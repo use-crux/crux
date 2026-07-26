@@ -1,10 +1,9 @@
 import type { BoundaryDef, SafetyTargetId } from './boundary'
-import { isMediaSafetyTargetId } from './boundary'
+import { isMediaSafetyTargetId, selectedPath } from './boundary'
 import { SafetyConfigError } from './errors'
 import type { Constraint } from './constraint/types'
 import { assertConstraintBoundary } from './constraint/boundary'
 import type { Guardrail } from './guardrail/types'
-import type { GuardrailStreamOption } from './stream/types'
 import type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
 import { validateSafetyTuneOptions } from './tune'
 import { applyBindingApplicability, type SafetyBindingApplicability } from './applicability'
@@ -30,14 +29,13 @@ interface SafetyBindingBase {
   readonly enabled: boolean
   /** Safe explanation when a global binding cannot run for this primitive. */
   readonly dormantReason?: string
-  readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
+  readonly tuned?: readonly ('mode' | 'enabled')[]
 }
 
 /** One guardrail attached to one exact boundary with its effective posture. */
 export interface GuardrailBinding extends SafetyBindingBase {
   readonly kind: 'guardrail'
   readonly policy: Guardrail
-  readonly stream?: GuardrailStreamOption
 }
 
 /** One constraint attached to one exact boundary with its effective posture. */
@@ -82,7 +80,6 @@ export function buildSafetyRegistry(options: BuildSafetyRegistryOptions): Safety
     options.tune,
     new Set(sources.map((source) => source.policy.id)),
   )
-  assertValidMediaTune(sources, tune)
 
   const expanded = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
   const bindings = options.applicability
@@ -164,36 +161,6 @@ function assertValidGuardrailBoundaryFamilies(sources: readonly PolicySource[]):
         scopes: [source.scope],
       })
     }
-    if (hasMedia && source.policy.stream !== undefined) {
-      throw new SafetyConfigError({
-        message:
-          `Safety policy "${source.policy.id}" configures stream handling for media boundaries (${ids.join(', ')}). ` +
-          'Media guardrails run once on canonical parts and cannot stream.',
-        boundaries: ids,
-        kinds: [source.kind],
-        scopes: [source.scope],
-      })
-    }
-  }
-}
-
-function assertValidMediaTune(
-  sources: readonly PolicySource[],
-  tune: Readonly<Record<string, SafetyTunePolicyOptions>>,
-): void {
-  for (const source of sources) {
-    if (source.kind !== 'guardrail' || tune[source.policy.id]?.stream === undefined) continue
-    const boundaries = boundariesFor(source.policy)
-    if (!boundaries.some((boundary) => isMediaSafetyTargetId(boundary.id))) continue
-
-    throw new SafetyConfigError({
-      message:
-        `Safety tune for media policy "${source.policy.id}" cannot set "stream". ` +
-        'Media guardrails run once on canonical parts.',
-      boundaries: boundaries.map((boundary) => boundary.id),
-      kinds: [source.kind],
-      scopes: [source.scope],
-    })
   }
 }
 
@@ -212,7 +179,6 @@ function expandBindings(
       boundary,
       scope: source.scope,
       mode: tune?.mode ?? source.policy.mode,
-      stream: tune?.stream ?? source.policy.stream,
       enabled: tune?.enabled ?? true,
       ...(tuned.length > 0 ? { tuned } : {}),
     }))
@@ -236,7 +202,7 @@ function boundariesFor(policy: Guardrail | Constraint): readonly BoundaryDef[] {
 function assertUniqueBoundaries(policyId: string, boundaries: readonly BoundaryDef[]): void {
   const seen = new Set<string>()
   for (const boundary of boundaries) {
-    const key = boundary.path ? `${boundary.id}:${boundary.path}` : boundary.id
+    const key = selectedPath(boundary) ? `${boundary.id}:${selectedPath(boundary)}` : boundary.id
     if (seen.has(key)) {
       throw new SafetyConfigError({
         message: `Safety policy "${policyId}" attaches to boundary "${key}" more than once.`,
@@ -246,7 +212,7 @@ function assertUniqueBoundaries(policyId: string, boundaries: readonly BoundaryD
   }
 }
 
-function tunedFields(tune: SafetyTunePolicyOptions | undefined): readonly ('mode' | 'stream' | 'enabled')[] {
+function tunedFields(tune: SafetyTunePolicyOptions | undefined): readonly ('mode' | 'enabled')[] {
   if (!tune) return []
-  return (['mode', 'stream', 'enabled'] as const).filter((field) => tune[field] !== undefined)
+  return (['mode', 'enabled'] as const).filter((field) => tune[field] !== undefined)
 }

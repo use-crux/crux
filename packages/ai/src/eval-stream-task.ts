@@ -8,12 +8,7 @@
  * @module
  */
 
-import type {
-  DeepPartial,
-  StreamObjectResult,
-  StreamTextResult,
-  ToolSet,
-} from "ai";
+import type { ToolSet } from "ai";
 import type { z } from "zod";
 import type {
   AnyPrompt,
@@ -22,7 +17,11 @@ import type {
   MergedInput,
   Prompt,
 } from "@use-crux/core";
-import type { StreamCompletion, StreamResult } from "@use-crux/core/adapter";
+import type {
+  DeepPartial,
+  StreamCompletion,
+  StreamResult,
+} from "@use-crux/core/adapter";
 import type { EvalTask } from "@use-crux/core/eval";
 import {
   attachEvalTaskDescriptorForInternalUse,
@@ -66,14 +65,17 @@ type StreamingPromptForModel<P extends AnyPrompt, M> = StructuredPromptForModel<
     ? unknown
     : ["model contains a cascade; cascades are generate-only"]);
 
-/** Rich streaming result selected from the prompt's output declaration. */
+/**
+ * Managed streaming result selected from the prompt's output declaration.
+ *
+ * @remarks
+ * Only the VALUE types vary: the logical result shape is identical for text and
+ * structured prompts (RFC #173).
+ */
 type ManagedStreamReturn<TOutput extends z.ZodType | undefined> =
-  TOutput extends z.ZodType<infer TObject>
-    ? StreamResult<
-        StreamObjectResult<DeepPartial<TObject>, TObject, never>,
-        TObject
-      >
-    : StreamResult<StreamTextResult<Record<string, never>, never>>;
+  TOutput extends z.ZodType
+    ? StreamResult<z.output<TOutput>, DeepPartial<z.input<TOutput>>>
+    : StreamResult<never, never>;
 
 /** Factory attached as `stream.task()` on every AI adapter instance. */
 export interface AIStreamTaskFactory {

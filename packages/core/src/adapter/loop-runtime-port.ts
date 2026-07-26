@@ -102,6 +102,13 @@ export interface LoopRuntimePort<
   readonly capabilities?: {
     /** The runtime applies `request.stepTransformer` before SDK/Crux client tools. */
     readonly stepTransform?: "before-client-tools";
+    /**
+     * The runtime executes `request.streamPlan`: it can discard a rejected attempt
+     * without surfacing any of it and restream, composing one logical result across
+     * attempts (RFC #173). Core only sends a plan to runtimes that declare this;
+     * others keep the single-attempt path, where a commit-gate rejection fails closed.
+     */
+    readonly coordinatedStream?: true;
   };
 
   /** Provider-authored media validation consumed privately before SDK I/O. */
@@ -179,9 +186,18 @@ export interface LoopRuntimePort<
   /**
    * Run a streaming generation (text, or structured when `schema` is set).
    *
-   * The returned handle's `raw` must be the SDK's own stream result,
-   * untouched — consumers iterate it directly. `completion()` must resolve
-   * from SDK finish callbacks, never by consuming the stream itself.
+   * The returned handle's `raw` must be the SDK's own stream result, untouched —
+   * consumers iterate it directly. `completion()` must resolve from SDK finish
+   * callbacks, never by consuming the stream itself.
+   *
+   * Exception: when `request.streamPlan?.active` is true (a commit gate can reject an
+   * attempt, RFC #173), a literal single-attempt object is impossible because a rejected
+   * attempt must be discarded and restreamed. `raw` is then SDK-SHAPED but may be a
+   * runtime-composed logical stream spanning attempts rather than object-identical to one
+   * provider attempt. It must still preserve the supported result surface and semantics:
+   * `textStream`, `fullStream`, the completion promises/getters Crux reads, structured
+   * output/object, usage, finish reason, response messages, warnings, provider metadata,
+   * cancellation, and error propagation.
    */
   runStream(
     request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },

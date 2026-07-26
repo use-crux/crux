@@ -39,7 +39,7 @@ const acme = defineSingleTurnProviderBundle({
       textDelta: acmeTextDelta,
     },
     settings: acmeSettings,
-    outputSchema: acmeOutputSchema,
+    structuredOutput: { accepts: acmeStructuredCapabilities },
     transcript: acmeTranscript,
   },
 });
@@ -69,6 +69,62 @@ describeCruxAdapterConformance({
 ```
 
 Keep provider-specific transcript tests for unusual message conversion behavior.
+
+### Structured output
+
+Your adapter does not convert schemas. It **describes what its provider accepts**,
+and core compiles the user's authored Zod schema down to that dialect.
+
+Declare the dialect once as inert capability data:
+
+```ts
+import type { StructuredOutputCapabilities } from "@use-crux/core/adapter";
+
+export const acmeStructuredCapabilities = {
+  id: "acme.v1",
+  supportsJsonSchema: true,
+  requiresAllProperties: true, // Acme rejects a partial `required` list
+  supportsOptionalProperties: false,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: false, // core inlines `$ref`/`$defs` for you
+  supportsUnions: true,
+  supportsRecursiveSchemas: false,
+  additionalProperties: "must-be-false",
+  unsupportedKeywords: ["format", "minLength"],
+} satisfies StructuredOutputCapabilities;
+```
+
+Then read the compiled result in your request builder:
+
+```ts
+const acmeRequest = (args, ctx) => ({
+  model: args.model,
+  messages: args.providerMessages,
+  ...(ctx.outputSchema
+    ? { response_format: { type: "json_schema", schema: ctx.outputSchema } }
+    : {}),
+});
+```
+
+`ctx.outputSchema` is `undefined` when the prompt declares no `output`, so guard it
+and omit the structured envelope for ordinary text calls. When present it is a
+provider-compatible `JsonSchemaObject`, already lowered against your `accepts`: unsupported keywords dropped, references inlined,
+`additionalProperties` set the way you declared, and optional properties encoded
+using whatever your provider tolerates. Place it in the native envelope; do not
+re-derive it from `args.schema`.
+
+<Callout type="info">
+  Capabilities are **data, not callbacks**. There is no hook to rewrite or lower a
+  schema yourself: core owns one finite set of lowering rules so every provider
+  produces the same observable behavior. If `structuredOutput` is absent, structured
+  output is unsupported and the call fails before any network request rather than
+  silently degrading. Never infer behavior from a provider id.
+</Callout>
+
+Core still owns validation: it decodes any transport sentinels its own lowering
+introduced, then validates once against the **authored** schema, so `result.object`
+matches what the user wrote regardless of how the wire schema was shaped.
 
 ### Media and completed operations
 

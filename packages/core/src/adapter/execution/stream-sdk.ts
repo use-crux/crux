@@ -13,9 +13,17 @@ import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
 import {
   createSafetyWithBindingApplicability,
+  defaultConstraintFeedbackFormatter,
   guardSafetySessionResolvedInput,
+  openSafetySessionStructuredStream,
+  safetyDefersDownstreamOutput,
+  safetyDefersReasoning,
+  openSafetySessionStreamRaw,
+  openSafetySessionStructuredStreamRaw,
   safetySessionModelIngressGuard,
+  safetySessionStreamCommitPlan,
 } from "../../safety/session";
+import { createCoordinatedStreamPlan } from "./stream-attempt-plan-factory";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { runInStreamObservationContext } from "../../generation/stream-observability";
@@ -141,6 +149,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
 
+  // `result.cancel()` must reach the provider, not merely detach readers. The
+  // caller's own signal already flows into the call; this controller gives the
+  // published result the same authority without inventing a second one.
+  const cancellation = new AbortController();
+  const callerSignal = composeAbortSignals(args.signal, cancellation.signal);
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
     resolved,
@@ -184,7 +197,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     throw error;
   }
   const tools = lifecycle.tools;
-  const trackedSafety =
+  // Text streams gate here; the structured stream is created after compilation
+  // below (it needs the canonical schema + decode manifest).
+  let trackedSafety =
     safety.enabled && !resolved.schema
       ? trackSafetyStreamSeal(safety.openStream())
       : undefined;
@@ -223,6 +238,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   // owns the authored parse of the completed stream value.
   let structuredOutputSchema: JsonSchemaObject | undefined;
   let structuredDecodeManifest: StructuredOutputDecodeManifest | undefined;
+  let structuredCanonicalSchema: JsonSchemaObject | undefined;
   if (resolved.schema) {
     const capabilities = dialect.structuredOutput?.capabilities(modelInfo);
     if (!capabilities) {
@@ -242,7 +258,85 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     );
     structuredOutputSchema = plan.outputSchema;
     structuredDecodeManifest = plan.decodeManifest;
+    structuredCanonicalSchema = plan.canonicalSchema;
   }
+
+  // Structured streaming drives the scanner-fed occurrence stream so provider
+  // wire JSON is canonicalized (manifest-decoded) and object-gated before
+  // `Output.object` parses it. Created even when Safety has no guardrails if the
+  // decode manifest requires canonicalization.
+  if (
+    resolved.schema &&
+    (safety.enabled || (structuredDecodeManifest?.operations.length ?? 0) > 0)
+  ) {
+    trackedSafety = trackSafetyStreamSeal(
+      openSafetySessionStructuredStream(safety, {
+        ...(structuredCanonicalSchema
+          ? { canonicalSchema: structuredCanonicalSchema }
+          : {}),
+        ...(structuredDecodeManifest
+          ? { decodeManifest: structuredDecodeManifest }
+          : {}),
+      }),
+    );
+  }
+
+  // A commit gate (enforce `assert`, or a positive `validationRetry`) can REJECT an
+  // attempt, so the stream must be able to discard it and restream. Core owns that
+  // policy through the plan; the runtime owns how attempts are physically streamed and
+  // composed. Runtimes that do not declare `coordinatedStream` keep the single-attempt
+  // path (where a rejection fails closed).
+  const sdkValidationGate =
+    resolved.schema !== undefined && (args.validationRetry?.maxRetries ?? 0) > 0;
+  const sdkCommitGate =
+    (safety.enabled && safetySessionStreamCommitPlan(safety).hasAssertGate) ||
+    sdkValidationGate;
+  let sdkSteps = 0;
+  const streamPlan =
+    sdkCommitGate && dialect.capabilities?.coordinatedStream
+      ? createCoordinatedStreamPlan({
+          active: true,
+          openAttemptSafety: () =>
+            resolved.schema
+              ? openSafetySessionStructuredStreamRaw(safety, {
+                  ...(structuredCanonicalSchema
+                    ? { canonicalSchema: structuredCanonicalSchema }
+                    : {}),
+                  ...(structuredDecodeManifest
+                    ? { decodeManifest: structuredDecodeManifest }
+                    : {}),
+                })
+              // RAW, not `safety.openStream()`: the coordinated route owns retry
+              // authority, so a text assert must raise the non-terminal rejection for
+              // the plan rather than failing closed inside the safety stream. Using the
+              // fail-closed entry here made a text assert terminate on its first failure
+              // on this route while the native route retried.
+              : openSafetySessionStreamRaw(safety),
+          bufferUntilValidated: sdkValidationGate,
+          ...(resolved.schema ? { schema: resolved.schema } : {}),
+          maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
+          steps: () => sdkSteps,
+          incrementStep: () => {
+            sdkSteps += 1;
+          },
+          formatFeedback: (failures) => {
+            const formatted = defaultConstraintFeedbackFormatter.format(failures, {
+              promptId: prompt.id,
+              model: modelInfo.modelId,
+              traceId: undefined,
+              metadata: {},
+            });
+            return typeof formatted === "string"
+              ? [{ role: "user", content: formatted }]
+              : formatted;
+          },
+          ...(args.validationRetry && sdkValidationGate
+            ? { validationRetry: args.validationRetry }
+            : {}),
+          ...(prompt.id ? { promptId: prompt.id } : {}),
+          ...(callerSignal ? { signal: callerSignal } : {}),
+        })
+      : undefined;
 
   const request: ExecutorRequest<TModel> & {
     schema?: z.ZodType;
@@ -268,10 +362,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
-    abortSignal: composeAbortSignals(args.signal, stepBudget.signal),
+    abortSignal: composeAbortSignals(callerSignal, stepBudget.signal),
     extra: args.extra,
     diagnostics,
-    ...(trackedSafety ? { safety: trackedSafety.stream } : {}),
+    // A coordinated stream drives per-attempt Safety through the plan instead; the
+    // single shared `safety` stream would leak a discarded attempt's state across
+    // attempts, so the two are mutually exclusive.
+    ...(streamPlan ? { streamPlan } : trackedSafety ? { safety: trackedSafety.stream } : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
     ...(structuredOutputSchema ? { outputSchema: structuredOutputSchema } : {}),
   };
@@ -343,19 +440,56 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   > => {
     try {
       const meta = await innerCompletion();
+      // The safety stream (text or structured) already guarded the released text
+      // live — object occurrences and `model.output.text` alike — so completion
+      // treats it as represented and does not re-guard it. For a structured stream
+      // `meta.text` is the canonical text the transform released. On a coordinated
+      // stream the seal comes from the ACCEPTED attempt (a discarded attempt's seal
+      // is never published).
+      const acceptedSeal = streamPlan?.acceptedSeal();
+      const sealedLive = streamPlan
+        ? acceptedSeal !== undefined
+        : (trackedSafety?.sealed() ?? false);
       const guarded = await guardStreamCompletion({
         safety,
         meta,
         assembleWithoutSafety: false,
-        liveText: trackedSafety
-          ? (trackedSafety.sealedText() ?? meta?.text)
-          : undefined,
-        representedText: trackedSafety ? meta?.text : undefined,
+        liveText: streamPlan
+          ? (acceptedSeal?.text ?? meta?.text)
+          : trackedSafety
+            ? (trackedSafety.sealedText() ?? meta?.text)
+            : undefined,
+        representedText: streamPlan || trackedSafety ? meta?.text : undefined,
         messages,
         ...(resolved.schema
           ? {
               schema: resolved.schema,
               decodeManifest: structuredDecodeManifest,
+              ...(structuredCanonicalSchema
+                ? {
+                    structuredContext: {
+                      canonicalSchema: structuredCanonicalSchema,
+                      decodeManifest: structuredDecodeManifest,
+                    },
+                  }
+                : {}),
+              // The structured stream already canonicalized + object-gated + sealed
+              // the value: consume it directly (no re-decode, no re-gate).
+              ...(sealedLive
+                ? {
+                    ...(streamPlan?.committedCandidate()
+                      ? { committedCandidate: streamPlan.committedCandidate() }
+                      : {}),
+                    sealedCanonicalValue: streamPlan
+                      ? acceptedSeal?.parsed
+                      : trackedSafety?.sealedObject(),
+                    objectOccurrencesAlreadyGated: true,
+                    // Occurrence-precise settlement from the accepted attempt only.
+                    ...(acceptedSeal?.settlement
+                      ? { constraintSettlement: acceptedSeal.settlement.settled }
+                      : {}),
+                  }
+                : {}),
               promptId: prompt.id,
             }
           : {}),
@@ -401,6 +535,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     runId: handle.runId,
     raw: handle.raw,
     ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
+    structured: resolved.schema !== undefined,
+    deferMedia: safetyDefersDownstreamOutput(safety),
+    deferReasoning: safetyDefersReasoning(safety),
+    abort: (reason: unknown) => cancellation.abort(reason),
+    ...(callerSignal ? { signal: callerSignal } : {}),
     _meta: publicMeta,
     completion: getCompletion,
   };

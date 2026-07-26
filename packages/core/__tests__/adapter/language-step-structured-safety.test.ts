@@ -145,8 +145,7 @@ describe("language step Safety — structured output", () => {
         guardrails: [
           guardrail({
             id: "rewrite-structured-path",
-            on: boundary.output
-              .path<typeof original>()("profile.label"),
+            on: boundary.output.object<typeof original>().path("profile.label"),
             run: (label) => {
               pathSeen.push(label);
               return {

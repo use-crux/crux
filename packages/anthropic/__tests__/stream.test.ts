@@ -43,9 +43,15 @@ describe("Anthropic stream handling", () => {
       { model: "claude-sonnet-4-5-20250929" },
     );
 
-    // The text stream still yields whatever arrived before the failure.
+    // The text stream replays whatever arrived before the failure and then
+    // errors: a terminal failure reaches every surface with one identity, so a
+    // caller reading only text cannot see a clean success (RFC #173).
     const chunks: string[] = [];
-    for await (const chunk of handle.textStream) chunks.push(chunk);
+    await expect(
+      (async () => {
+        for await (const chunk of handle.textStream) chunks.push(chunk);
+      })(),
+    ).rejects.toBeInstanceOf(CruxAdapterError);
     expect(chunks.join("")).toBe("partial");
 
     // The completion must now REJECT (previously it silently returned undefined).

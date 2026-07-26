@@ -1,0 +1,93 @@
+---
+title: Removed APIs
+description: What the structured-output and streaming-safety rollout removed, and what replaces each one.
+---
+
+Crux is pre-launch and prefers one mental model over compatibility aliases, so
+these APIs were removed outright rather than deprecated. Each row has a direct
+replacement.
+
+## Structured output
+
+The provider no longer converts schemas; it declares the JSON Schema dialect it
+accepts, and core compiles the authored schema against that declaration. See
+[building adapters](/docs/guides/advanced/building-adapters#structured-output).
+
+| Removed                       | Replacement                                                     |
+| ----------------------------- | --------------------------------------------------------------- |
+| `AdapterSpec.wrapOutputSchema` | `profile.structuredOutput.accepts` (inert capability data)      |
+| `NativeChatProfile.outputSchema` | `profile.structuredOutput.accepts`                            |
+| Hand-built provider schema in `request()` | `ctx.outputSchema`, the compiled wire schema          |
+
+A profile without `structuredOutput` no longer falls back to text: structured
+output is unsupported and the call fails before any network request.
+
+## Streaming safety
+
+Streaming behavior moved from a policy-level option onto the boundary itself, so
+one policy has one unit on both `generate()` and `stream()`. See
+[guardrails](/docs/guides/safety/guardrails#streaming).
+
+| Removed                     | Replacement                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| `guardrail({ stream: 'sentence' })` | `on: boundary.output.text().sentences()`                  |
+| `guardrail({ stream: 'line' })`     | `on: boundary.output.text().lines()`                      |
+| `guardrail({ stream: 'chunk' })`    | `on: boundary.output.text().deltas()`                     |
+| `guardrail({ stream: 'final' })`    | `on: boundary.output.text().complete()`                   |
+| `guardrail({ stream: { segment } })` | `on: boundary.output.text().segments({ maxCharacters, next })` |
+| `guardrail({ stream: false })`      | `enabled: false` via `safety.tune`, or omit the policy    |
+| `safety.tune[id].stream`            | Removed. Tune accepts only `mode` and `enabled`.          |
+| `constraint({ onChunk })`           | `on: boundary.output.object<T>().path('a.b')` — note this is not a like-for-like swap: `onChunk` was report-only, while an `assert` on a path gates release and can discard the attempt. Use `severity: 'suggest'` to keep the old report-only behavior. |
+| `onHoldLimit: 'release'`            | Removed. Reaching a hold limit always fails closed with `StreamHoldLimitError`. |
+
+`stream: false` and `onHoldLimit: 'release'` were the two ways a stream could
+release content a policy had not cleared. Both are gone; there is no configuration
+that publishes unchecked output.
+
+## Managed streams
+
+`stream()` returns one Crux-owned logical stream. The provider stream object is
+no longer reachable from it.
+
+| Removed                                | Replacement                              |
+| -------------------------------------- | ---------------------------------------- |
+| `result.raw` (on a stream result)      | Removed. See below.                      |
+| `result.raw.partialObjectStream`       | `result.partialOutputStream`             |
+| `result.raw.fullStream`                | `result.fullStream`                      |
+| `result.raw.textStream`                | `result.textStream`                      |
+| `result.raw.toUIMessageStream(opts)`   | `toUIMessageStream(result, opts)`        |
+| `result.raw.text` / `.usage` / `.finishReason` | `await result.completion`        |
+| `StreamResult<TRawStream, TOutput>`    | `StreamResult<TOutput, TPartial>`        |
+
+A provider stream resolves before terminal Safety and describes only one physical
+attempt, so reading it bypassed guardrail holds, structured occurrence gating,
+commit gates, and validation retry — including the content of an attempt Crux
+discarded and re-streamed. That is the bypass this rollout removes, so there is no
+`acceptedRaw`, `providerResult`, or `unsafe` replacement.
+
+`generate()` results keep `.raw` unchanged: a completed provider response has no
+equivalent problem. Provider-specific request options are also unchanged, and
+provider-specific terminal facts remain on `completion.providerMetadata`.
+
+## Boundary spelling
+
+| Removed                            | Replacement                               |
+| ---------------------------------- | ----------------------------------------- |
+| `boundary.output.path<T>()('a.b')` | `boundary.output.object<T>().path('a.b')` |
+
+The generic belongs on `object<T>()`, and `path` takes one string argument. Known
+paths autocomplete to depth four; deeper string paths remain valid at runtime with
+an `unknown` subject.
+
+## Behavior changes
+
+These are not renames — the same code now does something different.
+
+| Before                                              | Now                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------- |
+| Structured output validated only when `validationRetry` was set | Always validated; `validationRetry` controls only whether Crux retries |
+| Invalid structured output could be returned          | Throws `ValidationExhaustedError`                                    |
+| Constraints on streams ran report-only at end of stream | An `assert` is transactional: it gates release and can retry the attempt |
+| Structured streams always released incrementally     | A positive `validationRetry.maxRetries` buffers until end-of-stream so a failed attempt can be discarded |
+| A stream failure rejected only `completion`          | Every surface replays its committed prefix and then errors with the same error object |
+| `textStream` closed when provider deltas ended       | Surfaces close on the logical `finish`, so the stream ends when the operation does |

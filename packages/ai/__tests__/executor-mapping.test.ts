@@ -13,7 +13,11 @@ import { prompt as makePrompt } from "@use-crux/core";
 import { fallback } from "@use-crux/core";
 import { ValidationExhaustedError } from "@use-crux/core";
 import { assertCanonicalResult } from "@use-crux/core/adapter/testing";
-import type { StreamResult } from "@use-crux/core/adapter";
+import type {
+  PublishedStreamEvent,
+  StreamCompletion,
+} from "@use-crux/core/adapter";
+import { publishOrdinaryStream } from "@use-crux/core/adapter";
 import { createCruxRunId } from "@use-crux/core/observability";
 import type { SystemBlock } from "@use-crux/core";
 import {
@@ -558,7 +562,7 @@ describe("stream — metrics and completion", () => {
     });
   });
 
-  it("returns the canonical stream envelope with raw SDK access", async () => {
+  it("returns the canonical stream envelope with no provider handle", async () => {
     const scripted = scriptedGateway({
       streamText: [
         {
@@ -580,7 +584,7 @@ describe("stream — metrics and completion", () => {
     const completion = await result.completion;
 
     expect(streamed).toBe("hello");
-    expect(result.raw).toMatchObject({ kind: "scripted-text-stream" });
+    expect("raw" in result).toBe(false);
     expect(completion.text).toBe("hello");
     expect(completion.finalStep.usage?.outputTokens).toBe(9);
     expect(completion.usage?.totalTokens).toBe(12);
@@ -648,61 +652,31 @@ describe("stream — metrics and completion", () => {
 });
 
 describe("UI-message helpers", () => {
-  it("creates an SSE response from the raw AI SDK UI-message stream", async () => {
-    let called = 0;
+  it("creates an SSE response from the logical stream", async () => {
     const runId = createCruxRunId();
     const operation = {
       traceId: createCruxTraceId(),
       spanId: createCruxSpanId(),
     };
-    const result = {
+    async function* events(): AsyncIterable<PublishedStreamEvent<unknown>> {
+      yield { type: "text-delta", text: "hi" };
+    }
+    // Built from the logical stream, so a discarded attempt is unrepresentable
+    // in the helper's input rather than merely filtered out downstream.
+    const result = publishOrdinaryStream<unknown, unknown>({
       runId,
-      textStream: (async function* () {})(),
-      raw: {
-        toUIMessageStream() {
-          called++;
-          return new ReadableStream({
-            start(controller) {
-              controller.close();
-            },
-          });
-        },
-      },
-      completion: Promise.resolve({
-        runId,
-        text: "",
-        content: [],
-        steps: [{
-          content: [],
-          text: "",
-          finishReason: undefined,
-          responseId: undefined,
-          modelId: undefined,
-          warnings: [],
-        }],
-        finalStep: {
-          content: [],
-          text: "",
-          finishReason: undefined,
-          responseId: undefined,
-          modelId: undefined,
-          warnings: [],
-        },
-        messages: [],
-        warnings: [],
-        _meta: operation,
-      }),
-      _meta: operation,
-    } satisfies StreamResult<{
-      toUIMessageStream(): ReadableStream;
-    }>;
+      meta: operation,
+      events: events(),
+      completion: async () =>
+        ({ runId, _meta: operation, text: "hi" }) as unknown as StreamCompletion<unknown>,
+    });
 
     const response = createUIMessageStreamResponse(result);
 
-    expect(called).toBe(1);
     expect(response.headers.get("content-type")).toContain(
       "text/event-stream",
     );
+    expect(await response.text()).toContain("hi");
   });
 });
 

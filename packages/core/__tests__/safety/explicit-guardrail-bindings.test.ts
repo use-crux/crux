@@ -158,7 +158,6 @@ describe('createSafety — exact guardrail bindings', () => {
     const policy = guardrail({
       id: 'stream-tuple-policy',
       on: [boundary.input.text(), boundary.output.text()] as const,
-      stream: 'chunk',
       run: (subject, context) => {
         seen.push({ boundary: context.boundary.id, mode: context.policy.mode })
         return {

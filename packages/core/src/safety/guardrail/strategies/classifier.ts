@@ -7,7 +7,7 @@
 import type { BoundaryDef } from '../../boundary'
 import type { SafetyFinding } from '../../decision'
 import type { SafetyRunContext } from '../../decision'
-import type { GuardrailRun, GuardrailRunResult } from '../types'
+import type { GuardrailRun, ClosedGuardrailRunResult } from '../types'
 
 type TextBoundary = BoundaryDef<
   'model.input.text' | 'model.instructions' | 'model.output.text' | 'validation.feedback',
@@ -27,7 +27,7 @@ export interface ClassifierGuardrailOptions<TResult> {
 
 /** Create a provider-agnostic classifier strategy for text boundaries. */
 export function classifier<TResult>(options: ClassifierGuardrailOptions<TResult>): GuardrailRun<TextBoundary> {
-  const run = async (subject: string, ctx: SafetyRunContext<TextBoundary>): Promise<GuardrailRunResult<string>> => {
+  const run = async (subject: string, ctx: SafetyRunContext<TextBoundary>): Promise<ClosedGuardrailRunResult<string>> => {
     const result = await options.classifier(subject)
     if (!options.blockWhen(result)) return { action: 'allow' }
     for (const finding of options.findings?.(result) ?? []) {
@@ -44,7 +44,9 @@ export function classifier<TResult>(options: ClassifierGuardrailOptions<TResult>
   return Object.assign(run, {
     strategy: {
       kind: 'guardrail.classifier',
-      config: { stream: 'final' },
+      config: {},
+      // Classify the complete selected subject; do not evaluate partial text.
+      defaultUnit: 'complete' as const,
     },
   })
 }

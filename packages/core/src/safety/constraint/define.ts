@@ -1,3 +1,4 @@
+import { selectedPath } from '../boundary'
 import type { z } from 'zod'
 import type { SafetyRunContext } from '../decision'
 import { captureSource } from '../../project-index/source'
@@ -72,7 +73,6 @@ function defineBoundaryConstraint<B extends ConstraintBoundary>(config: Constrai
     maxRetries: config.maxRetries ?? 2,
     run: config.run,
     ...(strategy ? { strategy } : {}),
-    ...(config.onChunk ? { onChunk: config.onChunk } : {}),
   }) as Constraint<B>
 
   return c
@@ -102,13 +102,13 @@ function contextForConstraint<B extends ConstraintBoundary>(
     attempt: { index: ctx.attempt, kind: ctx.attempt === 0 ? 'initial' : 'retry' },
     metadata: ctx.metadata,
     findings: { add() {} },
-    ...(on.path ? { path: on.path } : {}),
+    ...(selectedPath(on) ? { path: selectedPath(on) } : {}),
   }
 }
 
 function subjectForBoundary(on: ConstraintBoundary, output: ConstraintOutput): unknown {
   if (on.id === 'model.output.text') return output.text
-  if (on.id === 'model.output.object') return on.path ? valueAtPath(output.parsed, on.path) : output.parsed
+  if (on.id === 'model.output.object') return selectedPath(on) ? valueAtPath(output.parsed, selectedPath(on)!) : output.parsed
   if (on.id === 'model.output') return { text: output.text, object: output.parsed }
   return output.text
 }

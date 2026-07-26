@@ -34,9 +34,6 @@ import type {
   ToolSet,
   GenerateObjectResult,
   GenerateTextResult,
-  StreamTextResult,
-  StreamObjectResult,
-  DeepPartial,
 } from "ai";
 import type { z } from "zod";
 import type {
@@ -60,6 +57,7 @@ import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
 import type {
   ApprovalRequestInfo,
   CallHandle,
+  DeepPartial,
   ExecutorGenerateOptions,
   ExecutorModelArg,
   ExecutorStreamOptions,
@@ -88,6 +86,7 @@ import type {
   AIExtra,
   AIGenerateOptions,
   AIMessageHistory,
+  AIStreamCallbacks,
   AITransport,
 } from "./options";
 import type { SdkLoopResultLike } from "./executor";
@@ -128,6 +127,7 @@ export type { AiSdkCodecOptions } from "./codec";
 export type {
   AIExtra,
   AIGenerateOptions,
+  AIStreamCallbacks,
   AITransport,
   AITransportInfo,
 } from "./options";
@@ -142,17 +142,6 @@ export type {
 // Result Types
 // ─────────────────────────────────────────────────────────────────
 
-/** Stream result for text prompts. */
-export type TextStreamResult<TTools extends ToolSet = Record<string, never>> =
-  StreamTextResult<TTools, never>;
-
-/** Stream result for structured prompts. */
-export type ObjectStreamResult<T> = StreamObjectResult<
-  DeepPartial<T>,
-  T,
-  never
->;
-
 /** Raw AI SDK result for `generate()` — discriminates on the prompt's output schema. */
 export type GenerateReturn<TOutput extends z.ZodType | undefined> =
   TOutput extends z.ZodType<infer O>
@@ -161,11 +150,19 @@ export type GenerateReturn<TOutput extends z.ZodType | undefined> =
         GenerateTextResult<Record<string, never>, never> | undefined
       >;
 
-/** Return type for `stream()` — discriminates on the prompt's output schema. */
+/**
+ * Return type for `stream()` — discriminates on the prompt's output schema.
+ *
+ * @remarks
+ * The RESULT SHAPE does not discriminate: every managed stream returns the same
+ * logical surfaces (RFC #173). Only the value types differ — `completion.object`
+ * is the authored schema's `z.output`, and `partialOutputStream` carries partial
+ * canonical `z.input`. A text prompt's partial surface closes with no values.
+ */
 export type StreamReturn<TOutput extends z.ZodType | undefined> =
-  TOutput extends z.ZodType<infer O>
-    ? StreamResult<ObjectStreamResult<O>, O>
-    : StreamResult<TextStreamResult>;
+  TOutput extends z.ZodType
+    ? StreamResult<z.output<TOutput>, DeepPartial<z.input<TOutput>>>
+    : StreamResult<never, never>;
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -303,7 +300,11 @@ interface AIStream {
       Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
       TRuntimeContext,
       TModel
-    >,
+    > &
+      AIStreamCallbacks<
+        TOutput extends z.ZodType ? z.output<TOutput> : never,
+        TOutput extends z.ZodType ? DeepPartial<z.input<TOutput>> : never
+      >,
   ): Promise<StreamReturn<TOutput>>;
 
   /** Bind a prompt and input-independent defaults as a streaming Eval task. */
@@ -557,15 +558,21 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       timeout,
       routing,
       route,
-      validationRetry: _validationRetry,
+      validationRetry,
       constraints,
       constraintMaxRetries,
       guardrails,
       safety,
       input,
       transport,
+      // Pulled out of `settings` deliberately: these are LOGICAL callbacks that
+      // observe the published sequence, so they must never reach the provider
+      // request (RFC #173).
+      onChunk,
+      onFinish,
+      onError,
       ...settings
-    } = opts;
+    } = opts as CallOpts & AIStreamCallbacks;
 
     if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
@@ -590,13 +597,21 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       safety,
       activeTools,
       maxSteps,
+      // A positive `maxRetries` installs the EOF-and-validate commit gate on the stream.
+      // Dropping it here silently disabled validation retry for `stream()` while
+      // `generate()` honored it — a route divergence, not just a missing feature.
+      validationRetry,
       settings: settings as GenerationSettings,
       extra,
     } as ExecutorStreamOptions<LanguageModel>;
 
     const handle = await executor.stream(prompt, executorOptions);
 
-    return createAiStreamResult(handle) as unknown as Record<string, unknown>;
+    return createAiStreamResult(handle, {
+      ...(onChunk ? { onChunk } : {}),
+      ...(onFinish ? { onFinish } : {}),
+      ...(onError ? { onError } : {}),
+    }) as unknown as Record<string, unknown>;
   }
 
   const generateFn = generateImpl as unknown as CruxAi["generate"];
@@ -730,9 +745,21 @@ export const generate = defaultAi.generate;
 /**
  * Stream a prompt using the Vercel AI SDK.
  *
- * Returns the SDK's own stream result (`textStream`, `fullStream`,
- * `partialObjectStream`, …) extended with a typed `completion` promise
- * resolving to usage, cost, and timing metrics when the stream finishes.
+ * Returns ONE managed Crux logical stream (RFC #173) — not the SDK's own result.
+ * A logical stream may use several physical provider attempts, but provider
+ * framing, discarded attempts, and the SDK object itself are never observable:
+ *
+ * - `textStream` — published, Safety-final text. For a structured prompt this is
+ *   canonical serialized `z.input` JSON, never provider wire JSON.
+ * - `fullStream` — every published logical event in canonical order.
+ * - `partialOutputStream` — canonical partial `z.input`. (The AI SDK spelling is
+ *   `partialObjectStream`; Crux publishes this instead, and a rejected attempt
+ *   contributes nothing to it.)
+ * - `completion` — the validated `object`, transcript, logical usage, and cost.
+ * - `cancel(reason?)` — abort the whole operation, including the live attempt.
+ *
+ * `onChunk`, `onFinish`, and `onError` are logical: they observe the published
+ * sequence, never a physical attempt.
  *
  * `cascade()` models are rejected — tier evaluation needs full results;
  * use `generate()` for cascades.
@@ -840,11 +867,14 @@ export type {
 } from "./extensions";
 export { aiSdkProviderRuntime } from "./profile";
 export {
+  createTextStreamResponse,
   createUIMessageStreamResponse,
   pipeUIMessageStreamToResponse,
+  toUIMessageStream,
 } from "./ui-message";
 export type {
   CruxPipeUIMessageStreamOptions,
+  CruxTextStreamResponseOptions,
   CruxUIMessageStreamResponseOptions,
 } from "./ui-message";
 

@@ -54,25 +54,30 @@ export async function createStreamCallPlan(
       | StopCondition<ToolSet>
       | StopCondition<ToolSet>[]
       | undefined;
+    // The budget cap is a HARD stop, not a default: an explicit caller condition is
+    // composed WITH it rather than replacing it, so a caller-supplied `stopWhen` cannot
+    // overrun the per-attempt grant core computed from the shared `maxSteps`.
+    const budgetStop = (({ steps }) =>
+      steps.length >= request.maxSteps) satisfies StopCondition<ToolSet>;
     args.stopWhen =
-      explicitStop ??
-      ((({ steps }) =>
-        steps.length >= request.maxSteps) satisfies StopCondition<ToolSet>);
+      explicitStop === undefined
+        ? budgetStop
+        : ([
+            ...(Array.isArray(explicitStop) ? explicitStop : [explicitStop]),
+            budgetStop,
+          ] as StopCondition<ToolSet>[]);
   }
 
   const streamStartTime = deps.clock();
   let firstChunkTime: number | undefined;
   let chunkCount = 0;
 
-  const callerOnChunk = request.extra?.onChunk as
-    | ((event: SdkStreamChunkEvent) => unknown)
-    | undefined;
-  const callerOnFinish = request.extra?.onFinish as
-    | ((event: SdkStreamFinishEvent) => unknown)
-    | undefined;
-  const callerOnError = request.extra?.onError as
-    | ((event: { readonly error: unknown }) => unknown)
-    | undefined;
+  // NO caller callback is installed on a physical attempt (RFC #173, contract 06).
+  // The hooks below are Crux's own: stream metrics and completion resolution.
+  // A caller's `onChunk`/`onFinish`/`onError` observe the PUBLISHED logical
+  // sequence instead — installing them here would let `onFinish` see content
+  // before terminal Safety, and would fire for an attempt Crux went on to
+  // discard.
 
   let resolveCompletion!: (meta: ExecutorStreamCompletionPayload) => void;
   let rejectCompletion!: (error: unknown) => void;
@@ -97,20 +102,40 @@ export async function createStreamCallPlan(
     }
     // Structured streaming uses `streamText` + `Output.object` (not the
     // deprecated `streamObject`, whose finish event exposes no completion text):
-    // the finish event carries both the streamed `text` and the parsed wire
-    // `output`. Core owns the sole authored parse over that wire value.
+    // the finish event carries both the streamed `text` and the parsed `output`.
+    //
+    // The `jsonSchema(...)` wrapper carries no local validator (`validate` is
+    // undefined), so `Output.object` does NOT enforce the wire schema against the
+    // streamed text — the wire schema only constructs the provider response
+    // format. When a structured Safety transform is installed below it releases
+    // manifest-decoded/gated canonical JSON, so `Output.object` parses that
+    // canonical text and `event.output` is itself canonical (never a wire value to
+    // decode again). Core's single authored Zod parse is the sole semantic check.
     args.output = Output.object({
       schema: jsonSchema(request.outputSchema) as never,
     });
     args.stopWhen = stepCountIs(1);
+    // The provider streams wire JSON; the structured Safety stream interprets it
+    // (scanner → manifest decode → occurrence gating → release cursor) and emits
+    // canonical JSON. Its sealed `{ text, parsed }` is authoritative at completion.
+    if (request.safety) {
+      args.experimental_transform = createSafetyStreamTransform(request.safety, {
+        onError: (error, source) => {
+          if (source === "finish") rejectCompletion(error);
+        },
+      });
+    }
     args.onFinish = async (event: SdkStreamFinishEvent) => {
       try {
         const content = event.content
           ? decodeAssistantContentFromAiSdkParts(event.content)
           : undefined;
         resolveCompletion({
-          // `output` is the parsed provider wire value; core decodes, guards,
-          // and runs the authored schema over it exactly once.
+          // `output` is `Output.object`'s parse of the streamed text. With a
+          // structured Safety transform that text is canonical, so core consumes
+          // the sealed canonical value directly (no re-decode); without one it is
+          // the provider wire value core decodes. Either way core runs the single
+          // authored parse.
           ...(event.output !== undefined ? { object: event.output } : {}),
           usage: normalizeUsage(event.usage),
           finishReason: event.finishReason,
@@ -136,7 +161,6 @@ export async function createStreamCallPlan(
             totalChunks: chunkCount,
           },
         });
-        await callerOnFinish?.(event);
       } catch (error) {
         rejectCompletion(error);
       }
@@ -173,12 +197,10 @@ export async function createStreamCallPlan(
     const textDelta =
       event.chunk?.type === "text-delta" ? event.chunk.textDelta : undefined;
     progress?.onChunk(textDelta);
-    await callerOnChunk?.(event);
   };
-  args.onError = async (event: { readonly error: unknown }) => {
+  args.onError = (event: { readonly error: unknown }) => {
     progress?.dispose();
     rejectCompletion(event.error);
-    await callerOnError?.(event);
   };
   args.onFinish = async (event: SdkStreamFinishEvent) => {
     try {
@@ -228,7 +250,6 @@ export async function createStreamCallPlan(
           totalChunks: chunkCount,
         },
       });
-      await callerOnFinish?.(event);
     } catch (error) {
       progress?.dispose();
       rejectCompletion(error);

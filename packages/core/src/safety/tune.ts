@@ -1,10 +1,8 @@
 import { SafetyConfigError } from './errors'
-import type { GuardrailStreamOption } from './stream/types'
 
 /** Per-policy posture overrides allowed at a call site. */
 export interface SafetyTunePolicyOptions {
   readonly mode?: 'enforce' | 'report'
-  readonly stream?: GuardrailStreamOption
   readonly enabled?: boolean
 }
 
@@ -15,7 +13,7 @@ export interface SafetyTuneOptions {
 
 export type SafetyTuneField = keyof SafetyTunePolicyOptions
 
-const allowedTuneFields = new Set<SafetyTuneField>(['mode', 'stream', 'enabled'])
+const allowedTuneFields = new Set<SafetyTuneField>(['mode', 'enabled'])
 
 /** Validate that a tune object only refers to known policies and allowed fields. */
 export function validateSafetyTuneOptions(
@@ -43,7 +41,7 @@ function validateTunePolicyOptions(policyId: string, value: SafetyTunePolicyOpti
   for (const field of Object.keys(value)) {
     if (!allowedTuneFields.has(field as SafetyTuneField)) {
       throw new SafetyConfigError({
-        message: `Safety tune for "${policyId}" cannot set "${field}". Allowed fields: mode, stream, enabled.`,
+        message: `Safety tune for "${policyId}" cannot set "${field}". Allowed fields: mode, enabled.`,
       })
     }
   }

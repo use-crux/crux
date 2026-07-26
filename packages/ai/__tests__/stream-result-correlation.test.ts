@@ -108,7 +108,7 @@ describe("AI SDK stream result correlation", () => {
     expect(completion.object).toEqual({ answer: 42 });
   });
 
-  it("points legacy raw metadata at the observed completion promise", async () => {
+  it("points the legacy completion slot at the observed completion promise", async () => {
     const scripted = scriptedGateway({
       streamText: [{ chunks: ["legacy"] }],
     });
@@ -116,8 +116,9 @@ describe("AI SDK stream result correlation", () => {
       textPrompt,
       { model: model(), input: { message: "Stream" } },
     );
-    const legacy = (result.raw as { _meta?: { _streamCompletion?: unknown } })
-      ._meta?._streamCompletion;
+    // The provider result is unreachable from a managed stream, so the internal
+    // cost/middleware completion slot is observable only through `_meta`.
+    expect("raw" in result).toBe(false);
     const publicLegacy = (
       result._meta as typeof result._meta & { _streamCompletion?: unknown }
     )._streamCompletion;
@@ -125,7 +126,7 @@ describe("AI SDK stream result correlation", () => {
     for await (const _chunk of result.textStream) {
       // Drain to let both public completion projections settle.
     }
-    const executorCompletion = await (legacy as Promise<{
+    const executorCompletion = await (publicLegacy as Promise<{
       _meta: typeof result._meta;
     }>);
     const canonicalCompletion = await result.completion;
@@ -134,7 +135,6 @@ describe("AI SDK stream result correlation", () => {
       traceId: result._meta.traceId,
       spanId: result._meta.spanId,
     });
-    expect(publicLegacy).toBe(legacy);
     expect(canonicalCompletion._meta).toMatchObject(executorCompletion._meta);
   });
 

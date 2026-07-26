@@ -1,112 +1,237 @@
-import type { StreamResult } from "@use-crux/core/adapter";
+import type {
+  PublishedStreamEvent,
+  StreamCompletion,
+} from "@use-crux/core/adapter";
+import { publishOrdinaryStream } from "@use-crux/core/adapter";
 import {
   createCruxRunId,
   createCruxSpanId,
   createCruxTraceId,
 } from "@use-crux/core/observability";
 import { describe, expect, it, vi } from "vitest";
-import { createUIMessageStreamResponse } from "../../src/ui-message";
+import { toUIMessageStream } from "../../src/ui-message";
 
 describe("Crux UI-message metadata", () => {
-  it("preserves user metadata while authoritatively stamping crux.runId", () => {
+  it("preserves user metadata while authoritatively stamping crux.runId", async () => {
     const runId = createCruxRunId();
     const messageMetadata = vi.fn(() => ({
       user: { tenant: "acme" },
       crux: { feature: "support", runId: "user-supplied" },
     }));
-    let emitted: unknown;
-    const result = streamResult(runId, (options) => {
-      emitted = options.messageMetadata?.({ part: { type: "start" } } as never);
-    });
 
-    createUIMessageStreamResponse(result, { messageMetadata });
+    const chunks = await collect(
+      toUIMessageStream(streamResult(runId), { messageMetadata }),
+    );
 
-    expect(messageMetadata).toHaveBeenCalledOnce();
-    expect(emitted).toEqual({
+    // The caller's own fields survive; only `crux.runId` is authoritative.
+    expect(metadataOf(chunks, "start")).toEqual({
       user: { tenant: "acme" },
       crux: { feature: "support", runId },
     });
   });
 
-  it("adds Crux metadata when the user callback returns no metadata", () => {
+  it("adds Crux metadata when the user callback returns no metadata", async () => {
     const runId = createCruxRunId();
-    let emitted: unknown;
-    const result = streamResult(runId, (options) => {
-      emitted = options.messageMetadata?.({} as never);
-    });
 
-    createUIMessageStreamResponse(result, {
-      messageMetadata: () => undefined,
-    });
+    const chunks = await collect(
+      toUIMessageStream(streamResult(runId), {
+        messageMetadata: () => undefined,
+      }),
+    );
 
-    expect(emitted).toEqual({ crux: { runId } });
+    expect(metadataOf(chunks, "start")).toEqual({ crux: { runId } });
   });
 
-  it("stamps every lifecycle callback without changing callback frequency", () => {
+  it("stamps the terminal part as well as the opening one", async () => {
     const runId = createCruxRunId();
     const messageMetadata = vi.fn(() => ({ source: "user" }));
-    const emitted: unknown[] = [];
-    const result = streamResult(runId, (options) => {
-      emitted.push(options.messageMetadata?.({} as never));
-      emitted.push(options.messageMetadata?.({} as never));
+
+    const chunks = await collect(
+      toUIMessageStream(streamResult(runId), { messageMetadata }),
+    );
+
+    expect(metadataOf(chunks, "start")).toEqual({
+      source: "user",
+      crux: { runId },
     });
-
-    createUIMessageStreamResponse(result, { messageMetadata });
-
+    expect(metadataOf(chunks, "finish")).toEqual({
+      source: "user",
+      crux: { runId },
+    });
     expect(messageMetadata).toHaveBeenCalledTimes(2);
-    expect(emitted).toEqual([
-      { source: "user", crux: { runId } },
-      { source: "user", crux: { runId } },
+  });
+
+  it("translates published text into one UI text block", async () => {
+    const runId = createCruxRunId();
+
+    const chunks = await collect(toUIMessageStream(streamResult(runId)));
+
+    expect(chunks.map((chunk) => chunk.type)).toEqual([
+      "start",
+      "text-start",
+      "text-delta",
+      "text-delta",
+      "text-end",
+      "finish",
     ]);
+  });
+
+  it("forwards the logical finish facts to the terminal part and metadata", async () => {
+    const runId = createCruxRunId();
+    const seen: unknown[] = [];
+
+    const chunks = await collect(
+      toUIMessageStream(
+        streamResult(
+          runId,
+          [{ type: "text-delta", text: "hi" }],
+          { finishReason: "stop", usage: { totalTokens: 12 } },
+        ),
+        {
+          messageMetadata: ({ part }) => {
+            seen.push(part);
+            return undefined;
+          },
+        },
+      ),
+    );
+
+    // The terminal chunk carries what the UI protocol needs...
+    expect(chunks.find((chunk) => chunk.type === "finish")).toMatchObject({
+      finishReason: "stop",
+      totalUsage: { totalTokens: 12 },
+    });
+    // ...and the caller's callback sees the SAME facts, not a synthetic stub.
+    expect(seen.at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: "stop",
+      totalUsage: { totalTokens: 12 },
+    });
+  });
+
+  it("renders published media as a UI file chunk", async () => {
+    const runId = createCruxRunId();
+
+    const chunks = await collect(
+      toUIMessageStream(
+        streamResult(runId, [
+          {
+            type: "media",
+            part: {
+              type: "image",
+              source: new Uint8Array([1, 2, 3]),
+              mediaType: "image/png",
+            },
+          },
+        ]),
+      ),
+    );
+
+    const file = chunks.find((chunk) => chunk.type === "file");
+    expect(file).toMatchObject({
+      type: "file",
+      mediaType: "image/png",
+      url: "data:image/png;base64,AQID",
+    });
+  });
+
+  it("omits media it cannot render rather than emitting a broken attachment", async () => {
+    const runId = createCruxRunId();
+
+    const chunks = await collect(
+      toUIMessageStream(
+        streamResult(runId, [
+          {
+            type: "media",
+            part: {
+              type: "file",
+              // A provider-hosted reference carries no inline bytes.
+              source: { type: "provider-file", provider: "openai", fileId: "f_1" },
+              mediaType: "application/pdf",
+            },
+          },
+        ]),
+      ),
+    );
+
+    expect(chunks.some((chunk) => chunk.type === "file")).toBe(false);
+  });
+
+  it("frames reasoning as its own block, never merged into the answer", async () => {
+    const runId = createCruxRunId();
+
+    const chunks = await collect(
+      toUIMessageStream(
+        streamResult(runId, [
+          { type: "reasoning-delta", text: "thinking" },
+          { type: "text-delta", text: "answer" },
+        ]),
+      ),
+    );
+
+    expect(chunks.map((chunk) => chunk.type)).toEqual([
+      "start",
+      "reasoning-start",
+      "reasoning-delta",
+      "text-start",
+      "text-delta",
+      "reasoning-end",
+      "text-end",
+      "finish",
+    ]);
+    // Distinct ids: a shared one would render private reasoning as the answer.
+    const reasoningId = chunks.find((c) => c.type === "reasoning-delta")?.id;
+    const textId = chunks.find((c) => c.type === "text-delta")?.id;
+    expect(reasoningId).not.toBe(textId);
   });
 });
 
+function metadataOf(
+  chunks: readonly Record<string, unknown>[],
+  type: "start" | "finish",
+): unknown {
+  return chunks.find((chunk) => chunk.type === type)?.messageMetadata;
+}
+
+async function collect(
+  stream: ReadableStream<unknown>,
+): Promise<Record<string, unknown>[]> {
+  const chunks: Record<string, unknown>[] = [];
+  const reader = stream.getReader();
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) break;
+    chunks.push(next.value as Record<string, unknown>);
+  }
+  return chunks;
+}
+
+/** A real logical stream, so the helper is exercised through the public seam. */
 function streamResult(
   runId: ReturnType<typeof createCruxRunId>,
-  inspect: (options: {
-    readonly messageMetadata?: (input: { readonly part: never }) => unknown;
-  }) => void,
-): StreamResult<{ toUIMessageStream(options?: unknown): ReadableStream }> {
-  const operation = {
-    traceId: createCruxTraceId(),
-    spanId: createCruxSpanId(),
-  };
-  return {
+  published: readonly PublishedStreamEvent<unknown>[] = [
+    { type: "text-delta", text: "he" },
+    { type: "text-delta", text: "llo" },
+  ],
+  terminal: { finishReason?: string; usage?: unknown } = {},
+) {
+  const meta = { traceId: createCruxTraceId(), spanId: createCruxSpanId() };
+  async function* events(): AsyncIterable<PublishedStreamEvent<unknown>> {
+    yield* published;
+  }
+  return publishOrdinaryStream<unknown, unknown>({
     runId,
-    _meta: operation,
-    textStream: (async function* () {})(),
-    raw: {
-      toUIMessageStream(options?: unknown) {
-        inspect(
-          options as {
-            readonly messageMetadata?: (input: {
-              readonly part: never;
-            }) => unknown;
-          },
-        );
-        return new ReadableStream({
-          start(controller) {
-            controller.close();
-          },
-        });
-      },
-    },
-    completion: Promise.resolve({
-      runId,
-      _meta: operation,
-      text: "",
-      content: [],
-      steps: [],
-      finalStep: {
-        content: [],
-        text: "",
-        finishReason: undefined,
-        responseId: undefined,
-        modelId: undefined,
-        warnings: [],
-      },
-      messages: [],
-      warnings: [],
-    }),
-  };
+    meta,
+    events: events(),
+    completion: async () =>
+      ({
+        runId,
+        _meta: meta,
+        text: "hello",
+        ...(terminal.finishReason !== undefined
+          ? { finalStep: { finishReason: terminal.finishReason } }
+          : {}),
+        ...(terminal.usage !== undefined ? { usage: terminal.usage } : {}),
+      }) as unknown as StreamCompletion<unknown>,
+  });
 }

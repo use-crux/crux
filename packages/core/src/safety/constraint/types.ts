@@ -11,8 +11,6 @@ export type ConstraintCheckResult =
   | { readonly pass: true; readonly metadata?: Readonly<Record<string, unknown>> }
   | { readonly pass: false; readonly feedback: string; readonly metadata?: Readonly<Record<string, unknown>> }
 
-export type ChunkCheckResult = { readonly abort: false } | { readonly abort: true; readonly feedback: string }
-
 /** Callable constraint body, optionally carrying first-party strategy metadata. */
 export interface ConstraintRun<B extends ConstraintBoundary> {
   (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): ConstraintCheckResult | Promise<ConstraintCheckResult>
@@ -29,11 +27,6 @@ export interface ConstraintConfig<B extends ConstraintBoundary = ConstraintBound
   readonly severity?: ConstraintSeverity
   readonly maxRetries?: number
   readonly run: ConstraintRun<B>
-  readonly onChunk?: (
-    chunk: string,
-    accumulated: string,
-    ctx: ConstraintContext,
-  ) => ChunkCheckResult | Promise<ChunkCheckResult>
 }
 
 /** Frozen constraint object. */
@@ -49,8 +42,6 @@ export interface Constraint<B extends ConstraintBoundary = ConstraintBoundary> {
     readonly kind: string
     readonly config: Readonly<Record<string, unknown>>
   }
-
-  onChunk?(chunk: string, accumulated: string, ctx: ConstraintContext): ChunkCheckResult | Promise<ChunkCheckResult>
 }
 
 export interface ConstraintContext {

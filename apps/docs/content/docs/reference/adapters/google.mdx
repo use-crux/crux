@@ -186,11 +186,18 @@ Stream a prompt execution.
 | `options.extra.cachedContent.skip`       | `boolean?`                                     | Skip caching for this call                                                                                      |
 | `options.extra.cachedContent.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                                                           |
 
-**Returns:** `StreamResult<TRawStream>`:
+**Returns:** `StreamResult<TOutput, TPartial>`:
 
-- `result.textStream`: provider-neutral text deltas
-- `result.raw`: raw Google GenAI stream
-- `result.completion`: promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+- `result.textStream`: published, Safety-final text deltas
+- `result.fullStream`: every published logical event in canonical order
+- `result.partialOutputStream`: canonical partial `z.input` for a structured prompt
+- `result.completion`: promise resolving to the canonical completion envelope (`text`, optional `object`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+- `result.cancel(reason?)`: abort the whole logical operation, including the active provider attempt
+
+There is deliberately no `raw` on a managed stream: a provider stream resolves
+before terminal Safety and describes only one attempt, so exposing it would
+bypass guardrail holds, structured occurrence gating, commit gates, and
+validation retry.
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

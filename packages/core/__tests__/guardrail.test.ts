@@ -57,26 +57,28 @@ describe('guardrail', () => {
     expect(Object.isFrozen(guard)).toBe(true)
   })
 
-  it('supports stream config on output guards', () => {
-    const guard = makeGuardrail({
-      id: 'streaming-guard',
-      on: boundary.output.text(),
-      stream: 'final',
+  it('carries the boundary refinement unit on output guards (unit owns granularity)', () => {
+    const complete = makeGuardrail({
+      id: 'complete-guard',
+      on: boundary.output.text().complete(),
       run: async () => ({ action: 'allow' as const }),
     })
+    expect((complete.on as { unit?: string }).unit).toBe('complete')
 
-    expect(guard.stream).toBe('final')
-  })
-
-  it('supports explicit chunk segmentation for streaming', () => {
-    const guard = makeGuardrail({
-      id: 'chunk-guard',
-      on: boundary.output.text(),
-      stream: 'chunk',
+    const deltas = makeGuardrail({
+      id: 'delta-guard',
+      on: boundary.output.text().deltas(),
       run: async () => ({ action: 'allow' as const }),
     })
+    expect((deltas.on as { unit?: string }).unit).toBe('delta')
 
-    expect(guard.stream).toBe('chunk')
+    // An unrefined boundary has no explicit unit (adaptive resolution applies).
+    const adaptive = makeGuardrail({
+      id: 'adaptive-guard',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'allow' as const }),
+    })
+    expect((adaptive.on as { unit?: string }).unit).toBeUndefined()
   })
 
   it('carries an optional risk category', () => {
@@ -147,7 +149,7 @@ describe('stable beta boundary authoring', () => {
       _tag: 'Boundary',
       id: 'model.output',
     })
-    expect(boundary.output.path<{ customer: { email: string } }>()('customer.email')).toMatchObject({
+    expect(boundary.output.object<{ customer: { email: string } }>().path('customer.email')).toMatchObject({
       _tag: 'Boundary',
       id: 'model.output.object',
       path: 'customer.email',
@@ -224,7 +226,7 @@ describe('validateGuardrailRunResult', () => {
 })
 
 describe('first-party guardrail strategies', () => {
-  it('rewrites PII with safe strategy metadata and a stream default', async () => {
+  it('rewrites PII with safe strategy metadata and a sentence unit default', async () => {
     const run = makeGuardrail.pii({ strategy: 'redact' })
     const guard = makeGuardrail({
       id: 'pii',
@@ -237,9 +239,11 @@ describe('first-party guardrail strategies', () => {
     expect(run.strategy).toEqual({
       kind: 'guardrail.pii',
       config: { strategy: 'redact' },
+      defaultUnit: 'sentence',
     })
     expect(guard.strategy).toEqual(run.strategy)
-    expect(guard.stream).toBe('sentence')
+    // The bundled semantic default is a sentence unit (applied when unrefined).
+    expect(guard.strategy?.defaultUnit).toBe('sentence')
     expect(result).toMatchObject({
       action: 'rewrite',
       rewrite: { kind: 'redact' },
@@ -275,7 +279,8 @@ describe('first-party guardrail strategies', () => {
     expect(findings).toEqual([{ type: 'classifier-unsafe', count: 1 }])
     expect(run.strategy).toEqual({
       kind: 'guardrail.classifier',
-      config: { stream: 'final' },
+      config: {},
+      defaultUnit: 'complete',
     })
   })
 })

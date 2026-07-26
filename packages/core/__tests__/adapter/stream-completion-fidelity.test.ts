@@ -30,8 +30,7 @@ describe("stream completion fidelity — Core", () => {
       [
         guardrail({
           id: "independent-live-slots",
-          on: boundary.output.text(),
-          stream: "chunk",
+          on: boundary.output.text().deltas(),
           run: (text) => ({
             action: "rewrite",
             value: text === "alpha" ? "A" : "B",
@@ -70,8 +69,7 @@ describe("stream completion fidelity — Core", () => {
       [
         guardrail({
           id: "shared-part-slots",
-          on: boundary.output.text(),
-          stream: "chunk",
+          on: boundary.output.text().deltas(),
           run: (text) => {
             seen.push(text);
             return {
@@ -104,8 +102,7 @@ describe("stream completion fidelity — Core", () => {
       [
         guardrail({
           id: "partial-live-slot",
-          on: boundary.output.text(),
-          stream: "chunk",
+          on: boundary.output.text().deltas(),
           run: (text) => {
             seen.push(text);
             return {
@@ -132,8 +129,7 @@ describe("stream completion fidelity — Core", () => {
     const result = await start({ chunks: ["unsafe"], completion: false }, [
       guardrail({
         id: "metadata-free-live-text",
-        on: boundary.output.text(),
-        stream: "chunk",
+        on: boundary.output.text().deltas(),
         run: (text) => {
           seen.push(text);
           return {
@@ -153,7 +149,7 @@ describe("stream completion fidelity — Core", () => {
     expect(completion.content).toEqual([{ type: "text", text: "safe" }]);
   });
 
-  it("keeps an omitted raw handle bound to the original provider iterable", async () => {
+  it("publishes provider text without exposing the provider iterable", async () => {
     let providerStream: AsyncIterable<{ readonly text: string }> | undefined;
     const runtime = adapter(
       streamSpec({
@@ -168,7 +164,8 @@ describe("stream completion fidelity — Core", () => {
       model: "stream-model",
     });
 
-    expect(result.raw).toBe(providerStream);
+    expect(providerStream).toBeDefined();
+    expect("raw" in result).toBe(false);
     expect(await collect(result.textStream)).toBe("visible");
   });
 

@@ -155,6 +155,24 @@ export interface ExecutorRequest<TModel> {
    * `experimental_transform` on `streamText`.
    */
   readonly safety?: import("../safety/session").SafetyStream;
+
+  /**
+   * Core-owned coordinated-stream plan (RFC #173). Present only when a commit gate
+   * (an enforce `assert`, or a positive `validationRetry`) can REJECT an attempt, so
+   * the runtime must be able to discard it and restream.
+   *
+   * When present and `plan.active`, the runtime MUST drive attempts through the plan
+   * instead of `request.safety`: begin an attempt, feed its `attempt.safety` stream,
+   * surface only released content, and on a thrown rejection call `attempt.reject()` —
+   * which either returns the next attempt (retry granted) or throws the typed public
+   * terminal error. A discarded attempt must reach NO user-facing channel (no stream
+   * parts, no `onChunk`/`onFinish`, no completion resolution). The runtime composes one
+   * logical SDK-shaped result across attempts and never re-implements retry policy.
+   *
+   * Absent (or inactive) means the untouched single-attempt fast path: preserve raw
+   * result identity exactly.
+   */
+  readonly streamPlan?: import("./execution/stream-attempt-plan").CoordinatedStreamPlan;
 }
 
 /**

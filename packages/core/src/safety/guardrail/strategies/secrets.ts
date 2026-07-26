@@ -5,7 +5,7 @@
  */
 
 import type { BoundaryDef } from '../../boundary'
-import type { GuardrailRun, GuardrailRunResult } from '../types'
+import type { GuardrailRun, ClosedGuardrailRunResult } from '../types'
 import { rewritePatterns, SECRET_PATTERNS } from './patterns'
 
 type TextBoundary = BoundaryDef<
@@ -21,7 +21,7 @@ export interface SecretsGuardrailOptions {
 /** Create a provider-agnostic secret redaction strategy for text boundaries. */
 export function secrets(options: SecretsGuardrailOptions = {}): GuardrailRun<TextBoundary> {
   const strategy = options.strategy ?? 'redact'
-  const run = async (subject: string): Promise<GuardrailRunResult<string>> => {
+  const run = async (subject: string): Promise<ClosedGuardrailRunResult<string>> => {
     const rewrite = rewritePatterns(subject, SECRET_PATTERNS)
     if (rewrite.findings.length === 0) return { action: 'allow' }
     return {
@@ -36,6 +36,8 @@ export function secrets(options: SecretsGuardrailOptions = {}): GuardrailRun<Tex
     strategy: {
       kind: 'guardrail.secrets',
       config: { strategy },
+      // Evaluate whole sentences so a secret split across deltas is not missed.
+      defaultUnit: 'sentence' as const,
     },
   })
 }

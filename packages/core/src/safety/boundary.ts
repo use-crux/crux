@@ -1,6 +1,22 @@
 import type { MediaPartSubject, MediaSafetyTargetId } from './media/types'
 import type { InputSource } from './input-origin'
 import { inputBoundary } from './input-boundary'
+import { outputObject, outputText } from './output/output-boundaries'
+
+export type {
+  HoldCapability,
+  HoldLimits,
+  HoldMarker,
+  ItemsBoundary,
+  LineOptions,
+  ObjectBoundary,
+  PathBoundary,
+  SafetyUnitKind,
+  SegmentOptions,
+  SentenceOptions,
+  StringPathSentencesBoundary,
+  TextBoundary,
+} from './output/output-boundaries'
 
 export type {
   MediaPart,
@@ -111,6 +127,18 @@ export type OriginlessBoundaryOf<B> =
       : never
     : never
 
+/**
+ * The selected structured-output path of a boundary, if any.
+ *
+ * A root `object()` builder installs a non-enumerable `.path()` method, so its
+ * `path` property is a function rather than a selected-path string. Runtime
+ * readers use this helper to read the selected path as data, treating the root
+ * object (and any non-string `path`) as "no path selected".
+ */
+export function selectedPath(boundary: { readonly path?: unknown }): string | undefined {
+  return typeof boundary.path === 'string' ? boundary.path : undefined
+}
+
 /** Runtime type guard for frozen boundary descriptors. */
 export function isBoundaryDef(value: unknown): value is BoundaryDef {
   return (
@@ -136,7 +164,14 @@ function makeBoundary<TId extends SafetyTargetId, TSubject>(id: TId, path?: stri
 export const boundary = Object.freeze({
   input: inputBoundary,
   output: Object.freeze({
-    text: (): BoundaryDef<'model.output.text', string> => makeBoundary('model.output.text'),
+    /**
+     * Target the model's generated text.
+     *
+     * @remarks Adaptive default: evaluated once when a generate result completes
+     * and once per canonical text delta on a stream. Refine the unit with
+     * `.deltas()`, `.complete()`, `.sentences()`, `.lines()`, or `.segments()`.
+     */
+    text: outputText,
     /**
      * Target each canonical media part produced by a model or completed operation.
      *
@@ -166,13 +201,17 @@ export const boundary = Object.freeze({
      * ```
      */
     media: (): BoundaryDef<'model.output.media', MediaPartSubject> => makeBoundary('model.output.media'),
-    object: <T>(): BoundaryDef<'model.output.object', T> => makeBoundary('model.output.object'),
+    /**
+     * Target the model's structured output object.
+     *
+     * @remarks Adaptive default: evaluates the complete root object. Select a
+     * path with `.path('a.b')`; a string path adds `.sentences()` and an array
+     * path adds `.items()`. Known paths autocomplete to depth four; deeper string
+     * paths are runtime-valid with an `unknown` subject.
+     */
+    object: outputObject,
     both: <T>(): BoundaryDef<'model.output', { readonly text: string; readonly object: T }> =>
       makeBoundary('model.output'),
-    path:
-      <T>() =>
-      <P extends DotPath<T>>(path: P): BoundaryDef<'model.output.object', PathValue<T, P>> =>
-        makeBoundary('model.output.object', path),
   }),
   memory: Object.freeze({
     write: <T = unknown>(): BoundaryDef<'memory.write', T> => makeBoundary('memory.write'),

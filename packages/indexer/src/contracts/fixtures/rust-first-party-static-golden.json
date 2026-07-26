@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 786,
+    "files": 799,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1484,
-    "canonicalBytes": 217434
+    "dependencies": 1555,
+    "canonicalBytes": 222221
   },
   "files": [
     {
@@ -411,12 +411,12 @@
     },
     {
       "file": "packages/ai/src/executor.ts",
-      "sha256": "5935214bf660a5d4f4ac8ce2bf44c53fd3dce7699a059b725b65087fc62ab38b",
-      "bytes": 299,
+      "sha256": "7fb01231c8ad5e99ccfb8324f336b8545691c4cba24d8b36508f42e7b9d85770",
+      "bytes": 356,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/ai/src/extensions.ts",
@@ -462,6 +462,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 9
+    },
+    {
+      "file": "packages/ai/src/logical-events.ts",
+      "sha256": "ba38cabf14d6a9f36a7dde328331215aa6fc19daadb98cf1869f0704ade683fe",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/ai/src/mcp-materializer.ts",
@@ -548,6 +557,15 @@
       "file": "packages/ai/src/result-shape.ts",
       "sha256": "e24f6f3382643fe00cff6589bdf32b575c25218e30a4c97e874db2d6cafe2684",
       "bytes": 193,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/coordinated-stream.ts",
+      "sha256": "8747c93fe14aec4e04ddad272a13c8686f520b03857ce70bbe65557d11d11941",
+      "bytes": 206,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -690,12 +708,12 @@
     },
     {
       "file": "packages/ai/src/stream-result.ts",
-      "sha256": "71b4d62a49d5e261487eadace2bf3beae4a291713ef8b529b6100a44e3e549fb",
-      "bytes": 114,
+      "sha256": "65c04f384c4b5226725ca5eed2d0cf00bd90d8dd39269fb30666119f9b327561",
+      "bytes": 157,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/ai/src/stream/client.ts",
@@ -2003,6 +2021,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/core/__type_tests__/logical-stream-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/memory-beta-contract.ts",
       "sha256": "7f850ce72f015e7748ddff25269f494e8b9640c2ca63784f051429bf3f04b830",
       "bytes": 110,
@@ -2316,6 +2343,33 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/adapter/execution/stream-completion.ts",
+      "sha256": "a2ce969e2eebb9314d6d76216d695639e93fd3e29f8ba62cdf9919ec46c63717",
+      "bytes": 237,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/src/adapter/execution/stream-core.ts",
+      "sha256": "849c9df1c11488e9a3f2d08e54b1cae06fd03a41b451ef836047608a49e83262",
+      "bytes": 1352,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 22
+    },
+    {
+      "file": "packages/core/src/adapter/execution/structured-completion.ts",
+      "sha256": "9fb4653aab2d67260dd83a079e48888f4ac6fe5bd3fe7231c0158d539d934b53",
+      "bytes": 347,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
     },
     {
       "file": "packages/core/src/adapter/executor-types.ts",
@@ -3615,12 +3669,12 @@
     },
     {
       "file": "packages/core/src/safety/boundary.ts",
-      "sha256": "e6d93644539a3619456a9f90ec1dcdadbd7578bc484e9ec2e83753acc4e234cd",
-      "bytes": 119,
+      "sha256": "7fe27961830e07237ecd3170bdcb64d2d4097ae1d5dd8d5494422437616d3f04",
+      "bytes": 181,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/safety/constraint/boundary.ts",
@@ -3633,12 +3687,12 @@
     },
     {
       "file": "packages/core/src/safety/constraint/runner.ts",
-      "sha256": "221ab3c6a086a924f0fb3aceea46e95bbcf4b8efc6fe2e516d8a27cf85685520",
-      "bytes": 285,
+      "sha256": "5f5dcb4dea9711ea901d48b0ea6ae35be14dc2fe00fcd595b3ac4dfcc89c795b",
+      "bytes": 451,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 7
     },
     {
       "file": "packages/core/src/safety/constraint/strategies/judge.ts",
@@ -3650,13 +3704,31 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/safety/guardrail/pipeline.ts",
-      "sha256": "54da7c6f70d846862e139c93c24e5dffd3ce47d1621beab5a3d31ff9158726de",
-      "bytes": 512,
+      "file": "packages/core/src/safety/guardrail/adaptive-notice.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/safety/guardrail/pipeline.ts",
+      "sha256": "f935f3be233bef1312d470fdfab61a8e41f8ac41b1ae0e7a4e5cbfe96b146b13",
+      "bytes": 332,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/src/safety/guardrail/run-guard.ts",
+      "sha256": "1232c0c7c1f448a43b737d0da2723430eca59cce59e7a8b0c3c8f3ad3c6e7cef",
+      "bytes": 400,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
     },
     {
       "file": "packages/core/src/safety/guardrail/strategies/media/index.ts",
@@ -3720,6 +3792,51 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 7
+    },
+    {
+      "file": "packages/core/src/safety/output/terminal.ts",
+      "sha256": "68514202feb2c685b172e3001ff4d4d05a23fbd278ade618440cd17d9adfe87a",
+      "bytes": 276,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/src/safety/session-bridge.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/safety/stream/structured-engine.ts",
+      "sha256": "28057ba373d3d3bf2c8994fa8d6cf0386b15342f0d99b508726a15a143280760",
+      "bytes": 424,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/safety/stream/structured-gating.ts",
+      "sha256": "dd181f150678aaacbec354cf3e352ea1751c90273dd307b3e932e9b15c3880dd",
+      "bytes": 546,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 9
+    },
+    {
+      "file": "packages/core/src/safety/stream/text-replay.ts",
+      "sha256": "cf89e6e277780ce95059064601d0f23d7a3fe31d7f3e44be9bf1d36b4e5c709c",
+      "bytes": 538,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 9
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",

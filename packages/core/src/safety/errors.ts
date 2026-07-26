@@ -34,6 +34,22 @@ export function toSafetyCaptureSummary(value: string | SafetyCaptureSummary): Sa
   return typeof value === 'string' ? safeCaptureSummary(value) : value
 }
 
+/**
+ * Evidence-only summary of a REJECTED candidate: size and hash, never content.
+ *
+ * @remarks
+ * Public terminal errors describe output the caller was never allowed to see, so they
+ * carry no preview unconditionally — redaction is not enough, because a preview of
+ * rejected output is still rejected output. The hash still lets callers correlate
+ * repeated failures. Observability capture presets govern telemetry artifacts separately.
+ */
+export function rejectedCandidateEvidence(
+  value: string | SafetyCaptureSummary,
+): SafetyCaptureSummary {
+  const summary = toSafetyCaptureSummary(value)
+  return { level: summary.level, sizeBytes: summary.sizeBytes, hash: summary.hash }
+}
+
 function fnv1a64(input: string): string {
   let hash = 0xcbf29ce484222325n
   const prime = 0x100000001b3n

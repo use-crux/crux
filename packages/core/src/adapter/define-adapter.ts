@@ -37,16 +37,18 @@ import type {
   AdapterGenerateOptions,
   AdapterGenerateResult,
   AdapterStreamOptions,
+  AdapterStreamResult,
   AdapterTransport,
   AdapterTransportInfo,
   CruxAdapter,
 } from "./define-adapter-types";
-import { createStreamResult, type StreamResult } from "./result-accumulator";
+import { createStreamResult } from "./result-accumulator";
 
 export type {
   AdapterGenerateOptions,
   AdapterGenerateResult,
   AdapterStreamOptions,
+  AdapterStreamResult,
   AdapterTransport,
   AdapterTransportInfo,
   CruxAdapter,
@@ -174,7 +176,7 @@ export function adapter<
     >(
       prompt: TPrompt,
       opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
-    ): Promise<StreamResult<TRawStream>> {
+    ): Promise<AdapterStreamResult<TPrompt>> {
       if (opts.transport) throw new CruxTransportStreamUnsupportedError(spec.providerId);
       const handle = await execution.stream({
         prompt,
@@ -204,7 +206,9 @@ export function adapter<
         signal: opts.signal,
       });
       assertStreamHandle<TRawStream>(handle);
-      return createStreamResult(handle);
+      // The prompt's schema types the RESULT, not the runtime shape: one logical
+      // stream is built either way, so this is a projection of the same object.
+      return createStreamResult(handle) as AdapterStreamResult<TPrompt>;
     }
 
     // ── prepare() ──────────────────────────────────────────────

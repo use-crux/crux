@@ -3,16 +3,17 @@ import type {
   BoundaryDef,
   BoundaryIdOf,
   BoundaryInput,
+  HoldMarker,
   MediaPartLocation,
   MediaPartSubject,
   MediaSafetyTargetId,
   SafetyTargetId,
   SubjectOf,
 } from '../boundary'
+import type { SafetyUnitKind } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import type { ModelInputOrigin } from '../input-origin'
 import { SafetyResultError } from '../errors'
-import type { GuardrailStreamOption } from '../stream/types'
 
 export type GuardrailMode = 'enforce' | 'report'
 export type GuardrailRewriteKind = 'redact' | 'mask' | 'hash' | 'normalize'
@@ -29,6 +30,16 @@ export type GuardrailRunResult<TValue = string> =
       readonly findings?: readonly SafetyFinding[]
     }
   | { readonly action: 'hold' }
+
+/**
+ * A guardrail result for a closed (non-growing) unit. `hold` is excluded because
+ * a closed unit cannot grow; use it for `.complete()` text and for reusable
+ * strategy bodies that never hold.
+ */
+export type ClosedGuardrailRunResult<TValue = string> = Exclude<
+  GuardrailRunResult<TValue>,
+  { readonly action: 'hold' }
+>
 
 /**
  * Result returned by a guardrail attached to `boundary.input.media()` or
@@ -68,16 +79,41 @@ type GuardrailBoundaryInput<B extends BoundaryInput> =
       }
     : B
 
+/**
+ * Whether the boundary's selected unit permits `hold`. Growing text units (text
+ * deltas/sentences/lines/segments and string-path sentences) carry
+ * `HoldMarker<'permitted'>`; closed units (`.complete()`, root object, scalar
+ * path, array item, media, tool) do not. A multi-boundary attachment never
+ * permits hold.
+ */
+type HoldPermittedFor<B extends BoundaryInput> = B extends readonly unknown[]
+  ? false
+  : B extends HoldMarker<'permitted'>
+    ? true
+    : false
+
 type GuardrailRunResultFor<B extends BoundaryInput> =
-  IsMediaBoundary<B> extends true ? MediaGuardrailRunResult : GuardrailRunResult<SubjectOf<B>>
+  IsMediaBoundary<B> extends true
+    ? MediaGuardrailRunResult
+    : HoldPermittedFor<B> extends true
+      ? GuardrailRunResult<SubjectOf<B>>
+      : Exclude<GuardrailRunResult<SubjectOf<B>>, { readonly action: 'hold' }>
+
+/**
+ * First-party strategy metadata carried on a guardrail body. `defaultUnit` is the
+ * strategy's semantic default streaming unit, applied when the attached boundary
+ * has no explicit refinement (resolution order: explicit > strategy > adaptive).
+ */
+export interface GuardrailStrategyMeta {
+  readonly kind: string
+  readonly config: Readonly<Record<string, unknown>>
+  readonly defaultUnit?: SafetyUnitKind
+}
 
 /** Callable guardrail body, optionally carrying first-party strategy metadata. */
 export interface GuardrailRun<B extends BoundaryInput> {
   (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): GuardrailRunResultFor<B> | Promise<GuardrailRunResultFor<B>>
-  readonly strategy?: {
-    readonly kind: string
-    readonly config: Readonly<Record<string, unknown>>
-  }
+  readonly strategy?: GuardrailStrategyMeta
 }
 
 /** Public guardrail authoring config. */
@@ -86,7 +122,6 @@ export interface GuardrailConfig<B extends BoundaryInput = BoundaryDef> {
   readonly on: GuardrailBoundaryInput<B>
   readonly category?: string
   readonly mode?: GuardrailMode
-  readonly stream?: IsMediaBoundary<B> extends true ? never : GuardrailStreamOption
   readonly run: GuardrailRun<B>
 }
 
@@ -97,12 +132,8 @@ export interface Guardrail<B extends BoundaryInput = BoundaryDef> {
   readonly on: B
   readonly category: string | undefined
   readonly mode: GuardrailMode
-  readonly stream: GuardrailStreamOption | undefined
   readonly run: GuardrailConfig<B>['run']
-  readonly strategy?: {
-    readonly kind: string
-    readonly config: Readonly<Record<string, unknown>>
-  }
+  readonly strategy?: GuardrailStrategyMeta
 }
 
 /** Internal call context used by the Safety session when running guardrails. */

@@ -36,7 +36,8 @@ describe("language terminal object Safety — core dialect", () => {
         guardrail({
           id: "rewrite-core-structured-path",
           on: boundary.output
-            .path<z.infer<typeof outputSchema>>()("profile.label"),
+            .object<z.infer<typeof outputSchema>>()
+            .path("profile.label"),
           run: (label) => {
             pathSeen.push(label);
             return {

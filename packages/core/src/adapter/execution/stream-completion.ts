@@ -5,6 +5,7 @@ import type { Message } from "../../generation/messages";
 import type { TraceMeta } from "../../generation/types";
 import type { Safety } from "../../safety/session";
 import type { SafetyStream } from "../../safety/session";
+import type { StructuredSafetyContext } from "../../safety/session";
 import { guardSafetySessionStreamCompletion } from "../../safety/session";
 import type { LiveTextSlot } from "../../safety/output/completion";
 import type { AssistantContentPart } from "../../types/content";
@@ -42,6 +43,27 @@ interface GuardStreamCompletionOptions {
   readonly schema?: z.ZodType;
   /** Reversible decode manifest for the compiled plan, when any. */
   readonly decodeManifest?: StructuredOutputDecodeManifest;
+  /** Compiled structured context (canonical schema) for object-occurrence gating. */
+  readonly structuredContext?: StructuredSafetyContext;
+  /**
+   * The canonical value a live structured stream already object-gated and sealed.
+   * When present with {@link objectOccurrencesAlreadyGated}, completion consumes
+   * it verbatim: no manifest decode and no object-occurrence re-gate.
+   */
+  readonly sealedCanonicalValue?: unknown;
+  readonly objectOccurrencesAlreadyGated?: boolean;
+  /**
+   * Occurrence-precise settlement recorded by the accepted stream attempt: an
+   * unchanged settled occurrence is not re-evaluated by the terminal constraints.
+   */
+  readonly constraintSettlement?: readonly import("../../safety/constraint/settlement").ConstraintOccurrenceSettlement[];
+  /**
+   * A candidate a stream's validation gate already parsed before publishing it.
+   *
+   * Completion publishes that parse's `data` instead of parsing again, so a transform or
+   * refinement runs exactly once per candidate.
+   */
+  readonly committedCandidate?: { readonly value: unknown; readonly data: unknown };
   /** Prompt id used in a terminal validation-failure diagnostic. */
   readonly promptId?: string;
 }
@@ -108,11 +130,19 @@ export async function guardStreamCompletion(
     const finalized = await finalizeStructuredStreamCompletion({
       safety: options.safety,
       schema: options.schema,
+      ...(options.committedCandidate ? { committed: options.committedCandidate } : {}),
       decodeManifest: options.decodeManifest,
+      structuredContext: options.structuredContext,
+      ...(options.constraintSettlement ? { settled: options.constraintSettlement } : {}),
       promptId: options.promptId,
       messages: options.messages,
       text,
-      wireValue: textRewritten ? undefined : options.meta?.object,
+      // A live structured stream already object-gated and sealed the canonical
+      // value: consume it verbatim (no decode, no re-gate) when completion text
+      // was not rewritten out from under it. Otherwise fall back to the wire value.
+      ...(options.objectOccurrencesAlreadyGated && !textRewritten
+        ? { canonicalValue: options.sealedCanonicalValue }
+        : { wireValue: textRewritten ? undefined : options.meta?.object }),
     });
     object = finalized.object;
     if (finalized.text !== text) {
@@ -150,27 +180,42 @@ async function finalizeStructuredStreamCompletion(opts: {
   readonly safety: Safety;
   readonly schema: z.ZodType;
   readonly decodeManifest?: StructuredOutputDecodeManifest;
+  readonly structuredContext?: StructuredSafetyContext;
+  readonly settled?: readonly import("../../safety/constraint/settlement").ConstraintOccurrenceSettlement[];
+  /** A validation-gated candidate already parsed before publication. */
+  readonly committed?: { readonly value: unknown; readonly data: unknown };
   readonly promptId?: string;
   readonly messages: readonly Message[];
   readonly text: string;
-  readonly wireValue: unknown;
+  readonly wireValue?: unknown;
+  /** The canonical value a live structured stream already gated and sealed. */
+  readonly canonicalValue?: unknown;
 }): Promise<{ readonly text: string; readonly object: unknown }> {
+  // A sealed live structured stream already object-gated the canonical value.
+  const alreadyGated = "canonicalValue" in opts;
   const completion = createStructuredCompletion({
     safety: opts.safety,
     schema: opts.schema,
     decodeManifest: opts.decodeManifest,
+    ...(opts.structuredContext
+      ? { structuredContext: opts.structuredContext }
+      : {}),
+    objectOccurrencesAlreadyGated: alreadyGated,
+    ...(opts.settled ? { settled: opts.settled } : {}),
     promptId: opts.promptId ?? "unknown",
+    ...(opts.committed ? { committed: opts.committed } : {}),
     validationRetry: undefined,
     maxSteps: 0,
     steps: () => 0,
     messages: () => opts.messages,
     reprompt: async () => opts.text,
   });
-  // The parsed wire value is authoritative for the initial semantic value; when
-  // it is absent (a completion-text rewrite made it stale, or a runtime exposed
-  // no wire value) the value is resynchronized from the authoritative text.
-  const initial =
-    opts.wireValue !== undefined
+  // Precedence: the sealed canonical value (already decoded + gated) is used
+  // verbatim; else the parsed wire value; else the value is resynchronized from
+  // the authoritative text (a completion-text rewrite made the wire value stale).
+  const initial = alreadyGated
+    ? completion.buildFromCanonical({ text: opts.text, value: opts.canonicalValue })
+    : opts.wireValue !== undefined
       ? completion.buildFromWireValue({ text: opts.text, value: opts.wireValue })
       : completion.buildFromText(opts.text);
   const finalized = await completion.finalize(initial, { suspended: false });
@@ -229,13 +274,21 @@ function createAssistantMessage(
 export function trackSafetyStreamSeal(stream: SafetyStream): {
   readonly stream: SafetyStream;
   readonly sealedText: () => string | undefined;
+  /** The sealed canonical value for a structured stream, once `finish()` ran. */
+  readonly sealedObject: () => unknown;
+  /** Whether `finish()` has sealed (distinguishes a sealed `undefined` object). */
+  readonly sealed: () => boolean;
 } {
   let sealedText: string | undefined;
+  let sealedObject: unknown;
+  let didSeal = false;
   const tracked: SafetyStream = {
     feed: (chunk) => stream.feed(chunk),
     async finish() {
       const seal = await stream.finish();
       sealedText = seal.text;
+      sealedObject = seal.parsed;
+      didSeal = true;
       return seal;
     },
     transform() {
@@ -253,5 +306,10 @@ export function trackSafetyStreamSeal(stream: SafetyStream): {
       });
     },
   };
-  return { stream: tracked, sealedText: () => sealedText };
+  return {
+    stream: tracked,
+    sealedText: () => sealedText,
+    sealedObject: () => sealedObject,
+    sealed: () => didSeal,
+  };
 }

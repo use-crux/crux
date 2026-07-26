@@ -142,9 +142,9 @@ type TargetGenerateResult<TRaw, TOutput = unknown> = GenerateResult<
   TOutput
 >;
 type TargetStreamCompletion<TOutput = unknown> = StreamCompletion<TOutput>;
-type TargetStreamResult<TRawStream, TOutput = unknown> = StreamResult<
-  TRawStream,
-  TOutput
+type TargetStreamResult<TOutput = unknown, TPartial = unknown> = StreamResult<
+  TOutput,
+  TPartial
 >;
 
 type _GenerateResultKeys = Expect<
@@ -212,21 +212,23 @@ type _FinalStepUsage = Expect<
     TargetTokenUsage | undefined
   >
 >;
+// The managed logical result is closed: there is no `raw`, and its surface does
+// not change with a schema, a Safety gate, or the execution route (RFC #173).
 type _StreamResultKeys = Expect<
   AssertEqual<
-    keyof TargetStreamResult<{ readonly stream: true }>,
-    "runId" | "textStream" | "raw" | "completion" | "_meta"
-  >
->;
-type _StreamRaw = Expect<
-  AssertEqual<
-    TargetStreamResult<{ readonly stream: true }>["raw"],
-    { readonly stream: true }
+    keyof TargetStreamResult,
+    | "runId"
+    | "_meta"
+    | "textStream"
+    | "fullStream"
+    | "partialOutputStream"
+    | "completion"
+    | "cancel"
   >
 >;
 type _StreamCompletion = Expect<
   AssertEqual<
-    TargetStreamResult<unknown, { readonly ok: true }>["completion"],
+    TargetStreamResult<{ readonly ok: true }>["completion"],
     Promise<TargetStreamCompletion<{ readonly ok: true }>>
   >
 >;

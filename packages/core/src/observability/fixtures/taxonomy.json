@@ -31,6 +31,7 @@
     "flow.suspension": "flow",
     "generation.call": "generation",
     "generation.stream": "generation",
+    "generation.stream.attempt": "generation",
     "guardrail.run": "guardrail",
     "handoff.prepare": "handoff",
     "indexing.pipeline": "indexing",

@@ -64,6 +64,12 @@ completion._meta.spanId === operation.spanId; // true
 
 The pair is stable whether provider completion or stream drain settles first, during partial consumption, and when asynchronous ambient context is unavailable. If iteration or completion later fails, the already-returned handle remains the navigation reference. Crux never annotates individual chunks.
 
+A terminal failure reaches every surface, not just `completion`: each live stream
+replays its already committed prefix and then errors with the exact same
+normalized error object that `completion` rejects with. A caller reading only
+`textStream` therefore cannot observe a clean success for an operation a terminal
+guard, constraint, or provider failure rejected.
+
 ## Media and higher-level results
 
 Completed image, transcription, and speech results point at their outer `media.*` operation. Warnings, provider metadata, execution facts, and `raw` retain their existing meaning. A composed child generation has a different span.

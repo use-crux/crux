@@ -51,6 +51,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   "run",
   "generation.call",
   "generation.stream",
+  "generation.stream.attempt",
   "media.generate_image",
   "media.transcribe",
   "media.generate_speech",
@@ -188,6 +189,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   run: "run",
   "generation.call": "generation",
   "generation.stream": "generation",
+  "generation.stream.attempt": "generation",
   "media.generate_image": "media",
   "media.transcribe": "media",
   "media.generate_speech": "media",
@@ -946,6 +948,20 @@ export interface CruxGenerationStreamAttributes {
   finishReason?: string;
 }
 
+/**
+ * One physical provider stream invocation nested under the single logical
+ * `generation.stream`. A coordinated stream (RFC #173) can run several: the
+ * initial call plus corrective retries. Never carries candidate content or
+ * corrective feedback — only attempt identity, cause, and outcome.
+ */
+export interface CruxGenerationStreamAttemptAttributes {
+  attemptIndex: number;
+  cause: "initial" | "constraint-retry" | "validation-retry";
+  outcome?: "accepted" | "discarded" | "failed" | "cancelled";
+  /** Sanitized ids of the policies that discarded this attempt (never feedback text). */
+  failedPolicies?: readonly string[];
+}
+
 export interface CruxPromptResolveAttributes {
   contextCount?: number;
   droppedContextCount?: number;
@@ -1028,6 +1044,7 @@ export interface CruxDeferRunAttributes {
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
+  "generation.stream.attempt": CruxGenerationStreamAttemptAttributes;
   "prompt.resolve": CruxPromptResolveAttributes;
   "memory.capture": CruxMemoryCaptureSpanAttributes;
   "defer.scheduled": CruxDeferScheduledAttributes;

@@ -25,8 +25,8 @@ export { sumUsageWhenComplete } from "./result-usage";
 export type {
   StreamCompletion,
   StreamCompletionPayload,
-  StreamResult,
 } from "./stream-result-types";
+export type { StreamResult } from "./logical-stream";
 
 /** Last provider-call step facts exposed next to accumulated result fields. */
 export interface FinalStepInfo {
@@ -168,6 +168,19 @@ export interface ResultEnvelopeBase<TRaw, TOutput = unknown> {
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   /** Routing decisions for calls that used a routing wrapper. */
   readonly routing?: RoutingReceipt;
+  /**
+   * Scalar totals across every billable physical attempt (RFC #173, law 7).
+   *
+   * When present this REPLACES the step-derived usage and the supplied cost —
+   * including replacing them with `undefined`, which is how "some billable
+   * attempt was unmetered, so the total is unknowable" is expressed. Step facts
+   * are untouched, so `usage` deliberately stops equalling the sum of
+   * `steps[].usage` once a policy retry occurred.
+   */
+  readonly logicalTotals?: {
+    readonly usage?: TokenUsage;
+    readonly cost?: number;
+  };
 }
 
 /** Create a new result accumulator for one managed call. */
@@ -184,7 +197,10 @@ export function createResultAccumulator() {
     finalize<TRaw, TOutput = unknown>(
       base: ResultEnvelopeBase<TRaw, TOutput>,
     ): GenerateResultPayload<TRaw, TOutput> {
-      const usage = sumUsageWhenComplete(steps);
+      const usage = base.logicalTotals
+        ? base.logicalTotals.usage
+        : sumUsageWhenComplete(steps);
+      const cost = base.logicalTotals ? base.logicalTotals.cost : base.cost;
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
       const content = Object.freeze(
@@ -195,7 +211,7 @@ export function createResultAccumulator() {
         text: textFromAssistantContent(content),
         ...(base.object !== undefined ? { object: base.object } : {}),
         ...(usage !== undefined ? { usage } : {}),
-        ...(base.cost !== undefined ? { cost: base.cost } : {}),
+        ...(cost !== undefined ? { cost } : {}),
         steps: publicSteps,
         finalStep,
         messages: Object.freeze([...base.messages]),
@@ -216,7 +232,10 @@ export function createResultAccumulator() {
     finalizeCompletion<TOutput = unknown>(
       base: Omit<ResultEnvelopeBase<never, TOutput>, "raw">,
     ): StreamCompletionPayload<TOutput> {
-      const usage = sumUsageWhenComplete(steps);
+      const usage = base.logicalTotals
+        ? base.logicalTotals.usage
+        : sumUsageWhenComplete(steps);
+      const cost = base.logicalTotals ? base.logicalTotals.cost : base.cost;
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
       const content = Object.freeze(
@@ -227,7 +246,7 @@ export function createResultAccumulator() {
         text: textFromAssistantContent(content),
         ...(base.object !== undefined ? { object: base.object } : {}),
         ...(usage !== undefined ? { usage } : {}),
-        ...(base.cost !== undefined ? { cost: base.cost } : {}),
+        ...(cost !== undefined ? { cost } : {}),
         steps: publicSteps,
         finalStep,
         messages: Object.freeze([...base.messages]),

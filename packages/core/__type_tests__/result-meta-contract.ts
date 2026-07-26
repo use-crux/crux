@@ -165,7 +165,7 @@ const compatibleGenerationMeta: GenerationMeta = legacyTraceMeta;
 
 void compatibleGenerationMeta;
 
-declare const streamResult: StreamResult<AsyncIterable<unknown>>;
+declare const streamResult: StreamResult<{ readonly ok: true }>;
 declare const streamCompletion: StreamCompletion;
 
 const immediateStreamMeta: OperationResultMeta = streamResult._meta;

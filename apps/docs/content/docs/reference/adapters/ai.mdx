@@ -193,7 +193,7 @@ Execute a prompt using the Vercel AI SDK.
 
 ### `stream(prompt, options)`
 
-Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) execute automatically on text streams through the Safety stream transform, so sentence-gated holds, rewrites, and blocks reach `textStream` consumers; constraints run report-only at end-of-stream and audits land on the completion meta.
+Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) execute automatically on text streams through the Safety stream transform, so sentence-gated holds, rewrites, and blocks reach `textStream` consumers. An `assert` constraint gates release transactionally: the stream withholds output while it is unresolved, and a failure discards the attempt and re-streams with corrective feedback. `suggest` constraints run report-only and their audits land on the completion meta.
 
 | Field                      | Type                                                  | Description                                                                                                                                                                                             |
 | -------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -215,14 +215,20 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | `options.messages`         | `ModelMessage[]?`                                     | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                                                               |
 | `options.tokenBudget`      | `number?`                                             | Token budget for context dropping                                                                                                                                                                       |
 
-**Returns:** `StreamResult<TRawStream, TOutput>`, canonical `.textStream`, typed `.raw` for the AI SDK stream result, and `.completion`, which resolves to the canonical completion envelope.
+**Returns:** `StreamResult<TOutput, TPartial>` — one managed logical stream with
+`.textStream`, `.fullStream`, `.partialOutputStream`, `.completion`, and
+`.cancel()`. There is no `.raw`: the AI SDK result resolves before terminal
+Safety and describes only one attempt, so exposing it would bypass the gates
+this contract enforces.
 
 ```ts
 const result = await stream(editDraft, {
   model: openai("gpt-4o"),
   input: { instruction: "Fix the intro" },
 });
-for await (const partial of result.raw.partialObjectStream) {
+// Canonical partial `z.input` — manifest-decoded, never provider wire JSON,
+// and never published from an attempt Safety went on to discard.
+for await (const partial of result.partialOutputStream) {
   console.log(partial);
 }
 ```
@@ -450,8 +456,7 @@ import type {
   CruxAiOptions,
   CruxAIErrorCode,
   SdkGateway,
-  TextStreamResult,
-  ObjectStreamResult,
+  AIStreamCallbacks,
   GenerateReturn,
   StreamReturn,
 } from "@use-crux/ai";

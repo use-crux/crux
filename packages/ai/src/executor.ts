@@ -24,6 +24,7 @@ import { createAiSdkCodec } from "./sdk-codec";
 import type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 import { materializeAiSdkToolSource } from "./mcp-materializer";
 import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
+import { runCoordinatedStream } from "./sdk-codec/coordinated-stream";
 import { aiSdkStructuredCapabilities } from "./provider-profile";
 
 export type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
@@ -51,7 +52,12 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
 
   return {
     id: codec.executorId,
-    capabilities: { stepTransform: "before-client-tools" },
+    capabilities: {
+      stepTransform: "before-client-tools",
+      // This runtime executes core's coordinated-stream plan: it can discard a
+      // rejected attempt without surfacing any of it and restream (RFC #173).
+      coordinatedStream: true,
+    },
     structuredOutput: { capabilities: aiSdkStructuredCapabilities },
 
     materializeToolSource: materializeAiSdkToolSource,
@@ -81,6 +87,22 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
     },
 
     async runStream(request) {
+      // A coordinated stream (a commit gate can reject an attempt) drives attempts
+      // through core's plan and composes one logical SDK-shaped result. Without a
+      // plan the untouched single-attempt fast path is preserved exactly.
+      const plan = request.streamPlan;
+      if (plan?.active) {
+        return runCall(
+          () =>
+            runCoordinatedStream(
+              { ...request, streamPlan: plan },
+              gateway,
+              (attemptRequest) => codec.stream(attemptRequest),
+              {},
+            ),
+          request,
+        );
+      }
       const call = await codec.stream(request);
       return runCall(
         () =>

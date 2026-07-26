@@ -13,6 +13,31 @@
  *   -> expose safeParse.data as z.output
  * ```
  *
+ * This is the ONE pre-publication finalization seam (RFC #173, law 1). Both routes
+ * reach it through `guardStreamCompletion` → {@link createStructuredCompletion}'s
+ * `finalize()` → `finalizeSafetySessionLanguageOutput`, so "published means final"
+ * is enforced in a single place rather than re-derived per route. Do not add a
+ * second finalization pass alongside it.
+ *
+ * Two laws make the ordering load-bearing rather than cosmetic:
+ *
+ * - **Publication means finality (law 2).** Terminal guardrails run BEFORE the
+ *   authored parse, because a composite `model.output` or output-media guard can
+ *   still rewrite or block the represented value. Parsing first would validate a
+ *   value that is not what gets published; publishing first would leak output a
+ *   terminal guard was about to reject.
+ * - **Exactly-once (law 6).** The authored `safeParse` happens here and its `data`
+ *   is what the caller receives. A stream whose validation gate already committed
+ *   a candidate passes it in as `committed`, so completion republishes THAT parse
+ *   instead of re-running transforms and refinements — a `.transform()` that
+ *   allocates, counts, or logs must not fire twice for one logical operation.
+ *
+ * Constraints run AFTER validation on purpose: every completed structured
+ * candidate is validated first, so a constraint always inspects schema-valid
+ * canonical input rather than a value the schema would have rejected. Occurrences
+ * a live stream already settled are not re-judged, so a `constraint.judge()` runs
+ * once.
+ *
  * `validationRetry` only controls whether a failed attempt is retried; it never
  * controls whether validation runs. Validation retry and constraint regeneration
  * share one `maxSteps` provider-call budget.
@@ -29,6 +54,7 @@ import {
   finalizeSafetySessionLanguageOutput,
   type Safety,
   type SafetyOutput,
+  type StructuredSafetyContext,
 } from "../../safety/session";
 import {
   decodeStructuredValue,
@@ -41,8 +67,25 @@ export interface StructuredCompletionDeps {
   readonly safety: Safety;
   /** Authored Zod schema — the sole semantic validator. */
   readonly schema: z.ZodType;
+  /**
+   * A candidate that a stream's validation gate already parsed and committed.
+   *
+   * Carries the canonical value it parsed and that parse's `data`, so completion
+   * publishes the SAME parse rather than running transforms and refinements twice.
+   */
+  readonly committed?: { readonly value: unknown; readonly data: unknown };
   /** Reversible decode manifest for the compiled plan, when any. */
   readonly decodeManifest: StructuredOutputDecodeManifest | undefined;
+  /**
+   * Compiled structured context (canonical schema + manifest) for object-
+   * occurrence gating in the terminal finalize. When a live stream already gated
+   * and sealed the object occurrences, `objectOccurrencesAlreadyGated` skips the
+   * batch re-gate here.
+   */
+  readonly structuredContext?: StructuredSafetyContext;
+  readonly objectOccurrencesAlreadyGated?: boolean;
+  /** Occurrence-precise settlement from an accepted stream attempt (skip re-eval). */
+  readonly settled?: readonly import("../../safety/constraint/settlement").ConstraintOccurrenceSettlement[];
   readonly promptId: string;
   readonly validationRetry: ValidationRetryOptions | undefined;
   /** Shared provider-call budget. */
@@ -107,6 +150,10 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
     readonly text: string;
     readonly value: unknown;
   }) => SafetyOutput;
+  buildFromCanonical: (candidate: {
+    readonly text: string;
+    readonly value: unknown;
+  }) => SafetyOutput;
   finalize: (
     initial: SafetyOutput,
     opts: { readonly suspended: boolean },
@@ -141,6 +188,17 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
     return { text: candidate.text, parsed };
   };
 
+  // Canonical candidate: a live structured stream already manifest-decoded and
+  // object-gated this value, so it is used verbatim as the semantic value — no
+  // decode, no re-gate. `text` stays authoritative for `result.text`.
+  const buildFromCanonical = (candidate: {
+    readonly text: string;
+    readonly value: unknown;
+  }): SafetyOutput => {
+    currentText = candidate.text;
+    return { text: candidate.text, parsed: candidate.value };
+  };
+
   // Provider re-call shared by validation retry and constraint regeneration.
   // Once the shared budget is exhausted, no provider call is made — the current
   // candidate is returned so the caller settles within its own bounds.
@@ -153,7 +211,20 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
     return buildFromText(await deps.reprompt(corrective));
   };
 
+  /**
+   * The authored parse — run at most ONCE per candidate.
+   *
+   * A stream's validation gate already parsed the committed candidate before publishing
+   * it. Re-parsing here would run transforms and refinements a second time, so the
+   * committed candidate hands its `safeParse.data` forward and this becomes a lookup.
+   * Any other candidate (a regenerated one, or a route with no gate) parses here.
+   */
   const validate = (value: unknown): z.ZodError | undefined => {
+    const committed = deps.committed;
+    if (committed !== undefined && Object.is(committed.value, value)) {
+      acceptedObject = committed.data;
+      return undefined;
+    }
     const result = deps.schema.safeParse(value);
     if (result.success) {
       acceptedObject = result.data;
@@ -209,6 +280,11 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
         messages: deps.messages(),
         schema: deps.schema,
         ...(suspended ? {} : { prepareValidated }),
+        ...(deps.structuredContext
+          ? { structuredContext: deps.structuredContext }
+          : {}),
+        objectOccurrencesAlreadyGated: deps.objectOccurrencesAlreadyGated ?? false,
+        ...(deps.settled && deps.settled.length > 0 ? { settled: deps.settled } : {}),
       },
     );
     return {
@@ -217,5 +293,5 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
     };
   };
 
-  return { buildFromText, buildFromWireValue, finalize };
+  return { buildFromText, buildFromWireValue, buildFromCanonical, finalize };
 }

@@ -19,16 +19,26 @@ describe('ValidationExhaustedError', () => {
     expect(err).toBeInstanceOf(Error)
     expect(err).toBeInstanceOf(ValidationExhaustedError)
     expect(err.name).toBe('ValidationExhaustedError')
-    expect(err.lastOutput.preview).toBe('{"name": 123}')
+    // Evidence only: a public terminal error describes output the caller was never
+    // allowed to see, so it carries size and hash but no preview.
+    expect(err.lastOutput.preview).toBeUndefined()
+    expect(err.lastOutput.sizeBytes).toBeGreaterThan(0)
+    expect(err.lastOutput.hash).toEqual(expect.any(String))
     expect(err.decisions).toEqual([
       expect.objectContaining({
         policyId: 'validation.feedback',
         boundary: 'validation.feedback',
         action: 'block',
-        captured: expect.objectContaining({ preview: '{"name": 123}' }),
+        captured: expect.not.objectContaining({ preview: expect.anything() }),
       }),
     ])
-    expect(err.zodErrors).toBe(zodError)
+    // Sanitized rather than stored by identity: issue paths/codes survive, authored
+    // messages (which can embed the rejected value) do not.
+    expect(err.zodErrors).not.toBe(zodError)
+    expect(err.issues).toEqual([
+      { path: 'name', depth: 1, code: 'invalid_type' },
+      { path: 'age', depth: 1, code: 'invalid_type' },
+    ])
     expect(err.attempts).toBe(3)
     expect(err.maxAttempts).toBe(3)
     expect(err.promptId).toBe('test-prompt')

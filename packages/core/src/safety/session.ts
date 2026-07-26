@@ -24,8 +24,20 @@ export {
   guardSafetySessionOutputMedia,
   guardSafetySessionOutputOperationText,
   guardSafetySessionStreamCompletion,
+  openSafetySessionStructuredStream,
+  openSafetySessionStreamRaw,
+  openSafetySessionStructuredStreamRaw,
   runSafetySessionOneShotOutputConstraints,
+  safetyDefersDownstreamOutput,
+  safetyDefersReasoning,
   safetyRequiresLanguageStepTransform,
+  safetySessionStreamCommitPlan,
+} from "./session-bridge";
+
+export type {
+  StreamCommitPlan,
+  StructuredSafetyContext,
+  TerminalFinalizeOptions,
 } from "./session-bridge";
 
 export {

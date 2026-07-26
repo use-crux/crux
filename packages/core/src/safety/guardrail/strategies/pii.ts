@@ -5,7 +5,7 @@
  */
 
 import type { BoundaryDef } from '../../boundary'
-import type { GuardrailRun, GuardrailRunResult, GuardrailRewriteKind } from '../types'
+import type { GuardrailRun, ClosedGuardrailRunResult, GuardrailRewriteKind } from '../types'
 import { hashPatterns, maskPatterns, PII_PATTERNS, rewritePatterns } from './patterns'
 
 type TextBoundary = BoundaryDef<
@@ -21,7 +21,7 @@ export interface PiiGuardrailOptions {
 /** Create a provider-agnostic PII redaction strategy for text boundaries. */
 export function pii(options: PiiGuardrailOptions = {}): GuardrailRun<TextBoundary> {
   const strategy = options.strategy ?? 'redact'
-  const run = async (subject: string): Promise<GuardrailRunResult<string>> => {
+  const run = async (subject: string): Promise<ClosedGuardrailRunResult<string>> => {
     const rewrite =
       strategy === 'mask'
         ? maskPatterns(subject, PII_PATTERNS)
@@ -42,6 +42,8 @@ export function pii(options: PiiGuardrailOptions = {}): GuardrailRun<TextBoundar
     strategy: {
       kind: 'guardrail.pii',
       config: { strategy },
+      // Evaluate whole sentences so a match split across deltas is not missed.
+      defaultUnit: 'sentence' as const,
     },
   })
 }

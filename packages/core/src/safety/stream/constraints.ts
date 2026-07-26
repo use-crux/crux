@@ -1,4 +1,3 @@
-import { ConstraintViolationError } from '../constraint/errors'
 import { observeConstraintCheck } from '../constraint/runner'
 import type {
   Constraint,
@@ -6,31 +5,6 @@ import type {
   ConstraintAuditEntry,
   ConstraintContext,
 } from '../constraint/types'
-
-/** Run stream chunk constraints before releasing newly cleared content. */
-export async function runStreamChunkConstraints(options: {
-  readonly constraints: readonly Constraint[]
-  readonly content: string
-  readonly releasedText: string
-  readonly context: ConstraintContext
-  readonly audit: ConstraintAudit | undefined
-}): Promise<void> {
-  for (const constraint of options.constraints) {
-    const verdict = await constraint.onChunk!(options.content, options.releasedText + options.content, options.context)
-    if (!verdict.abort) continue
-
-    throw new ConstraintViolationError({
-      failedConstraints: [{ name: constraint.id, feedback: verdict.feedback }],
-      audit: {
-        entries: options.audit?.entries ?? [],
-        allPassed: false,
-        suggestFallback: false,
-      },
-      lastOutput: options.releasedText + options.content,
-      totalAttempts: 1,
-    })
-  }
-}
 
 /** Run final stream constraints using the same observed check path as generation. */
 export async function runFinalStreamConstraints(options: {

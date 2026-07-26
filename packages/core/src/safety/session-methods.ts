@@ -30,6 +30,8 @@ import {
   inputOperationTextGuard,
   languageStepGuard,
   languageStepGuardEnabled,
+  outputDownstreamMutators,
+  outputTerminalTextGuards,
   languageStepTransform,
   languageTerminalFinalize,
   oneShotOutputConstraints,
@@ -39,8 +41,15 @@ import {
   modelIngressGuard,
   modelIngressSources,
   resolvedInputGuard,
+  structuredStreamOpen,
+  structuredStreamOpenRaw,
+  streamOpenRaw,
+  streamCommitPlan,
   type SafetySession,
+  type StructuredSafetyContext,
 } from "./session-bridge";
+import { createStructuredSafetyStream } from "./stream/structured-engine";
+import { failClosedOnRejection } from "./stream/fail-closed";
 import { guardModelIngress } from "./input/model-ingress";
 interface SessionMethodOptions {
   readonly options: SafetyCallOptions;
@@ -77,17 +86,30 @@ interface SessionMethodOptions {
             guarded: SafetyOutput,
             guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
           ) => Promise<SafetyOutput>;
+          readonly structuredContext?: StructuredSafetyContext;
+          readonly objectOccurrencesAlreadyGated?: boolean;
+          readonly settled?: readonly import("./constraint/settlement").ConstraintOccurrenceSettlement[];
         }
       | undefined,
     terminalOnly: boolean,
   ) => Promise<SafetyOutput>;
   readonly openStream: () => SafetyStream;
+  readonly openStreamRaw: () => SafetyStream;
 }
 /** Build the method table after session state and runners are initialized. */
 export function createSafetySessionMethods(
   state: SessionMethodOptions,
 ): SafetySession {
   const outputBindings = () => state.phaseBindings("output");
+  // A composite `model.output` guard or an output-media guard can change or strip
+  // content after it was produced, so anything they govern must not be published
+  // before they have run. One definition, shared by every deferral decision.
+  const hasDownstreamMutator = (): boolean =>
+    outputBindings().some(
+      (binding) =>
+        binding.boundary.id === "model.output" ||
+        binding.boundary.id === "model.output.media",
+    );
   const guardIngress = (input: Parameters<SafetySession[typeof modelIngressGuard]>[0]) =>
     guardModelIngress({
       bindings: state.phaseBindings("input"),
@@ -102,6 +124,38 @@ export function createSafetySessionMethods(
       source !== "retrieval" && inputBindingsFor(inputBindings, "model.input.media", source).length > 0;
     return matchesText || matchesMedia;
   });
+  const buildStructuredStream = (
+    structuredContext?: StructuredSafetyContext,
+  ) =>
+    createStructuredSafetyStream({
+      objectBindings: outputBindings().filter(
+        (binding) => binding.boundary.id === "model.output.object",
+      ),
+      textBindings: outputBindings().filter(
+        (binding) => binding.boundary.id === "model.output.text",
+      ),
+      // `assert`-severity constraints commit the attempt on the live stream: they
+      // hold release until resolved and fail closed on failure.
+      assertConstraints: state.constraints.filter(
+        (constraint) => constraint.severity === "assert",
+      ),
+      constraintContext: state.constraintContext(),
+      guardContext: {
+        ...state.guardContext("output", state.messages.get()),
+        stream: { segment: true, last: true, heldChars: 0, heldMs: 0 },
+      },
+      appendGuardrailAudit: state.appendGuardrailAudit,
+      // These also change the represented JSON after the object gate cleared it, so
+      // they defer commitment exactly as a text guard does.
+      downstreamMutators: hasDownstreamMutator(),
+      ...(structuredContext?.canonicalSchema
+        ? { canonicalSchema: structuredContext.canonicalSchema }
+        : {}),
+      ...(structuredContext?.decodeManifest
+        ? { manifest: structuredContext.decodeManifest }
+        : {}),
+      transcript: state.transcript,
+    });
   const guardInput = async (
     input: Parameters<SafetySession["guardInput"]>[0],
     systemIngress?: Parameters<SafetySession[typeof resolvedInputGuard]>[1],
@@ -122,9 +176,22 @@ export function createSafetySessionMethods(
   };
   return {
     enabled: state.enabled,
+    // An enforce `assert` is the only Safety-owned commit gate today: it holds
+    // every streamed byte until resolved and fails the attempt closed on failure.
+    [streamCommitPlan]: {
+      hasAssertGate: state.constraints.some(
+        (constraint) => constraint.severity === "assert",
+      ),
+    },
     [modelIngressGuard]: guardIngress,
     [modelIngressSources]: Object.freeze(ingressSources),
     [resolvedInputGuard]: guardInput,
+    [outputDownstreamMutators]: hasDownstreamMutator(),
+    // `model.output.text` runs over reasoning parts at completion, so it can
+    // rewrite or block content the live text transform never gated.
+    [outputTerminalTextGuards]: outputBindings().some(
+      (binding) => binding.boundary.id === "model.output.text",
+    ),
     [languageStepGuardEnabled]: outputBindings().some(
       (binding) =>
         binding.boundary.id === "model.output.text" ||
@@ -192,6 +259,20 @@ export function createSafetySessionMethods(
         appendAudit: state.appendGuardrailAudit,
         transcript: state.transcript,
       }),
+
+    // Standalone structured stream: no regeneration authority, so a non-terminal
+    // assert rejection fails closed as the public error.
+    [structuredStreamOpen]: (structuredContext) =>
+      failClosedOnRejection(buildStructuredStream(structuredContext)),
+
+    // Adapter (coordinated) structured stream: the raw commit gate raises the
+    // non-terminal rejection so the shared attempt coordinator can retry.
+    [structuredStreamOpenRaw]: (structuredContext) =>
+      buildStructuredStream(structuredContext),
+
+    // Adapter (coordinated) text stream: same non-terminal rejection contract as the
+    // structured raw stream, so a text `assert` retries on both routes.
+    [streamOpenRaw]: () => state.openStreamRaw(),
 
     guardInput,
 

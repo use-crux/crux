@@ -411,7 +411,8 @@ describe('canonical context and safety observability', () => {
         preview: expect.objectContaining({
           kind: 'constraint.report',
           attempts: expect.arrayContaining([
-            expect.objectContaining({ n: 1, status: 'fail', feedback: 'Mention ship.' }),
+            // Feedback text is deliberately absent: it can echo model output.
+            expect.objectContaining({ n: 1, status: 'fail' }),
           ]),
         }),
       }),

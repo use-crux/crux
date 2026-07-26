@@ -71,7 +71,6 @@ export function isGuardrail(value: unknown): value is Guardrail {
 function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B> {
   const mode = config.mode ?? 'enforce'
   const strategy = strategyMetadata(config.run)
-  const stream = config.stream ?? defaultStreamForStrategy(strategy)
 
   const guard = Object.freeze({
     _tag: 'Guardrail' as const,
@@ -79,25 +78,11 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
     on: config.on,
     category: config.category,
     mode,
-    stream,
     run: config.run,
     ...(strategy ? { strategy } : {}),
   }) satisfies Guardrail<B>
 
   return guard
-}
-
-function defaultStreamForStrategy(strategy: Guardrail['strategy'] | undefined): Guardrail['stream'] {
-  switch (strategy?.kind) {
-    case 'guardrail.pii':
-    case 'guardrail.secrets':
-    case 'guardrail.injection':
-      return 'sentence'
-    case 'guardrail.classifier':
-      return 'final'
-    default:
-      return undefined
-  }
 }
 
 function strategyMetadata(run: unknown): Guardrail['strategy'] | undefined {

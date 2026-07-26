@@ -42,8 +42,7 @@ describe("Google stream completion", () => {
         guardrails: [
           guardrail({
             id: "redact-secret-slot",
-            on: boundary.output.text(),
-            stream: "chunk",
+            on: boundary.output.text().deltas(),
             run: async (text) => ({
               action: "rewrite" as const,
               value: text.replace("secret", "[REDACTED]"),
@@ -89,8 +88,7 @@ describe("Google stream completion", () => {
         guardrails: [
           guardrail({
             id: "rewrite-each-slot",
-            on: boundary.output.text(),
-            stream: "chunk",
+            on: boundary.output.text().deltas(),
             run: async (text) => ({
               action: "rewrite" as const,
               value: text === "alpha" ? "A" : text === "beta" ? "B" : text,
@@ -128,8 +126,7 @@ describe("Google stream completion", () => {
         guardrails: [
           guardrail({
             id: "rewrite-after-empty-slot",
-            on: boundary.output.text(),
-            stream: "chunk",
+            on: boundary.output.text().deltas(),
             run: async (text) => ({
               action: "rewrite" as const,
               value: text.replace("unsafe", "safe"),

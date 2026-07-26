@@ -35,12 +35,17 @@ Policies bind to typed boundary descriptors:
 | `boundary.output.media()`          | Each canonical model/operation output media part before public accumulation.    |
 | `boundary.output.object<T>()`      | Parsed structured output object.                                                |
 | `boundary.output.both<T>()`        | `{ text, object }` structured output pair.                                      |
-| `boundary.output.path<T>()('a.b')` | Typed structured-output path.                                                   |
+| `boundary.output.object<T>().path('a.b')` | Typed structured-output path.                                            |
 | `boundary.memory.write<T>()`       | Candidate memory writes.                                                        |
 | `boundary.validation.feedback()`   | Corrective validation feedback before re-prompting.                             |
 
-Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
-public boundary family; streaming is configured on output guardrails.
+Boundary ids are stable decision/config ids. `boundary.stream.*` is not a public
+boundary family, and there is no separate streaming configuration: the boundary
+itself carries the unit. Refine text with `.deltas()`, `.complete()`,
+`.sentences()`, `.lines()`, or `.segments()`; refine structured output with
+`.path('a.b')`, and an array path with `.items()`. Growing text units permit a
+`hold` verdict; closed units (`.complete()`, the root object, a scalar path, an
+array item) exclude `hold` at the type level.
 
 ### Semantic model ingress
 
@@ -301,8 +306,12 @@ rewrites keep returned `text` and `object` synchronized or fail closed.
 
 `openStream()` exposes the streaming sub-protocol:
 
-- `feed(chunk)` returns `{ kind: 'emit', content }` or `{ kind: 'hold' }`.
-- `finish()` runs final-only guards, report-mode constraints, and returns the
+- `feed(chunk)` returns `{ kind: 'emit', content }` or `{ kind: 'hold', bufferedBy? }`.
+  `bufferedBy` is an optional content-free reason explaining the pause without
+  exposing held bytes — one of `'boundary'`, `'guardrail'`, `'serialization'`,
+  `'constraint'`, `'validation-retry'`, `'adapter'`, reported in that precedence order
+  when several gates are active, and omitted when a hold names no reason.
+- `finish()` runs `.complete()` guards, report-mode constraints, and returns the
   final seal with any unreleased `pending` text.
 - `transform()` returns a `TransformStream<string, string>`.
 
@@ -323,7 +332,9 @@ await adapter.generate(prompt, {
 });
 ```
 
-Allowed tune fields are `mode`, `stream`, and `enabled`. Unknown ids throw.
+Allowed tune fields are `mode` and `enabled`. Unknown ids throw. The streaming
+unit is not tunable: it belongs to the policy's boundary, so a call site cannot
+widen what a policy sees.
 
 Safety artifacts participate in `observability.capture`. Use capture presets
 and per-artifact overrides when traces leave a trusted boundary. Public audit,

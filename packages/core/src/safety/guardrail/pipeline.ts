@@ -5,18 +5,15 @@ import type {
   GuardrailAuditEntry,
   GuardrailRunResult,
 } from './types'
-import { validateGuardrailRunResult } from './types'
 import { GuardrailBlockedError } from './errors'
-import type { SafetyDecision, SafetyRunContext } from '../decision'
+import type { SafetyDecision } from '../decision'
 import type { BoundaryDef } from '../boundary'
 import type { GuardrailBinding } from '../registry'
 import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
-import { guardrailDefinitionRef } from '../../observability/definition-ref'
-import { recordGuardrailBlockedEdge, recordGuardrailReport } from './observability'
 import type { z } from 'zod'
 import { applyTerminalRewrite, terminalSubject } from '../output/guardrail-state'
-import { inputOriginAttributes } from '../input-origin-observability'
+import { auditAction, runGuardWithObservability } from './run-guard'
 
 // ── Pipeline Config ────────────────────────────────────────────────
 
@@ -128,65 +125,15 @@ async function runGuardsInternal(
 
   for (const binding of bindings) {
     const guard = binding.policy
-    const start = performance.now()
     const boundary = binding.boundary
-    const span = observe.openSpan(
-      {
-        name: guard.id,
-        primitive: 'guardrail.run',
-        // `guardrail()` requires `id`, so this ref is always canonical. The
-        // outer `${phase} guardrails` group span covers many guards and gets none.
-        definitionRefs: [guardrailDefinitionRef(guard.id)],
-        attributes: {
-          guardrailName: guard.id,
-          category: guard.category,
-          boundary: boundary.id,
-          mode: binding.mode,
-          phase,
-          promptId: ctx.promptId,
-          model: ctx.model,
-          ...inputOriginAttributes(ctx.origin),
-        },
-      },
-    )
-    let result: GuardrailRunResult<unknown>
-    let durationMs = 0
-    try {
-      result = validateGuardrailRunResult(
-        await span.withContext(async () =>
-          guard.run(
-            terminalSubject(boundary, current) as never,
-            runContext(binding, ctx) as never,
-          ),
-        ),
-        {
-          streaming: false,
-          last: true,
-          policyId: guard.id,
-          boundary: boundary.id,
-        },
-      )
-      durationMs = performance.now() - start
-      span.withContext(() =>
-        recordGuardrailReport(binding, auditAction(result), phase, durationMs, result, ctx.origin),
-      )
-      span.end({ attributes: { action: auditAction(result), durationMs } })
-    } catch (error) {
-      span.error(error)
-      throw error
-    }
-
-    const entry: GuardrailAuditEntry = {
-      guard: guard.id,
-      ...(guard.category !== undefined ? { category: guard.category } : {}),
-      boundary: boundary.id,
-      ...(ctx.origin ? { origin: ctx.origin } : {}),
-      mode: binding.mode,
+    const { result, entry, durationMs } = await runGuardWithObservability({
+      binding,
+      subject: terminalSubject(boundary, current),
+      ctx,
       phase,
-      action: auditAction(result),
-      ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
-      durationMs,
-    }
+      streaming: false,
+      last: true,
+    })
 
     switch (result.action) {
       case 'allow':
@@ -197,7 +144,6 @@ async function runGuardsInternal(
         entries.push(entry)
         if (binding.mode === 'report') break
         config?.onBlock?.(guard, { reason: result.reason })
-        span.withContext(() => recordGuardrailBlockedEdge(binding, result.reason, ctx.origin))
         throw new GuardrailBlockedError({
           guardrailId: guard.id,
           phase,
@@ -274,30 +220,4 @@ function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {
     boundary.id === 'model.instructions'
     ? 'input'
     : 'output'
-}
-
-function runContext<B extends BoundaryDef>(
-  binding: GuardrailBinding & { readonly boundary: B },
-  ctx: GuardrailContext,
-): SafetyRunContext<B> {
-  const guard = binding.policy
-  const boundary = binding.boundary
-  return {
-    policy: { id: guard.id, mode: binding.mode },
-    boundary: { id: boundary.id as never, kind: boundary.id as never },
-    prompt: { id: ctx.promptId },
-    model: { id: ctx.model },
-    trace: { id: ctx.traceId },
-    attempt: { index: 0, kind: 'initial' },
-    metadata: ctx.metadata,
-    findings: { add() {} },
-    ...(ctx.stream ? { stream: ctx.stream } : {}),
-    ...(boundary.path ? { path: boundary.path } : {}),
-    ...(ctx.origin ? { origin: ctx.origin } : {}),
-  } as SafetyRunContext<B>
-}
-
-function auditAction(result: GuardrailRunResult<unknown>): string {
-  if (result.action === 'rewrite') return result.rewrite.kind === 'normalize' ? 'transform' : result.rewrite.kind
-  return result.action
 }

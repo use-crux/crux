@@ -22,25 +22,6 @@ describe('output media boundary', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('rejects unsafe-cast stream configuration before callback execution', () => {
-    const run = vi.fn(() => ({ action: 'allow' as const }))
-    const malformed = guardrail({
-      id: 'streaming-output-media',
-      on: boundary.output.media(),
-      stream: 'sentence',
-      run,
-    } as never)
-
-    expect(() =>
-      createSafety({
-        call: { guardrails: [malformed] },
-        promptId: undefined,
-        model: 'image-model',
-      }),
-    ).toThrow(SafetyConfigError)
-    expect(run).not.toHaveBeenCalled()
-  })
-
   it('rejects unsafe-cast constraints before callback execution', () => {
     const run = vi.fn(() => ({ pass: true as const }))
 

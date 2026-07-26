@@ -12,7 +12,6 @@ export type {
   ConstraintContext,
   ConstraintSeverity,
   ConstraintCheckResult,
-  ChunkCheckResult,
   ConstraintOutput,
   ConstraintAudit,
   ConstraintAuditEntry,

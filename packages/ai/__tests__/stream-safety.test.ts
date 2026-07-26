@@ -27,7 +27,6 @@ const importFixer = () =>
   guardrail({
     id: "import-fixer",
     on: boundary.output.text(),
-    stream: "chunk",
     run: async (chunk) => {
       if (chunk.includes("@/comps/")) {
         return {
@@ -94,7 +93,8 @@ describe("streaming safety through real streamText", () => {
 
   it("applies ordinary output guardrails to streamText by default", async () => {
     const ai = createCruxAi();
-    const model = streamingModel(["api key sk-", "123."]);
+    // Adaptive default is per canonical delta; a custom guard evaluates each delta.
+    const model = streamingModel(["api key sk-123."]);
     const redactor = guardrail({
       id: "default-stream-redactor",
       on: boundary.output.text(),
@@ -127,7 +127,6 @@ describe("streaming safety through real streamText", () => {
     const blocker = guardrail({
       id: "live-block",
       on: boundary.output.text(),
-      stream: "chunk",
       run: async (chunk) =>
         chunk.includes("forbidden")
           ? { action: "block" as const, reason: "nope" }
@@ -163,8 +162,7 @@ describe("streaming safety through real streamText", () => {
       guardrails: [
         guardrail({
           id: "ai-final-seal",
-          on: boundary.output.text(),
-          stream: "final",
+          on: boundary.output.text().complete(),
           run: async (text) => {
             seen.push(text);
             return {
@@ -211,7 +209,6 @@ describe("streaming safety through real streamText", () => {
         guardrail({
           id: "ai-stream-text",
           on: boundary.output.text(),
-          stream: "chunk",
           run: async (text) => {
             textSeen.push(text);
             return {

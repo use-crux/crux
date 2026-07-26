@@ -102,8 +102,21 @@ describe("stream completion media Safety — Core", () => {
       ],
     });
 
-    expect(await collect(result.textStream)).toBe("visible");
+    // A terminal failure reaches EVERY surface with one error identity: a caller
+    // reading only `textStream` must not observe a clean success for an operation
+    // a terminal guard rejected (RFC #173).
+    const seen: string[] = [];
+    let streamError: unknown;
+    try {
+      for await (const delta of result.textStream) seen.push(delta);
+    } catch (error) {
+      streamError = error;
+    }
+    expect(seen.join("")).toBe("visible");
+    expect(streamError).toBeInstanceOf(Error);
+    expect((streamError as Error).message).toContain("block-buffered-image");
     await expect(result.completion).rejects.toThrow("block-buffered-image");
+    await expect(result.completion).rejects.toBe(streamError);
   });
 
   it("does not re-guard streamed text and guards completion-only reasoning once", async () => {
@@ -121,8 +134,7 @@ describe("stream completion media Safety — Core", () => {
       guardrails: [
         guardrail({
           id: "rewrite-live-and-completion-only-text",
-          on: boundary.output.text(),
-          stream: "chunk",
+          on: boundary.output.text().deltas(),
           run: (text) => {
             seen.push(text);
             return text === "unsafe."
@@ -211,8 +223,7 @@ describe("stream completion media Safety — Core", () => {
       guardrails: [
         guardrail({
           id: "separate-live-and-buffered-text",
-          on: boundary.output.text(),
-          stream: "chunk",
+          on: boundary.output.text().deltas(),
           run: (text) => {
             seen.push(text);
             return {

@@ -190,7 +190,8 @@ describe('completed-operation Safety applicability', () => {
     const error = await generateSpeech({
       model: 'speech-model',
       text: 'Read this.',
-      safety: { tune: { 'dormant-media-tune': { stream: 'final' } } },
+      // `stream` is not a tune field; the cast models an untyped JavaScript caller.
+      safety: { tune: { 'dormant-media-tune': { stream: 'final' } } } as never,
     }).catch((caught: unknown) => caught)
 
     expect(error).toMatchObject({ name: 'SafetyConfigError' })
