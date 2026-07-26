@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
+	"github.com/use-crux/crux/packages/local/internal/lsp/transient"
 )
 
 const (
@@ -24,18 +25,14 @@ type documentBufferLimitNotice struct {
 	LimitBytes    int
 }
 
-type documentSnapshot struct {
-	URI        protocol.DocumentURI
-	LanguageID string
-	Version    int
-	Text       string
-}
+type documentSnapshot = transient.Document
 
 type documentBuffers struct {
 	mu         sync.Mutex
 	limits     documentBufferLimits
 	documents  map[protocol.DocumentURI]bufferDocument
 	totalBytes int
+	openEpochs map[protocol.DocumentURI]uint64
 }
 
 type bufferDocument struct {
@@ -47,12 +44,14 @@ type bufferDocument struct {
 func newDocumentBuffers(limits documentBufferLimits) *documentBuffers {
 	return &documentBuffers{
 		limits: limits, documents: make(map[protocol.DocumentURI]bufferDocument),
+		openEpochs: make(map[protocol.DocumentURI]uint64),
 	}
 }
 
 func (b *documentBuffers) Open(item protocol.TextDocumentItem) *documentBufferLimitNotice {
 	b.mu.Lock()
 	b.removeBytesLocked(b.documents[item.URI])
+	b.openEpochs[item.URI]++
 	if !completionLanguage(item.LanguageID) {
 		delete(b.documents, item.URI)
 		b.mu.Unlock()
@@ -61,11 +60,19 @@ func (b *documentBuffers) Open(item protocol.TextDocumentItem) *documentBufferLi
 	document := bufferDocument{
 		snapshot: documentSnapshot{
 			URI: item.URI, LanguageID: item.LanguageID, Version: item.Version, Text: item.Text,
+			Revision: transient.Revision{
+				OpenEpoch: b.openEpochs[item.URI], Version: int64(item.Version),
+			},
 		},
 		available: b.withinLimitsLocked(len(item.Text)),
 	}
 	var notice *documentBufferLimitNotice
 	if document.available {
+		document.snapshot.Revision = transient.NewRevision(
+			b.openEpochs[item.URI],
+			item.Version,
+			item.Text,
+		)
 		b.totalBytes += len(item.Text)
 	} else {
 		notice = b.limitNoticeLocked(item.URI, len(item.Text), b.totalBytes+len(item.Text))

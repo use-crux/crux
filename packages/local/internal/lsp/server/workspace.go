@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
+	indexview "github.com/use-crux/crux/packages/local/internal/lsp/view"
 )
 
 type workspaceController interface {
@@ -37,8 +38,9 @@ type scopeSession struct {
 	scope              readmodel.Scope
 	folderName         string
 	publisher          *Publisher
+	views              indexview.ViewProvider
 	mode               readmodel.Mode
-	completion         readmodel.CompletionSource
+	transient          readmodel.TransientSource
 	sourceEpoch        uint64
 	completionFailures int
 	cancel             context.CancelFunc
@@ -76,7 +78,10 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 	w.settings = settings
 	for _, scope := range readmodel.DetectScopes(folders) {
 		lines := mapping.NewLineIndex()
-		session := &scopeSession{scope: scope, folderName: workspaceFolderName(scope.Root, folders)}
+		session := &scopeSession{
+			scope: scope, folderName: workspaceFolderName(scope.Root, folders),
+			views: indexview.NewSavedProvider(w.store),
+		}
 		session.publisher = NewPublisher(PublisherOptions{
 			ScopeID:    scope.ID,
 			Root:       scope.Root,
@@ -222,13 +227,13 @@ func (w *workspaceRuntime) startManagerLocked(session *scopeSession) {
 			w.handleScopeChange(session, change)
 		},
 		OnIndexChange: func() {
-			w.invalidateCompletionSource(session)
+			w.invalidateTransientSource(session)
 		},
 		OnModeChange: func(mode readmodel.Mode) {
 			w.setSessionMode(session, mode)
 		},
-		OnCompletionSource: func(source readmodel.CompletionSource) {
-			w.setSessionCompletionSource(session, source)
+		OnTransientSource: func(source readmodel.TransientSource) {
+			w.setSessionTransientSource(session, source)
 		},
 		OnWarning: func(message string) {
 			w.server.Notify(ctx, protocol.MethodLogMessage, protocol.LogMessageParams{

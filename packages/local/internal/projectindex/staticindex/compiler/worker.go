@@ -29,6 +29,12 @@ type Completer interface {
 	Completion(context.Context, protocol.CompletionQuery) (protocol.CompletionResponse, error)
 }
 
+// PromptTextAnalyzer runs normalized, cache-bypassing PromptText queries on
+// the persistent worker process.
+type PromptTextAnalyzer interface {
+	PromptText(context.Context, protocol.PromptTextQuery) (protocol.PromptTextQueryResponse, error)
+}
+
 type Worker struct {
 	*frontend.Worker
 }
@@ -138,6 +144,37 @@ func (p *Pool) Completion(ctx context.Context, query protocol.CompletionQuery) (
 		return protocol.CompletionResponse{}, err
 	}
 	return worker.Completion(ctx, query)
+}
+
+// PromptText runs one transient query without entering Static Index stages.
+func (w *Worker) PromptText(
+	ctx context.Context,
+	query protocol.PromptTextQuery,
+) (protocol.PromptTextQueryResponse, error) {
+	id := w.NextID()
+	request := protocol.PromptTextWorkerRequest{
+		ID: id, Method: protocol.PromptTextMethod, Query: query,
+	}
+	envelope, err := call[protocol.WorkerResponse[protocol.PromptTextQueryResponse]](ctx, w, request)
+	if err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	if err := protocol.ValidateWorkerResponse(envelope.ID, envelope.OK, envelope.Error, id); err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	return envelope.Response, nil
+}
+
+// PromptText borrows one already-running worker from the compiler pool.
+func (p *Pool) PromptText(
+	ctx context.Context,
+	query protocol.PromptTextQuery,
+) (protocol.PromptTextQueryResponse, error) {
+	worker, err := p.staticIndexWorker()
+	if err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	return worker.PromptText(ctx, query)
 }
 
 func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, error) {

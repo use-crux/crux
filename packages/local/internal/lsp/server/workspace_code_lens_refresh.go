@@ -22,17 +22,24 @@ func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.
 	if enabled && (previous == readmodel.ModeAttached) != (mode == readmodel.ModeAttached) {
 		w.server.requestCodeLensRefresh()
 	}
+	if previous != mode && w.server != nil {
+		w.server.requestPromptTextRefresh()
+	}
 }
 
-func (w *workspaceRuntime) setSessionCompletionSource(session *scopeSession, source readmodel.CompletionSource) {
+func (w *workspaceRuntime) setSessionTransientSource(session *scopeSession, source readmodel.TransientSource) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.closed {
+		w.mu.Unlock()
 		return
 	}
-	session.completion = source
+	session.transient = source
 	session.sourceEpoch++
 	session.completionFailures = 0
+	w.mu.Unlock()
+	if w.server != nil {
+		w.server.requestPromptTextRefresh()
+	}
 }
 
 func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readmodel.Change) {
@@ -44,14 +51,18 @@ func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readm
 	session.publisher.Change(change)
 }
 
-func (w *workspaceRuntime) invalidateCompletionSource(session *scopeSession) {
+func (w *workspaceRuntime) invalidateTransientSource(session *scopeSession) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.closed {
+		w.mu.Unlock()
 		return
 	}
 	session.sourceEpoch++
 	session.completionFailures = 0
+	w.mu.Unlock()
+	if w.server != nil {
+		w.server.requestPromptTextRefresh()
+	}
 }
 
 func (s *Server) requestCodeLensRefresh() {
@@ -95,4 +106,5 @@ func (s *Server) requestInlayHintRefreshIfEnabled() {
 func (s *Server) requestEditorAnnotationsRefreshIfEnabled() {
 	s.requestInlayHintRefreshIfEnabled()
 	s.requestCodeLensRefreshIfEnabled()
+	s.requestPromptTextRefresh()
 }

@@ -22,6 +22,8 @@ const (
 	MethodExecuteCommand         = "workspace/executeCommand"
 	MethodInlayHintRefresh       = "workspace/inlayHint/refresh"
 	MethodCodeLensRefresh        = "workspace/codeLens/refresh"
+	MethodPromptTextDecorations  = "crux/promptText/decorations"
+	MethodPromptTextRefresh      = "crux/promptText/refresh"
 	MethodPublishDiagnostics     = "textDocument/publishDiagnostics"
 	MethodLogMessage             = "window/logMessage"
 	MethodShowMessage            = "window/showMessage"

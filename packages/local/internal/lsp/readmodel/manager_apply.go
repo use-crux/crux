@@ -17,7 +17,7 @@ func (m *Manager) applyDelta(ctx context.Context, delta Delta) error {
 			return fmt.Errorf("generation-gap resync identity: %w", err)
 		}
 		m.applySnapshot(snapshot)
-		m.setAttachedCompletionSource(snapshot)
+		m.setAttachedTransientSource(snapshot)
 		return nil
 	}
 	after := m.options.Store.PublicationSnapshot(m.options.ScopeID)

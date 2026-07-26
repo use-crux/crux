@@ -10,6 +10,7 @@ mod completion;
 mod finalize_stream;
 mod io;
 mod parse;
+mod prompt_text;
 mod static_index;
 mod static_syntax;
 
@@ -18,6 +19,9 @@ pub(crate) mod static_index_tests;
 
 #[cfg(test)]
 mod completion_tests;
+
+#[cfg(test)]
+mod prompt_text_tests;
 
 #[cfg(test)]
 mod stream_tests;
@@ -47,6 +51,7 @@ fn serve() -> Result<(), String> {
 #[derive(Debug)]
 pub(crate) enum ServeRequest {
     Completion(crate::protocol::completion::CompletionWorkerRequest),
+    PromptText(crate::protocol::prompt_text::PromptTextWorkerRequest),
     Syntax(WorkerRequest),
     StaticIndex(static_index::StaticIndexWorkerRequest),
 }
@@ -55,6 +60,9 @@ pub(crate) fn parse_serve_request(line: &str) -> Result<ServeRequest, String> {
     let value: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
     if parse::has_completion_method(&value) {
         return parse::parse_completion_worker_request(value).map(ServeRequest::Completion);
+    }
+    if parse::has_prompt_text_method(&value) {
+        return parse::parse_prompt_text_worker_request(value).map(ServeRequest::PromptText);
     }
     if parse::has_worker_method(&value) {
         return parse::parse_static_index_worker_request(value).map(ServeRequest::StaticIndex);
@@ -70,6 +78,7 @@ pub(crate) fn write_serve_response<W: Write>(
 ) -> Result<(), String> {
     match request {
         ServeRequest::Completion(request) => completion::write_response(stdout, request),
+        ServeRequest::PromptText(request) => prompt_text::write_response(stdout, request),
         ServeRequest::Syntax(request) => static_syntax::write_response(stdout, request),
         ServeRequest::StaticIndex(request) => {
             static_index::write_static_index_worker_response(stdout, request)

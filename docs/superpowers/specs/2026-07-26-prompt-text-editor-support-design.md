@@ -182,6 +182,10 @@ not duplicated.
 client-session-owned and does not mutate the saved Store or reuse runtime
 registration overlays.
 
+The saved provider retains the Store and captures one detached publication
+under the Store read lock for every request. It does not mirror Store state in
+a separately replaced immutable publication.
+
 The saved view is exact when its source hash equals the buffer, including after
 an edit returns to saved bytes. A future dirty view must match session, scope,
 base generation, source profile, open epochs, versions, hashes, evidence, and
@@ -191,6 +195,10 @@ Saved fallback permits editor-relative byte mismatch but never evidence
 downgrade. Pending, cancelled, incomplete, older-document, or old-generation
 dirty results are never fallback evidence. See the exact contract in
 [Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
+
+Semantic source-profile identity is private validation state for future dirty
+views. It is not stored on saved views, persisted in Project Index data, or
+derived from saved source rows.
 
 ## Feature evidence
 

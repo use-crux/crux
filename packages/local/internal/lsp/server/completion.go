@@ -205,6 +205,7 @@ func (s *Server) cancelRequest(raw json.RawMessage) {
 	if pending != nil {
 		pending.cancel()
 	}
+	s.cancelPromptTextRequest(raw)
 }
 
 func (s *Server) closeCompletionRequests() {

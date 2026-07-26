@@ -56,12 +56,12 @@ type ManagerOptions struct {
 	// publication file changed.
 	OnIndexChange func()
 	OnModeChange  func(Mode)
-	// OnCompletionSource swaps the optional transient query source as OWN or
-	// ATTACHED mode starts, stops, reconnects, or hands over. A nil source makes
-	// completion unavailable.
-	OnCompletionSource func(CompletionSource)
-	OnWarning          func(string)
-	OnShowWarning      func(string)
+	// OnTransientSource atomically replaces the client-private query source as
+	// OWN or ATTACHED mode starts, stops, reconnects, or hands over. A nil
+	// source makes every transient capability unavailable.
+	OnTransientSource func(TransientSource)
+	OnWarning         func(string)
+	OnShowWarning     func(string)
 }
 
 // Manager owns discovery, attachment, and reconnect for one scope.
@@ -116,8 +116,8 @@ func (m *Manager) Mode() Mode {
 
 // Run blocks until cancellation after driving this scope's attach lifecycle.
 func (m *Manager) Run(ctx context.Context) {
-	m.setCompletionSource(nil)
-	defer m.setCompletionSource(nil)
+	m.setTransientSource(nil)
+	defer m.setTransientSource(nil)
 	m.setMode(ModeDiscovering)
 	discoveryContext, cancelDiscovery := context.WithTimeout(ctx, m.options.InitialBudget)
 	probe, err := m.options.Transport.Probe(discoveryContext, m.options.Root, m.options.Version, m.options.ProbeBudget)
@@ -164,7 +164,7 @@ func (m *Manager) consume(ctx, readyContext context.Context, stream MessageStrea
 			return fmt.Errorf("resync Project Index identity: %w", err)
 		}
 		m.applySnapshot(snapshot)
-		m.setAttachedCompletionSource(snapshot)
+		m.setAttachedTransientSource(snapshot)
 		m.setMode(ModeAttached)
 	} else if err := m.awaitInitialSnapshot(readyContext, messages); err != nil {
 		return err
@@ -198,7 +198,7 @@ func (m *Manager) consumeMessages(ctx context.Context, messages <-chan json.RawM
 					continue
 				}
 				m.applySnapshot(*message.Snapshot)
-				m.setAttachedCompletionSource(*message.Snapshot)
+				m.setAttachedTransientSource(*message.Snapshot)
 				continue
 			}
 			if err := m.applyDelta(ctx, *message.Delta); err != nil {
@@ -222,7 +222,7 @@ func (m *Manager) awaitInitialSnapshot(ctx context.Context, messages <-chan json
 			return err
 		}
 	}
-	m.setAttachedCompletionSource(snapshot)
+	m.setAttachedTransientSource(snapshot)
 	m.setMode(ModeAttached)
 	return nil
 }

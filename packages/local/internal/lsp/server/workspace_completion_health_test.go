@@ -133,7 +133,7 @@ func TestWorkspaceCompletionHandoverResetsScopeFailures(t *testing.T) {
 	fixture.complete(context.Background())
 
 	fixture.workspace.setSessionMode(fixture.session, readmodel.ModeAttached)
-	fixture.workspace.setSessionCompletionSource(fixture.session, fixture.source)
+	fixture.workspace.setSessionTransientSource(fixture.session, fixture.source)
 	if got := fixture.complete(context.Background()); got.Kind != completionOutcomeWorkerFailure {
 		t.Fatalf("post-handover failure = %v, want first worker failure", got.Kind)
 	}
@@ -168,7 +168,7 @@ func TestWorkspaceCompletionReindexDiscardsLateFailureAndResetsHealth(t *testing
 		outcome <- fixture.complete(context.Background())
 	}()
 	<-fixture.source.started
-	fixture.workspace.invalidateCompletionSource(fixture.session)
+	fixture.workspace.invalidateTransientSource(fixture.session)
 	close(fixture.source.release)
 	if got := <-outcome; got.Kind != completionOutcomeSoft {
 		t.Fatalf("late pre-reindex failure = %v, want health-neutral soft outcome", got.Kind)
@@ -208,7 +208,7 @@ func TestWorkspaceCompletionFailureCountersArePerScope(t *testing.T) {
 		}
 		workspace.sessions = append(workspace.sessions, &scopeSession{
 			scope: readmodel.Scope{ID: id, Root: root},
-			mode:  readmodel.ModeOwn, completion: source, sourceEpoch: 1,
+			mode:  readmodel.ModeOwn, transient: source, sourceEpoch: 1,
 		})
 		scopes = append(scopes, scopedSource{
 			uri: protocol.DocumentURI(
@@ -251,7 +251,7 @@ func newCompletionHealthFixture(t *testing.T, scope string) *completionHealthFix
 	}}
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: scope, Root: root},
-		mode:  readmodel.ModeOwn, completion: source, sourceEpoch: 1,
+		mode:  readmodel.ModeOwn, transient: source, sourceEpoch: 1,
 	}
 	session.publisher = NewPublisher(PublisherOptions{
 		ScopeID: scope,

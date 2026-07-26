@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
+	"github.com/use-crux/crux/packages/local/internal/lsp/transient"
 )
 
 func (b *documentBuffers) Change(
@@ -62,6 +63,11 @@ func (b *documentBuffers) ApplyChanges(
 	}
 	document.snapshot.Version = version
 	document.snapshot.Text = text
+	document.snapshot.Revision = transient.NewRevision(
+		document.snapshot.Revision.OpenEpoch,
+		version,
+		text,
+	)
 	document.available = true
 	document.limitTraced = false
 	b.documents[uri] = document
@@ -77,6 +83,11 @@ func (b *documentBuffers) invalidateLocked(
 	b.removeBytesLocked(document)
 	document.snapshot.Version = version
 	document.snapshot.Text = ""
+	document.snapshot.Revision = transient.NewRevision(
+		document.snapshot.Revision.OpenEpoch,
+		version,
+		"",
+	)
 	document.available = false
 	b.documents[uri] = document
 }

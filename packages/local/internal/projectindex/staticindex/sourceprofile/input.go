@@ -1,13 +1,13 @@
 package sourceprofile
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"runtime"
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/sourcehash"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
@@ -122,11 +122,10 @@ func readFile(file string) sourceRead {
 	if err != nil {
 		return sourceRead{file: file, err: err}
 	}
-	sum := sha256.Sum256(source)
 	return sourceRead{
 		file:       file,
 		source:     source,
-		sourceHash: fmt.Sprintf("%x", sum),
+		sourceHash: sourcehash.Sum(source),
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
+	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -31,6 +32,7 @@ type Service struct {
 	indexService  *service.Service
 	indexModel    *readmodel.Model
 	completion    *indexcompletion.Service
+	promptText    *indexprompttext.Service
 	manifestStore catalogManifestCounter
 
 	publishMu          sync.Mutex
@@ -88,6 +90,11 @@ func (s *Service) WithProjectIndexer(indexer projectindex.ProjectIndexer) *Servi
 	} else {
 		s.completion = nil
 	}
+	if compiler, ok := indexer.(indexprompttext.Compiler); ok {
+		s.promptText = indexprompttext.New(compiler)
+	} else {
+		s.promptText = nil
+	}
 	return s
 }
 
@@ -99,6 +106,15 @@ func (s *Service) CompleteProjectIndex(
 	request indexcompletion.Request,
 ) (indexcompletion.Result, error) {
 	return s.completion.Complete(ctx, view, request)
+}
+
+// AnalyzeProjectPromptText runs one memory-only query through the same
+// persistent compiler configured for Project Index work.
+func (s *Service) AnalyzeProjectPromptText(
+	ctx context.Context,
+	request indexprompttext.Request,
+) (indexprompttext.Result, error) {
+	return s.promptText.Analyze(ctx, request)
 }
 
 func (s *Service) WithFactStore(facts service.CacheStore) *Service {

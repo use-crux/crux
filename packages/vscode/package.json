@@ -49,12 +49,15 @@
     "build": "node ./scripts/build.mjs",
     "package": "vsce package --no-dependencies",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "pnpm test:unit && pnpm test:extension",
+    "test:unit": "vitest run",
+    "test:extension": "pnpm build && node ./scripts/test-extension.mjs"
   },
   "dependencies": { "vscode-languageclient": "^9.0.1" },
   "devDependencies": {
     "@types/node": "^24.12.4",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^3.6.2",
     "esbuild": "^0.28.0",
     "typescript": "5.9.3",

@@ -29,13 +29,13 @@ func (w *workspaceRuntime) Completion(
 		}
 	}
 	w.mu.Lock()
-	if w.closed || (session.mode != readmodel.ModeOwn && session.mode != readmodel.ModeAttached) || session.completion == nil {
+	if w.closed || (session.mode != readmodel.ModeOwn && session.mode != readmodel.ModeAttached) || session.transient == nil {
 		w.mu.Unlock()
 		return completionOutcome{
 			Kind: completionOutcomeSoft, Reason: completionReasonSourceUnavailable,
 		}
 	}
-	source := session.completion
+	source := session.transient
 	epoch := session.sourceEpoch
 	scope := session.scope.ID
 	w.mu.Unlock()

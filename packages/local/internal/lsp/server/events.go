@@ -27,6 +27,7 @@ func (s *Server) didChange(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
+	s.cancelDocumentPromptText(params.TextDocument.URI)
 	_, notice := s.buffers.ApplyChanges(
 		params.TextDocument.URI,
 		params.TextDocument.Version,
@@ -55,6 +56,7 @@ func (s *Server) didClose(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
+	s.cancelDocumentPromptText(params.TextDocument.URI)
 	s.buffers.Close(params.TextDocument.URI)
 	s.setDocumentOpen(params.TextDocument.URI, false)
 	if workspace := s.currentWorkspace(); workspace != nil {

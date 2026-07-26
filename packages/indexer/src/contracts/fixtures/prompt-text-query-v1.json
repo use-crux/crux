@@ -1,0 +1,109 @@
+{
+  "request": {
+    "id": 401,
+    "method": "promptTextQuery",
+    "query": {
+      "protocolVersion": 1,
+      "file": "/repo/src/writer.ts",
+      "languageId": "typescript",
+      "revision": {
+        "openEpoch": 7,
+        "version": 11,
+        "sourceHash": "9a7e2e745698e9315a7f3a066017ac71ea0ffea39aa494c71878e7f2a1197d4f"
+      },
+      "source": "import { md, prompt } from '@use-crux/core'\nexport const writer = prompt({\n  id: 'writer',\n  prompt: md`# Hello`,\n})\n",
+      "fragments": [],
+      "limits": {
+        "maxSourceBytes": 2097152,
+        "maxTemplates": 256,
+        "maxTemplateBytes": 262144,
+        "maxTraversalNodes": 100000,
+        "maxOutputBytes": 1048576,
+        "maxFragments": 256,
+        "maxFragmentBytes": 65536,
+        "maxFragmentDepth": 16,
+        "maxPreviewBytes": 1048576
+      }
+    }
+  },
+  "response": {
+    "id": 401,
+    "ok": true,
+    "response": {
+      "protocolVersion": 1,
+      "file": "/repo/src/writer.ts",
+      "revision": {
+        "openEpoch": 7,
+        "version": 11,
+        "sourceHash": "9a7e2e745698e9315a7f3a066017ac71ea0ffea39aa494c71878e7f2a1197d4f"
+      },
+      "status": {
+        "kind": "complete"
+      },
+      "templates": [
+        {
+          "candidateId": 0,
+          "range": {
+            "start": { "line": 3, "character": 10 },
+            "end": { "line": 3, "character": 21 }
+          },
+          "tagRange": {
+            "start": { "line": 3, "character": 10 },
+            "end": { "line": 3, "character": 12 }
+          },
+          "templateRange": {
+            "start": { "line": 3, "character": 12 },
+            "end": { "line": 3, "character": 21 }
+          },
+          "status": {
+            "kind": "complete"
+          },
+          "literalIslands": [
+            {
+              "index": 0,
+              "range": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              },
+              "projectionLength": 7
+            }
+          ],
+          "interpolationBarriers": [],
+          "mappings": [
+            {
+              "island": 0,
+              "projectionRange": { "start": 0, "end": 7 },
+              "sourceRange": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              }
+            }
+          ],
+          "blocks": [
+            {
+              "kind": "heading",
+              "index": 0,
+              "island": 0,
+              "level": 1,
+              "range": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              },
+              "textRange": {
+                "start": { "line": 3, "character": 15 },
+                "end": { "line": 3, "character": 20 }
+              }
+            }
+          ],
+          "spans": [],
+          "links": [],
+          "nesting": [],
+          "preview": {
+            "text": "",
+            "segments": []
+          }
+        }
+      ]
+    }
+  }
+}

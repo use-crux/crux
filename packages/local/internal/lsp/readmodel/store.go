@@ -16,6 +16,8 @@ type Snapshot struct {
 	ProjectRoot   string
 	ServerVersion string
 	Generation    *uint64
+	Indexing      *api.ProjectIndexingStatus
+	Diagnostics   []api.IndexDiagnostic
 	Findings      []api.IndexLintFinding
 	Definitions   []api.ProjectDefinition
 	Relations     []api.ProjectRelation
@@ -34,14 +36,17 @@ type LintReplacement struct {
 	Findings []api.IndexLintFinding `json:"findings"`
 }
 
-// Delta is the LSP-owned subset of an index:delta message. A nil Lints value
-// means the delta changed other Project Index sections but did not change
-// lints. SourceChanged invalidates source text derived mapping state.
+// Delta is the LSP-owned subset of an index:delta message. Nil Lints or
+// Diagnostics values mean those replacement fields were omitted.
+// SourceChanged distinguishes an omitted sourceRow from an explicit null
+// removal; SourceRow retains the replacement value when present.
 type Delta struct {
 	Generation    uint64
 	File          string
 	Lints         *LintReplacement
 	Definitions   DefinitionChanges
+	Diagnostics   []api.IndexDiagnostic
+	SourceRow     *api.IndexSourceFile
 	SourceChanged bool
 }
 
@@ -67,6 +72,7 @@ type DeltaResult struct {
 
 type scopeState struct {
 	anchors           map[string][]api.IndexLintFinding
+	diagnostics       map[string][]api.IndexDiagnostic
 	definitions       map[string]api.ProjectDefinition
 	definitionsByFile map[string][]api.ProjectDefinition
 	sitesByFile       map[string][]NavigationSite
@@ -75,6 +81,7 @@ type scopeState struct {
 	relationsByTo     map[string][]api.ProjectRelation
 	relationsByFile   map[string][]api.ProjectRelation
 	sources           map[string]api.IndexSourceFile
+	indexing          *api.ProjectIndexingStatus
 	initialized       bool
 	generation        uint64
 	generationKnown   bool
@@ -95,6 +102,7 @@ func NewStore() *Store {
 // ApplySnapshot atomically replaces one scope and returns every changed anchor.
 func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 	next := findingsByAnchor(snapshot.Findings)
+	nextDiagnostics := diagnosticsBySource(snapshot.Diagnostics)
 	nextDefinitions := definitionsByID(snapshot.Definitions)
 	nextDefinitionsByFile := definitionLookupsByFile(nextDefinitions)
 	nextRelations, nextRelationsByTo, nextRelationsByFile := relationLookups(snapshot.Relations)
@@ -106,6 +114,7 @@ func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 	current := s.scope(scope)
 	current.revision++
 	changed := changedAnchors(current.anchors, next)
+	changed = append(changed, changedIndexFiles(current.diagnostics, nextDiagnostics)...)
 	changed = append(changed, definitionAffectedAnchors(current, next, nextDefinitions)...)
 	changed = append(changed, changedIndexFiles(current.definitionsByFile, nextDefinitionsByFile)...)
 	changed = append(changed, changedIndexFiles(current.sitesByFile, nextSitesByFile)...)
@@ -114,6 +123,7 @@ func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 	sort.Strings(changed)
 	changed = compactStrings(changed)
 	current.anchors = next
+	current.diagnostics = nextDiagnostics
 	current.definitions = nextDefinitions
 	current.definitionsByFile = nextDefinitionsByFile
 	current.sitesByFile = nextSitesByFile
@@ -122,6 +132,7 @@ func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 	current.relationsByTo = nextRelationsByTo
 	current.relationsByFile = nextRelationsByFile
 	current.sources = nextSources
+	current.indexing = cloneIndexingStatus(snapshot.Indexing)
 	current.initialized = true
 	current.generationKnown = snapshot.Generation != nil
 	if snapshot.Generation != nil {
@@ -130,57 +141,6 @@ func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 		current.generation = 0
 	}
 	return changed
-}
-
-// ApplyDelta applies replacement semantics after enforcing per-scope
-// generation ordering.
-func (s *Store) ApplyDelta(scope string, delta Delta) DeltaResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current := s.scope(scope)
-	if !current.initialized {
-		return DeltaResult{Status: DeltaNeedsResync}
-	}
-	if current.generationKnown {
-		if delta.Generation < current.generation {
-			return DeltaResult{Status: DeltaIgnored}
-		}
-		if delta.Generation > current.generation+1 {
-			return DeltaResult{Status: DeltaNeedsResync}
-		}
-	} else {
-		current.generationKnown = true
-	}
-	current.generation = delta.Generation
-	current.revision++
-	changedFiles := make([]string, 0, 2)
-	if delta.SourceChanged {
-		changedFiles = append(changedFiles, delta.File)
-	}
-	if applyDefinitionChanges(current.definitions, delta.Definitions) {
-		current.definitionsByFile = definitionLookupsByFile(current.definitions)
-		current.sitesByFile, current.sitesByTarget = navigationSiteLookups(current.relations, current.definitions)
-		changedFiles = append(changedFiles, delta.File)
-	}
-
-	if delta.Lints == nil {
-		sort.Strings(changedFiles)
-		return DeltaResult{Status: DeltaApplied, ChangedFiles: compactStrings(changedFiles)}
-	}
-	replacement := cloneFindings(delta.Lints.Findings)
-	previous := current.anchors[delta.File]
-	if len(replacement) == 0 {
-		delete(current.anchors, delta.File)
-	} else {
-		current.anchors[delta.File] = replacement
-	}
-	if reflect.DeepEqual(previous, replacement) || (len(previous) == 0 && len(replacement) == 0) {
-		sort.Strings(changedFiles)
-		return DeltaResult{Status: DeltaApplied, ChangedFiles: compactStrings(changedFiles)}
-	}
-	changedFiles = append(changedFiles, delta.File)
-	sort.Strings(changedFiles)
-	return DeltaResult{Status: DeltaApplied, ChangedFiles: compactStrings(changedFiles)}
 }
 
 // Findings returns a detached copy of one anchor's findings.
@@ -242,6 +202,7 @@ func (s *Store) scope(id string) *scopeState {
 	if current == nil {
 		current = &scopeState{
 			anchors:           make(map[string][]api.IndexLintFinding),
+			diagnostics:       make(map[string][]api.IndexDiagnostic),
 			definitions:       make(map[string]api.ProjectDefinition),
 			definitionsByFile: make(map[string][]api.ProjectDefinition),
 			sitesByFile:       make(map[string][]NavigationSite),

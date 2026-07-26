@@ -12,6 +12,7 @@ const (
 type ClientCapabilities struct {
 	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 	Workspace    *WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+	Experimental *ExperimentalClientCapabilities `json:"experimental,omitempty"`
 }
 
 // WorkspaceClientCapabilities contains workspace-wide refresh support.

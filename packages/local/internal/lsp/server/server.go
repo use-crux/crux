@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/jsonrpc"
+	lsprompttext "github.com/use-crux/crux/packages/local/internal/lsp/prompttext"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
@@ -34,23 +35,25 @@ type Options struct {
 type Server struct {
 	options Options
 
-	mu                      sync.Mutex
-	shutdown                bool
-	exitCode                int
-	folders                 []protocol.WorkspaceFolder
-	clientInfo              *protocol.ClientInfo
-	initialized             bool
-	scopeCancel             context.CancelFunc
-	outbound                chan protocol.OutboundMessage
-	settings                Settings
-	hoverFormat             protocol.MarkupKind
-	inlayHintRefreshSupport bool
-	codeLensRefreshSupport  bool
-	openDevtoolsCommand     bool
-	trusted                 bool
-	workspace               workspaceController
-	documents               map[protocol.DocumentURI]documentStatus
-	buffers                 *documentBuffers
+	mu                       sync.Mutex
+	shutdown                 bool
+	exitCode                 int
+	folders                  []protocol.WorkspaceFolder
+	clientInfo               *protocol.ClientInfo
+	initialized              bool
+	scopeCancel              context.CancelFunc
+	outbound                 chan protocol.OutboundMessage
+	settings                 Settings
+	hoverFormat              protocol.MarkupKind
+	inlayHintRefreshSupport  bool
+	codeLensRefreshSupport   bool
+	promptTextRefreshSupport bool
+	openDevtoolsCommand      bool
+	trusted                  bool
+	workspace                workspaceController
+	documents                map[protocol.DocumentURI]documentStatus
+	buffers                  *documentBuffers
+	promptText               *lsprompttext.Controller
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
@@ -63,6 +66,10 @@ type Server struct {
 	pendingCompletions    map[string]*pendingCompletion
 	completionByURI       map[protocol.DocumentURI]*pendingCompletion
 	lastCompletionWarning time.Time
+
+	promptTextMu       sync.Mutex
+	pendingPromptTexts map[string]*pendingPromptText
+	promptTextByURI    map[protocol.DocumentURI]*pendingPromptText
 }
 
 type documentStatus struct {
@@ -81,7 +88,7 @@ func New(options Options) *Server {
 	if options.FixExecutable == nil {
 		options.FixExecutable = os.Executable
 	}
-	return &Server{
+	server := &Server{
 		options:     options,
 		outbound:    make(chan protocol.OutboundMessage, 256),
 		settings:    defaultSettings(options.Port),
@@ -95,7 +102,11 @@ func New(options Options) *Server {
 		pendingClientRequests: make(map[string]*pendingClientRequest),
 		pendingCompletions:    make(map[string]*pendingCompletion),
 		completionByURI:       make(map[protocol.DocumentURI]*pendingCompletion),
+		pendingPromptTexts:    make(map[string]*pendingPromptText),
+		promptTextByURI:       make(map[protocol.DocumentURI]*pendingPromptText),
 	}
+	server.promptText = lsprompttext.NewController(server.buffers)
+	return server
 }
 
 // Outbound returns asynchronous LSP requests and notifications for the
@@ -142,6 +153,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.buffers.Clear()
 		s.closeClientRequests()
 		s.closeCompletionRequests()
+		s.closePromptTextRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -158,6 +170,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.buffers.Clear()
 		s.closeClientRequests()
 		s.closeCompletionRequests()
+		s.closePromptTextRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -180,6 +193,8 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return s.codeLens(request.Params)
 	case protocol.MethodCompletion:
 		return s.completion(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextDecorations:
+		return s.promptTextDecorations(ctx, request.ID, request.Params)
 	case protocol.MethodWorkspaceSymbol:
 		return s.workspaceSymbol(ctx, request.Params)
 	case protocol.MethodDidOpen:
@@ -225,6 +240,7 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodInlayHint ||
 		request.Method == protocol.MethodCodeLens ||
 		request.Method == protocol.MethodCompletion ||
+		request.Method == protocol.MethodPromptTextDecorations ||
 		request.Method == protocol.MethodCodeAction ||
 		request.Method == protocol.MethodWorkspaceSymbol ||
 		request.Method == protocol.MethodExecuteCommand

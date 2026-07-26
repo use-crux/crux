@@ -36,6 +36,7 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 	s.clientInfo = params.ClientInfo
 	s.hoverFormat = preferredHoverFormat(params.Capabilities)
 	s.inlayHintRefreshSupport, s.codeLensRefreshSupport = refreshSupport(params.Capabilities)
+	s.promptTextRefreshSupport = promptTextRefreshSupport(params.Capabilities)
 	s.openDevtoolsCommand = initializationClientCommands(params.InitializationOptions).OpenDevtools
 	s.settings = mergeSettings(s.settings, params.InitializationOptions)
 	s.trusted = initializationWorkspaceTrusted(params.InitializationOptions)

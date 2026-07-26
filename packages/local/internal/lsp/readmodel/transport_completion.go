@@ -40,4 +40,4 @@ func (t *AttachTransport) Completion(ctx context.Context, request CompletionRequ
 	}, nil
 }
 
-var _ CompletionSource = (*AttachTransport)(nil)
+var _ TransientSource = (*AttachTransport)(nil)

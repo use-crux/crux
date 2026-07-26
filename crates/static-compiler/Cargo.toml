@@ -13,6 +13,7 @@ crux-indexer-facts.workspace = true
 crux-indexer-syntax-oxc.workspace = true
 crux-indexer-primitives.workspace = true
 crux-indexer-lints.workspace = true
+pulldown-cmark.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
