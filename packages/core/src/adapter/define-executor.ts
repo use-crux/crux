@@ -21,7 +21,7 @@
 
 import type { AnyPrompt } from "../prompt/prompt-types";
 import type { GenerationSettings } from "../generation/types";
-import { Deadline } from "../generation/timeout";
+import { Deadline, normalizeBudgetMs } from "../generation/timeout";
 import type { TimeoutOptions } from "../generation/timeout";
 import type { Message } from "../generation/messages";
 import type { LoopRuntimePort } from "./loop-runtime-port";
@@ -353,7 +353,7 @@ export function loopRuntimeAdapter<
         {
           deadline,
           mode: "stream",
-          firstTokenMs: opts.timeout?.firstToken,
+          firstTokenMs: normalizeBudgetMs(opts.timeout?.firstToken),
           context: opts.routing,
           forcedRoute: opts.route,
         },

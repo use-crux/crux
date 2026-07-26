@@ -36,7 +36,7 @@ export function wrapStreamIterable(
   extractTextDelta: TextDeltaExtractor,
   onComplete: (finalChunk?: unknown) => void,
   onError: (err: unknown) => void,
-  chunkMs?: number,
+  chunkMs?: number | null,
 ): void {
   const originalIterFn = stream[Symbol.asyncIterator].bind(stream)
   const normalizedChunkMs = normalizeBudgetMs(chunkMs)

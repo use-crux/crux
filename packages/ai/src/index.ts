@@ -51,7 +51,7 @@ import type {
   Guardrail,
   SafetyTuneOptions,
 } from "@use-crux/core/safety";
-import { isValidationExhaustedError } from "@use-crux/core";
+import { isValidationExhaustedError, TimeoutError } from "@use-crux/core";
 import type { DenseEmbedding } from "@use-crux/core/embedding";
 import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
 import type {
@@ -212,10 +212,9 @@ export class CruxAIError extends Error {
 
   /**
    * Classify any thrown error into a `CruxAIError`, preserving the
-   * original as `cause`. Crux timeouts map from `TimeoutError`, provider
-   * aborts map from `AbortError`, exhausted validation retries from
-   * `ValidationExhaustedError`;
-   * everything else is `'provider'`.
+   * original as `cause`. Canonical Crux timeouts map from `TimeoutError`,
+   * provider aborts map from `AbortError`, exhausted validation retries from
+   * `ValidationExhaustedError`; everything else is `'provider'`.
    */
   static classify(error: unknown): CruxAIError {
     if (error instanceof CruxAIError) return error;
@@ -223,7 +222,7 @@ export class CruxAIError extends Error {
     if (isValidationExhaustedError(error)) {
       return new CruxAIError("validation_exhausted", message, { cause: error });
     }
-    if (error instanceof Error && error.name === "TimeoutError") {
+    if (TimeoutError.isInstance(error)) {
       return new CruxAIError("timeout", message, { cause: error });
     }
     if (error instanceof Error && error.name === "AbortError") {

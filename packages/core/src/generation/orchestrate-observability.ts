@@ -57,7 +57,7 @@ export function emitOperationDeadline(totalMs: TimeoutOptions['totalMs']): void 
   })
 }
 
-function normalizeTotalTimeoutMs(totalMs: number | undefined): number | undefined {
+function normalizeTotalTimeoutMs(totalMs: number | null | undefined): number | undefined {
   if (typeof totalMs !== 'number' || !Number.isFinite(totalMs) || totalMs <= 0) return undefined
   return Math.floor(totalMs)
 }
