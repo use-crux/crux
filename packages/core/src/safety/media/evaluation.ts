@@ -1,8 +1,13 @@
 import { observe } from '../../observability'
-import type { SafetyRunContext } from '../decision'
+import type {
+  SafetyFinding,
+  SafetyFindingCollector,
+  SafetyRunContext,
+} from '../decision'
 import type { ModelInputOrigin } from '../input-origin'
 import { safeCaptureSummary } from '../errors'
 import { GuardrailBlockedError } from '../guardrail/errors'
+import { findingCountAttributes } from '../guardrail/finding-observability'
 import { recordMediaGuardrailBlockedEdge, recordMediaGuardrailReport } from '../guardrail/observability'
 import type { GuardrailAudit, GuardrailAuditEntry, GuardrailContext, MediaGuardrailRunResult } from '../guardrail/types'
 import type { GuardrailBinding } from '../registry'
@@ -13,6 +18,7 @@ export interface MediaEvaluation {
   readonly groupId: string
   readonly binding: GuardrailBinding
   readonly result: MediaGuardrailRunResult
+  readonly findings?: readonly SafetyFinding[]
   readonly location: MediaPartLocation
   readonly model?: string
   /** Privacy-safe semantic provenance shared across media projections. */
@@ -32,22 +38,58 @@ export function finalizeMediaEvaluations(
   terminal?: MediaEvaluation,
 ): void {
   for (const evaluation of evaluations) {
-    const { binding, result, location, model, origin, durationMs, escalatedToBlock, span } = evaluation
+    const {
+      binding,
+      result,
+      findings,
+      location,
+      model,
+      origin,
+      durationMs,
+      escalatedToBlock,
+      span,
+    } = evaluation
     span.withContext(() => {
-      recordMediaGuardrailReport(binding, result, location, durationMs, escalatedToBlock, origin)
+      recordMediaGuardrailReport(
+        binding,
+        result,
+        location,
+        durationMs,
+        escalatedToBlock,
+        origin,
+        findings,
+      )
       if (evaluation === terminal && result.action !== 'allow') {
-        recordMediaGuardrailBlockedEdge(binding, result.reason, location, escalatedToBlock, origin)
+        recordMediaGuardrailBlockedEdge(
+          binding,
+          result.reason,
+          location,
+          escalatedToBlock,
+          origin,
+          findings,
+        )
       }
     })
     span.end({
       attributes: {
         action: result.action,
         ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
+        ...findingCountAttributes(findings),
         durationMs,
       },
     })
     options.appendAudit({
-      applied: [auditEntry(options.phase, binding, result, location, model, origin, durationMs, escalatedToBlock)],
+      applied: [auditEntry(
+        options.phase,
+        binding,
+        result,
+        location,
+        model,
+        origin,
+        durationMs,
+        escalatedToBlock,
+        evaluation.findings,
+      )],
       blocked: (result.action === 'block' && binding.mode === 'enforce') || escalatedToBlock,
     })
   }
@@ -63,6 +105,7 @@ export function mediaBlockedError(
   escalatedToBlock = false,
   model?: string,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): GuardrailBlockedError {
   return new GuardrailBlockedError({
     guardrailId: binding.policy.id,
@@ -80,6 +123,7 @@ export function mediaBlockedError(
         ...(model ? { model } : {}),
         location,
         ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
+        ...(findings ? { findings } : {}),
         ...(binding.tuned ? { tuned: binding.tuned } : {}),
         durationMs,
         captured: safeCaptureSummary(''),
@@ -92,6 +136,7 @@ export function mediaBlockedError(
 export function mediaRunContext(
   binding: GuardrailBinding,
   context: GuardrailContext,
+  findings: SafetyFindingCollector,
 ): Omit<SafetyRunContext, 'origin'> & { readonly origin?: ModelInputOrigin } {
   return {
     policy: { id: binding.policy.id, mode: binding.mode },
@@ -101,7 +146,7 @@ export function mediaRunContext(
     trace: { id: context.traceId },
     attempt: { index: 0, kind: 'initial' },
     metadata: context.metadata,
-    findings: { add() {} },
+    findings,
     ...(context.origin ? { origin: context.origin } : {}),
   }
 }
@@ -115,6 +160,7 @@ function auditEntry(
   origin: ModelInputOrigin | undefined,
   durationMs: number,
   escalatedToBlock: boolean,
+  findings: readonly SafetyFinding[] | undefined,
 ): GuardrailAuditEntry {
   return {
     guard: binding.policy.id,
@@ -128,6 +174,7 @@ function auditEntry(
     ...(model ? { model } : {}),
     location,
     ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
+    ...(findings ? { findings } : {}),
     durationMs,
   }
 }

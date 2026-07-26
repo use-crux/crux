@@ -41,25 +41,52 @@ export interface CompactionMediaConfig {
 }
 
 /**
+ * Common controls accepted by a framework-agnostic structured generation call.
+ *
+ * @typeParam T - Structured value produced after schema validation.
+ */
+export interface GenerateObjectCommonOptions<T> {
+  /** Model reference resolved by the implementation for this call. */
+  readonly model: unknown;
+  /** Optional system instruction applied before the prompt or messages. */
+  readonly system?: string;
+  /** Zod schema describing and validating the returned object. */
+  readonly schema: z.ZodType<T>;
+  /** Provider temperature forwarded when the caller needs deterministic generation. */
+  readonly temperature?: number;
+  /** Provider nucleus-sampling setting forwarded when the caller needs deterministic generation. */
+  readonly topP?: number;
+}
+
+/**
+ * Exclusive canonical input accepted by structured generation.
+ *
+ * Canonical messages preserve multimodal content for provider adapters. A
+ * caller supplies exactly one input form.
+ */
+export type GenerateObjectInput =
+  | { readonly prompt: string; readonly messages?: never }
+  | { readonly messages: readonly Message[]; readonly prompt?: never };
+
+/**
  * Framework-agnostic structured output function.
  *
- * Provider-native helpers send `schema` to their provider's structured-output
- * mechanism and return the provider/schema validated `{ object }`. They do not
- * imply the full Crux prompt runtime: prompt resolution, validation retry,
- * safety, Eval evidence, tools, memory, and instrumentation are only present when
- * the helper is explicitly adapter-backed, such as one created with
+ * Accepts either a text prompt or canonical messages. Provider-native helpers
+ * send `schema` to their provider's structured-output mechanism and return the
+ * provider/schema validated `{ object }`. They do not imply the full Crux
+ * prompt runtime: prompt resolution, validation retry, safety, Eval evidence,
+ * tools, memory, and instrumentation are only present when the helper is
+ * explicitly adapter-backed, such as one created with
  * `createGenerateObjectFnFromGenerate()`.
+ *
+ * @typeParam T - Structured value produced after schema validation.
  */
-export type GenerateObjectFn = <T>(options: {
-  model: unknown;
-  system?: string;
-  prompt: string;
-  schema: z.ZodType<T>;
-  /** Provider temperature forwarded when the caller needs deterministic generation. */
-  temperature?: number;
-  /** Provider nucleus-sampling setting forwarded when the caller needs deterministic generation. */
-  topP?: number;
-}) => Promise<{ object: T; routing?: RoutingReceipt }>;
+export type GenerateObjectFn = <T>(
+  options: GenerateObjectCommonOptions<T> & GenerateObjectInput,
+) => Promise<{
+  readonly object: T;
+  readonly routing?: RoutingReceipt;
+}>;
 
 // ── summarizeMessages ───────────────────────────────────────────────
 

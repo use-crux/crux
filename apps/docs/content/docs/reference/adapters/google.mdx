@@ -271,18 +271,34 @@ Assistant tool calls become `functionCall` parts and tool results become `functi
 
 `googleTranscript` is the lower-level `NativeTranscriptCodec` used by `createGoogle()`. The public `toMessages()` and `fromMessages()` wrappers delegate to it.
 
-### `createGenerateObjectFn(client, model)`
+### `createGenerateObjectFn(client)`
 
-Create a `GenerateObjectFn` bound to a client and model.
+Create a provider-native `GenerateObjectFn` bound only to a client. Every call
+must supply a non-empty Google model id.
 
 | Field    | Type          | Description                  |
 | -------- | ------------- | ---------------------------- |
 | `client` | `GoogleGenAI` | Google GenAI client instance |
-| `model`  | `string`      | Model name                   |
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper. It uses Google GenAI structured JSON output and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+```ts
+const generateObject = createGenerateObjectFn(client);
+const { object } = await generateObject({
+  model: "gemini-2.5-flash",
+  messages,
+  schema,
+});
+```
+
+This helper uses the same native chat profile and media codec as
+`createGoogle()`. It accepts exactly one of `prompt` or canonical `messages`,
+uses Google GenAI structured JSON output, and returns `{ object }` while
+preserving provider errors. It does not run Crux prompt resolution, validation
+retry, safety, tools, memory capture, or instrumentation. Use
+`createGenerateObjectFnFromGenerate(generate)` from
+`@use-crux/core/compaction` only when full adapter runtime behavior is needed;
+do not call that bridge from a guardrail attached to the same lifecycle.
 
 ### `createGenerateTextFn(client, model)`
 

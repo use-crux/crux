@@ -8,6 +8,7 @@ export function streamGuardDecision(
   binding: GuardrailBinding,
   result: GuardrailRunResult<unknown>,
   content: string,
+  findings?: SafetyDecision['findings'],
 ): SafetyDecision {
   const guard = binding.policy
   return {
@@ -18,6 +19,7 @@ export function streamGuardDecision(
     mode: binding.mode,
     action: chunkSafetyAction(result.action),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...(findings ? { findings } : {}),
     ...(binding.tuned ? { tuned: binding.tuned } : {}),
     durationMs: 0,
     captured: safeCaptureSummary(content),

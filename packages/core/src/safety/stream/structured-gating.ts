@@ -161,7 +161,9 @@ export async function gateOccurrence(
       guardrailId: guard.id,
       phase: 'output',
       reason: result.reason,
-      decisions: [streamGuardDecision(binding, result, '')],
+      decisions: [
+        streamGuardDecision(binding, result, '', entry.findings),
+      ],
     })
   }
   if (result.action === 'rewrite' && binding.mode !== 'report') {
@@ -220,7 +222,9 @@ async function gateStringSentences(
         guardrailId: binding.policy.id,
         phase: 'output',
         reason: result.reason,
-        decisions: [streamGuardDecision(binding, result, output)],
+        decisions: [
+          streamGuardDecision(binding, result, output, entry.findings),
+        ],
       })
     }
     output +=

@@ -31,6 +31,14 @@ export interface StaticExtensionHostRuntime {
 
 export const cruxCoreCompilerProjections = [
   {
+    name: 'safety-strategy-facts',
+    version: '2',
+    phase: 'extract',
+    reason:
+      'Compiler-owned Safety helper recognition and privacy-safe strategy config projection.',
+    staticCallNames: ['mediaClassifier'],
+  },
+  {
     name: 'deferred-work-containment',
     version: '2',
     phase: 'resolve',

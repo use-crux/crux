@@ -8,14 +8,11 @@
  */
 
 import type { z } from "zod";
-import type { GenerateObjectFn, GenerateTextFn } from "../../compaction";
 import type { Message } from "../../generation/messages";
 import type { GenerationSettings } from "../../generation/types";
 import type { AssistantContentPart } from "../../types/content";
 import type { ToolSourceMaterializer } from "../../tools/tool-source";
-import type { CruxAdapter } from "../define-adapter";
 import type { CruxProviderError } from "../normalized-outcome";
-import type { AdapterSpec } from "../spec";
 import type {
   AdapterResponse,
   CallArgs,
@@ -278,64 +275,4 @@ export interface NativeChatProfile<
     assistant: NativeAssistantTurn,
     results: readonly ToolResultEntry[],
   ): Message[];
-}
-
-/** Dependency argument shape: required only when the profile declares deps. */
-export type NativeProviderDepsArg<TDeps extends Record<string, unknown>> =
-  TDeps extends Record<string, never>
-    ? readonly [deps?: TDeps]
-    : readonly [deps: TDeps];
-
-/** Bound helper functions generated from the same single-turn provider path. */
-export interface NativeChatHelpers<TClient> {
-  /** Create a framework-agnostic text generation helper for compaction/scoring APIs. */
-  createGenerateTextFn(client: TClient, model: string): GenerateTextFn;
-  /** Create a framework-agnostic structured generation helper for compaction/scoring APIs. */
-  createGenerateObjectFn(client: TClient, model: string): GenerateObjectFn;
-}
-
-/** Compiled native chat provider facade. */
-export interface NativeChatProvider<
-  TRequest,
-  TRawResponse,
-  TRawStream extends AsyncIterable<unknown>,
-  TExtra extends Record<string, unknown>,
-  TDeps extends Record<string, unknown> = Record<string, never>,
-  TProviderMessage = unknown,
-> {
-  /** Original provider recipe. */
-  readonly profile: NativeChatProfile<
-    TRequest,
-    TRawResponse,
-    TRawStream,
-    TExtra,
-    TDeps,
-    TProviderMessage
-  >;
-
-  /** Compile the profile into an `AdapterSpec` for a provider SDK client. */
-  specFor<TClient>(
-    bind: (
-      client: TClient,
-    ) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
-    ...deps: NativeProviderDepsArg<TDeps>
-  ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest>;
-
-  /** Compile the profile into the public Crux adapter factory. */
-  createFor<TClient>(
-    bind: (
-      client: TClient,
-    ) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
-    ...deps: NativeProviderDepsArg<TDeps>
-  ): (
-    client: TClient,
-  ) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TRequest>;
-
-  /** Create lightweight helpers from the same request/response profile. */
-  helpers<TClient>(
-    bind: (
-      client: TClient,
-    ) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
-    ...deps: NativeProviderDepsArg<TDeps>
-  ): NativeChatHelpers<TClient>;
 }

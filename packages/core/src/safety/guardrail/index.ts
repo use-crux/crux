@@ -2,7 +2,8 @@
 export { guardrail, isGuardrail, getGuardrailDefinitionSource } from './define'
 export { evaluateGuardrail } from './evaluate'
 export { GuardrailBlockedError } from './errors'
-export { validateGuardrailRunResult } from './types'
+export { validateGuardrailRunResult } from './result-validation'
+export { MEDIA_CLASSIFIER_PROMPT_VERSION } from './strategies/media-classifier'
 
 // ── Types ──────────────────────────────────────────────────────────
 export type {
@@ -15,3 +16,10 @@ export type {
   GuardrailAuditEntry,
   MediaGuardrailRunResult,
 } from './types'
+export type {
+  MediaClassifierAction,
+  MediaClassifierCategory,
+  MediaClassifierModality,
+  MediaClassifierOptions,
+  MediaClassifierUnsupportedAction,
+} from './strategies/media-classifier'

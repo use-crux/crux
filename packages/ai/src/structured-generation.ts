@@ -13,6 +13,7 @@
  */
 
 import type { LanguageModel } from "ai";
+import type { Message } from "@use-crux/core";
 import type {
   JsonSchemaObject,
   StructuredAttempt,
@@ -38,12 +39,16 @@ export type StructuredGateway = Pick<SdkGateway, "generateText">;
 
 type StructuredArgs = Parameters<StructuredGateway["generateText"]>[0];
 
-interface GenerateObjectOptions<T> {
+type GenerateObjectOptions<T> = {
   readonly model: unknown;
   readonly system?: string;
-  readonly prompt: string;
   readonly schema: import("zod").ZodType<T>;
-}
+  readonly temperature?: number;
+  readonly topP?: number;
+} & (
+  | { readonly prompt: string; readonly messages?: never }
+  | { readonly messages: readonly Message[]; readonly prompt?: never }
+);
 
 interface StructuredObjectResult<T> {
   readonly object: T;
@@ -83,7 +88,8 @@ export async function attemptStructuredGeneration(
  *
  * The helper shares the same schema sanitation and repair mechanics as prompt
  * structured generation, while keeping the public `GenerateObjectFn` shape:
- * callers receive `{ object }`, not a `StructuredAttempt`.
+ * callers provide a model for each call and receive `{ object }`, not a
+ * `StructuredAttempt`.
  */
 export function createStructuredGenerateObjectFn(
   gateway: StructuredGateway,
@@ -125,7 +131,9 @@ export function createStructuredGenerateObjectFn(
 
     return resolveModel<LanguageModel, StructuredObjectResult<T>>(
       options.model as LanguageModel,
-      { prompt: options.prompt },
+      options.messages === undefined
+        ? { prompt: options.prompt }
+        : { messages: options.messages },
       run,
       modelLabel,
       { mode: "generate", preserveRawResult: true },
@@ -145,8 +153,13 @@ function requestFromGenerateObjectOptions<T>(
     system: options.system,
     systemBlocks: undefined,
     prompt: options.prompt,
-    messages: undefined,
-    settings: {},
+    messages: options.messages,
+    settings: {
+      ...(options.temperature === undefined
+        ? {}
+        : { temperature: options.temperature }),
+      ...(options.topP === undefined ? {} : { topP: options.topP }),
+    },
     tools: undefined,
     activeTools: undefined,
     maxSteps: 1,

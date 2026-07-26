@@ -7,6 +7,7 @@ import type {
 import { classifier } from './strategies/classifier'
 import { injection } from './strategies/injection'
 import { media } from './strategies/media'
+import { mediaClassifier } from './strategies/media-classifier'
 import { pii } from './strategies/pii'
 import { secrets } from './strategies/secrets'
 
@@ -38,6 +39,8 @@ interface GuardrailFactory {
   readonly classifier: typeof classifier
   /** Build a declarative input-attachment policy callback. */
   readonly media: typeof media
+  /** Classify canonical input or output media through a structured generator. */
+  readonly mediaClassifier: typeof mediaClassifier
 }
 
 function defineGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
@@ -55,6 +58,7 @@ export const guardrail: GuardrailFactory = Object.assign(defineGuardrail, {
   injection,
   classifier,
   media,
+  mediaClassifier,
 })
 
 /** Runtime type guard: checks if a value is a Guardrail. */

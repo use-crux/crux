@@ -4,6 +4,8 @@
 "@use-crux/openai": minor
 "@use-crux/anthropic": minor
 "@use-crux/google": minor
+"@use-crux/indexer": minor
+"@use-crux/devtools": patch
 "@use-crux/local": minor
 ---
 Normalize structured response and tool-input schemas through provider capability
@@ -16,6 +18,25 @@ another attempt is made; without it, invalid structured output throws instead of
 being returned. Adapter authors must declare their structured-output
 capabilities and use the prepared `outputSchema` supplied to request builders.
 AI SDK and provider adapters now accept `@use-crux/mcp` 0.7 peers.
+
+## Provider-neutral media classification
+
+Add `guardrail.mediaClassifier()` for per-part image, audio, video, and
+file/document classification through any `GenerateObjectFn`. Caller-authored
+categories, inclusive thresholds, capability handling, input/output media
+boundaries, report mode, and strip escalation share one provider-neutral
+contract.
+
+`GenerateObjectFn` now accepts either a text prompt or canonical messages so
+structured media reaches provider adapters without flattening. Native OpenAI,
+Anthropic, and Google object helpers bind only their client; callers pass the
+model per invocation. Existing two-argument helper construction must migrate
+to `createGenerateObjectFn(client)` plus `{ model, ... }` on each call.
+
+Guardrail findings now survive callback collection into audits, terminal
+decisions, privacy-safe report artifacts, and Devtools Run Detail. Project
+Index and Catalog expose only complete literal classifier-safe configuration;
+telemetry retains bounded counts rather than category or media details.
 
 ## Boundary-driven streaming Safety
 

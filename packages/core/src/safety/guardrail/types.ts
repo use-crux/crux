@@ -13,7 +13,6 @@ import type {
 import type { SafetyUnitKind } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import type { ModelInputOrigin } from '../input-origin'
-import { SafetyResultError } from '../errors'
 
 export type GuardrailMode = 'enforce' | 'report'
 export type GuardrailRewriteKind = 'redact' | 'mask' | 'hash' | 'normalize'
@@ -174,116 +173,12 @@ export interface GuardrailAuditEntry {
   readonly escalatedToBlock?: true
   /** Present only when an enforced transcript rewrite removed segments and words. */
   readonly timedTranscriptDetailRemoved?: true
+  /** Validated evidence emitted by this exact policy invocation. */
+  readonly findings?: readonly SafetyFinding[]
   readonly durationMs: number
 }
 
 export interface GuardrailAudit {
   readonly applied: readonly GuardrailAuditEntry[]
   readonly blocked: boolean
-}
-
-/** Validate a JS/unknown media guardrail result and fail closed on malformed values. */
-export function validateMediaGuardrailRunResult(
-  value: unknown,
-  opts: { readonly policyId?: string; readonly boundary?: string },
-): MediaGuardrailRunResult {
-  if (!isRecord(value) || typeof value.action !== 'string') {
-    throw resultError(opts, 'media result must be an object with an action string')
-  }
-
-  switch (value.action) {
-    case 'allow':
-      return { action: 'allow' }
-    case 'warn':
-      if (typeof value.reason !== 'string' || value.reason.length === 0) {
-        throw resultError(opts, 'media warn results require a reason')
-      }
-      return { action: 'warn', reason: value.reason }
-    case 'block':
-      if (typeof value.reason !== 'string' || value.reason.length === 0) {
-        throw resultError(opts, 'media block results require a reason')
-      }
-      return { action: 'block', reason: value.reason }
-    case 'strip':
-      if (typeof value.reason !== 'string' || value.reason.length === 0) {
-        throw resultError(opts, 'media strip results require a reason')
-      }
-      return { action: 'strip', reason: value.reason }
-    default:
-      throw resultError(opts, `unknown media guardrail action "${value.action}"`)
-  }
-}
-
-/** Validate a JS/unknown guardrail result and fail closed on malformed values. */
-export function validateGuardrailRunResult(
-  value: unknown,
-  opts: {
-    readonly streaming: boolean
-    readonly last: boolean
-    readonly policyId?: string
-    readonly boundary?: string
-  },
-): GuardrailRunResult<unknown> {
-  if (!isRecord(value) || typeof value.action !== 'string') {
-    throw resultError(opts, 'result must be an object with an action string')
-  }
-
-  switch (value.action) {
-    case 'allow':
-      return { action: 'allow' }
-    case 'block':
-      if (typeof value.reason !== 'string' || value.reason.length === 0) {
-        throw resultError(opts, 'block results require a reason')
-      }
-      return { action: 'block', reason: value.reason }
-    case 'warn':
-      if (typeof value.reason !== 'string' || value.reason.length === 0) {
-        throw resultError(opts, 'warn results require a reason')
-      }
-      return { action: 'warn', reason: value.reason }
-    case 'rewrite':
-      if (!('value' in value)) throw resultError(opts, 'rewrite results require a value')
-      if (!isRecord(value.rewrite) || !isRewriteKind(value.rewrite.kind)) {
-        throw resultError(opts, 'rewrite results require a valid rewrite.kind')
-      }
-      return {
-        action: 'rewrite',
-        value: value.value,
-        rewrite: { kind: value.rewrite.kind },
-        ...(isSafetyFindings(value.findings) ? { findings: value.findings } : {}),
-      }
-    case 'hold':
-      if (!opts.streaming || opts.last) {
-        throw resultError(opts, 'hold is only valid for non-final stream segments')
-      }
-      return { action: 'hold' }
-    default:
-      throw resultError(opts, `unknown guardrail action "${value.action}"`)
-  }
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null
-}
-
-function isRewriteKind(value: unknown): value is GuardrailRewriteKind {
-  return value === 'redact' || value === 'mask' || value === 'hash' || value === 'normalize'
-}
-
-function isSafetyFindings(value: unknown): value is readonly SafetyFinding[] {
-  return Array.isArray(value) && value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
-}
-
-function resultError(
-  opts: { readonly policyId?: string; readonly boundary?: string },
-  problem: string,
-): SafetyResultError {
-  const policyId = opts.policyId ?? 'unknown'
-  const boundary = opts.boundary ?? 'unknown'
-  return new SafetyResultError({
-    message: `Safety policy "${policyId}" returned an invalid result: ${problem}.`,
-    policyId,
-    boundary,
-    problem,
-  })
 }

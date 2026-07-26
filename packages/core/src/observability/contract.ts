@@ -3,6 +3,7 @@ import type {
   ProjectDefinitionKind,
 } from "../project-index";
 import type { ModelInputOrigin } from "../safety/input-origin";
+import type { SafetyFinding } from "../safety/decision";
 
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 4;
 
@@ -606,6 +607,9 @@ export interface CruxGuardrailMatchPreview {
 /** Privacy-safe semantic model-ingress provenance carried by guardrail reports. */
 export type CruxModelInputOriginPreview = ModelInputOrigin;
 
+/** Canonical validated finding exposed without media or rubric content. */
+export type CruxGuardrailFindingPreview = SafetyFinding;
+
 export interface CruxGuardrailReportPreview {
   kind: "guardrail.report";
   /** Canonical Safety target and render-safe display label. */
@@ -625,6 +629,8 @@ export interface CruxGuardrailReportPreview {
   field?: string;
   partIndex?: number;
   escalatedToBlock?: true;
+  /** Validated audit evidence; detailed values never become span attributes. */
+  findings?: readonly CruxGuardrailFindingPreview[];
   matches?: readonly CruxGuardrailMatchPreview[];
   reason?: string;
   beforePreview?: string;

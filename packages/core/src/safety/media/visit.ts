@@ -1,7 +1,8 @@
 import { observe } from '../../observability'
 import { guardrailDefinitionRef } from '../../observability/definition-ref'
+import { createGuardrailFindingCollection } from '../guardrail/findings'
 import type { GuardrailAudit, GuardrailContext, MediaGuardrailRunResult } from '../guardrail/types'
-import { validateMediaGuardrailRunResult } from '../guardrail/types'
+import { validateMediaGuardrailRunResult } from '../guardrail/result-validation'
 import type { GuardrailBinding } from '../registry'
 import { finalizeMediaEvaluations, mediaBlockedError, mediaRunContext, type MediaEvaluation } from './evaluation'
 import { findMediaGroupDependencyViolation, type MediaGroupDependency } from './groups'
@@ -85,9 +86,20 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       })
 
       let result: MediaGuardrailRunResult
+      const findingCollection = createGuardrailFindingCollection({
+        policyId: binding.policy.id,
+        boundary: binding.boundary.id,
+      })
       try {
         const value: unknown = await span.withContext(() =>
-          binding.policy.run(item.subject as never, mediaRunContext(binding, context) as never),
+          binding.policy.run(
+            item.subject as never,
+            mediaRunContext(
+              binding,
+              context,
+              findingCollection.collector,
+            ) as never,
+          ),
         )
         result = validateMediaGuardrailRunResult(value, {
           policyId: binding.policy.id,
@@ -108,6 +120,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
         groupId: item.groupId,
         binding,
         result,
+        findings: findingCollection.snapshot(),
         location,
         model: context.model,
         origin: context.origin,
@@ -120,13 +133,33 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
       if (result.action === 'block' && binding.mode === 'enforce') {
         finalizeMediaEvaluations(options, evaluations, evaluation)
-        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model, context.origin)
+        throw mediaBlockedError(
+          options.phase,
+          binding,
+          result.reason,
+          location,
+          durationMs,
+          false,
+          context.model,
+          context.origin,
+          evaluation.findings,
+        )
       }
 
       if (result.action === 'strip' && binding.mode === 'enforce') {
         if (escalatedToBlock) {
           finalizeMediaEvaluations(options, evaluations, evaluation)
-          throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, true, context.model)
+          throw mediaBlockedError(
+            options.phase,
+            binding,
+            result.reason,
+            location,
+            durationMs,
+            true,
+            context.model,
+            context.origin,
+            evaluation.findings,
+          )
         }
         retainedByGroup.set(item.groupId, groupCount(retainedByGroup, item.groupId) - 1)
         stripped.add(retentionKey)
@@ -154,6 +187,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       true,
       evaluation.model,
       evaluation.origin,
+      evaluation.findings,
     )
   }
 

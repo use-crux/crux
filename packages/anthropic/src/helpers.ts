@@ -7,10 +7,21 @@ import { anthropicHelpers } from './native'
  *
  * The helper is generated from the same provider runtime as
  * `createAnthropic()`, using Anthropic's structured parse surface and
- * preserving provider SDK errors.
+ * preserving provider SDK errors. Pass a non-empty Anthropic model ID in
+ * every call.
+ *
+ * @example
+ * ```ts
+ * const generateObject = createGenerateObjectFn(client)
+ * const result = await generateObject({
+ *   model: 'claude-sonnet-4-5',
+ *   prompt: 'Return whether this request is safe.',
+ *   schema,
+ * })
+ * ```
  */
-export function createGenerateObjectFn(client: Anthropic, model: string): GenerateObjectFn {
-  const generateObject = anthropicHelpers.createGenerateObjectFn(client, model)
+export function createGenerateObjectFn(client: Anthropic): GenerateObjectFn {
+  const generateObject = anthropicHelpers.createGenerateObjectFn(client)
   return async (options) => {
     try {
       return await generateObject(options)

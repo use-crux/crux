@@ -10,9 +10,18 @@ import type { ModelInputOrigin } from './input-origin'
 
 /** Safe, structured finding metadata emitted by safety policies. */
 export interface SafetyFinding {
+  /** Stable finding kind used by audit and Devtools projections. */
   readonly type: string
+  /** Number of equivalent occurrences represented by this finding. */
   readonly count?: number
+  /** Optional zero-based source span for text findings. */
   readonly span?: { readonly start: number; readonly end: number }
+  /** Stable classifier category ID; descriptions are never retained. */
+  readonly category?: string
+  /** Validated normalized classifier confidence in the range `[0, 1]`. */
+  readonly score?: number
+  /** Effective normalized threshold applied to `score`. */
+  readonly threshold?: number
 }
 
 /** Canonical action vocabulary for the safety decision read model. */

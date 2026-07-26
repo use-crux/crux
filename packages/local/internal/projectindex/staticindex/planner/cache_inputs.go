@@ -9,6 +9,7 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"compiler-profile","name":"@use-crux/indexer/crux-core-profile","version":"1"}`,
 		`{"kind":"compiler-projection","name":"prompt-context-tree-paths","version":"1","phase":"resolve"}`,
 		`{"kind":"compiler-projection","name":"runtime-prepare-use-entries","version":"1","phase":"parse"}`,
+		`{"kind":"compiler-projection","name":"safety-strategy-facts","version":"2","phase":"extract"}`,
 		`{"kind":"compiler-projection","name":"source-ref-projection","version":"1","phase":"parse"}`,
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core-media","version":"1"}`,
 		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core-media","version":"1","digest":"a08d4797cd75809ae55532ea453a961e8d3e5a740097a62249d51c38bfd20a9e"}`,

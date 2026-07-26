@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 799,
+    "files": 801,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1555,
-    "canonicalBytes": 222221
+    "dependencies": 1568,
+    "canonicalBytes": 223273
   },
   "files": [
     {
@@ -2192,6 +2192,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/safety-media-classifier-contract.ts",
+      "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/__type_tests__/safety-media-contract.ts",
       "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
       "bytes": 110,
@@ -2661,12 +2670,12 @@
     },
     {
       "file": "packages/core/src/compaction/generate-object.ts",
-      "sha256": "66c01f655e52ade5db42376d9ee61216812089fd63d2dcb281b57033a7c1d46c",
-      "bytes": 111,
+      "sha256": "38665ab7468eade3fd0957f5355529d02e3732c502b1600d58240d1a70009d68",
+      "bytes": 161,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/cost/index.ts",
@@ -3723,12 +3732,21 @@
     },
     {
       "file": "packages/core/src/safety/guardrail/run-guard.ts",
-      "sha256": "1232c0c7c1f448a43b737d0da2723430eca59cce59e7a8b0c3c8f3ad3c6e7cef",
-      "bytes": 400,
+      "sha256": "dfd435dc468e542cad763171e06cd9a1a0ec9330c3dcea6e2f1fcf67797ab050",
+      "bytes": 537,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 8
+    },
+    {
+      "file": "packages/core/src/safety/guardrail/strategies/media-classifier/index.ts",
+      "sha256": "0735e5aac7d7be9e92951ff8b7954ad3cf8a71d0bdf99e48cfc8fd1a5b22e63b",
+      "bytes": 619,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
     },
     {
       "file": "packages/core/src/safety/guardrail/strategies/media/index.ts",
@@ -3786,12 +3804,12 @@
     },
     {
       "file": "packages/core/src/safety/media/visit.ts",
-      "sha256": "b0e39d0c94416c4ab894461587e10c485528df7e32031a1c71a470d570aca73c",
-      "bytes": 449,
+      "sha256": "e7f10a305f0c73a31f69b9a5eef6db0ae870d48bcadbb540d9ab840c3be43132",
+      "bytes": 517,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 8
     },
     {
       "file": "packages/core/src/safety/output/terminal.ts",
@@ -3831,12 +3849,12 @@
     },
     {
       "file": "packages/core/src/safety/stream/text-replay.ts",
-      "sha256": "cf89e6e277780ce95059064601d0f23d7a3fe31d7f3e44be9bf1d36b4e5c709c",
-      "bytes": 538,
+      "sha256": "4b6ab8f48ff15ac6b18c46d3b5bfe533d482f32ee3fff2a7fef48963a62ab870",
+      "bytes": 606,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 9
+      "dependencies": 10
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",

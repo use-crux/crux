@@ -6,6 +6,12 @@ import type { GuardrailBinding } from '../registry'
 import type { ModelInputOrigin } from '../input-origin'
 import { inputOriginAttributes } from '../input-origin-observability'
 import { safetyTarget } from '../../observability/safety-presentation'
+import type { SafetyFinding } from '../decision'
+import {
+  findingCountAttributes,
+  findingPreview,
+  hasClassifierMatch,
+} from './finding-observability'
 
 /** Record the safe observability projection for one guardrail result. */
 export function recordGuardrailReport(
@@ -15,6 +21,7 @@ export function recordGuardrailReport(
   durationMs: number,
   result: unknown,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): void {
   const guard = binding.policy
   const guardrailName = guard.id
@@ -23,7 +30,15 @@ export function recordGuardrailReport(
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: guardrailReportPreview(binding.boundary.id, binding.mode, phase, action, result, origin),
+    preview: guardrailReportPreview(
+      binding.boundary.id,
+      binding.mode,
+      phase,
+      action,
+      result,
+      origin,
+      findings,
+    ),
     attributes: {
       guardrailName,
       category: guard.category,
@@ -31,6 +46,7 @@ export function recordGuardrailReport(
       mode: binding.mode,
       phase,
       action,
+      ...findingCountAttributes(findings),
       ...inputOriginAttributes(origin),
       durationMs,
     },
@@ -45,6 +61,7 @@ export function recordGuardrailReport(
         boundary: binding.boundary.id,
         mode: binding.mode,
         action,
+        ...findingCountAttributes(findings),
         ...inputOriginAttributes(origin),
       },
     })
@@ -57,6 +74,7 @@ export function recordGuardrailReport(
       mode: binding.mode,
       phase,
       action,
+      ...findingCountAttributes(findings),
       ...inputOriginAttributes(origin),
       durationMs,
     },
@@ -68,8 +86,9 @@ export function recordGuardrailBlockedEdge(
   binding: GuardrailBinding,
   reason: string,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): void {
-  recordBlockedEdge(binding, reason, origin)
+  recordBlockedEdge(binding, reason, origin, {}, findings)
 }
 
 /** Record one media result without retaining its canonical source. */
@@ -80,11 +99,17 @@ export function recordMediaGuardrailReport(
   durationMs: number,
   escalatedToBlock: boolean,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): void {
   const guardrailName = binding.policy.id
   const media = mediaAttributes(location, escalatedToBlock)
   const phase = binding.boundary.id === 'model.output.media' ? 'output' : 'input'
   const reason = result.action === 'allow' ? {} : { reason: result.reason }
+  const telemetryReason =
+    result.action === 'allow' || hasClassifierMatch(findings)
+      ? {}
+      : { reason: result.reason }
+  const counts = findingCountAttributes(findings)
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
     kind: 'guardrail.report',
@@ -97,6 +122,7 @@ export function recordMediaGuardrailReport(
       phase,
       action: result.action,
       ...reason,
+      ...findingPreview(findings),
       ...(origin ? { origin } : {}),
       ...media,
     },
@@ -107,7 +133,8 @@ export function recordMediaGuardrailReport(
       mode: binding.mode,
       phase,
       action: result.action,
-      ...reason,
+      ...telemetryReason,
+      ...counts,
       ...inputOriginAttributes(origin),
       ...media,
       durationMs,
@@ -123,6 +150,7 @@ export function recordMediaGuardrailReport(
         boundary: binding.boundary.id,
         mode: binding.mode,
         action: result.action,
+        ...counts,
         ...inputOriginAttributes(origin),
         ...media,
       },
@@ -137,7 +165,8 @@ export function recordMediaGuardrailReport(
       phase,
       action: result.action,
       ...inputOriginAttributes(origin),
-      ...reason,
+      ...telemetryReason,
+      ...counts,
       ...media,
       durationMs,
     },
@@ -151,8 +180,15 @@ export function recordMediaGuardrailBlockedEdge(
   location: MediaPartLocation,
   escalatedToBlock: boolean,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): void {
-  recordBlockedEdge(binding, reason, origin, mediaAttributes(location, escalatedToBlock))
+  recordBlockedEdge(
+    binding,
+    reason,
+    origin,
+    mediaAttributes(location, escalatedToBlock),
+    findings,
+  )
 }
 
 function recordBlockedEdge(
@@ -160,6 +196,7 @@ function recordBlockedEdge(
   reason: string,
   origin?: ModelInputOrigin,
   details: Readonly<Record<string, string | number | true>> = {},
+  findings?: readonly SafetyFinding[],
 ): void {
   const guardrailName = binding.policy.id
   const activeSpanId = observe.captureContext()?.currentSpanId
@@ -173,6 +210,7 @@ function recordBlockedEdge(
       mode: binding.mode,
       action: 'block',
       reason,
+      ...findingPreview(findings),
       ...(origin ? { origin } : {}),
       ...details,
     },
@@ -181,7 +219,8 @@ function recordBlockedEdge(
       boundary: binding.boundary.id,
       mode: binding.mode,
       action: 'block',
-      reason,
+      ...(hasClassifierMatch(findings) ? {} : { reason }),
+      ...findingCountAttributes(findings),
       ...inputOriginAttributes(origin),
       ...details,
     },
@@ -195,7 +234,8 @@ function recordBlockedEdge(
         guardrailName,
         boundary: binding.boundary.id,
         mode: binding.mode,
-        reason,
+        ...(hasClassifierMatch(findings) ? {} : { reason }),
+        ...findingCountAttributes(findings),
         ...inputOriginAttributes(origin),
         ...details,
       },
@@ -220,6 +260,7 @@ function guardrailReportPreview(
   action: string,
   result: unknown,
   origin?: ModelInputOrigin,
+  findings?: readonly SafetyFinding[],
 ): Record<string, unknown> {
   const base = {
     kind: 'guardrail.report',
@@ -244,5 +285,6 @@ function guardrailReportPreview(
     ...base,
     ...rewrite,
     ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
+    ...findingPreview(findings),
   }
 }

@@ -4,45 +4,26 @@
  * @module
  */
 
-import type { z } from "zod";
-import type { GenerateObjectFn, GenerateTextFn } from "../../compaction";
-import type { Message } from "../../generation/messages";
 import { adapter } from "../define-adapter";
 import type { AdapterSpec } from "../spec";
-import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
+import type { CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
 import {
-  compileStructuredOutput,
-  CruxUnsupportedStructuredOutputError,
-  decodeStructuredValue,
   validateStructuredOutputCapabilities,
 } from "../structured-output";
-import type { JsonSchemaObject } from "../structured-output";
-import {
-  assertProviderMediaSupported,
-  attachProviderMediaHooks,
-} from "./media-hooks";
+import { attachProviderMediaHooks } from "./media-hooks";
 import type {
   NativeCallMode,
-  NativeChatRequestArgs,
-  NativeChatHelpers,
   NativeChatProfile,
+  NativeProviderPort,
+} from "./types";
+import type { NativeChatHelpers } from "./helper-types";
+import { createNativeChatHelpers } from "./helpers";
+import type {
   NativeChatProvider,
   NativeProviderDepsArg,
-  NativeProviderPort,
-  NativeTranscriptCodec,
-} from "./types";
-
-interface HelperCallArgs<TExtra extends Record<string, unknown>> {
-  readonly model: string;
-  readonly system: string | undefined;
-  readonly prompt?: string;
-  readonly messages?: readonly Message[];
-  readonly maxOutputTokens?: number;
-  readonly schema: z.ZodType | undefined;
-  readonly outputSchema: JsonSchemaObject | undefined;
-  readonly extra: TExtra;
-}
+} from "./provider-types";
+import { requestArgsFor, responseFor } from "./request-response";
 
 /**
  * Create a compiled native chat provider from provider-owned wire hooks.
@@ -194,64 +175,7 @@ export function defineNativeChatProvider<
     ...depsArg: NativeProviderDepsArg<TDeps>
   ): NativeChatHelpers<TClient> {
     const deps = resolveDeps(depsArg);
-
-    return Object.freeze({
-      createGenerateTextFn(client: TClient, model: string): GenerateTextFn {
-        const port = bind(client);
-        return async (options) => {
-          const args = helperCallArgs<TExtra>({
-            model,
-            system: options.system,
-            ...(options.prompt !== undefined
-              ? { prompt: options.prompt }
-              : { messages: options.messages }),
-            maxOutputTokens: options.maxOutputTokens,
-            schema: undefined,
-            outputSchema: undefined,
-            extra: {} as TExtra,
-          });
-          const request = await profile.request(requestArgsFor(profile, args), {
-            mode: "text",
-            deps,
-          });
-          const raw = await port.call(request, "text");
-          return { text: responseFor(profile, raw).text };
-        };
-      },
-
-      createGenerateObjectFn(client: TClient, model: string): GenerateObjectFn {
-        const port = bind(client);
-        return async (options) => {
-          if (!profile.structuredOutput) {
-            throw new CruxUnsupportedStructuredOutputError(profile.providerId);
-          }
-
-          const plan = compileStructuredOutput(
-            options.schema,
-            profile.structuredOutput.accepts,
-          );
-          const args = helperCallArgs<TExtra>({
-            model,
-            system: options.system,
-            prompt: options.prompt,
-            schema: options.schema,
-            outputSchema: plan.outputSchema,
-            extra: {} as TExtra,
-          });
-          const request = await profile.request(requestArgsFor(profile, args), {
-            mode: "structured",
-            deps,
-            outputSchema: plan.outputSchema,
-          });
-          const raw = await port.call(request, "structured");
-          const provided =
-            profile.structuredObject?.(raw) ??
-            parseJson(responseFor(profile, raw).text, profile.providerId);
-          const decoded = decodeStructuredValue(provided, plan.decodeManifest);
-          return { object: options.schema.parse(decoded) };
-        };
-      },
-    });
+    return createNativeChatHelpers(profile, bind, deps);
   }
 
   return Object.freeze({ profile, specFor, createFor, helpers });
@@ -281,119 +205,4 @@ function resolveDeps<TDeps extends Record<string, unknown>>(
   depsArg: NativeProviderDepsArg<TDeps>,
 ): TDeps {
   return (depsArg[0] ?? {}) as TDeps;
-}
-
-function helperCallArgs<TExtra extends Record<string, unknown>>(
-  args: HelperCallArgs<TExtra>,
-): CallArgs<TExtra> {
-  const messages: Message[] = args.messages
-    ? args.messages.map((message) => ({ ...message }))
-    : [{ role: "user", content: args.prompt ?? "" }];
-  return {
-    model: args.model,
-    system: args.system,
-    systemBlocks: undefined,
-    messages,
-    settings:
-      args.maxOutputTokens === undefined
-        ? {}
-        : { maxTokens: args.maxOutputTokens },
-    schema: args.schema,
-    outputSchema: args.outputSchema,
-    tools: undefined,
-    extra: args.extra,
-  };
-}
-
-function requestArgsFor<
-  TRequest,
-  TRawResponse,
-  TRawStream extends AsyncIterable<unknown>,
-  TExtra extends Record<string, unknown>,
-  TDeps extends Record<string, unknown>,
-  TProviderMessage,
->(
-  profile: Pick<
-    NativeChatProfile<
-      TRequest,
-      TRawResponse,
-      TRawStream,
-      TExtra,
-      TDeps,
-      TProviderMessage
-    >,
-    "media" | "providerId" | "transcript"
-  >,
-  args: CallArgs<TExtra>,
-): NativeChatRequestArgs<TExtra, TProviderMessage> {
-  assertProviderMediaSupported(profile, {
-    model: args.model,
-    messages: args.messages,
-  });
-  return {
-    ...args,
-    providerMessages: providerMessagesFor(profile, args.messages),
-  };
-}
-
-function providerMessagesFor<TProviderMessage, TRawResponse>(
-  profile: {
-    readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>;
-  },
-  messages: readonly Message[],
-): readonly TProviderMessage[] {
-  return profile.transcript.fromMessages(messages);
-}
-
-function responseFor<
-  TRequest,
-  TRawResponse,
-  TRawStream extends AsyncIterable<unknown>,
-  TExtra extends Record<string, unknown>,
-  TDeps extends Record<string, unknown>,
-  TProviderMessage,
->(
-  profile: Pick<
-    NativeChatProfile<
-      TRequest,
-      TRawResponse,
-      TRawStream,
-      TExtra,
-      TDeps,
-      TProviderMessage
-    >,
-    "providerId" | "response" | "transcript"
-  >,
-  raw: TRawResponse,
-  request?: TRequest,
-): AdapterResponse {
-  const assistant = profile.transcript.readAssistant(raw, { request });
-  const text = profile.response.text?.(raw, assistant) ?? assistant.text;
-  const content =
-    text !== assistant.text
-      ? [{ type: "text" as const, text }]
-      : assistant.content === undefined
-        ? undefined
-        : typeof assistant.content === "string"
-          ? [{ type: "text" as const, text: assistant.content }]
-          : assistant.content;
-  return {
-    ...profile.response.meta(raw),
-    ...(content !== undefined ? { content } : {}),
-    text,
-    toolCalls: assistant.toolCalls,
-  };
-}
-
-function parseJson(text: string, providerId: string): unknown {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch (error) {
-    throw new SyntaxError(
-      `Native chat profile "${providerId}" returned structured output that is not valid JSON.`,
-      {
-        cause: error,
-      },
-    );
-  }
 }

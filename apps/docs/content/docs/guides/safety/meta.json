@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "guardrails",
+    "media-classifier",
     "constraints",
     "validation-retry",
     "security"
