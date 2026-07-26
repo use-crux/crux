@@ -44,13 +44,7 @@ import type {
   MergedInput,
   GenerationSettings,
   Message,
-  TimeoutOptions,
 } from "@use-crux/core";
-import type {
-  Constraint,
-  Guardrail,
-  SafetyTuneOptions,
-} from "@use-crux/core/safety";
 import { isValidationExhaustedError, TimeoutError } from "@use-crux/core";
 import type { DenseEmbedding } from "@use-crux/core/embedding";
 import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
@@ -59,13 +53,11 @@ import type {
   CallHandle,
   DeepPartial,
   ExecutorGenerateOptions,
-  ExecutorModelArg,
   ExecutorStreamOptions,
   GenerateResult,
   StreamResult,
 } from "@use-crux/core/adapter";
 import { CruxTransportStreamUnsupportedError } from "@use-crux/core/adapter";
-import type { ToolApprovalMap, ToolMiddleware } from "@use-crux/core";
 import { resolveModel } from "@use-crux/core/routing";
 import type {
   AnyRouterModel,
@@ -79,11 +71,11 @@ import type {
   GenerateObjectFn,
   GenerateTextFn,
 } from "@use-crux/core/compaction";
-import type { ValidationRetryOptions } from "@use-crux/core";
 import type { SdkGateway } from "./gateway";
 import { liveSdkGateway } from "./gateway";
 import type {
   AIExtra,
+  AIExecutorCallOptions,
   AIGenerateOptions,
   AIMessageHistory,
   AIStreamCallbacks,
@@ -257,7 +249,7 @@ interface AIGenerate {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
-    TModel = CallOpts["model"],
+    TModel = AIExecutorCallOptions["model"],
   >(
     prompt: PromptForModel<
       AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
@@ -286,7 +278,7 @@ interface AIStream {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
-    TModel = CallOpts["model"],
+    TModel = AIExecutorCallOptions["model"],
   >(
     prompt: StreamPromptForModel<
       AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
@@ -330,7 +322,7 @@ export interface CruxAi {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
-    TModel = CallOpts["model"],
+    TModel = AIExecutorCallOptions["model"],
   >(
     prompt: PromptForModel<
       AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
@@ -362,31 +354,6 @@ export interface CruxAi {
   /** See the package-level {@link reranker}. */
   reranker(config: AIRerankerConfig): Reranker;
 }
-
-/** Internal: the loosely-typed view of call opts used by the implementation. */
-type CallOpts = Record<string, unknown> & {
-  model: ExecutorModelArg<LanguageModel>;
-  routing?: unknown;
-  route?: string;
-  tools?: ToolSet;
-  toolsContext?: Readonly<Record<string, unknown>>;
-  runtimeContext?: unknown;
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
-  toolApproval?: ToolApprovalMap;
-  messages?: AIMessageHistory;
-  maxSteps?: number;
-  extra?: AIExtra;
-  activeTools?: readonly string[];
-  tokenBudget?: number;
-  timeout?: TimeoutOptions;
-  validationRetry?: ValidationRetryOptions;
-  constraints?: Constraint[];
-  constraintMaxRetries?: number;
-  guardrails?: Guardrail[];
-  safety?: SafetyTuneOptions;
-  input?: Record<string, unknown>;
-  transport?: AITransport;
-};
 
 type AiPromptInstance<
   TOwnInput extends z.ZodType,
@@ -428,7 +395,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   async function runGenerate(
     activeExecutor: typeof executor,
     prompt: AnyPrompt,
-    opts: CallOpts,
+    opts: AIExecutorCallOptions,
   ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
     const {
       model,
@@ -443,6 +410,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       tokenBudget,
       timeout,
+      signal,
       routing,
       route,
       validationRetry,
@@ -470,6 +438,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
+      signal,
       validationRetry,
       constraints,
       constraintMaxRetries,
@@ -490,7 +459,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   async function generateImpl(
     prompt: AnyPrompt,
-    opts: CallOpts,
+    opts: AIExecutorCallOptions,
   ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
     if (opts.transport) {
       return runGenerate(
@@ -504,7 +473,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   async function prepareImpl(
     prompt: AnyPrompt,
-    opts: CallOpts,
+    opts: AIExecutorCallOptions,
   ): Promise<
     CallHandle<
       Record<string, unknown>,
@@ -540,7 +509,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   async function streamImpl(
     prompt: AnyPrompt,
-    opts: CallOpts,
+    opts: AIExecutorCallOptions,
   ): Promise<Record<string, unknown>> {
     const {
       model,
@@ -555,6 +524,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       tokenBudget,
       timeout,
+      signal,
       routing,
       route,
       validationRetry,
@@ -571,7 +541,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       onFinish,
       onError,
       ...settings
-    } = opts as CallOpts & AIStreamCallbacks;
+    } = opts as AIExecutorCallOptions & AIStreamCallbacks;
 
     if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
@@ -590,6 +560,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
+      signal,
       constraints,
       constraintMaxRetries,
       guardrails,
@@ -616,7 +587,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const generateFn = generateImpl as unknown as CruxAi["generate"];
   Object.defineProperty(generateFn, "task", {
     value: createGenerateTaskFactory(
-      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      (prompt, taskOptions) =>
+        generateImpl(prompt, taskOptions as AIExecutorCallOptions),
       { executionContractKnown: options.gateway === undefined },
     ),
     enumerable: true,
@@ -627,10 +599,14 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   Object.defineProperty(streamFn, "task", {
     value: createStreamTaskFactory(
       (prompt, taskOptions) =>
-        streamImpl(prompt, taskOptions as CallOpts) as unknown as Promise<
+        streamImpl(
+          prompt,
+          taskOptions as AIExecutorCallOptions,
+        ) as unknown as Promise<
           StreamResult<unknown, unknown>
         >,
-      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      (prompt, taskOptions) =>
+        generateImpl(prompt, taskOptions as AIExecutorCallOptions),
       { executionContractKnown: options.gateway === undefined },
     ),
     enumerable: true,

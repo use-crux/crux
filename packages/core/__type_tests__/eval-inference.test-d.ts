@@ -3,7 +3,7 @@
 import { expectTypeOf } from "vitest";
 
 import { evaluate } from "@use-crux/core/eval";
-import type { Eval, EvalTask } from "@use-crux/core/eval";
+import type { CaseOf, Eval, EvalTask } from "@use-crux/core/eval";
 import { scorers } from "../src/eval/internal/scorers/types";
 
 declare const answerTask: EvalTask<
@@ -14,6 +14,21 @@ declare const answerTask: EvalTask<
   { temperature?: number },
   "modelCalls"
 >;
+
+declare const cancellableRoutedTask: EvalTask<
+  { question: string },
+  { text: string },
+  string,
+  { tenantId: string; locale?: string; signal?: AbortSignal },
+  object,
+  "modelCalls"
+>;
+expectTypeOf<
+  CaseOf<typeof cancellableRoutedTask>["call"]
+>().toEqualTypeOf<{
+  tenantId: string;
+  locale?: string;
+}>();
 
 const scoredEval = evaluate({
   task: answerTask,

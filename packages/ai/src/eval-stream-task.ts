@@ -30,15 +30,18 @@ import {
 import type { StreamOf } from "@use-crux/core/routing";
 import type {
   AIGenerateTaskCallOptions,
+  AIGenerateTaskCall,
   AIGenerateTaskDefaults,
-  AIGenerateTaskVariant,
-  AIPromptEvalCapability,
-  ManagedGenerateOutput,
   StructuredPromptForModel,
   TaskCallTools,
   TaskModel,
   TaskRuntimeContext,
   ValidateTaskDefaults,
+} from "./eval-task-options";
+import type {
+  AIGenerateTaskVariant,
+  AIPromptEvalCapability,
+  ManagedGenerateOutput,
 } from "./eval-task";
 import { AI_PROMPT_EVAL_CAPABILITIES } from "./eval-task";
 import {
@@ -107,7 +110,7 @@ export interface AIStreamTaskFactory {
     ManagedStreamReturn<TOutput>,
     ManagedGenerateOutput<TOutput>,
     AIGenerateTaskCallOptions<
-      AIGenerateTaskDefaults<
+      AIGenerateTaskCall<
         TOwnInput,
         TContexts,
         TaskCallTools<TDefaults>,

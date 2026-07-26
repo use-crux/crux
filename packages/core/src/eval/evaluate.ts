@@ -14,8 +14,8 @@ import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
 import type { EvalGates } from "./gates";
 import type {
-  CallOf,
   CapsOf,
+  EvalCaseCallOf,
   EvalTaskLike,
   InputOf,
   OutputOf,
@@ -48,7 +48,7 @@ type ScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
 /** Task projections cached behind short aliases for public diagnostics. */
 type TaskInput<TTask> = InputOf<TTask>;
 type TaskOutput<TTask> = OutputOf<TTask>;
-type TaskCall<TTask> = CallOf<TTask>;
+type TaskCall<TTask> = EvalCaseCallOf<TTask>;
 type TaskVariant<TTask> = VariantOf<TTask>;
 type TaskCapabilities<TTask> = CapsOf<TTask>;
 type TaskResponse<TTask> = ResponseOf<TTask>;

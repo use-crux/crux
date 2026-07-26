@@ -33,6 +33,10 @@
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
     },
+    "./eval/testing": {
+      "types": "./src/eval/testing.ts",
+      "import": "./src/eval/testing.ts"
+    },
     "./feedback": {
       "types": "./src/feedback/index.ts",
       "import": "./src/feedback/index.ts"
@@ -242,6 +246,9 @@
     "*": {
       "eval": [
         "src/eval/index.ts"
+      ],
+      "eval/testing": [
+        "src/eval/testing.ts"
       ],
       "eval/node": [
         "src/eval/node.ts"

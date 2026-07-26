@@ -19,6 +19,35 @@ const model = {
 } as unknown as LanguageModel;
 
 describe("stream.task()", () => {
+  it("forwards a direct caller signal to provider execution", async () => {
+    const scripted = scriptedGateway({
+      streamText: [{ chunks: ["cancel-aware"] }],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+    const controller = new AbortController();
+    const directPrompt = prompt({
+      input: z.object({ topic: z.string() }),
+      prompt: ({ input }) => input.topic,
+    });
+
+    await ai.stream(directPrompt, {
+      model,
+      input: { topic: "refunds" },
+      signal: controller.signal,
+    });
+
+    const providerSignal = scripted.calls.streamText[0]
+      ?.abortSignal as AbortSignal;
+    const reason = new Error("caller cancelled");
+    expect(providerSignal).not.toBe(controller.signal);
+    expect(providerSignal.aborted).toBe(false);
+
+    controller.abort(reason);
+
+    expect(providerSignal.aborted).toBe(true);
+    expect(providerSignal.reason).toBe(reason);
+  });
+
   it("preserves production streaming and drains a complete text Eval once", async () => {
     const scripted = scriptedGateway({
       streamText: [

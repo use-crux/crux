@@ -22,181 +22,35 @@
 import type { AnyPrompt } from "../prompt/prompt-types";
 import type { GenerationSettings } from "../generation/types";
 import { Deadline, normalizeBudgetMs } from "../generation/timeout";
-import type { TimeoutOptions } from "../generation/timeout";
-import type { Message } from "../generation/messages";
 import type { LoopRuntimePort } from "./loop-runtime-port";
-import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
-import type { GenerateResult } from "./result-accumulator";
-import type { CruxRunId } from "../observability";
-import type { ValidationRetryOptions } from "../generation/validation-retry";
-import type { Constraint } from "../safety/constraint/types";
-import type { Guardrail } from "../safety/guardrail/types";
-import type { SafetyTuneOptions } from "../safety/tune";
-import type { FallbackModel } from "../generation/fallback";
 import { resolveModel } from "../routing/resolve";
-import type {
-  AnyRouterModel,
-  CascadeModel,
-  RetryModel,
-  SplitModel,
-  CallProfileParams,
-  RoutingCallOptions,
-} from "../routing";
-import type { ToolMiddleware } from "../tools/types";
-import type { ToolApprovalMap } from "../tools/approval-policy";
+import type { CallProfileParams } from "../routing";
 import { createCompositions } from "../agent/create-compositions";
 import { agentRoutingContext } from "../agent/routing-context";
 import type { AgentExecutor } from "../agent/executor";
 import { getExecutionContext } from "../runtime/execution-context";
 import { createAdapterExecution, sdkLoopDialect } from "./execution/session";
+import type {
+  CruxExecutor,
+  ExecutorGenerateBaseOptions,
+  ExecutorGenerateOptions,
+  ExecutorGenerateResult,
+  ExecutorStreamOptions,
+  ExecutorStreamResult,
+} from "./executor-contracts";
+
+export type {
+  CruxExecutor,
+  ExecutorGenerateOptions,
+  ExecutorGenerateResult,
+  ExecutorModelArg,
+  ExecutorStreamOptions,
+  ExecutorStreamResult,
+} from "./executor-contracts";
 
 interface AttemptSignalOptions {
   readonly signal?: AbortSignal;
   readonly params?: CallProfileParams;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Options & results
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * The model argument accepted by executor `generate()`/`stream()`: a plain
- * SDK model or any core routing wrapper around one. Routing is resolved by
- * the factory; the spec only ever receives a plain `TModel`.
- */
-export type ExecutorModelArg<TModel> =
-  | TModel
-  | FallbackModel<TModel>
-  | AnyRouterModel<TModel>
-  | CascadeModel<TModel>
-  | SplitModel<Record<string, { model: TModel; weight: number }>>
-  | RetryModel<TModel>;
-
-/** Shared fields for executor `generate()` calls. */
-export interface ExecutorGenerateBaseOptions<TModel, TSelectedModel = ExecutorModelArg<TModel>> {
-  /** The model to use — plain, `fallback()`, `router()`, or `cascade()`. */
-  model: TSelectedModel;
-  /** Input for the prompt. */
-  input?: Record<string, unknown>;
-  /** Additional tools merged at call time (highest precedence). */
-  tools?: Record<string, unknown>;
-  /** Per-tool context values keyed by tools that declare `contextSchema`. */
-  toolsContext?: Readonly<Record<string, unknown>>;
-  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
-  runtimeContext?: unknown;
-  /** Tool middleware applied after prompt tools and call-site tools are merged. */
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
-  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
-  toolApproval?: ToolApprovalMap;
-  /**
-   * Message history override — used for conversation continuations and for
-   * resuming after a tool-approval decision (append a
-   * `tool-approval-response` message to the suspended result's history).
-   */
-  messages?: Message[];
-  /** Maximum loop steps. Refunded steps (e.g. `LoadSkill`) don't count. @defaultValue 10 */
-  maxSteps?: number;
-  /** Call-site generation settings (highest precedence). */
-  settings?: GenerationSettings;
-  /** Token budget for the system message. */
-  tokenBudget?: number;
-  /** Structured timeout budgets for this managed call. */
-  timeout?: TimeoutOptions;
-  /**
-   * Validation-feedback retry for structured output. Each retry makes one
-   * additional `attemptStructured` call with the Zod errors injected as a
-   * corrective message.
-   */
-  validationRetry?: ValidationRetryOptions;
-  /** Semantic constraints checked after structural validation passes. */
-  constraints?: Constraint[];
-  /** Shared cap on total constraint retries across all constraints. */
-  constraintMaxRetries?: number;
-  /** Guardrails to run on input/output during generation. */
-  guardrails?: Guardrail[];
-  /**
-   * Per-call safety posture overrides keyed by policy id.
-   *
-   * Tune enforcement/reporting, stream posture, or whether a policy is
-   * enabled for this call without replacing the policy logic.
-   */
-  safety?: SafetyTuneOptions;
-  /**
-   * Per-step steering observer. Runs after the factory's own steering
-   * (skill re-resolution); on conflict, `stop` wins over `amend` wins over
-   * `continue`, and caller `amend` fields override factory ones.
-   */
-  observer?: StepObserver;
-  /** Restrict which tools the model may call. */
-  activeTools?: readonly string[];
-  /** Spec-specific passthrough options (e.g. AI SDK `toolChoice`). */
-  extra?: Record<string, unknown>;
-}
-
-/** Options for executor `generate()` calls. */
-export type ExecutorGenerateOptions<
-  TModel,
-  TSelectedModel = ExecutorModelArg<TModel>,
-> = ExecutorGenerateBaseOptions<TModel, TSelectedModel> &
-  RoutingCallOptions<TSelectedModel>;
-
-/** Options for executor `stream()` calls. */
-export type ExecutorStreamOptions<
-  TModel,
-  TSelectedModel = ExecutorModelArg<TModel>,
-> = ExecutorGenerateOptions<TModel, TSelectedModel>;
-
-/**
- * Result of an executor `generate()` call.
- *
- * Suspension is signalled in-band, mirroring `adapter()`: when a tool
- * required approval, `_meta.finishReason` is `'tool_approval_required'`,
- * `pendingApprovals` carries the minted requests, and `messages` ends with
- * the approval-request message — persist it, collect a decision, append a
- * `tool-approval-response`, and call `generate()` again with `messages`.
- */
-export type ExecutorGenerateResult<TRawResponse> = GenerateResult<
-  TRawResponse | undefined
->;
-
-/** SDK-owned stream handle stamped by the authoritative Crux run span. */
-export type ExecutorStreamResult<TRawStream> = ExecutorStreamHandle<TRawStream> & {
-  readonly runId: CruxRunId;
-};
-
-/** The executor interface returned by the factory. */
-export interface CruxExecutor<
-  TModel,
-  TRawResponse = unknown,
-  TRawStream = unknown,
-> {
-  /** Executor identifier from the port. */
-  readonly executorId: string;
-
-  /** Execute a prompt (non-streaming) through the SDK-owned loop. */
-  generate(
-    prompt: AnyPrompt,
-    opts: ExecutorGenerateOptions<TModel>,
-  ): Promise<ExecutorGenerateResult<TRawResponse>>;
-
-  /**
-   * Stream a prompt. Returns the SDK's stream result untouched (`raw`)
-   * plus a typed `completion()` resolving with usage/cost/timing metadata.
-   * `cascade()` models are rejected — tier evaluation needs full results.
-   */
-  stream(
-    prompt: AnyPrompt,
-    opts: ExecutorStreamOptions<TModel>,
-  ): Promise<ExecutorStreamResult<TRawStream>>;
-
-  /** Run multiple agents concurrently and merge results. */
-  parallel: ReturnType<typeof createCompositions>["parallel"];
-  /** Chain agents sequentially with typed data flow. */
-  pipeline: ReturnType<typeof createCompositions>["pipeline"];
-  /** Run multiple agents and pick a winner via voting. */
-  consensus: ReturnType<typeof createCompositions>["consensus"];
-  /** Run a swarm of agents with peer-to-peer routing via tool calls. */
-  swarm: ReturnType<typeof createCompositions>["swarm"];
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -281,6 +135,7 @@ export function loopRuntimeAdapter<
         {
           deadline,
           mode: "generate",
+          signal: opts.signal,
           context: opts.routing,
           forcedRoute: opts.route,
         },
@@ -353,6 +208,7 @@ export function loopRuntimeAdapter<
         {
           deadline,
           mode: "stream",
+          signal: opts.signal,
           firstTokenMs: normalizeBudgetMs(opts.timeout?.firstToken),
           context: opts.routing,
           forcedRoute: opts.route,

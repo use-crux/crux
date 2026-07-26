@@ -66,9 +66,12 @@ export class Deadline {
    * Compose this deadline with a narrower attempt signal.
    *
    * @param attemptSignal - Optional attempt-owned cancellation signal.
-   * @returns A signal that aborts with the first reason from either source.
+   * @returns The attempt signal unchanged for an open deadline, otherwise a
+   *   signal that aborts with the first reason from either source.
    */
   compose(attemptSignal: AbortSignal | undefined): AbortSignal {
+    if (this.#expiresAt === undefined && attemptSignal !== undefined)
+      return attemptSignal;
     return composeAbortSignals(this.signal, attemptSignal) ?? this.signal;
   }
 

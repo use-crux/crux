@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 
 interface CorePackageManifest {
   readonly exports?: Readonly<Record<string, unknown>>;
+  readonly typesVersions?: Readonly<
+    Record<string, Readonly<Record<string, readonly string[]>>>
+  >;
 }
 
 describe("@use-crux/core/eval", () => {
@@ -20,9 +23,34 @@ describe("@use-crux/core/eval", () => {
     expect(manifest.exports).not.toHaveProperty("./quality/internal/runner");
 
     const surface = await import("@use-crux/core/eval");
-    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+    expect(Object.keys(surface).sort()).toEqual([
+      "caseFile",
+      "evalContext",
+      "evaluate",
+      "tryEvalContext",
+    ]);
     expect(surface.evaluate).toBeTypeOf("function");
     expect(surface.caseFile).toBeTypeOf("function");
+    expect(surface.evalContext).toBeTypeOf("function");
+    expect(surface.tryEvalContext).toBeTypeOf("function");
+  });
+
+  it("exposes only the explicit task-context installer from eval/testing", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as CorePackageManifest;
+
+    expect(manifest.exports?.["./eval/testing"]).toEqual({
+      types: "./src/eval/testing.ts",
+      import: "./src/eval/testing.ts",
+    });
+    expect(manifest.typesVersions?.["*"]?.["eval/testing"]).toEqual([
+      "src/eval/testing.ts",
+    ]);
+
+    expect(
+      Object.keys(await import("@use-crux/core/eval/testing")),
+    ).toEqual(["withEvalContext"]);
   });
 
   it("resolves the internal task protocol without widening the Eval root", async () => {
@@ -38,7 +66,12 @@ describe("@use-crux/core/eval", () => {
     expect(protocol.executeEvalTaskForInternalUse).toBeTypeOf("function");
 
     const surface = await import("@use-crux/core/eval");
-    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+    expect(Object.keys(surface).sort()).toEqual([
+      "caseFile",
+      "evalContext",
+      "evaluate",
+      "tryEvalContext",
+    ]);
   });
 
   it("exposes the coordinator bridge only through its internal subpath", async () => {
@@ -47,7 +80,12 @@ describe("@use-crux/core/eval", () => {
     expect(runner.materializeEvalForInternalUse).toBeTypeOf("function");
 
     const surface = await import("@use-crux/core/eval");
-    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+    expect(Object.keys(surface).sort()).toEqual([
+      "caseFile",
+      "evalContext",
+      "evaluate",
+      "tryEvalContext",
+    ]);
   }, 20_000);
 
   it("exposes only runEval as the Node runtime API", async () => {

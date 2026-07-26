@@ -18,8 +18,8 @@ import type {
 } from "./internal/assertions/types";
 import type { StandardSchemaV1 } from "./internal/schema";
 import type {
-  CallOf,
   CapsOf,
+  EvalCaseCallOf,
   EvalCapability,
   EvalTaskLike,
   InputOf,
@@ -174,7 +174,7 @@ export type CaseOf<
   InputOf<T>,
   OutputOf<T>,
   E,
-  CallOf<T>,
+  EvalCaseCallOf<T>,
   CapsOf<T>,
   ScoreName,
   ResponseOf<T>

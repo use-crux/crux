@@ -97,6 +97,47 @@ expectTypeOf<VariantOf<typeof managedTask>>().toEqualTypeOf<{
 }>();
 expectTypeOf<CapsOf<typeof managedTask>>().toEqualTypeOf<"modelCalls">();
 
+declare const signalOwnedManagedTask: EvalTask<
+  { question: string },
+  { readonly text: string },
+  string,
+  { readonly tenantId: string; readonly signal?: AbortSignal },
+  object,
+  "modelCalls"
+>;
+signalOwnedManagedTask(
+  { question: "Refund?" },
+  { tenantId: "acme", signal: new AbortController().signal },
+);
+evaluate({
+  task: signalOwnedManagedTask,
+  cases: [
+    { input: { question: "Refund?" }, call: { tenantId: "acme" } },
+    {
+      input: { question: "Shipping?" },
+      call: {
+        tenantId: "acme",
+        // @ts-expect-error — a managed Case cannot author the engine-owned signal
+        signal: new AbortController().signal,
+      },
+    },
+  ],
+});
+
+const opaqueSignalTask = async (
+  input: { question: string },
+  call: { readonly signal: "user-owned"; readonly locale?: string },
+) => `${call.signal}:${input.question}`;
+evaluate({
+  task: opaqueSignalTask,
+  cases: [
+    {
+      input: { question: "Refund?" },
+      call: { signal: "user-owned", locale: "nl" },
+    },
+  ],
+});
+
 declare const requiredCallTask: EvalTask<
   { question: string },
   { readonly text: string },

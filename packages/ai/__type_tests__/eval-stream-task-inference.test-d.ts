@@ -5,6 +5,7 @@ import { expectTypeOf } from "vitest";
 import { z } from "zod";
 
 import { prompt } from "@use-crux/core";
+import { evaluate } from "@use-crux/core/eval";
 import type { CallOf, InputOf, OutputOf } from "@use-crux/core/eval";
 import { cascade, router, type RouteArgs } from "@use-crux/core/routing";
 import { createCruxAi, stream } from "../src";
@@ -17,6 +18,28 @@ const textPrompt = prompt({
   prompt: ({ input }) => input.topic,
 });
 const textTask = stream.task(textPrompt, { model: fastModel });
+const abortSignal = new AbortController().signal;
+void stream(textPrompt, {
+  model: fastModel,
+  input: { topic: "refunds" },
+  signal: abortSignal,
+});
+void textTask({ topic: "refunds" }, { signal: abortSignal });
+stream.task(textPrompt, {
+  model: fastModel,
+  // @ts-expect-error — one-shot cancellation cannot be bound into reusable defaults
+  signal: abortSignal,
+});
+evaluate({
+  task: textTask,
+  cases: [
+    {
+      input: { topic: "refunds" },
+      // @ts-expect-error — managed Eval Cases cannot author the engine-owned signal
+      call: { signal: abortSignal },
+    },
+  ],
+});
 expectTypeOf<InputOf<typeof textTask>>().toEqualTypeOf<{ topic: string }>();
 expectTypeOf<OutputOf<typeof textTask>>().toEqualTypeOf<string>();
 expectTypeOf<

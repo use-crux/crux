@@ -75,6 +75,28 @@ const textPrompt = prompt({
 });
 const textTask = generate.task(textPrompt, { model: fastModel });
 expectTypeOf<OutputOf<typeof textTask>>().toEqualTypeOf<string>();
+const abortSignal = new AbortController().signal;
+void generate(textPrompt, {
+  model: fastModel,
+  input: { topic: "refunds" },
+  signal: abortSignal,
+});
+void textTask({ topic: "refunds" }, { signal: abortSignal });
+generate.task(textPrompt, {
+  model: fastModel,
+  // @ts-expect-error — one-shot cancellation cannot be bound into reusable defaults
+  signal: abortSignal,
+});
+evaluate({
+  task: textTask,
+  cases: [
+    {
+      input: { topic: "refunds" },
+      // @ts-expect-error — managed Eval Cases cannot author the engine-owned signal
+      call: { signal: abortSignal },
+    },
+  ],
+});
 
 const nativeMessages = [
   {

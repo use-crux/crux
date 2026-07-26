@@ -11,6 +11,7 @@
       "entrypoints": {
         ".": "portable-web",
         "./eval": "portable-web",
+        "./eval/testing": "portable-web",
         "./feedback": "portable-web",
         "./eval/node": "node-only",
         "./eval/internal/task": "portable-web",

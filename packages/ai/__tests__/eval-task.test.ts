@@ -27,6 +27,26 @@ function model(modelId = "gpt-4o"): LanguageModel {
 }
 
 describe("generate.task()", () => {
+  it("forwards a direct caller signal to provider execution", async () => {
+    const scripted = scriptedGateway({
+      generateText: [{ text: "cancel-aware" }],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+    const controller = new AbortController();
+    const directPrompt = prompt({
+      input: z.object({ question: z.string() }),
+      prompt: ({ input }) => input.question,
+    });
+
+    await ai.generate(directPrompt, {
+      model: model(),
+      input: { question: "Refund?" },
+      signal: controller.signal,
+    });
+
+    expect(scripted.calls.generateText[0]?.abortSignal).toBe(controller.signal);
+  });
+
   it("shares one generation path between rich production and semantic Eval execution", async () => {
     const first = { answer: "Production" };
     const second = { answer: "Eval" };
