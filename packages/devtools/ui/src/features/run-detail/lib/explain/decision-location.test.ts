@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { decisionLocationLabel } from './decision-location'
 import { guardrailReportRows } from '../guardrail-report-facts'
 
+function presentationRows(
+  rows: ReturnType<typeof guardrailReportRows>,
+): [string, string, string?][] {
+  return rows.map(([label, value, color]) =>
+    color === undefined ? [label, value] : [label, value, color],
+  )
+}
+
 describe('decisionLocationLabel', () => {
   it('renders every safe media origin without payload evidence', () => {
     expect(
@@ -43,18 +51,20 @@ describe('decisionLocationLabel', () => {
 
   it('renders flattened operation reports and strip escalation', () => {
     expect(
-      guardrailReportRows({
-        kind: 'guardrail.report',
-        phase: 'output',
-        action: 'strip',
-        originKind: 'operation',
-        operation: 'generateImage',
-        operationPhase: 'output',
-        field: 'images',
-        partIndex: 1,
-        mediaPartType: 'image',
-        escalatedToBlock: true,
-      }),
+      presentationRows(
+        guardrailReportRows({
+          kind: 'guardrail.report',
+          phase: 'output',
+          action: 'strip',
+          originKind: 'operation',
+          operation: 'generateImage',
+          operationPhase: 'output',
+          field: 'images',
+          partIndex: 1,
+          mediaPartType: 'image',
+          escalatedToBlock: true,
+        }),
+      ),
     ).toEqual(
       expect.arrayContaining([
         ['origin', 'generateImage · output · images · part 1 · image'],
@@ -78,7 +88,7 @@ describe('decisionLocationLabel', () => {
       },
     })
 
-    expect(rows).toEqual(
+    expect(presentationRows(rows)).toEqual(
       expect.arrayContaining([
         ['target', 'Model input · Text'],
         ['source', 'Tool · search · call-1'],
