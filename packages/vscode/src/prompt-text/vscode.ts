@@ -2,6 +2,10 @@ import * as vscode from 'vscode'
 import type { LanguageClient } from 'vscode-languageclient/node'
 import type { PromptTextDecorationRequest } from './contracts.js'
 import {
+  promptTextDecorationsConfiguration,
+  readPromptTextDecorationsEnabled,
+} from './configuration.js'
+import {
   PromptTextDecorationController,
   type PromptTextControllerPorts,
   type PromptTextEditor,
@@ -67,7 +71,9 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
 
     const ports: PromptTextControllerPorts = {
       get enabled() {
-        return true
+        return readPromptTextDecorationsEnabled(
+          vscode.workspace.getConfiguration(),
+        )
       },
       visibleEditors: () => this.#visibleEditors(),
       request: (editor, signal) => this.#request(editor, signal),
@@ -98,6 +104,11 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
         const uri = document.uri.toString()
         this.#revisions.close(uri)
         this.#controller.documentClosed(uri)
+      }),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration(promptTextDecorationsConfiguration)) {
+          this.#controller.settingsChanged()
+        }
       }),
       client.onRequest(refreshMethod, (params: unknown) => {
         if (isRefreshParams(params)) this.#controller.start()

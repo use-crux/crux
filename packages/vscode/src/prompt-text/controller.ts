@@ -70,6 +70,11 @@ export type PromptTextControllerPorts =
 export class PromptTextDecorationController {
   readonly #editors = new Map<string, PromptTextEditor>()
   readonly #requests = new Map<string, AbortController>()
+  readonly #applied = new Set<string>()
+  // The server owns one transient compiler query, so visible surfaces drain
+  // sequentially instead of superseding one another at that boundary.
+  readonly #queue: PromptTextEditor[] = []
+  #draining = false
   #disposed = false
 
   /** @param ports - Narrow boundaries for editor state, evidence, and presentation. */
@@ -78,7 +83,9 @@ export class PromptTextDecorationController {
   /**
    * Requests decorations for the current visible editor revisions.
    *
-   * Repeated calls safely supersede pending work for the same editor.
+   * Visible surfaces are pulled serially to match the server's single-query
+   * coordinator. Repeated calls clear applied ranges before refreshing and
+   * safely supersede pending work for the same editor.
    *
    * @returns Nothing; evidence requests continue asynchronously.
    */
@@ -122,7 +129,7 @@ export class PromptTextDecorationController {
     for (const [id, editor] of this.#editors) {
       if (editor.uri !== uri) continue
       this.#cancel(id)
-      this.ports.clear(editor)
+      this.#clear(editor)
       this.#editors.delete(id)
     }
   }
@@ -143,7 +150,7 @@ export class PromptTextDecorationController {
     }
     for (const editor of this.#editors.values()) {
       this.#cancel(editor.id)
-      this.ports.clear(editor)
+      this.#clear(editor)
     }
   }
 
@@ -159,7 +166,7 @@ export class PromptTextDecorationController {
     this.#disposed = true
     for (const editor of this.#editors.values()) {
       this.#cancel(editor.id)
-      this.ports.clear(editor)
+      this.#clear(editor)
     }
     this.#editors.clear()
   }
@@ -170,7 +177,7 @@ export class PromptTextDecorationController {
     for (const [id, previous] of this.#editors) {
       if (visibleIds.has(id)) continue
       this.#cancel(id)
-      this.ports.clear(previous)
+      this.#clear(previous)
       this.#editors.delete(id)
     }
     for (const editor of visible) {
@@ -180,24 +187,61 @@ export class PromptTextDecorationController {
         || previous.openEpoch !== editor.openEpoch
         || previous.version !== editor.version
         || previous.sourceHash !== editor.sourceHash
-      if (previous !== undefined && changed) this.ports.clear(previous)
+      if (previous !== undefined
+        && this.#applied.has(previous.id)
+        && (changed || (refreshCurrent && this.ports.enabled))) {
+        this.#clear(previous)
+      }
       this.#editors.set(editor.id, editor)
       if (this.ports.enabled && (changed || refreshCurrent)) {
-        void this.#refresh(editor)
+        this.#schedule(editor)
       }
     }
   }
 
-  async #refresh(editor: PromptTextEditor): Promise<void> {
+  #schedule(editor: PromptTextEditor): void {
     this.#cancel(editor.id)
+    this.#queue.push(editor)
+    void this.#drain()
+  }
+
+  async #drain(): Promise<void> {
+    if (this.#draining) return
+    this.#draining = true
+    try {
+      while (this.#queue.length > 0) {
+        const editor = this.#queue.shift()
+        if (editor === undefined
+          || this.#disposed
+          || !this.ports.enabled
+          || !sameStamp(this.#editors.get(editor.id), editor)) continue
+        await this.#refresh(editor)
+      }
+    } finally {
+      this.#draining = false
+    }
+  }
+
+  async #refresh(editor: PromptTextEditor): Promise<void> {
     const request = new AbortController()
     this.#requests.set(editor.id, request)
+    let resolveAbort: (() => void) | undefined
+    const aborted = new Promise<undefined>((resolve) => {
+      resolveAbort = () => resolve(undefined)
+      request.signal.addEventListener('abort', resolveAbort, { once: true })
+    })
     let result: PromptTextDecorationResult | undefined
     try {
-      result = await this.ports.request(editor, request.signal)
+      result = await Promise.race([
+        this.ports.request(editor, request.signal),
+        aborted,
+      ])
     } catch {
       return
     } finally {
+      if (resolveAbort !== undefined) {
+        request.signal.removeEventListener('abort', resolveAbort)
+      }
       if (this.#requests.get(editor.id) === request) {
         this.#requests.delete(editor.id)
       }
@@ -211,19 +255,30 @@ export class PromptTextDecorationController {
     if (current === undefined
       || !sameStamp(current, editor)) return
     this.ports.apply(editor, mapPromptTextDecorationRanges(result))
+    this.#applied.add(editor.id)
+  }
+
+  #clear(editor: PromptTextEditor): void {
+    this.ports.clear(editor)
+    this.#applied.delete(editor.id)
   }
 
   #cancel(editorId: string): void {
     this.#requests.get(editorId)?.abort()
     this.#requests.delete(editorId)
+    for (let index = this.#queue.length - 1; index >= 0; index--) {
+      if (this.#queue[index]?.id === editorId) this.#queue.splice(index, 1)
+    }
   }
 }
 
 function sameStamp(
-  left: Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>,
+  left: Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>
+    | undefined,
   right: Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>,
 ): boolean {
-  return left.uri === right.uri
+  return left !== undefined
+    && left.uri === right.uri
     && left.openEpoch === right.openEpoch
     && left.version === right.version
     && left.sourceHash === right.sourceHash

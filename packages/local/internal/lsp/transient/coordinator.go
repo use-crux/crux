@@ -7,6 +7,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
+	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
 )
 
 var (
@@ -20,11 +21,14 @@ var (
 // Query identifies both the open document and the active OWN or ATTACHED
 // analyzer epoch used for one PromptText analysis.
 type Query struct {
-	URI         protocol.DocumentURI
-	File        string
-	ScopeID     string
-	SourceEpoch uint64
-	Analyzer    readmodel.TransientSource
+	URI            protocol.DocumentURI
+	File           string
+	ScopeID        string
+	SourceEpoch    uint64
+	BaseGeneration uint64
+	ViewRevision   uint64
+	Fragments      []indexprompttext.Fragment
+	Analyzer       readmodel.TransientSource
 }
 
 // Analysis is normalized evidence accepted for one exact document revision.
@@ -34,11 +38,14 @@ type Analysis struct {
 }
 
 type queryKey struct {
-	uri         protocol.DocumentURI
-	file        string
-	scopeID     string
-	sourceEpoch uint64
-	revision    Revision
+	uri            protocol.DocumentURI
+	file           string
+	scopeID        string
+	sourceEpoch    uint64
+	baseGeneration uint64
+	viewRevision   uint64
+	fragmentDigest [32]byte
+	revision       Revision
 }
 
 type analysisCall struct {
@@ -78,9 +85,20 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	if !ok {
 		return Analysis{}, ErrUnavailable
 	}
+	fragments, fragmentDigest, err := indexprompttext.CanonicalizeFragments(
+		query.Fragments,
+		indexprompttext.DefaultLimits(),
+	)
+	if err != nil {
+		return Analysis{}, err
+	}
 	key := queryKey{
 		uri: query.URI, file: query.File, scopeID: query.ScopeID,
-		sourceEpoch: query.SourceEpoch, revision: document.Revision,
+		sourceEpoch:    query.SourceEpoch,
+		baseGeneration: query.BaseGeneration,
+		viewRevision:   query.ViewRevision,
+		fragmentDigest: fragmentDigest,
+		revision:       document.Revision,
 	}
 
 	c.mu.Lock()
@@ -110,7 +128,7 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 
 	result, err := query.Analyzer.PromptText(queryContext, readmodel.PromptTextRequest{
 		File: query.File, LanguageID: document.LanguageID,
-		Revision: document.Revision, Text: document.Text,
+		Revision: document.Revision, Text: document.Text, Fragments: fragments,
 	})
 	cancel()
 	analysis := Analysis{Revision: document.Revision, Result: result}

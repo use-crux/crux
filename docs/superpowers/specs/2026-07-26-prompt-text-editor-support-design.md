@@ -112,6 +112,21 @@ input/output boundary, keeps its parser dependency private, and owns independent
 fixtures and benchmarks. Extract a crate if another consumer appears or
 measurements show material incremental-build benefit.
 
+The classifier receives Oxc's ECMAScript-cooked quasis after the exact
+construction-time outer-blank-line and common-indent normalization used by
+Core. It does not classify raw authored escapes or fully rendered PromptText.
+Every interpolation remains an opaque island boundary. Invalid cooked quasis
+make that template unsupported rather than falling back to raw syntax.
+Segmented mappings preserve exact authored provenance through escapes, CRLF,
+removed indentation, and line continuations; an ambiguously mappable record is
+suppressed.
+
+Cooked text containing an unpaired UTF-16 surrogate is likewise unsupported
+for that template because Rust and the normalized protocol cannot preserve the
+JavaScript value exactly. Valid adjacent surrogate pairs reconstruct to their
+scalar with a nonlinear mapping, while genuine U+FFFD text remains distinct
+and supported.
+
 Folding, symbols, links, decoration roles, and preview derive from one
 normalized analysis per document revision. No consumer reparses Markdown.
 
@@ -171,10 +186,27 @@ scope and source epoch
 It cancels superseded work, retains only the latest bounded result, and never
 mutates the saved Store.
 
+The fragment-catalogue digest is a coordinator-owned, domain-separated SHA-256
+over a validated, canonically encoded and sorted catalogue. It is distinct
+from the future #266 semantic-source-profile digest. Callers cannot supply a
+trusted digest, and an invalid catalogue cannot reuse an older result.
+
+The V1 `maxFragmentBytes` budget applies to the aggregate canonical encoded
+fragment records, including every identity, range, and snippet field. This
+keeps both the catalogue and ATTACHED body bounded without adding another ABI
+field or multiplying a per-record allowance by `maxFragments`.
+
 OWN mode calls the existing compiler process. ATTACHED mode uses a private
 local-runtime HTTP query with the same contract. One transient source interface
 owns completion and PromptText capabilities so ATTACHED/OWN lifecycle logic is
 not duplicated.
+
+VS Code exposes the client-only window setting
+`crux.promptText.decorations.enabled`, defaulting to `true`. It affects only
+mapped PromptText highlighting and clears synchronously when disabled.
+Decoration types retain `ThemeColor` references for their full controller
+lifetime; VS Code resolves theme changes without type replacement or a new
+analysis request.
 
 ### Best available view
 

@@ -5,8 +5,10 @@
 //! not classify Markdown.
 
 mod candidates;
+mod cooked;
 mod interpolation;
 mod mapping;
+mod normalization;
 mod projection;
 #[cfg(test)]
 mod tests;

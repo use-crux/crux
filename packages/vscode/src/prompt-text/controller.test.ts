@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { PromptTextDecorationResult } from './contracts.js'
+import { PromptTextDecorationController } from './controller.js'
 import {
-  PromptTextDecorationController,
-  type PromptTextControllerPorts,
-  type PromptTextEditor,
-} from './controller.js'
-import type { PromptTextDecorationRanges } from './mapping.js'
+  DeferredPorts,
+  FakePorts,
+  fixture,
+  settle,
+  visibleEditor,
+} from './controller.test-support.js'
 
 describe('PromptTextDecorationController', () => {
   it('applies a matching fixture to the current visible editor', async () => {
@@ -34,6 +35,24 @@ describe('PromptTextDecorationController', () => {
     }])
   })
 
+  it('serializes visible-editor pulls so every surface receives evidence', async () => {
+    const left = visibleEditor(4, 'left', 'file:///left.ts')
+    const right = visibleEditor(7, 'right', 'file:///right.ts')
+    const ports = new DeferredPorts([left, right])
+    const controller = new PromptTextDecorationController(ports)
+
+    controller.start()
+
+    expect(ports.requests.map(({ editor }) => editor)).toEqual([left])
+    ports.resolve(0, fixture(4, left.uri))
+    await settle()
+    expect(ports.requests.map(({ editor }) => editor)).toEqual([left, right])
+    ports.resolve(1, fixture(7, right.uri))
+    await settle()
+
+    expect(ports.applied.map(({ editor }) => editor)).toEqual([left, right])
+  })
+
   it('clears synchronously when the decoration setting is disabled', async () => {
     const editor = visibleEditor(4)
     const ports = new FakePorts([editor])
@@ -46,6 +65,54 @@ describe('PromptTextDecorationController', () => {
     controller.settingsChanged()
 
     expect(ports.cleared).toEqual([editor])
+  })
+
+  it('clears before an unchanged refresh so failed evidence cannot stay stale', async () => {
+    const editor = visibleEditor(4)
+    const ports = new FakePorts([editor])
+    ports.fixture = fixture(4)
+    const controller = new PromptTextDecorationController(ports)
+    controller.start()
+    await settle()
+    ports.cleared.length = 0
+    ports.fixture = undefined
+
+    controller.start()
+
+    expect(ports.cleared).toEqual([editor])
+    await settle()
+    expect(ports.applied).toHaveLength(1)
+  })
+
+  it('cancels on disable, stays pull-free while off, and repulls on enable', async () => {
+    const left = visibleEditor(4, 'left')
+    const right = visibleEditor(4, 'right')
+    const ports = new DeferredPorts([left, right])
+    const controller = new PromptTextDecorationController(ports)
+    controller.start()
+
+    ports.enabled = false
+    controller.settingsChanged()
+
+    expect(ports.requests).toHaveLength(1)
+    expect(ports.requests.every(({ signal }) => signal.aborted)).toBe(true)
+    expect(ports.cleared).toEqual([left, right])
+
+    ports.visible = [visibleEditor(5, 'left'), right]
+    controller.documentChanged(left.uri)
+    controller.start()
+    expect(ports.requests).toHaveLength(1)
+
+    ports.enabled = true
+    controller.settingsChanged()
+    await settle()
+    expect(ports.requests).toHaveLength(2)
+    ports.resolve(1, fixture(5))
+    await settle()
+    expect(ports.requests).toHaveLength(3)
+    ports.resolve(2, fixture(4))
+    await settle()
+    expect(ports.applied.map(({ editor }) => editor)).toEqual(ports.visible)
   })
 
   it('clears the previous editor and decorates the next visible editor on switch', async () => {
@@ -124,8 +191,9 @@ describe('PromptTextDecorationController', () => {
     ports.visible = [current]
     controller.documentChanged(current.uri)
 
-    expect(ports.requests).toHaveLength(2)
     expect(ports.requests[0]?.signal.aborted).toBe(true)
+    await settle()
+    expect(ports.requests).toHaveLength(2)
 
     ports.resolve(0, fixture(4))
     await settle()
@@ -153,97 +221,3 @@ describe('PromptTextDecorationController', () => {
     expect(ports.requests).toHaveLength(1)
   })
 })
-
-class FakePorts implements PromptTextControllerPorts {
-  fixture: PromptTextDecorationResult | undefined
-  enabled = true
-  visible: readonly PromptTextEditor[]
-  readonly applied: Array<{
-    readonly editor: PromptTextEditor
-    readonly ranges: PromptTextDecorationRanges
-  }> = []
-  readonly cleared: PromptTextEditor[] = []
-
-  constructor(visible: readonly PromptTextEditor[]) {
-    this.visible = visible
-  }
-
-  visibleEditors(): readonly PromptTextEditor[] {
-    return this.visible
-  }
-
-  async request(
-    _editor: PromptTextEditor,
-    _signal: AbortSignal,
-  ): Promise<PromptTextDecorationResult | undefined> {
-    return this.fixture
-  }
-
-  apply(editor: PromptTextEditor, ranges: PromptTextDecorationRanges): void {
-    this.applied.push({ editor, ranges })
-  }
-
-  clear(editor: PromptTextEditor): void {
-    this.cleared.push(editor)
-  }
-}
-
-class DeferredPorts extends FakePorts {
-  readonly requests: Array<{
-    readonly editor: PromptTextEditor
-    readonly signal: AbortSignal
-    readonly resolve: (fixture: PromptTextDecorationResult | undefined) => void
-  }> = []
-
-  override request(
-    editor: PromptTextEditor,
-    signal: AbortSignal,
-  ): Promise<PromptTextDecorationResult | undefined> {
-    return new Promise((resolve) => {
-      this.requests.push({ editor, signal, resolve })
-    })
-  }
-
-  resolve(index: number, value: PromptTextDecorationResult | undefined): void {
-    this.requests[index]?.resolve(value)
-  }
-}
-
-function visibleEditor(
-  version: number,
-  id = 'editor-1',
-  uri = 'file:///writer.ts',
-): PromptTextEditor {
-  return {
-    id,
-    uri,
-    openEpoch: 2,
-    version,
-    sourceHash: `hash-${version}`,
-  }
-}
-
-function fixture(
-  version: number,
-  uri = 'file:///writer.ts',
-): PromptTextDecorationResult {
-  return {
-    protocolVersion: 1,
-    uri,
-    openEpoch: 2,
-    version,
-    sourceHash: `hash-${version}`,
-    decorations: [{
-      role: 'heading',
-      range: {
-        start: { line: 0, character: 18 },
-        end: { line: 0, character: 23 },
-      },
-    }],
-  }
-}
-
-async function settle(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-}

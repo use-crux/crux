@@ -28,7 +28,7 @@ func registerPromptTextRoutes(mux *http.ServeMux, analyzer indexprompttext.Analy
 			return
 		}
 		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			writePromptTextDecodeError(w, err)
 			return
 		}
 		if len(request.Text) > indexprompttext.MaxDocumentBytes {

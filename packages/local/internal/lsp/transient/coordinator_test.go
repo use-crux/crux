@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -135,6 +136,38 @@ type cancelThenSucceedTransientSource struct {
 	started      chan struct{}
 	cancelled    chan struct{}
 	releaseFirst chan struct{}
+}
+
+type recordingTransientSource struct {
+	calls    int
+	requests []readmodel.PromptTextRequest
+}
+
+func (*recordingTransientSource) Completion(
+	context.Context,
+	readmodel.CompletionRequest,
+) (readmodel.CompletionResult, error) {
+	return readmodel.CompletionResult{}, nil
+}
+
+func (s *recordingTransientSource) PromptText(
+	_ context.Context,
+	request readmodel.PromptTextRequest,
+) (readmodel.PromptTextResult, error) {
+	s.calls++
+	s.requests = append(s.requests, request)
+	return exactPromptTextResult(request), nil
+}
+
+func transientFragment(id, snippet string) staticprotocol.PromptTextFragment {
+	return staticprotocol.PromptTextFragment{
+		ID: id, Symbol: "fragment", File: "/repo/src/fragments.ts",
+		SourceHash: strings.Repeat("a", 64), Snippet: snippet,
+		Range: staticprotocol.PromptTextRange{
+			Start: staticprotocol.PromptTextPosition{Line: 1, Character: 2},
+			End:   staticprotocol.PromptTextPosition{Line: 1, Character: 3},
+		},
+	}
 }
 
 func (*cancelThenSucceedTransientSource) Completion(

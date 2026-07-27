@@ -1,21 +1,27 @@
 use crux_indexer_protocol::prompt_text::{
-    PromptTextAnalysisStatus, PromptTextLiteralIsland, PromptTextOffsetRange, PromptTextPreview,
-    PromptTextSourceMapping, PromptTextTemplate,
+    PromptTextAnalysisStatus, PromptTextLiteralIsland, PromptTextPreview, PromptTextTemplate,
 };
 use oxc_ast::ast::TaggedTemplateExpression;
 use oxc_span::{GetSpan, Span};
 
-use super::{interpolation::barriers, mapping::SourceMap};
+use super::{
+    cooked,
+    interpolation::barriers,
+    mapping::{ByteMapping, SourceMap, protocol_mappings},
+    normalization,
+};
 
 /// One literal slice retained privately for the Markdown classifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedTextIsland {
     /// Stable zero-based island identity within the containing template.
     pub index: u32,
-    /// Exact authored literal bytes between template barriers.
+    /// Core-normalized ECMAScript-cooked text between template barriers.
     pub text: String,
-    /// UTF-8 byte offset of `text` within the complete source document.
-    pub source_start: usize,
+    /// Exact authored quasi extent before cooking and whitespace normalization.
+    pub(crate) source_range: std::ops::Range<usize>,
+    /// Ordered compiler-private byte mappings used by the classifier.
+    pub(crate) mappings: Vec<ByteMapping>,
 }
 
 /// One wire candidate plus its classifier-only literal text.
@@ -42,40 +48,30 @@ pub(crate) fn template(
     candidate_id: u32,
     tagged: &TaggedTemplateExpression<'_>,
 ) -> ProjectedPromptTextTemplate {
-    let quasi_spans = tagged
-        .quasi
-        .quasis
+    let quasis = tagged.quasi.quasis.iter().collect::<Vec<_>>();
+    let quasi_spans = quasis
         .iter()
-        .map(GetSpan::span)
+        .map(|quasi| quasi.span())
         .collect::<Vec<Span>>();
-    let islands = quasi_spans
+    let cooked = quasis
         .iter()
         .enumerate()
-        .map(|(index, span)| ProjectedTextIsland {
-            index: index as u32,
-            text: source[span.start as usize..span.end as usize].to_string(),
-            source_start: span.start as usize,
-        })
-        .collect::<Vec<_>>();
+        .map(|(index, quasi)| cooked::island(source, index as u32, quasi))
+        .collect::<Option<Vec<_>>>();
+    let Some(islands) = cooked.and_then(normalization::normalize) else {
+        return unsupported(map, candidate_id, tagged);
+    };
     let literal_islands = islands
         .iter()
-        .zip(&quasi_spans)
-        .map(|(island, span)| PromptTextLiteralIsland {
+        .map(|island| PromptTextLiteralIsland {
             index: island.index,
-            range: map.span(*span),
+            range: map.bytes(island.source_range.clone()),
             projection_length: island.text.encode_utf16().count() as u32,
         })
         .collect::<Vec<_>>();
-    let mappings = literal_islands
+    let mappings = islands
         .iter()
-        .map(|island| PromptTextSourceMapping {
-            island: island.index,
-            projection_range: PromptTextOffsetRange {
-                start: 0,
-                end: island.projection_length,
-            },
-            source_range: island.range,
-        })
+        .flat_map(|island| protocol_mappings(source, island))
         .collect();
 
     ProjectedPromptTextTemplate {
@@ -95,5 +91,30 @@ pub(crate) fn template(
             preview: PromptTextPreview::default(),
         },
         islands,
+    }
+}
+
+fn unsupported(
+    map: &SourceMap<'_>,
+    candidate_id: u32,
+    tagged: &TaggedTemplateExpression<'_>,
+) -> ProjectedPromptTextTemplate {
+    ProjectedPromptTextTemplate {
+        template: PromptTextTemplate {
+            candidate_id,
+            range: map.span(tagged.span()),
+            tag_range: map.span(tagged.tag.span()),
+            template_range: map.span(tagged.quasi.span()),
+            status: PromptTextAnalysisStatus::Unsupported,
+            literal_islands: Vec::new(),
+            interpolation_barriers: Vec::new(),
+            mappings: Vec::new(),
+            blocks: Vec::new(),
+            spans: Vec::new(),
+            links: Vec::new(),
+            nesting: Vec::new(),
+            preview: PromptTextPreview::default(),
+        },
+        islands: Vec::new(),
     }
 }

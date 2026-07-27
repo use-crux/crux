@@ -32,13 +32,17 @@ func (s *Service) Analyze(ctx context.Context, request Request) (Result, error) 
 	if request.Revision.SourceHash != sourcehash.Sum([]byte(request.Text)) {
 		return Result{}, fmt.Errorf("PromptText source hash does not match document bytes")
 	}
+	fragments, _, err := CanonicalizeFragments(request.Fragments, limits)
+	if err != nil {
+		return Result{}, err
+	}
 	query := staticprotocol.PromptTextQuery{
 		ProtocolVersion: staticprotocol.PromptTextProtocolVersion,
 		File:            request.File,
 		LanguageID:      request.LanguageID,
 		Revision:        request.Revision,
 		Source:          request.Text,
-		Fragments:       initialFragments(),
+		Fragments:       fragments,
 		Limits:          limits,
 	}
 	response, err := s.compiler.PromptText(ctx, query)

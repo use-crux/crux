@@ -1,9 +1,18 @@
 use std::ops::Range;
 
-use crux_indexer_protocol::prompt_text::{PromptTextPosition, PromptTextRange};
+use crux_indexer_protocol::prompt_text::{
+    PromptTextOffsetRange, PromptTextPosition, PromptTextRange, PromptTextSourceMapping,
+};
 use oxc_span::Span;
 
 use super::ProjectedTextIsland;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ByteMapping {
+    pub(crate) projection: Range<usize>,
+    pub(crate) source: Range<usize>,
+    pub(crate) linear: bool,
+}
 
 pub(crate) struct SourceMap<'source> {
     source: &'source str,
@@ -50,10 +59,31 @@ impl<'source> SourceMap<'source> {
     }
 }
 
+pub(crate) fn protocol_mappings(
+    source: &str,
+    island: &ProjectedTextIsland,
+) -> Vec<PromptTextSourceMapping> {
+    let map = SourceMap::new(source);
+    island
+        .mappings
+        .iter()
+        .map(|mapping| PromptTextSourceMapping {
+            island: island.index,
+            projection_range: PromptTextOffsetRange {
+                start: utf16_offset(&island.text, mapping.projection.start),
+                end: utf16_offset(&island.text, mapping.projection.end),
+            },
+            source_range: map.bytes(mapping.source.clone()),
+        })
+        .collect()
+}
+
 /// Maps a parser byte range within one projected island back to UTF-16 source.
 ///
-/// Phase 3 islands are exact authored slices. Phase 4 extends this function
-/// with segmented escape mappings without changing classifier ownership.
+/// Linear mappings permit endpoints inside retained authored text. Nonlinear
+/// mappings, such as escapes and CRLF, map only at complete segment
+/// boundaries. Start and end endpoints deliberately use opposite bias so
+/// removed indentation between adjacent segments is never reintroduced.
 pub fn map_projected_range(
     source: &str,
     island: &ProjectedTextIsland,
@@ -65,8 +95,45 @@ pub fn map_projected_range(
     {
         return None;
     }
-    Some(
-        SourceMap::new(source)
-            .bytes(island.source_start + range.start..island.source_start + range.end),
-    )
+    let start = map_start(island, range.start)?;
+    let end = map_end(island, range.end)?;
+    (start <= end).then(|| SourceMap::new(source).bytes(start..end))
+}
+
+fn map_start(island: &ProjectedTextIsland, offset: usize) -> Option<usize> {
+    if offset == island.text.len() {
+        return island.mappings.last().map(|mapping| mapping.source.end);
+    }
+    let mapping = island
+        .mappings
+        .iter()
+        .find(|mapping| mapping.projection.start <= offset && offset < mapping.projection.end)?;
+    map_offset(mapping, offset)
+}
+
+fn map_end(island: &ProjectedTextIsland, offset: usize) -> Option<usize> {
+    if offset == 0 {
+        return island.mappings.first().map(|mapping| mapping.source.start);
+    }
+    let mapping =
+        island.mappings.iter().rev().find(|mapping| {
+            mapping.projection.start < offset && offset <= mapping.projection.end
+        })?;
+    map_offset(mapping, offset)
+}
+
+fn map_offset(mapping: &ByteMapping, offset: usize) -> Option<usize> {
+    if offset == mapping.projection.start {
+        return Some(mapping.source.start);
+    }
+    if offset == mapping.projection.end {
+        return Some(mapping.source.end);
+    }
+    mapping
+        .linear
+        .then(|| mapping.source.start + offset - mapping.projection.start)
+}
+
+fn utf16_offset(text: &str, byte: usize) -> u32 {
+    text[..byte].encode_utf16().count() as u32
 }

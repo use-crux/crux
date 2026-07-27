@@ -38,6 +38,7 @@
         "crux.lint.includeSuppressed": { "type": "boolean", "default": false, "description": "Includes findings retained with suppression evidence." },
         "crux.inlayHints.enabled": { "type": "boolean", "default": true, "description": "Controls Crux inlay hint finding badges." },
         "crux.codeLens.enabled": { "type": "boolean", "default": true, "description": "Controls Crux code lens finding counts." },
+        "crux.promptText.decorations.enabled": { "type": "boolean", "default": true, "scope": "window" },
         "crux.decorations.mode": { "type": "string", "default": "auto", "enum": ["auto", "on", "off"], "description": "Controls client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
         "crux.decorations.maxLength": { "type": "number", "default": 80, "minimum": 1, "description": "Maximum client-side inline decoration length. This extension-only setting is not sent to the language server." },
         "crux.decorations.opacity": { "type": "number", "default": 0.65, "minimum": 0.1, "maximum": 1, "description": "Controls the opacity of client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },

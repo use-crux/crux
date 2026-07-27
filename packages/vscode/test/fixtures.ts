@@ -11,6 +11,7 @@ export const promptTextFixtureSource = [
   '- Read [guide](https://example.com) and `code`',
   '`',
   'void prompt',
+  'export {}',
 ].join('\r\n')
 
 const decorations = {

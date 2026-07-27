@@ -106,6 +106,70 @@ func TestPromptTextRoutePreservesTheDirectSourceBoundAfterJSONEscaping(t *testin
 	}
 }
 
+func TestPromptTextRouteEnforcesKnownAndChunkedAttachedBodyBounds(t *testing.T) {
+	body, err := json.Marshal(indexprompttext.Request{
+		File: "/repo/src/writer.ts", LanguageID: "typescript",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > indexprompttext.MaxRequestBytes {
+		t.Fatal("boundary fixture exceeds the PromptText request limit")
+	}
+	exact := append(
+		body,
+		bytes.Repeat([]byte(" "), indexprompttext.MaxRequestBytes-len(body))...,
+	)
+	overflow := append(append([]byte(nil), exact...), ' ')
+
+	tests := []struct {
+		name          string
+		body          []byte
+		contentLength int64
+		wantStatus    int
+		wantCalls     int
+	}{
+		{
+			name: "known length equality", body: exact,
+			contentLength: int64(len(exact)), wantStatus: http.StatusOK, wantCalls: 1,
+		},
+		{
+			name: "known length overflow", body: overflow,
+			contentLength: int64(len(overflow)), wantStatus: http.StatusRequestEntityTooLarge,
+		},
+		{
+			name: "chunked equality", body: exact,
+			contentLength: -1, wantStatus: http.StatusOK, wantCalls: 1,
+		},
+		{
+			name: "chunked overflow", body: overflow,
+			contentLength: -1, wantStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			analyzer := &capturingPromptTextRouteAnalyzer{}
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/project/index/prompt-text",
+				bytes.NewReader(test.body),
+			)
+			request.ContentLength = test.contentLength
+			response := httptest.NewRecorder()
+
+			New(Options{PromptText: analyzer}).ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			if analyzer.calls != test.wantCalls {
+				t.Fatalf("analyzer calls = %d, want %d", analyzer.calls, test.wantCalls)
+			}
+		})
+	}
+}
+
 func TestPromptTextRouteDoesNotReflectOrLogUnsavedSource(t *testing.T) {
 	t.Parallel()
 
@@ -146,12 +210,14 @@ type promptTextRouteAnalyzer struct {
 type capturingPromptTextRouteAnalyzer struct {
 	request indexprompttext.Request
 	result  indexprompttext.Result
+	calls   int
 }
 
 func (a *capturingPromptTextRouteAnalyzer) Analyze(
 	_ context.Context,
 	request indexprompttext.Request,
 ) (indexprompttext.Result, error) {
+	a.calls++
 	a.request = request
 	return a.result, nil
 }

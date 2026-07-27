@@ -28,6 +28,146 @@ Preview segments distinguish authored literals, known values, named fragments,
 placeholders, and truncation markers. Their concatenation must reconstruct
 preview text exactly.
 
+### Literal projection and source mapping
+
+CommonMark consumes ECMAScript-cooked template text after the construction-time
+whitespace normalization performed by Core's `createTemplateNode`. It never
+consumes raw quasi bytes or fully rendered PromptText output.
+
+The transient compiler applies these steps in order:
+
+1. Use each Oxc quasi's `value.cooked`; do not decode escapes independently.
+2. If any quasi has no cooked value, retain the candidate envelope and ranges
+   but mark the template `unsupported`. Literal islands, mappings, structure,
+   links, nesting, and preview are all empty. Raw text is never a fallback.
+3. Weave cooked quasis with opaque interpolation barriers and split cooked
+   lines on LF.
+4. Apply exactly Core's construction normalization: trim authored outer blank
+   lines, compute the exact space/tab common prefix across nonblank logical
+   lines, and remove that prefix. Tabs are characters, not visual columns.
+5. Classify every resulting literal island independently. CommonMark state and
+   constructs never cross an interpolation barrier.
+
+This normalization excludes render-time interpolation expansion, block-value
+indentation, empty-block seam removal, fragment rendering, and segment
+coalescing. ECMAScript cooking owns escape interpretation and line-terminator
+normalization, so authored CRLF projects as LF and escaped newlines, tabs,
+backticks, backslashes, Unicode escapes, and line continuations follow the Oxc
+cooked value.
+
+An unpaired UTF-16 surrogate in any cooked quasi also makes only its containing
+template `unsupported`. The request remains `complete` unless an independent
+request-wide condition changes it, and other candidates remain analyzable. The
+unsupported template retains its candidate, tag, and template ranges, but its
+literal islands, interpolation barriers, mappings, blocks, spans, links,
+nesting, preview text, and preview segments are empty. CommonMark never
+receives Oxc's private U+FFFD-plus-hex surrogate marker or a substituted
+replacement character.
+
+Adjacent high and low surrogate code units in the same cooked quasi are
+reconstructed as their Unicode scalar and remain supported, regardless of the
+escape spellings that produced them. They do not pair across an interpolation
+barrier. The scalar has UTF-16 projection length two and maps nonlinearly to
+the complete authored spans that produced both code units. A genuine U+FFFD
+remains supported and distinct whether literal or escaped, with an exact
+mapping to its authored representation. Raw surrogate source bytes are invalid
+UTF-8 request input rather than replacement-character text.
+
+Source mappings are ordered by island and projection start, nonoverlapping, and
+half-open. They segment every nonlinear transformation or removed normalization
+span. Ordinary retained text may be coalesced one-to-one. A cooked code unit
+may map to the complete authored escape or CRLF range; unequal projection and
+source lengths are valid. Removed indentation, trimmed lines, and line
+continuations have no projected span. `projectionLength` is the normalized
+cooked island's UTF-16 length.
+
+A normalized structure record is publishable only when both endpoints of every
+required classifier range map unambiguously. Otherwise the compiler suppresses
+that record instead of widening or guessing. Mappings and published editor
+ranges must never overlap a tag, backtick, interpolation delimiter, or
+interpolation expression.
+
+### Fragment-catalogue identity
+
+The transient coordinator computes the fragment-catalogue digest; callers
+supply fragments, never a trusted digest. It validates the catalogue, sorts the
+same records that will be sent to the worker, and hashes this canonical byte
+stream with SHA-256:
+
+```text
+ASCII "crux-prompt-text-fragment-catalogue-v1\0"
+u32be(record count)
+records sorted lexicographically by their complete encoded record bytes
+```
+
+Each record encodes these fields in order:
+
+```text
+id, symbol, file, sourceHash, start.line, start.character,
+end.line, end.character, snippet
+```
+
+Strings encode as `u32be(UTF-8 byte length) || exact UTF-8 bytes`; positions
+encode as `u32be`. Digesting does not normalize Unicode, paths, line endings,
+or hashes, and it does not use JSON. Catalogue construction must already have
+produced canonical file and source-hash values. A repeated `id`, including an
+identical duplicate, is invalid; different IDs with otherwise equal records
+are permitted.
+
+The empty catalogue digest is SHA-256 over the domain prefix followed by a
+zero record count:
+
+```text
+98ae68c7e1000785759e8e128c5a5c4a3aadd3c86e8ce98aab3a1d97913216fe
+```
+
+Invalid UTF-8 or length overflow, malformed ranges, noncanonical required
+identity fields, duplicate IDs, and catalogue limit violations make transient
+analysis unavailable. The coordinator does not call the worker or reuse a
+prior result. The digest enters the coalescing/cache key beside the selected
+view revision.
+
+This digest is private PromptText catalogue identity. Its domain, inputs, and
+lifecycle are distinct from #266's semantic-source-profile digest; neither may
+substitute for, include, or be included in the other.
+
+`maxFragmentBytes` bounds the sum of all canonical encoded fragment-record
+lengths, not each snippet or record:
+
+```text
+sum(encoded_record.len) <= maxFragmentBytes
+```
+
+The count includes, for every record, five big-endian `u32` string-length
+prefixes, the exact UTF-8 bytes of `id`, `symbol`, `file`, `sourceHash`, and
+`snippet`, and four big-endian `u32` range positions. It excludes the digest
+domain prefix, catalogue count word, digest bytes, JSON syntax and escaping,
+and all request fields outside the fragment records.
+
+Go checks `maxFragments` first, then validates and encodes records in caller
+order, rejects duplicate IDs, and accumulates encoded lengths with checked
+`u64` addition. Equality fits. Excess or arithmetic/length overflow fails
+closed. A zero byte or count limit permits only an empty catalogue; the limits
+are conjunctive. Sorting occurs only after every record and the aggregate
+budget validate. A failure yields no canonical vector or digest, cannot reuse a
+cached/coalesced result, and never invokes the worker.
+
+The strict ATTACHED V1 request-body limit is:
+
+```text
+MaxRequestBytes =
+    6 * MaxDocumentBytes
+  + 6 * defaultMaxFragmentBytes
+  + 64 KiB
+```
+
+At the V1 defaults this is `13_041_664` bytes. The final 64 KiB is fixed JSON
+envelope allowance for field names, quotes, punctuation, numeric rendering,
+revision/file/language metadata, and at most 256 fragment objects; it is not
+fragment payload capacity. A known larger `Content-Length` returns HTTP 413
+before decoding. The identical `http.MaxBytesReader` bound handles absent or
+dishonest lengths and also returns 413 without analyzer invocation.
+
 ### Native query ABI v1
 
 The persistent compiler method is `promptTextQuery`; its protocol version is
@@ -471,6 +611,45 @@ The server echoes the complete stamp. The client computes its own current
 stamp and discards any mismatched result. A non-nil empty `decorations` array
 is the only clear payload. Document changes clear synchronously in the client
 before the replacement request starts.
+
+The dedicated highlighting switch is:
+
+```json
+{
+  "crux.promptText.decorations.enabled": {
+    "type": "boolean",
+    "default": true,
+    "scope": "window"
+  }
+}
+```
+
+It is owned only by the VS Code client and is never sent to Go or advertised
+through LSP initialization. One controller-lifetime configuration listener
+uses `affectsConfiguration("crux.promptText.decorations.enabled")`; the setting
+is not language-overridable. Disabling synchronously cancels pending pulls and
+clears every managed editor before the handler returns. Document events and
+refresh requests do not pull while disabled. Enabling schedules fresh pulls
+for all visible eligible editors.
+
+The setting affects only mapped PromptText Markdown decorations. Folding,
+symbols, links, diagnostics and actions, hover, navigation, and previews remain
+enabled. It is independent of `crux.decorations.mode`, TypeScript semantic
+highlighting, and semantic-token settings.
+
+Each PromptText decoration type is created once per controller lifetime with
+`ThemeColor` references. VS Code's automatic `ThemeColor` resolution is the
+required no-reload theme update. The client must not listen for active-theme
+changes, rebuild decoration types, clear ranges, or repull solely because the
+theme changed.
+
+Disposal first stops and cancels controller work, then disposes subscriptions,
+then disposes every decoration type exactly once and releases editor
+references. A completion arriving after disposal must never call
+`setDecorations`. Visible repaint, range loss, artificial rendering, or
+illegibility in Dark+, Light+, High Contrast Dark, or High Contrast Light is an
+architecture stop gate rather than permission to rebuild types or change
+transport.
 
 `crux/promptText/refresh` is a capability-gated server-to-client request with
 params `{ protocolVersion: 1 }` and a `null` result. The exact initialize-time

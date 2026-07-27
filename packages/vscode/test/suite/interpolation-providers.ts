@@ -7,7 +7,8 @@ const interpolationPosition = new vscode.Position(5, 18)
  * Capture native TypeScript features at the expression inside `${name}`.
  *
  * The normalized snapshot deliberately excludes object identity while
- * retaining user-visible completion, hover, and definition results.
+ * retaining user-visible completion, hover, definition, rename, diagnostics,
+ * bracket navigation, and selection-range results.
  */
 export async function captureInterpolationProviders(
   uri: vscode.Uri,
@@ -50,6 +51,34 @@ export async function captureInterpolationProviders(
     'TypeScript definition is unavailable.',
   )
 
+  const rename = await vscode.commands.executeCommand<vscode.WorkspaceEdit | undefined>(
+    'vscode.executeDocumentRenameProvider',
+    uri,
+    interpolationPosition,
+    'renamedName',
+  )
+  assert.ok(rename !== undefined, 'TypeScript rename is unavailable.')
+  const renameEntries = rename.entries()
+    .flatMap(([entryUri, edits]) =>
+      edits.map((edit) => ({
+        uri: entryUri.toString(),
+        range: normalizeRange(edit.range),
+        newText: edit.newText,
+      }))
+    )
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+  assert.ok(renameEntries.length >= 2, 'TypeScript rename did not cover both binding uses.')
+
+  const selectionRanges = await vscode.commands.executeCommand<
+    readonly vscode.SelectionRange[] | undefined
+  >('vscode.executeSelectionRangeProvider', uri, [interpolationPosition])
+  assert.ok(
+    selectionRanges !== undefined && selectionRanges.length === 1,
+    'TypeScript selection ranges are unavailable.',
+  )
+
+  const bracketNavigation = await captureBracketNavigation(uri)
+
   return {
     completions: normalizedCompletions,
     hovers: hovers.map((hover) => ({
@@ -57,6 +86,36 @@ export async function captureInterpolationProviders(
       range: normalizeRange(hover.range),
     })),
     definitions: definitions.map(normalizeDefinition),
+    rename: renameEntries,
+    diagnostics: vscode.languages.getDiagnostics(uri).map((diagnostic) => ({
+      range: normalizeRange(diagnostic.range),
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+      source: diagnostic.source,
+      code: typeof diagnostic.code === 'object'
+        ? diagnostic.code.value
+        : diagnostic.code,
+    })),
+    selectionRanges: selectionRanges.map(normalizeSelectionRange),
+    bracketNavigation,
+  }
+}
+
+async function captureBracketNavigation(uri: vscode.Uri): Promise<unknown> {
+  const editor = vscode.window.visibleTextEditors.find(
+    ({ document }) => document.uri.toString() === uri.toString(),
+  )
+  assert.ok(editor, 'The TypeScript editor is not visible for bracket navigation.')
+  const previous = editor.selections
+  const openingBrace = new vscode.Position(5, 16)
+  editor.selection = new vscode.Selection(openingBrace, openingBrace)
+  await vscode.commands.executeCommand('editor.action.jumpToBracket')
+  const destination = editor.selection.active
+  editor.selections = previous
+  assert.notDeepEqual(destination, openingBrace, 'TypeScript bracket navigation did not move.')
+  return {
+    start: { line: openingBrace.line, character: openingBrace.character },
+    end: { line: destination.line, character: destination.character },
   }
 }
 
@@ -101,6 +160,15 @@ function normalizeDefinition(
     kind: 'location',
     uri: definition.uri.toString(),
     range: normalizeRange(definition.range),
+  }
+}
+
+function normalizeSelectionRange(range: vscode.SelectionRange): unknown {
+  return {
+    range: normalizeRange(range.range),
+    parent: range.parent === undefined
+      ? undefined
+      : normalizeSelectionRange(range.parent),
   }
 }
 

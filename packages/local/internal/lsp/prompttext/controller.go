@@ -36,8 +36,9 @@ func NewController(documents transient.Source) *Controller {
 	}
 }
 
-// Decorations returns headings only when current semantic identity and exact
-// transient structure agree. Every failure is a non-nil clear result.
+// Decorations returns mapped Markdown roles only when current semantic
+// identity and exact transient structure agree. Every failure is a non-nil
+// clear result.
 func (c *Controller) Decorations(ctx context.Context, request Request) Result {
 	if c == nil || c.documents == nil || c.coordinator == nil {
 		return clearResult(transient.Revision{})
@@ -71,7 +72,10 @@ func (c *Controller) Decorations(ctx context.Context, request Request) Result {
 	}
 	analysis, err := c.coordinator.Analyze(ctx, transient.Query{
 		URI: request.URI, File: request.File, ScopeID: request.ScopeID,
-		SourceEpoch: request.SourceEpoch, Analyzer: request.Analyzer,
+		SourceEpoch:    request.SourceEpoch,
+		BaseGeneration: selection.View.Stamp.BaseGeneration,
+		ViewRevision:   selection.View.Stamp.Revision,
+		Analyzer:       request.Analyzer,
 	})
 	if err != nil || analysis.Revision != document.Revision ||
 		analysis.Result.Status.Kind == staticprotocol.PromptTextStatusUnsupported {
@@ -85,7 +89,7 @@ func (c *Controller) Decorations(ctx context.Context, request Request) Result {
 		if _, canonical := identities[editorRange(template.Range)]; !canonical {
 			continue
 		}
-		decorations = append(decorations, headingDecorations(template)...)
+		decorations = append(decorations, templateDecorations(template)...)
 	}
 	return Result{Revision: document.Revision, Decorations: decorations}
 }

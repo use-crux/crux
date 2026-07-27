@@ -117,12 +117,23 @@ Architecture tests reject:
 Focused tests cover:
 
 - projection mappings, barriers, malformed syntax, CRLF, and Unicode;
+- cooked-versus-raw escapes, Core construction-normalization parity, segmented
+  endpoint mappings, and invalid cooked quasis that fail closed;
+- valid surrogate-pair and genuine U+FFFD mappings, plus candidate-local
+  unsupported results for every unpaired cooked surrogate;
 - Markdown block/inline structure and interpolation isolation;
 - direct, alias, namespace, re-export, shadowed, unrelated, and unresolved
   identity;
 - view selection across edit, return-to-saved, save, close, generation,
   cancellation, handover, and reconnect;
 - decorations across supported themes and semantic-highlighting modes;
+- the dedicated window-scoped decoration switch, immediate cancellation and
+  clearing, and zero decoration-type replacement across theme changes;
+- canonical fragment-catalogue digest order invariance, field sensitivity,
+  duplicate rejection, empty identity, and coordinator-cache separation from
+  #266 source-profile identity;
+- aggregate canonical fragment-byte equality/overflow/zero boundaries and
+  known-length plus chunked ATTACHED request-body rejection;
 - identical TypeScript tokens and interpolation provider results with
   decorations enabled and disabled;
 - folding, symbols, links, navigation, and hover;

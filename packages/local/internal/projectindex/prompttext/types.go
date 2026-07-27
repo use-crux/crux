@@ -27,10 +27,11 @@ type Result = staticprotocol.PromptTextQueryResponse
 
 // Request supplies one exact open-document snapshot to Analyze.
 type Request struct {
-	File       string   `json:"file"`
-	LanguageID string   `json:"languageId"`
-	Revision   Revision `json:"revision"`
-	Text       string   `json:"text"`
+	File       string     `json:"file"`
+	LanguageID string     `json:"languageId"`
+	Revision   Revision   `json:"revision"`
+	Text       string     `json:"text"`
+	Fragments  []Fragment `json:"fragments"`
 }
 
 // Analyzer serves one cancellable transient PromptText query.

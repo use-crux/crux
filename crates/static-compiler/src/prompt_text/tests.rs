@@ -6,6 +6,11 @@ use crux_indexer_protocol::prompt_text::{
 
 use super::analyze;
 
+mod barrier_cases;
+mod structure_cases;
+mod support;
+mod surrogate_cases;
+
 #[test]
 fn prompt_text_heading_preserves_construct_and_text_ranges() {
     let response = analyze(request("const value = md`# Hello`;"));

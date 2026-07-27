@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/sourcehash"
 	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
@@ -65,12 +67,66 @@ func readPromptTextGolden(t *testing.T) promptTextGolden {
 type recordingCompiler struct {
 	query    CompilerQuery
 	response CompilerResponse
+	calls    int
 }
 
 func (c *recordingCompiler) PromptText(
 	_ context.Context,
 	query CompilerQuery,
 ) (CompilerResponse, error) {
+	c.calls++
 	c.query = query
 	return c.response, nil
+}
+
+func TestServiceRejectsInvalidFragmentsBeforeCompilerInvocation(t *testing.T) {
+	t.Parallel()
+
+	const source = "const value = md`# Hello`"
+	compiler := &recordingCompiler{}
+	service := New(compiler)
+	_, err := service.Analyze(context.Background(), Request{
+		File: "/repo/src/writer.ts", LanguageID: "typescript",
+		Revision: staticprotocol.PromptTextDocumentRevision{
+			OpenEpoch: 1, Version: 1,
+			SourceHash: sourcehash.Sum([]byte(source)),
+		},
+		Text: source, Fragments: []Fragment{fragment("same", "a"), fragment("same", "b")},
+	})
+
+	if err == nil {
+		t.Fatal("Analyze succeeded, want invalid catalogue error")
+	}
+	if compiler.calls != 0 {
+		t.Fatalf("compiler calls = %d, want zero", compiler.calls)
+	}
+}
+
+func TestServiceRejectsAggregateFragmentOverflowBeforeCompilerInvocation(t *testing.T) {
+	t.Parallel()
+
+	const source = "const value = md`# Hello`"
+	compiler := &recordingCompiler{}
+	service := New(compiler)
+	_, err := service.Analyze(context.Background(), Request{
+		File: "/repo/src/writer.ts", LanguageID: "typescript",
+		Revision: staticprotocol.PromptTextDocumentRevision{
+			OpenEpoch: 1, Version: 1,
+			SourceHash: sourcehash.Sum([]byte(source)),
+		},
+		Text: source,
+		Fragments: []Fragment{
+			fragment(
+				"record-overhead-makes-this-overflow",
+				strings.Repeat("x", int(DefaultLimits().MaxFragmentBytes)),
+			),
+		},
+	})
+
+	if err == nil {
+		t.Fatal("Analyze succeeded, want aggregate catalogue error")
+	}
+	if compiler.calls != 0 {
+		t.Fatalf("compiler calls = %d, want zero", compiler.calls)
+	}
 }

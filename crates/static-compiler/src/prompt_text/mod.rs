@@ -6,6 +6,7 @@
 mod limits;
 mod markdown;
 mod preview;
+mod ranges;
 mod structure;
 #[cfg(test)]
 mod tests;

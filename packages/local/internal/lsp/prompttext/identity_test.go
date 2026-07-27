@@ -137,6 +137,9 @@ func aliasedIdentityFixture() (
 		Templates: []staticprotocol.PromptTextTemplate{{
 			CandidateID: 0,
 			Range:       wholeRange,
+			LiteralIslands: []staticprotocol.PromptTextLiteralIsland{{
+				Index: 0, Range: headingRange,
+			}},
 			Status: staticprotocol.PromptTextAnalysisStatus{
 				Kind: staticprotocol.PromptTextStatusComplete,
 			},
@@ -172,6 +175,8 @@ func unicodeIdentityFixture() (
 		Start: staticprotocol.PromptTextPosition{Line: 0, Character: 38},
 		End:   staticprotocol.PromptTextPosition{Line: 0, Character: 45},
 	}
+	analysis.Templates[0].LiteralIslands[0].Range =
+		analysis.Templates[0].Blocks[0].Range
 	textRange := staticprotocol.PromptTextRange{
 		Start: staticprotocol.PromptTextPosition{Line: 0, Character: 40},
 		End:   staticprotocol.PromptTextPosition{Line: 0, Character: 45},
