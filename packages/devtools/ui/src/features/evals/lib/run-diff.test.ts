@@ -52,7 +52,7 @@ function run(runId: string, cells: EvalRunRecord["cells"]): EvalRunRecord {
 
 function cell(
   trial: number,
-  status: string,
+  status: EvalRunRecord["cells"][number]["status"],
   durationMs: number,
   value: number,
 ): EvalRunRecord["cells"][number] {

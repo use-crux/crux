@@ -26,14 +26,22 @@ export { canonicalRuntimeResult, createRuntimeResultLocation } from "./results";
 export { EvalHostSetupError, type EvalHostSetupErrorCode } from "./setup";
 export {
   decodeEvalHostManifest,
+  decodeEvalHostManifestV1,
+  decodeEvalHostManifestV2,
   EvalHostManifestCompatibilityError,
 } from "./validation/manifest";
-export { decodeEvalHostJobStatus } from "./validation/status";
+export {
+  decodeEvalHostJobStatus,
+  decodeEvalHostJobStatusV1,
+  decodeEvalHostJobStatusV2,
+} from "./validation/status";
 export {
   EVAL_HOST_MAX_BODY_BYTES,
   EVAL_HOST_MAX_DEADLINE_HORIZON_MS,
   EvalHostProtocolError,
   decodeSubmitEvalJob,
+  decodeSubmitEvalJobV1,
+  decodeSubmitEvalJobV2,
   readEvalHostRequestBytes,
 } from "./protocol";
 export { hasEvalHostAuthorization } from "./auth";
@@ -45,6 +53,10 @@ export {
 } from "./transport";
 export {
   CRUX_EVAL_HOST_PROTOCOL,
+  CRUX_EVAL_HOST_PROTOCOL_V1,
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+  EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
+  EVAL_HOST_RESULT_CODEC_VERSION,
   type CreateMemoryEvalHostOptions,
   type CreateNodeEvalHostOptions,
   type CreateServerlessEvalHostOptions,
@@ -55,9 +67,15 @@ export {
   type EvalHostStore,
   type EvalHostKind,
   type EvalHostManifestEntryV1,
+  type EvalHostManifest,
   type EvalHostManifestV1,
+  type EvalHostManifestV2,
   type EvalHostJobStatusV1,
+  type EvalHostJobStatusV2,
+  type EvalHostDeadlineV2,
+  type EvalHostTimeoutV2,
   type MemoryEvalHost,
   type ServerlessEvalHost,
   type SubmitEvalJobV1,
+  type SubmitEvalJobV2,
 } from "./types";

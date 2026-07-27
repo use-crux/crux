@@ -9,8 +9,11 @@ import {
   getEvalTaskDescriptorForInternalUse,
 } from "@use-crux/core/eval/internal/task";
 import type { OutputOf } from "@use-crux/core/eval";
+import { evalContext } from "@use-crux/core/eval";
+import { withEvalContext } from "@use-crux/core/eval/testing";
 import { createCruxAi, stream } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
+import { streamEvalTimeoutPrecedenceBehavior } from "./eval-stream-timeout-precedence.behavior";
 
 const model = {
   provider: "openai",
@@ -19,6 +22,70 @@ const model = {
 } as unknown as LanguageModel;
 
 describe("stream.task()", () => {
+  streamEvalTimeoutPrecedenceBehavior();
+
+  it("forwards managed Eval cancellation through the composed stream signal", async () => {
+    const scripted = scriptedGateway({
+      streamText: [{ chunks: ["context-aware"] }],
+    });
+    const task = createCruxAi({ gateway: scripted.gateway }).stream.task(
+      prompt({
+        input: z.object({ topic: z.string() }),
+        prompt: ({ input }) => input.topic,
+      }),
+      { model },
+    );
+    const controller = new AbortController();
+    let activeTimeout: ReturnType<typeof evalContext>["timeout"] | undefined;
+
+    await withEvalContext(
+      { signal: controller.signal, timeout: { firstToken: null } },
+      async () => {
+        activeTimeout = evalContext().timeout;
+        await executeEvalTaskForInternalUse(task, { topic: "refunds" });
+      },
+    );
+
+    const providerSignal = scripted.calls.streamText[0]
+      ?.abortSignal as AbortSignal;
+    const reason = new Error("Eval cancelled");
+    expect(providerSignal).not.toBe(controller.signal);
+    controller.abort(reason);
+    expect(providerSignal.aborted).toBe(true);
+    expect(providerSignal.reason).toBe(reason);
+    expect(activeTimeout).toEqual({ firstToken: null });
+    expect(Object.isFrozen(activeTimeout)).toBe(true);
+  });
+
+  it("forwards a direct caller signal to provider execution", async () => {
+    const scripted = scriptedGateway({
+      streamText: [{ chunks: ["cancel-aware"] }],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+    const controller = new AbortController();
+    const directPrompt = prompt({
+      input: z.object({ topic: z.string() }),
+      prompt: ({ input }) => input.topic,
+    });
+
+    await ai.stream(directPrompt, {
+      model,
+      input: { topic: "refunds" },
+      signal: controller.signal,
+    });
+
+    const providerSignal = scripted.calls.streamText[0]
+      ?.abortSignal as AbortSignal;
+    const reason = new Error("caller cancelled");
+    expect(providerSignal).not.toBe(controller.signal);
+    expect(providerSignal.aborted).toBe(false);
+
+    controller.abort(reason);
+
+    expect(providerSignal.aborted).toBe(true);
+    expect(providerSignal.reason).toBe(reason);
+  });
+
   it("preserves production streaming and drains a complete text Eval once", async () => {
     const scripted = scriptedGateway({
       streamText: [

@@ -290,7 +290,7 @@ export async function streamCore<
             maxSteps:
               args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
             ...(callerSignal ? { signal: callerSignal } : {}),
-            ...(args.timeout?.stepMs !== undefined
+            ...(args.timeout?.stepMs != null
               ? { stepTimeoutMs: args.timeout.stepMs }
               : {}),
             ...(args.validationRetry

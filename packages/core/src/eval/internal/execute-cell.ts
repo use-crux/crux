@@ -1,42 +1,41 @@
 /** Execute and assess one already-planned Eval cell. @internal */
 
 import { assessEvalCell } from "./assess";
-import { createTaskEvidenceEntry } from "./evidence";
 import { executeExternalScorers } from "./external-scorer-executor";
-import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
-import { getEvalTaskDescriptorForInternalUse } from "./task";
-import { isEvalSnapshotPersistenceSafe } from "./redact";
 import type { EvalExecutionPorts } from "./ports";
 import type {
   EvalCell,
+  EvalCellTimeout,
   EvalPlan,
   EvalPlannedCell,
   EvalTaskExecutionEvidence,
   EvalTaskHostResult,
 } from "./types";
-import { runEvalCellScope } from "./scope";
+import { openEvalCellScope } from "./scope";
+import { runWithCellDeadline } from "./cell-deadline";
+import { createTimedOutEvalCell } from "./timeout-outcome";
+import { snapshotEvalCellObservation } from "./cell-observation";
 import {
   EMPTY_ASSERTIONS,
   cellIdentity,
   dependencyFailedScores,
   freezeCell,
 } from "./cell-result";
+import {
+  writeTaskEvidence,
+  type EvidenceWriteReason,
+  type EvidenceWriteStatus,
+} from "./task-evidence-write";
+import {
+  executeEvalTaskHost,
+  type EvalTaskHostOutcome,
+} from "./task-host-outcome";
+import { timeoutEvalCellObservabilityRun } from "./cell-observability-run";
 
-export type EvidenceWriteStatus =
-  | "written"
-  | "failed"
-  | "not_eligible"
-  | "not_attempted";
-
-export type EvidenceWriteReason =
-  | "identity_unavailable"
-  | "model_identity_unattested"
-  | "untracked_external_dependency"
-  | "task_binding_untracked"
-  | "unresolved_source_dependency"
-  | "implicit_media"
-  | "capture_policy"
-  | "observed_identity_mismatch";
+export type {
+  EvidenceWriteReason,
+  EvidenceWriteStatus,
+} from "./task-evidence-write";
 
 export interface EvalCellExecutionResult {
   readonly cell: EvalCell;
@@ -52,7 +51,27 @@ export async function executePlannedCell(input: {
   readonly ports: EvalExecutionPorts;
   readonly executionAttemptId: string;
 }): Promise<EvalCellExecutionResult> {
-  return runEvalCellScope(input.planned, () => executeCell(input));
+  const scope = openEvalCellScope(input.planned);
+  try {
+    const result = await scope.run(() =>
+      executeCell({
+        ...input,
+        expireTimeout: (abort) =>
+          scope.run(() => {
+            timeoutEvalCellObservabilityRun(abort.timeout);
+            const observation = snapshotEvalCellObservation();
+            scope.seal("timeout");
+            abort.abort();
+            return observation;
+          }),
+      }),
+    );
+    if (result.cell.status !== "timed_out") scope.seal("success");
+    return result;
+  } catch (error) {
+    scope.seal("error");
+    throw error;
+  }
 }
 
 async function executeCell(input: {
@@ -60,6 +79,12 @@ async function executeCell(input: {
   readonly planned: EvalPlannedCell;
   readonly ports: EvalExecutionPorts;
   readonly executionAttemptId: string;
+  readonly expireTimeout: (
+    abort: {
+      readonly timeout: EvalCellTimeout;
+      abort(): void;
+    },
+  ) => ReturnType<typeof snapshotEvalCellObservation>;
 }): Promise<EvalCellExecutionResult> {
   if (input.planned.action.kind === "skip") {
     return Object.freeze({
@@ -81,10 +106,17 @@ async function executeCell(input: {
   let evidenceWriteReason: EvidenceWriteReason | undefined;
   try {
     let liveResult: EvalTaskHostResult | undefined;
-    const execution: EvalTaskExecutionEvidence =
-      input.planned.action.kind === "reuse"
-        ? input.planned.action.evidence.result
-        : (liveResult = await input.ports.taskHost.execute({
+    if (input.planned.action.kind === "execute") {
+      const live = await runWithCellDeadline({
+        totalMs: input.planned.timeout.totalMs,
+        timeout: input.planned.timeout.nested,
+        clock: input.ports.cellDeadlineClock,
+        expire: (abort) =>
+          input.expireTimeout({ timeout: abort.timeout, abort: abort.abort }),
+        timeoutFromValue: (outcome: EvalTaskHostOutcome) =>
+          outcome.status === "timed_out" ? outcome.timeout : undefined,
+        task: () =>
+          executeEvalTaskHost(input.ports.taskHost, {
             evalId: input.plan.evalId,
             caseId: input.planned.caseId,
             variant: input.planned.variant,
@@ -99,72 +131,38 @@ async function executeCell(input: {
             ...(input.planned.call !== undefined
               ? { call: input.planned.call }
               : {}),
-          }));
-    if (
-      input.planned.action.kind === "execute" &&
-      input.planned.action.evidenceKey !== undefined &&
-      input.planned.action.plannedAdapterFingerprint !== undefined &&
-      liveResult !== undefined &&
-      input.ports.evidenceStore !== undefined
-    ) {
-      const observed = liveResult.observedIdentity;
-      if (!observed.reusable) {
-        evidenceWrite = "not_eligible";
-        evidenceWriteReason = observed.reason;
-      } else if (
-        ("fingerprint" in observed
-          ? observed.fingerprint
-          : fingerprintEvalValue(observed.fingerprintMaterial)) !==
-        input.planned.action.plannedAdapterFingerprint
-      ) {
-        evidenceWrite = "not_eligible";
-        evidenceWriteReason = "observed_identity_mismatch";
-      } else {
-        const descriptor = getEvalTaskDescriptorForInternalUse(
-          input.planned.task,
-        );
-        if (
-          descriptor.projectRenderedPromptIdentity !== undefined &&
-          liveResult.renderedPromptFingerprint === undefined
-        ) {
-          evidenceWrite = "not_eligible";
-          evidenceWriteReason = "untracked_external_dependency";
-          liveResult = undefined;
-        }
+          }),
+      });
+      if (live.status === "timed_out") {
+        return Object.freeze({
+          cell: createTimedOutEvalCell({
+            planned: input.planned,
+            timeout: live.timeout,
+            durationMs: live.durationMs,
+            observation: live.observation,
+          }),
+          evidenceWrite: "not_attempted",
+        });
       }
-      if (liveResult !== undefined && evidenceWrite === "not_attempted") {
-        const entry = createTaskEvidenceEntry(
-          input.planned.action.evidenceKey,
-          liveResult,
-          input.ports.persistencePolicy,
+      if (live.value.status !== "completed") {
+        throw new TypeError(
+          "Timed-out task-host outcomes must terminate through the cell deadline.",
         );
-        if (entry === undefined) {
-          evidenceWrite = "not_eligible";
-          evidenceWriteReason =
-            !isReusableEvalValue(liveResult.output) ||
-            (liveResult.response !== undefined &&
-              !isReusableEvalValue(liveResult.response))
-              ? "implicit_media"
-              : !isEvalSnapshotPersistenceSafe(
-                    liveResult.output,
-                    input.ports.persistencePolicy,
-                  ) ||
-                  (liveResult.response !== undefined &&
-                    !isEvalSnapshotPersistenceSafe(
-                      liveResult.response,
-                      input.ports.persistencePolicy,
-                    ))
-                ? "capture_policy"
-                : "implicit_media";
-        } else {
-          try {
-            await input.ports.evidenceStore.write(entry);
-            evidenceWrite = "written";
-          } catch {
-            evidenceWrite = "failed";
-          }
-        }
       }
+      liveResult = live.value.result;
+    }
+    const execution: EvalTaskExecutionEvidence =
+      input.planned.action.kind === "reuse"
+        ? input.planned.action.evidence.result
+        : liveResult!;
+    if (liveResult !== undefined) {
+      const evidenceOutcome = await writeTaskEvidence({
+        planned: input.planned,
+        result: liveResult,
+        ports: input.ports,
+      });
+      evidenceWrite = evidenceOutcome.status;
+      evidenceWriteReason = evidenceOutcome.reason;
     }
     const managedScores = await executeExternalScorers({
       cell: input.planned,
@@ -174,7 +172,7 @@ async function executeCell(input: {
     const assessment = await assessEvalCell({
       planExpect: input.plan.expect,
       planAfterScores: input.plan.afterScores,
-      scorers: input.plan.scorers,
+      scorers: input.planned.scorers,
       cell: input.planned,
       execution,
       managedScores,

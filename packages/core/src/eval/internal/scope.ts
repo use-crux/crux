@@ -6,7 +6,11 @@ import {
   runScope,
   type ScopeController,
 } from "../../scope/internal";
-import { setEvalCaptureSession } from "./capture-context";
+import {
+  currentEvalCaptureSession,
+  setEvalCaptureSession,
+} from "./capture-context";
+import { setEvalCellObservation } from "./cell-observation";
 import { installSignalCapture } from "./signal-capture";
 
 /** Stable identity needed to name one Eval-cell scope. @internal */
@@ -37,14 +41,21 @@ export function runEvalCellScope<T>(
   identity: EvalCellScopeIdentity,
   fn: () => T | PromiseLike<T>,
 ): Promise<Awaited<T>> {
-  return runScope(evalCellDescriptor(identity), evalCellOptions, () => fn());
+  return runScope(evalCellDescriptor(identity), evalCellOptions, (scope) => {
+    setEvalCellObservation(scope, currentEvalCaptureSession());
+    return fn();
+  });
 }
 
 /** Open a manually sealed Eval cell for the remote pre-start deadline path. */
 export function openEvalCellScope(
   identity: EvalCellScopeIdentity,
 ): ScopeController {
-  return openScope(evalCellDescriptor(identity), evalCellOptions);
+  const controller = openScope(evalCellDescriptor(identity), evalCellOptions);
+  controller.run(() => {
+    setEvalCellObservation(controller.scope, currentEvalCaptureSession());
+  });
+  return controller;
 }
 
 /** Ensure direct observed-task callers also execute inside both Eval tiers. */

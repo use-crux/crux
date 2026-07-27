@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  decodeEvalHostResultV1,
+  decodeEvalHostResultV2,
   decodeEvalHostResult,
   encodeEvalHostResult,
 } from "../../../src/runtime/eval-host/result-codec";
 import { fingerprintEvalValue } from "../../../src/eval/internal/identity";
+import { defineEvalHostProtocolV2Behavior } from "./protocol-v2.behavior";
+import { CRUX_EVAL_HOST_PROTOCOL_V1 } from "../../../src/runtime/eval-host";
 
 const evidence = {
   output: "yes",
@@ -50,6 +54,8 @@ const evidence = {
 };
 
 describe("Eval host result codec", () => {
+  defineEvalHostProtocolV2Behavior();
+
   it("retains realistic generation metadata alongside the required operation pair", () => {
     const encoded = encodeEvalHostResult({
       jobId: "job-1",
@@ -63,6 +69,26 @@ describe("Eval host result codec", () => {
         evalRunId: "eval-run-1",
       }).response._meta,
     ).toEqual(evidence.response._meta);
+  });
+
+  it("retains an explicit V1 result reader while current results use V2", () => {
+    const encoded = encodeEvalHostResult({
+      jobId: "job-1",
+      evalRunId: "eval-run-1",
+      evidence,
+    }) as Record<string, unknown>;
+    const legacy = {
+      ...encoded,
+      protocol: CRUX_EVAL_HOST_PROTOCOL_V1,
+    };
+    const expected = { jobId: "job-1", evalRunId: "eval-run-1" };
+
+    expect(decodeEvalHostResultV1(legacy, expected)).toMatchObject({
+      output: "yes",
+    });
+    expect(() => decodeEvalHostResultV2(legacy, expected)).toThrow(
+      /incompatible result/i,
+    );
   });
 
   it("hashes adapter identity before the canonical envelope crosses the wire", () => {

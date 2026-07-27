@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverRuntimeEvalDefinitions } from "../../src/indexer/eval-discovery";
+import { evalTimeoutDiscoveryBehavior } from "./discovery-timeout.behavior";
 
 const roots: string[] = [];
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -14,6 +15,8 @@ afterEach(async () => {
 });
 
 describe("Eval Project Index discovery", () => {
+  evalTimeoutDiscoveryBehavior();
+
   it("emits coordinator placement for an ordinary callable Eval", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));
     roots.push(root);
@@ -72,7 +75,7 @@ describe("Eval Project Index discovery", () => {
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk',",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk',",
         "  capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [],",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: { fixture: true } }),",
         "  execute: async (input: unknown) => ({ output: input }),",
@@ -115,7 +118,7 @@ describe("Eval Project Index discovery", () => {
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const hosted = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk',",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk',",
         "  capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [],",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: { hosted: true } }),",
         "  execute: async (input: unknown) => ({ output: input }),",
@@ -203,7 +206,7 @@ describe("Eval Project Index discovery", () => {
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const task = (call: string) => attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [], callContractFingerprint: call,",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [], callContractFingerprint: call,",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
         "  projectOutput: (result: { output: unknown }) => result.output, projectResponse: (result: { output: unknown }) => result,",
         "})",

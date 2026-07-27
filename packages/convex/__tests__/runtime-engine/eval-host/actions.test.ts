@@ -78,7 +78,7 @@ describe("createConvexEvalHost()", () => {
 
     expect(result.status).toBe(200);
     await expect(responseFrom(result).json()).resolves.toMatchObject({
-      protocol: "crux.eval-host.v1",
+      protocol: "crux.eval-host.v2",
       hostKind: "convex",
     });
   });
@@ -113,10 +113,10 @@ describe("createConvexEvalHost()", () => {
     expect(unauthorized.status).toBe(401);
     expect(authorized.status).toBe(200);
     await expect(authorized.json()).resolves.toMatchObject({
-      protocol: "crux.eval-host.v1",
+      protocol: "crux.eval-host.v2",
       hostKind: "convex",
       privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-      capabilities: ["record-store", "result-ref"],
+      capabilities: ["record-store", "result-ref", "structured-timeout"],
       evals: [{ id: "support" }],
     });
   });
@@ -216,7 +216,7 @@ describe("createConvexEvalHost()", () => {
       request("/manifest", `Bearer ${TOKEN}`),
     );
     await expect(manifest.json()).resolves.toMatchObject({
-      capabilities: ["record-store", "result-ref"],
+      capabilities: ["record-store", "result-ref", "structured-timeout"],
     });
 
     const body = jobBody(registry);

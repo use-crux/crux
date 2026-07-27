@@ -1,4 +1,5 @@
 import { Chip } from "@/devtools/shell/primitives";
+import { EvalTimeoutOutcome } from "@/shared/components/EvalTimeoutOutcome";
 import type { EvalRunRecord } from "../types";
 
 type EvalCell = EvalRunRecord["cells"][number];
@@ -23,13 +24,23 @@ export function EvalCellDetail({
         <span className="font-mono text-[12px] font-semibold">
           {cell.caseId} / {cell.variant} / trial {(cell.trial ?? 0) + 1}
         </span>
-        <Chip tone={cell.status === "passed" ? "ok" : "danger"}>
-          {cell.status}
+        <Chip
+          tone={
+            cell.status === "passed"
+              ? "ok"
+              : cell.status === "timed_out"
+                ? "warn"
+                : "danger"
+          }
+        >
+          {cell.status === "timed_out" ? "Timed out" : cell.status}
         </Chip>
-        <Chip tone="muted">
-          {cell.task.status}
-          {reason ? `: ${reason}` : ""}
-        </Chip>
+        {cell.status === "timed_out" ? null : (
+          <Chip tone="muted">
+            {cell.task.status}
+            {reason ? `: ${reason}` : ""}
+          </Chip>
+        )}
         {cell.metrics ? (
           <span className="ml-auto font-mono text-[11px]">
             {cell.metrics.durationMs}ms
@@ -39,6 +50,10 @@ export function EvalCellDetail({
           </span>
         ) : null}
       </div>
+
+      {cell.status === "timed_out" && cell.timeout ? (
+        <EvalTimeoutOutcome timeout={cell.timeout} />
+      ) : null}
 
       {cell.error ? (
         <p

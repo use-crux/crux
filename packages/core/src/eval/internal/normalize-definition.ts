@@ -9,16 +9,11 @@
  * @module
  */
 
-import { getCaseFileRef, isCaseFile } from "../case-file";
 import type { EvalCoverageTargetId } from "../evaluate";
-import type {
-  CaseFileRef,
-  EvalArmDeclaration,
-  EvalCaseSourcePosition,
-  EvalDefinitionV1,
-  RawEvalCase,
-} from "./definition";
+import { normalizeEvalTimeoutPolicy } from "../timeout-policy";
+import type { EvalArmDeclaration, EvalDefinitionV1 } from "./definition";
 import { normalizeEvalCheck, normalizeEvalGates } from "./normalize-checks";
+import { normalizeCaseSources } from "./normalize-case-sources";
 
 interface RawEvaluateOptions {
   readonly id?: unknown;
@@ -29,6 +24,7 @@ interface RawEvaluateOptions {
   readonly afterScores?: unknown;
   readonly scorers?: unknown;
   readonly gates?: unknown;
+  readonly timeout?: unknown;
   readonly trials?: unknown;
   readonly tags?: unknown;
   readonly description?: unknown;
@@ -39,96 +35,6 @@ interface RawEvaluateOptions {
 export interface NormalizedEvalDefinition {
   readonly id: string | undefined;
   readonly definition: EvalDefinitionV1;
-}
-
-function normalizeCaseSources(value: unknown): {
-  readonly cases: readonly RawEvalCase[];
-  readonly caseFiles: readonly CaseFileRef[];
-  readonly caseSourceOrder: readonly EvalCaseSourcePosition[];
-} {
-  const items = isCaseFile(value) ? [value] : value;
-  if (!Array.isArray(items)) {
-    throw new TypeError(
-      "evaluate(): `cases` must be an array of Cases/caseFile references or one caseFile().",
-    );
-  }
-
-  const cases: RawEvalCase[] = [];
-  const caseFiles: CaseFileRef[] = [];
-  const caseSourceOrder: EvalCaseSourcePosition[] = [];
-  for (const item of items) {
-    if (isCaseFile(item)) {
-      caseSourceOrder.push(
-        Object.freeze({ kind: "file", index: caseFiles.length }),
-      );
-      caseFiles.push(getCaseFileRef(item));
-      continue;
-    }
-    if (item === null || typeof item !== "object" || !("input" in item)) {
-      throw new TypeError(
-        "evaluate(): every inline Case must be an object with `input`.",
-      );
-    }
-    if (
-      "id" in item &&
-      item.id !== undefined &&
-      (typeof item.id !== "string" || item.id.trim() === "")
-    ) {
-      throw new TypeError(
-        "evaluate(): a Case `id` must be a non-empty string when provided.",
-      );
-    }
-    if (
-      "tags" in item &&
-      item.tags !== undefined &&
-      (!Array.isArray(item.tags) ||
-        !item.tags.every((tag: unknown) => typeof tag === "string"))
-    ) {
-      throw new TypeError(
-        "evaluate(): Case `tags` must be an array of strings.",
-      );
-    }
-    if (
-      "metadata" in item &&
-      item.metadata !== undefined &&
-      (item.metadata === null ||
-        typeof item.metadata !== "object" ||
-        Array.isArray(item.metadata))
-    ) {
-      throw new TypeError("evaluate(): Case `metadata` must be a record.");
-    }
-    const rawCase = item as Readonly<Record<string, unknown>>;
-    caseSourceOrder.push(
-      Object.freeze({ kind: "inline", index: cases.length }),
-    );
-    cases.push(
-      Object.freeze({
-        ...rawCase,
-        ...(rawCase.expect !== undefined
-          ? { expect: normalizeEvalCheck(rawCase.expect, "Case `expect`") }
-          : {}),
-        ...(rawCase.afterScores !== undefined
-          ? {
-              afterScores: normalizeEvalCheck(
-                rawCase.afterScores,
-                "Case `afterScores`",
-              ),
-            }
-          : {}),
-        ...("tags" in item && item.tags !== undefined
-          ? { tags: Object.freeze([...item.tags]) }
-          : {}),
-        ...("metadata" in item && item.metadata !== undefined
-          ? { metadata: Object.freeze({ ...item.metadata }) }
-          : {}),
-      }) as RawEvalCase,
-    );
-  }
-  return {
-    cases: Object.freeze(cases),
-    caseFiles: Object.freeze(caseFiles),
-    caseSourceOrder: Object.freeze(caseSourceOrder),
-  };
 }
 
 function normalizeStringArray(
@@ -232,6 +138,10 @@ export function normalizeEvalDefinition(
   const { variants, arms } = normalizeVariants(raw.variants);
   const { cases, caseFiles, caseSourceOrder } = normalizeCaseSources(raw.cases);
   const gates = normalizeEvalGates(raw.gates);
+  const timeout = normalizeEvalTimeoutPolicy(
+    raw.timeout,
+    "evaluate(): `timeout`",
+  );
   return {
     id: explicitId,
     definition: Object.freeze({
@@ -253,6 +163,7 @@ export function normalizeEvalDefinition(
         : {}),
       scorers: normalizeScorers(raw.scorers),
       ...(gates !== undefined ? { gates } : {}),
+      ...(timeout !== undefined ? { timeout } : {}),
       trials: (raw.trials as number | undefined) ?? 1,
       tags: normalizeStringArray(raw.tags, "tags"),
       ...(raw.description !== undefined
@@ -275,6 +186,7 @@ const EVAL_OPTION_KEYS = new Set([
   "afterScores",
   "scorers",
   "gates",
+  "timeout",
   "trials",
   "tags",
   "description",
@@ -286,7 +198,8 @@ function assertTopLevelKeys(options: Readonly<Record<string, unknown>>): void {
     if (EVAL_OPTION_KEYS.has(key)) continue;
     const legacy = legacyOptionRemedy(key);
     throw new TypeError(
-      legacy ?? `evaluate(): unknown top-level option \`${key}\`. Check the Eval API spelling.`,
+      legacy ??
+        `evaluate(): unknown top-level option \`${key}\`. Check the Eval API spelling.`,
     );
   }
 }

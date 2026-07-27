@@ -4,7 +4,7 @@ import { createResolvedEvalHost } from "./runtime";
 import type { CreateMemoryEvalHostOptions, MemoryEvalHost } from "./types";
 import { assertEvalHostEntry } from "./setup";
 
-/** Create the process-local reference implementation of Eval host V1. */
+/** Create the process-local V2 reference host with strict V1 read support. */
 export function createMemoryEvalHost(
   options: CreateMemoryEvalHostOptions,
 ): MemoryEvalHost {

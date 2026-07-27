@@ -12,6 +12,10 @@ import {
   fingerprintEvalSourceClosure,
   type EvalSourceClosureIdentity,
 } from "./source-dependencies";
+import {
+  projectResolvedEvalTimeoutPolicy,
+  resolveEvalTimeoutPolicy,
+} from "../timeout-policy";
 
 export interface EvalDefinitionIdentity {
   readonly fingerprint: string;
@@ -51,6 +55,9 @@ export async function fingerprintEvalDefinition(input: {
     source,
     sourceClosureFingerprint: sourceClosure.fingerprint,
     evalId: input.discovered.id,
+    timeout: projectResolvedEvalTimeoutPolicy(
+      resolveEvalTimeoutPolicy(undefined, input.definition.timeout),
+    ),
     caseFileDependencies: input.caseFileDependencies,
     cases: input.cases.map((entry) => ({
       id: entry.id,
@@ -80,6 +87,12 @@ export async function fingerprintEvalDefinition(input: {
         ...(entry.authored.only !== undefined
           ? { only: entry.authored.only }
           : {}),
+        timeout: projectResolvedEvalTimeoutPolicy(
+          resolveEvalTimeoutPolicy(
+            input.definition.timeout,
+            entry.authored.timeout,
+          ),
+        ),
       }),
     })),
     arms: input.definition.arms,

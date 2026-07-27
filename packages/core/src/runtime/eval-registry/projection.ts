@@ -8,6 +8,10 @@ import {
 import { getEvalDefinitionForInternalUse } from "../../eval/internal/definition";
 import { EvalTaskExecutionError } from "../../eval/internal/task";
 import { projectEvalExecutionArms } from "../../eval/internal/execution-placement";
+import {
+  projectResolvedEvalTimeoutPolicy,
+  resolveEvalTimeoutPolicy,
+} from "../../eval/timeout-policy";
 export {
   projectEvalExecutionArms,
   projectEvalTaskExecution,
@@ -22,6 +26,7 @@ export type {
 
 /** Fingerprint one deployed Case without diagnostic-only metadata. */
 export function fingerprintDeployedEvalCase(
+  evalValue: AnyEval,
   id: string,
   authored: RawEvalCase,
 ): string {
@@ -45,6 +50,12 @@ export function fingerprintDeployedEvalCase(
     ...(authored.tags !== undefined ? { tags: authored.tags } : {}),
     ...(authored.skip !== undefined ? { skip: authored.skip } : {}),
     ...(authored.only !== undefined ? { only: authored.only } : {}),
+    timeout: projectResolvedEvalTimeoutPolicy(
+      resolveEvalTimeoutPolicy(
+        getEvalDefinitionForInternalUse(evalValue).timeout,
+        authored.timeout,
+      ),
+    ),
   });
 }
 

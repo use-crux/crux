@@ -3,16 +3,9 @@ import {
   createNodeEvalHostDeployment,
   createNodeEvalHostReadiness,
   createNodeEvalHostRuntime,
-  pollEvalHostJobForInternalUse,
 } from "../../../src/eval/node/host/readiness";
-import type {
-  EvalHostClient,
-  EvalHostJobStatusV1,
-} from "../../../src/runtime/eval-host";
 import {
-  createEvalHostClient,
   createMemoryEvalHost,
-  EvalHostClientTransportError,
 } from "../../../src/runtime/eval-host";
 import {
   connectionEnvironment,
@@ -21,144 +14,22 @@ import {
   mixedAdapterEntry,
   registry,
 } from "./fixture";
+import { defineTimeoutReadinessBehavior } from "./readiness-timeout.behavior";
+import { defineProtocolV2ReadinessBehavior } from "./readiness-protocol-v2.behavior";
+import { defineRemoteDeadlineBehavior } from "./remote-deadline.behavior";
+import { defineRemoteRunV4Behavior } from "./remote-run-v4.behavior";
+import { pollDeadlineBehavior } from "./poll-deadline.behavior";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe("Node Eval host manifest readiness", () => {
-  it("polls until the admitted deadline instead of a fixed attempt count", async () => {
-    let now = 0;
-    let polls = 0;
-    const accepted: EvalHostJobStatusV1 = {
-      jobId: "job-1",
-      evalRunId: "run-1",
-      attempt: 1,
-      revision: 1,
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-      status: "accepted",
-    };
-    const succeeded: EvalHostJobStatusV1 = {
-      ...accepted,
-      status: "succeeded",
-      resultRef: {
-        sha256: "a".repeat(64),
-        size: 2,
-        mediaType: "application/vnd.crux.eval-result+json",
-        location: "memory://results/result-1",
-      },
-      result: {},
-    };
-    const transport = vi.fn(async () =>
-      Response.json(++polls > 150 ? succeeded : accepted),
-    );
-    const client = createEvalHostClient({
-      baseUrl: "https://runtime.example/",
-      token: "poll-token-that-must-not-be-retained",
-      transport,
-    });
-
-    await expect(
-      pollEvalHostJobForInternalUse(client, accepted, 20_000, {
-        now: () => now,
-        sleep: async (durationMs) => {
-          now += durationMs;
-        },
-        pollIntervalMs: 100,
-      }),
-    ).resolves.toMatchObject({ status: "succeeded" });
-    expect(transport).toHaveBeenCalledTimes(151);
-  });
-
-  it("does not start another poll after sleeping through the admitted deadline", async () => {
-    let now = 0;
-    const accepted: EvalHostJobStatusV1 = {
-      jobId: "job-1",
-      evalRunId: "run-1",
-      attempt: 1,
-      revision: 1,
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-      status: "accepted",
-    };
-    const client = {
-      poll: vi.fn(),
-    } as unknown as EvalHostClient;
-
-    await expect(
-      pollEvalHostJobForInternalUse(client, accepted, 25, {
-        now: () => now,
-        sleep: async (durationMs) => {
-          now += durationMs;
-        },
-        pollIntervalMs: 100,
-      }),
-    ).resolves.toBe(accepted);
-    expect(client.poll).not.toHaveBeenCalled();
-  });
-
-  it("bounds an in-flight poll by the remaining admitted deadline", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const accepted: EvalHostJobStatusV1 = {
-      jobId: "job-1",
-      evalRunId: "run-1",
-      attempt: 1,
-      revision: 1,
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-      status: "accepted",
-    };
-    const client = createEvalHostClient({
-      baseUrl: "https://runtime.example/",
-      token: "poll-token-that-must-not-be-retained",
-      requestTimeoutMs: 1_000,
-      transport: () => new Promise<Response>(() => undefined),
-    });
-    const pending = pollEvalHostJobForInternalUse(client, accepted, 25, {
-      pollIntervalMs: 0,
-    });
-
-    await vi.advanceTimersByTimeAsync(25);
-
-    await expect(pending).resolves.toBe(accepted);
-    vi.useRealTimers();
-  });
-
-  it("surfaces a shorter per-request timeout while overall time remains", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const accepted: EvalHostJobStatusV1 = {
-      jobId: "job-1",
-      evalRunId: "run-1",
-      attempt: 1,
-      revision: 1,
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-      status: "accepted",
-    };
-    const client = createEvalHostClient({
-      baseUrl: "https://runtime.example/",
-      token: "poll-token-that-must-not-be-retained",
-      requestTimeoutMs: 1_000,
-      transport: () => new Promise<Response>(() => undefined),
-    });
-    const pending = pollEvalHostJobForInternalUse(client, accepted, 1_000, {
-      pollIntervalMs: 0,
-      requestTimeoutMs: 10,
-    });
-    void pending.catch(() => undefined);
-
-    await vi.advanceTimersByTimeAsync(10);
-
-    await expect(pending).rejects.toMatchObject({
-      name: "EvalHostClientTransportError",
-      code: "EVAL_HOST_REQUEST_TIMEOUT",
-      operation: "poll",
-    } satisfies Partial<EvalHostClientTransportError>);
-    vi.useRealTimers();
-  });
+  defineTimeoutReadinessBehavior();
+  defineProtocolV2ReadinessBehavior();
+  defineRemoteDeadlineBehavior();
+  defineRemoteRunV4Behavior();
+  pollDeadlineBehavior();
 
   it("memoizes one authenticated manifest across all remote cells", async () => {
     const entry = hydratedEntry();
@@ -200,7 +71,7 @@ describe("Node Eval host manifest readiness", () => {
     );
   });
 
-  it("accepts a v1 host manifest for an all-adapter mixed-placement Eval", async () => {
+  it("accepts a v2 host manifest for an all-adapter mixed-placement Eval", async () => {
     const entry = mixedAdapterEntry();
     const deployed = manifest(entry, "production");
     const provider = createNodeEvalHostReadiness({
@@ -300,7 +171,7 @@ describe("Node Eval host manifest readiness", () => {
       transport: async () =>
         Response.json({
           ...manifest(entry, "production"),
-          protocol: "crux.eval-host.v2",
+          protocol: "crux.eval-host.v3",
         }),
     });
 

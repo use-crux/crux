@@ -8,6 +8,7 @@
  */
 
 import type { JsonValue } from "../storage";
+import type { TimeoutOptions } from "../generation/timeout";
 import type {
   AlwaysOnExpect,
   AssertContext,
@@ -18,8 +19,8 @@ import type {
 } from "./internal/assertions/types";
 import type { StandardSchemaV1 } from "./internal/schema";
 import type {
-  CallOf,
   CapsOf,
+  EvalCaseCallOf,
   EvalCapability,
   EvalTaskLike,
   InputOf,
@@ -132,6 +133,27 @@ interface EvalCaseFields<
     EvalAssertContext<I, O, NoInfer<E>, ScoreName, Caps, Response>,
     EvalFreshAssertContext<I, O, NoInfer<E>, ScoreName, Caps, Response>
   >;
+  /**
+   * Per-Case structured timeout overrides.
+   *
+   * Missing fields inherit the Eval policy, fields and named Tools replace
+   * inherited values, and `null` explicitly clears an inherited ceiling.
+   * Set `timeout` itself to `null` to clear every inherited timeout.
+   *
+   * @defaultValue `undefined`
+   *
+   * @example
+   * ```ts
+   * import type { CaseOf } from '@use-crux/core/eval'
+   * import { support } from '../src/support'
+   *
+   * const cases = [
+   *   { input: { question: 'standard' }, timeout: { toolMs: 2_000 } },
+   *   { input: { question: 'unbounded' }, timeout: null },
+   * ] satisfies readonly CaseOf<typeof support>[]
+   * ```
+   */
+  readonly timeout?: TimeoutOptions | null;
   trials?: number;
   tags?: readonly string[];
   metadata?: Readonly<Record<string, JsonValue>>;
@@ -174,7 +196,7 @@ export type CaseOf<
   InputOf<T>,
   OutputOf<T>,
   E,
-  CallOf<T>,
+  EvalCaseCallOf<T>,
   CapsOf<T>,
   ScoreName,
   ResponseOf<T>

@@ -6,6 +6,7 @@ import { registeredAsyncScopeFacetsForTesting } from "../../src/async-scope/inte
 import "../../src/defer/internal/context";
 import "../../src/defer/internal/replay-guard";
 import "../../src/eval/internal/capture-context";
+import "../../src/eval/internal/task-context-scope";
 import "../../src/observability/context";
 import "../../src/observability/delivery/host-scope";
 import "../../src/runtime/api/host-context";

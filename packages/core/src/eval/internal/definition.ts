@@ -9,6 +9,7 @@ import type { StandardSchemaV1 } from "./schema";
 import type { JsonValue } from "../../storage";
 import type { EvalCoverageTargetId } from "../evaluate";
 import type { AnyEval } from "../evaluate";
+import type { NormalizedEvalTimeoutPolicy } from "../timeout-policy";
 
 /** Private storage key for an Eval's normalized definition. */
 export const EVAL_INTERNAL: unique symbol = Symbol("crux.eval.definition");
@@ -30,6 +31,7 @@ export interface RawEvalCase {
   readonly unvalidatedExpected?: true;
   readonly expect?: NormalizedEvalCheck;
   readonly afterScores?: NormalizedEvalCheck;
+  readonly timeout?: NormalizedEvalTimeoutPolicy | null;
   readonly trials?: number;
   readonly tags?: readonly string[];
   readonly metadata?: Readonly<Record<string, JsonValue>>;
@@ -74,6 +76,7 @@ export interface EvalDefinitionV1 {
   readonly afterScores?: NormalizedEvalCheck;
   readonly scorers: unknown;
   readonly gates?: Readonly<Record<string, unknown>>;
+  readonly timeout?: NormalizedEvalTimeoutPolicy | null;
   readonly trials: number;
   readonly tags: readonly string[];
   readonly description?: string;

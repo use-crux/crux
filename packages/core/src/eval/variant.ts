@@ -18,7 +18,11 @@ import type {
   PromptOutputSchemaOf,
   RoutingCallOptions,
 } from "../routing";
-import type { CallOf, InputOf, OutputOf } from "./task";
+import type {
+  EvalCaseCallOf,
+  InputOf,
+  OutputOf,
+} from "./task";
 
 type PromptEvalOutput<TPrompt> =
   PromptOutputSchemaOf<TPrompt> extends infer TSchema
@@ -100,11 +104,11 @@ type CompatibleTaskOverride<
 > = TTask extends { readonly _tag: "CruxTask" }
   ? [TInput] extends [InputOf<TTask>]
     ? [OutputOf<TTask>] extends [TOutput]
-      ? [TCall] extends [CallOf<TTask>]
+      ? [TCall] extends [EvalCaseCallOf<TTask>]
         ? TTask
         : {
             readonly "crux-eval error": "Variant task does not accept the base Case call contract";
-            readonly accepts: CallOf<TTask>;
+            readonly accepts: EvalCaseCallOf<TTask>;
           }
       : {
           readonly "crux-eval error": "Variant task output is not assignable to the task output";

@@ -28,6 +28,7 @@ describe("Node managed scorer host", () => {
       Object.assign(async () => "unused", { _tag: "CruxTask" as const }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -118,6 +119,7 @@ describe("Node managed scorer host", () => {
       Object.assign(async () => "unused", { _tag: "CruxTask" as const }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -185,9 +187,15 @@ describe("Node managed scorer host", () => {
       { confirmUnknownCost: true },
       projectRoot,
     );
+    const admittedContract = coordinated.plan.cells[0]?.scorerContracts[0];
+    expect(admittedContract).toMatchObject({
+      name: "helpful",
+      contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
     const run = await coordinated.execute();
 
     expect(generate).toHaveBeenCalledOnce();
+    expect(run.cells[0]?.scorerContracts).toEqual([admittedContract]);
     expect(run.cells[0]?.scores[0]).toMatchObject({
       status: "computed",
       reason: "managed_external_executed",
@@ -196,6 +204,7 @@ describe("Node managed scorer host", () => {
         actualUsd: 0.04,
         usage: { inputTokens: 9, outputTokens: 3, totalTokens: 12 },
       },
+      contractFingerprint: admittedContract?.contractFingerprint,
     });
     expect(run.cost).toMatchObject({
       actualUsd: 0.04,

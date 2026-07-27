@@ -15,12 +15,19 @@ export interface EvalBaselineMetric {
   readonly values: readonly EvalBaselineMetricValue[];
 }
 
+/** Terminal result aligned to one promoted Case trial. */
+export interface EvalBaselineTrialOutcome {
+  readonly trial: number;
+  readonly status: "passed" | "failed" | "timed_out";
+}
+
 export interface EvalBaselineCase {
   readonly caseId: string;
   readonly inputFingerprint: string;
   readonly callFingerprint: string;
   readonly expectedFingerprint: string;
   readonly trials: readonly number[];
+  readonly outcomes: readonly EvalBaselineTrialOutcome[];
   readonly metrics: Readonly<Record<string, EvalBaselineMetric>>;
 }
 

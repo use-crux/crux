@@ -78,6 +78,13 @@ export interface ResolveModelOptions {
   readonly emitReport?: boolean;
 }
 
+type NestedResolveOptions = Omit<
+  ResolveModelOptions,
+  "deadline" | "params" | "preserveRawResult"
+> & {
+  readonly deadline: Deadline;
+};
+
 // ─────────────────────────────────────────────────────────────────
 // resolveModel
 // ─────────────────────────────────────────────────────────────────
@@ -133,6 +140,7 @@ export async function resolveModel<M, R>(
         {
           deadline,
           mode: options.mode,
+          signal: options.signal,
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
@@ -149,6 +157,7 @@ export async function resolveModel<M, R>(
           input,
           deadline,
           mode: options.mode,
+          signal: options.signal,
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
@@ -168,6 +177,7 @@ export async function resolveModel<M, R>(
           input,
           deadline,
           mode: options.mode,
+          signal: options.signal,
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
@@ -192,6 +202,7 @@ export async function resolveModel<M, R>(
         {
           deadline,
           mode: options.mode,
+          signal: options.signal,
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
@@ -206,6 +217,7 @@ export async function resolveModel<M, R>(
       return await resolveFallback({
         fallback: fallbackModel,
         deadline,
+        signal: options.signal,
         resolveCandidate: (candidate, attemptOptions) =>
           resolveModel(candidate, input, tryModel, extractModelId, {
             deadline,
@@ -227,10 +239,8 @@ export async function resolveModel<M, R>(
       options.mode === "stream" && options.firstTokenMs !== undefined
         ? new AbortController()
         : undefined;
-    const attemptSignal = composeAbortSignals(
-      deadline.signal,
-      options.signal,
-      firstTokenController?.signal,
+    const attemptSignal = deadline.compose(
+      composeAbortSignals(options.signal, firstTokenController?.signal),
     );
     const result = await withAbortSignal(
       () => tryModel(model, { signal: attemptSignal, params: options.params }),
@@ -258,14 +268,7 @@ async function resolveRouter<M, R>(
   input: unknown,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: {
-    deadline: Deadline;
-    mode?: "generate" | "stream";
-    firstTokenMs?: number;
-    context?: unknown;
-    forcedRoute?: string;
-    emitReport?: boolean;
-  },
+  options: NestedResolveOptions,
 ): Promise<RoutableResult<R>> {
   const { config } = routerModel;
   const forcedRoute = options.forcedRoute;
@@ -392,14 +395,7 @@ async function resolveCascade<M, R>(
   input: unknown,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: {
-    deadline: Deadline;
-    mode?: "generate" | "stream";
-    firstTokenMs?: number;
-    context?: unknown;
-    forcedRoute?: string;
-    emitReport?: boolean;
-  },
+  options: NestedResolveOptions,
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { tiers, budget } = cascadeModel.config;
   const tierDetails: CascadeTierDetail[] = [];
@@ -551,7 +547,10 @@ async function resolveCascade<M, R>(
             resolveModel(tier.model, input, tryModel, extractModelId, {
               deadline: options.deadline,
               mode: options.mode,
-              signal: latencyDeadline.signal,
+              signal:
+                latencyDeadline.remaining() === undefined
+                  ? options.signal
+                  : latencyDeadline.compose(options.signal),
               context: options.context,
               forcedRoute: options.forcedRoute,
               emitReport: false,

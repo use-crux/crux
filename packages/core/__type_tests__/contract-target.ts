@@ -82,10 +82,22 @@ type _TimeoutOptionsKeys = Expect<
     "totalMs" | "stepMs" | "chunkMs" | "firstToken" | "toolMs" | "tools"
   >
 >;
+type _TimeoutScalarValues = Expect<
+  AssertEqual<
+    Omit<TargetTimeoutOptions, "tools">,
+    {
+      readonly totalMs?: number | null;
+      readonly stepMs?: number | null;
+      readonly chunkMs?: number | null;
+      readonly firstToken?: number | null;
+      readonly toolMs?: number | null;
+    }
+  >
+>;
 type _TimeoutToolsReadonly = Expect<
   AssertEqual<
     TargetTimeoutOptions["tools"],
-    Readonly<Record<string, number>> | undefined
+    Readonly<Record<string, number | null>> | undefined
   >
 >;
 type _TimeoutErrorBudget = Expect<
@@ -97,6 +109,15 @@ type _TimeoutErrorLimit = Expect<
 type _TimeoutErrorToolName = Expect<
   AssertEqual<TargetTimeoutError["toolName"], string | undefined>
 >;
+
+function assertTimeoutErrorGuard(value: unknown): void {
+  if (TimeoutError.isInstance(value)) {
+    type _NarrowedTimeoutError = Expect<
+      AssertEqual<typeof value, TimeoutError>
+    >;
+  }
+}
+void assertTimeoutErrorGuard;
 
 type Phase2GenerationSettings = GenerationSettings;
 

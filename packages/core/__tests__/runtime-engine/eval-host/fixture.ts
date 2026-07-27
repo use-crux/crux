@@ -1,6 +1,8 @@
 import { evaluate } from "../../../src/eval";
 import { attachEvalTaskDescriptorForInternalUse } from "../../../src/eval/internal/task";
 import type { EvalRequiredHostCapability } from "../../../src/eval/internal/task";
+import type { EvalTaskExecutionContext } from "../../../src/eval/internal/task-execution-context";
+import type { TimeoutOptions } from "../../../src/generation/timeout";
 import {
   createDeployedEvalRegistry,
   fingerprintDeployedEvalCase,
@@ -18,20 +20,27 @@ export const TOKEN = "eval-execute-capability-token-32-bytes";
 export const NOW = new Date("2026-07-16T18:00:00.000Z");
 export const HOST_CAPABILITIES = ["asset-store"] as const;
 
+type FixtureExecute = (
+  input: unknown,
+  callOptions: Readonly<object> | undefined,
+  overrides: Readonly<object>,
+  context: EvalTaskExecutionContext,
+) => Promise<{ output: unknown }>;
+
 export function fixtureRegistry(
-  execute: (input: unknown) => Promise<{ output: unknown }> = async (
-    input,
-  ) => ({ output: input }),
+  execute: FixtureExecute = async (input) => ({ output: input }),
   requiredHostCapabilities: readonly EvalRequiredHostCapability[] = HOST_CAPABILITIES,
   operation: "generate" | "stream" = "generate",
   redactPaths: readonly string[] = [],
   alphaHostCapabilities?: readonly EvalRequiredHostCapability[],
+  timeout?: TimeoutOptions | null,
 ) {
   const fixtureTask = (capabilities: readonly EvalRequiredHostCapability[]) =>
     attachEvalTaskDescriptorForInternalUse(
       async (input: { message: string }) => input.message,
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation,
         adapterId: "ai-sdk",
         capabilities: [],
@@ -80,6 +89,7 @@ export function fixtureRegistry(
     id: "support",
     task,
     cases: [authored, account],
+    ...(timeout !== undefined ? { timeout } : {}),
     variants: {
       zeta: { temperature: 1 },
       alpha: {
@@ -104,12 +114,20 @@ export function fixtureRegistry(
         cases: [
           {
             id: "refund",
-            fingerprint: fingerprintDeployedEvalCase("refund", authored),
+            fingerprint: fingerprintDeployedEvalCase(
+              evalValue,
+              "refund",
+              authored,
+            ),
             authored,
           },
           {
             id: "account",
-            fingerprint: fingerprintDeployedEvalCase("account", account),
+            fingerprint: fingerprintDeployedEvalCase(
+              evalValue,
+              "account",
+              account,
+            ),
             authored: account,
           },
         ],
@@ -176,6 +194,10 @@ export function jobBody(registry: ReturnType<typeof fixtureRegistry>) {
     variantFingerprint: entry.variants[0]!.fingerprint,
     trial: 0,
     deadlineAt: "2026-07-16T19:00:00.000Z",
+    deadline: {
+      source: "host",
+      limitMs: 10 * 60_000,
+    },
   } as const;
 }
 

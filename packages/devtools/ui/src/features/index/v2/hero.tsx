@@ -27,6 +27,7 @@ import {
 import type { IndexIndex, IndexFacts, ViewDef } from "./adapt";
 import { RoutingCatalogFacts } from "./routing-catalog";
 import { EmbeddingCatalogHero } from "./embedding-hero";
+import { EvalTimeoutPolicy } from "./eval-timeout-policy";
 import { useIndexIndex, useIndexOpenEval, useIndexSelect } from "./context";
 
 /** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
@@ -1839,21 +1840,11 @@ export function IndexHero({ def }: { def: ViewDef }) {
         }
       >
         {k === "eval" ? (
-          <button
-            type="button"
-            onClick={() => openEval(def.name)}
-            style={{
-              all: "unset",
-              boxSizing: "border-box",
-              cursor: "pointer",
-              fontFamily: T.mono,
-              fontSize: 11.5,
-              color: T.crux,
-              marginBottom: 12,
-            }}
-          >
-            Open {def.name} in Evals →
-          </button>
+          <EvalTimeoutPolicy
+            policy={f.timeout}
+            evalId={def.name}
+            openEval={openEval}
+          />
         ) : null}
         {k === "eval" && cases.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

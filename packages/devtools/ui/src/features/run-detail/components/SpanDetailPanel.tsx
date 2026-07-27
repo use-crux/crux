@@ -109,11 +109,11 @@ import { memoryRenderBudgetDecision } from "../lib/memory-span-detail";
 import {
   AgentCard,
   CompositionCard,
-  EvalCard,
   EvalRunCard,
   FlowCard,
   OperationReportCard,
 } from "./PrimitiveCards";
+import { EvalCard } from "./EvalCard";
 import { DeferredWorkCard } from "./DeferredWorkCard";
 import { WorkspaceSnapshotCard } from "../workspace-snapshot/card";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";

@@ -41,6 +41,8 @@ export interface ResolveRetryArgs<M, R> {
   readonly deadline: Deadline;
   /** Current execution mode. */
   readonly mode?: "generate" | "stream";
+  /** Caller-owned cancellation inherited from the outer resolution. */
+  readonly signal?: AbortSignal;
   /** Stream first-token timeout budget inherited from the call site. */
   readonly firstTokenMs?: number;
   /** Call-site routing context. */
@@ -55,6 +57,7 @@ export interface ResolveRetryArgs<M, R> {
     options: {
       readonly deadline: Deadline;
       readonly mode?: "generate" | "stream";
+      readonly signal?: AbortSignal;
       readonly firstTokenMs?: number;
       readonly context?: unknown;
       readonly forcedRoute?: string;
@@ -71,6 +74,7 @@ export async function resolveRetry<M, R>({
   input,
   deadline,
   mode,
+  signal,
   firstTokenMs,
   context,
   forcedRoute,
@@ -108,6 +112,7 @@ export async function resolveRetry<M, R>({
         resolveCandidate(model, {
           deadline,
           mode,
+          signal,
           firstTokenMs,
           context,
           forcedRoute,
@@ -199,7 +204,7 @@ export async function resolveRetry<M, R>({
       }
 
       if (delayMs > 0) {
-        await sleepWithSignal(delayMs, deadline.signal);
+        await sleepWithSignal(delayMs, deadline.compose(signal));
       }
     }
   }

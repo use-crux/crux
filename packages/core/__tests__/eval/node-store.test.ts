@@ -2,13 +2,13 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
-
 import {
   createEvalEvidenceFileStore,
   createEvalRunFileStore,
   evalRunV3Schema,
   isEvalRunPromotable,
 } from "../../src/eval/node/stores";
+import { runV4StoreBehavior } from "./run-v4-store.behavior";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import {
@@ -18,12 +18,12 @@ import {
   taskResult,
 } from "./reuse-test-harness";
 import { runFixture } from "./baseline-test-harness";
-
 const source = {
   sourceKey: { relativeFile: "support.eval.ts", export: "default" as const },
 };
 
-describe("Node Eval V3 stores", () => {
+describe("Node Eval run stores", () => {
+  runV4StoreBehavior();
   it("rejects impossible task and score discriminator combinations", () => {
     const fixture = runFixture({ score: 1 });
     const cell = fixture.cells[0]!;

@@ -2,9 +2,11 @@
 
 import type { AnyPrompt } from "@use-crux/core";
 import type {
+  EvalTaskExecutionContext,
   EvalTaskIdentityProjection,
   EvalTaskIdentityProjectionRequest,
 } from "@use-crux/core/eval/internal/task";
+import { applyEvalTaskExecutionContext } from "@use-crux/core/eval/internal/task";
 import { extractModelInfo } from "./provider-profile";
 import { getStableModelIdentity } from "./stable-model";
 import {
@@ -56,6 +58,7 @@ export function createRenderedPromptIdentity<TResult>(input: {
         readonly call?: Readonly<object>;
         readonly overrides: Readonly<object>;
         readonly input: unknown;
+        readonly executionContext?: EvalTaskExecutionContext;
       },
     ): Promise<TResult> {
       const invocation = resolveAiTaskInvocation(
@@ -68,10 +71,19 @@ export function createRenderedPromptIdentity<TResult>(input: {
       const instrumented = instrumentPrompt(invocation.prompt, (projection) => {
         observed = asIdentity(projection);
       });
-      const result = await run(instrumented, {
+      const resolvedOptions = {
         ...invocation.options,
         input: request.input,
-      });
+      };
+      const result = await run(
+        instrumented,
+        request.executionContext === undefined
+          ? resolvedOptions
+          : applyEvalTaskExecutionContext(
+              resolvedOptions,
+              request.executionContext,
+            ),
+      );
       if (isObject(result)) {
         captured.set(
           result,

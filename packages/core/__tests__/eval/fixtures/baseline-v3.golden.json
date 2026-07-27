@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "baselineFingerprintEpoch": 4,
+  "baselineFingerprintEpoch": 5,
   "baselineId": "baseline-golden",
   "evalId": "support",
   "runId": "eval-run-golden",
@@ -16,6 +16,7 @@
       "callFingerprint": "call-fp",
       "expectedFingerprint": "expected-fp",
       "trials": [0],
+      "outcomes": [{ "trial": 0, "status": "passed" }],
       "metrics": {
         "helpful": {
           "contractFingerprint": "helpful-v1",
@@ -30,5 +31,5 @@
     "taskFingerprint": "model-a"
   },
   "futureBaselineField": { "preserve": true },
-  "snapshotFingerprint": "f1589e0a1d1b3c7393078759a62ef82950cd6c6444e602bf8278391b19f10634"
+  "snapshotFingerprint": "b339bf7e44060030528ec79f01805e8d9d8f4bc74a0b9bafe318055c30ef117a"
 }

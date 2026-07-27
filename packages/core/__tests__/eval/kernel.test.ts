@@ -12,6 +12,89 @@ import type {
 import { nonBillablePlanningPorts } from "./reuse-test-harness";
 
 describe("portable Eval kernel", () => {
+  it("plans an independent resolved timeout policy for every Case", async () => {
+    const task = Object.assign(async (input: string) => input, {
+      _tag: "CruxTask" as const,
+      operation: "function" as const,
+    });
+    const evalTimeout = {
+      totalMs: 5_000,
+      stepMs: 3_000,
+      tools: { search: 1_000, compose: 2_000 },
+    };
+    const caseTimeout = {
+      stepMs: 1_500,
+      tools: { search: null },
+    };
+    const evalValue = evaluate({
+      id: "resolved-timeouts",
+      task,
+      timeout: evalTimeout,
+      cases: [
+        { id: "override", input: "one", timeout: caseTimeout },
+        { id: "clear", input: "two", timeout: null },
+      ],
+    });
+
+    const plan = await planEval(
+      evalValue,
+      {
+        sourceKey: { relativeFile: "timeouts.eval.ts", export: "default" },
+      },
+      nonBillablePlanningPorts(),
+    );
+
+    expect(plan.cells.map(({ caseId, timeout }) => ({ caseId, timeout })))
+      .toMatchInlineSnapshot(`
+        [
+          {
+            "caseId": "override",
+            "timeout": {
+              "nested": {
+                "stepMs": 1500,
+                "tools": {
+                  "compose": 2000,
+                  "search": null,
+                },
+              },
+              "totalMs": 5000,
+            },
+          },
+          {
+            "caseId": "clear",
+            "timeout": {
+              "nested": {
+                "stepMs": null,
+                "tools": {
+                  "compose": null,
+                  "search": null,
+                },
+              },
+              "totalMs": null,
+            },
+          },
+        ]
+      `);
+    expect(Object.isFrozen(plan.cells[0]?.timeout)).toBe(true);
+    expect(Object.isFrozen(plan.cells[0]?.timeout.nested)).toBe(true);
+    expect(Object.keys(plan.cells[0]?.timeout.nested ?? {})).toEqual([
+      "stepMs",
+      "tools",
+    ]);
+    expect(JSON.stringify(plan.cells[0]?.timeout.nested)).not.toContain(
+      "EvalTaskTimeout",
+    );
+    expect(evalTimeout).toEqual({
+      totalMs: 5_000,
+      stepMs: 3_000,
+      tools: { search: 1_000, compose: 2_000 },
+    });
+    expect(caseTimeout).toEqual({
+      stepMs: 1_500,
+      tools: { search: null },
+    });
+  });
+
   it("preserves scalar opaque-task inputs in plans and persisted runs", async () => {
     const task = Object.assign(async (input: string) => input.toUpperCase(), {
       _tag: "CruxTask" as const,
@@ -135,7 +218,7 @@ describe("portable Eval kernel", () => {
     expect(writes).toEqual([run]);
     expect(Object.isFrozen(run)).toBe(true);
     expect(run).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       status: "complete",
       passed: true,
       runId: "eval-run-1",

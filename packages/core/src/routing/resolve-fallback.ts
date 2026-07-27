@@ -10,12 +10,10 @@
  * @internal
  */
 
-import type {
-  FallbackModel,
-} from "../generation/fallback";
+import type { FallbackModel } from "../generation/fallback";
 import { classifyError, shouldAttemptFallback } from "../generation/fallback";
 import { getMeta } from "../generation/result-meta";
-import { Deadline, withBudget } from "../generation/timeout";
+import { composeAbortSignals, Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
 import { routingDefinitionRef } from "../observability/definition-ref";
 import { isPolicyTerminal } from "../safety/errors";
@@ -52,6 +50,7 @@ export interface ResolveFallbackArgs<M, R> {
   readonly fallback: FallbackModel<M>;
   /** Whole routed-call deadline shared by every attempt. */
   readonly deadline: Deadline;
+  readonly signal?: AbortSignal;
   /** Resolve one fallback candidate through the top-level resolver. */
   readonly resolveCandidate: (
     model: M,
@@ -72,6 +71,7 @@ export interface ResolveFallbackArgs<M, R> {
 export async function resolveFallback<M, R>({
   fallback,
   deadline,
+  signal: callerSignal,
   resolveCandidate,
   describeModel,
   emitReport = true,
@@ -123,7 +123,7 @@ export async function resolveFallback<M, R>({
         withBudget(
           (signal) =>
             resolveCandidate(model, {
-              signal: deadline.compose(signal),
+              signal: deadline.compose(composeAbortSignals(callerSignal, signal)),
             }),
           { budget: "step", limitMs: options.timeout?.attempt },
         ),

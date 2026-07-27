@@ -1,10 +1,10 @@
 /** Pure per-Variant aggregation for portable Eval cells. @internal */
 
-import type { EvalCell, EvalVariantAggregate } from "./types";
+import type { EvalCell, EvalVariantAggregateV4 } from "./types";
 
 export function aggregateVariant(
   cells: readonly EvalCell[],
-): EvalVariantAggregate {
+): EvalVariantAggregateV4 {
   const active = cells.filter((cell) => cell.status !== "skipped");
   const passed = active.filter((cell) => cell.status === "passed").length;
   const costValues = cells.flatMap((cell) =>
@@ -44,6 +44,7 @@ export function aggregateVariant(
     passed,
     failed: active.filter((cell) => cell.status === "failed").length,
     errored: active.filter((cell) => cell.status === "errored").length,
+    timedOut: active.filter((cell) => cell.status === "timed_out").length,
     skipped: cells.length - active.length,
     passRate: active.length === 0 ? 0 : passed / active.length,
     scores: Object.freeze(scores),

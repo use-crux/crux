@@ -1,9 +1,15 @@
-import { CRUX_EVAL_HOST_PROTOCOL, type SubmitEvalJobV1 } from "./types";
+import {
+  CRUX_EVAL_HOST_PROTOCOL_V1,
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+  type SubmitEvalJob,
+  type SubmitEvalJobV1,
+  type SubmitEvalJobV2,
+} from "./types";
 
 export const EVAL_HOST_MAX_BODY_BYTES = 16 * 1024;
 export const EVAL_HOST_MAX_DEADLINE_HORIZON_MS = 24 * 60 * 60 * 1000;
 
-const SUBMIT_KEYS = [
+const IDENTITY_KEYS = [
   "protocol",
   "jobId",
   "evalRunId",
@@ -14,11 +20,67 @@ const SUBMIT_KEYS = [
   "variant",
   "variantFingerprint",
   "trial",
+] as const;
+const SUBMIT_V1_KEYS = [
+  ...IDENTITY_KEYS,
   "deadlineAt",
 ] as const satisfies readonly (keyof SubmitEvalJobV1)[];
+const SUBMIT_V2_KEYS = [
+  ...IDENTITY_KEYS,
+  "deadlineAt",
+  "deadline",
+] as const satisfies readonly (keyof SubmitEvalJobV2)[];
 
-/** Decode one strict, bounded V1 submission without accepting dynamic input. */
-export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
+/** Decode one strict V1 submission retained for legacy host records. */
+export function decodeSubmitEvalJobV1(
+  text: string,
+  now: Date,
+): SubmitEvalJobV1 {
+  const value = parseSubmit(text);
+  if (
+    !hasExactKeys(value, SUBMIT_V1_KEYS) ||
+    value.protocol !== CRUX_EVAL_HOST_PROTOCOL_V1
+  ) {
+    throw protocolError("EVAL_HOST_INVALID_JOB");
+  }
+  assertIdentity(value);
+  assertDeadline(value.deadlineAt, now);
+  return Object.freeze(value as unknown as SubmitEvalJobV1);
+}
+
+/** Decode one strict V2 submission with explicit deadline provenance. */
+export function decodeSubmitEvalJobV2(
+  text: string,
+  now: Date,
+): SubmitEvalJobV2 {
+  const value = parseSubmit(text);
+  if (
+    !hasExactKeys(value, SUBMIT_V2_KEYS) ||
+    value.protocol !== CRUX_EVAL_HOST_PROTOCOL_V2 ||
+    !isRecord(value.deadline) ||
+    !hasExactKeys(value.deadline, ["source", "limitMs"]) ||
+    (value.deadline.source !== "eval" && value.deadline.source !== "host") ||
+    !isPositiveBoundedLimit(value.deadline.limitMs)
+  ) {
+    throw protocolError("EVAL_HOST_INVALID_JOB");
+  }
+  assertIdentity(value);
+  assertDeadline(value.deadlineAt, now);
+  return Object.freeze({
+    ...value,
+    deadline: Object.freeze({ ...value.deadline }),
+  }) as unknown as SubmitEvalJobV2;
+}
+
+/** Decode either strict persisted protocol version without shape widening. */
+export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJob {
+  const protocol = submissionProtocol(text);
+  return protocol === CRUX_EVAL_HOST_PROTOCOL_V1
+    ? decodeSubmitEvalJobV1(text, now)
+    : decodeSubmitEvalJobV2(text, now);
+}
+
+function parseSubmit(text: string): Record<string, unknown> {
   if (new TextEncoder().encode(text).byteLength > EVAL_HOST_MAX_BODY_BYTES) {
     throw protocolError("EVAL_HOST_BODY_TOO_LARGE");
   }
@@ -28,17 +90,33 @@ export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
   } catch {
     throw protocolError("EVAL_HOST_INVALID_JSON");
   }
-  if (!isRecord(value) || !hasExactKeys(value, SUBMIT_KEYS)) {
+  if (!isRecord(value)) {
     throw protocolError("EVAL_HOST_INVALID_JOB");
   }
-  for (const key of SUBMIT_KEYS) {
+  return value;
+}
+
+function submissionProtocol(
+  text: string,
+): typeof CRUX_EVAL_HOST_PROTOCOL_V1 | typeof CRUX_EVAL_HOST_PROTOCOL_V2 {
+  const value = parseSubmit(text);
+  if (value.protocol === CRUX_EVAL_HOST_PROTOCOL_V1) {
+    return CRUX_EVAL_HOST_PROTOCOL_V1;
+  }
+  if (value.protocol === CRUX_EVAL_HOST_PROTOCOL_V2) {
+    return CRUX_EVAL_HOST_PROTOCOL_V2;
+  }
+  throw protocolError("EVAL_HOST_INVALID_JOB");
+}
+
+function assertIdentity(value: Record<string, unknown>): void {
+  for (const key of IDENTITY_KEYS) {
     if (key === "trial") continue;
     if (typeof value[key] !== "string") {
       throw protocolError("EVAL_HOST_INVALID_JOB");
     }
   }
   if (
-    value.protocol !== CRUX_EVAL_HOST_PROTOCOL ||
     !isBoundedId(value.jobId) ||
     !isBoundedId(value.evalRunId) ||
     !isBoundedId(value.evalId) ||
@@ -52,13 +130,16 @@ export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
   ) {
     throw protocolError("EVAL_HOST_INVALID_JOB");
   }
-  if (typeof value.deadlineAt !== "string") {
+}
+
+function assertDeadline(value: unknown, now: Date): void {
+  if (typeof value !== "string") {
     throw protocolError("EVAL_HOST_INVALID_DEADLINE");
   }
-  const deadlineAt = new Date(value.deadlineAt);
+  const deadlineAt = new Date(value);
   if (
     Number.isNaN(deadlineAt.getTime()) ||
-    deadlineAt.toISOString() !== value.deadlineAt
+    deadlineAt.toISOString() !== value
   ) {
     throw protocolError("EVAL_HOST_INVALID_DEADLINE");
   }
@@ -71,7 +152,14 @@ export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
   ) {
     throw protocolError("EVAL_JOB_DEADLINE_TOO_FAR");
   }
-  return Object.freeze(value as unknown as SubmitEvalJobV1);
+}
+
+function isPositiveBoundedLimit(value: unknown): value is number {
+  return (
+    Number.isSafeInteger(value) &&
+    (value as number) > 0 &&
+    (value as number) <= EVAL_HOST_MAX_DEADLINE_HORIZON_MS
+  );
 }
 
 /** Read one request body without buffering bytes beyond the protocol ceiling. */
@@ -148,7 +236,7 @@ function messageForCode(code: string): string {
     case "EVAL_HOST_INVALID_DEADLINE":
       return "The Eval job deadline must be a canonical ISO timestamp.";
     default:
-      return "The Eval job request does not match crux.eval-host.v1.";
+      return "The Eval job request does not match a supported strict Eval host protocol.";
   }
 }
 

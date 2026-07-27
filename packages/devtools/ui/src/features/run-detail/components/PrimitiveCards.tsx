@@ -13,8 +13,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { JsonTree } from "@/shared/components/JsonTree";
-import { Chip, Eyebrow, ScoreBar, type ChipTone } from "@/devtools/shell/primitives";
+import { Chip, Eyebrow, type ChipTone } from "@/devtools/shell/primitives";
 import type {
   CruxCacheReportPreview,
   CruxCompactionReportPreview,
@@ -25,7 +24,6 @@ import type {
   CruxIndexingReportPreview,
   CruxIngestReportPreview,
   CruxRoutingReportPreview,
-  CruxScoreReportPreview,
   CruxSecurityReportPreview,
   CruxSourceStageCountsPreview,
 } from "@use-crux/core/observability";
@@ -81,134 +79,6 @@ function Section({
         {right}
       </div>
       {children}
-    </div>
-  );
-}
-
-// ─── Eval / scoring (verdict + judges + expected/actual) ────────────
-
-export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
-  const raw = findArtifact(node, "score.report")?.preview;
-  if (!reportOfKind(raw, "score.report")) {
-    return (
-      <EmptyHint>No verdict / judge report recorded for this case.</EmptyHint>
-    );
-  }
-  const report = raw as CruxScoreReportPreview;
-  const verdict = report.verdict;
-  const pass = verdict === "pass";
-  const judges = report.judges ?? [];
-
-  return (
-    <div className="flex flex-col gap-3">
-      <CardShell
-        label="Verdict"
-        right={
-          report.primaryFailureType ? (
-            <span style={{ color: "var(--devtools-danger)" }}>
-              {report.primaryFailureType}
-            </span>
-          ) : undefined
-        }
-      >
-        <div className="flex items-center gap-3 px-3.5 py-3">
-          <Chip tone={pass ? "ok" : verdict ? "danger" : "muted"} dot>
-            {verdict != null ? String(verdict) : "—"}
-          </Chip>
-          {report.score != null && (
-            <span className="font-mono text-[13px] font-semibold">
-              {report.score.toFixed(2)}
-            </span>
-          )}
-          {report.reasoningPreview && (
-            <span
-              className="flex-1 text-[12px]"
-              style={{ color: "var(--devtools-fg-muted)" }}
-            >
-              {report.reasoningPreview}
-            </span>
-          )}
-        </div>
-      </CardShell>
-
-      {judges.length > 0 && (
-        <CardShell label={`Judges · ${judges.length}`}>
-          <div className="flex flex-col gap-2.5 px-3.5 py-3">
-            {judges.map((j) => {
-              const ok =
-                j.status === "passed" ||
-                (j.score != null &&
-                  j.threshold != null &&
-                  j.score >= j.threshold);
-              const color = ok ? "var(--devtools-ok)" : "var(--devtools-warn)";
-              return (
-                <div key={j.name}>
-                  <div className="mb-1 flex items-center gap-2">
-                    <span
-                      className="flex-1 truncate font-mono text-[11.5px]"
-                      style={{ color: "var(--devtools-fg)" }}
-                    >
-                      {j.name}
-                    </span>
-                    {j.score != null && (
-                      <span
-                        className="font-mono text-[11.5px] font-semibold"
-                        style={{ color }}
-                      >
-                        {j.score.toFixed(2)}
-                        {j.threshold != null && (
-                          <span style={{ color: "var(--devtools-fg-faint)" }}>
-                            {" "}
-                            / {j.threshold.toFixed(2)}
-                          </span>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  {j.score != null && (
-                    <ScoreBar
-                      score={j.score}
-                      threshold={j.threshold}
-                      color={color}
-                    />
-                  )}
-                  {j.rationale && (
-                    <div
-                      className="mt-1 text-[11.5px] leading-[1.5]"
-                      style={{ color: "var(--devtools-fg-muted)" }}
-                    >
-                      {j.rationale}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardShell>
-      )}
-
-      {(report.expected !== undefined || report.actual !== undefined) && (
-        <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <CardShell label="Expected">
-            <div className="px-3.5 py-3">
-              {report.expected !== undefined ? (
-                <JsonTree data={report.expected} />
-              ) : (
-                <Empty />
-              )}
-            </div>
-          </CardShell>
-          <CardShell label="Actual">
-            <div className="px-3.5 py-3">
-              {report.actual !== undefined ? (
-                <JsonTree data={report.actual} />
-              ) : (
-                <Empty />
-              )}
-            </div>
-          </CardShell>
-        </div>
-      )}
     </div>
   );
 }

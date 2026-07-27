@@ -51,6 +51,13 @@ Baseline. Source, Case, scorer, Gate, Variant, parameter, and schema drift can
 make an older Baseline non-comparable. Crux reports the exact compatibility
 reason rather than silently comparing different populations.
 
+A complete run may contain `timed_out` Cases and can still be promoted. The
+Baseline stores each aligned trial outcome. Every declared metric remains in
+coverage; a timed-out trial contributes `null`, not a fabricated score.
+Comparing different aligned outcomes makes that Case incompatible. When
+outcomes and metric contracts match but either aggregate is unavailable, the
+metric—and therefore the Case comparison—is reported missing.
+
 A complete arm may still be failing. That can be an honest starting point, so
 Crux requires `--accept-failing` in the CLI or the explicit “Accept anyway”
 action in Devtools. The writer enforces this intent before changing the

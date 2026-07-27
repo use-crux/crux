@@ -1,4 +1,4 @@
-// Package evalfs reads private Eval V3 artifacts.
+// Package evalfs reads private Eval V3 and V4 artifacts.
 package evalfs
 
 import (
@@ -45,7 +45,7 @@ func OpenProject(projectRoot string) *Store {
 	}
 }
 
-// ReadRun validates the known V3 envelope while preserving the exact bytes.
+// ReadRun validates a known V3/V4 envelope while preserving the exact bytes.
 func (s *Store) ReadRun(runID string) (Run, bool, error) {
 	if !safeID.MatchString(runID) {
 		return Run{}, false, fmt.Errorf("invalid Eval run ID %q", runID)
@@ -67,7 +67,7 @@ func (s *Store) ReadRun(runID string) (Run, bool, error) {
 	return run, true, nil
 }
 
-// ListRuns returns valid V3 records newest-first by file name. A corrupt
+// ListRuns returns valid V3/V4 records newest-first by file name. A corrupt
 // terminal record is reported instead of being silently treated as truth.
 func (s *Store) ListRuns() ([]json.RawMessage, error) {
 	entries, err := os.ReadDir(s.runsDir)
@@ -98,7 +98,7 @@ func (s *Store) ListRuns() ([]json.RawMessage, error) {
 }
 
 func parseRun(raw []byte) (Run, error) {
-	if err := validateRunV3(raw); err != nil {
+	if err := validateRun(raw); err != nil {
 		return Run{}, err
 	}
 	var run Run
@@ -125,8 +125,8 @@ func parseRun(raw []byte) (Run, error) {
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return Run{}, err
 	}
-	if run.SchemaVersion != 3 || run.RunID == "" || run.EvalID == "" {
-		return Run{}, fmt.Errorf("expected schemaVersion 3 with runId and evalId")
+	if (run.SchemaVersion != 3 && run.SchemaVersion != 4) || run.RunID == "" || run.EvalID == "" {
+		return Run{}, fmt.Errorf("expected schemaVersion 3 or 4 with runId and evalId")
 	}
 	for name, value := range map[string]json.RawMessage{
 		"sourceKey": envelope.SourceKey, "startedAt": envelope.StartedAt,

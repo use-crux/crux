@@ -13,7 +13,7 @@ export function parseEvalRun(value: unknown, prefix = ""): EvalRunRecord {
     throw new TypeError(`malformed Eval run '${runId}' at ${path}`);
   };
   if (
-    run.schemaVersion !== 3 ||
+    (run.schemaVersion !== 3 && run.schemaVersion !== 4) ||
     typeof run.runId !== "string" ||
     typeof run.evalId !== "string" ||
     typeof run.definitionFingerprint !== "string" ||

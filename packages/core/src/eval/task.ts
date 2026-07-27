@@ -113,6 +113,18 @@ export type CallOf<T> = [ManagedTaskTypes<T>] extends [never]
     : Record<string, never>
   : ManagedTaskTypes<T>["call"];
 
+/**
+ * Call options that may be authored in an Eval Case.
+ *
+ * Managed tasks reserve `signal` for the Eval engine. Opaque task call shapes
+ * remain user-owned and are returned unchanged.
+ *
+ * @internal
+ */
+export type EvalCaseCallOf<T> = [ManagedTaskTypes<T>] extends [never]
+  ? CallOf<T>
+  : Omit<ManagedTaskTypes<T>["call"], "signal">;
+
 /** Authored Variant override surface of an Eval task. */
 export type VariantOf<T> = [ManagedTaskTypes<T>] extends [never]
   ? Record<string, never>

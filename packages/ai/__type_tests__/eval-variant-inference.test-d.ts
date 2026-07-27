@@ -49,6 +49,14 @@ declare const compatibleTask: EvalTask<
   object,
   "modelCalls"
 >;
+declare const signalRequiredTask: EvalTask<
+  { topic: string },
+  { text: string },
+  string,
+  { signal: AbortSignal },
+  object,
+  "modelCalls"
+>;
 declare const wrongOutputTask: EvalTask<
   { topic: string },
   { object: number },
@@ -71,6 +79,7 @@ evaluate({
   cases: [{ input: { topic: "refunds" } }],
   variants: {
     compatible: { task: compatibleTask },
+    signalOwned: { task: signalRequiredTask },
     wrongOutput: {
       // @ts-expect-error — replacement task output must be covariant
       task: wrongOutputTask,

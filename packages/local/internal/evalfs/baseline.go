@@ -27,8 +27,14 @@ func ParseBaseline(raw []byte) (Baseline, error) {
 	if err := json.Unmarshal(raw, &baseline); err != nil {
 		return Baseline{}, err
 	}
-	if baseline.SchemaVersion != 3 || baseline.BaselineFingerprintEpoch != 4 {
-		return Baseline{}, fmt.Errorf("expected Eval Baseline schemaVersion 3 and fingerprint epoch 4")
+	if baseline.SchemaVersion != 3 {
+		return Baseline{}, fmt.Errorf("expected Eval Baseline schemaVersion 3")
+	}
+	if baseline.BaselineFingerprintEpoch != 5 {
+		return Baseline{}, fmt.Errorf(
+			"Eval Baseline fingerprint epoch %d is incompatible; repromote with the current Crux version (expected epoch 5)",
+			baseline.BaselineFingerprintEpoch,
+		)
 	}
 	if baseline.BaselineID == "" || baseline.EvalID == "" || baseline.RunID == "" ||
 		baseline.SelectedArm == "" || baseline.SnapshotFingerprint == "" {

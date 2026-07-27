@@ -12,9 +12,12 @@ import {
   compareEvalRunToBaseline,
 } from "../../src/eval/internal/baseline";
 import { evaluateBlockingGates } from "../../src/eval/internal/gates";
+import { baselineOutcomeBehavior } from "./baseline-outcome.behavior";
 import { runFixture } from "./baseline-test-harness";
 
 describe("Eval Baseline V3", () => {
+  baselineOutcomeBehavior();
+
   it("promotes Current without raw evidence and compares a changed task", () => {
     const promoted = runFixture({ score: 0.8, taskFingerprint: "model-a" });
     const baseline = buildEvalBaseline(promoted, {
@@ -28,7 +31,7 @@ describe("Eval Baseline V3", () => {
     expect(JSON.stringify(baseline)).not.toContain("private answer");
     expect(baseline).toMatchObject({
       schemaVersion: 3,
-      baselineFingerprintEpoch: 4,
+      baselineFingerprintEpoch: 5,
       evalId: "support",
       runId: "run-1",
       selectedArm: "current",
@@ -36,6 +39,7 @@ describe("Eval Baseline V3", () => {
         {
           caseId: "refund",
           trials: [0],
+          outcomes: [{ trial: 0, status: "passed" }],
           metrics: {
             helpful: {
               contractFingerprint: "helpful-v1",

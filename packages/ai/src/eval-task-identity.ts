@@ -6,6 +6,7 @@ import type {
   EvalTaskIdentityProjection,
   EvalTaskIdentityProjectionRequest,
 } from "@use-crux/core/eval/internal/task";
+import { resolveTaskTimeoutOverrideForInternalUse } from "@use-crux/core/eval/internal/task";
 import {
   isRecord,
   projectJson,
@@ -147,15 +148,28 @@ export function resolveAiTaskInvocation(
   call: Readonly<object> | undefined,
   overrides: Readonly<object>,
 ): { readonly prompt: AnyPrompt; readonly options: Record<string, unknown> } {
-  const merged = {
-    ...defaults,
-    ...(call ?? {}),
-    ...overrides,
-  } as Record<string, unknown>;
+  const merged = mergeTaskOptions(mergeTaskOptions(defaults, call), overrides);
   const effectivePrompt = isPrompt(merged.prompt) ? merged.prompt : prompt;
   delete merged.prompt;
   delete merged.task;
   return Object.freeze({ prompt: effectivePrompt, options: merged });
+}
+
+function mergeTaskOptions(
+  base: Readonly<object>,
+  override: Readonly<object> | undefined,
+): Record<string, unknown> {
+  if (override === undefined) return { ...base };
+  const merged = { ...base, ...override } as Record<string, unknown>;
+  if (Object.hasOwn(override, "timeout")) {
+    const baseTimeout = (base as Record<string, unknown>).timeout;
+    const overrideTimeout = (override as Record<string, unknown>).timeout;
+    merged.timeout = resolveTaskTimeoutOverrideForInternalUse(
+      baseTimeout,
+      overrideTimeout,
+    );
+  }
+  return merged;
 }
 
 function projectOptions(options: Record<string, unknown>): JsonProjection {

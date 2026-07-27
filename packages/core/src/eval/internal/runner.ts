@@ -36,6 +36,10 @@ export {
   fingerprintEvalPersistencePolicy,
   normalizeEvalPersistencePolicy,
 } from "./redact";
+export {
+  projectResolvedEvalTimeoutPolicy,
+  resolveEvalTimeoutPolicy,
+} from "../timeout-policy";
 export type { EvalPersistencePolicy } from "./redact";
 export type {
   EvalExecutionPorts,

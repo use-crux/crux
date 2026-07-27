@@ -18,6 +18,7 @@ import {
 import { createEvalInvocationBudget } from "../lib/eval-coordinator/invocation-budget";
 import { costAdmissionMessage } from "../lib/eval-coordinator/cost-message";
 import { projectEvalRunForCli } from "../lib/eval-coordinator/cli-run-projection";
+import { projectEvalCatalogTimeouts } from "../lib/eval-coordinator/catalog-timeout";
 
 console.log = (...args: unknown[]) => console.error(...args);
 
@@ -157,17 +158,14 @@ async function mainInUserImportSession(): Promise<number> {
             ].sort()
           : [];
       }
+      const catalogTimeouts = projectEvalCatalogTimeouts(core, definition, entry.cases);
       manifests.push({
         id: entry.id,
         definitionFingerprint: entry.definitionFingerprint,
         sourceKey: entry.sourceKey,
         sidecarFile: entry.sidecarFile,
         links: entry.links,
-        cases: entry.cases.map((item) => ({
-          id: item.id,
-          origin: item.origin,
-          ...(item.unvalidatedExpected ? { unvalidatedExpected: true } : {}),
-        })),
+        ...catalogTimeouts,
         variants: definition.arms.map((arm) => arm.name),
         description: definition.description,
         tags: definition.tags,

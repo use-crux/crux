@@ -22,7 +22,13 @@ type baselineCoverageContract struct {
 	CallFingerprint     *string                            `json:"callFingerprint"`
 	ExpectedFingerprint *string                            `json:"expectedFingerprint"`
 	Trials              *[]int                             `json:"trials"`
+	Outcomes            *[]baselineOutcomeContract         `json:"outcomes"`
 	Metrics             *map[string]baselineMetricContract `json:"metrics"`
+}
+
+type baselineOutcomeContract struct {
+	Trial  *int    `json:"trial"`
+	Status *string `json:"status"`
 }
 
 type baselineMetricContract struct {
@@ -74,9 +80,22 @@ func validateBaselineV3(raw []byte) error {
 		if coverage.CaseID == nil || coverage.InputFingerprint == nil || coverage.CallFingerprint == nil || coverage.ExpectedFingerprint == nil || coverage.Trials == nil || coverage.Metrics == nil {
 			return contractError(path, "is malformed")
 		}
+		if coverage.Outcomes == nil {
+			return contractError(path+".outcomes", "is required")
+		}
 		for _, trial := range *coverage.Trials {
 			if trial < 0 {
 				return contractError(path, "trials must be nonnegative")
+			}
+		}
+		if len(*coverage.Outcomes) != len(*coverage.Trials) {
+			return contractError(path+".outcomes", "must align exactly with trials")
+		}
+		for outcomeIndex, outcome := range *coverage.Outcomes {
+			outcomePath := fmt.Sprintf("%s.outcomes[%d]", path, outcomeIndex)
+			if outcome.Trial == nil || *outcome.Trial != (*coverage.Trials)[outcomeIndex] ||
+				outcome.Status == nil || !oneOf(*outcome.Status, "passed", "failed", "timed_out") {
+				return contractError(outcomePath, "is malformed")
 			}
 		}
 		for name, metric := range *coverage.Metrics {
@@ -84,9 +103,15 @@ func validateBaselineV3(raw []byte) error {
 			if metric.ContractFingerprint == nil || metric.Aggregation == nil || *metric.Aggregation != "arithmetic_mean_non_null_v1" || metric.Values == nil {
 				return contractError(metricPath, "is malformed")
 			}
+			if len(*metric.Values) != len(*coverage.Trials) {
+				return contractError(metricPath+".values", "must align exactly with trials")
+			}
 			for valueIndex, sample := range *metric.Values {
-				if sample.Trial == nil || *sample.Trial < 0 || !rawNullableFiniteNumber(sample.Value) {
+				if sample.Trial == nil || *sample.Trial != (*coverage.Trials)[valueIndex] || !rawNullableFiniteNumber(sample.Value) {
 					return contractError(fmt.Sprintf("%s.values[%d]", metricPath, valueIndex), "is malformed")
+				}
+				if *(*coverage.Outcomes)[valueIndex].Status == "timed_out" && string(sample.Value) != "null" {
+					return contractError(fmt.Sprintf("%s.values[%d].value", metricPath, valueIndex), "must be null for a timed-out trial")
 				}
 			}
 		}

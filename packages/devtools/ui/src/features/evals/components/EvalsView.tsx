@@ -13,6 +13,7 @@ import {
   hostReadinessPresentation,
 } from "../lib/catalog-status";
 import { EvalRunAction } from "./EvalRunAction";
+import { EvalCatalogTimeoutPolicies } from "./EvalTimeoutPolicy";
 
 export function EvalsView({ evalId }: { evalId?: string }) {
   const { navigate } = useNavigation();
@@ -176,25 +177,7 @@ export function EvalsView({ evalId }: { evalId?: string }) {
                 }
               />
               <RuntimeReadiness entry={selected} />
-              <h3
-                className="mt-5 text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--devtools-fg-muted)" }}
-              >
-                Cases
-              </h3>
-              <div className="mt-2 space-y-1.5">
-                {selected.cases.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 font-mono text-[12px]"
-                  >
-                    <span>{item.id}</span>
-                    {item.unvalidatedExpected && (
-                      <Chip tone="warn">expected unvalidated</Chip>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <EvalCatalogTimeoutPolicies entry={selected} />
             </>
           ) : (
             <p
