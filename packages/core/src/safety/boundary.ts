@@ -1,6 +1,8 @@
 import type { MediaPartSubject, MediaSafetyTargetId } from './media/types'
 import type { InputSource } from './input-origin'
 import { inputBoundary } from './input-boundary'
+import { inputTools } from './input-tool-boundary'
+import type { ToolDefinitionSource } from './input-tool-boundary'
 import { outputObject, outputText } from './output/output-boundaries'
 
 export type {
@@ -31,6 +33,7 @@ export { isMediaSafetyTargetId } from './media/types'
 export type SafetyTargetId =
   | MediaSafetyTargetId
   | 'model.input.text'
+  | 'model.input.tools'
   | 'model.instructions'
   | 'model.output.text'
   | 'model.output.object'
@@ -58,7 +61,13 @@ export interface BoundaryDef<TId extends SafetyTargetId = SafetyTargetId, TSubje
   /** @internal Compile-time model-ingress origin carrier. */
   readonly __origin?: TOrigin
   /** Frozen, de-duplicated semantic source filter when explicitly supplied. */
-  readonly from?: readonly InputSource[]
+  readonly from?: readonly (InputSource | ToolDefinitionSource)[]
+  /**
+   * Optional serializable refinement of a canonical boundary target.
+   *
+   * @default Omitted, selecting the root target.
+   */
+  readonly selector?: 'descriptions'
 }
 
 type Prev = [never, 0, 1, 2, 3, 4]
@@ -162,7 +171,7 @@ function makeBoundary<TId extends SafetyTargetId, TSubject>(id: TId, path?: stri
  * ids structurally without depending on object identity.
  */
 export const boundary = Object.freeze({
-  input: inputBoundary,
+  input: Object.freeze({ ...inputBoundary, tools: inputTools }),
   output: Object.freeze({
     /**
      * Target the model's generated text.
@@ -214,9 +223,55 @@ export const boundary = Object.freeze({
       makeBoundary('model.output'),
   }),
   memory: Object.freeze({
+    /**
+     * Target a managed-memory candidate immediately before durable commit.
+     *
+     * @remarks
+     * Managed adapter capture runs block-local redaction, this global/prompt/call
+     * boundary, block-local validation, `shouldRemember`, then persistence.
+     * Standalone memory capture has no per-call Safety registry and remains
+     * governed by block-local policy only.
+     *
+     * @returns A frozen memory-write boundary preserving the candidate type.
+     *
+     * @example
+     * ```ts
+     * const durableMemory = guardrail({
+     *   id: 'durable-memory',
+     *   on: boundary.memory.write<MyMemory>(),
+     *   run: (candidate) =>
+     *     candidate.safe
+     *       ? { action: 'allow' }
+     *       : { action: 'drop', reason: 'Unsafe memory is not persisted.' },
+     * })
+     * ```
+     */
     write: <T = unknown>(): BoundaryDef<'memory.write', T> => makeBoundary('memory.write'),
   }),
   validation: Object.freeze({
+    /**
+     * Target framework-produced validation feedback before retry writeback.
+     *
+     * @remarks
+     * This compatibility boundary covers validation feedback only. New
+     * feedback, including constraint feedback and rejected output, is governed
+     * through `boundary.input.text({ from: 'feedback' })`.
+     *
+     * @returns A frozen validation-feedback boundary.
+     *
+     * @example
+     * ```ts
+     * const feedbackIngress = guardrail({
+     *   id: 'feedback-ingress',
+     *   on: boundary.input.text({ from: 'feedback' }),
+     *   run: (feedback) => ({ action: 'allow' }),
+     * })
+     * ```
+     *
+     * @deprecated Use `boundary.input.text({ from: 'feedback' })`. This alias
+     * remains operational for validation feedback during the compatibility
+     * window.
+     */
     feedback: (): BoundaryDef<'validation.feedback', string> => makeBoundary('validation.feedback'),
   }),
 })

@@ -7,9 +7,35 @@ import {
   createSafety,
   evaluateConstraint,
   SafetyConfigError,
+  type BoundaryDef,
 } from '../../src/safety'
 
 describe('constraint — input media boundary', () => {
+  it.each([
+    boundary.input.text(),
+    boundary.input.media(),
+    boundary.input.instructions(),
+    boundary.input.tools(),
+    boundary.input.tools().descriptions(),
+    boundary.output.media(),
+    boundary.memory.write(),
+    boundary.validation.feedback(),
+    Object.freeze({ _tag: 'Boundary', id: 'tool.call' }) satisfies BoundaryDef,
+    Object.freeze({ _tag: 'Boundary', id: 'tool.result' }) satisfies BoundaryDef,
+    Object.freeze({ _tag: 'Boundary', id: 'approval.request' }) satisfies BoundaryDef,
+  ])('rejects non-output boundary $id during unsafe-cast authoring', (on) => {
+    const run = vi.fn(() => ({ pass: true as const }))
+
+    expect(() =>
+      constraint({
+        id: `invalid-${on.id}`,
+        on,
+        run,
+      } as never),
+    ).toThrow(SafetyConfigError)
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('rejects unsafe-cast factory authoring before the callback can run', () => {
     const run = vi.fn(() => ({ pass: true as const }))
 

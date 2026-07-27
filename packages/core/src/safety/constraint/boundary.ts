@@ -1,18 +1,28 @@
-import type { BoundaryDef, MediaSafetyTargetId, SafetyTargetId } from '../boundary'
-import { isMediaSafetyTargetId } from '../boundary'
+import type { BoundaryDef } from '../boundary'
 import { SafetyConfigError } from '../errors'
 
+type ConstraintTargetId =
+  | 'model.output.text'
+  | 'model.output.object'
+  | 'model.output'
+
 /** A boundary supported by the output-oriented constraint lifecycle. */
-export type ConstraintBoundary = BoundaryDef<Exclude<SafetyTargetId, MediaSafetyTargetId>, unknown>
+export type ConstraintBoundary = BoundaryDef<ConstraintTargetId, unknown>
 
 /** Reject boundaries that have no constraint execution lifecycle. */
 export function assertConstraintBoundary(value: { readonly id: string; readonly on: BoundaryDef }): void {
-  if (!isMediaSafetyTargetId(value.on.id)) return
+  if (
+    value.on.id === 'model.output.text' ||
+    value.on.id === 'model.output.object' ||
+    value.on.id === 'model.output'
+  ) {
+    return
+  }
 
   throw new SafetyConfigError({
     message:
       `Safety constraint "${value.id}" cannot target boundary "${value.on.id}". ` +
-      'Media boundaries are guardrail-only; use guardrail({ on: boundary.input.media() or boundary.output.media(), ... }) instead.',
+      'Constraints can target only model.output.text, model.output.object, or model.output; use a guardrail for protective input, media, tool, or memory policies.',
     boundaries: [value.on.id],
     kinds: ['constraint'],
   })

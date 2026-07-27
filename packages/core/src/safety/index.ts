@@ -51,6 +51,12 @@ export type {
   TextInputSource,
 } from './input-origin'
 export type {
+  ToolDefinitionOrigin,
+  ToolDefinitionSource,
+  ToolDefinitionSubject,
+  ToolDescriptionOrigin,
+} from './input-tool-boundary'
+export type {
   SafetyCaptureSummary,
   SafetyDecision,
   SafetyDecisionAction,
@@ -103,6 +109,10 @@ export type {
   GuardrailRewriteKind,
   MediaGuardrailRunResult,
 } from './guardrail/types'
+export type {
+  MemoryWriteGuardrailResult,
+  ToolDefinitionGuardrailResult,
+} from './guardrail/specialized-results'
 export type {
   MediaClassifierAction,
   MediaClassifierCategory,

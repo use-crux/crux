@@ -13,6 +13,10 @@ import type {
 import type { SafetyUnitKind } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import type { ModelInputOrigin } from '../input-origin'
+import type {
+  MemoryWriteGuardrailResult,
+  ToolDefinitionGuardrailResult,
+} from './specialized-results'
 
 export type GuardrailMode = 'enforce' | 'report'
 export type GuardrailRewriteKind = 'redact' | 'mask' | 'hash' | 'normalize'
@@ -60,6 +64,70 @@ export type MediaGuardrailRunResult =
 
 type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends [MediaSafetyTargetId] ? true : false
 
+type BoundaryMember<B extends BoundaryInput> = B extends readonly (infer TBoundary)[] ? TBoundary : B
+
+type RootToolDefinitionMember<TBoundary> =
+  TBoundary extends { readonly id: 'model.input.tools' }
+    ? TBoundary extends { readonly selector: 'descriptions' }
+      ? never
+      : TBoundary
+    : never
+
+type ToolDescriptionMember<TBoundary> =
+  TBoundary extends {
+    readonly id: 'model.input.tools'
+    readonly selector: 'descriptions'
+  }
+    ? TBoundary
+    : never
+
+type ContainsRootToolDefinitionBoundary<B extends BoundaryInput> = [
+  RootToolDefinitionMember<BoundaryMember<B>>,
+] extends [never]
+  ? false
+  : true
+
+type ContainsToolDescriptionBoundary<B extends BoundaryInput> = [
+  ToolDescriptionMember<BoundaryMember<B>>,
+] extends [never]
+  ? false
+  : true
+
+type InvalidRootToolDefinitionMember<TBoundary> =
+  TBoundary extends unknown
+    ? RootToolDefinitionMember<TBoundary> extends never
+      ? TBoundary
+      : never
+    : never
+
+type InvalidToolDescriptionMember<TBoundary> =
+  TBoundary extends unknown
+    ? ToolDescriptionMember<TBoundary> extends never
+      ? TBoundary extends {
+          readonly id:
+            | 'model.input.text'
+            | 'model.instructions'
+            | 'model.output.text'
+            | 'validation.feedback'
+        }
+        ? never
+        : TBoundary
+      : never
+    : never
+
+type InvalidMemoryWriteMember<TBoundary> =
+  TBoundary extends { readonly id: 'memory.write' } ? never : TBoundary
+
+type IsRootToolDefinitionBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends ['model.input.tools']
+  ? ContainsToolDescriptionBoundary<B> extends true
+    ? false
+    : true
+  : false
+
+type IsMemoryWriteBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends ['memory.write']
+  ? true
+  : false
+
 type ContainsMediaBoundary<B extends BoundaryInput> = [Extract<BoundaryIdOf<B>, MediaSafetyTargetId>] extends [never]
   ? false
   : true
@@ -71,12 +139,37 @@ type IsMixedMediaBoundary<B extends BoundaryInput> =
       : true
     : false
 
+type ContainsMemoryWriteBoundary<B extends BoundaryInput> = Extract<
+  BoundaryIdOf<B>,
+  'memory.write'
+> extends never
+  ? false
+  : true
+
 type GuardrailBoundaryInput<B extends BoundaryInput> =
   IsMixedMediaBoundary<B> extends true
     ? B & {
         readonly 'A media guardrail can target only media boundaries': never
       }
-    : B
+    : ContainsRootToolDefinitionBoundary<B> extends true
+      ? [InvalidRootToolDefinitionMember<BoundaryMember<B>>] extends [never]
+        ? B
+        : B & {
+            readonly 'A root tool-definition guardrail can target only root tool definitions': never
+          }
+      : ContainsToolDescriptionBoundary<B> extends true
+        ? [InvalidToolDescriptionMember<BoundaryMember<B>>] extends [never]
+          ? B
+          : B & {
+              readonly 'A tool-description guardrail can target only closed string boundaries': never
+            }
+        : ContainsMemoryWriteBoundary<B> extends true
+          ? [InvalidMemoryWriteMember<BoundaryMember<B>>] extends [never]
+            ? B
+            : B & {
+                readonly 'A memory-write guardrail can target only memory-write boundaries': never
+              }
+          : B
 
 /**
  * Whether the boundary's selected unit permits `hold`. Growing text units (text
@@ -94,9 +187,15 @@ type HoldPermittedFor<B extends BoundaryInput> = B extends readonly unknown[]
 type GuardrailRunResultFor<B extends BoundaryInput> =
   IsMediaBoundary<B> extends true
     ? MediaGuardrailRunResult
-    : HoldPermittedFor<B> extends true
-      ? GuardrailRunResult<SubjectOf<B>>
-      : Exclude<GuardrailRunResult<SubjectOf<B>>, { readonly action: 'hold' }>
+    : IsRootToolDefinitionBoundary<B> extends true
+      ? ToolDefinitionGuardrailResult
+      : ContainsToolDescriptionBoundary<B> extends true
+        ? ClosedGuardrailRunResult<SubjectOf<B>>
+        : IsMemoryWriteBoundary<B> extends true
+          ? MemoryWriteGuardrailResult<SubjectOf<B>>
+          : HoldPermittedFor<B> extends true
+            ? GuardrailRunResult<SubjectOf<B>>
+            : Exclude<GuardrailRunResult<SubjectOf<B>>, { readonly action: 'hold' }>
 
 /**
  * First-party strategy metadata carried on a guardrail body. `defaultUnit` is the

@@ -32,4 +32,8 @@ export function inputOriginAttributes(
         ...(origin.segmentIndex === undefined ? {} : { segmentIndex: origin.segmentIndex }),
       }
   }
+
+  // New provenance families receive a privacy-safe generic projection until
+  // their richer fixed-label observability contract lands with phase 9.
+  return common
 }

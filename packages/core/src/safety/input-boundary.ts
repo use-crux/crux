@@ -4,21 +4,30 @@ import type {
   InputSource,
   InputSourcesFromOptions,
   MediaInputSource,
+  ModelInputOrigin,
   ModelInputOriginFor,
   NonEmptyInputBoundaryOptions,
   TextInputSource,
 } from "./input-origin";
 import type { MediaPartSubject } from "./media/types";
 
-const TEXT_SOURCES = ["user", "tool", "retrieval"] as const;
+const TEXT_SOURCES = [
+  "user",
+  "tool",
+  "retrieval",
+  "memory",
+  "handoff",
+  "feedback",
+] as const;
 const MEDIA_SOURCES = ["user", "tool"] as const;
 
 /**
  * Target untrusted text immediately before it enters a governed model.
  *
- * With no options, the boundary matches user, tool, and rendered retrieval
- * text. Use {@link toolPolicy} instead when policy logic needs the raw tool
- * result before canonical model-output conversion.
+ * With no options, the boundary matches user, tool, rendered retrieval,
+ * memory, handoff, and framework-feedback text. Use {@link toolPolicy} instead
+ * when policy logic needs the raw tool result before canonical model-output
+ * conversion.
  *
  * @param options Optional semantic source filter.
  * @returns A frozen text boundary with callback origin narrowed to `from`.
@@ -88,9 +97,11 @@ function media<
 /**
  * Target trusted developer and system instructions sent to a governed model.
  *
+ * @remarks
  * This boundary has no source filter. A system message is not trusted merely
- * because of its role: rendered retrieval text remains on {@link text} with
- * source `retrieval`. Raw tool values belong in {@link toolPolicy}.
+ * because of its role: rendered retrieval, memory, blackboard, and handoff text
+ * remain on {@link text} with their untrusted sources. Raw tool values belong
+ * in {@link toolPolicy}.
  *
  * @returns A frozen trusted-instructions boundary.
  *
@@ -99,7 +110,11 @@ function media<
  * const trustedInstructions = boundary.input.instructions()
  * ```
  */
-function instructions(): BoundaryDef<"model.instructions", string> {
+function instructions(): BoundaryDef<
+  "model.instructions",
+  string,
+  Extract<ModelInputOrigin, { readonly source: "instructions" }>
+> {
   return createInputBoundary("model.instructions");
 }
 
