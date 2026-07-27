@@ -9,6 +9,7 @@ use super::analyze;
 mod barrier_cases;
 mod folding_cases;
 mod heading_label_cases;
+mod link_cases;
 mod structure_cases;
 mod support;
 mod surrogate_cases;

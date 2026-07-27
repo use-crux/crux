@@ -191,6 +191,8 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return s.documentSymbol(ctx, request.ID, request.Params)
 	case protocol.MethodFoldingRange:
 		return s.promptTextFolding(ctx, request.ID, request.Params)
+	case protocol.MethodDocumentLink:
+		return s.promptTextLinks(ctx, request.ID, request.Params)
 	case protocol.MethodInlayHint:
 		return s.inlayHint(request.Params)
 	case protocol.MethodCodeLens:
@@ -242,6 +244,7 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodReferences ||
 		request.Method == protocol.MethodDocumentSymbol ||
 		request.Method == protocol.MethodFoldingRange ||
+		request.Method == protocol.MethodDocumentLink ||
 		request.Method == protocol.MethodInlayHint ||
 		request.Method == protocol.MethodCodeLens ||
 		request.Method == protocol.MethodCompletion ||

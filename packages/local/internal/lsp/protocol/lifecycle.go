@@ -41,6 +41,7 @@ type ServerCapabilities struct {
 	ReferencesProvider      bool                    `json:"referencesProvider"`
 	DocumentSymbolProvider  bool                    `json:"documentSymbolProvider"`
 	FoldingRangeProvider    bool                    `json:"foldingRangeProvider"`
+	DocumentLinkProvider    DocumentLinkOptions     `json:"documentLinkProvider"`
 	CodeActionProvider      CodeActionOptions       `json:"codeActionProvider"`
 	ExecuteCommandProvider  ExecuteCommandOptions   `json:"executeCommandProvider"`
 	WorkspaceSymbolProvider bool                    `json:"workspaceSymbolProvider"`

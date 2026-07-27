@@ -13,7 +13,7 @@ import (
 	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func TestControllerSharedAnalysisAcrossDecorationsFoldingAndSymbols(t *testing.T) {
+func TestControllerSharedAnalysisAcrossDecorationsFoldingSymbolsAndLinks(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -42,9 +42,10 @@ func TestControllerSharedAnalysisAcrossDecorationsFoldingAndSymbols(t *testing.T
 		decorations Result
 		folding     FoldingResult
 		symbols     SymbolResult
+		links       LinkResult
 		wait        sync.WaitGroup
 	)
-	wait.Add(3)
+	wait.Add(4)
 	go func() {
 		defer wait.Done()
 		decorations = controller.Decorations(context.Background(), request)
@@ -57,6 +58,10 @@ func TestControllerSharedAnalysisAcrossDecorationsFoldingAndSymbols(t *testing.T
 		defer wait.Done()
 		symbols = controller.Symbols(context.Background(), request)
 	}()
+	go func() {
+		defer wait.Done()
+		links = controller.Links(context.Background(), request)
+	}()
 	<-analyzer.started
 	close(analyzer.release)
 	wait.Wait()
@@ -64,8 +69,8 @@ func TestControllerSharedAnalysisAcrossDecorationsFoldingAndSymbols(t *testing.T
 	if analyzer.callCount() != 1 {
 		t.Fatalf("analysis calls = %d, want one shared call", analyzer.callCount())
 	}
-	if len(decorations.Decorations) != 1 {
-		t.Fatalf("decorations = %#v, want one canonical heading", decorations)
+	if len(decorations.Decorations) != 2 {
+		t.Fatalf("decorations = %#v, want one heading and one link", decorations)
 	}
 	want := []protocol.FoldingRange{
 		{StartLine: 0, EndLine: 3},
@@ -82,6 +87,10 @@ func TestControllerSharedAnalysisAcrossDecorationsFoldingAndSymbols(t *testing.T
 	if symbols.Revision != revision || len(symbols.Symbols) != 1 ||
 		symbols.Symbols[0].Name != "Title" {
 		t.Fatalf("symbols = %#v, want exact revision and canonical heading", symbols)
+	}
+	if links.Revision != revision || len(links.Links) != 1 ||
+		links.Links[0].Target != "https://example.com" {
+		t.Fatalf("links = %#v, want exact revision and one eager target", links)
 	}
 }
 
@@ -137,6 +146,12 @@ func sharedFoldingAnalysis(
 					Range: rangeAt(5, 0, 7, 0),
 				},
 			},
+			Links: []staticprotocol.PromptTextLink{{
+				Kind: staticprotocol.PromptTextLinkInline, Island: 0,
+				Range: headingText, TextRange: headingText,
+				DestinationRange: &headingText,
+				Destination:      "https://example.com",
+			}},
 		}},
 	}
 }

@@ -14,6 +14,7 @@ const (
 	MethodReferences             = "textDocument/references"
 	MethodDocumentSymbol         = "textDocument/documentSymbol"
 	MethodFoldingRange           = "textDocument/foldingRange"
+	MethodDocumentLink           = "textDocument/documentLink"
 	MethodInlayHint              = "textDocument/inlayHint"
 	MethodCodeLens               = "textDocument/codeLens"
 	MethodCompletion             = "textDocument/completion"

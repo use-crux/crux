@@ -188,8 +188,20 @@ fn closing_label(raw: &str, start: usize, code_spans: &[Range<usize>]) -> Option
 
 fn destination(raw: &str, start: usize) -> Option<Range<usize>> {
     if raw.as_bytes().get(start) == Some(&b'<') {
-        let end = raw.get(start + 1..)?.find('>')? + start + 1;
-        return Some(start + 1..end);
+        let bytes = raw.as_bytes();
+        let mut cursor = start + 1;
+        while cursor < bytes.len() {
+            if bytes[cursor] == b'\\' && bytes.get(cursor + 1).is_some_and(u8::is_ascii_punctuation)
+            {
+                cursor += 2;
+                continue;
+            }
+            if bytes[cursor] == b'>' {
+                return Some(start + 1..cursor);
+            }
+            cursor += 1;
+        }
+        return None;
     }
     let mut depth = 0;
     let mut escaped = false;

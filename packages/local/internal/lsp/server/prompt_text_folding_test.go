@@ -83,6 +83,12 @@ func TestPromptTextSharedAnalysisRequestsDoNotCancelSameRevision(t *testing.T) {
 				Name: "Title", Kind: protocol.SymbolKindString,
 			}},
 		},
+		links: lsprompttext.LinkResult{
+			Revision: document.Revision,
+			Links: []protocol.DocumentLink{{
+				Target: "https://example.com",
+			}},
+		},
 	}
 	decorationParams, err := json.Marshal(protocol.PromptTextDecorationParams{
 		ProtocolVersion: protocol.PromptTextProtocolVersion,
@@ -106,13 +112,19 @@ func TestPromptTextSharedAnalysisRequestsDoNotCancelSameRevision(t *testing.T) {
 		ID: []byte("12"), Method: protocol.MethodDocumentSymbol,
 		Params: []byte(`{"textDocument":{"uri":"file:///repo/src/writer.ts"}}`),
 	})
-	if decoration.Deferred == nil || folding.Deferred == nil || symbols.Deferred == nil {
+	links := server.Handle(context.Background(), protocol.Request{
+		ID: []byte("13"), Method: protocol.MethodDocumentLink,
+		Params: []byte(`{"textDocument":{"uri":"file:///repo/src/writer.ts"}}`),
+	})
+	if decoration.Deferred == nil || folding.Deferred == nil ||
+		symbols.Deferred == nil || links.Deferred == nil {
 		t.Fatal("overlapping PromptText requests were not all deferred")
 	}
 
 	decoration = decoration.Deferred()
 	folding = folding.Deferred()
 	symbols = symbols.Deferred()
+	links = links.Deferred()
 	decorated, decorationOK := decoration.Result.(protocol.PromptTextDecorationResult)
 	folded, foldingOK := folding.Result.([]protocol.FoldingRange)
 	if !decorationOK || len(decorated.Decorations) != 1 {
@@ -124,6 +136,10 @@ func TestPromptTextSharedAnalysisRequestsDoNotCancelSameRevision(t *testing.T) {
 	symbolsResult, symbolsOK := symbols.Result.([]protocol.DocumentSymbol)
 	if !symbolsOK || len(symbolsResult) != 1 {
 		t.Fatalf("symbol result = %#v, want one non-cancelled symbol", symbols.Result)
+	}
+	linksResult, linksOK := links.Result.([]protocol.DocumentLink)
+	if !linksOK || len(linksResult) != 1 {
+		t.Fatalf("link result = %#v, want one non-cancelled link", links.Result)
 	}
 }
 
@@ -173,6 +189,7 @@ type promptTextFoldingHandlerWorkspace struct {
 	result      lsprompttext.FoldingResult
 	decorations lsprompttext.Result
 	symbols     lsprompttext.SymbolResult
+	links       lsprompttext.LinkResult
 }
 
 func (*promptTextFoldingHandlerWorkspace) Close() {}
@@ -201,6 +218,14 @@ func (w *promptTextFoldingHandlerWorkspace) PromptTextSymbols(
 	string,
 ) lsprompttext.SymbolResult {
 	return w.symbols
+}
+
+func (w *promptTextFoldingHandlerWorkspace) PromptTextLinks(
+	context.Context,
+	protocol.DocumentURI,
+	string,
+) lsprompttext.LinkResult {
+	return w.links
 }
 
 type blockingPromptTextFoldingWorkspace struct {

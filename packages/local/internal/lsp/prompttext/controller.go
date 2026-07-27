@@ -74,6 +74,30 @@ func (c *Controller) Symbols(ctx context.Context, request Request) SymbolResult 
 	return SymbolResult{Revision: document.Revision, Symbols: symbols}
 }
 
+// Links returns eager parser-confirmed Markdown targets only when current
+// canonical semantic identity and exact transient structure agree.
+func (c *Controller) Links(ctx context.Context, request Request) LinkResult {
+	document, analysis, identities, ok := c.currentSemanticAnalysis(ctx, request)
+	if !ok {
+		return emptyLinkResult(document.Revision)
+	}
+	if analysis.Status.Kind != staticprotocol.PromptTextStatusComplete &&
+		analysis.Status.Kind != staticprotocol.PromptTextStatusTruncated {
+		return emptyLinkResult(document.Revision)
+	}
+	links := make([]protocol.DocumentLink, 0)
+	for _, template := range analysis.Templates {
+		if _, canonical := identities[editorRange(template.Range)]; !canonical {
+			continue
+		}
+		links = append(
+			links,
+			templateDocumentLinks(template, request.File, request.Root)...,
+		)
+	}
+	return LinkResult{Revision: document.Revision, Links: links}
+}
+
 // Folding returns parser-proven multiline structure for the current buffer.
 // Unlike identity-sensitive features, it may consume explicitly labelled
 // lexical candidates; exact revision checks still fail closed.
