@@ -82,8 +82,8 @@ export async function runCoordinatedStream(
   const billable: Array<ExecutorStreamCompletionPayload | undefined> = [];
 
   const drive = async (): Promise<void> => {
-    let attempt: SdkStreamAttempt | undefined = await request.streamPlan.beginAttempt();
-    let rejectedText = "";
+    let attempt: SdkStreamAttempt | undefined =
+      await request.streamPlan.beginAttempt();
     while (attempt) {
       const current: SdkStreamAttempt = attempt;
       // Whether THIS attempt's billing has been recorded, so the accept and
@@ -105,20 +105,22 @@ export async function runCoordinatedStream(
         // Core owns the shared budget; this attempt may consume at most its grant, so
         // the SDK's own multi-step loop is capped rather than free to run `maxSteps`
         // model steps inside one invocation.
-        maxSteps: Math.min(request.maxSteps ?? current.remainingSteps, current.remainingSteps),
+        maxSteps: Math.min(
+          request.maxSteps ?? current.remainingSteps,
+          current.remainingSteps,
+        ),
         safety: current.safety,
         // COMPOSED, not replaced: `request.abortSignal` carries the caller signal AND the
         // step-timeout budget. Overwriting it with the attempt signal silently stopped
         // `timeout.stepMs` from applying to coordinated streams, while the native route
         // still enforced it.
         abortSignal: anySignal(request.abortSignal, current.signal),
-        messages: withCorrective(request.messages, rejectedText, current),
+        messages: withCorrective(request.messages, current),
       } as ExecutorRequest<LanguageModel> & {
         readonly schema?: z.ZodType;
         readonly outputSchema?: JsonSchemaObject;
       };
       const held: unknown[] = [];
-      let attemptText = "";
       // Model steps observed on THIS invocation, counted from the SDK's own step
       // markers. Visible to the catch block, unlike a `try`-scoped binding.
       let observedSteps = 0;
@@ -132,15 +134,18 @@ export async function runCoordinatedStream(
         // settle this attempt's span and release its abort listener rather than leaving
         // the span open forever.
         const call = await createPlan(attemptRequest, deps);
-        const raw = (
-          call.method === "streamText"
-            ? gateway.streamText(call.args as Parameters<SdkGateway["streamText"]>[0])
-            : gateway.streamObject(call.args as Parameters<SdkGateway["streamObject"]>[0])
-        ) as unknown as SdkStreamResultLike;
+        const raw = (call.method === "streamText"
+          ? gateway.streamText(
+              call.args as Parameters<SdkGateway["streamText"]>[0],
+            )
+          : gateway.streamObject(
+              call.args as Parameters<SdkGateway["streamObject"]>[0],
+            )) as unknown as SdkStreamResultLike;
         const handle = call.attach(raw);
         attemptHandle = handle;
         for await (const part of fullStreamOf(raw)) {
-          if ((part as { type?: string }).type === "start-step") observedSteps += 1;
+          if ((part as { type?: string }).type === "start-step")
+            observedSteps += 1;
           // Billing framing, when the SDK gets far enough to emit it. A REJECTED
           // attempt never does: the Safety transform raises from its flush, and
           // the SDK synthesizes `finish-step`/`finish` downstream of the
@@ -155,7 +160,6 @@ export async function runCoordinatedStream(
             observedBilling = addStepBilling(observedBilling, usage, cost);
           }
           const text = textOf(part);
-          if (text) attemptText += text;
           // Core's safety transform gates TEXT only: a text part it emits is already
           // committed. Content-bearing non-text parts (reasoning, tool events, sources)
           // pass through ungated, so they stay behind the commit gate or a discarded
@@ -210,7 +214,6 @@ export async function runCoordinatedStream(
           );
           throw error;
         }
-        rejectedText = attemptText;
         // Report before rejecting so core decides retry-safety from REAL consumption.
         // `observedSteps` is counted in this scope; reading the SDK result's `steps` here
         // would resolve to the composite declared below and report one step per
@@ -260,15 +263,19 @@ export async function runCoordinatedStream(
 /** Append the rejected answer and core's corrective turn for a retry attempt. */
 function withCorrective(
   messages: ExecutorRequest<LanguageModel>["messages"],
-  rejectedText: string,
   attempt: SdkStreamAttempt,
 ): ExecutorRequest<LanguageModel>["messages"] {
-  if (attempt.corrective.length === 0) return messages;
-  const base = [...(messages ?? [])];
-  if (rejectedText.length > 0) {
-    base.push({ role: "assistant", content: rejectedText } as never);
+  if (attempt.corrective.length === 0 && attempt.rejectedOutput === undefined) {
+    return messages;
   }
-  return [...base, ...attempt.corrective] as ExecutorRequest<LanguageModel>["messages"];
+  const base = [...(messages ?? [])];
+  if (attempt.rejectedOutput !== undefined) {
+    base.push({ role: "assistant", content: attempt.rejectedOutput } as never);
+  }
+  return [
+    ...base,
+    ...attempt.corrective,
+  ] as ExecutorRequest<LanguageModel>["messages"];
 }
 
 /**
@@ -287,7 +294,10 @@ function withCorrective(
  * A multi-step invocation is reported as non-resumable: this route replays only the
  * rejected assistant text, so completed tool rounds cannot be safely continued.
  */
-function reportConsumption(observedSteps: number, attempt: SdkStreamAttempt): void {
+function reportConsumption(
+  observedSteps: number,
+  attempt: SdkStreamAttempt,
+): void {
   if (!Number.isSafeInteger(observedSteps) || observedSteps < 1) return;
   attempt.reportSteps({ steps: observedSteps, resumable: observedSteps <= 1 });
 }
@@ -307,8 +317,6 @@ function textOf(part: unknown): string | undefined {
     : undefined;
 }
 
-
-
 /** Framing parts that carry no model output and are safe to forward pre-commitment. */
 const STRUCTURAL_PARTS: ReadonlySet<string> = new Set([
   "start",
@@ -325,11 +333,16 @@ function isStructuralPart(part: unknown): boolean {
 }
 
 /** Compose abort signals without assuming a runtime `AbortSignal.any`. */
-function anySignal(...signals: ReadonlyArray<AbortSignal | undefined>): AbortSignal | undefined {
-  const live = signals.filter((signal): signal is AbortSignal => signal !== undefined);
+function anySignal(
+  ...signals: ReadonlyArray<AbortSignal | undefined>
+): AbortSignal | undefined {
+  const live = signals.filter(
+    (signal): signal is AbortSignal => signal !== undefined,
+  );
   if (live.length === 0) return undefined;
   if (live.length === 1) return live[0];
-  const anyOf = (AbortSignal as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  const anyOf = (AbortSignal as { any?: (s: AbortSignal[]) => AbortSignal })
+    .any;
   if (typeof anyOf === "function") return anyOf(live);
   const controller = new AbortController();
   for (const signal of live) {

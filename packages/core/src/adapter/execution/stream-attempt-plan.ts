@@ -21,7 +21,11 @@ import type { SafetyStream } from "../../safety/session";
 import type { StreamAttemptCause } from "./stream-attempt";
 
 /** How one SDK attempt ended, reported back so core can close its attempt span. */
-export type SdkAttemptOutcome = "accepted" | "discarded" | "failed" | "cancelled";
+export type SdkAttemptOutcome =
+  | "accepted"
+  | "discarded"
+  | "failed"
+  | "cancelled";
 
 /** One attempt's coordination handle, obtained from {@link CoordinatedStreamPlan.beginAttempt}. */
 export interface SdkStreamAttempt {
@@ -31,6 +35,13 @@ export interface SdkStreamAttempt {
   readonly cause: StreamAttemptCause;
   /** Corrective messages to append before re-invoking the SDK (empty on the initial attempt). */
   readonly corrective: readonly Message[];
+  /**
+   * Plan-owned guarded rejected output for the retry transcript.
+   *
+   * The runtime must use this value instead of locally captured raw attempt
+   * text. `undefined` on the initial attempt or when no rejected turn is replayed.
+   */
+  readonly rejectedOutput: string | undefined;
   /**
    * A FRESH Safety stream for this attempt: the runtime feeds provider text deltas to
    * it and forwards only released content. It raises the internal non-terminal
@@ -71,7 +82,10 @@ export interface SdkStreamAttempt {
    * `resumable: false` after tool rounds, core fails closed and surfaces the original
    * typed terminal error rather than making another provider call.
    */
-  reportSteps(consumed: { readonly steps: number; readonly resumable: boolean }): void;
+  reportSteps(consumed: {
+    readonly steps: number;
+    readonly resumable: boolean;
+  }): void;
   /**
    * Run core's authoritative validation of this attempt's completed candidate.
    *
@@ -123,5 +137,7 @@ export interface CoordinatedStreamPlan {
    * Completion publishes this `data` rather than parsing again, so a transform or
    * refinement runs exactly once per candidate on this route too.
    */
-  committedCandidate(): { readonly value: unknown; readonly data: unknown } | undefined;
+  committedCandidate():
+    | { readonly value: unknown; readonly data: unknown }
+    | undefined;
 }

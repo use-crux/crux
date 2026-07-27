@@ -127,6 +127,18 @@ export function staticSyntaxValueFromExpression(
     );
   }
   if (
+    ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression)
+  ) {
+    return staticSyntaxValueFromExpression(
+      sourceFile,
+      expression.expression,
+      importsByLocalName,
+    );
+  }
+  if (
     ts.isArrowFunction(expression) ||
     ts.isFunctionExpression(expression) ||
     ts.isClassExpression(expression)

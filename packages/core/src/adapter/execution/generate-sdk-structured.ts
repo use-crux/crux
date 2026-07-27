@@ -28,15 +28,10 @@ import {
   composeAbortSignals,
   createBudgetSignal,
 } from "../../generation/timeout";
-import {
-  type Safety,
-} from "../../safety/session";
+import { type Safety, safetySessionFeedbackGuard } from "../../safety/session";
+import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
 import type { ExecutorRequest, StructuredRequest } from "../executor-types";
-import {
-  compileStructuredOutputForRequest,
-  CruxUnsupportedStructuredOutputError,
-} from "../structured-output";
-import { withDefaultResolverPorts } from "../../resolver/ports";
+import { type StructuredOutputPlan } from "../structured-output";
 import type { ResultStepFacts } from "../result-accumulator";
 import type { AdapterResponse } from "../types";
 import type {
@@ -48,6 +43,7 @@ import { appendCorrectiveMessages } from "./messages";
 import { buildTraceMeta } from "./metadata";
 import { createStructuredCompletion } from "./structured-completion";
 import { finalizeSdkResultEnvelope } from "./sdk-result-envelope";
+import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
 
 /** Inputs shared by the SDK-loop structured retry helper. */
 interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
@@ -59,6 +55,8 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   readonly request: ExecutorRequest<TModel>;
   /** Zod schema that the structured output must satisfy. */
   readonly schema: z.ZodType;
+  /** Provider-specific plan compiled before middleware/cache lookup. */
+  readonly plan: StructuredOutputPlan;
   /** Safety session created by the parent SDK-loop execution. */
   readonly safety: Safety;
   /** Stable retry id used for validation instrumentation hooks. */
@@ -85,26 +83,8 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
 export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
 ): Promise<AdapterExecutionGenerateResultWithoutRunId<TRawResponse>> {
-  const { dialect, args, request, schema, safety, promptId, stepFacts } = ctx;
-
-  // Core owns compilation. Resolve the model's inert capabilities and compile
-  // one plan before any provider I/O. An unknown/unsupported model fails here
-  // rather than sending the authored schema over the wire.
-  const capabilities = dialect.structuredOutput?.capabilities(
-    request.modelInfo,
-  );
-  if (!capabilities) {
-    throw new CruxUnsupportedStructuredOutputError(
-      dialect.id,
-      `the selected model "${
-        request.modelInfo.provider || request.modelInfo.modelId || "unknown"
-      }" has no verified structured-output capability profile`,
-    );
-  }
-  const plan = compileStructuredOutputForRequest(schema, capabilities, {
-    diagnostics: request.diagnostics ?? withDefaultResolverPorts().diagnostics,
-    promptId,
-  });
+  const { dialect, args, request, schema, plan, safety, promptId, stepFacts } =
+    ctx;
 
   const validationRetry = args.validationRetry;
   let steps = 0;
@@ -173,12 +153,18 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     // Re-call the provider with corrective messages, shared by validation retry
     // and constraint regeneration. Owns SDK step-fact accounting and returns the
     // new candidate text; the pipeline decodes and re-validates it.
-    reprompt: async (corrective: readonly Message[]): Promise<string> => {
+    reprompt: async (corrective, writeback): Promise<string> => {
+      const guardedWriteback = await guardCorrectiveWriteback({
+        ...writeback,
+        rejectedOutput: writeback.rejectedOutput || "Invalid output",
+        corrective,
+        guard: safetySessionFeedbackGuard(safety),
+      });
       currentMessages = appendCorrectiveMessages(
         currentPrompt,
         currentMessages,
-        lastText,
-        corrective,
+        guardedWriteback.rejectedOutput,
+        guardedWriteback.corrective,
       );
       currentPrompt = undefined;
       // The candidate being corrected is superseded: record it as an empty
@@ -222,7 +208,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     { role: "assistant" as const, content: finalText },
   ];
 
-  return finalizeSdkResultEnvelope({
+  const envelope = finalizeSdkResultEnvelope({
     raw: lastRaw,
     response: lastResponse,
     text: finalText,
@@ -234,4 +220,5 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     stepFacts,
     finalStepMode: stepFacts.length < steps ? "append" : "replace",
   });
+  return attachCachedStructuredCandidate(envelope, result.canonicalInput);
 }

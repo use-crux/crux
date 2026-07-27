@@ -65,7 +65,7 @@ describe.sequential("runEval", () => {
       ],
     });
     await expect(access(join(projectRoot, ".crux"))).rejects.toThrow();
-  }, 10_000);
+  });
 
   it("keeps strict-offline planning independent from Runtime adapter loading", async () => {
     const configPath = join(projectRoot, "crux.config.ts");
@@ -131,7 +131,7 @@ describe.sequential("runEval", () => {
       runIds: run.cells[0]?.runIds,
       capturedSignals: [],
     });
-  }, 10_000);
+  });
 
   it("reuses task evidence after an assertion-only Eval source edit", async () => {
     const path = join(projectRoot, "evals/assessment-edit.eval.ts");
@@ -211,7 +211,7 @@ describe.sequential("runEval", () => {
       runIds: [expect.stringMatching(/^run_[0-9a-f]{24}$/u)],
     });
     expect(run.cells[0]).not.toHaveProperty("response");
-  });
+  }, 10_000);
 
   it("explains how to make an unknown hard-cap estimate actionable", async () => {
     await expect(
@@ -219,7 +219,7 @@ describe.sequential("runEval", () => {
     ).rejects.toThrow(
       /Use a managed AI task and configure experimental\.eval\.pricing with maxUsdPerCall ceilings/,
     );
-  });
+  }, 10_000);
 
   it("runs fresh when an authored source dependency cannot be proven", async () => {
     const plan = await runEval("dynamic-prompt", {

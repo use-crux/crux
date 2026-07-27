@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::{
     protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
@@ -21,6 +21,7 @@ const GUARDRAIL_STRATEGY_KINDS: &[&str] = &[
 const SAFETY_BOUNDARY_IDS: &[&str] = &[
     "model.input.text",
     "model.input.media",
+    "model.input.tools",
     "model.instructions",
     "model.output.text",
     "model.output.media",
@@ -36,6 +37,7 @@ const SAFETY_BOUNDARY_IDS: &[&str] = &[
 const HELPER_BOUNDARY_IDS: &[(&str, &str)] = &[
     ("boundary.input.text", "model.input.text"),
     ("boundary.input.media", "model.input.media"),
+    ("boundary.input.tools", "model.input.tools"),
     ("boundary.input.instructions", "model.instructions"),
     ("boundary.output.text", "model.output.text"),
     ("boundary.output.media", "model.output.media"),

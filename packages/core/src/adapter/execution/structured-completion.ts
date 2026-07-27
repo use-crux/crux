@@ -61,6 +61,10 @@ import {
   type StructuredOutputDecodeManifest,
 } from "../structured-output";
 import { formatValidationFeedback } from "../policy/validation-retry";
+import type {
+  CorrectiveWriteback,
+  SafetyRegenerate,
+} from "../../safety/session-feedback-guard";
 
 /** Dependencies for one call's structured completion pipeline. */
 export interface StructuredCompletionDeps {
@@ -88,6 +92,11 @@ export interface StructuredCompletionDeps {
   readonly settled?: readonly import("../../safety/constraint/settlement").ConstraintOccurrenceSettlement[];
   readonly promptId: string;
   readonly validationRetry: ValidationRetryOptions | undefined;
+  /**
+   * Whether this candidate may spend provider calls on validation or constraint
+   * correction. Cached candidates have no retry authority and fail in one pass.
+   */
+  readonly retryAuthority?: "none";
   /** Shared provider-call budget. */
   readonly maxSteps: number;
   /** Current provider-call count (shared across the whole generation). */
@@ -99,20 +108,31 @@ export interface StructuredCompletionDeps {
    * text. Implementations own their result-accumulation side effects and MUST
    * increment the shared step count. Only invoked while budget remains.
    */
-  readonly reprompt: (corrective: readonly Message[]) => Promise<string>;
+  readonly reprompt: (
+    corrective: readonly Message[],
+    writeback: CorrectiveWriteback,
+  ) => Promise<string>;
 }
 
 /** The completed, validated candidate. */
 export interface StructuredCompletionResult {
   /** Repaired/resynchronized pre-Zod structured text. */
   readonly text: string;
+  /**
+   * Accepted post-guard canonical `z.input`; `undefined` when suspended.
+   *
+   * This is private cache evidence, not the public structured result.
+   */
+  readonly canonicalInput: unknown;
   /** Post-Zod `safeParse.data`; `undefined` when suspended. */
   readonly object: unknown;
 }
 
 /** A single-issue `ZodError` used when provider output is not valid JSON. */
 export function invalidJsonZodError(): z.ZodError {
-  return new z.ZodError([{ code: "custom", path: [], message: "Invalid JSON" }]);
+  return new z.ZodError([
+    { code: "custom", path: [], message: "Invalid JSON" },
+  ]);
 }
 
 /**
@@ -202,13 +222,11 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
   // Provider re-call shared by validation retry and constraint regeneration.
   // Once the shared budget is exhausted, no provider call is made — the current
   // candidate is returned so the caller settles within its own bounds.
-  const repromptCandidate = async (
-    corrective: readonly Message[],
-  ): Promise<SafetyOutput> => {
+  const repromptCandidate: SafetyRegenerate = async (corrective, writeback) => {
     if (deps.steps() >= deps.maxSteps) {
       return buildFromText(currentText);
     }
-    return buildFromText(await deps.reprompt(corrective));
+    return buildFromText(await deps.reprompt(corrective, writeback));
   };
 
   /**
@@ -240,7 +258,9 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
     let current = guarded;
     for (;;) {
       const error =
-        current.parsed === undefined ? invalidJsonZodError() : validate(current.parsed);
+        current.parsed === undefined
+          ? invalidJsonZodError()
+          : validate(current.parsed);
       if (error === undefined) return current;
 
       if (
@@ -250,9 +270,19 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
       ) {
         validationRetries++;
         deps.validationRetry.onRetry?.(validationRetries, error);
-        const reprompted = await repromptCandidate([
-          { role: "user", content: formatValidationFeedback(current.text, error) },
-        ]);
+        const reprompted = await repromptCandidate(
+          [
+            {
+              role: "user",
+              content: formatValidationFeedback(current.text, error),
+            },
+          ],
+          {
+            kind: "validation-feedback",
+            attempt: validationRetries,
+            rejectedOutput: current.text,
+          },
+        );
         current = await guardCandidate(reprompted);
         continue;
       }
@@ -279,16 +309,26 @@ export function createStructuredCompletion(deps: StructuredCompletionDeps): {
         suspended,
         messages: deps.messages(),
         schema: deps.schema,
+        ...(deps.retryAuthority
+          ? {
+              retryAuthority: deps.retryAuthority,
+              stepOutputAlreadyGated: false,
+            }
+          : {}),
         ...(suspended ? {} : { prepareValidated }),
         ...(deps.structuredContext
           ? { structuredContext: deps.structuredContext }
           : {}),
-        objectOccurrencesAlreadyGated: deps.objectOccurrencesAlreadyGated ?? false,
-        ...(deps.settled && deps.settled.length > 0 ? { settled: deps.settled } : {}),
+        objectOccurrencesAlreadyGated:
+          deps.objectOccurrencesAlreadyGated ?? false,
+        ...(deps.settled && deps.settled.length > 0
+          ? { settled: deps.settled }
+          : {}),
       },
     );
     return {
       text: finalOutput.text,
+      canonicalInput: suspended ? undefined : finalOutput.parsed,
       object: suspended ? undefined : acceptedObject,
     };
   };

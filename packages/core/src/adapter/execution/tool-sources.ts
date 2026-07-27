@@ -15,6 +15,7 @@ import {
   type ToolSourceSession,
 } from "../../tools/tool-source";
 import { createToolRegistry } from "../../tools/tool-registry";
+import { withToolExposureProvenance } from "../tool/exposure/provenance";
 
 /** A resolved prompt augmented with materialized tools and owned cleanup. */
 export interface MaterializedToolSources {
@@ -114,7 +115,11 @@ export async function materializeToolSources(options: {
           if (previousOwner) {
             throw new ToolSourceCollisionError(name, source.id, previousOwner);
           }
-          tools[name] = tool;
+          tools[name] = withToolExposureProvenance(tool, {
+            kind: "discovered",
+            sourceId: source.id,
+            sourceKind: source.kind,
+          });
           owners.set(name, `tool source "${source.id}"`);
         }
       }

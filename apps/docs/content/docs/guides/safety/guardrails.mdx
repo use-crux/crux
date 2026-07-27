@@ -97,17 +97,17 @@ structured-generation provider, see
 
 Common boundaries:
 
-| Boundary                           | Subject                                                                     |
-| ---------------------------------- | --------------------------------------------------------------------------- |
-| `boundary.input.text()`            | User, converted tool, and rendered retrieval text before the provider call. |
-| `boundary.input.media()`           | One canonical user/tool media part and its stable origin.                   |
-| `boundary.input.instructions()`    | Trusted developer/system instructions before the provider call.             |
-| `boundary.output.text()`           | Model output text before the caller sees it.                                |
-| `boundary.output.media()`          | One canonical model/operation output-media part before public accumulation. |
-| `boundary.output.object<T>()`      | Parsed structured output.                                                   |
-| `boundary.output.object<T>().path('a.b')` | One typed structured-output path.                                    |
-| `boundary.memory.write<T>()`       | Candidate memory write.                                                     |
-| `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted.                               |
+| Boundary                                  | Subject                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| `boundary.input.text()`                   | Canonical untrusted text, with semantic provenance, before a provider call. |
+| `boundary.input.media()`                  | One canonical user/tool media part and its stable origin.                   |
+| `boundary.input.instructions()`           | Trusted developer/system instructions before the provider call.             |
+| `boundary.input.tools()`                  | One canonical provider-visible tool definition.                             |
+| `boundary.output.text()`                  | Model output text before the caller sees it.                                |
+| `boundary.output.media()`                 | One canonical model/operation output-media part before public accumulation. |
+| `boundary.output.object<T>()`             | Parsed structured output.                                                   |
+| `boundary.output.object<T>().path('a.b')` | One typed structured-output path.                                           |
+| `boundary.memory.write<T>()`              | A managed-memory candidate immediately before commit.                       |
 
 Guardrails can bind to several boundaries with `on: [...]`. A duplicate
 boundary in the same guardrail is a configuration error. Duplicate policy ids
@@ -125,11 +125,91 @@ const retrievalInjection = guardrail({
 });
 ```
 
-Text accepts `user`, `tool`, or `retrieval`; media accepts `user` or `tool`.
-Retrieved assets are never hydrated automatically, so retrieval media has no
-canonical model-ingress boundary yet. A system-role carrier does not make
-retrieval trusted: rendered retrieval prefixes stay source `retrieval`, while
-authored system content is checked as `boundary.input.instructions()`.
+Text accepts `user`, `tool`, `retrieval`, `memory`, `handoff`, or `feedback`;
+media accepts `user` or `tool`. Managed memory and blackboard renderings both
+use source `memory`, distinguished by `ctx.origin.kind`. Retrieved assets are
+never hydrated automatically, so retrieval media has no canonical
+model-ingress boundary yet. A system-role carrier does not make retrieval,
+memory, blackboard, or handoff text trusted: those rendered contributions keep
+their untrusted provenance, while authored system content is checked as
+`boundary.input.instructions()`.
+
+Use one source-aware policy for lifecycle content when the same rule applies:
+
+```ts
+const lifecycleIngress = guardrail({
+  id: "lifecycle-ingress",
+  on: boundary.input.text({
+    from: ["memory", "handoff", "feedback"],
+  }),
+  run: guardrail.secrets({ action: "block" }),
+});
+```
+
+### Provider-visible tools
+
+Tool-definition guardrails run after authored and discovered tools have been
+merged, immediately before provider exposure. A root boundary receives the
+canonical name, description, and frozen JSON Schema:
+
+```ts
+const discoveredTools = guardrail({
+  id: "discovered-tools",
+  on: boundary.input.tools({ from: "discovered" }),
+  run: (tool) =>
+    tool.name.startsWith("public_")
+      ? { action: "allow" }
+      : { action: "strip", reason: "Only public tools may be exposed." },
+});
+```
+
+An enforced root `strip` removes that tool from both the provider-visible list
+and executable registration; an enforced `block` prevents the call. To rewrite
+only provider-visible text, target the tool description and every JSON Schema
+description independently:
+
+```ts
+const descriptions = guardrail({
+  id: "tool-descriptions",
+  on: boundary.input.tools().descriptions(),
+  run: (text) => ({
+    action: "rewrite",
+    value: text.replaceAll("internal", "available"),
+    rewrite: { kind: "normalize" },
+  }),
+});
+```
+
+Description policies cannot rename tools or alter schema structure. Report mode
+records strip, block, or rewrite intent and sends the original tool envelope.
+
+### Managed memory writes
+
+`boundary.memory.write<T>()` governs managed adapter capture immediately before
+durable commit:
+
+```ts
+const safeMemory = guardrail({
+  id: "safe-memory",
+  on: boundary.memory.write<MyMemory>(),
+  run: (candidate) =>
+    candidate.safe
+      ? { action: "allow" }
+      : { action: "drop", reason: "Do not persist this candidate." },
+});
+```
+
+The commit order is block-local redaction, global/prompt/call memory guardrails,
+block-local validation, `shouldRemember`, then persistence. Enforced `rewrite`
+replaces the candidate before validation, `drop` skips persistence without
+failing generation, and `block` fails the write. Report mode preserves the
+candidate and commit behavior.
+
+This per-call gate applies only to managed memory capture performed by an
+adapter. Calling a memory block's standalone capture API has no originating
+Safety registry and continues to use its block-local policy. Direct blackboard
+writes likewise do not pass through this global/prompt/call memory-write
+boundary.
 
 ## Multimodal Content
 
@@ -283,14 +363,19 @@ rewriting its text placeholder.
 Adapters create one Safety session per `generate()` or `stream()` call. The
 session:
 
-1. Runs input guardrails exactly once over each applicable user, converted tool,
-   rendered retrieval, and trusted-instruction contribution before every model
-   call.
+1. Runs input guardrails over every applicable canonical user, converted tool,
+   retrieval, memory, blackboard, handoff, feedback, instruction, and tool-
+   definition contribution before every model call.
 2. Applies output guardrails before constraints, validation feedback,
    observability, memory, tools, and final caller access consume generated
    content.
 3. Keeps structured `text` and `object` synchronized after rewrites.
 4. Emits safe Safety decisions and audit metadata by default.
+
+For message input, Crux guards string content, every `{ type: "text", text }`
+part, and every assistant `{ type: "reasoning", text }` part independently.
+Roles, ordering, metadata, provider options, tool inputs, and non-text parts are
+preserved. Opaque metadata and tool arguments are not searched recursively.
 
 Guardrails do not re-call the model. Use a
 [constraint](/docs/guides/safety/constraints) when a semantic failure should
@@ -347,22 +432,22 @@ unit, then releases only the cleared text. Later guardrails see earlier rewrites
 
 ### Choosing the unit
 
-| Refinement                      | Unit evaluated                                            |
-| ------------------------------- | ---------------------------------------------------------- |
-| _(none)_                        | Adaptive: one complete result on generate, one canonical delta on stream. |
-| `.deltas()`                     | Each canonical text delta, explicitly.                     |
-| `.sentences(opts?)`             | Each complete sentence.                                    |
-| `.lines(opts?)`                 | Each newline-delimited line; a trailing line completes at EOF. |
-| `.segments({ maxCharacters, next })` | Your own deterministic segmenter.                     |
-| `.complete()`                   | The whole text once, at completion — on a stream this releases nothing until EOF. |
+| Refinement                           | Unit evaluated                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| _(none)_                             | Adaptive: one complete result on generate, one canonical delta on stream.         |
+| `.deltas()`                          | Each canonical text delta, explicitly.                                            |
+| `.sentences(opts?)`                  | Each complete sentence.                                                           |
+| `.lines(opts?)`                      | Each newline-delimited line; a trailing line completes at EOF.                    |
+| `.segments({ maxCharacters, next })` | Your own deterministic segmenter.                                                 |
+| `.complete()`                        | The whole text once, at completion — on a stream this releases nothing until EOF. |
 
 The effective unit resolves in a fixed order: an **explicit refinement** wins,
 then a **bundled strategy's semantic default**, then the **adaptive default**.
 
 | Bundled strategy                                | Semantic default     |
 | ----------------------------------------------- | -------------------- |
-| `guardrail.pii()`, `.secrets()`, `.injection()`  | sentence             |
-| `guardrail.classifier()`                         | the complete subject |
+| `guardrail.pii()`, `.secrets()`, `.injection()` | sentence             |
+| `guardrail.classifier()`                        | the complete subject |
 
 Media boundaries are not text and take no refinement: each canonical media part
 is one atomic occurrence.
@@ -410,9 +495,7 @@ guardrail({
   id: "policy-phrase",
   on: boundary.output.text().sentences({ maxHold: { chars: 500, ms: 2_000 } }),
   run: (text) =>
-    isTruncatedPhrase(text)
-      ? { action: "hold" }
-      : { action: "allow" },
+    isTruncatedPhrase(text) ? { action: "hold" } : { action: "allow" },
 });
 ```
 

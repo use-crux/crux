@@ -87,7 +87,17 @@ export function createSemanticCache<TModality extends EmbeddingModality>(
             threshold: effectiveThreshold,
             version,
           }
-          const call: SemanticCacheCall = { config, namespace, args, promptHint, cacheId, scopeHash, ttl, lookupCtx }
+          const call: SemanticCacheCall = {
+            config,
+            namespace,
+            args,
+            promptHint,
+            cacheId,
+            scopeHash,
+            ttl,
+            lookupCtx,
+            middlewareNext: next,
+          }
 
           if ((mode === 'readonly' || mode === 'readwrite') && (await shouldLookup(config, lookupCtx))) {
             const cached = await performLookup(call)

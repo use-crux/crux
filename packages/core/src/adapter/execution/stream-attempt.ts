@@ -31,7 +31,10 @@
 
 import type { Message } from "../../generation/messages";
 import type { SafetyStreamSeal } from "../../safety/session";
-import type { ConstraintAuditEntry, ConstraintFailure } from "../../safety/constraint/types";
+import type {
+  ConstraintAuditEntry,
+  ConstraintFailure,
+} from "../../safety/constraint/types";
 import type {
   ConstraintSettlement,
   StreamConstraintFailure,
@@ -41,6 +44,10 @@ import type { ValidationRetryOptions } from "../../generation/validation-retry";
 import type { ConstraintViolationError } from "../../safety/constraint/errors";
 import { isStreamValidationRejection } from "./stream-rejection";
 import { createStreamRetryPolicy } from "./stream-retry-policy";
+import {
+  guardCorrectiveWriteback,
+  type FeedbackIngressGuard,
+} from "../../safety/session-feedback-guard";
 
 export type { ConstraintSettlement } from "../../safety/constraint/settlement";
 export { StreamValidationRejection } from "./stream-rejection";
@@ -88,11 +95,15 @@ export interface StreamAttemptRun {
 }
 
 /** Why the coordinator started this attempt — the `generation.stream.attempt` cause. */
-export type StreamAttemptCause = "initial" | "constraint-retry" | "validation-retry";
+export type StreamAttemptCause =
+  | "initial"
+  | "constraint-retry"
+  | "validation-retry";
 
 /** Start one fresh provider stream + Safety attempt over `corrective` within `signal`. */
 export type StreamAttemptStart = (params: {
   readonly corrective: readonly Message[];
+  readonly rejectedOutput: string | undefined;
   readonly attemptIndex: number;
   readonly cause: StreamAttemptCause;
   readonly signal: AbortSignal;
@@ -114,7 +125,10 @@ export interface CoordinatedStreamOptions {
   readonly signal?: AbortSignal;
   readonly promptId?: string;
   /** Announce a retry (attempt index → next, with sanitized failed ids). */
-  readonly onRetry?: (attemptIndex: number, failedIds: readonly string[]) => void;
+  readonly onRetry?: (
+    attemptIndex: number,
+    failedIds: readonly string[],
+  ) => void;
   /**
    * Validation-retry policy shared with the same loop (Fork 2). When present with
    * `maxRetries > 0`, a {@link StreamValidationRejection} is retried under the shared
@@ -123,6 +137,8 @@ export interface CoordinatedStreamOptions {
    * `onExhausted` fire with the same counts as generate.
    */
   readonly validationRetry?: ValidationRetryOptions;
+  /** Guard eligible retry writeback before another physical attempt starts. */
+  readonly guardFeedback: FeedbackIngressGuard;
 }
 
 /** The accepted attempt plus cumulative retry accounting. */
@@ -184,11 +200,14 @@ async function driveLoop(
     maxSteps: options.maxSteps,
     steps: options.steps,
     formatFeedback: options.formatFeedback,
-    ...(options.validationRetry ? { validationRetry: options.validationRetry } : {}),
+    ...(options.validationRetry
+      ? { validationRetry: options.validationRetry }
+      : {}),
     ...(options.promptId ? { promptId: options.promptId } : {}),
     ...(options.onRetry ? { onRetry: options.onRetry } : {}),
   });
   let corrective: readonly Message[] = [];
+  let rejectedOutput: string | undefined;
   let attemptIndex = 0;
   let cause: StreamAttemptCause = "initial";
 
@@ -198,18 +217,22 @@ async function driveLoop(
 
       // Budget gate BEFORE consuming a provider call: never start (or count) an
       // attempt the shared budget cannot afford.
-      if (!policy.canAffordAttempt()) throw policy.budgetExhausted(attemptIndex);
+      if (!policy.canAffordAttempt())
+        throw policy.budgetExhausted(attemptIndex);
       options.incrementStep();
 
       const controller = new AbortController();
       const onAbort = () =>
-        controller.abort((options.signal as { reason?: unknown } | undefined)?.reason);
+        controller.abort(
+          (options.signal as { reason?: unknown } | undefined)?.reason,
+        );
       options.signal?.addEventListener("abort", onAbort, { once: true });
 
       let run: StreamAttemptRun | undefined;
       try {
         run = await options.startAttempt({
           corrective,
+          rejectedOutput,
           attemptIndex,
           cause,
           signal: controller.signal,
@@ -238,9 +261,12 @@ async function driveLoop(
         throw new Error("stream attempt ended without sealing");
       } catch (error) {
         const rejection =
-          isStreamConstraintRejection(error) || isStreamValidationRejection(error);
+          isStreamConstraintRejection(error) ||
+          isStreamValidationRejection(error);
         if (!rejection) {
-          run?.settleOutcome?.(options.signal?.aborted ? "cancelled" : "failed");
+          run?.settleOutcome?.(
+            options.signal?.aborted ? "cancelled" : "failed",
+          );
           throw error;
         }
         // A rejection is a POLICY decision, not a provider error: the attempt
@@ -256,9 +282,21 @@ async function driveLoop(
         // public terminal error (validation vs constraint — never combined).
         if (options.signal?.aborted) throw abortError(options.signal);
         const grant = policy.onRejection(error, attemptIndex);
-        corrective = grant.corrective;
+        const nextAttempt = attemptIndex + 1;
+        const guarded = await guardCorrectiveWriteback({
+          corrective: grant.corrective,
+          rejectedOutput: grant.rejectedOutput,
+          kind:
+            grant.cause === "validation-retry"
+              ? "validation-feedback"
+              : "constraint-feedback",
+          attempt: nextAttempt,
+          guard: options.guardFeedback,
+        });
+        corrective = guarded.corrective;
+        rejectedOutput = guarded.rejectedOutput;
         cause = grant.cause;
-        attemptIndex += 1;
+        attemptIndex = nextAttempt;
       } finally {
         options.signal?.removeEventListener("abort", onAbort);
       }
@@ -273,7 +311,9 @@ async function driveLoop(
 
 function abortError(signal: AbortSignal): Error {
   const reason = (signal as { reason?: unknown }).reason;
-  return reason instanceof Error ? reason : new DOMException("Aborted", "AbortError");
+  return reason instanceof Error
+    ? reason
+    : new DOMException("Aborted", "AbortError");
 }
 
 // ── Backpressured rendezvous channel ───────────────────────────────

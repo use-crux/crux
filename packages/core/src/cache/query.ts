@@ -85,7 +85,13 @@ export async function resolveScope(
   return value
 }
 
-/** Resolve the embedding query text from the prompt hint or resolved prompt. */
+/**
+ * Resolve the embedding query text.
+ *
+ * Custom query callbacks retain their authored raw-input contract. The default
+ * path prefers adapter-prepared provider input because it already reflects
+ * model-ingress guardrails.
+ */
 export async function resolveQueryText(hint: NormalizedPromptHint, args: PromptMiddlewareArgs): Promise<string> {
   const resolved = args.resolved
   if (hint.query && resolved) {
@@ -99,6 +105,8 @@ export async function resolveQueryText(hint: NormalizedPromptHint, args: PromptM
     }
     return hint.query(ctx)
   }
+  const approved = preparedProviderText(args.preparedArgs)
+  if (approved !== undefined) return approved
   if (resolved?.messages) {
     return resolved.messages
       .map((message) => {
@@ -109,6 +117,34 @@ export async function resolveQueryText(hint: NormalizedPromptHint, args: PromptM
       .join('\n')
   }
   return [resolved?.system, resolved?.prompt, fallbackPreparedText(args)].filter(Boolean).join('\n\n')
+}
+
+/** Project guarded adapter input into the default cache-query text. */
+function preparedProviderText(
+  prepared: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!prepared) return undefined
+  const parts: string[] = []
+  let providerInputPresent = false
+
+  for (const key of ['system', 'prompt'] as const) {
+    const value = prepared[key]
+    if (typeof value !== 'string') continue
+    providerInputPresent = true
+    if (value) parts.push(value)
+  }
+  if (Array.isArray(prepared.messages)) {
+    providerInputPresent = true
+    const messages = prepared.messages
+      .map((message) => {
+        const item = message as { role?: unknown; content?: unknown }
+        return `${String(item.role ?? '')}: ${projectUnknownContent(item.content)}`
+      })
+      .join('\n')
+    if (messages) parts.push(messages)
+  }
+
+  return providerInputPresent ? parts.join('\n\n') : undefined
 }
 
 /** Build a fallback query text from prepared args when no resolved prompt exists. */

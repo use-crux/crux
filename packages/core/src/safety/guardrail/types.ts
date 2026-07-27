@@ -13,6 +13,7 @@ import type {
 import type { SafetyUnitKind } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import type { ModelInputOrigin } from '../input-origin'
+import type { ToolDefinitionOrigin } from '../input-tool-boundary'
 import type {
   MemoryWriteGuardrailResult,
   ToolDefinitionGuardrailResult,
@@ -20,6 +21,9 @@ import type {
 
 export type GuardrailMode = 'enforce' | 'report'
 export type GuardrailRewriteKind = 'redact' | 'mask' | 'hash' | 'normalize'
+
+/** Privacy-safe provenance supported by guardrail runtime records. @internal */
+export type GuardrailOrigin = ModelInputOrigin | ToolDefinitionOrigin
 
 /** Result returned by guardrail policy callbacks. */
 export type GuardrailRunResult<TValue = string> =
@@ -235,7 +239,9 @@ export interface Guardrail<B extends BoundaryInput = BoundaryDef> {
 }
 
 /** Internal call context used by the Safety session when running guardrails. */
-export interface GuardrailContext {
+export interface GuardrailContext<
+  TOrigin extends GuardrailOrigin = ModelInputOrigin,
+> {
   readonly mode?: GuardrailMode
   readonly promptId: string | undefined
   readonly model: string | undefined
@@ -243,7 +249,7 @@ export interface GuardrailContext {
   readonly systemPrompt: string | undefined
   readonly traceId: string | undefined
   readonly metadata: Readonly<Record<string, unknown>>
-  readonly origin?: ModelInputOrigin
+  readonly origin?: TOrigin
   readonly stream?: {
     readonly segment: true
     readonly last: boolean
@@ -258,7 +264,7 @@ export interface GuardrailAuditEntry {
   /** Exact boundary evaluated for this entry. */
   readonly boundary: SafetyTargetId
   /** Privacy-safe semantic provenance for model-ingress evaluations. */
-  readonly origin?: ModelInputOrigin
+  readonly origin?: GuardrailOrigin
   /** Effective enforcement posture after per-call tuning. */
   readonly mode: GuardrailMode
   readonly phase: 'input' | 'output'

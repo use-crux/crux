@@ -2,83 +2,83 @@ import type {
   IndexerExtension,
   IndexerExtensionRuntime,
   ResolvedIndexerExtension,
-} from '../extensions'
-import { createIndexerExtensionRuntime } from '../extensions'
-import { embeddingPrimitiveManifest } from '../embedding/primitive-manifest'
-import { mediaPrimitiveManifest } from '../media/primitive-manifest'
-import { mcpPrimitiveManifest } from '../mcp/primitive-manifest'
-export { compilerProfileCacheInputs } from '../cache-identity'
+} from "../extensions";
+import { createIndexerExtensionRuntime } from "../extensions";
+import { embeddingPrimitiveManifest } from "../embedding/primitive-manifest";
+import { mediaPrimitiveManifest } from "../media/primitive-manifest";
+import { mcpPrimitiveManifest } from "../mcp/primitive-manifest";
+export { compilerProfileCacheInputs } from "../cache-identity";
 
 export interface CompilerOwnedProjection {
-  readonly name: string
-  readonly version: string
-  readonly phase: 'parse' | 'extract' | 'resolve'
-  readonly reason: string
-  readonly staticCallNames?: readonly string[]
+  readonly name: string;
+  readonly version: string;
+  readonly phase: "parse" | "extract" | "resolve";
+  readonly reason: string;
+  readonly staticCallNames?: readonly string[];
 }
 
 export interface ProjectIndexCompilerProfile {
-  readonly name: string
-  readonly version: string
-  readonly extensions: readonly IndexerExtension[]
-  readonly projections?: readonly CompilerOwnedProjection[]
+  readonly name: string;
+  readonly version: string;
+  readonly extensions: readonly IndexerExtension[];
+  readonly projections?: readonly CompilerOwnedProjection[];
 }
 
 export interface StaticExtensionHostRuntime {
-  readonly profile: ProjectIndexCompilerProfile
-  readonly extensionRuntime: IndexerExtensionRuntime
+  readonly profile: ProjectIndexCompilerProfile;
+  readonly extensionRuntime: IndexerExtensionRuntime;
 }
 
 export const cruxCoreCompilerProjections = [
   {
-    name: 'safety-strategy-facts',
-    version: '2',
-    phase: 'extract',
+    name: "safety-strategy-facts",
+    version: "3",
+    phase: "extract",
     reason:
-      'Compiler-owned Safety helper recognition and privacy-safe strategy config projection.',
-    staticCallNames: ['mediaClassifier'],
+      "Compiler-owned Safety helper recognition, tool-boundary fallback projection, and privacy-safe strategy config projection.",
+    staticCallNames: ["guardrail", "mediaClassifier"],
   },
   {
-    name: 'deferred-work-containment',
-    version: '2',
-    phase: 'resolve',
+    name: "deferred-work-containment",
+    version: "2",
+    phase: "resolve",
     reason:
-      'Compiler-owned source ranges attach public deferred work only to proven enclosing indexed definitions.',
-    staticCallNames: ['defer'],
+      "Compiler-owned source ranges attach public deferred work only to proven enclosing indexed definitions.",
+    staticCallNames: ["defer"],
   },
   {
-    name: 'source-ref-projection',
-    version: '1',
-    phase: 'parse',
+    name: "source-ref-projection",
+    version: "1",
+    phase: "parse",
     reason:
-      'Parser-owned source-reference helpers project config properties, callbacks, templates, schemas, and helper usages.',
+      "Parser-owned source-reference helpers project config properties, callbacks, templates, schemas, and helper usages.",
   },
   {
-    name: 'runtime-prepare-use-entries',
-    version: '1',
-    phase: 'parse',
+    name: "runtime-prepare-use-entries",
+    version: "1",
+    phase: "parse",
     reason:
-      'Runtime prepare helper usage is inferred from function bodies by compiler-owned traversal.',
+      "Runtime prepare helper usage is inferred from function bodies by compiler-owned traversal.",
   },
   {
-    name: 'prompt-context-tree-paths',
-    version: '1',
-    phase: 'resolve',
+    name: "prompt-context-tree-paths",
+    version: "1",
+    phase: "resolve",
     reason:
-      'createPrompts/createContexts path projection annotates known definitions after source-local extraction.',
+      "createPrompts/createContexts path projection annotates known definitions after source-local extraction.",
   },
-] as const satisfies readonly CompilerOwnedProjection[]
+] as const satisfies readonly CompilerOwnedProjection[];
 
 export const cruxCoreCompilerProfile = {
-  name: '@use-crux/indexer/crux-core-profile',
-  version: '3',
+  name: "@use-crux/indexer/crux-core-profile",
+  version: "3",
   extensions: [
     embeddingPrimitiveManifest,
     mediaPrimitiveManifest,
     mcpPrimitiveManifest,
   ],
   projections: cruxCoreCompilerProjections,
-} as const satisfies ProjectIndexCompilerProfile
+} as const satisfies ProjectIndexCompilerProfile;
 
 export function createStaticExtensionHostRuntime(
   profile: ProjectIndexCompilerProfile = cruxCoreCompilerProfile,
@@ -88,7 +88,7 @@ export function createStaticExtensionHostRuntime(
     extensionRuntime: createIndexerExtensionRuntime({
       extensions: profile.extensions,
     }),
-  }
+  };
 }
 
 /**
@@ -102,7 +102,7 @@ export function compilerProfileWithResolvedExtensions(
   profile: ProjectIndexCompilerProfile,
   extensions: readonly ResolvedIndexerExtension[],
 ): ProjectIndexCompilerProfile {
-  if (extensions.length === 0) return profile
+  if (extensions.length === 0) return profile;
   return {
     ...profile,
     extensions: [
@@ -112,14 +112,14 @@ export function compilerProfileWithResolvedExtensions(
     projections: [
       ...(profile.projections ?? []),
       ...extensions.map((entry) => ({
-        name: `indexer-extension-package:${entry.reference.package}#${entry.reference.export ?? 'default'}`,
+        name: `indexer-extension-package:${entry.reference.package}#${entry.reference.export ?? "default"}`,
         version: entry.packageVersion ?? entry.extension.version,
-        phase: 'parse' as const,
+        phase: "parse" as const,
         reason:
-          'Configured Indexer extension package identity participates in static cache invalidation.',
+          "Configured Indexer extension package identity participates in static cache invalidation.",
       })),
     ],
-  }
+  };
 }
 
 export function compilerProjectionStaticCallNames(
@@ -131,5 +131,5 @@ export function compilerProjectionStaticCallNames(
         (projection) => projection.staticCallNames ?? [],
       ),
     ),
-  ].sort()
+  ].sort();
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createToolLifecycle } from '../../../src/adapter/tool/session'
 import { LOAD_SKILL_TOOL_NAME } from '../../../src/skill/tools'
 import { createSkillActivationSession, skill } from '../../../src/skill'
@@ -85,5 +85,70 @@ describe('createToolLifecycle — skill activation session', () => {
       'blocked-sql',
     ])
     expect(session.snapshot().injectedSkillIds).toEqual([])
+  })
+
+  it('re-evaluates only new or provider-visibly changed tool definitions', async () => {
+    const extension = skill.inline({
+      id: 'tool-extension',
+      description: 'Adds tools',
+      instructions: 'Use the added tools.',
+    })
+    const session = createSkillActivationSession({ skills: [extension] })
+    session.activate('tool-extension')
+    const resolved = resolvedWith({
+      system: 'base',
+      tools: {
+        stable: {
+          description: 'stable v1',
+          execute: async () => 'stable-old',
+        },
+        changed: { description: 'changed v1' },
+      },
+    })
+    ;(resolved as ResolvedPrompt & { _skillSession?: typeof session })._skillSession =
+      session
+    const reResolved = resolvedWith({
+      system: 'base plus skill',
+      tools: {
+        stable: {
+          description: 'stable v1',
+          execute: async () => 'stable-new',
+        },
+        changed: { description: 'changed v2' },
+        added: { description: 'added v1' },
+      },
+    })
+    ;(
+      reResolved as ResolvedPrompt & { _skillSession?: typeof session }
+    )._skillSession = session
+    const roots = vi.fn(async (subject: { name: string; description: string }) => {
+      return { action: 'allow' as const }
+    })
+    const descriptions = vi.fn(async () => ({ action: 'allow' as const }))
+    const lifecycle = createToolLifecycle({
+      regime: 'core',
+      resolved,
+      promptId: 'skill-tool-exposure',
+      reresolve: async () => reResolved,
+    })
+
+    await lifecycle.guardExposure({ root: roots, descriptions })
+    await lifecycle.applySkillLoads([
+      { name: LOAD_SKILL_TOOL_NAME, args: { name: 'tool-extension' } },
+    ])
+
+    expect(
+      roots.mock.calls.map(([subject]) => `${subject.name}:${subject.description}`),
+    ).toEqual([
+      'stable:stable v1',
+      'changed:changed v1',
+      'changed:changed v2',
+      'added:added v1',
+    ])
+    expect(descriptions).toHaveBeenCalledTimes(4)
+    const stable = lifecycle.descriptors?.find(
+      (descriptor) => descriptor.name === 'stable',
+    )
+    await expect(stable?.execute({}, {})).resolves.toBe('stable-new')
   })
 })

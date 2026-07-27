@@ -52,7 +52,9 @@ export type SafetyTargetId =
  * filter; omitted filters retain the helper's semantic default.
  */
 export interface BoundaryDef<TId extends SafetyTargetId = SafetyTargetId, TSubject = unknown, TOrigin = unknown> {
+  /** Runtime discriminant for a Safety boundary descriptor. */
   readonly _tag: 'Boundary'
+  /** Canonical destination guarded by the attached policy. */
   readonly id: TId
   /** Optional structured-output property path. */
   readonly path?: string
@@ -60,7 +62,11 @@ export interface BoundaryDef<TId extends SafetyTargetId = SafetyTargetId, TSubje
   readonly __subject?: TSubject
   /** @internal Compile-time model-ingress origin carrier. */
   readonly __origin?: TOrigin
-  /** Frozen, de-duplicated semantic source filter when explicitly supplied. */
+  /**
+   * Frozen, de-duplicated provenance filter when explicitly supplied.
+   *
+   * @default Omitted, matching every source supported by the helper.
+   */
   readonly from?: readonly (InputSource | ToolDefinitionSource)[]
   /**
    * Optional serializable refinement of a canonical boundary target.

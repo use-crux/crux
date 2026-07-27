@@ -34,6 +34,7 @@ import {
   defaultConstraintFeedbackFormatter,
   openSafetySessionStreamRaw,
   openSafetySessionStructuredStreamRaw,
+  safetySessionFeedbackGuard,
   safetySessionStreamCommitPlan,
 } from "../../safety/session";
 import {
@@ -164,7 +165,6 @@ export function openCoordinatedStructuredStream<
 
   let steps = 0;
   let priorMessages: Message[] = [...messages];
-  let priorText = "";
   let accepted:
     | {
         readonly meta: Awaited<ReturnType<typeof handle.completion>>;
@@ -192,7 +192,9 @@ export function openCoordinatedStructuredStream<
   };
   // The validation gate's parse of the committed candidate, carried into completion so
   // the authored schema runs exactly once per candidate.
-  let committedCandidate: { readonly value: unknown; readonly data: unknown } | undefined;
+  let committedCandidate:
+    | { readonly value: unknown; readonly data: unknown }
+    | undefined;
 
   const assistantResponseFor = (text: string): AdapterResponse => ({
     text,
@@ -207,6 +209,7 @@ export function openCoordinatedStructuredStream<
   // gate; attempt 0 reuses the already-orchestrated provider handle.
   const startAttempt: StreamAttemptStart = async ({
     corrective,
+    rejectedOutput,
     attemptIndex,
     cause,
     signal,
@@ -244,11 +247,13 @@ export function openCoordinatedStructuredStream<
     if (attemptIndex === 0) {
       providerHandle = handle;
     } else {
-      priorMessages = dialect.appendToolRound(
-        [...priorMessages],
-        assistantResponseFor(priorText),
-        [],
-      );
+      if (rejectedOutput !== undefined) {
+        priorMessages = dialect.appendToolRound(
+          [...priorMessages],
+          assistantResponseFor(rejectedOutput),
+          [],
+        );
+      }
       priorMessages = [...priorMessages, ...corrective];
       const retryMessages = await normalizeInvocationMessages(priorMessages, {
         provider: modelInfo.provider,
@@ -312,7 +317,6 @@ export function openCoordinatedStructuredStream<
           const delta = providerHandle.extractTextDelta(chunk);
           if (delta === undefined || delta === "") continue;
           attemptText += delta;
-          priorText = attemptText;
           const directive = await safetyStream.feed(delta);
           if (directive.kind === "hold") continue;
           if (directive.content.length === 0) continue;
@@ -407,6 +411,7 @@ export function openCoordinatedStructuredStream<
         ),
       },
     ],
+    guardFeedback: safetySessionFeedbackGuard(safety),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(promptId ? { promptId } : {}),
     ...(validationGate && options.validationRetry

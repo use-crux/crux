@@ -56,6 +56,20 @@ const data = {
         },
       ],
     },
+    {
+      id: "guardrail:tool-boundaries",
+      kind: "guardrail",
+      name: "toolBoundaries",
+      fidelity: "resolved",
+      status: "active",
+      metadata: {
+        facts: {
+          kind: "guardrail",
+          boundary: "model.input.tools",
+          boundaries: ["model.input.tools"],
+        },
+      },
+    },
   ],
   relations: [
     {
@@ -99,5 +113,11 @@ describe("Safety Catalog detail", () => {
     expect(html).toContain("portableMedia");
     expect(html).toContain("model.output.media");
     expect(html).toContain("Safety options authored");
+  });
+
+  it("renders the canonical provider-visible tool boundary with friendly copy", () => {
+    const html = render("guardrail:tool-boundaries");
+    expect(html).toContain("Model input · Tools");
+    expect(html).not.toContain(">model.input.tools<");
   });
 });

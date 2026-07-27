@@ -78,13 +78,22 @@ the feedback, asks the model to regenerate, guards the new candidate, and
 checks constraints again.
 
 ```
-Attempt 1 -> schema validates -> output guardrails -> constraints fail
-Retry feedback -> regenerate -> output guardrails -> constraints pass
-Return guarded final output
+Attempt 1 -> canonical z.input -> output guardrails -> authored safeParse once
+          -> constraints fail
+Retry feedback -> regenerate -> output guardrails -> authored safeParse once
+               -> constraints pass -> publish z.output
 ```
 
 All constraints in a round run concurrently. The model sees all failure
 feedback at once instead of one retry per constraint.
+
+Semantic-cache candidates take the same release path: current output
+guardrails run over a private canonical `z.input`, the authored schema parses
+exactly once, then constraints run before the cached `z.output` can be
+published. A rejected or legacy cache entry falls through to one live provider
+call. Cache rejection itself never sends corrective feedback to the provider;
+feedback is guarded and written back only after a live attempt is eligible to
+retry.
 
 ## Severity And Retry Budget
 
@@ -191,20 +200,20 @@ sharing the `maxSteps` budget with validation retry. If retries run out,
 Release is held only as long as the gate needs, and **the boundary decides how long
 that is**:
 
-| Boundary                                    | Unlocks                                        |
-| ------------------------------------------- | ---------------------------------------------- |
-| `.object<T>().path('x')` (scalar)           | as soon as that value completes — the prefix flows well before the response ends |
-| `.object<T>().path('xs').items()`           | as each array item closes                      |
-| `.object<T>()` (root)                       | at completion                                  |
-| a missing optional path                     | never holds — vacuously satisfied              |
-| `boundary.output.text()` / `.both<T>()`     | **only at end-of-stream**                      |
+| Boundary                                | Unlocks                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `.object<T>().path('x')` (scalar)       | as soon as that value completes — the prefix flows well before the response ends |
+| `.object<T>().path('xs').items()`       | as each array item closes                                                        |
+| `.object<T>()` (root)                   | at completion                                                                    |
+| a missing optional path                 | never holds — vacuously satisfied                                                |
+| `boundary.output.text()` / `.both<T>()` | **only at end-of-stream**                                                        |
 
 <Callout type="warn">
-A text or composite `assert` can only be judged on the finished text, so while one is
-attached **nothing streams**: every delta is withheld and the whole response is
-released at once when the constraint passes. If you need tokens to flow early, put the
-`assert` on a scalar path and use a `suggest` constraint (or a guardrail) for
-whole-text rules.
+  A text or composite `assert` can only be judged on the finished text, so while
+  one is attached **nothing streams**: every delta is withheld and the whole
+  response is released at once when the constraint passes. If you need tokens to
+  flow early, put the `assert` on a scalar path and use a `suggest` constraint
+  (or a guardrail) for whole-text rules.
 </Callout>
 
 `suggest` constraints never gate: they run report-only and audit their decision.
@@ -215,7 +224,9 @@ const title = constraint({
   on: boundary.output.object<Article>().path("title"),
   // Holds the stream until `title` completes, then releases or retries.
   run: (value) =>
-    value.length > 0 ? { pass: true } : { pass: false, feedback: "Title required." },
+    value.length > 0
+      ? { pass: true }
+      : { pass: false, feedback: "Title required." },
 });
 ```
 
@@ -230,10 +241,10 @@ This travels on the `openStream().feed()` directive, which is the adapter-author
 protocol; it is not yet surfaced as an application-level stream event.
 
 <Callout type="warn">
-Crux never puts model output into telemetry, but your `feedback` string is recorded
-on the constraint's span — it is the policy's own prose and is needed to explain a
-retry. Write feedback as instructions ("Title must not be empty"), and do not
-interpolate the model's output into it.
+  Crux never puts model output into telemetry, but your `feedback` string is
+  recorded on the constraint's span — it is the policy's own prose and is needed
+  to explain a retry. Write feedback as instructions ("Title must not be
+  empty"), and do not interpolate the model's output into it.
 </Callout>
 
 A constraint the stream already settled is not re-run at completion, so a

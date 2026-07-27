@@ -26,6 +26,14 @@ import type {
 } from "../adapter/structured-output";
 import type { ResolvedSystemIngressCarrier } from "../resolver/system-ingress-provenance";
 import type { ResolvedSystemIngressDelivery } from "./input/resolved-system";
+import type {
+  CorrectiveWriteback,
+  FeedbackIngress,
+  FeedbackIngressGuard,
+  SafetyRegenerate,
+} from "./session-feedback-guard";
+import type { ToolExposureGuards } from "../adapter/tool/exposure/types";
+import type { ManagedMemoryWriteGuard } from "../memory/managed-write-guard";
 
 export const outputMediaGuard: unique symbol = Symbol(
   "crux.safety.outputMediaGuard",
@@ -43,12 +51,12 @@ export const oneShotOutputConstraints: unique symbol = Symbol(
   "crux.safety.oneShotOutputConstraints",
 );
 export const outputDownstreamMutators: unique symbol = Symbol(
-  '@use-crux/core/safety/outputDownstreamMutators',
-)
+  "@use-crux/core/safety/outputDownstreamMutators",
+);
 
 export const outputTerminalTextGuards: unique symbol = Symbol(
-  '@use-crux/core/safety/outputTerminalTextGuards',
-)
+  "@use-crux/core/safety/outputTerminalTextGuards",
+);
 
 export const languageStepGuardEnabled: unique symbol = Symbol(
   "crux.safety.languageStepGuardEnabled",
@@ -71,9 +79,7 @@ export const structuredStreamOpen: unique symbol = Symbol(
 export const structuredStreamOpenRaw: unique symbol = Symbol(
   "crux.safety.structuredStreamOpenRaw",
 );
-export const streamOpenRaw: unique symbol = Symbol(
-  "crux.safety.streamOpenRaw",
-);
+export const streamOpenRaw: unique symbol = Symbol("crux.safety.streamOpenRaw");
 export const streamCommitPlan: unique symbol = Symbol(
   "crux.safety.streamCommitPlan",
 );
@@ -86,6 +92,18 @@ export const modelIngressSources: unique symbol = Symbol(
 export const resolvedInputGuard: unique symbol = Symbol(
   "crux.safety.resolvedInputGuard",
 );
+export const feedbackIngressGuard: unique symbol = Symbol(
+  "crux.safety.feedbackIngressGuard",
+);
+export const toolDefinitionGuard: unique symbol = Symbol(
+  "crux.safety.toolDefinitionGuard",
+);
+export const toolDescriptionGuard: unique symbol = Symbol(
+  "crux.safety.toolDescriptionGuard",
+);
+export const memoryWriteGuard: unique symbol = Symbol(
+  "crux.safety.memoryWriteGuard",
+);
 
 type SafetyInput = Parameters<Safety["guardInput"]>[0];
 type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
@@ -93,6 +111,10 @@ type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
 };
 
 export interface SafetySession extends Safety {
+  [memoryWriteGuard]: ManagedMemoryWriteGuard;
+  [toolDefinitionGuard]: ToolExposureGuards["root"];
+  [toolDescriptionGuard]: ToolExposureGuards["descriptions"];
+  [feedbackIngressGuard](input: FeedbackIngress): Promise<string>;
   [modelIngressGuard](
     input: CanonicalModelIngress,
   ): Promise<CanonicalModelIngressResult>;
@@ -116,7 +138,7 @@ export interface SafetySession extends Safety {
   ): Promise<readonly StepContentEdit[]>;
   [languageTerminalFinalize](
     output: SafetyOutput,
-    regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    regenerate: SafetyRegenerate,
     opts?: TerminalFinalizeOptions,
   ): Promise<SafetyOutput>;
   [streamCompletionGuard](
@@ -125,8 +147,12 @@ export interface SafetySession extends Safety {
     representedText?: string,
     liveTextSlots?: readonly LiveTextSlot[],
   ): Promise<readonly AssistantContentPart[]>;
-  [structuredStreamOpen](structuredContext?: StructuredSafetyContext): SafetyStream;
-  [structuredStreamOpenRaw](structuredContext?: StructuredSafetyContext): SafetyStream;
+  [structuredStreamOpen](
+    structuredContext?: StructuredSafetyContext,
+  ): SafetyStream;
+  [structuredStreamOpenRaw](
+    structuredContext?: StructuredSafetyContext,
+  ): SafetyStream;
   [streamOpenRaw](): SafetyStream;
   readonly [streamCommitPlan]: StreamCommitPlan;
   [inputOperationTextGuard](
@@ -148,6 +174,49 @@ export interface SafetySession extends Safety {
   [outputOperationTextGuard](text: string, model?: string): Promise<string>;
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>;
 }
+
+/** @internal Read the managed-memory commit capability for this call. */
+export function safetySessionMemoryWriteGuard(
+  safety: Safety,
+): ManagedMemoryWriteGuard {
+  return (safety as SafetySession)[memoryWriteGuard];
+}
+
+/** @internal Read the bound root tool-definition guard. */
+export function safetySessionToolDefinitionGuard(
+  safety: Safety,
+): ToolExposureGuards["root"] {
+  return (safety as SafetySession)[toolDefinitionGuard];
+}
+
+/** @internal Read the bound tool-description guard. */
+export function safetySessionToolDescriptionGuard(
+  safety: Safety,
+): ToolExposureGuards["descriptions"] {
+  return (safety as SafetySession)[toolDescriptionGuard];
+}
+
+/** @internal Guard one corrective text occurrence before provider writeback. */
+export function guardSafetySessionFeedback(
+  safety: Safety,
+  input: FeedbackIngress,
+): Promise<string> {
+  return (safety as SafetySession)[feedbackIngressGuard](input);
+}
+
+/** @internal Read the bound corrective-ingress capability for retry planners. */
+export function safetySessionFeedbackGuard(
+  safety: Safety,
+): FeedbackIngressGuard {
+  return (input) => guardSafetySessionFeedback(safety, input);
+}
+
+export type {
+  CorrectiveWriteback,
+  FeedbackIngress,
+  FeedbackIngressGuard,
+  SafetyRegenerate,
+} from "./session-feedback-guard";
 
 /** @internal Guard one post-conversion canonical model-ingress value. */
 export function guardSafetySessionModelIngress(
@@ -245,6 +314,20 @@ export interface TerminalFinalizeOptions {
   readonly messages?: readonly Message[];
   readonly schema?: z.ZodType;
   /**
+   * Disable every corrective model call for a candidate-only evaluation.
+   *
+   * Cached candidates use this to run enforcing constraints once before
+   * deciding whether to fall through to a fresh live generation.
+   */
+  readonly retryAuthority?: "none";
+  /**
+   * Whether this exact candidate already passed current per-step output gates.
+   *
+   * Hydrated cache candidates set this false because their stored audit is not
+   * evidence that the current call's bindings evaluated them.
+   */
+  readonly stepOutputAlreadyGated?: boolean;
+  /**
    * Adapter-owned candidate validator run between terminal guardrails and
    * constraints: the single authoritative Zod `safeParse` plus any validation
    * retry. Given the guard function so a re-prompt can re-run terminal guardrails.
@@ -273,7 +356,7 @@ export interface TerminalFinalizeOptions {
 export function finalizeSafetySessionLanguageOutput(
   safety: Safety,
   output: SafetyOutput,
-  regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+  regenerate: SafetyRegenerate,
   opts?: TerminalFinalizeOptions,
 ): Promise<SafetyOutput> {
   return (safety as SafetySession)[languageTerminalFinalize](
@@ -301,7 +384,9 @@ export interface StreamCommitPlan {
 }
 
 /** @internal The resolved stream commit plan (assert-gate half) for this call. */
-export function safetySessionStreamCommitPlan(safety: Safety): StreamCommitPlan {
+export function safetySessionStreamCommitPlan(
+  safety: Safety,
+): StreamCommitPlan {
   return (safety as SafetySession)[streamCommitPlan];
 }
 

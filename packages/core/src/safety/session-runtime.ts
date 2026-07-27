@@ -19,7 +19,11 @@ import {
   recordBindingAuditEntries,
 } from "./binding-audit";
 import type { Constraint, ConstraintContext } from "./constraint/types";
-import type { GuardrailAudit, GuardrailContext } from "./guardrail/types";
+import type {
+  GuardrailAudit,
+  GuardrailContext,
+  GuardrailOrigin,
+} from "./guardrail/types";
 import { createSafetyStream } from "./stream/engine";
 import { failClosedOnRejection } from "./stream/fail-closed";
 import { finalizeLanguageTerminal } from "./output/terminal";
@@ -27,7 +31,6 @@ import type {
   OperationInputGuardContext,
   StructuredSafetyContext,
 } from "./session-bridge";
-import type { ModelInputOrigin } from "./input-origin";
 import type {
   Safety,
   SafetyCallOptions,
@@ -45,6 +48,10 @@ import {
 import { createSessionConstraintRunner } from "./session-constraints";
 import { createSafetySessionMethods } from "./session-methods";
 import { createScopedSafetySession } from "./scope-session";
+import { guardSessionFeedback } from "./session-feedback-guard";
+import type { SafetyRegenerate } from "./session-feedback-guard";
+import { createToolExposureSafetyGuards } from "../adapter/tool/exposure/safety-guard";
+import { createManagedMemoryWriteGuard } from "../memory/managed-write-guard";
 
 // ─────────────────────────────────────────────────────────────────
 // createSafety
@@ -123,11 +130,17 @@ function createSafetySession(
   const guardrailBindings = enabledGuardrailBindings(registry.bindings);
   const disabledGuardEntries = disabledBindingEntries(registry.bindings);
   const dormantGuardEntries = dormantBindingEntries(registry.bindings);
+  const memoryWriteBindings = guardrailBindings.filter(
+    (binding) => binding.boundary.id === "memory.write",
+  );
 
   // Phase dispatch is keyed, not branched — the phase vocabulary can grow
   // (tool-args, tool-result, context-inject) without session surgery.
   const bindingsByPhase = new Map<"input" | "output", GuardrailBinding[]>();
   for (const binding of guardrailBindings) {
+    // Managed memory commits have their own lifecycle and must never run as a
+    // model-output guard merely because they occur after generation.
+    if (binding.boundary.id === "memory.write") continue;
     const phase = boundaryPhase(binding.boundary);
     const list = bindingsByPhase.get(phase) ?? [];
     list.push(binding);
@@ -151,12 +164,14 @@ function createSafetySession(
   let guardrailAudit: GuardrailAudit | undefined;
   let lastMessages: readonly Message[] = [];
 
-  const guardContext = (
+  const guardContext = <
+    TOrigin extends GuardrailOrigin = import("./input-origin").ModelInputOrigin,
+  >(
     _phase: "input" | "output",
     messages: readonly Message[],
     override?: OperationInputGuardContext,
-    origin?: ModelInputOrigin,
-  ): GuardrailContext => ({
+    origin?: TOrigin,
+  ): GuardrailContext<TOrigin> => ({
     promptId: options.promptId,
     model: override ? override.model : options.model,
     messages,
@@ -181,6 +196,31 @@ function createSafetySession(
     metadata,
   });
 
+  const appendGuardrailAudit = (audit: GuardrailAudit): void => {
+    guardrailAudit = {
+      applied: [...(guardrailAudit?.applied ?? []), ...audit.applied],
+      blocked: guardrailAudit?.blocked === true || audit.blocked,
+    };
+  };
+  const guardFeedback = (
+    input: import("./session-feedback-guard").FeedbackIngress,
+  ) =>
+    guardSessionFeedback({
+      bindings: phaseBindings("input"),
+      input,
+      context: guardContext("input", lastMessages),
+      appendAudit: appendGuardrailAudit,
+    });
+  const toolExposureGuards = createToolExposureSafetyGuards({
+    bindings: phaseBindings("input"),
+    context: (origin) => guardContext("input", lastMessages, undefined, origin),
+    appendAudit: appendGuardrailAudit,
+  });
+  const managedMemoryWriteGuard = createManagedMemoryWriteGuard({
+    bindings: memoryWriteBindings,
+    context: () => guardContext("output", lastMessages),
+    appendAudit: appendGuardrailAudit,
+  });
   const constraintRunner = createSessionConstraintRunner({
     constraints,
     reportConstraints,
@@ -190,13 +230,6 @@ function createSafetySession(
     constraintMaxRetries: options.call?.constraintMaxRetries,
     transcript,
   });
-
-  const appendGuardrailAudit = (audit: GuardrailAudit): void => {
-    guardrailAudit = {
-      applied: [...(guardrailAudit?.applied ?? []), ...audit.applied],
-      blocked: guardrailAudit?.blocked === true || audit.blocked,
-    };
-  };
 
   if (disabledGuardEntries.length > 0) {
     appendGuardrailAudit({ applied: disabledGuardEntries, blocked: false });
@@ -209,12 +242,14 @@ function createSafetySession(
 
   async function finalizeLanguageOutput(
     output: SafetyOutput,
-    regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    regenerate: SafetyRegenerate,
     opts:
       | {
           readonly suspended?: boolean;
           readonly messages?: readonly Message[];
           readonly schema?: z.ZodType;
+          readonly retryAuthority?: "none";
+          readonly stepOutputAlreadyGated?: boolean;
           readonly prepareValidated?: (
             guarded: SafetyOutput,
             guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
@@ -236,13 +271,15 @@ function createSafetySession(
       suspended: opts?.suspended,
       messages: lastMessages,
       schema: opts?.schema,
+      retryAuthority: opts?.retryAuthority,
       ...(opts?.prepareValidated
         ? { prepareValidated: opts.prepareValidated }
         : {}),
       ...(opts?.structuredContext
         ? { structuredContext: opts.structuredContext }
         : {}),
-      objectOccurrencesAlreadyGated: opts?.objectOccurrencesAlreadyGated ?? false,
+      objectOccurrencesAlreadyGated:
+        opts?.objectOccurrencesAlreadyGated ?? false,
       ...(opts?.settled ? { settled: opts.settled } : {}),
       context: guardContext("output", lastMessages),
       appendAudit: appendGuardrailAudit,
@@ -295,6 +332,7 @@ function createSafetySession(
     constraintContext,
     appendGuardrailAudit,
     guardrailAudit: () => guardrailAudit,
+    lateGuardrailAudit: memoryWriteBindings.length > 0,
     constraintRunner,
     transcript,
     messages: {
@@ -306,6 +344,9 @@ function createSafetySession(
     finalizeLanguageOutput,
     openStream,
     openStreamRaw: openStreamRawForAdapter,
+    guardFeedback,
+    toolExposureGuards,
+    managedMemoryWriteGuard,
   });
   return createScopedSafetySession(options.promptId, session);
 }
@@ -318,6 +359,8 @@ function isInputBoundary(boundary: BoundaryDef): boolean {
   return (
     boundary.id === "model.input.text" ||
     boundary.id === "model.input.media" ||
-    boundary.id === "model.instructions"
+    boundary.id === "model.instructions" ||
+    boundary.id === "model.input.tools" ||
+    boundary.id === "validation.feedback"
   );
 }

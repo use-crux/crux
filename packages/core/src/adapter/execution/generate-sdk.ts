@@ -16,7 +16,11 @@ import {
   createSafetyLanguageStepTransformer,
   finalizeSafetySessionLanguageOutput,
   guardSafetySessionResolvedInput,
+  safetySessionFeedbackGuard,
+  safetySessionMemoryWriteGuard,
   safetySessionModelIngressGuard,
+  safetySessionToolDefinitionGuard,
+  safetySessionToolDescriptionGuard,
   safetyRequiresLanguageStepTransform,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -66,6 +70,16 @@ import { materializeToolSources } from "./tool-sources";
 import { toolModelIngressDialect } from "../tool/model-ingress-port";
 import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
 import { systemMessagePrefixPatch } from "./system-prefix-patch";
+import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
+import { replaceFinalAssistantOutput } from "./messages";
+import {
+  compileStructuredOutputForRequest,
+  CruxUnsupportedStructuredOutputError,
+  type StructuredOutputPlan,
+} from "../structured-output";
+import { withDefaultResolverPorts } from "../../resolver/ports";
+import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
+import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -143,14 +157,21 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     safety,
     resolved.schema,
   );
-  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
-    messages,
-    prompt: promptText,
-    system: currentSystem,
-  }, {
-    resolvedMessages:
-      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
-  });
+  const guardedInput = await guardSafetySessionResolvedInput(
+    safety,
+    resolved,
+    {
+      messages,
+      prompt: promptText,
+      system: currentSystem,
+    },
+    {
+      resolvedMessages:
+        initialMessages.source === "resolved-messages"
+          ? "selected"
+          : "discarded",
+    },
+  );
   if (
     guardedInput.messages !== messages ||
     guardedInput.system !== currentSystem
@@ -196,11 +217,16 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       timeout: args.timeout,
       abortSignal: args.signal,
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
       guardSkillAmendment,
+    });
+    await lifecycle.guardExposure({
+      root: safetySessionToolDefinitionGuard(safety),
+      descriptions: safetySessionToolDescriptionGuard(safety),
     });
     const resumed = await lifecycle.resume(messages);
     messages = resumed.messages;
@@ -211,6 +237,44 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   }
   const maxSteps =
     args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS;
+  let structuredPlan: StructuredOutputPlan | undefined;
+  if (resolved.schema) {
+    const capabilities = dialect.structuredOutput?.capabilities(modelInfo);
+    if (!capabilities) {
+      throw new CruxUnsupportedStructuredOutputError(
+        dialect.id,
+        `the selected model "${
+          modelInfo.provider || modelInfo.modelId || "unknown"
+        }" has no verified structured-output capability profile`,
+      );
+    }
+    structuredPlan = compileStructuredOutputForRequest(
+      resolved.schema,
+      capabilities,
+      {
+        diagnostics: withDefaultResolverPorts().diagnostics,
+        promptId: prompt.id,
+      },
+    );
+  }
+  const cachedFinalizer =
+    resolved.schema && structuredPlan
+      ? createCachedGenerateCandidateFinalizer({
+          output: "object",
+          safety,
+          messages: () => messages,
+          schema: resolved.schema,
+          promptId: prompt.id ?? "unknown",
+          structuredContext: {
+            canonicalSchema: structuredPlan.canonicalSchema,
+            decodeManifest: structuredPlan.decodeManifest,
+          },
+        })
+      : createCachedGenerateCandidateFinalizer({
+          output: "text",
+          safety,
+          messages: () => messages,
+        });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);
   const stepFacts: ResultStepFacts[] = [];
@@ -236,8 +300,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           ...(lifecycle.tools !== undefined ? { tools: lifecycle.tools } : {}),
           ...(amendment[systemMessagePrefixPatch] !== undefined
             ? {
-                [systemMessagePrefixPatch]:
-                  amendment[systemMessagePrefixPatch],
+                [systemMessagePrefixPatch]: amendment[systemMessagePrefixPatch],
               }
             : {}),
           refundStep: true,
@@ -305,30 +368,37 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         Record<string, unknown>,
         AdapterExecutionGenerateResultWithoutRunId<TRawResponse>
       >(
-        {
-          promptId: prompt.id,
-          promptConfig:
-            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-          preparedArgs: {
-            model: modelInfo.modelId,
-            system: currentSystem,
-            systemBlocks: currentSystemBlocks,
-            prompt: promptText,
-            messages,
-            settings: mappedSettings,
-            schema: resolved.schema,
-            tools: lifecycle.tools,
+        attachCachedCandidateFinalizer(
+          {
+            promptId: prompt.id,
+            promptConfig:
+              prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+            preparedArgs: {
+              model: modelInfo.modelId,
+              system: currentSystem,
+              systemBlocks: currentSystemBlocks,
+              prompt: promptText,
+              messages,
+              settings: mappedSettings,
+              schema: resolved.schema,
+              tools: lifecycle.tools,
+              input: args.input ?? {},
+              ...(await inspectForDevtools(
+                prompt,
+                resolveOpts,
+                lifecycle.tools,
+              )),
+            },
+            model: args.model,
+            traceModel: modelInfo.modelId || undefined,
             input: args.input ?? {},
-            ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
+            provider: modelInfo.provider || dialect.id,
+            resolved,
+            outputMode: resolved.schema ? "object" : "text",
+            timeout: args.timeout,
           },
-          model: args.model,
-          traceModel: modelInfo.modelId || undefined,
-          input: args.input ?? {},
-          provider: modelInfo.provider || dialect.id,
-          resolved,
-          outputMode: resolved.schema ? "object" : "text",
-          timeout: args.timeout,
-        },
+          cachedFinalizer,
+        ),
         async () => {
           try {
             const result = resolved.schema
@@ -337,6 +407,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
                   args,
                   request: await buildRequest(undefined),
                   schema: resolved.schema,
+                  plan: structuredPlan!,
                   safety,
                   retryId,
                   promptId: prompt.id,
@@ -400,8 +471,19 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     const finalOutput = await finalizeSafetySessionLanguageOutput(
       safety,
       { text: finalText, parsed: undefined },
-      async (corrective) => {
-        const regenMessages: Message[] = [...resultMessages, ...corrective];
+      async (corrective, writeback) => {
+        const guardedWriteback = await guardCorrectiveWriteback({
+          ...writeback,
+          corrective,
+          guard: safetySessionFeedbackGuard(safety),
+        });
+        const regenMessages: Message[] = [
+          ...replaceFinalAssistantOutput(
+            resultMessages,
+            guardedWriteback.rejectedOutput,
+          ),
+          ...guardedWriteback.corrective,
+        ];
         const regenRequest: ExecutorRequest<TModel> = {
           ...request,
           prompt: undefined,

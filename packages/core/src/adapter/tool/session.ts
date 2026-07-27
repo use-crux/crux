@@ -34,6 +34,7 @@
 
 import { z } from "zod";
 import type { ResolvedPrompt } from "../../resolver/types";
+import type { ManagedMemoryWriteGuard } from "../../memory/managed-write-guard";
 import type { TimeoutOptions } from "../../generation/timeout";
 import {
   TimeoutError,
@@ -149,6 +150,9 @@ import {
   systemMessagePrefixPatch,
   type SystemMessagePrefixPatch,
 } from "../execution/system-prefix-patch";
+import { createToolExposureEvaluator } from "./exposure/evaluator";
+import { readToolExposureProvenance } from "./exposure/provenance";
+import type { ToolExposureGuards } from "./exposure/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -214,6 +218,8 @@ export interface ToolLifecycleOptions {
   readonly abortSignal?: AbortSignal;
   /** @internal Guards post-conversion canonical tool output before writeback. */
   readonly modelIngress?: ModelIngressGuard;
+  /** @internal Gates block-managed memory candidates before durable commit. */
+  readonly memoryWriteGuard?: ManagedMemoryWriteGuard;
   /** @internal Wraps SDK-owned tools in their native model-output dialect. */
   readonly sdkModelIngress?: ToolModelIngressDialect;
   /** @internal Active provider used for dialect-native semantic projections. */
@@ -388,6 +394,17 @@ export interface ToolLifecycle {
   readonly descriptors: readonly ToolDescriptor[] | undefined;
 
   /**
+   * Evaluate the current provider-visible tool set before transport.
+   *
+   * The first call evaluates every winning definition. Later calls after skill
+   * activation reuse unchanged descriptor/provenance fingerprints and evaluate
+   * only new or changed definitions.
+   *
+   * @internal
+   */
+  guardExposure(guards: ToolExposureGuards): Promise<void>;
+
+  /**
    * SDK regime: evaluate the effective approval policy for one tool call.
    * Core regime uses the same logic inside `executeRound()`.
    */
@@ -533,6 +550,13 @@ export function createToolLifecycle(
   let wrappedTools: Record<string, unknown> = {};
   let armedTools: Record<string, unknown> | undefined;
   let descriptors: ToolDescriptor[] | undefined;
+  let exposedDescriptors: readonly ToolDescriptor[] = [];
+  let exposureCandidates: Array<{
+    readonly descriptor: ToolDescriptor;
+    readonly provenance: ReturnType<typeof readToolExposureProvenance>;
+  }> = [];
+  let exposureGuards: ToolExposureGuards | undefined;
+  let enabled = false;
   let middlewareCount = 0;
   const capabilityResolution: ToolInputCapabilitiesResolution =
     options.toolInputCapabilities ??
@@ -542,6 +566,7 @@ export function createToolLifecycle(
   // Per-tool compiled input plans (wire schema + decode manifest + Zod), rebuilt
   // on every arm() alongside the tool registry.
   const toolInputPlans = new Map<string, ToolInputPlan>();
+  const exposureEvaluator = createToolExposureEvaluator();
   let skillSession: SkillActivationSession | undefined;
   let approvalDeclarations: readonly ApprovalDeclaration[] = [];
   let toolContexts: ResolvedToolsContext = {};
@@ -596,46 +621,21 @@ export function createToolLifecycle(
       ...(resolved.toolApprovalDeclarations ?? []),
       ...callApprovalDeclarations(options.call?.toolApproval),
     ];
-    if (options.regime === "core") {
-      descriptors = convertTools(
+    const canonical =
+      convertTools(
         wrappedTools,
         toolInputPlans,
-        options.sanitizeToolSchema,
-      );
-    } else {
-      const keys = Object.keys(wrappedTools);
-      if (keys.length === 0) {
-        armedTools = undefined;
-      } else {
-        let executable = withToolLifecycleExecutionOptions(
-          wrappedTools,
-          executionOptionsForSdkTool,
-        );
-        if (options.modelIngress) {
-          if (!options.sdkModelIngress) {
-            throw new Error(
-              "The loop runtime cannot guard native tool model output because it does not provide a model-ingress dialect hook.",
-            );
-          }
-          const guard = options.abortSignal
-            ? (input: Parameters<ModelIngressGuard>[0]) =>
-                withAbortSignal(
-                  () => options.modelIngress!(input),
-                  options.abortSignal,
-                )
-            : options.modelIngress;
-          executable = options.sdkModelIngress(executable, guard, {
-            provider: options.modelIngressProvider,
-          });
-        }
-        armedTools = instrumentToolSet(executable);
-      }
-    }
+        options.regime === "core" ? options.sanitizeToolSchema : undefined,
+      ) ?? [];
+    exposureCandidates = canonical.map((descriptor) => ({
+      descriptor,
+      provenance: readToolExposureProvenance(wrappedTools[descriptor.name]),
+    }));
+    applyExposedDescriptors(canonical);
   }
 
   arm(options.resolved);
 
-  const enabled = Object.keys(wrappedTools).length > 0;
   transcript.push({
     t: "prepare",
     tools: Object.keys(wrappedTools).length,
@@ -657,6 +657,65 @@ export function createToolLifecycle(
   const mintToken = options.createApprovalToken ?? defaultCreateApprovalToken;
   const appendRound: AppendToolRound =
     options.appendToolRound ?? canonicalAppendToolRound;
+
+  function applyExposedDescriptors(
+    exposed: readonly ToolDescriptor[],
+  ): void {
+    exposedDescriptors = exposed;
+    const retained = new Set(exposed.map((descriptor) => descriptor.name));
+    wrappedTools = createToolRegistry(
+      Object.fromEntries(
+        Object.entries(wrappedTools).filter(([name]) => retained.has(name)),
+      ),
+    );
+    for (const name of [...toolInputPlans.keys()]) {
+      if (!retained.has(name)) toolInputPlans.delete(name);
+    }
+    enabled = retained.size > 0;
+
+    if (options.regime === "core") {
+      descriptors = exposed.length > 0 ? [...exposed] : undefined;
+      armedTools = undefined;
+      return;
+    }
+
+    descriptors = undefined;
+    const exposedTools = createToolRegistry<unknown>();
+    for (const descriptor of exposed) {
+      const tool = wrappedTools[descriptor.name];
+      exposedTools[descriptor.name] =
+        tool && typeof tool === "object"
+          ? { ...tool, description: descriptor.description }
+          : tool;
+    }
+    if (Object.keys(exposedTools).length === 0) {
+      armedTools = undefined;
+      return;
+    }
+
+    let executable = withToolLifecycleExecutionOptions(
+      exposedTools,
+      executionOptionsForSdkTool,
+    );
+    if (options.modelIngress) {
+      if (!options.sdkModelIngress) {
+        throw new Error(
+          "The loop runtime cannot guard native tool model output because it does not provide a model-ingress dialect hook.",
+        );
+      }
+      const guard = options.abortSignal
+        ? (input: Parameters<ModelIngressGuard>[0]) =>
+            withAbortSignal(
+              () => options.modelIngress!(input),
+              options.abortSignal,
+            )
+        : options.modelIngress;
+      executable = options.sdkModelIngress(executable, guard, {
+        provider: options.modelIngressProvider,
+      });
+    }
+    armedTools = instrumentToolSet(executable);
+  }
 
   const currentTraceId = (): string | undefined =>
     getExecutionContext()?.traceId ?? observe.captureContext()?.traceId;
@@ -1347,7 +1406,9 @@ export function createToolLifecycle(
   }
 
   return {
-    enabled,
+    get enabled() {
+      return enabled;
+    },
 
     get tools() {
       return armedTools;
@@ -1360,15 +1421,29 @@ export function createToolLifecycle(
       // is unwrapped and a raw JSON Schema is installed correctly. Tools with no
       // schema are left untouched. Undefined when no such tool exists.
       let result: Record<string, JsonSchemaObject> | undefined;
+      const exposedByName = new Map(
+        exposedDescriptors.map((descriptor) => [descriptor.name, descriptor]),
+      );
       for (const [name, plan] of toolInputPlans) {
         if (!plan.hasAuthoredSchema) continue;
-        (result ??= {})[name] = plan.wireSchema;
+        const descriptor = exposedByName.get(name);
+        if (!descriptor) continue;
+        (result ??= {})[name] = descriptor.parameters;
       }
       return result;
     },
 
     get descriptors() {
       return descriptors;
+    },
+
+    async guardExposure(guards) {
+      exposureGuards = guards;
+      const exposed = await exposureEvaluator.evaluate(
+        exposureCandidates,
+        guards,
+      );
+      applyExposedDescriptors(exposed);
     },
 
     requiresApproval: async (toolCall, messages) => {
@@ -1505,11 +1580,17 @@ export function createToolLifecycle(
             systemBlocks: reResolved.systemBlocks,
           };
       const { prefixPatch, ...amendment } = guarded;
-      skillSession.markInjected(newSkills.map((entry) => entry.id));
-
       // Re-arm the surface and re-notify approval middleware against the
       // REBUILT tool instances (decision dedup keeps this idempotent).
       arm(reResolved);
+      if (exposureGuards) {
+        const exposed = await exposureEvaluator.evaluate(
+          exposureCandidates,
+          exposureGuards,
+        );
+        applyExposedDescriptors(exposed);
+      }
+      skillSession.markInjected(newSkills.map((entry) => entry.id));
       await notifyToolApprovalResponses(wrappedTools, lastMessages);
 
       return {
@@ -1596,6 +1677,7 @@ export function createToolLifecycle(
         messages: [...args.messages],
         assistantText: args.assistantText,
         toolCalls,
+        memoryWriteGuard: options.memoryWriteGuard,
       });
     },
 

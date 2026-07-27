@@ -7,6 +7,7 @@ import { loopRuntimeAdapter } from "../../src/adapter/define-executor";
 import type { AdapterSpec } from "../../src/adapter/spec";
 import { fakeLoopRuntime } from "../../src/adapter/testing";
 import type { AdapterResponse } from "../../src/adapter/types";
+import type { CallArgs } from "../../src/adapter/types";
 import { prompt } from "../../src/prompt/prompt";
 import { boundary, constraint, guardrail } from "../../src/safety";
 import { permissiveCapabilities } from "./structured-output/capability-fixtures";
@@ -43,6 +44,8 @@ describe("language step Safety — constraint regeneration", () => {
     });
     const textSeen: string[] = [];
     const mediaOrigins: unknown[] = [];
+    const feedbackOrigins: unknown[] = [];
+    let legacyFeedbackCalls = 0;
     const scripted = coreScript([
       { text: "draft" },
       {
@@ -67,6 +70,15 @@ describe("language step Safety — constraint regeneration", () => {
               return { action: "strip", reason: "remove media" };
             },
           }),
+          rewriteFeedback(feedbackOrigins),
+          guardrail({
+            id: "legacy-must-ignore-constraint",
+            on: boundary.validation.feedback(),
+            run: () => {
+              legacyFeedbackCalls += 1;
+              return { action: "allow" };
+            },
+          }),
         ],
       },
     );
@@ -82,10 +94,22 @@ describe("language step Safety — constraint regeneration", () => {
       role: "assistant",
       content: [{ type: "text", text: "safe ship" }],
     });
+    expect(JSON.stringify(scripted.requests[1]?.messages)).toContain(
+      "guarded rejected draft",
+    );
+    expect(JSON.stringify(scripted.requests[1]?.messages)).toContain(
+      "mention safe ship",
+    );
+    expect(feedbackOrigins).toEqual([
+      { source: "feedback", kind: "rejected-output", attempt: 1 },
+      { source: "feedback", kind: "constraint-feedback", attempt: 1 },
+    ]);
+    expect(legacyFeedbackCalls).toBe(0);
   });
 
   it("guards an SDK-loop regeneration once with a monotonic provider ordinal", async () => {
     const seen: string[] = [];
+    const feedbackOrigins: unknown[] = [];
     const fake = fakeLoopRuntime({
       loops: [[{ text: "draft" }], [{ text: "unsafe ship" }]],
     });
@@ -94,13 +118,23 @@ describe("language step Safety — constraint regeneration", () => {
       model: "fake:test-model",
       input: { message: "write" },
       constraints: [needsShip()],
-      guardrails: [rewriteUnsafe(seen)],
+      guardrails: [rewriteUnsafe(seen), rewriteFeedback(feedbackOrigins)],
     });
 
     expect(seen).toEqual(["draft", "unsafe ship"]);
     expect(result.steps.map((step) => step.text)).toEqual(["", "safe ship"]);
     expect(result.finalStep.text).toBe("safe ship");
     expect(result.text).toBe("safe ship");
+    expect(JSON.stringify(fake.calls.runTextLoop[1]?.messages)).toContain(
+      "guarded rejected draft",
+    );
+    expect(JSON.stringify(fake.calls.runTextLoop[1]?.messages)).toContain(
+      "mention safe ship",
+    );
+    expect(feedbackOrigins).toEqual([
+      { source: "feedback", kind: "rejected-output", attempt: 1 },
+      { source: "feedback", kind: "constraint-feedback", attempt: 1 },
+    ]);
   });
 
   it("rejects a schema-invalid core regeneration before constraint recheck", async () => {
@@ -189,13 +223,32 @@ function rewriteUnsafe(seen: string[]) {
   });
 }
 
+function rewriteFeedback(origins: unknown[]) {
+  return guardrail({
+    id: `rewrite-feedback-${origins.length}`,
+    on: boundary.input.text({ from: "feedback" }),
+    run: (text, context) => {
+      origins.push(context.origin);
+      return {
+        action: "rewrite" as const,
+        value: text
+          .replace("draft", "guarded rejected draft")
+          .replace("mention ship", "mention safe ship"),
+        rewrite: { kind: "redact" as const },
+      };
+    },
+  });
+}
+
 function coreScript(responses: readonly AdapterResponse[]) {
   const queue = [...responses];
+  const requests: CallArgs[] = [];
   const client = { kind: "constraint-regeneration" as const };
   const spec: AdapterSpec<typeof client, { readonly call: number }, never> = {
     providerId: "constraint-regeneration",
     structuredOutput: { accepts: permissiveCapabilities },
-    async call() {
+    async call(_client, args) {
+      requests.push(args);
       return {
         raw: { call: responses.length - queue.length },
         extracted: queue.shift()!,
@@ -214,6 +267,7 @@ function coreScript(responses: readonly AdapterResponse[]) {
   return {
     spec,
     client,
+    requests,
     get calls() {
       return responses.length - queue.length;
     },

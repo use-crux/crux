@@ -21,6 +21,7 @@ import type {
 } from "./targets";
 import type { MediaPartLocation } from "../../safety/media/types";
 import type { ModelInputOrigin } from "../../safety/input-origin";
+import type { ToolDefinitionOrigin } from "../../safety/input-tool-boundary";
 
 /** Safety-specific facts that explain one decision without retaining content. */
 export interface TurnSafetyDecisionDetails {
@@ -34,7 +35,7 @@ export interface TurnSafetyDecisionDetails {
   /** Whether enforcement changed canonical content before delivery. */
   changed: boolean;
   /** Privacy-safe model-ingress provenance, when the target has one. */
-  origin?: ModelInputOrigin;
+  origin?: ModelInputOrigin | ToolDefinitionOrigin;
 }
 
 /** One canonical explanation report for a model call or stream turn. */

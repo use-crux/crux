@@ -14,6 +14,7 @@ import { z } from "zod";
 import { prompt } from "@use-crux/core";
 import { boundary } from "@use-crux/core/safety";
 import { constraint } from "@use-crux/core/safety";
+import { guardrail } from "@use-crux/core/safety";
 import { ConstraintViolationError } from "@use-crux/core/safety";
 import { createCruxAi, toUIMessageStream } from "../src";
 import { capturingStreamingEmissionModel } from "./mock-model";
@@ -34,11 +35,14 @@ async function drainText(handle: {
 
 describe("coordinated SDK stream", () => {
   it("retries a rejected assert attempt and publishes only the accepted stream", async () => {
+    const feedbackOrigins: unknown[] = [];
     const countPositive = constraint({
       id: "count-positive",
       on: boundary.output.object<{ title: string; count: number }>(),
       run: (obj: { title: string; count: number }) =>
-        obj.count > 0 ? { pass: true } : { pass: false, feedback: "count must be positive" },
+        obj.count > 0
+          ? { pass: true }
+          : { pass: false, feedback: "count must be positive" },
     });
     const { model, prompts } = capturingStreamingEmissionModel([
       { text: '{"title":"a","count":-1}' }, // rejected
@@ -48,6 +52,26 @@ describe("coordinated SDK stream", () => {
     const handle = await createCruxAi().stream(structured, {
       model,
       constraints: [countPositive],
+      guardrails: [
+        guardrail({
+          id: "rewrite-sdk-stream-feedback",
+          on: boundary.input.text({ from: "feedback" }),
+          run: (value, context) => {
+            feedbackOrigins.push(context.origin);
+            return {
+              action: "rewrite",
+              value:
+                context.origin?.kind === "rejected-output"
+                  ? "[guarded rejected output]"
+                  : value.replace(
+                      "count must be positive",
+                      "guarded constraint feedback",
+                    ),
+              rewrite: { kind: "redact" },
+            };
+          },
+        }),
+      ],
     });
     const text = await drainText(handle);
     const completion = await handle.completion;
@@ -57,7 +81,48 @@ describe("coordinated SDK stream", () => {
     expect(completion.object).toEqual({ title: "a", count: 2 });
     // Two physical provider calls; the retry carried corrective feedback.
     expect(prompts).toHaveLength(2);
-    expect(JSON.stringify(prompts[1])).toContain("count must be positive");
+    const retryPrompt = JSON.stringify(prompts[1]);
+    expect(retryPrompt).toContain("[guarded rejected output]");
+    expect(retryPrompt).toContain("guarded constraint feedback");
+    expect(retryPrompt).not.toContain("-1");
+    expect(feedbackOrigins).toEqual([
+      { source: "feedback", kind: "rejected-output", attempt: 1 },
+      { source: "feedback", kind: "constraint-feedback", attempt: 1 },
+    ]);
+  });
+
+  it("starts no next SDK stream attempt when feedback ingress blocks", async () => {
+    const countPositive = constraint({
+      id: "count-positive-blocked-feedback",
+      on: boundary.output.object<{ title: string; count: number }>(),
+      run: (obj: { title: string; count: number }) =>
+        obj.count > 0
+          ? { pass: true }
+          : { pass: false, feedback: "count must be positive" },
+    });
+    const { model, prompts } = capturingStreamingEmissionModel([
+      { text: '{"title":"a","count":-1}' },
+      { text: '{"title":"unreachable","count":2}' },
+    ]);
+    const handle = await createCruxAi().stream(structured, {
+      model,
+      constraints: [countPositive],
+      guardrails: [
+        guardrail({
+          id: "block-sdk-stream-feedback",
+          on: boundary.input.text({ from: "feedback" }),
+          run: () => ({
+            action: "block",
+            reason: "unsafe retry writeback",
+          }),
+        }),
+      ],
+    });
+
+    await expect(drainText(handle)).rejects.toMatchObject({
+      name: "GuardrailBlockedError",
+    });
+    expect(prompts).toHaveLength(1);
   });
 
   it("throws ConstraintViolationError when retries are exhausted, leaking no bytes", async () => {
@@ -110,7 +175,9 @@ describe("coordinated SDK stream", () => {
       on: boundary.output.object<{ title: string; count: number }>(),
       run,
     });
-    const { model } = capturingStreamingEmissionModel([{ text: '{"title":"a","count":2}' }]);
+    const { model } = capturingStreamingEmissionModel([
+      { text: '{"title":"a","count":2}' },
+    ]);
     const handle = await createCruxAi().stream(structured, {
       model,
       constraints: [once],
@@ -151,7 +218,9 @@ describe("coordinated SDK stream lifecycle", () => {
     id: "count-positive",
     on: boundary.output.object<{ title: string; count: number }>(),
     run: (obj: { title: string; count: number }) =>
-      obj.count > 0 ? { pass: true } : { pass: false, feedback: "count must be positive" },
+      obj.count > 0
+        ? { pass: true }
+        : { pass: false, feedback: "count must be positive" },
   });
 
   const twoAttempts = () =>
@@ -180,7 +249,10 @@ describe("coordinated SDK stream lifecycle", () => {
         setTimeout(() => reject(new Error("completion deadlocked")), 5000),
       ),
     ]);
-    expect((completion as { object?: unknown }).object).toEqual({ title: "a", count: 2 });
+    expect((completion as { object?: unknown }).object).toEqual({
+      title: "a",
+      count: 2,
+    });
   });
 
   it("serves fullStream and textStream simultaneously without stealing parts", async () => {
@@ -247,10 +319,16 @@ describe("coordinated SDK stream lifecycle", () => {
     const completion = await Promise.race([
       handle.completion,
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("completion stalled after early return")), 5000),
+        setTimeout(
+          () => reject(new Error("completion stalled after early return")),
+          5000,
+        ),
       ),
     ]);
-    expect((completion as { object?: unknown }).object).toEqual({ title: "a", count: 2 });
+    expect((completion as { object?: unknown }).object).toEqual({
+      title: "a",
+      count: 2,
+    });
   });
 
   it("does not raise an unhandled rejection when only one surface is consumed", async () => {
@@ -276,7 +354,9 @@ describe("coordinated SDK stream lifecycle", () => {
         constraints: [impossible],
       });
       // Consume ONLY the text surface; `completion` is never awaited.
-      await expect(drainText(handle)).rejects.toBeInstanceOf(ConstraintViolationError);
+      await expect(drainText(handle)).rejects.toBeInstanceOf(
+        ConstraintViolationError,
+      );
       await new Promise((resolve) => setTimeout(resolve, 50));
     } finally {
       process.off("unhandledRejection", onUnhandled);
@@ -345,7 +425,9 @@ describe("coordinated SDK stream preserves the documented surface", () => {
     id: "count-positive",
     on: boundary.output.object<{ title: string; count: number }>(),
     run: (obj: { title: string; count: number }) =>
-      obj.count > 0 ? { pass: true } : { pass: false, feedback: "count must be positive" },
+      obj.count > 0
+        ? { pass: true }
+        : { pass: false, feedback: "count must be positive" },
   });
 
   const twoAttempts = () =>
@@ -364,7 +446,9 @@ describe("coordinated SDK stream preserves the documented surface", () => {
     for (const key of ["fullStream", "textStream", "partialOutputStream"]) {
       expect(surfaces[key]).toBeInstanceOf(ReadableStream);
       expect(
-        typeof (surfaces[key] as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator],
+        typeof (surfaces[key] as { [Symbol.asyncIterator]?: unknown })[
+          Symbol.asyncIterator
+        ],
       ).toBe("function");
     }
   });
@@ -422,12 +506,16 @@ describe("coordinated SDK route parity invariants", () => {
     id: "must-cite",
     on: boundary.output.text(),
     run: (text: string) =>
-      text.includes("[1]") ? { pass: true } : { pass: false, feedback: "cite a source" },
+      text.includes("[1]")
+        ? { pass: true }
+        : { pass: false, feedback: "cite a source" },
   });
   const textPrompt = prompt({ id: "parity-text", prompt: "answer" });
 
   it("forwards committed text before EOF (early unlock, matching the native route)", async () => {
-    const { model } = capturingStreamingEmissionModel([{ text: "answered [1]" }]);
+    const { model } = capturingStreamingEmissionModel([
+      { text: "answered [1]" },
+    ]);
     const handle = await createCruxAi().stream(textPrompt, {
       model,
       constraints: [mustCite],
@@ -458,7 +546,10 @@ describe("coordinated SDK route parity invariants", () => {
       Promise.race([
         drainText(handle).catch(() => "settled"),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("step budget never applied")), 4000),
+          setTimeout(
+            () => reject(new Error("step budget never applied")),
+            4000,
+          ),
         ),
       ]),
     ).resolves.toBeDefined();

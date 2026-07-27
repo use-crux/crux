@@ -26,18 +26,19 @@ policies and attaches them globally, to prompts/contexts, or per call.
 
 Policies bind to typed boundary descriptors:
 
-| Helper                             | Boundary                                                                        |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| `boundary.input.text()`            | Untrusted user, tool, and rendered retrieval text immediately before the model. |
-| `boundary.input.media()`           | Canonical user and tool media immediately before provider normalization.        |
-| `boundary.input.instructions()`    | Trusted developer and system instructions.                                      |
-| `boundary.output.text()`           | Final model output text.                                                        |
-| `boundary.output.media()`          | Each canonical model/operation output media part before public accumulation.    |
-| `boundary.output.object<T>()`      | Parsed structured output object.                                                |
-| `boundary.output.both<T>()`        | `{ text, object }` structured output pair.                                      |
-| `boundary.output.object<T>().path('a.b')` | Typed structured-output path.                                            |
-| `boundary.memory.write<T>()`       | Candidate memory writes.                                                        |
-| `boundary.validation.feedback()`   | Corrective validation feedback before re-prompting.                             |
+| Helper                                    | Boundary                                                                     |
+| ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `boundary.input.text()`                   | Canonical untrusted text with semantic provenance before the model.          |
+| `boundary.input.media()`                  | Canonical user and tool media immediately before provider normalization.     |
+| `boundary.input.instructions()`           | Trusted developer and system instructions.                                   |
+| `boundary.input.tools()`                  | Canonical provider-visible authored or discovered tool definitions.          |
+| `boundary.output.text()`                  | Final model output text.                                                     |
+| `boundary.output.media()`                 | Each canonical model/operation output media part before public accumulation. |
+| `boundary.output.object<T>()`             | Parsed structured output object.                                             |
+| `boundary.output.both<T>()`               | `{ text, object }` structured output pair.                                   |
+| `boundary.output.object<T>().path('a.b')` | Typed structured-output path.                                                |
+| `boundary.memory.write<T>()`              | A managed-memory candidate immediately before durable commit.                |
+| `boundary.validation.feedback()`          | Deprecated compatibility target for validation feedback only.                |
 
 Boundary ids are stable decision/config ids. `boundary.stream.*` is not a public
 boundary family, and there is no separate streaming configuration: the boundary
@@ -62,13 +63,20 @@ Filter by source only when a policy genuinely differs by owner. The callback's
 
 ```ts
 const retrievalText = boundary.input.text({ from: "retrieval" });
+const lifecycleText = boundary.input.text({
+  from: ["memory", "handoff", "feedback"],
+});
 const toolContent = [
   boundary.input.text({ from: "tool" }),
   boundary.input.media({ from: "tool" }),
 ] as const;
 ```
 
-Text supports `user`, `tool`, and `retrieval`; media supports `user` and `tool`.
+An input boundary is a canonical destination plus semantic provenance. Text
+supports `user`, `tool`, `retrieval`, `memory`, `handoff`, and `feedback`;
+media supports `user` and `tool`. Managed memory and blackboard state both use
+source `memory`, distinguished by `ctx.origin.kind`. Origin records contain
+stable, privacy-safe coordinates only, never the guarded text or payload.
 `boundary.input.media({ from: "retrieval" })` is intentionally invalid because
 retrieval results do not yet have canonical media ingress. Crux never hydrates
 retrieved `assetRef` values automatically.
@@ -90,6 +98,48 @@ Direct retrieval contributions are guarded after rendering with source
 has source `tool`. System role does not establish trust: when retrieval text is
 folded into a system message, that prefix remains untrusted retrieval text while
 the adjacent authored system instructions use `boundary.input.instructions()`.
+
+Framework-generated retry text uses source `feedback`. Prefer
+`boundary.input.text({ from: "feedback" })` for validation feedback, constraint
+feedback, and rejected output. The deprecated
+`boundary.validation.feedback()` remains a validation-feedback-only
+compatibility target.
+
+### Provider-visible tool definitions
+
+`boundary.input.tools()` receives each canonical name, description, and frozen
+JSON Schema after authored and discovered tools merge. Filter by provenance or
+target provider-visible description strings:
+
+```ts
+const discovered = boundary.input.tools({ from: "discovered" });
+const descriptions = boundary.input.tools().descriptions();
+```
+
+Root tool policies return `allow`, `warn`, `block`, or `strip`. In enforce
+mode, `strip` removes the tool from provider exposure and executable
+registration, while `block` prevents the call. Description policies are closed
+text guardrails: rewrites can change the root tool description and schema
+descriptions, but cannot rename tools or change schema structure. Report mode
+records intent and preserves the original tool envelope.
+
+### Managed memory commits
+
+`boundary.memory.write<T>()` receives the post-redaction managed-memory
+candidate:
+
+```ts
+const memoryCommit = boundary.memory.write<MyMemory>();
+```
+
+The order is block-local redaction, global/prompt/call guardrails, block-local
+validation, `shouldRemember`, then persistence. Enforced `rewrite` replaces the
+candidate, `drop` skips persistence without failing generation, and `block`
+fails the write. Report mode does not change the candidate or commit.
+
+This gate applies to adapter-managed capture. Standalone memory capture has no
+originating per-call Safety registry and remains block-local. Direct blackboard
+writes are not globally guarded by `boundary.memory.write()`.
 
 ### Multimodal content
 

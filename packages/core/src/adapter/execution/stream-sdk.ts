@@ -18,10 +18,14 @@ import {
   openSafetySessionStructuredStream,
   safetyDefersDownstreamOutput,
   safetyDefersReasoning,
+  safetySessionFeedbackGuard,
   openSafetySessionStreamRaw,
   openSafetySessionStructuredStreamRaw,
+  safetySessionMemoryWriteGuard,
   safetySessionModelIngressGuard,
   safetySessionStreamCommitPlan,
+  safetySessionToolDefinitionGuard,
+  safetySessionToolDescriptionGuard,
 } from "../../safety/session";
 import { createCoordinatedStreamPlan } from "./stream-attempt-plan-factory";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -75,6 +79,9 @@ import {
   operationMetaWithLegacyCompletion,
   replaceLegacyStreamCompletion,
 } from "./stream-legacy-completion";
+import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
+import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -131,14 +138,21 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
-    messages,
-    prompt: promptText,
-    system: currentSystem,
-  }, {
-    resolvedMessages:
-      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
-  });
+  const guardedInput = await guardSafetySessionResolvedInput(
+    safety,
+    resolved,
+    {
+      messages,
+      prompt: promptText,
+      system: currentSystem,
+    },
+    {
+      resolvedMessages:
+        initialMessages.source === "resolved-messages"
+          ? "selected"
+          : "discarded",
+    },
+  );
   if (
     guardedInput.messages !== messages ||
     guardedInput.system !== currentSystem
@@ -184,10 +198,15 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       timeout: args.timeout,
       abortSignal: args.signal,
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+    });
+    await lifecycle.guardExposure({
+      root: safetySessionToolDefinitionGuard(safety),
+      descriptions: safetySessionToolDescriptionGuard(safety),
     });
     const resumed = await lifecycle.resume(messages);
     messages = resumed.messages;
@@ -260,6 +279,24 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     structuredDecodeManifest = plan.decodeManifest;
     structuredCanonicalSchema = plan.canonicalSchema;
   }
+  const cachedFinalizer =
+    resolved.schema && structuredCanonicalSchema
+      ? createCachedStreamCandidateFinalizer({
+          output: "object",
+          safety,
+          messages: () => messages,
+          schema: resolved.schema,
+          promptId: prompt.id ?? "unknown",
+          structuredContext: {
+            canonicalSchema: structuredCanonicalSchema,
+            decodeManifest: structuredDecodeManifest,
+          },
+        })
+      : createCachedStreamCandidateFinalizer({
+          output: "text",
+          safety,
+          messages: () => messages,
+        });
 
   // Structured streaming drives the scanner-fed occurrence stream so provider
   // wire JSON is canonicalized (manifest-decoded) and object-gated before
@@ -287,7 +324,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   // composed. Runtimes that do not declare `coordinatedStream` keep the single-attempt
   // path (where a rejection fails closed).
   const sdkValidationGate =
-    resolved.schema !== undefined && (args.validationRetry?.maxRetries ?? 0) > 0;
+    resolved.schema !== undefined &&
+    (args.validationRetry?.maxRetries ?? 0) > 0;
   const sdkCommitGate =
     (safety.enabled && safetySessionStreamCommitPlan(safety).hasAssertGate) ||
     sdkValidationGate;
@@ -306,30 +344,35 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
                     ? { decodeManifest: structuredDecodeManifest }
                     : {}),
                 })
-              // RAW, not `safety.openStream()`: the coordinated route owns retry
-              // authority, so a text assert must raise the non-terminal rejection for
-              // the plan rather than failing closed inside the safety stream. Using the
-              // fail-closed entry here made a text assert terminate on its first failure
-              // on this route while the native route retried.
-              : openSafetySessionStreamRaw(safety),
+              : // RAW, not `safety.openStream()`: the coordinated route owns retry
+                // authority, so a text assert must raise the non-terminal rejection for
+                // the plan rather than failing closed inside the safety stream. Using the
+                // fail-closed entry here made a text assert terminate on its first failure
+                // on this route while the native route retried.
+                openSafetySessionStreamRaw(safety),
           bufferUntilValidated: sdkValidationGate,
           ...(resolved.schema ? { schema: resolved.schema } : {}),
-          maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
+          maxSteps:
+            args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
           steps: () => sdkSteps,
           incrementStep: () => {
             sdkSteps += 1;
           },
           formatFeedback: (failures) => {
-            const formatted = defaultConstraintFeedbackFormatter.format(failures, {
-              promptId: prompt.id,
-              model: modelInfo.modelId,
-              traceId: undefined,
-              metadata: {},
-            });
+            const formatted = defaultConstraintFeedbackFormatter.format(
+              failures,
+              {
+                promptId: prompt.id,
+                model: modelInfo.modelId,
+                traceId: undefined,
+                metadata: {},
+              },
+            );
             return typeof formatted === "string"
               ? [{ role: "user", content: formatted }]
               : formatted;
           },
+          guardFeedback: safetySessionFeedbackGuard(safety),
           ...(args.validationRetry && sdkValidationGate
             ? { validationRetry: args.validationRetry }
             : {}),
@@ -368,7 +411,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     // A coordinated stream drives per-attempt Safety through the plan instead; the
     // single shared `safety` stream would leak a discarded attempt's state across
     // attempts, so the two are mutually exclusive.
-    ...(streamPlan ? { streamPlan } : trackedSafety ? { safety: trackedSafety.stream } : {}),
+    ...(streamPlan
+      ? { streamPlan }
+      : trackedSafety
+        ? { safety: trackedSafety.stream }
+        : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
     ...(structuredOutputSchema ? { outputSchema: structuredOutputSchema } : {}),
   };
@@ -382,40 +429,45 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         Record<string, unknown>,
         ExecutorProviderStreamHandle<TRawStream>
       >(
-        {
-          promptId: prompt.id,
-          promptConfig:
-            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-          preparedArgs: {
-            model: modelInfo.modelId,
-            system: currentSystem,
-            systemBlocks: currentSystemBlocks,
-            prompt: promptText,
-            messages,
-            settings: mappedSettings,
-            schema: resolved.schema,
-            tools,
+        attachCachedCandidateFinalizer(
+          {
+            promptId: prompt.id,
+            promptConfig:
+              prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+            preparedArgs: {
+              model: modelInfo.modelId,
+              system: currentSystem,
+              systemBlocks: currentSystemBlocks,
+              prompt: promptText,
+              messages,
+              settings: mappedSettings,
+              schema: resolved.schema,
+              tools,
+              input: args.input ?? {},
+              ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+            },
             input: args.input ?? {},
-            ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+            provider: modelInfo.provider || dialect.id,
+            model: args.model,
+            traceModel: modelInfo.modelId || undefined,
+            resolved,
+            outputMode: resolved.schema ? "object" : "text",
+            timeout: args.timeout,
+            ...(dialect.replayStream
+              ? {
+                  createCachedStreamResult: (cached: {
+                    text?: string;
+                    object?: unknown;
+                    meta?: Record<string, unknown>;
+                  }) =>
+                    dialect.replayStream!(
+                      cached,
+                    ) as unknown as MiddlewareResult,
+                }
+              : {}),
           },
-          input: args.input ?? {},
-          provider: modelInfo.provider || dialect.id,
-          model: args.model,
-          traceModel: modelInfo.modelId || undefined,
-          resolved,
-          outputMode: resolved.schema ? "object" : "text",
-          timeout: args.timeout,
-          ...(dialect.replayStream
-            ? {
-                createCachedStreamResult: (cached: {
-                  text?: string;
-                  object?: unknown;
-                  meta?: Record<string, unknown>;
-                }) =>
-                  dialect.replayStream!(cached) as unknown as MiddlewareResult,
-              }
-            : {}),
-        },
+          cachedFinalizer,
+        ),
         async () => {
           emitInputTokenEstimate({
             messages: providerMessages ?? [],
@@ -434,6 +486,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     throw error;
   }
 
+  const cachedRelease = readCachedReleaseSeal(handle);
   const innerCompletion = handle.completion.bind(handle);
   const wrappedCompletion = async (): Promise<
     ExecutorStreamMeta | undefined
@@ -454,6 +507,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         safety,
         meta,
         assembleWithoutSafety: false,
+        ...(cachedRelease ? { cachedRelease } : {}),
         liveText: streamPlan
           ? (acceptedSeal?.text ?? meta?.text)
           : trackedSafety
@@ -486,7 +540,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
                     objectOccurrencesAlreadyGated: true,
                     // Occurrence-precise settlement from the accepted attempt only.
                     ...(acceptedSeal?.settlement
-                      ? { constraintSettlement: acceptedSeal.settlement.settled }
+                      ? {
+                          constraintSettlement: acceptedSeal.settlement.settled,
+                        }
                       : {}),
                   }
                 : {}),

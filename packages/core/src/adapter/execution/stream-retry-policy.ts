@@ -16,7 +16,10 @@
  */
 
 import type { Message } from "../../generation/messages";
-import type { ConstraintAuditEntry, ConstraintFailure } from "../../safety/constraint/types";
+import type {
+  ConstraintAuditEntry,
+  ConstraintFailure,
+} from "../../safety/constraint/types";
 import { isStreamConstraintRejection } from "../../safety/constraint/settlement";
 import { ConstraintViolationError } from "../../safety/constraint/errors";
 import {
@@ -33,17 +36,24 @@ export interface StreamRetryPolicyOptions {
   /** Current shared step count (validation + constraint retries share it). */
   readonly steps: () => number;
   /** Build corrective messages from a rejected attempt's constraint failures. */
-  readonly formatFeedback: (failures: readonly ConstraintFailure[]) => readonly Message[];
+  readonly formatFeedback: (
+    failures: readonly ConstraintFailure[],
+  ) => readonly Message[];
   /** Validation-retry policy, when a positive-retry validation gate is configured. */
   readonly validationRetry?: ValidationRetryOptions;
   readonly promptId?: string;
   /** Announce a constraint retry (next attempt index, sanitized failed ids). */
-  readonly onRetry?: (attemptIndex: number, failedIds: readonly string[]) => void;
+  readonly onRetry?: (
+    attemptIndex: number,
+    failedIds: readonly string[],
+  ) => void;
 }
 
 /** A granted retry: what the next attempt should send and why it exists. */
 export interface StreamRetryGrant {
   readonly corrective: readonly Message[];
+  /** Exact rejected candidate that the next attempt may replay. */
+  readonly rejectedOutput: string | undefined;
   readonly cause: StreamAttemptCause;
   /** Sanitized ids of the policies that discarded the previous attempt, when any. */
   readonly failedPolicies?: readonly string[];
@@ -125,7 +135,10 @@ export function createStreamRetryPolicy(
     onRejection(error, attemptIndex) {
       if (isStreamValidationRejection(error)) {
         if (!canAffordAttempt() || validationRetries >= maxValidationRetries) {
-          options.validationRetry?.onExhausted?.(validationRetries, error.error);
+          options.validationRetry?.onExhausted?.(
+            validationRetries,
+            error.error,
+          );
           throw new ValidationExhaustedError({
             lastRawOutput: error.text,
             zodErrors: error.error,
@@ -138,8 +151,12 @@ export function createStreamRetryPolicy(
         options.validationRetry?.onRetry?.(validationRetries, error.error);
         return {
           corrective: [
-            { role: "user", content: formatValidationFeedback(error.text, error.error) },
+            {
+              role: "user",
+              content: formatValidationFeedback(error.text, error.error),
+            },
           ],
+          rejectedOutput: error.text,
           cause: "validation-retry",
         };
       }
@@ -147,7 +164,8 @@ export function createStreamRetryPolicy(
       if (!isStreamConstraintRejection(error)) throw error;
       audit.push(...error.settlement.audit);
       const eligible = error.failures.some(
-        (failure) => (retriesByConstraint.get(failure.name) ?? 0) < failure.maxRetries,
+        (failure) =>
+          (retriesByConstraint.get(failure.name) ?? 0) < failure.maxRetries,
       );
       if (!canAffordAttempt() || !eligible) {
         throw new ConstraintViolationError({
@@ -170,6 +188,7 @@ export function createStreamRetryPolicy(
       options.onRetry?.(attemptIndex + 1, failedPolicies);
       return {
         corrective: options.formatFeedback(error.failures),
+        rejectedOutput: error.text,
         cause: "constraint-retry",
         failedPolicies,
       };

@@ -29,6 +29,11 @@ import {
 } from './namespace'
 import { applyMemoryPolicy, type MemoryPolicyDecisionEvent } from './policy-safety'
 import { createMemoryCaptureRuntime } from './capture/runtime'
+import {
+  attachManagedMemoryWriteGuard,
+  readManagedMemoryWriteGuard,
+  type ManagedMemoryWriteGuardCarrier,
+} from './managed-write-guard'
 import type {
   Memory,
   MemoryBlock,
@@ -784,11 +789,13 @@ export function memory(config: MemoryConfig): Memory {
 
   async function createContext(
     input: Record<string, unknown> = {},
-    options: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> } = {},
+    options: Partial<MemoryRuntimeOptions> &
+      { input?: Record<string, unknown> } &
+      ManagedMemoryWriteGuardCarrier = {},
   ): Promise<MemoryBlockContext> {
     const namespace = await resolveNamespace(input, options.promptId, options.namespace)
     const activeStorage = resolveRuntimeStorage(memoryStorage, options)
-    return {
+    return attachManagedMemoryWriteGuard({
       storage: activeStorage.storage,
       records: activeStorage.records,
       vectors: activeStorage.vectors,
@@ -799,7 +806,7 @@ export function memory(config: MemoryConfig): Memory {
       input,
       propose: async (candidate, proposalOptions) =>
         createProposal(activeStorage, namespace, proposalOptions.block, candidate, proposalOptions.source),
-    }
+    }, readManagedMemoryWriteGuard(options))
   }
 
   async function createProposal(

@@ -12,7 +12,10 @@ import type { GuardrailBinding } from '../registry'
 import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
 import type { z } from 'zod'
-import { applyTerminalRewrite, terminalSubject } from '../output/guardrail-state'
+import {
+  applyTerminalRewrite,
+  terminalSubject,
+} from '../output/guardrail-state'
 import { auditAction, runGuardWithObservability } from './run-guard'
 
 // ── Pipeline Config ────────────────────────────────────────────────
@@ -36,7 +39,10 @@ export interface GuardrailPipelineResult {
 
 export interface GuardrailPipeline {
   /** Run input-phase guards on content. Throws GuardrailBlockedError on block. */
-  readonly runInput: (content: string, ctx: GuardrailContext) => Promise<GuardrailPipelineResult>
+  readonly runInput: (
+    content: string,
+    ctx: GuardrailContext,
+  ) => Promise<GuardrailPipelineResult>
 
   /** Run output-phase guards on content. Throws GuardrailBlockedError on block. */
   readonly runOutput: (
@@ -65,13 +71,20 @@ export function createGuardrailPipeline(
   bindings: readonly GuardrailBinding[],
   config?: GuardrailPipelineConfig,
 ): GuardrailPipeline {
-  const inputBindings = bindings.filter((binding) => boundaryPhase(binding.boundary) === 'input')
-  const outputBindings = bindings.filter((binding) => boundaryPhase(binding.boundary) === 'output')
+  const inputBindings = bindings.filter(
+    (binding) => boundaryPhase(binding.boundary) === 'input',
+  )
+  const outputBindings = bindings.filter(
+    (binding) => boundaryPhase(binding.boundary) === 'output',
+  )
 
   return {
     bindings,
 
-    async runInput(content: string, ctx: GuardrailContext): Promise<GuardrailPipelineResult> {
+    async runInput(
+      content: string,
+      ctx: GuardrailContext,
+    ): Promise<GuardrailPipelineResult> {
       return runGuards(inputBindings, content, ctx, 'input', config)
     },
 
@@ -80,7 +93,15 @@ export function createGuardrailPipeline(
       ctx: GuardrailContext,
       opts?: { readonly parsed?: unknown; readonly schema?: z.ZodType },
     ): Promise<GuardrailPipelineResult> {
-      return runGuards(outputBindings, content, ctx, 'output', config, opts?.parsed, opts?.schema)
+      return runGuards(
+        outputBindings,
+        content,
+        ctx,
+        'output',
+        config,
+        opts?.parsed,
+        opts?.schema,
+      )
     },
   }
 }
@@ -107,7 +128,8 @@ async function runGuards(
         guardrailCount: bindings.length,
       },
     },
-    async () => runGuardsInternal(bindings, content, ctx, phase, config, parsed, schema),
+    async () =>
+      runGuardsInternal(bindings, content, ctx, phase, config, parsed, schema),
   )
 }
 
@@ -120,7 +142,10 @@ async function runGuardsInternal(
   parsed?: unknown,
   schema?: z.ZodType,
 ): Promise<GuardrailPipelineResult> {
-  let current: import('../structured').StructuredSafetyOutput = { text: content, parsed }
+  let current: import('../structured').StructuredSafetyOutput = {
+    text: content,
+    parsed,
+  }
   const entries: GuardrailAuditEntry[] = []
 
   for (const binding of bindings) {
@@ -163,10 +188,15 @@ async function runGuardsInternal(
       case 'rewrite': {
         entries.push(entry)
         if (binding.mode !== 'report') {
-          const rewritten = applyTerminalRewrite(boundary, current, result.value, {
-            schema,
-            policyId: guard.id,
-          })
+          const rewritten = applyTerminalRewrite(
+            boundary,
+            current,
+            result.value,
+            {
+              schema,
+              policyId: guard.id,
+            },
+          )
           const content = rewritten.text
           if (result.rewrite.kind === 'normalize') {
             config?.onTransform?.(guard, { content })
@@ -211,7 +241,9 @@ function guardDecision(
     ...(context.origin ? { origin: context.origin } : {}),
     mode: binding.mode,
     action: safetyAction(result),
-    ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...(result.action === 'block' || result.action === 'warn'
+      ? { reason: result.reason }
+      : {}),
     ...(findings ? { findings } : {}),
     ...(binding.tuned ? { tuned: binding.tuned } : {}),
     durationMs,
@@ -219,7 +251,9 @@ function guardDecision(
   }
 }
 
-function safetyAction(result: GuardrailRunResult<unknown>): SafetyDecision['action'] {
+function safetyAction(
+  result: GuardrailRunResult<unknown>,
+): SafetyDecision['action'] {
   if (result.action === 'allow' || result.action === 'hold') return 'allow'
   if (result.action === 'rewrite') return 'rewrite'
   return result.action
@@ -228,7 +262,9 @@ function safetyAction(result: GuardrailRunResult<unknown>): SafetyDecision['acti
 function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {
   return boundary.id === 'model.input.text' ||
     boundary.id === 'model.input.media' ||
-    boundary.id === 'model.instructions'
+    boundary.id === 'model.instructions' ||
+    boundary.id === 'model.input.tools' ||
+    boundary.id === 'validation.feedback'
     ? 'input'
     : 'output'
 }

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { AdapterSpec } from "../../src/adapter/spec";
-import type { AdapterResponse } from "../../src/adapter/types";
+import type { AdapterResponse, CallArgs } from "../../src/adapter/types";
 import type { Message } from "../../src/generation/messages";
 import { prompt } from "../../src/prompt/prompt";
 import type { AssistantContentPart } from "../../src/types/content";
@@ -28,6 +28,7 @@ export function toolIngressScript(steps: readonly ToolIngressStep[]) {
   const queue = [...steps];
   let calls = 0;
   const providerMessages: Array<readonly Message[]> = [];
+  const providerTools: Array<CallArgs["tools"]> = [];
   const client = { kind: "tool-ingress" as const };
   const spec: AdapterSpec<
     typeof client,
@@ -38,6 +39,7 @@ export function toolIngressScript(steps: readonly ToolIngressStep[]) {
     async call(_client, args) {
       calls++;
       providerMessages.push(args.messages);
+      providerTools.push(args.tools);
       const next = queue.shift() ?? { text: "exhausted" };
       return {
         raw: { call: calls },
@@ -47,6 +49,7 @@ export function toolIngressScript(steps: readonly ToolIngressStep[]) {
     async stream(_client, args) {
       calls++;
       providerMessages.push(args.messages);
+      providerTools.push(args.tools);
       const rawStream = (async function* () {
         yield { text: "streamed" };
       })();
@@ -83,6 +86,7 @@ export function toolIngressScript(steps: readonly ToolIngressStep[]) {
       return calls;
     },
     providerMessages,
+    providerTools,
   };
 }
 

@@ -9,9 +9,17 @@ import type { StructuredSafetyContext } from "../../safety/session";
 import { guardSafetySessionStreamCompletion } from "../../safety/session";
 import type { LiveTextSlot } from "../../safety/output/completion";
 import type { AssistantContentPart } from "../../types/content";
-import { responseContent, textFromAssistantContent } from "../assistant-output";
+import { textFromAssistantContent } from "../assistant-output";
 import type { StructuredOutputDecodeManifest } from "../structured-output";
 import { createStructuredCompletion } from "./structured-completion";
+import type { CachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
+import { assembleCachedStreamCompletion } from "./cached-stream-candidate";
+import {
+  createAssistantMessage,
+  replaceAssistantText,
+  replaceFinalAssistant,
+  streamCompletionContent,
+} from "./stream-completion-assembly";
 
 interface BufferedStreamMeta extends TraceMeta {
   readonly text?: string;
@@ -63,9 +71,17 @@ interface GuardStreamCompletionOptions {
    * Completion publishes that parse's `data` instead of parsing again, so a transform or
    * refinement runs exactly once per candidate.
    */
-  readonly committedCandidate?: { readonly value: unknown; readonly data: unknown };
+  readonly committedCandidate?: {
+    readonly value: unknown;
+    readonly data: unknown;
+  };
   /** Prompt id used in a terminal validation-failure diagnostic. */
   readonly promptId?: string;
+  /**
+   * Accepted cached payload. Completion still rebuilds canonical bookkeeping,
+   * but terminal policy and schema work already happened before replay.
+   */
+  readonly cachedRelease?: CachedReleaseSeal;
 }
 
 /**
@@ -79,6 +95,14 @@ export async function guardStreamCompletion(
   options: GuardStreamCompletionOptions,
 ): Promise<BufferedStreamMeta | undefined> {
   if (!options.meta && options.liveText === undefined) return undefined;
+  if (options.cachedRelease) {
+    return assembleCachedStreamCompletion({
+      safety: options.safety,
+      meta: options.meta,
+      messages: options.messages,
+      release: options.cachedRelease,
+    });
+  }
   // A structured stream must still re-derive its terminal value even when no
   // policy is active and the runtime owns assembly, so keep the fast path for
   // unstructured completions only.
@@ -90,15 +114,10 @@ export async function guardStreamCompletion(
     return options.meta;
   }
 
-  const providerContent = responseContent({
-    content: options.meta?.content,
-    text: options.meta?.text ?? options.liveText ?? "",
-    toolCalls: options.meta?.toolCalls?.flatMap((call) =>
-      typeof call.id === "string"
-        ? [{ id: call.id, name: call.name, args: call.args }]
-        : [],
-    ),
-  });
+  const providerContent = streamCompletionContent(
+    options.meta,
+    options.meta?.text ?? options.liveText ?? "",
+  );
   const representedText =
     options.meta?.content === undefined && options.meta?.text === undefined
       ? options.liveText
@@ -125,15 +144,18 @@ export async function guardStreamCompletion(
     // exactly once. Streaming is terminal, so there is no corrective reprompt.
     // If completion-text Safety rewrote the JSON, the wire value is stale and
     // the initial value is resynchronized from the rewritten text instead.
-    const textRewritten =
-      text !== textFromAssistantContent(providerContent);
+    const textRewritten = text !== textFromAssistantContent(providerContent);
     const finalized = await finalizeStructuredStreamCompletion({
       safety: options.safety,
       schema: options.schema,
-      ...(options.committedCandidate ? { committed: options.committedCandidate } : {}),
+      ...(options.committedCandidate
+        ? { committed: options.committedCandidate }
+        : {}),
       decodeManifest: options.decodeManifest,
       structuredContext: options.structuredContext,
-      ...(options.constraintSettlement ? { settled: options.constraintSettlement } : {}),
+      ...(options.constraintSettlement
+        ? { settled: options.constraintSettlement }
+        : {}),
       promptId: options.promptId,
       messages: options.messages,
       text,
@@ -152,7 +174,11 @@ export async function guardStreamCompletion(
   }
 
   const messages = options.meta?.messages
-    ? replaceFinalAssistant(options.meta.messages, content, options.meta.toolCalls)
+    ? replaceFinalAssistant(
+        options.meta.messages,
+        content,
+        options.meta.toolCalls,
+      )
     : [
         ...options.messages,
         createAssistantMessage(content, options.meta?.toolCalls),
@@ -214,60 +240,18 @@ async function finalizeStructuredStreamCompletion(opts: {
   // verbatim; else the parsed wire value; else the value is resynchronized from
   // the authoritative text (a completion-text rewrite made the wire value stale).
   const initial = alreadyGated
-    ? completion.buildFromCanonical({ text: opts.text, value: opts.canonicalValue })
+    ? completion.buildFromCanonical({
+        text: opts.text,
+        value: opts.canonicalValue,
+      })
     : opts.wireValue !== undefined
-      ? completion.buildFromWireValue({ text: opts.text, value: opts.wireValue })
+      ? completion.buildFromWireValue({
+          text: opts.text,
+          value: opts.wireValue,
+        })
       : completion.buildFromText(opts.text);
   const finalized = await completion.finalize(initial, { suspended: false });
   return { text: finalized.text, object: finalized.object };
-}
-
-/** Replace the assistant text part with rewritten structured text. */
-function replaceAssistantText(
-  content: readonly AssistantContentPart[],
-  text: string,
-): readonly AssistantContentPart[] {
-  let replaced = false;
-  const next = content.map((part) => {
-    if (part.type !== "text" || replaced) return part;
-    replaced = true;
-    return part.text === text ? part : { ...part, text };
-  });
-  return replaced ? next : [...next, { type: "text", text }];
-}
-
-function replaceFinalAssistant(
-  messages: readonly Message[],
-  content: readonly AssistantContentPart[],
-  toolCalls: TraceMeta["toolCalls"],
-): readonly Message[] {
-  const result = [...messages];
-  for (let index = result.length - 1; index >= 0; index -= 1) {
-    const current = result[index];
-    if (current?.role !== "assistant") continue;
-    const metadata = toolCalls
-      ? { ...current.metadata, toolCalls }
-      : current.metadata;
-    result[index] = {
-      ...current,
-      content,
-      ...(metadata !== undefined ? { metadata } : {}),
-    };
-    return result;
-  }
-  result.push(createAssistantMessage(content, toolCalls));
-  return result;
-}
-
-function createAssistantMessage(
-  content: readonly AssistantContentPart[],
-  toolCalls: TraceMeta["toolCalls"],
-): Message {
-  return {
-    role: "assistant",
-    content,
-    ...(toolCalls ? { metadata: { toolCalls } } : {}),
-  };
 }
 
 /** Capture the authoritative seal while preserving the streaming protocol. */

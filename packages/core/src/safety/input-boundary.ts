@@ -24,13 +24,16 @@ const MEDIA_SOURCES = ["user", "tool"] as const;
 /**
  * Target untrusted text immediately before it enters a governed model.
  *
+ * @remarks
  * With no options, the boundary matches user, tool, rendered retrieval,
  * memory, handoff, and framework-feedback text. Use {@link toolPolicy} instead
  * when policy logic needs the raw tool result before canonical model-output
- * conversion.
+ * conversion. Enforce mode may block or rewrite matching text; report mode
+ * records intent while preserving the original message envelope.
  *
- * @param options Optional semantic source filter.
+ * @param options - Optional semantic provenance filter.
  * @returns A frozen text boundary with callback origin narrowed to `from`.
+ * @throws {TypeError} When `from` is empty or contains an unsupported source.
  *
  * @example
  * ```ts
@@ -61,12 +64,15 @@ function text<
 /**
  * Target canonical untrusted media immediately before it enters a governed model.
  *
+ * @remarks
  * With no options, the boundary matches user and tool media. Retrieval is not
  * a media source because retrieved assets are not implicitly hydrated. Use
- * {@link toolPolicy} for raw tool results before canonical conversion.
+ * {@link toolPolicy} for raw tool results before canonical conversion. Enforce
+ * mode may block or strip matching media; report mode preserves the request.
  *
- * @param options Optional semantic source filter.
+ * @param options - Optional semantic provenance filter.
  * @returns A frozen media boundary whose subject is a {@link MediaPartSubject}.
+ * @throws {TypeError} When `from` is empty or contains an unsupported source.
  *
  * @example
  * ```ts

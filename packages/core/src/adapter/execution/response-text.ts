@@ -28,6 +28,23 @@ export function replaceResponseText(
   };
 }
 
+/**
+ * Replace rejected-output text for transcript write-back.
+ *
+ * Responses without rich `content` intentionally stay text-only so a provider
+ * transcript codec can retain its string assistant representation. Rich
+ * responses keep their canonical non-text parts and tool-call facts while
+ * their text slots receive the guarded rejected output.
+ */
+export function replaceResponseTranscriptText(
+  response: AdapterResponse,
+  text: string,
+): AdapterResponse {
+  return response.content === undefined
+    ? { ...response, text }
+    : replaceResponseText(response, text);
+}
+
 /** Replace canonical response content while retaining every provider-owned fact. */
 export function replaceResponseContent(
   response: AdapterResponse,

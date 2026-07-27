@@ -9,8 +9,9 @@ package cache
 // preserves Eval arm placement and embedding facts from epoch 44, unconditional
 // Rust/Oxc Static Index scheduling, Workspace snapshot usage relations, retained
 // lint suppression evidence, and the direct named-export evidence installed by
-// Epoch 46 while adding prompt-text source-ref metadata across restart
-// boundaries.
+// Epoch 46 plus prompt-text source-ref metadata from Epoch 47 while adding
+// canonical provider-visible tool Safety boundary metadata across restart
+// boundaries in Epoch 48.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 47
+const ProjectIndexSnapshotCacheEpoch = 48
