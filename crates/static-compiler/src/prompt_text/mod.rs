@@ -25,8 +25,15 @@ pub fn analyze(request: PromptTextQueryRequest) -> PromptTextQueryResponse {
             continue;
         }
         markdown::classify(&request.source, projected);
-        preview::retain_empty_preview(&mut projected.template);
     }
+    preview::render_all(
+        &request,
+        &request.source,
+        &request.revision.source_hash,
+        request.limits.max_preview_bytes,
+        request.limits.max_fragment_depth,
+        &mut projection.templates,
+    );
     let (templates, output_truncated) = limits::retain_output_prefix(
         projection
             .templates

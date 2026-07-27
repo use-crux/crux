@@ -11,6 +11,7 @@ import {
   type PromptTextEditor,
 } from './controller.js'
 import { PromptTextDocumentRevisions } from './document-revisions.js'
+import { isPromptTextSourceDocument } from './documents.js'
 import type { PromptTextDecorationRanges } from './mapping.js'
 import {
   createPromptTextDecorationRenderOptions,
@@ -39,8 +40,9 @@ export interface PromptTextDecorations extends vscode.Disposable {
  */
 export function activatePromptTextDecorations(
   client: LanguageClient,
+  onRefresh: () => void = () => {},
 ): PromptTextDecorations {
-  return new VSCodePromptTextDecorations(client)
+  return new VSCodePromptTextDecorations(client, onRefresh)
 }
 
 class VSCodePromptTextDecorations implements PromptTextDecorations {
@@ -55,7 +57,10 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
   #nextEditorId = 0
   #disposed = false
 
-  constructor(private readonly client: LanguageClient) {
+  constructor(
+    private readonly client: LanguageClient,
+    private readonly onRefresh: () => void,
+  ) {
     const options = createPromptTextDecorationRenderOptions(
       (id) => new vscode.ThemeColor(id),
     )
@@ -66,8 +71,13 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
       emphasis: vscode.window.createTextEditorDecorationType(options.emphasis),
       strong: vscode.window.createTextEditorDecorationType(options.strong),
       list: vscode.window.createTextEditorDecorationType(options.list),
-      blockquote: vscode.window.createTextEditorDecorationType(options.blockquote),
-    } satisfies Record<PromptTextDecorationRole, vscode.TextEditorDecorationType>
+      blockquote: vscode.window.createTextEditorDecorationType(
+        options.blockquote,
+      ),
+    } satisfies Record<
+      PromptTextDecorationRole,
+      vscode.TextEditorDecorationType
+    >
 
     const ports: PromptTextControllerPorts = {
       get enabled() {
@@ -82,21 +92,21 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
     }
     this.#controller = new PromptTextDecorationController(ports)
     for (const document of vscode.workspace.textDocuments) {
-      if (isPromptTextDocument(document)) {
+      if (isPromptTextSourceDocument(document)) {
         this.#revisions.open(document.uri.toString())
       }
     }
     this.#subscriptions = [
-      vscode.window.onDidChangeVisibleTextEditors(
-        () => this.#controller.visibleEditorsChanged(),
+      vscode.window.onDidChangeVisibleTextEditors(() =>
+        this.#controller.visibleEditorsChanged(),
       ),
       vscode.workspace.onDidOpenTextDocument((document) => {
-        if (isPromptTextDocument(document)) {
+        if (isPromptTextSourceDocument(document)) {
           this.#revisions.open(document.uri.toString())
         }
       }),
       vscode.workspace.onDidChangeTextDocument(({ document }) => {
-        if (isPromptTextDocument(document)) {
+        if (isPromptTextSourceDocument(document)) {
           this.#controller.documentChanged(document.uri.toString())
         }
       }),
@@ -111,7 +121,10 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
         }
       }),
       client.onRequest(refreshMethod, (params: unknown) => {
-        if (isRefreshParams(params)) this.#controller.start()
+        if (isRefreshParams(params)) {
+          this.#controller.start()
+          this.onRefresh()
+        }
         return null
       }),
     ]
@@ -133,7 +146,7 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
   #visibleEditors(): readonly PromptTextEditor[] {
     const visible: PromptTextEditor[] = []
     for (const editor of vscode.window.visibleTextEditors) {
-      if (!isPromptTextDocument(editor.document)) continue
+      if (!isPromptTextSourceDocument(editor.document)) continue
       const id = this.#editorId(editor)
       this.#editorsById.set(id, editor)
       visible.push({ id, ...this.#stamp(editor.document) })
@@ -141,10 +154,7 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
     return visible
   }
 
-  async #request(
-    editor: PromptTextEditor,
-    signal: AbortSignal,
-  ) {
+  async #request(editor: PromptTextEditor, signal: AbortSignal) {
     const cancellation = new vscode.CancellationTokenSource()
     const cancel = () => cancellation.cancel()
     signal.addEventListener('abort', cancel, { once: true })
@@ -204,26 +214,18 @@ class VSCodePromptTextDecorations implements PromptTextDecorations {
   }
 }
 
-function isPromptTextDocument(document: vscode.TextDocument): boolean {
-  return document.uri.scheme === 'file'
-    && (
-      document.languageId === 'typescript'
-      || document.languageId === 'typescriptreact'
-      || document.languageId === 'javascript'
-      || document.languageId === 'javascriptreact'
-    )
-}
-
 function isRefreshParams(value: unknown): boolean {
-  return typeof value === 'object'
-    && value !== null
-    && 'protocolVersion' in value
-    && value.protocolVersion === 1
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'protocolVersion' in value &&
+    value.protocolVersion === 1
+  )
 }
 
 function toVSCodeRange(range: {
-  readonly start: { readonly line: number, readonly character: number }
-  readonly end: { readonly line: number, readonly character: number }
+  readonly start: { readonly line: number; readonly character: number }
+  readonly end: { readonly line: number; readonly character: number }
 }): vscode.Range {
   return new vscode.Range(
     range.start.line,

@@ -81,6 +81,36 @@ describe("Project Index schemas", () => {
             tag: "md",
             language: "markdown",
             lifecycle: "static",
+            fragmentJoins: [
+              {
+                kind: "named-fragment",
+                ownerSourceRefId: "owner",
+                ownerTemplateRange: {
+                  file: "src/support.ts",
+                  startLine: 1,
+                  startColumn: 1,
+                  endLine: 1,
+                  endColumn: 20,
+                },
+                interpolationIndex: 0,
+                expressionRange: {
+                  file: "src/support.ts",
+                  startLine: 1,
+                  startColumn: 8,
+                  endLine: 1,
+                  endColumn: 16,
+                },
+                targetSourceRefId: "target",
+                targetTemplateRange: {
+                  file: "src/shared.ts",
+                  startLine: 2,
+                  startColumn: 3,
+                  endLine: 2,
+                  endColumn: 15,
+                },
+                proof: "semantic-exact",
+              },
+            ],
           },
         },
       }).metadata?.promptText,
@@ -88,6 +118,36 @@ describe("Project Index schemas", () => {
       tag: "md",
       language: "markdown",
       lifecycle: "static",
+      fragmentJoins: [
+        {
+          kind: "named-fragment",
+          ownerSourceRefId: "owner",
+          ownerTemplateRange: {
+            file: "src/support.ts",
+            startLine: 1,
+            startColumn: 1,
+            endLine: 1,
+            endColumn: 20,
+          },
+          interpolationIndex: 0,
+          expressionRange: {
+            file: "src/support.ts",
+            startLine: 1,
+            startColumn: 8,
+            endLine: 1,
+            endColumn: 16,
+          },
+          targetSourceRefId: "target",
+          targetTemplateRange: {
+            file: "src/shared.ts",
+            startLine: 2,
+            startColumn: 3,
+            endLine: 2,
+            endColumn: 15,
+          },
+          proof: "semantic-exact",
+        },
+      ],
     });
   });
 

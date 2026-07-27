@@ -76,7 +76,7 @@ func TestPromptTextVariantsMarshalRustRequiredZeroAndNullFields(t *testing.T) {
 			value: PromptTextPreviewSegment{
 				Kind: PromptTextPreviewKnownValue,
 			},
-			want: `{"kind":"known-value","text":"","interpolation":0}`,
+			want: `{"kind":"known-value","text":"","interpolation":0,"interpolationPath":[]}`,
 		},
 		{
 			name: "empty fragment identity",
@@ -90,7 +90,7 @@ func TestPromptTextVariantsMarshalRustRequiredZeroAndNullFields(t *testing.T) {
 			value: PromptTextPreviewSegment{
 				Kind: PromptTextPreviewPlaceholder,
 			},
-			want: `{"kind":"placeholder","text":"","interpolation":0}`,
+			want: `{"kind":"placeholder","text":"","interpolation":0,"interpolationPath":[]}`,
 		},
 	}
 	for _, testCase := range cases {
@@ -135,6 +135,22 @@ func TestPromptTextHeadingAccessorRejectsInvalidRequiredFields(t *testing.T) {
 		if heading, ok := block.Heading(); ok {
 			t.Fatalf("Heading(%#v) = %#v, true; want invalid", block, heading)
 		}
+	}
+}
+
+func TestPromptTextVariantDecodeRejectsForeignNullableField(t *testing.T) {
+	t.Parallel()
+
+	var span PromptTextSpan
+	err := json.Unmarshal([]byte(`{
+		"kind":"html",
+		"index":0,
+		"island":0,
+		"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
+		"textRange":null
+	}`), &span)
+	if err == nil {
+		t.Fatal("HTML span accepted foreign textRange field")
 	}
 }
 

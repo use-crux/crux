@@ -9,13 +9,15 @@ describe('parsePromptTextDecorationResult', () => {
       openEpoch: 2,
       version: 7,
       sourceHash: 'a'.repeat(64),
-      decorations: [{
-        role: 'heading',
-        range: {
-          start: { line: 3, character: 15 },
-          end: { line: 3, character: 20 },
+      decorations: [
+        {
+          role: 'heading',
+          range: {
+            start: { line: 3, character: 15 },
+            end: { line: 3, character: 20 },
+          },
         },
-      }],
+      ],
     }
 
     expect(parsePromptTextDecorationResult(value)).toEqual(value)
@@ -25,20 +27,29 @@ describe('parsePromptTextDecorationResult', () => {
     { protocolVersion: 2 },
     { sourceHash: 'not-a-digest' },
     { decorations: [{ role: 'unknown', range: range() }] },
-    { decorations: [{ role: 'heading', range: {
-      start: { line: -1, character: 0 },
-      end: { line: 0, character: 1 },
-    } }] },
+    {
+      decorations: [
+        {
+          role: 'heading',
+          range: {
+            start: { line: -1, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      ],
+    },
   ])('rejects malformed or unknown wire evidence: %o', (change) => {
-    expect(parsePromptTextDecorationResult({
-      protocolVersion: 1,
-      uri: 'file:///writer.ts',
-      openEpoch: 2,
-      version: 7,
-      sourceHash: 'a'.repeat(64),
-      decorations: [],
-      ...change,
-    })).toBeUndefined()
+    expect(
+      parsePromptTextDecorationResult({
+        protocolVersion: 1,
+        uri: 'file:///writer.ts',
+        openEpoch: 2,
+        version: 7,
+        sourceHash: 'a'.repeat(64),
+        decorations: [],
+        ...change,
+      }),
+    ).toBeUndefined()
   })
 })
 

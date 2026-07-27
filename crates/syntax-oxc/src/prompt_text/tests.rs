@@ -8,6 +8,7 @@ use oxc_parser::Parser;
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 
+use super::ProjectedValue;
 use super::project;
 
 mod projection_boundaries;
@@ -177,6 +178,31 @@ fn prompt_text_traversal_limit_counts_the_exact_semantic_table() {
     assert!(projected.templates.is_empty());
 }
 
+#[test]
+fn prompt_text_fragment_lookup_resolves_many_refs_to_a_late_candidate() {
+    let references = "${target511}".repeat(512);
+    let declarations = (0..512)
+        .map(|index| format!("const target{index} = md`{index}`;\n"))
+        .collect::<String>();
+    let source = format!("const root = md`{references}`;\n{declarations}");
+    let mut query = request(&source);
+    query.limits.max_templates = 1024;
+
+    let projected = project(&query);
+
+    assert_eq!(projected.templates.len(), 513);
+    assert_eq!(projected.templates[0].interpolations.len(), 512);
+    assert!(
+        projected.templates[0]
+            .interpolations
+            .iter()
+            .all(|interpolation| matches!(
+                interpolation.value,
+                ProjectedValue::Fragment { candidate_id: 512 }
+            ))
+    );
+}
+
 fn assert_mapping_partition(
     projected: &super::ProjectedPromptTextTemplate,
     expected: &str,
@@ -264,6 +290,7 @@ fn request(source: &str) -> PromptTextQueryRequest {
         },
         source: source.into(),
         fragments: Vec::new(),
+        fragment_joins: Vec::new(),
         limits: PromptTextLimits {
             max_source_bytes: 2 << 20,
             max_templates: 256,
@@ -271,6 +298,7 @@ fn request(source: &str) -> PromptTextQueryRequest {
             max_traversal_nodes: 100_000,
             max_output_bytes: 1 << 20,
             max_fragments: 256,
+            max_fragment_joins: 256,
             max_fragment_bytes: 64 << 10,
             max_fragment_depth: 16,
             max_preview_bytes: 1 << 20,

@@ -27,7 +27,8 @@
     "commands": [
       { "command": "crux.openDocs", "title": "Crux: Open Rule Documentation" },
       { "command": "crux.openDevtools", "title": "Crux: Open Devtools" },
-      { "command": "crux.restartServer", "title": "Crux: Restart Language Server" }
+      { "command": "crux.restartServer", "title": "Crux: Restart Language Server" },
+      { "command": "crux.promptText.previewStatic", "title": "Crux: Preview PromptText Statically" }
     ],
     "configuration": {
       "title": "Crux",

@@ -1,5 +1,8 @@
 import type { SemanticBackendParityFixture } from "./semantic-backend-parity-fixtures";
-import { promptTextRef } from "./prompt-text-semantic-fixture-helpers";
+import {
+  promptTextRef,
+  sourceRange,
+} from "./prompt-text-semantic-fixture-helpers";
 
 const file = "src/prompt-text-direct.ts";
 const fileKey = "src-prompt-text-direct.ts-226b0abf8dcb039a";
@@ -72,6 +75,44 @@ const ref = (
     ...options,
   });
 
+const outerInner = ref("prompt:outer-system", "system", "md`Inner`", "static", {
+  symbol: "inner",
+});
+const outerRoot = ref(
+  "prompt:outer-system",
+  "system",
+  "md`Outer ${inner}`",
+  "static",
+  { symbol: "outer" },
+);
+const outerRootWithJoin = {
+  ...outerRoot,
+  ref: {
+    ...outerRoot.ref,
+    metadata: {
+      ...outerRoot.ref.metadata,
+      promptText: {
+        ...outerRoot.ref.metadata!.promptText!,
+        fragmentJoins: [
+          {
+            kind: "named-fragment" as const,
+            ownerSourceRefId: outerRoot.ref.id,
+            ownerTemplateRange: outerRoot.ref.snippet!.range,
+            interpolationIndex: 0,
+            expressionRange: {
+              file,
+              ...sourceRange(source, "inner", 1),
+            },
+            targetSourceRefId: outerInner.ref.id,
+            targetTemplateRange: outerInner.ref.snippet!.range,
+            proof: "semantic-exact" as const,
+          },
+        ],
+      },
+    },
+  },
+};
+
 /** Same-file prompt-text shapes required on both shared and native-direct paths. */
 export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
   name: "prompt-text-direct-and-callbacks",
@@ -93,12 +134,8 @@ export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
       ref("prompt:object-prompt", "prompt", "md`Object`", "static", {
         symbol: "fragments.answer",
       }),
-      ref("prompt:outer-system", "system", "md`Inner`", "static", {
-        symbol: "inner",
-      }),
-      ref("prompt:outer-system", "system", "md`Outer ${inner}`", "static", {
-        symbol: "outer",
-      }),
+      outerInner,
+      outerRootWithJoin,
       ref(
         "prompt:nested-prompt",
         "prompt",

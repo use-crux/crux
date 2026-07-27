@@ -6,6 +6,7 @@ import {
 } from '../fixtures.js'
 import { ExtensionHostDecorationSurface } from './decoration-host.js'
 import { captureInterpolationProviders } from './interpolation-providers.js'
+import { runStaticPreviewHost } from './static-preview.js'
 import { runThemeEvidence } from './theme-evidence.js'
 
 const semanticTokenTimeoutMs = 10_000
@@ -24,6 +25,7 @@ export async function run(): Promise<void> {
   const typescript = vscode.extensions.getExtension('vscode.typescript-language-features')
   assert.ok(typescript, 'The built-in TypeScript extension is unavailable.')
   await typescript.activate()
+  await runStaticPreviewHost()
 
   const document = await vscode.workspace.openTextDocument({
     language: 'typescript',

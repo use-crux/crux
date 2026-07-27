@@ -10,6 +10,7 @@ mod barrier_cases;
 mod folding_cases;
 mod heading_label_cases;
 mod link_cases;
+mod preview_cases;
 mod structure_cases;
 mod support;
 mod surrogate_cases;
@@ -171,6 +172,7 @@ fn request(source: &str) -> PromptTextQueryRequest {
         },
         source: source.into(),
         fragments: Vec::new(),
+        fragment_joins: Vec::new(),
         limits: PromptTextLimits {
             max_source_bytes: 2 << 20,
             max_templates: 256,
@@ -178,6 +180,7 @@ fn request(source: &str) -> PromptTextQueryRequest {
             max_traversal_nodes: 100_000,
             max_output_bytes: 1 << 20,
             max_fragments: 256,
+            max_fragment_joins: 256,
             max_fragment_bytes: 64 << 10,
             max_fragment_depth: 16,
             max_preview_bytes: 1 << 20,

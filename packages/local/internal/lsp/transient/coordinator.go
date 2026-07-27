@@ -28,6 +28,7 @@ type Query struct {
 	BaseGeneration uint64
 	ViewRevision   uint64
 	Fragments      []indexprompttext.Fragment
+	FragmentJoins  []indexprompttext.FragmentJoin
 	Analyzer       readmodel.TransientSource
 }
 
@@ -44,7 +45,7 @@ type queryKey struct {
 	sourceEpoch    uint64
 	baseGeneration uint64
 	viewRevision   uint64
-	fragmentDigest [32]byte
+	evidenceDigest [32]byte
 	revision       Revision
 }
 
@@ -87,8 +88,11 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	if !ok {
 		return Analysis{}, ErrUnavailable
 	}
-	fragments, fragmentDigest, err := indexprompttext.CanonicalizeFragments(
+	fragments, joins, evidenceDigest, err := indexprompttext.CanonicalizePreviewEvidence(
+		query.File,
+		document.Revision.SourceHash,
 		query.Fragments,
+		query.FragmentJoins,
 		indexprompttext.DefaultLimits(),
 	)
 	if err != nil {
@@ -99,7 +103,7 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 		sourceEpoch:    query.SourceEpoch,
 		baseGeneration: query.BaseGeneration,
 		viewRevision:   query.ViewRevision,
-		fragmentDigest: fragmentDigest,
+		evidenceDigest: evidenceDigest,
 		revision:       document.Revision,
 	}
 
@@ -130,7 +134,7 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	c.cached = nil
 	c.mu.Unlock()
 
-	go c.runAnalysis(queryContext, call, query, document, fragments)
+	go c.runAnalysis(queryContext, call, query, document, fragments, joins)
 	return c.waitForAnalysis(ctx, call)
 }
 
@@ -140,10 +144,11 @@ func (c *Coordinator) runAnalysis(
 	query Query,
 	document Document,
 	fragments []indexprompttext.Fragment,
+	joins []indexprompttext.FragmentJoin,
 ) {
 	result, err := query.Analyzer.PromptText(ctx, readmodel.PromptTextRequest{
-		File: query.File, LanguageID: document.LanguageID,
-		Revision: document.Revision, Text: document.Text, Fragments: fragments,
+		File: query.File, LanguageID: document.LanguageID, Revision: document.Revision,
+		Text: document.Text, Fragments: fragments, FragmentJoins: joins,
 	})
 	call.cancel()
 	analysis := Analysis{Revision: document.Revision, Result: result}

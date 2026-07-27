@@ -150,6 +150,39 @@ The virtual document contains only preview bytes. Label, source identity,
 evidence level, and truncation use non-document UI so copying preserves exact
 output.
 
+The client requests `crux/promptText/previewStatic` with the exact open-document
+stamp and either the active position or a previously tracked exact template
+range. The server returns a closed `ready | choose | unavailable` result.
+Candidate ordinals are display-only; the client tracks a selected UTF-16 range
+through edits and rematches it exactly against current Oxc analysis. It never
+claims a persistent lexical template identity.
+
+Failure mutation follows that same exact association. A range-less initial
+position failure is not associated with a slot and leaves all retained previews
+unchanged. Exact-range requests may clear only a slot already keyed by that
+source URI and range; background work also requires the originating slot
+generation. The client never guesses from source, cursor, ordinal, proximity,
+sole-slot state, or command history.
+
+Open previews clear synchronously on edit, then auto-refresh after a 150 ms
+debounce. Server refresh signals also repull them. Stale bytes are never shown
+while replacement analysis is pending. A source close, target-loss edit,
+reconnect, unavailable result associated with that slot, or incompatible editor
+line-ending model clears the virtual content instead of retaining an older
+preview.
+
+VS Code text documents may normalize line endings. The client publishes only
+text whose CR/LF sequences match the opened virtual document's EOL and verifies
+`document.getText()` byte-for-byte before showing it. Bare/mixed/incompatible
+line endings make the slot unavailable; the client never transforms the
+preview or labels normalized text exact.
+
+Metadata is one scheme-scoped CodeLens, including for empty documents. Its
+no-op title reports approximation, sanitized source basename/line, evidence,
+all three statuses, and truncation outside document content. At most 16 preview
+resources are active; split views count once and closed resources are never
+cached.
+
 Devtools owns exact-preview inputs, runtime selection, validation display, and
 the explicit Preview action. The active application runtime invokes canonical
 Core inspection through an advertised Runtime Bridge capability. Opening UI,
@@ -186,21 +219,28 @@ A client-session coordinator coalesces concurrent requests by:
 scope and source epoch
 + open epoch, document version, source hash
 + selected view revision
-+ fragment-catalogue digest
++ preview-evidence digest
 ```
 
 It cancels superseded work, retains only the latest bounded result, and never
 mutates the saved Store.
 
-The fragment-catalogue digest is a coordinator-owned, domain-separated SHA-256
-over a validated, canonically encoded and sorted catalogue. It is distinct
-from the future #266 semantic-source-profile digest. Callers cannot supply a
-trusted digest, and an invalid catalogue cannot reuse an older result.
+The preview-evidence digest is a coordinator-owned, domain-separated SHA-256
+over validated, canonically encoded and sorted fragment records and exact
+interpolation-to-fragment joins. It is distinct from the future #266
+semantic-source-profile digest. Callers cannot supply a trusted digest, and
+invalid evidence cannot reuse an older result.
 
-The V1 `maxFragmentBytes` budget applies to the aggregate canonical encoded
-fragment records, including every identity, range, and snippet field. This
-keeps both the catalogue and ATTACHED body bounded without adding another ABI
-field or multiplying a per-record allowance by `maxFragments`.
+Oxc/Rust owns closed syntax-exact evaluation from the current source and
+validated fragment snippets. Go supplies only semantic-exact fragment records
+and exact joins selected from one coherent `EvidenceSemantic +
+RequireCurrent` view. Go never parses or evaluates TypeScript and does not
+supply scalar, array, or JSON bytes. Dirty buffers retain syntax-exact preview
+but receive no saved joins.
+
+The V1 `maxFragmentBytes` budget applies to the aggregate canonical encoding of
+both fragment and join records. This keeps preview evidence and the ATTACHED
+body bounded without adding a separate payload allowance.
 
 OWN mode calls the existing compiler process. ATTACHED mode uses a private
 local-runtime HTTP query with the same contract. One transient source interface

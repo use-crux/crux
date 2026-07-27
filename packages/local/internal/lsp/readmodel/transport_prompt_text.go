@@ -7,6 +7,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
+	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
 // ErrPromptTextUnavailable identifies a fail-soft attached server that does
@@ -23,9 +24,26 @@ func (t *AttachTransport) PromptText(
 		return PromptTextResult{}, fmt.Errorf("attach transport is not configured")
 	}
 	var result indexprompttext.Result
-	err := t.http.PostJSON(ctx, "/api/project/index/prompt-text", request, &result)
+	err := t.http.PostJSONStrict(ctx, "/api/project/index/prompt-text", request, &result)
 	if errors.Is(err, api.ErrNotFound) {
 		return PromptTextResult{}, ErrPromptTextUnavailable
+	}
+	if err == nil {
+		err = indexprompttext.ValidateResult(result)
+	}
+	if err == nil && result.ProtocolVersion !=
+		staticprotocol.PromptTextProtocolVersion {
+		err = fmt.Errorf(
+			"PromptText protocol version %d does not match %d",
+			result.ProtocolVersion,
+			staticprotocol.PromptTextProtocolVersion,
+		)
+	}
+	if err == nil && result.File != request.File {
+		err = fmt.Errorf("PromptText response file %q does not match %q", result.File, request.File)
+	}
+	if err == nil && result.Revision != request.Revision {
+		err = fmt.Errorf("PromptText response revision does not match request")
 	}
 	return result, err
 }

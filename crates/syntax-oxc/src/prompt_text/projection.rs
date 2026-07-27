@@ -2,13 +2,16 @@ use crux_indexer_protocol::prompt_text::{
     PromptTextAnalysisStatus, PromptTextLiteralIsland, PromptTextPreview, PromptTextTemplate,
 };
 use oxc_ast::ast::TaggedTemplateExpression;
+use oxc_semantic::Scoping;
 use oxc_span::{GetSpan, Span};
 
 use super::{
     cooked,
+    fragments::FragmentIndex,
     interpolation::barriers,
     mapping::{ByteMapping, SourceMap, protocol_mappings},
     normalization,
+    value::{self, ProjectedValue},
 };
 
 /// One literal slice retained privately for the Markdown classifier.
@@ -31,6 +34,15 @@ pub struct ProjectedPromptTextTemplate {
     pub template: PromptTextTemplate,
     /// Compiler-private source used only by the Rust Markdown classifier.
     pub islands: Vec<ProjectedTextIsland>,
+    /// Closed AST-free interpolation values used only by static preview.
+    pub interpolations: Vec<ProjectedInterpolation>,
+}
+
+/// One source-order interpolation and its closed syntax-exact value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectedInterpolation {
+    pub index: u32,
+    pub value: ProjectedValue,
 }
 
 /// Tag-neutral result before Markdown classification.
@@ -47,6 +59,8 @@ pub(crate) fn template(
     map: &SourceMap<'_>,
     candidate_id: u32,
     tagged: &TaggedTemplateExpression<'_>,
+    scoping: &Scoping,
+    fragments: &FragmentIndex,
 ) -> ProjectedPromptTextTemplate {
     let quasis = tagged.quasi.quasis.iter().collect::<Vec<_>>();
     let quasi_spans = quasis
@@ -74,6 +88,22 @@ pub(crate) fn template(
         .flat_map(|island| protocol_mappings(source, island))
         .collect();
 
+    let interpolations = tagged
+        .quasi
+        .expressions
+        .iter()
+        .enumerate()
+        .map(|(index, expression)| ProjectedInterpolation {
+            index: index as u32,
+            value: value::project(
+                source,
+                expression,
+                scoping,
+                value::binding(&tagged.tag, scoping).as_ref(),
+                fragments,
+            ),
+        })
+        .collect();
     ProjectedPromptTextTemplate {
         template: PromptTextTemplate {
             candidate_id,
@@ -91,6 +121,7 @@ pub(crate) fn template(
             preview: PromptTextPreview::default(),
         },
         islands,
+        interpolations,
     }
 }
 
@@ -116,5 +147,6 @@ fn unsupported(
             preview: PromptTextPreview::default(),
         },
         islands: Vec::new(),
+        interpolations: Vec::new(),
     }
 }

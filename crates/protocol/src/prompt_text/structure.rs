@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::{PromptTextAnalysisStatus, PromptTextOffsetRange, PromptTextPreview, PromptTextRange};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextLiteralIsland {
     pub index: u32,
     pub range: PromptTextRange,
@@ -11,7 +11,7 @@ pub struct PromptTextLiteralIsland {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextInterpolationBarrier {
     pub index: u32,
     pub range: PromptTextRange,
@@ -19,7 +19,7 @@ pub struct PromptTextInterpolationBarrier {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextSourceMapping {
     pub island: u32,
     pub projection_range: PromptTextOffsetRange,
@@ -31,7 +31,8 @@ pub struct PromptTextSourceMapping {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextBlock {
     Heading {
@@ -120,7 +121,8 @@ where
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextSpan {
     Emphasis {
@@ -163,7 +165,8 @@ pub enum PromptTextSpan {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextLink {
     Inline {
@@ -188,7 +191,8 @@ pub enum PromptTextLink {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextNodeRef {
     Block { index: u32 },
@@ -197,7 +201,7 @@ pub enum PromptTextNodeRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextNesting {
     pub parent: PromptTextNodeRef,
     pub child: PromptTextNodeRef,
@@ -206,7 +210,7 @@ pub struct PromptTextNesting {
 
 /// One tag-neutral template projection and its normalized Markdown payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextTemplate {
     pub candidate_id: u32,
     pub range: PromptTextRange,

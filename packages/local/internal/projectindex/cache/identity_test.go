@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 51 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want bounded media stream epoch 51", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 52 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want PromptText fragment-join epoch 52", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -36,6 +36,8 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"privacy-safe effective observability policy",
 		"Epoch 51",
 		"bounded media stream operation facts",
+		"Epoch 52",
+		"fragment-join evidence",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -46,7 +48,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-51", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-52", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -123,6 +125,25 @@ func TestProjectIndexFactStoreMissesPrePromptTextSnapshotEpoch(t *testing.T) {
 	currentPath := projectIndexFactStoreDBFile(root)
 	if currentPath == oldPath {
 		t.Fatalf("current snapshot path reused epoch-46 snapshot %q", currentPath)
+	}
+	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
+		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)
+	}
+}
+
+func TestProjectIndexFactStoreMissesPreFragmentJoinSnapshotEpoch(t *testing.T) {
+	root := t.TempDir()
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-51", "index.db")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("pre-fragment-join snapshot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	currentPath := projectIndexFactStoreDBFile(root)
+	if currentPath == oldPath {
+		t.Fatalf("current snapshot path reused epoch-51 snapshot %q", currentPath)
 	}
 	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
 		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)

@@ -9,19 +9,28 @@ import (
 	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func TestCanonicalizeFragmentsUsesTheNamedEmptyCatalogueDigest(t *testing.T) {
+func TestCanonicalizePreviewEvidenceUsesTheNamedEmptyDigest(t *testing.T) {
 	t.Parallel()
 
-	fragments, digest, err := CanonicalizeFragments(nil, DefaultLimits())
+	fragments, joins, digest, err := CanonicalizePreviewEvidence(
+		"/repo/src/writer.ts",
+		strings.Repeat("c", 64),
+		nil,
+		nil,
+		DefaultLimits(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fragments == nil || len(fragments) != 0 {
 		t.Fatalf("canonical fragments = %#v, want non-nil empty", fragments)
 	}
-	const want = "98ae68c7e1000785759e8e128c5a5c4a3aadd3c86e8ce98aab3a1d97913216fe"
+	if joins == nil || len(joins) != 0 {
+		t.Fatalf("canonical joins = %#v, want non-nil empty", joins)
+	}
+	const want = "6e6550df1ee9835c362c9f846fc0327d5cec77c9c0dea2f7768c8aa550679895"
 	if got := hex.EncodeToString(digest[:]); got != want {
-		t.Fatalf("empty catalogue digest = %s, want %s", got, want)
+		t.Fatalf("empty preview-evidence digest = %s, want %s", got, want)
 	}
 }
 
@@ -30,8 +39,9 @@ func TestCanonicalizeFragmentsSortsTheExactWorkerVector(t *testing.T) {
 
 	second := fragment("second", "z")
 	first := fragment("first", "a")
-	got, leftDigest, err := CanonicalizeFragments(
+	got, _, leftDigest, err := canonicalizeEvidenceForTest(
 		[]Fragment{second, first},
+		nil,
 		DefaultLimits(),
 	)
 	if err != nil {
@@ -41,7 +51,7 @@ func TestCanonicalizeFragmentsSortsTheExactWorkerVector(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("canonical fragments = %#v, want %#v", got, want)
 	}
-	_, rightDigest, err := CanonicalizeFragments(want, DefaultLimits())
+	_, _, rightDigest, err := canonicalizeEvidenceForTest(want, nil, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +64,11 @@ func TestCanonicalizeFragmentsDigestIsSensitiveToEveryEncodedField(t *testing.T)
 	t.Parallel()
 
 	baseline := fragment("first", "a")
-	_, baselineDigest, err := CanonicalizeFragments([]Fragment{baseline}, DefaultLimits())
+	_, _, baselineDigest, err := canonicalizeEvidenceForTest(
+		[]Fragment{baseline},
+		nil,
+		DefaultLimits(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +87,11 @@ func TestCanonicalizeFragmentsDigestIsSensitiveToEveryEncodedField(t *testing.T)
 		t.Run(name, func(t *testing.T) {
 			changed := baseline
 			mutate(&changed)
-			_, digest, err := CanonicalizeFragments([]Fragment{changed}, DefaultLimits())
+			_, _, digest, err := canonicalizeEvidenceForTest(
+				[]Fragment{changed},
+				nil,
+				DefaultLimits(),
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,18 +108,25 @@ func TestCanonicalizeFragmentsRejectsDuplicateIDsAndMalformedRecords(t *testing.
 	duplicate := fragment("same", "a")
 	invalidRange := fragment("range", "b")
 	invalidRange.Range.End.Line = invalidRange.Range.Start.Line - 1
+	emptyRange := fragment("empty-range", "b")
+	emptyRange.Range.End = emptyRange.Range.Start
 	invalidUTF8 := fragment("utf8", "c")
 	invalidUTF8.Snippet = string([]byte{0xff})
 
 	for name, fragments := range map[string][]Fragment{
 		"duplicate ID": {duplicate, duplicate},
 		"range":        {invalidRange},
+		"empty range":  {emptyRange},
 		"UTF-8":        {invalidUTF8},
 		"identity":     {fragment("", "d")},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, _, err := CanonicalizeFragments(fragments, DefaultLimits()); err == nil {
-				t.Fatal("CanonicalizeFragments succeeded, want fail-closed error")
+			if _, _, _, err := canonicalizeEvidenceForTest(
+				fragments,
+				nil,
+				DefaultLimits(),
+			); err == nil {
+				t.Fatal("CanonicalizePreviewEvidence succeeded, want fail-closed error")
 			}
 		})
 	}
@@ -115,13 +140,13 @@ func TestCanonicalizeFragmentsBoundsTheAggregateCanonicalRecords(t *testing.T) {
 	exact := DefaultLimits()
 	exact.MaxFragmentBytes = uint32(recordBytes)
 
-	if _, _, err := CanonicalizeFragments(fragments, exact); err != nil {
+	if _, _, _, err := canonicalizeEvidenceForTest(fragments, nil, exact); err != nil {
 		t.Fatalf("exact aggregate catalogue rejected: %v", err)
 	}
 
 	overflow := exact
 	overflow.MaxFragmentBytes--
-	if _, _, err := CanonicalizeFragments(fragments, overflow); err == nil {
+	if _, _, _, err := canonicalizeEvidenceForTest(fragments, nil, overflow); err == nil {
 		t.Fatal("one-byte aggregate overflow succeeded")
 	}
 }
@@ -131,15 +156,30 @@ func TestCanonicalizeFragmentsZeroBytesPermitsOnlyTheEmptyCatalogue(t *testing.T
 
 	limits := DefaultLimits()
 	limits.MaxFragmentBytes = 0
-	if _, _, err := CanonicalizeFragments(nil, limits); err != nil {
+	if _, _, _, err := canonicalizeEvidenceForTest(nil, nil, limits); err != nil {
 		t.Fatalf("empty zero-budget catalogue rejected: %v", err)
 	}
-	if _, _, err := CanonicalizeFragments(
+	if _, _, _, err := canonicalizeEvidenceForTest(
 		[]Fragment{fragment("record", "")},
+		nil,
 		limits,
 	); err == nil {
 		t.Fatal("nonempty zero-budget catalogue succeeded")
 	}
+}
+
+func canonicalizeEvidenceForTest(
+	fragments []Fragment,
+	joins []FragmentJoin,
+	limits staticprotocol.PromptTextLimits,
+) ([]Fragment, []FragmentJoin, [32]byte, error) {
+	return CanonicalizePreviewEvidence(
+		"/repo/src/writer.ts",
+		strings.Repeat("c", 64),
+		fragments,
+		joins,
+		limits,
+	)
 }
 
 func fragment(id, snippet string) Fragment {

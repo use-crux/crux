@@ -68,6 +68,24 @@ export type ProjectSourceRefRole =
   | "config"
   | "helper";
 
+/**
+ * Semantic proof that one exact PromptText interpolation resolves to a named
+ * fragment source ref in the same definition lifecycle.
+ *
+ * The record carries identity and authored ranges only. Rendered values remain
+ * transient Rust output and never enter the Project Index.
+ */
+export interface PromptTextFragmentJoinEvidence {
+  readonly kind: "named-fragment";
+  readonly ownerSourceRefId: string;
+  readonly ownerTemplateRange: SourceRange;
+  readonly interpolationIndex: number;
+  readonly expressionRange: SourceRange;
+  readonly targetSourceRefId: string;
+  readonly targetTemplateRange: SourceRange;
+  readonly proof: "semantic-exact";
+}
+
 export interface ProjectSourceRef {
   id: string;
   role: ProjectSourceRefRole;
@@ -97,6 +115,8 @@ export interface ProjectSourceRef {
       language: "markdown";
       /** Direct authored field versus value produced through a callback. */
       lifecycle: "static" | "dynamic";
+      /** Exact named-fragment occurrences owned by this template. */
+      fragmentJoins?: readonly PromptTextFragmentJoinEvidence[];
     };
     extensions?: Record<string, unknown>;
   };
@@ -1281,6 +1301,17 @@ export const ProjectSourceRefRoleSchema = z.enum([
   "helper",
 ]);
 
+export const PromptTextFragmentJoinEvidenceSchema = z.object({
+  kind: z.literal("named-fragment"),
+  ownerSourceRefId: z.string(),
+  ownerTemplateRange: SourceRangeSchema,
+  interpolationIndex: z.number().int().nonnegative(),
+  expressionRange: SourceRangeSchema,
+  targetSourceRefId: z.string(),
+  targetTemplateRange: SourceRangeSchema,
+  proof: z.literal("semantic-exact"),
+}) satisfies z.ZodType<PromptTextFragmentJoinEvidence>;
+
 export const ProjectSourceRefSchema = z.object({
   id: z.string(),
   role: ProjectSourceRefRoleSchema,
@@ -1309,6 +1340,9 @@ export const ProjectSourceRefSchema = z.object({
           tag: z.literal("md"),
           language: z.literal("markdown"),
           lifecycle: z.enum(["static", "dynamic"]),
+          fragmentJoins: z
+            .array(PromptTextFragmentJoinEvidenceSchema)
+            .optional(),
         })
         .optional(),
       extensions: z.record(z.string(), z.unknown()).optional(),

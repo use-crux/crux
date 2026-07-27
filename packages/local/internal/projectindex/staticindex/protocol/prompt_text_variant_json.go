@@ -70,6 +70,33 @@ func (l PromptTextLink) MarshalJSON() ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+// MarshalJSON preserves the exact fields owned by the Rust span variant.
+func (s PromptTextSpan) MarshalJSON() ([]byte, error) {
+	payload := map[string]any{
+		"kind": s.Kind, "index": s.Index, "island": s.Island, "range": s.Range,
+	}
+	switch s.Kind {
+	case PromptTextSpanEmphasis, PromptTextSpanStrong, PromptTextSpanInlineCode:
+		if err := addRequiredRange(payload, "textRange", s.TextRange); err != nil {
+			return nil, err
+		}
+	case PromptTextSpanHTML, PromptTextSpanSoftBreak, PromptTextSpanHardBreak:
+	default:
+		return nil, fmt.Errorf("marshal PromptText span with unknown kind %q", s.Kind)
+	}
+	return json.Marshal(payload)
+}
+
+// MarshalJSON preserves the closed Rust node-reference discriminant.
+func (n PromptTextNodeRef) MarshalJSON() ([]byte, error) {
+	switch n.Kind {
+	case PromptTextNodeBlock, PromptTextNodeSpan, PromptTextNodeLink:
+	default:
+		return nil, fmt.Errorf("marshal PromptText node with unknown kind %q", n.Kind)
+	}
+	return json.Marshal(map[string]any{"kind": n.Kind, "index": n.Index})
+}
+
 // MarshalJSON preserves required zero and empty-string fields on the selected
 // Rust preview-segment variant.
 func (s PromptTextPreviewSegment) MarshalJSON() ([]byte, error) {
@@ -81,10 +108,14 @@ func (s PromptTextPreviewSegment) MarshalJSON() ([]byte, error) {
 		}
 	case PromptTextPreviewKnownValue, PromptTextPreviewPlaceholder:
 		payload["interpolation"] = s.Interpolation
+		path := s.InterpolationPath
+		if path == nil {
+			path = []uint32{}
+		}
+		payload["interpolationPath"] = path
 	case PromptTextPreviewFragment:
 		payload["fragmentId"] = s.FragmentID
 		payload["sourceHash"] = s.SourceHash
-	case PromptTextPreviewTruncation:
 	default:
 		return nil, fmt.Errorf("marshal PromptText preview segment with unknown kind %q", s.Kind)
 	}

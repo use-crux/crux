@@ -26,6 +26,7 @@ crux-indexer-static-compiler = { path = "crates/static-compiler" }
 oxc_allocator = "0.139.0"
 oxc_ast = "0.139.0"
 oxc_parser = "0.139.0"
+oxc_syntax = { version = "0.139.0", features = ["to_js_string"] }
 oxc_semantic = "0.139.0"
 oxc_span = "0.139.0"
 pulldown-cmark = "0.13.4"

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  PromptTextDecorationFixture,
-  Utf16Range,
-} from './contracts.js'
+import type { PromptTextDecorationFixture, Utf16Range } from './contracts.js'
 import { mapPromptTextDecorationRanges } from './mapping.js'
 
 describe('mapPromptTextDecorationRanges', () => {
@@ -35,12 +32,14 @@ describe('mapPromptTextDecorationRanges', () => {
 
     const mapped = mapPromptTextDecorationRanges(fixture)
 
-    expect(Object.fromEntries(
-      Object.entries(mapped).map(([role, ranges]) => [
-        role,
-        ranges.map((range) => textAtRange(sourceLines, range)),
-      ]),
-    )).toEqual({
+    expect(
+      Object.fromEntries(
+        Object.entries(mapped).map(([role, ranges]) => [
+          role,
+          ranges.map((range) => textAtRange(sourceLines, range)),
+        ]),
+      ),
+    ).toEqual({
       heading: ['Héllo'],
       link: ['guide'],
       code: ['code'],
@@ -60,7 +59,11 @@ describe('mapPromptTextDecorationRanges', () => {
     ]
     for (const ranges of Object.values(mapped)) {
       for (const decorationRange of ranges) {
-        expect(protectedRanges.some((barrier) => intersects(decorationRange, barrier))).toBe(false)
+        expect(
+          protectedRanges.some((barrier) =>
+            intersects(decorationRange, barrier),
+          ),
+        ).toBe(false)
       }
     }
   })
@@ -84,11 +87,19 @@ function range(line: number, start: number, end: number): Utf16Range {
 
 function textAtRange(lines: readonly string[], value: Utf16Range): string {
   expect(value.start.line).toBe(value.end.line)
-  return lines[value.start.line]?.slice(value.start.character, value.end.character) ?? ''
+  return (
+    lines[value.start.line]?.slice(
+      value.start.character,
+      value.end.character,
+    ) ?? ''
+  )
 }
 
 function intersects(left: Utf16Range, right: Utf16Range): boolean {
-  if (left.start.line !== right.start.line || left.end.line !== right.end.line) return false
-  return left.start.character < right.end.character
-    && right.start.character < left.end.character
+  if (left.start.line !== right.start.line || left.end.line !== right.end.line)
+    return false
+  return (
+    left.start.character < right.end.character &&
+    right.start.character < left.end.character
+  )
 }

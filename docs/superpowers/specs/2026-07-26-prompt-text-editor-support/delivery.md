@@ -18,8 +18,14 @@ crates/static-compiler/src/prompt_text/
   mod.rs
   markdown.rs
   structure.rs
-  preview.rs
   limits.rs
+  preview/
+    mod.rs
+    composition.rs
+    fragments.rs
+    json.rs
+    segments.rs
+    value.rs
 
 packages/local/internal/projectindex/prompttext/
   types.go
@@ -53,8 +59,14 @@ packages/vscode/src/prompt-text/
   contracts.ts
   controller.ts
   types.ts
-  preview.ts
   commands.ts
+  preview/
+    controller.ts
+    provider.ts
+    wire.ts
+    range.ts
+    metadata.ts
+    types.ts
 ```
 
 The server package composes the focused PromptText controller through explicit
@@ -129,11 +141,12 @@ Focused tests cover:
 - decorations across supported themes and semantic-highlighting modes;
 - the dedicated window-scoped decoration switch, immediate cancellation and
   clearing, and zero decoration-type replacement across theme changes;
-- canonical fragment-catalogue digest order invariance, field sensitivity,
-  duplicate rejection, empty identity, and coordinator-cache separation from
-  #266 source-profile identity;
-- aggregate canonical fragment-byte equality/overflow/zero boundaries and
-  known-length plus chunked ATTACHED request-body rejection;
+- canonical preview-evidence digest order invariance, every-field sensitivity,
+  duplicate/dangling/range/proof rejection, empty identity, and
+  coordinator-cache separation from #266 source-profile identity;
+- aggregate canonical fragment-plus-join byte equality/overflow/zero
+  boundaries, `maxFragmentJoins`, and known-length plus chunked ATTACHED
+  request-body rejection;
 - identical TypeScript tokens and interpolation provider results with
   decorations enabled and disabled;
 - folding, symbols, links, navigation, and hover;
@@ -151,7 +164,20 @@ Focused tests cover:
   scope containment, and nonexistent targets without filesystem/network I/O;
 - stale/cancelled link suppression and one shared-analysis identity across
   decorations, folding, symbols, and links;
-- preview golden parity, placeholders, fragments, and truncation;
+- preview ABI/golden parity, syntax-versus-semantic proof ownership, saved-join
+  withholding on dirty bytes, exact placeholders, JavaScript number/JSON
+  rendering, arrays/seams/fragments/cycles, whole-segment byte truncation,
+  reconstruction, and structural-status independence;
+- owning-source-ref `named-fragment` evidence parity across both semantic
+  backends, snapshot retention/migration, and stale semantic/snapshot cache
+  misses after the required epoch bumps;
+- strict static-preview request/result unions; position/choice/exact-range
+  selection; ordinal-independent slot reuse; range-less position failures
+  preserving every retained slot; exact-key and generation-associated failures
+  clearing only their slot; immediate clear plus 150 ms refresh; EOL
+  compatibility/equality rejection; content-only virtual documents; CodeLens
+  metadata; URI/title privacy; source/reconnect lifecycle; and 16-resource
+  capacity including split editors;
 - diagnostic type inference, evidence schemas, actions, and stale edits;
 - ATTACHED and OWN end-to-end behavior;
 - byte-for-byte cache/store non-mutation; and

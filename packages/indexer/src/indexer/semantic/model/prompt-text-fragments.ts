@@ -30,14 +30,17 @@ export function promptTextNamedFragment(
   const initializer = view.syntax.variableDeclarationInitializer(declaration);
   const object = initializer && view.syntax.unwrapExpression(initializer);
   if (!object || !view.syntax.isKind(object, "objectLiteral")) return undefined;
-  const property = view.syntax
-    .objectProperties(object)
-    .find(
-      (entry) =>
-        view.syntax.isKind(entry, "propertyAssignment") &&
-        semanticPropertyName(entry, view.syntax) === propertyName,
-    );
-  const value = property && view.syntax.propertyInitializer(property);
+  const properties = view.syntax.objectProperties(object);
+  const seen = new Set<string>();
+  let value: SemanticAnalyzerNode<SemanticAnalyzerView> | undefined;
+  for (const property of properties) {
+    if (!view.syntax.isKind(property, "propertyAssignment")) return undefined;
+    const name = semanticPropertyName(property, view.syntax);
+    const initializer = view.syntax.propertyInitializer(property);
+    if (!name || !initializer || seen.has(name)) return undefined;
+    seen.add(name);
+    if (name === propertyName) value = initializer;
+  }
   const tag = value && view.syntax.unwrapExpression(value);
   return tag && view.syntax.isKind(tag, "taggedTemplate") ? { tag } : undefined;
 }
@@ -81,5 +84,7 @@ function resolvedDeclaration(
   view: SemanticAnalyzerView,
 ): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
   const symbol = view.resolvedSymbols([node])[0];
-  return symbol ? view.declarationsOf([symbol])[0]?.[0] : undefined;
+  if (!symbol) return undefined;
+  const declarations = view.declarationsOf([symbol])[0];
+  return declarations?.length === 1 ? declarations[0] : undefined;
 }

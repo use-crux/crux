@@ -8,6 +8,7 @@ use oxc_semantic::SemanticBuilder;
 use oxc_span::{GetSpan, SourceType};
 
 use super::{
+    fragments::FragmentIndex,
     mapping::SourceMap,
     projection::{ProjectedPromptText, template},
 };
@@ -46,6 +47,7 @@ pub fn project(request: &PromptTextQueryRequest) -> ProjectedPromptText {
         .collect::<Vec<_>>();
     candidates.sort_by_key(|tagged| tagged.span().start);
     candidates.dedup_by_key(|tagged| tagged.span());
+    let fragments = FragmentIndex::new(&semantic, &candidates);
 
     let limit = request.limits.max_templates as usize;
     let status = if candidates.len() > limit {
@@ -58,7 +60,16 @@ pub fn project(request: &PromptTextQueryRequest) -> ProjectedPromptText {
     let templates = candidates
         .into_iter()
         .enumerate()
-        .map(|(index, tagged)| template(&request.source, &map, index as u32, tagged))
+        .map(|(index, tagged)| {
+            template(
+                &request.source,
+                &map,
+                index as u32,
+                tagged,
+                semantic.scoping(),
+                &fragments,
+            )
+        })
         .collect();
     ProjectedPromptText { status, templates }
 }

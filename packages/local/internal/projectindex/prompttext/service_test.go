@@ -22,10 +22,12 @@ func TestServiceAnalyzesTheSharedCanonicalHeading(t *testing.T) {
 	service := New(compiler)
 
 	result, err := service.Analyze(context.Background(), Request{
-		File:       golden.Request.Query.File,
-		LanguageID: golden.Request.Query.LanguageID,
-		Revision:   golden.Request.Query.Revision,
-		Text:       golden.Request.Query.Source,
+		File:          golden.Request.Query.File,
+		LanguageID:    golden.Request.Query.LanguageID,
+		Revision:      golden.Request.Query.Revision,
+		Text:          golden.Request.Query.Source,
+		Fragments:     golden.Request.Query.Fragments,
+		FragmentJoins: golden.Request.Query.FragmentJoins,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -129,4 +131,106 @@ func TestServiceRejectsAggregateFragmentOverflowBeforeCompilerInvocation(t *test
 	if compiler.calls != 0 {
 		t.Fatalf("compiler calls = %d, want zero", compiler.calls)
 	}
+}
+
+func TestServiceRejectsInvalidClosedResponse(t *testing.T) {
+	t.Parallel()
+
+	golden := readPromptTextGolden(t)
+	cases := map[string]func(*CompilerResponse){
+		"request status": func(response *CompilerResponse) {
+			response.Status.Kind = "future"
+		},
+		"template status": func(response *CompilerResponse) {
+			response.Templates[0].Status.Kind = "future"
+		},
+		"block": func(response *CompilerResponse) {
+			response.Templates[0].Blocks[0].Kind = "future"
+		},
+		"span": func(response *CompilerResponse) {
+			response.Templates[0].Spans = []staticprotocol.PromptTextSpan{{Kind: "future"}}
+		},
+		"link": func(response *CompilerResponse) {
+			response.Templates[0].Links = []staticprotocol.PromptTextLink{{Kind: "future"}}
+		},
+		"nesting node": func(response *CompilerResponse) {
+			response.Templates[0].Nesting = []staticprotocol.PromptTextNesting{{
+				Parent: staticprotocol.PromptTextNodeRef{Kind: "future"},
+				Child:  staticprotocol.PromptTextNodeRef{Kind: staticprotocol.PromptTextNodeBlock},
+			}}
+		},
+		"preview status": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Status.Kind = "future"
+		},
+		"preview evidence": func(response *CompilerResponse) {
+			value := staticprotocol.PromptTextPreviewEvidence("future")
+			response.Templates[0].Preview.Evidence = &value
+		},
+		"preview segment": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Segments[0].Kind = "future"
+		},
+		"authored literal range": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Segments[0].Range =
+				&staticprotocol.PromptTextRange{}
+		},
+		"fragment source hash": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Segments =
+				[]staticprotocol.PromptTextPreviewSegment{{
+					Kind:       staticprotocol.PromptTextPreviewFragment,
+					Text:       response.Templates[0].Preview.Text,
+					FragmentID: "fragment",
+					SourceHash: "not-a-source-hash",
+				}}
+		},
+		"null template list": func(response *CompilerResponse) {
+			response.Templates = nil
+		},
+		"null preview segments": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Segments = nil
+		},
+		"preview truncation": func(response *CompilerResponse) {
+			response.Templates[0].Preview.Status.Kind =
+				staticprotocol.PromptTextPreviewTruncated
+			response.Templates[0].Preview.Truncation =
+				&staticprotocol.PromptTextPreviewTruncation{Reason: "future"}
+		},
+	}
+	for name, mutate := range cases {
+		name, mutate := name, mutate
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			response := cloneCompilerResponse(t, golden.Response.Response)
+			mutate(&response)
+			_, err := New(&recordingCompiler{response: response}).Analyze(
+				context.Background(),
+				Request{
+					File:          golden.Request.Query.File,
+					LanguageID:    golden.Request.Query.LanguageID,
+					Revision:      golden.Request.Query.Revision,
+					Text:          golden.Request.Query.Source,
+					Fragments:     golden.Request.Query.Fragments,
+					FragmentJoins: golden.Request.Query.FragmentJoins,
+				},
+			)
+			if err == nil {
+				t.Fatal("Analyze succeeded, want closed-discriminant error")
+			}
+		})
+	}
+}
+
+func cloneCompilerResponse(
+	t *testing.T,
+	source CompilerResponse,
+) CompilerResponse {
+	t.Helper()
+	data, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result CompilerResponse
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
 }

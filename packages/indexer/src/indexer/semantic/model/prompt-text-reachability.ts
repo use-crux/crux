@@ -17,6 +17,11 @@ export interface SemanticPromptTextEdge {
   readonly role: "system" | "prompt";
   readonly lifecycle: "static" | "dynamic";
   readonly symbol?: string;
+  readonly fragmentJoin?: {
+    readonly ownerTag: SemanticAnalyzerNode<SemanticAnalyzerView>;
+    readonly interpolationIndex: number;
+    readonly expression: SemanticAnalyzerNode<SemanticAnalyzerView>;
+  };
 }
 
 export interface SemanticPromptTextCandidateEdge extends SemanticPromptTextEdge {
@@ -146,10 +151,20 @@ function collectPromptTextValue(
   lifecycle: "static" | "dynamic",
   view: SemanticAnalyzerView,
   seen: Set<string>,
+  fragmentJoin?: SemanticPromptTextEdge["fragmentJoin"],
 ): readonly SemanticPromptTextCandidateEdge[] {
   const unwrapped = view.syntax.unwrapExpression(expression);
   if (view.syntax.isKind(unwrapped, "taggedTemplate")) {
-    return collectTag(unwrapped, edge, spec, lifecycle, undefined, view, seen);
+    return collectTag(
+      unwrapped,
+      edge,
+      spec,
+      lifecycle,
+      undefined,
+      view,
+      seen,
+      fragmentJoin,
+    );
   }
 
   const named = promptTextNamedFragment(unwrapped, view);
@@ -162,6 +177,7 @@ function collectPromptTextValue(
         view.syntax.text(unwrapped),
         view,
         seen,
+        fragmentJoin,
       )
     : [];
 }
@@ -174,36 +190,76 @@ function collectTag(
   symbol: string | undefined,
   view: SemanticAnalyzerView,
   seen: Set<string>,
+  fragmentJoin?: SemanticPromptTextEdge["fragmentJoin"],
 ): readonly SemanticPromptTextCandidateEdge[] {
   const tagExpression = view.syntax.taggedTemplateTag(tag);
   if (!tagExpression) return [];
   const canonical = isCanonicalPromptTextTag(tagExpression, view);
   const key = semanticNodeKey(tag, view.syntax);
-  if (seen.has(key)) return [];
+  const current = {
+    tag,
+    edge,
+    ...spec,
+    lifecycle,
+    canonical,
+    ...(symbol ? { symbol } : {}),
+    ...(symbol && fragmentJoin ? { fragmentJoin } : {}),
+  };
+  if (seen.has(key)) return [current];
   const nextSeen = new Set(seen);
   nextSeen.add(key);
 
   const nested = canonical
     ? view.syntax
         .templateExpressions(view.syntax.taggedTemplateBody(tag) ?? tag)
-        .flatMap((expression) =>
-          collectNestedExpression(expression, spec, lifecycle, view, nextSeen),
+        .flatMap((expression, interpolationIndex) =>
+          collectNestedExpression(
+            expression,
+            interpolationIndex,
+            tag,
+            spec,
+            lifecycle,
+            view,
+            nextSeen,
+          ),
         )
     : [];
-  return [
-    {
-      tag,
-      edge,
-      ...spec,
-      lifecycle,
-      canonical,
-      ...(symbol ? { symbol } : {}),
-    },
-    ...nested,
-  ];
+  return [current, ...nested];
 }
 
 function collectNestedExpression(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  interpolationIndex: number,
+  ownerTag: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  spec: SemanticPromptTextPropertySpec,
+  lifecycle: "static" | "dynamic",
+  view: SemanticAnalyzerView,
+  seen: Set<string>,
+): readonly SemanticPromptTextCandidateEdge[] {
+  const unwrapped = view.syntax.unwrapExpression(expression);
+  const direct = collectPromptTextValue(
+    expression,
+    unwrapped,
+    spec,
+    lifecycle,
+    view,
+    seen,
+    { ownerTag, interpolationIndex, expression },
+  );
+  if (direct.length > 0) return direct;
+
+  return view.syntax.children(unwrapped).flatMap((child) => {
+    if (
+      view.syntax.isFunctionLike(child) ||
+      view.syntax.isKind(child, "classDeclaration")
+    ) {
+      return [];
+    }
+    return collectNestedDescendant(child, spec, lifecycle, view, seen);
+  });
+}
+
+function collectNestedDescendant(
   expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   spec: SemanticPromptTextPropertySpec,
   lifecycle: "static" | "dynamic",
@@ -220,7 +276,6 @@ function collectNestedExpression(
     seen,
   );
   if (direct.length > 0) return direct;
-
   return view.syntax.children(unwrapped).flatMap((child) => {
     if (
       view.syntax.isFunctionLike(child) ||
@@ -228,6 +283,6 @@ function collectNestedExpression(
     ) {
       return [];
     }
-    return collectNestedExpression(child, spec, lifecycle, view, seen);
+    return collectNestedDescendant(child, spec, lifecycle, view, seen);
   });
 }

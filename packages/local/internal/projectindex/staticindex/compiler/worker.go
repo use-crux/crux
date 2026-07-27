@@ -1,8 +1,11 @@
 package compiler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
@@ -155,7 +158,9 @@ func (w *Worker) PromptText(
 	request := protocol.PromptTextWorkerRequest{
 		ID: id, Method: protocol.PromptTextMethod, Query: query,
 	}
-	envelope, err := call[protocol.WorkerResponse[protocol.PromptTextQueryResponse]](ctx, w, request)
+	envelope, err := callStrict[protocol.WorkerResponse[protocol.PromptTextQueryResponse]](
+		ctx, w, request,
+	)
 	if err != nil {
 		return protocol.PromptTextQueryResponse{}, err
 	}
@@ -183,4 +188,35 @@ func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, err
 		return zero, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	return workerproc.Call[Resp](ctx, worker.Process(), request)
+}
+
+func callStrict[Resp any](
+	ctx context.Context,
+	worker *Worker,
+	request any,
+) (Resp, error) {
+	var zero Resp
+	if worker == nil || worker.Process() == nil {
+		return zero, fmt.Errorf("project Static Index compiler is not configured")
+	}
+	raw, err := workerproc.CallRaw(ctx, worker.Process(), request)
+	if err != nil {
+		return zero, err
+	}
+	return decodeStrict[Resp](raw)
+}
+
+func decodeStrict[Resp any](raw json.RawMessage) (Resp, error) {
+	var response Resp
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&response); err != nil {
+		return response, fmt.Errorf("unmarshal strict response: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err == nil {
+		return response, fmt.Errorf("unmarshal strict response: trailing data")
+	} else if err != io.EOF {
+		return response, fmt.Errorf("unmarshal strict response trailing data: %w", err)
+	}
+	return response, nil
 }

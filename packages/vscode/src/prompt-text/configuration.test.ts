@@ -31,12 +31,14 @@ describe('PromptText decoration configuration', () => {
   it('defaults to enabled and reads only the dedicated key', () => {
     const reads: string[] = []
 
-    expect(readPromptTextDecorationsEnabled({
-      get(section, fallback) {
-        reads.push(section)
-        return fallback
-      },
-    })).toBe(true)
+    expect(
+      readPromptTextDecorationsEnabled({
+        get(section, fallback) {
+          reads.push(section)
+          return fallback
+        },
+      }),
+    ).toBe(true)
     expect(reads).toEqual([promptTextDecorationsConfiguration])
   })
 })

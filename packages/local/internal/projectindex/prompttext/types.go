@@ -16,6 +16,9 @@ type Revision = staticprotocol.PromptTextDocumentRevision
 // Fragment is one bounded, semantically proven static-analysis input.
 type Fragment = staticprotocol.PromptTextFragment
 
+// FragmentJoin is one semantic-exact interpolation-to-fragment edge.
+type FragmentJoin = staticprotocol.PromptTextFragmentJoin
+
 // CompilerQuery is the internal persistent-worker request.
 type CompilerQuery = staticprotocol.PromptTextQuery
 
@@ -27,11 +30,12 @@ type Result = staticprotocol.PromptTextQueryResponse
 
 // Request supplies one exact open-document snapshot to Analyze.
 type Request struct {
-	File       string     `json:"file"`
-	LanguageID string     `json:"languageId"`
-	Revision   Revision   `json:"revision"`
-	Text       string     `json:"text"`
-	Fragments  []Fragment `json:"fragments"`
+	File          string         `json:"file"`
+	LanguageID    string         `json:"languageId"`
+	Revision      Revision       `json:"revision"`
+	Text          string         `json:"text"`
+	Fragments     []Fragment     `json:"fragments"`
+	FragmentJoins []FragmentJoin `json:"fragmentJoins"`
 }
 
 // Analyzer serves one cancellable transient PromptText query.

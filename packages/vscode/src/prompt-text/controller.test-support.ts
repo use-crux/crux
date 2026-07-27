@@ -84,13 +84,15 @@ export function fixture(
     openEpoch: 2,
     version,
     sourceHash: `hash-${version}`,
-    decorations: [{
-      role: 'heading',
-      range: {
-        start: { line: 0, character: 18 },
-        end: { line: 0, character: 23 },
+    decorations: [
+      {
+        role: 'heading',
+        range: {
+          start: { line: 0, character: 18 },
+          end: { line: 0, character: 23 },
+        },
       },
-    }],
+    ],
   }
 }
 

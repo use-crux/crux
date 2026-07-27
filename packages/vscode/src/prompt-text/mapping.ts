@@ -1,7 +1,4 @@
-import type {
-  PromptTextDecorationSpan,
-  Utf16Range,
-} from './contracts.js'
+import type { PromptTextDecorationSpan, Utf16Range } from './contracts.js'
 import type { PromptTextDecorationRole } from './types.js'
 
 /** Decoration ranges grouped for one `setDecorations` call per visual role. */
@@ -19,9 +16,9 @@ export type PromptTextDecorationRanges = Readonly<
  * @param payload - Fixture or production result containing proven role ranges.
  * @returns The same ranges grouped exhaustively by presentation role.
  */
-export function mapPromptTextDecorationRanges(
-  payload: { readonly decorations: readonly PromptTextDecorationSpan[] },
-): PromptTextDecorationRanges {
+export function mapPromptTextDecorationRanges(payload: {
+  readonly decorations: readonly PromptTextDecorationSpan[]
+}): PromptTextDecorationRanges {
   const ranges: Record<PromptTextDecorationRole, Utf16Range[]> = {
     heading: [],
     link: [],

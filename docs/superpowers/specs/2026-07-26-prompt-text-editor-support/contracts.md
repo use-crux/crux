@@ -8,7 +8,8 @@ The request contains:
 
 - protocol version;
 - file, language, open epoch, document version, source hash, and text;
-- a bounded catalogue of proven fragment source refs/snippets; and
+- bounded proven fragment source refs/snippets and exact interpolation joins;
+  and
 - centralized size, candidate, traversal, and output limits.
 
 Each analyzed template contains:
@@ -20,13 +21,14 @@ Each analyzed template contains:
 - normalized blocks, spans, links, and nesting; and
 - static preview text, segments, placeholders, and truncation.
 
-The fragment catalogue is backend-neutral. It contains IDs, symbols, snippets,
-hashes, and source locations, never compiler AST/checker objects. Missing or
-uncertain fragments remain placeholders.
+The preview evidence is backend-neutral. Fragment records contain IDs, display
+symbols, snippets, hashes, and source locations. Join records identify one
+exact interpolation and its proven fragment target. Neither contains compiler
+AST/checker objects. Missing or uncertain joins remain placeholders.
 
 Preview segments distinguish authored literals, known values, named fragments,
-placeholders, and truncation markers. Their concatenation must reconstruct
-preview text exactly.
+and placeholders. Their concatenation reconstructs preview text exactly.
+Truncation is metadata and never contributes document bytes.
 
 ### Literal projection and source mapping
 
@@ -87,70 +89,85 @@ that record instead of widening or guessing. Mappings and published editor
 ranges must never overlap a tag, backtick, interpolation delimiter, or
 interpolation expression.
 
-### Fragment-catalogue identity
+### Preview-evidence identity
 
-The transient coordinator computes the fragment-catalogue digest; callers
-supply fragments, never a trusted digest. It validates the catalogue, sorts the
-same records that will be sent to the worker, and hashes this canonical byte
-stream with SHA-256:
+The transient coordinator computes the preview-evidence digest; callers supply
+fragments and joins, never a trusted digest. It validates both vectors, sorts
+the same records that will be sent to the worker, and hashes this canonical
+byte stream with SHA-256:
 
 ```text
-ASCII "crux-prompt-text-fragment-catalogue-v1\0"
-u32be(record count)
-records sorted lexicographically by their complete encoded record bytes
+ASCII "crux-prompt-text-preview-evidence-v1\0"
+u32be(fragment count)
+fragment records sorted lexicographically by their complete encoded record bytes
+u32be(join count)
+join records sorted lexicographically by their complete encoded record bytes
 ```
 
-Each record encodes these fields in order:
+Each fragment record encodes these fields in order:
 
 ```text
 id, symbol, file, sourceHash, start.line, start.character,
 end.line, end.character, snippet
 ```
 
-Strings encode as `u32be(UTF-8 byte length) || exact UTF-8 bytes`; positions
-encode as `u32be`. Digesting does not normalize Unicode, paths, line endings,
-or hashes, and it does not use JSON. Catalogue construction must already have
-produced canonical file and source-hash values. A repeated `id`, including an
-identical duplicate, is invalid; different IDs with otherwise equal records
-are permitted.
-
-The empty catalogue digest is SHA-256 over the domain prefix followed by a
-zero record count:
+Each join record encodes these fields in order:
 
 ```text
-98ae68c7e1000785759e8e128c5a5c4a3aadd3c86e8ce98aab3a1d97913216fe
+key.file, key.sourceHash,
+key.templateRange.start.line, key.templateRange.start.character,
+key.templateRange.end.line, key.templateRange.end.character,
+key.interpolation,
+key.expressionRange.start.line, key.expressionRange.start.character,
+key.expressionRange.end.line, key.expressionRange.end.character,
+fragmentId,
+u8 proof // 1 = semantic-exact
+```
+
+Strings encode as `u32be(UTF-8 byte length) || exact UTF-8 bytes`; positions,
+counts, and the interpolation ordinal encode as `u32be`. Digesting does not
+normalize Unicode, paths, line endings, or hashes, and it does not use JSON.
+Evidence construction must already have produced canonical file and
+source-hash values. A repeated fragment ID or join key, including an identical
+duplicate, is invalid.
+
+The empty evidence digest is SHA-256 over the domain prefix followed by zero
+fragment and join counts:
+
+```text
+6e6550df1ee9835c362c9f846fc0327d5cec77c9c0dea2f7768c8aa550679895
 ```
 
 Invalid UTF-8 or length overflow, malformed ranges, noncanonical required
-identity fields, duplicate IDs, and catalogue limit violations make transient
-analysis unavailable. The coordinator does not call the worker or reuse a
-prior result. The digest enters the coalescing/cache key beside the selected
-view revision.
+identity fields, duplicate IDs or join keys, dangling targets, invalid proofs,
+and evidence-limit violations make transient analysis unavailable. A join
+owner must be the exact document or a supplied fragment. The coordinator does
+not call the worker or reuse a prior result. The digest enters the
+coalescing/cache key beside the selected view revision.
 
-This digest is private PromptText catalogue identity. Its domain, inputs, and
+This digest is private PromptText preview-evidence identity. Its domain, inputs, and
 lifecycle are distinct from #266's semantic-source-profile digest; neither may
 substitute for, include, or be included in the other.
 
-`maxFragmentBytes` bounds the sum of all canonical encoded fragment-record
-lengths, not each snippet or record:
+`maxFragmentBytes` bounds the sum of all canonical encoded fragment and join
+record lengths, not each snippet or record:
 
 ```text
-sum(encoded_record.len) <= maxFragmentBytes
+sum(encoded_fragment.len) + sum(encoded_join.len) <= maxFragmentBytes
 ```
 
-The count includes, for every record, five big-endian `u32` string-length
-prefixes, the exact UTF-8 bytes of `id`, `symbol`, `file`, `sourceHash`, and
-`snippet`, and four big-endian `u32` range positions. It excludes the digest
-domain prefix, catalogue count word, digest bytes, JSON syntax and escaping,
-and all request fields outside the fragment records.
+The count includes every length prefix, exact UTF-8 string, position,
+interpolation ordinal, and proof byte described above. It excludes the digest
+domain prefix, vector count words, digest bytes, JSON syntax and escaping, and
+all request fields outside the evidence records.
 
-Go checks `maxFragments` first, then validates and encodes records in caller
-order, rejects duplicate IDs, and accumulates encoded lengths with checked
+Go checks `maxFragments` and `maxFragmentJoins` first, then validates and
+encodes records in caller order and accumulates encoded lengths with checked
 `u64` addition. Equality fits. Excess or arithmetic/length overflow fails
-closed. A zero byte or count limit permits only an empty catalogue; the limits
-are conjunctive. Sorting occurs only after every record and the aggregate
-budget validate. A failure yields no canonical vector or digest, cannot reuse a
-cached/coalesced result, and never invokes the worker.
+closed. A zero byte or matching count limit permits only an empty corresponding
+vector; the limits are conjunctive. Sorting occurs only after every record and
+the aggregate budget validate. A failure yields no canonical vectors or
+digest, cannot reuse a cached/coalesced result, and never invokes the worker.
 
 The strict ATTACHED V1 request-body limit is:
 
@@ -163,10 +180,11 @@ MaxRequestBytes =
 
 At the V1 defaults this is `13_041_664` bytes. The final 64 KiB is fixed JSON
 envelope allowance for field names, quotes, punctuation, numeric rendering,
-revision/file/language metadata, and at most 256 fragment objects; it is not
-fragment payload capacity. A known larger `Content-Length` returns HTTP 413
-before decoding. The identical `http.MaxBytesReader` bound handles absent or
-dishonest lengths and also returns 413 without analyzer invocation.
+revision/file/language metadata, and at most 256 fragment plus 256 join
+objects; it is not evidence-payload capacity. A known larger `Content-Length`
+returns HTTP 413 before decoding. The identical `http.MaxBytesReader` bound
+handles absent or dishonest lengths and also returns 413 without analyzer
+invocation.
 
 ### Native query ABI v1
 
@@ -182,28 +200,28 @@ pub const PROMPT_TEXT_QUERY_METHOD: &str = "promptTextQuery";
 pub const PROMPT_TEXT_PROTOCOL_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextPosition {
     pub line: u32,
     pub character: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextRange {
     pub start: PromptTextPosition,
     pub end: PromptTextPosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextOffsetRange {
     pub start: u32,
     pub end: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextDocumentRevision {
     pub open_epoch: u64,
     pub version: i64,
@@ -214,7 +232,8 @@ pub struct PromptTextDocumentRevision {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextAnalysisStatus {
     Complete,
@@ -223,7 +242,7 @@ pub enum PromptTextAnalysisStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextLimits {
     pub max_source_bytes: u32,
     pub max_templates: u32,
@@ -231,13 +250,14 @@ pub struct PromptTextLimits {
     pub max_traversal_nodes: u32,
     pub max_output_bytes: u32,
     pub max_fragments: u32,
+    pub max_fragment_joins: u32,
     pub max_fragment_bytes: u32,
     pub max_fragment_depth: u32,
     pub max_preview_bytes: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextFragment {
     pub id: String,
     pub symbol: String,
@@ -247,8 +267,32 @@ pub struct PromptTextFragment {
     pub snippet: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptTextEvidenceProof {
+    SemanticExact,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextInterpolationJoinKey {
+    pub file: String,
+    pub source_hash: String,
+    pub template_range: PromptTextRange,
+    pub interpolation: u32,
+    pub expression_range: PromptTextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextFragmentJoin {
+    pub key: PromptTextInterpolationJoinKey,
+    pub fragment_id: String,
+    pub proof: PromptTextEvidenceProof,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextQueryRequest {
     pub protocol_version: u16,
     pub file: String,
@@ -256,11 +300,12 @@ pub struct PromptTextQueryRequest {
     pub revision: PromptTextDocumentRevision,
     pub source: String,
     pub fragments: Vec<PromptTextFragment>,
+    pub fragment_joins: Vec<PromptTextFragmentJoin>,
     pub limits: PromptTextLimits,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextWorkerRequest {
     pub id: u64,
     pub method: String,
@@ -268,7 +313,7 @@ pub struct PromptTextWorkerRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextLiteralIsland {
     pub index: u32,
     pub range: PromptTextRange,
@@ -276,7 +321,7 @@ pub struct PromptTextLiteralIsland {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextInterpolationBarrier {
     pub index: u32,
     pub range: PromptTextRange,
@@ -284,7 +329,7 @@ pub struct PromptTextInterpolationBarrier {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextSourceMapping {
     pub island: u32,
     pub projection_range: PromptTextOffsetRange,
@@ -295,7 +340,8 @@ pub struct PromptTextSourceMapping {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextBlock {
     Heading {
@@ -354,7 +400,8 @@ pub enum PromptTextBlock {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextSpan {
     Emphasis {
@@ -396,7 +443,8 @@ pub enum PromptTextSpan {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextLink {
     Inline {
@@ -421,7 +469,8 @@ pub enum PromptTextLink {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextNodeRef {
     Block { index: u32 },
@@ -430,7 +479,7 @@ pub enum PromptTextNodeRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextNesting {
     pub parent: PromptTextNodeRef,
     pub child: PromptTextNodeRef,
@@ -441,7 +490,8 @@ pub struct PromptTextNesting {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PromptTextPreviewSegment {
     AuthoredLiteral {
@@ -451,6 +501,7 @@ pub enum PromptTextPreviewSegment {
     KnownValue {
         text: String,
         interpolation: u32,
+        interpolation_path: Vec<u32>,
     },
     Fragment {
         text: String,
@@ -460,21 +511,52 @@ pub enum PromptTextPreviewSegment {
     Placeholder {
         text: String,
         interpolation: u32,
-    },
-    Truncation {
-        text: String,
+        interpolation_path: Vec<u32>,
     },
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PromptTextPreview {
-    pub text: String,
-    pub segments: Vec<PromptTextPreviewSegment>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptTextPreviewEvidence {
+    SyntaxExact,
+    SemanticExact,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum PromptTextPreviewStatus {
+    Complete,
+    Truncated,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptTextPreviewTruncationReason {
+    MaxPreviewBytes,
+    MaxFragmentDepth,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextPreviewTruncation {
+    pub reason: PromptTextPreviewTruncationReason,
+    pub limit: u32,
+    pub emitted_bytes: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextPreview {
+    pub status: PromptTextPreviewStatus,
+    pub evidence: Option<PromptTextPreviewEvidence>,
+    pub text: String,
+    pub segments: Vec<PromptTextPreviewSegment>,
+    pub truncation: Option<PromptTextPreviewTruncation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextTemplate {
     pub candidate_id: u32,
     pub range: PromptTextRange,
@@ -492,7 +574,7 @@ pub struct PromptTextTemplate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextQueryResponse {
     pub protocol_version: u16,
     pub file: String,
@@ -501,6 +583,73 @@ pub struct PromptTextQueryResponse {
     pub templates: Vec<PromptTextTemplate>,
 }
 ```
+
+Join coordinates are absolute, zero-based UTF-16 and half-open.
+`templateRange` is the complete tagged-template range; `expressionRange` is
+the expression-only barrier range. Rust accepts a join only when Oxc
+independently finds that exact owner template, interpolation ordinal, and
+expression range in the current source or matching supplied fragment. It never
+guesses by `symbol`.
+
+Go obtains joins only from one coherent `EvidenceSemantic + RequireCurrent`
+view. Structured semantic evidence names the owner template range,
+interpolation ordinal/range, and resolved target `ProjectSourceRef`; Go adds
+exact source hashes from that publication. Both semantic backends emit this
+narrow evidence with parity. Missing, ambiguous, stale, partial,
+lifecycle-mismatched, cross-owner, or non-resolved evidence is omitted. Saved
+joins are never transformed or reused for dirty bytes.
+
+Oxc/Rust owns all syntax-exact scalar, array, JSON, and same-document fragment
+evaluation. Go never supplies rendered value bytes, parses TypeScript, or
+evaluates expressions. No persistent constant-value facts are added.
+
+The backend-neutral Project Index record is attached to the owning source ref:
+
+```ts
+export interface PromptTextFragmentJoinEvidence {
+  readonly kind: "named-fragment";
+  readonly ownerSourceRefId: string;
+  readonly ownerTemplateRange: SourceSnippet["range"];
+  readonly interpolationIndex: number;
+  readonly expressionRange: SourceSnippet["range"];
+  readonly targetSourceRefId: string;
+  readonly targetTemplateRange: SourceSnippet["range"];
+  readonly proof: "semantic-exact";
+}
+
+export interface ProjectSourceRef {
+  readonly metadata?: {
+    readonly promptText?: {
+      readonly tag: "md";
+      readonly language: "markdown";
+      readonly lifecycle: "static" | "dynamic";
+      readonly fragmentJoins?: readonly PromptTextFragmentJoinEvidence[];
+    };
+  };
+}
+```
+
+`SourceSnippet["range"]` is the existing file plus one-based, half-open
+line/column representation. The owner ID equals the ref carrying the array.
+Owner and target are exact, untruncated, resolved canonical `md` source refs in
+the same definition, role, property, lifecycle, and semantic result. Their
+template ranges equal their snippet ranges, and the expression range is
+contained by its owner.
+
+There is one record per proven named-fragment occurrence. Sort by interpolation
+index, expression range, then target ID. Duplicate owner/interpolation/range
+keys, multiple targets for one key, unresolved/partial targets, and ambiguous
+or cyclic resolution emit no join for that occurrence. Target refs retain
+existing source-ref deduplication; multiplicity exists only in the owner's
+array.
+
+Go resolves both IDs and source-row hashes inside the selected immutable
+publication, converts one-based ranges to zero-based UTF-16, and builds the
+worker join. A missing row/hash or failed invariant suppresses it. This record
+changes semantic facts and the Go snapshot: bump
+`SEMANTIC_FACTS_CACHE_EPOCH` and `ProjectIndexSnapshotCacheEpoch`, update both
+semantic backends and parity/migration fixtures, but do not bump
+`STATIC_PARSE_CACHE_EPOCH`.
 
 The request-level status describes the file query:
 
@@ -515,6 +664,25 @@ Each included template has its own authoritative status. `truncated` means its
 payload is a safe bounded prefix; `unsupported` requires all payload
 collections and preview to be empty. Consumers never downgrade a complete
 included template because the request-level status is truncated.
+
+Preview status is independent:
+
+- `complete` requires evidence and has no truncation;
+- `truncated` requires evidence and truncation metadata;
+- `unavailable` has no evidence or truncation and has empty text and segments;
+  and
+- structural `unsupported` makes preview unavailable, while preview truncation
+  never changes template status.
+
+Concatenating nonempty, source-ordered preview segment text must equal
+`preview.text`; adjacent identical provenance is coalesced. A semantic-exact
+preview has at least one accepted semantic join; every other available preview
+is syntax-exact. Semantic fragment segments use the catalogue ID.
+Syntax-local/direct fragments use `document:<candidateId>`.
+
+If `maxOutputBytes` rejects a finalized compact template object, that entire
+template and all later templates are omitted and only request status becomes
+`truncated`. Preview status does not replace structural output-byte accounting.
 
 #### V1 document-link projection and trust policy
 
@@ -1145,19 +1313,399 @@ Encoding, sanitization, suspicious-content, nested-input migration, `safe`,
 
 ## Static preview safety
 
-Rust may render only:
+The only placeholder bytes are `⟪unknown⟫` (U+27EA, ASCII `unknown`, U+27EB).
+They never expose expression text, symbol names, inferred kinds, or values. A
+placeholder is a nonempty scalar: at block position it receives normal parent
+indentation and prevents empty-carrier seam removal. Truncation contributes no
+preview text.
 
-- literal chunks;
-- known finite number, string, nullish, and false values;
-- visible arrays of safe known values;
-- proven local or named fragments within traversal limits; and
-- canonical `md.json` over inert literal JSON without spreads, getters, or
-  calls.
+Without semantic joins, Oxc/Rust may prove:
 
-Every unknown becomes a visible bounded placeholder. Preview never imports
-modules, executes callbacks/getters/functions, parses schemas, reads the
-environment, accesses the network, invokes tools, or performs arbitrary JSON
-serialization.
+- cooked string and no-substitution-template literals;
+- finite numeric literals, including unary minus;
+- `false`, `null`, and lexically unbound global `undefined`;
+- direct array literals;
+- direct nested tagged templates using the same Oxc-resolved tag binding;
+- same-document `const` identifiers initialized directly with such a tagged
+  template;
+- one static property of a same-document `const` object literal whose value is
+  directly such a template; and
+- direct receiver-matching `tag.json(...)` over the inert grammar below.
 
-Runtime and Rust preview share golden fixtures for normalization, placement,
-seams, arrays, JSON, fragments, and placeholders. Disagreement is a blocker.
+Parentheses and runtime-transparent TypeScript wrappers (`as`, `satisfies`,
+type assertion, and non-null) may be unwrapped. Do not follow aliases for
+scalar/array/JSON values, fold constants or concatenation, or evaluate
+conditionals, calls, imports, re-exports, or arbitrary property reads.
+Imported/re-exported named fragments require an exact semantic join. Dirty
+buffers keep same-document syntax preview but receive no saved joins.
+
+Rendering uses Core #270 construction and render ordering:
+
+- cooked strings render verbatim;
+- finite numbers use ECMAScript `String(number)`, including `-0` as `0`, the
+  shortest round-tripping decimal, fixed notation for
+  `1e-6 <= abs < 1e21`, and otherwise lowercase `e`, an explicit positive
+  exponent sign, and no exponent leading zeros;
+- `false`, `null`, and `undefined` are omitted;
+- `true`, nonfinite numbers, BigInt, objects, calls, and uncertain values are
+  placeholders;
+- an unknown/unsafe array leaf makes the whole interpolation a placeholder;
+- every inline array is a whole-interpolation placeholder;
+- block arrays recurse through direct literal arrays, omit holes and empty
+  values, reject spreads, join remaining items with one LF, then apply the
+  runtime empty-block seam and indentation rules; and
+- direct/local/imported fragments normalize before parent indentation. An
+  internal unknown remains its own placeholder. An active recursion cycle
+  produces one placeholder at the cyclic reference.
+
+`tag.json(...)` is syntax-exact only when the direct call receiver is the same
+Oxc-resolved binding as the containing tag. Its closed inert argument grammar
+allows string, numeric (including nonfinite and unary-negative), boolean,
+`null`, unshadowed `undefined`, and recursively direct array/object literals,
+including holes, trailing commas, and identifier/string/numeric object keys.
+It rejects aliases other than unshadowed `undefined`, BigInt, spreads,
+shorthand, methods/accessors, computed keys, calls/new/tagged values,
+unpaired-surrogate values, and `__proto__` data properties.
+
+Inert JSON follows JavaScript own-key order: canonical array-index keys
+`0..2^32-2` ascending, then other keys in first-insertion order. Duplicate keys
+retain first insertion position and last value. Array holes/undefined become
+`null`; object undefined values are omitted; nonfinite numbers become `null`;
+and `-0` becomes `0`. Output matches `JSON.stringify(value, null, 2)` exactly,
+with LF and JavaScript escaping. A top-level undefined result is unknown.
+
+`maxPreviewBytes` counts only UTF-8 bytes in `preview.text`, including
+placeholders, separators, and indentation. Equality fits. Emit the longest
+source-order prefix made of whole provenance segments; never split a segment
+or Unicode scalar. The first segment that does not fit is omitted and yields
+`max-preview-bytes` truncation.
+
+The root template has fragment depth zero. Entering any direct, local, or
+semantic fragment adds one; equality fits, and attempting the next level
+truncates before expansion with `max-fragment-depth`. Cycle detection uses the
+active stack, not a global visited set, so repeated acyclic references render
+independently. The first deterministic source-order truncation wins.
+
+Cancellation is transport-owned in V1. Cancelling `workerproc.CallRaw`
+terminates the persistent Rust subprocess; its response is discarded and is
+never cached or applied. A replacement worker serves later work. There is no
+wire `cancelled` status and no claim of cooperative Rust cancellation.
+
+Preview never imports modules, executes callbacks/getters/functions, parses
+schemas, reads the environment, accesses the network, invokes tools, or
+performs arbitrary JSON serialization. Runtime and Rust preview share golden
+fixtures for normalization, numbers, placement, seams, arrays, JSON, fragments,
+placeholders, limits, and reconstruction. Disagreement is a blocker.
+
+## Static preview editor protocol
+
+The client-to-server method is:
+
+```text
+crux/promptText/previewStatic
+```
+
+It needs no initialize-time client capability. The existing
+`capabilities.experimental.crux.promptText.refreshSupport === true` remains
+only the opt-in for the server-to-client `crux/promptText/refresh` request.
+
+```ts
+interface PromptTextDocumentStamp {
+  readonly uri: string;
+  readonly openEpoch: number;
+  readonly version: number;
+  readonly sourceHash: string;
+}
+
+type PromptTextPreviewTarget =
+  | {
+      readonly kind: "position";
+      readonly position: Position;
+    }
+  | {
+      readonly kind: "template-range";
+      readonly range: Range;
+    };
+
+interface PromptTextPreviewStaticParams extends PromptTextDocumentStamp {
+  readonly protocolVersion: 1;
+  readonly target: PromptTextPreviewTarget;
+}
+
+interface PromptTextPreviewSelection {
+  /** Request-local source-order display value, never template identity. */
+  readonly ordinal: number;
+  /** Exact current full tagged-template range. */
+  readonly range: Range;
+}
+
+type PromptTextPreviewServerUnavailableReason =
+  | "document-not-open"
+  | "revision-mismatch"
+  | "analysis-unavailable"
+  | "request-unsupported"
+  | "template-not-found"
+  | "template-ambiguous"
+  | "template-unsupported"
+  | "preview-unavailable";
+
+type PromptTextPreviewStaticResult =
+  | (PromptTextDocumentStamp & {
+      readonly protocolVersion: 1;
+      readonly kind: "ready";
+      readonly selection: PromptTextPreviewSelection;
+      readonly requestStatus: "complete" | "truncated";
+      readonly templateStatus: "complete" | "truncated";
+      readonly previewStatus: "complete" | "truncated";
+      readonly evidence: "syntax-exact" | "semantic-exact";
+      readonly text: string;
+      readonly truncation?: {
+        readonly reason: "max-preview-bytes" | "max-fragment-depth";
+        readonly limit: number;
+        readonly emittedBytes: number;
+      };
+    })
+  | (PromptTextDocumentStamp & {
+      readonly protocolVersion: 1;
+      readonly kind: "choose";
+      readonly requestStatus: "complete" | "truncated";
+      readonly choices: readonly PromptTextPreviewSelection[];
+    })
+  | (PromptTextDocumentStamp & {
+      readonly protocolVersion: 1;
+      readonly kind: "unavailable";
+      readonly reason: PromptTextPreviewServerUnavailableReason;
+    });
+```
+
+The stamp fields match decorations exactly: URI is nonempty; `openEpoch` is a
+positive JavaScript safe integer; version is an LSP integer; and source hash is
+64 lowercase hexadecimal characters. Ordinals, positions, and truncation
+values are integers in `0..2^31-1`. Ranges are nonempty, ordered, half-open,
+zero-based UTF-16.
+
+Request and result decoding rejects unknown fields recursively. Invalid request
+objects are JSON-RPC `InvalidParams`. An invalid/foreign result is never
+partially interpreted. It becomes client-side `analysis-unavailable`; it may
+clear only the exact slot already associated with that request. An unassociated
+initial `position` result cannot mutate any retained slot.
+
+A ready result cannot carry unsupported structural status. Complete preview
+omits truncation; truncated preview requires exactly one valid truncation.
+Choose results have nonempty, individually unique, strictly increasing
+ordinals and unique strictly source-ordered ranges. Every result echoes the
+exact request stamp. Phase 8 segments remain inside shared analysis and are
+omitted because Phase 9 has no client consumer.
+
+### Template selection and slot identity
+
+The command uses only the active file-scheme TypeScript, TSX, JavaScript, or
+JSX editor and its primary selection's active position. Additional selections
+are ignored. Without an eligible editor it shows:
+
+```text
+Open a TypeScript or JavaScript source editor before previewing PromptText.
+```
+
+For a position request:
+
+1. If exactly one included template exists, select it.
+2. Otherwise choose the uniquely innermost full range containing the position.
+3. An equal innermost tie returns only those tied choices.
+4. No containing template returns all included templates in source order.
+5. No choices returns `template-not-found`.
+
+Quick Pick labels are exactly:
+
+```text
+Template <ordinal + 1> — line <range.start.line + 1>
+```
+
+Cancellation performs no second request, creates or changes no slot, and shows
+no message. A chosen item is sent back in a second `template-range` request;
+the client never trusts the earlier range locally. That request requires
+exactly one current Oxc candidate with identical endpoints.
+
+A slot key is canonical source URI plus its exact current tracked template
+range. Candidate ordinal is never identity. Ready handling reserves this key
+atomically and reuses an attached or detached matching slot before allocating.
+Reuse replaces the entire stamp, ordinal, statuses, evidence, and content.
+Reopening under a new epoch may reuse only after a new exact ready response.
+Tracking updates registry keys atomically; a collision retains the lower slot
+ID and marks the other `template-ambiguous`.
+
+An initial `position` request has no slot association until valid `ready`
+supplies an exact selection range. Its unavailable, transport, invalid/foreign,
+or other current failure leaves every retained slot unchanged; a superseded or
+stale result is discarded silently. `choose` and Quick Pick cancellation also
+mutate nothing. Valid position `ready` atomically reuses only the slot at its
+returned exact key or creates one, and changes no other slot.
+
+An explicit `template-range` request is associated with a slot only when one
+already exists at its exact canonical-source-URI/range key. A current
+unavailable, transport, invalid/foreign, or foreign-stamp failure clears and
+updates only that associated slot; without one it creates nothing. Background
+rematch and refresh additionally retain the originating slot ID and generation
+client-side. A current failure clears only that slot; a response superseded by
+a newer generation or stamp is silently discarded and cannot clear newer
+refreshing or ready content.
+
+Never infer association from source URI alone, cursor containment, candidate
+ordinal, nearest range, sole-slot state, or previous command history. V1 adds
+no request or result field for this client-owned association.
+
+### Exact editor EOL boundary
+
+`TextDocumentContentProvider` does not guarantee line-ending preservation.
+Every slot opens invisibly with empty content first. After the virtual
+document's `EndOfLine` is known:
+
+- an LF document accepts LF and rejects every CR;
+- a CRLF document requires every LF to be immediately preceded by CR and every
+  CR to be immediately followed by LF;
+- bare CR and mixed line endings are unavailable; and
+- text with no CR/LF is compatible with either.
+
+After provider change, require `document.getText() === ready.text` before the
+initial editor is shown. A mismatch clears and waits for verified empty
+content, then enters client-only `editor-eol-normalization`. Later incompatible
+updates clear immediately. Never transform line endings, substitute
+placeholders, or label normalized text exact.
+
+Client-only slot reasons add `editor-eol-normalization`, `source-closed`, and
+`target-lost`; Go never sends them.
+
+### Virtual URI, title, and metadata
+
+Slot IDs are positive lowercase base-10 safe integers, monotonically increasing
+and never reused during one extension-host lifetime. Source label construction:
+
+1. take only `Uri.path` basename;
+2. retain ASCII letters, digits, `.`, `_`, and `-`;
+3. replace each maximal run of other code points with one `-`;
+4. remove leading/trailing `.`, `_`, and `-`;
+5. truncate to 40 ASCII characters; and
+6. use `source` when empty.
+
+The initial line is one-based and frozen at slot creation. Construct the URI
+exactly; authority and fragment remain empty:
+
+```ts
+vscode.Uri.from({
+  scheme: "crux-prompt-preview",
+  path: `/Static preview — ${sourceLabel} L${initialLine} — ${slotId}.md`,
+  query: `slot=${slotId}`,
+});
+```
+
+Its tab title is:
+
+```text
+Static preview — <sourceLabel> L<initialLine> — <slotId>.md
+```
+
+Register only a `TextDocumentContentProvider`, plus one scheme-scoped
+`CodeLensProvider`. The CodeLens uses range `(0,0)..(0,0)` and internal no-op
+command `crux.promptText.previewMetadata`; its title is metadata and never
+enters copied content. Do not add a filesystem provider, status item, text
+decoration, webview, parser, evaluator, or save path.
+
+Ready CodeLens title:
+
+```text
+Static preview — unknown values are placeholders · <source>:<line> · <evidence> · request <requestStatus> · template <templateStatus> · preview <previewStatus><suffix>
+```
+
+The suffix is `: max preview bytes` or `: max fragment depth`; a complete empty
+preview appends ` · empty`. Refreshing and unavailable titles are:
+
+```text
+Static preview — refreshing · <source>:<line>
+Static preview — unavailable · <source>:<line> · <reason>
+```
+
+Use the same sanitized source label and current one-based line. Never present
+directories, URI authority/query, hashes, source text, fragment names, or
+expression text.
+
+Verify language `markdown`. If `languages.setTextDocumentLanguage` is required,
+enter a one-shot `language-transition` state: ignore only the matching
+synthetic close, bind the matching open/returned document, and publish/show
+nothing until it resolves. Failure, another URI, or a second unmatched close
+disposes the slot. Ordinary later closes dispose immediately.
+
+Show the pinned, focused editor with:
+
+```ts
+{
+  viewColumn: vscode.ViewColumn.Beside,
+  preserveFocus: false,
+  preview: false,
+}
+```
+
+Reopening reveals the same resource. Split editors count as one slot.
+
+### Refresh, tracking, and capacity
+
+Edit handling clears content synchronously, marks refreshing, cancels work,
+increments the slot generation, transforms the target, and waits exactly 150
+ms after the last edit before requesting the current stamp. Apply only when
+generation, source URI, epoch, version, hash, and target range still match.
+
+Track the pre-event template as UTF-16 offsets `[s,e)`, `s < e`. For one ranged
+change `[a,b)` with replacement length `n` and `d = n - (b-a)`:
+
+- insertion before the target shifts both by `n`;
+- insertion strictly inside extends `e` by `n`;
+- insertion strictly after is unchanged;
+- insertion exactly at either boundary loses the target;
+- replacement ending at/before `s` shifts both by `d`;
+- replacement starting at/after `e` is unchanged;
+- replacement strictly inside adjusts `e` by `d`; and
+- every other overlap, boundary touch, crossing, or covering loses the target.
+
+All changes in one event use valid `rangeOffset`/`rangeLength` against the
+pre-event document. Reject full-document changes, invalid or overlapping
+ranges. Sort valid changes by descending offset, apply them in that order, then
+convert final offsets through the post-event document. Any lost case clears
+and stops automatic retargeting.
+
+Refresh requests repull every attached slot whose source is open; they never
+republish cached bytes. Source close cancels/clears and retains the tab as
+`source-closed`. Reopen may re-request only after the new didOpen stamp exists.
+Rename/move detaches without following. Reconnect/handover cancels and clears,
+then re-requests still-open unchanged sources after fresh stamps. Virtual
+document close disposes its slot/content/CodeLens/request. Deactivation
+disposes every slot, provider, CodeLens provider, and request. There is no
+closed-result cache.
+
+At most 16 preview resources may be active; split views count once. Reuse is
+allowed at capacity. Never auto-close a tab or evict an active slot. A
+seventeenth distinct preview shows:
+
+```text
+Crux already has 16 static previews open. Close one before opening another.
+```
+
+Server unavailable messages are:
+
+```text
+document-not-open: Open the source document before previewing it.
+revision-mismatch: The source changed before the static preview completed. Try again.
+analysis-unavailable: Static preview is temporarily unavailable.
+request-unsupported: Static preview does not support this document.
+template-not-found: No PromptText template was found at the selected location.
+template-ambiguous: Crux could not uniquely identify the selected PromptText template.
+template-unsupported: This PromptText template cannot be statically previewed.
+preview-unavailable: Static preview is unavailable for this PromptText template.
+```
+
+An unavailable response to an explicit command shows its mapped message.
+Background edit/refresh unavailability only updates the retained slot CodeLens.
+If an explicit ready response fails the editor EOL gate, show the empty
+unavailable tab and:
+
+```text
+VS Code cannot preserve this preview’s exact line-ending bytes.
+```

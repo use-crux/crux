@@ -20,6 +20,10 @@ import {
   activatePromptTextDecorations,
   type PromptTextDecorations,
 } from './prompt-text/vscode.js'
+import {
+  activatePromptTextPreviews,
+  type PromptTextPreviews,
+} from './prompt-text/preview/vscode.js'
 import { createPromptTextRefreshFeature } from './prompt-text/capabilities.js'
 import { RestartQueue } from './restart-queue.js'
 import { createServerOptions } from './server-options.js'
@@ -32,15 +36,18 @@ const stopTimeoutMs = 3_000
 let output: vscode.OutputChannel | undefined
 let decorations: vscode.Disposable | undefined
 let promptTextDecorations: PromptTextDecorations | undefined
+let promptTextPreviews: PromptTextPreviews | undefined
 const clientSlot = new ClientSlot<LanguageClient>()
 const restartQueue = new RestartQueue()
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel('Crux')
   decorations = activateDecorations(output)
+  promptTextPreviews = activatePromptTextPreviews()
   context.subscriptions.push(
     output,
     decorations,
+    promptTextPreviews,
     ...registerExtensionCommands({
       registerCommand: (command, handler) => vscode.commands.registerCommand(command, handler),
       getPort: () => vscode.workspace.getConfiguration('crux').get<number>('port', 4400),
@@ -57,6 +64,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
+  promptTextPreviews?.dispose()
+  promptTextPreviews = undefined
   promptTextDecorations?.dispose()
   promptTextDecorations = undefined
   decorations?.dispose()
@@ -72,6 +81,7 @@ export async function deactivate(): Promise<void> {
 async function queueRestart(): Promise<void> {
   try {
     await restartQueue.enqueue(async () => {
+      promptTextPreviews?.disconnect()
       promptTextDecorations?.dispose()
       promptTextDecorations = undefined
       await clientSlot.stop()
@@ -144,9 +154,13 @@ async function startClient(): Promise<void> {
   }
   const next = new LanguageClient('crux', 'Crux', serverOptions, clientOptions)
   next.registerFeature(createPromptTextRefreshFeature())
-  const nextPromptTextDecorations = activatePromptTextDecorations(next)
+  const nextPromptTextDecorations = activatePromptTextDecorations(
+    next,
+    () => promptTextPreviews?.refresh(),
+  )
   try {
     await clientSlot.start(next)
+    promptTextPreviews?.connect(next)
     nextPromptTextDecorations.start()
     promptTextDecorations = nextPromptTextDecorations
   } catch (error) {

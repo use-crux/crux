@@ -18,21 +18,25 @@ describe('PromptTextDecorationController', () => {
     controller.start()
     await settle()
 
-    expect(ports.applied).toEqual([{
-      editor,
-      ranges: {
-        heading: [{
-          start: { line: 0, character: 18 },
-          end: { line: 0, character: 23 },
-        }],
-        link: [],
-        code: [],
-        emphasis: [],
-        strong: [],
-        list: [],
-        blockquote: [],
+    expect(ports.applied).toEqual([
+      {
+        editor,
+        ranges: {
+          heading: [
+            {
+              start: { line: 0, character: 18 },
+              end: { line: 0, character: 23 },
+            },
+          ],
+          link: [],
+          code: [],
+          emphasis: [],
+          strong: [],
+          list: [],
+          blockquote: [],
+        },
       },
-    }])
+    ])
   })
 
   it('serializes visible-editor pulls so every surface receives evidence', async () => {

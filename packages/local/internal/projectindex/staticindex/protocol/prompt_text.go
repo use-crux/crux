@@ -55,6 +55,7 @@ type PromptTextLimits struct {
 	MaxTraversalNodes uint32 `json:"maxTraversalNodes"`
 	MaxOutputBytes    uint32 `json:"maxOutputBytes"`
 	MaxFragments      uint32 `json:"maxFragments"`
+	MaxFragmentJoins  uint32 `json:"maxFragmentJoins"`
 	MaxFragmentBytes  uint32 `json:"maxFragmentBytes"`
 	MaxFragmentDepth  uint32 `json:"maxFragmentDepth"`
 	MaxPreviewBytes   uint32 `json:"maxPreviewBytes"`
@@ -70,6 +71,30 @@ type PromptTextFragment struct {
 	Snippet    string          `json:"snippet"`
 }
 
+// PromptTextEvidenceProof identifies an externally verified evidence edge.
+type PromptTextEvidenceProof string
+
+const (
+	// PromptTextProofSemanticExact is a current semantic fragment resolution.
+	PromptTextProofSemanticExact PromptTextEvidenceProof = "semantic-exact"
+)
+
+// PromptTextInterpolationJoinKey identifies one exact interpolation occurrence.
+type PromptTextInterpolationJoinKey struct {
+	File            string          `json:"file"`
+	SourceHash      string          `json:"sourceHash"`
+	TemplateRange   PromptTextRange `json:"templateRange"`
+	Interpolation   uint32          `json:"interpolation"`
+	ExpressionRange PromptTextRange `json:"expressionRange"`
+}
+
+// PromptTextFragmentJoin resolves one interpolation to a supplied fragment.
+type PromptTextFragmentJoin struct {
+	Key        PromptTextInterpolationJoinKey `json:"key"`
+	FragmentID string                         `json:"fragmentId"`
+	Proof      PromptTextEvidenceProof        `json:"proof"`
+}
+
 // PromptTextQuery is one exact, cache-bypassing open-document query.
 type PromptTextQuery struct {
 	ProtocolVersion uint16                     `json:"protocolVersion"`
@@ -78,6 +103,7 @@ type PromptTextQuery struct {
 	Revision        PromptTextDocumentRevision `json:"revision"`
 	Source          string                     `json:"source"`
 	Fragments       []PromptTextFragment       `json:"fragments"`
+	FragmentJoins   []PromptTextFragmentJoin   `json:"fragmentJoins"`
 	Limits          PromptTextLimits           `json:"limits"`
 }
 

@@ -56,7 +56,7 @@ export function promptTextRef(
   };
 }
 
-function sourceRange(
+export function sourceRange(
   fileSource: string,
   source: string,
   occurrence: number,

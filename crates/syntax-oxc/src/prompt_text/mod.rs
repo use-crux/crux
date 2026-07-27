@@ -6,13 +6,18 @@
 
 mod candidates;
 mod cooked;
+mod fragments;
 mod interpolation;
 mod mapping;
 mod normalization;
 mod projection;
 #[cfg(test)]
 mod tests;
+mod value;
 
 pub use candidates::project;
 pub use mapping::map_projected_range;
-pub use projection::{ProjectedPromptText, ProjectedPromptTextTemplate, ProjectedTextIsland};
+pub use projection::{
+    ProjectedInterpolation, ProjectedPromptText, ProjectedPromptTextTemplate, ProjectedTextIsland,
+};
+pub use value::{ProjectedJsonValue, ProjectedSequenceItem, ProjectedValue};

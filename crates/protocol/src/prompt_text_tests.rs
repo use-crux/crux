@@ -29,6 +29,31 @@ fn prompt_text_v1_matches_the_shared_golden_abi() {
 }
 
 #[test]
+fn prompt_text_v1_rejects_unknown_record_and_variant_fields() {
+    let fixture: Value = serde_json::from_str(GOLDEN).expect("golden fixture should decode");
+
+    let mut request = fixture["request"].clone();
+    request["query"]
+        .as_object_mut()
+        .expect("golden query")
+        .insert("futureField".into(), Value::Bool(true));
+    assert!(
+        serde_json::from_value::<PromptTextWorkerRequest>(request).is_err(),
+        "unknown query records must fail closed",
+    );
+
+    let mut response = fixture["response"]["response"].clone();
+    response["templates"][0]["preview"]["segments"][0]
+        .as_object_mut()
+        .expect("golden preview segment")
+        .insert("futureField".into(), Value::Bool(true));
+    assert!(
+        serde_json::from_value::<PromptTextQueryResponse>(response).is_err(),
+        "unknown variant fields must fail closed",
+    );
+}
+
+#[test]
 fn prompt_text_heading_label_is_required_and_nonempty() {
     let fixture: Value = serde_json::from_str(GOLDEN).expect("golden fixture should decode");
     for label in [None, Some("")] {

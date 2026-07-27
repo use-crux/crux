@@ -54,11 +54,10 @@ export interface PromptTextDecorationSourcePort {
 }
 
 /** Injected editor, window, configuration, and evidence boundaries. */
-export type PromptTextControllerPorts =
-  & PromptTextWindowPort
-  & PromptTextEditorPort
-  & PromptTextConfigPort
-  & PromptTextDecorationSourcePort
+export type PromptTextControllerPorts = PromptTextWindowPort &
+  PromptTextEditorPort &
+  PromptTextConfigPort &
+  PromptTextDecorationSourcePort
 
 /**
  * Coordinates revision-stamped PromptText decorations for visible editors.
@@ -114,7 +113,8 @@ export class PromptTextDecorationController {
    */
   documentChanged(uri: string): void {
     if (this.#disposed) return
-    if (!this.ports.visibleEditors().some((editor) => editor.uri === uri)) return
+    if (!this.ports.visibleEditors().some((editor) => editor.uri === uri))
+      return
     this.#syncVisibleEditors(false)
   }
 
@@ -182,14 +182,17 @@ export class PromptTextDecorationController {
     }
     for (const editor of visible) {
       const previous = this.#editors.get(editor.id)
-      const changed = previous === undefined
-        || previous.uri !== editor.uri
-        || previous.openEpoch !== editor.openEpoch
-        || previous.version !== editor.version
-        || previous.sourceHash !== editor.sourceHash
-      if (previous !== undefined
-        && this.#applied.has(previous.id)
-        && (changed || (refreshCurrent && this.ports.enabled))) {
+      const changed =
+        previous === undefined ||
+        previous.uri !== editor.uri ||
+        previous.openEpoch !== editor.openEpoch ||
+        previous.version !== editor.version ||
+        previous.sourceHash !== editor.sourceHash
+      if (
+        previous !== undefined &&
+        this.#applied.has(previous.id) &&
+        (changed || (refreshCurrent && this.ports.enabled))
+      ) {
         this.#clear(previous)
       }
       this.#editors.set(editor.id, editor)
@@ -211,10 +214,13 @@ export class PromptTextDecorationController {
     try {
       while (this.#queue.length > 0) {
         const editor = this.#queue.shift()
-        if (editor === undefined
-          || this.#disposed
-          || !this.ports.enabled
-          || !sameStamp(this.#editors.get(editor.id), editor)) continue
+        if (
+          editor === undefined ||
+          this.#disposed ||
+          !this.ports.enabled ||
+          !sameStamp(this.#editors.get(editor.id), editor)
+        )
+          continue
         await this.#refresh(editor)
       }
     } finally {
@@ -246,14 +252,18 @@ export class PromptTextDecorationController {
         this.#requests.delete(editor.id)
       }
     }
-    if (request.signal.aborted
-      || result === undefined
-      || this.#disposed
-      || !this.ports.enabled) return
+    if (
+      request.signal.aborted ||
+      result === undefined ||
+      this.#disposed ||
+      !this.ports.enabled
+    )
+      return
     if (!sameStamp(result, editor)) return
-    const current = this.ports.visibleEditors().find(({ id }) => id === editor.id)
-    if (current === undefined
-      || !sameStamp(current, editor)) return
+    const current = this.ports
+      .visibleEditors()
+      .find(({ id }) => id === editor.id)
+    if (current === undefined || !sameStamp(current, editor)) return
     this.ports.apply(editor, mapPromptTextDecorationRanges(result))
     this.#applied.add(editor.id)
   }
@@ -273,13 +283,16 @@ export class PromptTextDecorationController {
 }
 
 function sameStamp(
-  left: Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>
+  left:
+    | Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>
     | undefined,
   right: Pick<PromptTextEditor, 'uri' | 'openEpoch' | 'version' | 'sourceHash'>,
 ): boolean {
-  return left !== undefined
-    && left.uri === right.uri
-    && left.openEpoch === right.openEpoch
-    && left.version === right.version
-    && left.sourceHash === right.sourceHash
+  return (
+    left !== undefined &&
+    left.uri === right.uri &&
+    left.openEpoch === right.openEpoch &&
+    left.version === right.version &&
+    left.sourceHash === right.sourceHash
+  )
 }

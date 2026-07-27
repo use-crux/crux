@@ -167,6 +167,7 @@ dependencies = [
  "oxc_parser",
  "oxc_semantic",
  "oxc_span",
+ "oxc_syntax",
  "serde_json",
  "sha2",
 ]

@@ -12,7 +12,38 @@
         "sourceHash": "9a7e2e745698e9315a7f3a066017ac71ea0ffea39aa494c71878e7f2a1197d4f"
       },
       "source": "import { md, prompt } from '@use-crux/core'\nexport const writer = prompt({\n  id: 'writer',\n  prompt: md`# Hello`,\n})\n",
-      "fragments": [],
+      "fragments": [
+        {
+          "id": "source-ref:shared",
+          "symbol": "shared",
+          "file": "/repo/src/shared.ts",
+          "sourceHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 10 }
+          },
+          "snippet": "md`Shared`"
+        }
+      ],
+      "fragmentJoins": [
+        {
+          "key": {
+            "file": "/repo/src/writer.ts",
+            "sourceHash": "9a7e2e745698e9315a7f3a066017ac71ea0ffea39aa494c71878e7f2a1197d4f",
+            "templateRange": {
+              "start": { "line": 3, "character": 10 },
+              "end": { "line": 3, "character": 21 }
+            },
+            "interpolation": 0,
+            "expressionRange": {
+              "start": { "line": 3, "character": 15 },
+              "end": { "line": 3, "character": 20 }
+            }
+          },
+          "fragmentId": "source-ref:shared",
+          "proof": "semantic-exact"
+        }
+      ],
       "limits": {
         "maxSourceBytes": 2097152,
         "maxTemplates": 256,
@@ -20,6 +51,7 @@
         "maxTraversalNodes": 100000,
         "maxOutputBytes": 1048576,
         "maxFragments": 256,
+        "maxFragmentJoins": 256,
         "maxFragmentBytes": 65536,
         "maxFragmentDepth": 16,
         "maxPreviewBytes": 1048576
@@ -100,8 +132,22 @@
           "links": [],
           "nesting": [],
           "preview": {
-            "text": "",
-            "segments": []
+            "status": {
+              "kind": "complete"
+            },
+            "evidence": "syntax-exact",
+            "text": "# Hello",
+            "segments": [
+              {
+                "kind": "authored-literal",
+                "text": "# Hello",
+                "range": {
+                  "start": { "line": 3, "character": 13 },
+                  "end": { "line": 3, "character": 20 }
+                }
+              }
+            ],
+            "truncation": null
           }
         }
       ]

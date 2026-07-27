@@ -1,7 +1,4 @@
-import type {
-  DecorationRenderOptions,
-  ThemeColor,
-} from 'vscode'
+import type { DecorationRenderOptions, ThemeColor } from 'vscode'
 
 /**
  * Presentation roles understood by the PromptText editor client.
@@ -21,7 +18,8 @@ export const promptTextDecorationRoles = [
 ] as const
 
 /** A visual role emitted for a proven PromptText literal range. */
-export type PromptTextDecorationRole = typeof promptTextDecorationRoles[number]
+export type PromptTextDecorationRole =
+  (typeof promptTextDecorationRoles)[number]
 
 /** Creates a VS Code theme reference without coupling pure tests to the extension host. */
 export type ThemeColorFactory = (id: string) => ThemeColor

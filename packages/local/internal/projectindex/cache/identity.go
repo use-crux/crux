@@ -14,6 +14,7 @@ package cache
 // boundary metadata across restart boundaries in Epoch 49. Epoch 50 adds the
 // privacy-safe effective observability policy to Project Identity snapshots.
 // Epoch 51 adds bounded media stream operation facts.
+// Epoch 52 adds semantic PromptText fragment-join evidence.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 51
+const ProjectIndexSnapshotCacheEpoch = 52

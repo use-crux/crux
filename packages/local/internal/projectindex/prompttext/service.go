@@ -32,7 +32,13 @@ func (s *Service) Analyze(ctx context.Context, request Request) (Result, error) 
 	if request.Revision.SourceHash != sourcehash.Sum([]byte(request.Text)) {
 		return Result{}, fmt.Errorf("PromptText source hash does not match document bytes")
 	}
-	fragments, _, err := CanonicalizeFragments(request.Fragments, limits)
+	fragments, joins, _, err := CanonicalizePreviewEvidence(
+		request.File,
+		request.Revision.SourceHash,
+		request.Fragments,
+		request.FragmentJoins,
+		limits,
+	)
 	if err != nil {
 		return Result{}, err
 	}
@@ -43,6 +49,7 @@ func (s *Service) Analyze(ctx context.Context, request Request) (Result, error) 
 		Revision:        request.Revision,
 		Source:          request.Text,
 		Fragments:       fragments,
+		FragmentJoins:   joins,
 		Limits:          limits,
 	}
 	response, err := s.compiler.PromptText(ctx, query)
@@ -53,6 +60,9 @@ func (s *Service) Analyze(ctx context.Context, request Request) (Result, error) 
 		response.File != request.File ||
 		response.Revision != request.Revision {
 		return Result{}, fmt.Errorf("PromptText compiler returned mismatched request identity")
+	}
+	if err := ValidateResult(response); err != nil {
+		return Result{}, err
 	}
 	return response, nil
 }

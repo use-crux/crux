@@ -22,6 +22,7 @@ func DefaultLimits() staticprotocol.PromptTextLimits {
 		MaxTraversalNodes: 100_000,
 		MaxOutputBytes:    1 << 20,
 		MaxFragments:      256,
+		MaxFragmentJoins:  256,
 		MaxFragmentBytes:  defaultMaxFragmentBytes,
 		MaxFragmentDepth:  16,
 		MaxPreviewBytes:   1 << 20,

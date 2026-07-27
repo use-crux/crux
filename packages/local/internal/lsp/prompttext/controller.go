@@ -115,14 +115,20 @@ func (c *Controller) Folding(ctx context.Context, request Request) FoldingResult
 	}
 
 	var baseGeneration, viewRevision uint64
+	var fragments []staticprotocol.PromptTextFragment
+	var fragmentJoins []staticprotocol.PromptTextFragmentJoin
 	if selection := currentSemanticView(request, document); selection.Status == indexview.ViewStatusExact && selection.View != nil {
 		baseGeneration = selection.View.Stamp.BaseGeneration
 		viewRevision = selection.View.Stamp.Revision
+		fragments, fragmentJoins = semanticPreviewEvidence(
+			selection.View.Publication, request.Root, request.File, document.Text,
+		)
 	}
 	analysis, err := c.coordinator.Analyze(ctx, transient.Query{
 		URI: request.URI, File: request.File, ScopeID: request.ScopeID,
 		SourceEpoch: request.SourceEpoch, BaseGeneration: baseGeneration,
-		ViewRevision: viewRevision, Analyzer: request.Analyzer,
+		ViewRevision: viewRevision, Fragments: fragments,
+		FragmentJoins: fragmentJoins, Analyzer: request.Analyzer,
 	})
 	if err != nil || analysis.Revision != document.Revision ||
 		analysis.Result.Status.Kind == staticprotocol.PromptTextStatusUnsupported {
@@ -198,11 +204,16 @@ func (c *Controller) currentSemanticAnalysis(
 	if len(identities) == 0 {
 		return document, readmodel.PromptTextResult{}, nil, false
 	}
+	fragments, fragmentJoins := semanticPreviewEvidence(
+		selection.View.Publication, request.Root, request.File, document.Text,
+	)
 	analysis, err := c.coordinator.Analyze(ctx, transient.Query{
 		URI: request.URI, File: request.File, ScopeID: request.ScopeID,
 		SourceEpoch:    request.SourceEpoch,
 		BaseGeneration: selection.View.Stamp.BaseGeneration,
 		ViewRevision:   selection.View.Stamp.Revision,
+		Fragments:      fragments,
+		FragmentJoins:  fragmentJoins,
 		Analyzer:       request.Analyzer,
 	})
 	if err != nil || ctx.Err() != nil || analysis.Revision != document.Revision ||

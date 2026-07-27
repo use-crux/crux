@@ -24,15 +24,18 @@ const sourceHashPattern = /^[0-9a-f]{64}$/
 export function parsePromptTextDecorationResult(
   value: unknown,
 ): PromptTextDecorationResult | undefined {
-  if (!isRecord(value)
-    || value.protocolVersion !== 1
-    || typeof value.uri !== 'string'
-    || value.uri.length === 0
-    || !isPositiveInteger(value.openEpoch)
-    || !isInteger(value.version)
-    || typeof value.sourceHash !== 'string'
-    || !sourceHashPattern.test(value.sourceHash)
-    || !Array.isArray(value.decorations)) return undefined
+  if (
+    !isRecord(value) ||
+    value.protocolVersion !== 1 ||
+    typeof value.uri !== 'string' ||
+    value.uri.length === 0 ||
+    !isPositiveInteger(value.openEpoch) ||
+    !isInteger(value.version) ||
+    typeof value.sourceHash !== 'string' ||
+    !sourceHashPattern.test(value.sourceHash) ||
+    !Array.isArray(value.decorations)
+  )
+    return undefined
 
   const decorations: PromptTextDecorationSpan[] = []
   for (const candidate of value.decorations) {
@@ -61,16 +64,23 @@ function parseRange(value: unknown): Utf16Range | undefined {
   if (!isRecord(value)) return undefined
   const start = parsePosition(value.start)
   const end = parsePosition(value.end)
-  if (start === undefined || end === undefined || comparePositions(start, end) > 0) {
+  if (
+    start === undefined ||
+    end === undefined ||
+    comparePositions(start, end) > 0
+  ) {
     return undefined
   }
   return { start, end }
 }
 
 function parsePosition(value: unknown): Utf16Position | undefined {
-  if (!isRecord(value)
-    || !isNonNegativeInteger(value.line)
-    || !isNonNegativeInteger(value.character)) return undefined
+  if (
+    !isRecord(value) ||
+    !isNonNegativeInteger(value.line) ||
+    !isNonNegativeInteger(value.character)
+  )
+    return undefined
   return { line: value.line, character: value.character }
 }
 

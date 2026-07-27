@@ -1,5 +1,6 @@
 use crux_indexer_protocol::prompt_text::{
-    PromptTextAnalysisStatus, PromptTextBlock, PromptTextPosition,
+    PromptTextAnalysisStatus, PromptTextBlock, PromptTextPosition, PromptTextPreviewSegment,
+    PromptTextPreviewStatus,
 };
 
 use super::{analyze, request};
@@ -44,7 +45,19 @@ fn heading_labels_come_from_normalized_commonmark_events() {
         ]
     );
     assert!(response.templates.iter().all(|template| {
-        template.preview.text.is_empty() && template.preview.segments.is_empty()
+        template.preview.status == PromptTextPreviewStatus::Complete
+            && template
+                .preview
+                .segments
+                .iter()
+                .map(|segment| match segment {
+                    PromptTextPreviewSegment::AuthoredLiteral { text, .. }
+                    | PromptTextPreviewSegment::KnownValue { text, .. }
+                    | PromptTextPreviewSegment::Fragment { text, .. }
+                    | PromptTextPreviewSegment::Placeholder { text, .. } => text.as_str(),
+                })
+                .collect::<String>()
+                == template.preview.text
     }));
 }
 
