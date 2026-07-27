@@ -9,9 +9,17 @@ export function recordStreamChunkAction(
   binding: GuardrailBinding,
   result: GuardrailRunResult<unknown>,
   reason?: string,
-  options?: { readonly blocked?: boolean },
+  options?: {
+    readonly blocked?: boolean
+    readonly findings?: GuardrailAuditEntry['findings']
+  },
 ): void {
-  if (result.action === 'allow' || result.action === 'hold') return
+  if (
+    (result.action === 'allow' || result.action === 'hold') &&
+    !options?.findings
+  ) {
+    return
+  }
 
   const guard = binding.policy
   const entry: GuardrailAuditEntry = {
@@ -22,6 +30,7 @@ export function recordStreamChunkAction(
     phase: 'output',
     action: auditAction(result),
     ...(reason ? { reason } : {}),
+    ...(options?.findings ? { findings: options.findings } : {}),
     durationMs: 0,
   }
   appendGuardrailAudit({ applied: [entry], blocked: options?.blocked ?? result.action === 'block' })

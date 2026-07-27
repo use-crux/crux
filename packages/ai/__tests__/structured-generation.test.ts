@@ -169,6 +169,56 @@ describe('createStructuredGenerateObjectFn', () => {
     expect(args.schema).toBeUndefined()
   })
 
+  it('preserves ordered canonical media and generation settings', async () => {
+    const schema = z.object({ safe: z.boolean() })
+    const scripted = scriptedGateway({ generateText: [{ output: { safe: true } }] })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+    const image = new Uint8Array([1, 2, 3])
+    const audio = new Uint8Array([4, 5, 6])
+    const video = new URL('https://example.com/clip.mp4')
+    const file = new Uint8Array([7, 8, 9])
+    const providerOptions = { openai: { detail: 'low' } }
+
+    await generateObject({
+      model: model('vision', 'openai'),
+      system: 'Classify the supplied media.',
+      temperature: 0,
+      topP: 0.8,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Inspect this image.' },
+            { type: 'image', source: image, mediaType: 'image/png' },
+            { type: 'audio', source: audio, mediaType: 'audio/mpeg' },
+            { type: 'video', source: video, mediaType: 'video/mp4', providerOptions },
+            { type: 'file', source: file, mediaType: 'application/pdf', filename: 'report.pdf' },
+          ],
+        },
+      ],
+      schema,
+    })
+
+    const args = scripted.calls.generateText[0]
+    expect(args).toMatchObject({
+      system: 'Classify the supplied media.',
+      temperature: 0,
+      topP: 0.8,
+    })
+    expect(args?.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Inspect this image.' },
+          { type: 'image', image, mediaType: 'image/png' },
+          { type: 'file', data: audio, mediaType: 'audio/mpeg' },
+          { type: 'file', data: video, mediaType: 'video/mp4', providerOptions },
+          { type: 'file', data: file, mediaType: 'application/pdf', filename: 'report.pdf' },
+        ],
+      },
+    ])
+  })
+
   it('preserves router and cascade model resolution for standalone helper calls', async () => {
     const schema = z.object({ accepted: z.boolean() })
     const scripted = scriptedGateway({

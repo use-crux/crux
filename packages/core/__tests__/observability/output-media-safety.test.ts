@@ -36,7 +36,15 @@ describe('output media Safety evidence', () => {
         guardrail({
           id: 'strip-required-speech',
           on: boundary.output.media(),
-          run: () => ({ action: 'strip', reason: 'Audio is outside policy.' }),
+          run: (_subject, ctx) => {
+            ctx.findings.add({
+              type: 'media_classifier_match',
+              category: 'unsafe',
+              score: 0.9,
+              threshold: 0.8,
+            })
+            return { action: 'strip', reason: 'Audio is outside policy.' }
+          },
         }),
       ],
     }).then(
@@ -49,6 +57,12 @@ describe('output media Safety evidence', () => {
     expect(error.decisions[0]).toMatchObject({
       action: 'block',
       escalatedToBlock: true,
+      findings: [{
+        type: 'media_classifier_match',
+        category: 'unsafe',
+        score: 0.9,
+        threshold: 0.8,
+      }],
       location: {
         origin: {
           kind: 'operation',
@@ -81,6 +95,8 @@ describe('output media Safety evidence', () => {
         attributes: expect.objectContaining({
           action: 'strip',
           escalatedToBlock: true,
+          findingCount: 1,
+          matchedCategoryCount: 1,
         }),
       }),
     )

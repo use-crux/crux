@@ -5,10 +5,18 @@ use serde_json::{Value, json};
 use crate::{
     protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
     record_values::{direct_string_property, json_value, property_value, resolve_static_value},
+    safety::classifier::media_classifier_config_value,
 };
 
 const SAFETY_API_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/safety"];
-const GUARDRAIL_STRATEGY_KINDS: &[&str] = &["classifier", "injection", "media", "pii", "secrets"];
+const GUARDRAIL_STRATEGY_KINDS: &[&str] = &[
+    "classifier",
+    "injection",
+    "media",
+    "mediaClassifier",
+    "pii",
+    "secrets",
+];
 
 const SAFETY_BOUNDARY_IDS: &[&str] = &[
     "model.input.text",
@@ -70,10 +78,14 @@ pub(crate) fn guardrail_strategy_facts(
     }
 
     let mut strategy = json!({ "kind": callee.name });
-    if let Some(config) = args
-        .first()
-        .and_then(|arg| complete_config_value(arg, initializers))
-    {
+    let config = args.first().and_then(|arg| {
+        if callee.name == "mediaClassifier" {
+            media_classifier_config_value(arg, initializers)
+        } else {
+            complete_config_value(arg, initializers)
+        }
+    });
+    if let Some(config) = config {
         strategy["config"] = config;
     }
     Some(strategy)

@@ -1,0 +1,233 @@
+---
+title: Media classifier guardrails
+description: Classify canonical image, audio, video, and file parts with any structured-generation provider.
+---
+
+`guardrail.mediaClassifier()` asks a structured-generation model to score
+caller-defined categories for each canonical media part. Use it when a local
+MIME, size, or source rule cannot answer the policy question.
+
+This is a guardrail, not a constraint. It accepts, warns, blocks, or strips the
+current part without asking the original model to try again. A constraint is
+for retryable quality requirements on model output; classifier quality and
+retry policy remain a separate concern ([#281](https://github.com/use-crux/crux/issues/281)).
+
+## Classify input media
+
+Pass any `GenerateObjectFn`. The classifier model is selected per call, so the
+same provider helper can serve several policies:
+
+```ts title="media-safety.ts"
+import OpenAI from "openai";
+import { createGenerateObjectFn } from "@use-crux/openai";
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+const generate = createGenerateObjectFn(
+  new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+);
+
+export const uploadSafety = guardrail({
+  id: "upload-safety",
+  on: boundary.input.media(),
+  run: guardrail.mediaClassifier({
+    generate,
+    model: "gpt-4.1-mini",
+    categories: [
+      {
+        id: "graphic-violence",
+        description:
+          "Graphic injury, exposed organs, or severe physical violence is visible.",
+      },
+      {
+        id: "personal-document",
+        description:
+          "A government identity, financial, medical, or employment document is visible.",
+      },
+    ],
+    threshold: 0.8,
+    thresholds: {
+      "personal-document": 0.9,
+    },
+    action: "block",
+    modalities: ["image", "file"],
+  }),
+});
+```
+
+Attach `uploadSafety` globally, to a prompt, or in a call's `guardrails`
+array. Literal category IDs infer the allowed `thresholds` keys without
+`as const`.
+
+## Observe output before enforcement
+
+The same strategy can target output media or an ordered input/output media
+tuple. Outer report mode changes enforcement only:
+
+```ts
+export const generatedMediaRollout = guardrail({
+  id: "generated-media-rollout",
+  on: boundary.output.media(),
+  mode: "report",
+  run: guardrail.mediaClassifier({
+    generate,
+    model: "gpt-4.1-mini",
+    categories: [
+      {
+        id: "brand-risk",
+        description:
+          "The generated media contains a protected logo or misleading brand imitation.",
+      },
+    ],
+    threshold: 0.85,
+    action: "strip",
+    unsupported: "warn",
+  }),
+});
+```
+
+In report mode, authored `block` and `strip` decisions are audited without
+terminating or changing content. Errors still reject; report mode is not an
+error-catching or fail-open mechanism.
+
+## Categories, thresholds, and actions
+
+Categories run in authored order. Each returned score must be finite and
+within `[0, 1]`, and the response must contain exactly the authored category
+keys. A score matches when `score >= threshold`; equality blocks, warns, or
+strips. `thresholds[id]` overrides the required global `threshold`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `categories` | required | Non-empty ordered `{ id, description }` criteria. |
+| `threshold` | required | Inclusive default in `[0, 1]`. |
+| `thresholds` | `{}` | Per-category overrides keyed only by authored IDs. |
+| `action` | `"block"` | `"block"`, `"warn"`, or `"strip"` on a match. |
+| `modalities` | all four | Non-empty selection of `"image"`, `"audio"`, `"video"`, and `"file"`. |
+| `unsupported` | throw | Explicit `"allow"`, `"warn"`, `"block"`, or `"strip"` capability handling. |
+
+`file` is the canonical document/general-file part, including PDFs. An
+enforced strip removes only the current part. If that part is required—such as
+the final generated image, generated speech audio, transcription audio, or an
+edit mask's final reference—the existing media lifecycle escalates the strip
+to a block and retains the original location and findings.
+
+## Choose any structured-generation provider
+
+OpenAI, Anthropic, Google GenAI, and AI SDK are equal implementations of the
+same Core port:
+
+```ts
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
+import { openai } from "@ai-sdk/openai";
+import { createGenerateObjectFn as openAIObject } from "@use-crux/openai";
+import { createGenerateObjectFn as anthropicObject } from "@use-crux/anthropic";
+import { createGenerateObjectFn as googleObject } from "@use-crux/google";
+import { generateObjectFn as aiSdkObject } from "@use-crux/ai";
+
+const choices = {
+  openai: {
+    generate: openAIObject(new OpenAI()),
+    model: "gpt-4.1-mini",
+  },
+  anthropic: {
+    generate: anthropicObject(new Anthropic()),
+    model: "claude-sonnet-4-5",
+  },
+  google: {
+    generate: googleObject(new GoogleGenAI({})),
+    model: "gemini-2.5-flash",
+  },
+  aiSdk: {
+    generate: aiSdkObject,
+    model: openai("gpt-4.1-mini"),
+  },
+};
+```
+
+Native helpers use their provider's structured-output and media codecs. The AI
+SDK helper uses its existing model resolver and structured-attempt path.
+Provider support still differs by model and media kind; that difference enters
+the common unsupported-capability contract.
+
+### Native helper migration
+
+Native object helpers no longer bind a default model:
+
+```ts
+// Before
+const generate = createGenerateObjectFn(client, model);
+
+// After
+const generate = createGenerateObjectFn(client);
+await generate({ model, prompt: "...", schema });
+```
+
+Third-party `GenerateObjectFn` implementations must now accept exactly one of
+`prompt` or canonical `messages`. The message form is how the classifier
+preserves structured image, audio, video, and file content.
+
+`createGenerateObjectFnFromGenerate(generate)` is different: it bridges
+through a full adapter prompt lifecycle. Do not call that bridge from a
+guardrail attached to the same lifecycle, or the classifier recursively runs
+the policy that invoked it.
+
+## Calls, disclosure, and portability
+
+Crux's classifier control flow is deterministic and sequential:
+
+- one structured-generation call per included part;
+- stable message, part, and policy order;
+- no batching, concurrency, cache, sampling, or hidden retry;
+- an excluded modality makes no classifier call and allows that occurrence.
+
+For returned scores, threshold evaluation, finding emission, and action and
+reason formatting are deterministic. The scores themselves depend on the
+selected provider, model, and generation configuration and may vary between
+calls.
+
+The selected media part and category descriptions are disclosed to the
+classifier provider. Core reconstructs a sanitized canonical part and removes
+the original `providerOptions`; it does not fetch URLs, hydrate `AssetRef`
+values, or resolve provider files.
+
+An `AssetRef` is not valid model input. Hydrate it explicitly with its owning
+asset store before the original model call. Provider-file references may also
+be portable only to the adapter that owns them; a different classifier
+provider can report an unsupported capability rather than silently
+downloading or uploading the file.
+
+## Unsupported media and ordinary errors
+
+These cases are intentionally different:
+
+- **Excluded:** `modalities` omits the part kind. No classifier call is made.
+- **Unsupported:** the adapter/model throws `UnsupportedCapabilityError`.
+  Omission rethrows the exact error; explicit `unsupported` maps only this
+  recognized capability gap to a media action.
+- **Ordinary failure:** authentication, rate limit, transport, timeout, abort,
+  provider, and schema errors always propagate unchanged.
+
+`unsupported: "allow"` is explicit fail-open behavior. It still records a
+`media_not_inspected` finding, so audit and Devtools can distinguish
+"inspected and allowed" from "not inspected." Report mode never swallows any
+of these errors.
+
+## Evidence and privacy
+
+Matched audit findings contain the safe category ID, exact score, and effective
+threshold. Safety decisions and `guardrail.report` artifacts retain that
+evidence, and Run Detail renders it as `category · score ≥ threshold`.
+
+Descriptions, rubric text, media sources, filenames, URLs, payloads, and
+provider options never enter findings. OpenTelemetry attributes receive only
+bounded finding counts—not category IDs, scores, or thresholds. Project Index
+records only complete literal safe config (IDs, thresholds, action,
+modalities, and unsupported policy) and omits classifier source snippets so
+literal descriptions cannot leak through Catalog facts.
+
+For local metadata-only attachment rules, use
+[`guardrail.media()`](/docs/guides/safety/guardrails#multimodal-content)
+instead. For retryable output quality, use
+[`constraint()`](/docs/guides/safety/constraints).

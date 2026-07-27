@@ -7,10 +7,21 @@ import { openAIHelpers } from './native'
  *
  * The helper uses the same provider runtime as `createOpenAI()`, then
  * returns the schema-validated object expected by Crux compaction and scoring
- * APIs. Provider SDK errors are not caught or wrapped.
+ * APIs. Pass a non-empty OpenAI model ID in every call. Provider SDK errors
+ * are not caught or wrapped.
+ *
+ * @example
+ * ```ts
+ * const generateObject = createGenerateObjectFn(client)
+ * const result = await generateObject({
+ *   model: 'gpt-5-mini',
+ *   prompt: 'Return whether this request is safe.',
+ *   schema,
+ * })
+ * ```
  */
-export function createGenerateObjectFn(client: OpenAI, model: string): GenerateObjectFn {
-  const generateObject = openAIHelpers.createGenerateObjectFn(client, model)
+export function createGenerateObjectFn(client: OpenAI): GenerateObjectFn {
+  const generateObject = openAIHelpers.createGenerateObjectFn(client)
   return async (options) => {
     try {
       return await generateObject(options)

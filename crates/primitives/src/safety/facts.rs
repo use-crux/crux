@@ -8,6 +8,7 @@ use crate::{
         direct_identifier, direct_string_property, property_value, resolve_static_value,
     },
     routing::output::{extracted_facts, insert_string},
+    safety::classifier::is_media_classifier_strategy,
     safety::metadata::{
         constraint_strategy_facts, guardrail_strategy_facts, policy_id_for, safety_boundaries,
     },
@@ -113,6 +114,7 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     let boundaries = safety_boundaries(config);
     let boundary = boundaries.first().cloned();
     let strategy = guardrail_strategy_facts(config, &context.initializers);
+    let omit_source_snippet = strategy.as_ref().is_some_and(is_media_classifier_strategy);
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("guardrail".to_string()));
@@ -177,7 +179,7 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
                 name: definition.name,
                 file: context.fingerprint_file,
                 source: parts.source,
-                snippet: parts.snippet,
+                snippet: (!omit_source_snippet).then_some(parts.snippet).flatten(),
                 metadata,
             }),
             Vec::new(),

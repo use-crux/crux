@@ -104,6 +104,7 @@ mod runtime {
     pub(crate) mod task;
 }
 mod safety {
+    pub(crate) mod classifier;
     pub(crate) mod facts;
     pub(crate) mod metadata;
 }

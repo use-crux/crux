@@ -148,7 +148,16 @@ async function runGuardsInternal(
           guardrailId: guard.id,
           phase,
           reason: result.reason,
-          decisions: [guardDecision(binding, result, current.text, durationMs, ctx)],
+          decisions: [
+            guardDecision(
+              binding,
+              result,
+              current.text,
+              durationMs,
+              ctx,
+              entry.findings,
+            ),
+          ],
         })
 
       case 'rewrite': {
@@ -192,6 +201,7 @@ function guardDecision(
   content: string,
   durationMs: number,
   context: GuardrailContext,
+  findings: GuardrailAuditEntry['findings'],
 ): SafetyDecision {
   const guard = binding.policy
   return {
@@ -202,6 +212,7 @@ function guardDecision(
     mode: binding.mode,
     action: safetyAction(result),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...(findings ? { findings } : {}),
     ...(binding.tuned ? { tuned: binding.tuned } : {}),
     durationMs,
     captured: safeCaptureSummary(result.action === 'block' ? '' : content),

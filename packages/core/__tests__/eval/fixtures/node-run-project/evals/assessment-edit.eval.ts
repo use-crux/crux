@@ -7,5 +7,5 @@ export default evaluate({
   task,
   cases: [{ id: "assessment-edit-case", input: { question: "run" } }],
   scorers: [quality],
-  expect: ({ output, expect }) => expect(output).toBe("run"),
+  expect: ({ output, expect }) => expect(output).toContain("run"),
 });

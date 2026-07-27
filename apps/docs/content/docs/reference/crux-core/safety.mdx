@@ -136,6 +136,7 @@ Built-in strategies:
 - `guardrail.injection({ action })`
 - `guardrail.classifier({ classifier, blockWhen, findings })`
 - `guardrail.media({ mediaTypes, size, sources, action })`
+- `guardrail.mediaClassifier({ generate, model, categories, threshold, ... })`
 
 Text strategies default to sentence-level streaming checks. Classifier and
 object/path guardrails run at final output unless tuned.
@@ -196,6 +197,26 @@ argument is statically resolvable.
 Reasons and observability can contain MIME types and byte counts, but never raw
 media, URLs, observed hostnames, paths, queries, userinfo, filenames, or
 provider/file identifiers.
+
+### `guardrail.mediaClassifier(options)`
+
+Creates a provider-neutral classifier callback restricted to input/output
+media boundaries. It makes one structured-generation call per included
+canonical image, audio, video, or file/document part. `threshold` is required
+and inclusive; `thresholds` accepts only authored category IDs. Defaults are
+`action: 'block'`, all four modalities, and exact
+`UnsupportedCapabilityError` propagation.
+
+Public types are `MediaClassifierOptions`, `MediaClassifierCategory`,
+`MediaClassifierAction`, `MediaClassifierModality`, and
+`MediaClassifierUnsupportedAction`. The configured generator receives the
+selected media and authored descriptions but never the original
+`providerOptions`. Ordinary provider, transport, abort, and response-validation
+errors propagate unchanged, including in report mode.
+
+See the [Media classifier guide](/docs/guides/safety/media-classifier) for
+provider examples, disclosure and portability guidance, explicit fail-open
+audit behavior, and the native helper migration.
 
 ## Constraints
 

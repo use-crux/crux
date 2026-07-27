@@ -43,7 +43,7 @@ import {
   isRoutingReportPreview,
   routingFactsFromReport,
 } from "../lib/routing-receipt";
-import { guardrailReportRows } from "../lib/guardrail-report-facts";
+import { guardrailReportRows, type GuardrailFactRow } from "../lib/guardrail-report-facts";
 
 // Governance presence + per-type tabs live further down (`presentGovernance`,
 // `GovernanceTab`, `governanceFacts`). Routing keeps its dedicated path.
@@ -188,7 +188,7 @@ function reportPreview<T>(
 export interface GovFacts {
   type: GovType;
   label: string;
-  rows: [string, string, string?][];
+  rows: GuardrailFactRow[];
   note?: string;
 }
 

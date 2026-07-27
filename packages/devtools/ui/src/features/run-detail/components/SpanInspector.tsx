@@ -347,8 +347,8 @@ export function SpanInspector({
       {govFacts.map((gf) => (
         <Section key={gf.type} title={gf.label}>
           <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-            {gf.rows.map(([k, v, tone]) => (
-              <Metric key={k} k={k} v={v} tone={tone} />
+            {gf.rows.map(([k, v, tone, rowKey], index) => (
+              <Metric key={rowKey ?? `${k}:${index}`} k={k} v={v} tone={tone} />
             ))}
           </div>
           {gf.note && (

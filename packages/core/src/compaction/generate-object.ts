@@ -6,18 +6,16 @@
 
 import { z } from 'zod'
 import { prompt } from '../prompt/prompt'
-import type { GenerateObjectFn } from './types'
+import { foldSystemIntoMessages } from '../resolver/adaptation'
+import type {
+  GenerateObjectCommonOptions,
+  GenerateObjectFn,
+  GenerateObjectInput,
+} from './types'
 
 const DEFAULT_PROMPT_ID = 'crux.generateObject'
 
-interface GenerateObjectOptions<T> {
-  readonly model: unknown
-  readonly system?: string
-  readonly prompt: string
-  readonly schema: z.ZodType<T>
-  readonly temperature?: number
-  readonly topP?: number
-}
+type GenerateObjectOptions<T> = GenerateObjectCommonOptions<T> & GenerateObjectInput
 
 interface GenerateObjectResult<T> {
   readonly object: T
@@ -63,14 +61,21 @@ export interface GenerateObjectBridgeOptions {
  * Use this when a Crux primitive expects the portable `GenerateObjectFn`
  * contract, but your application already has an adapter-backed `generate`
  * function from `@use-crux/ai` or another adapter. The bridge builds a temporary
- * structured prompt with the provided system text, user prompt, and Zod schema,
- * executes the adapter, and returns the adapter's `result.object`. Validation
- * remains the adapter's responsibility, just as it is for normal structured
- * prompt execution.
+ * structured prompt from canonical prompt or message input, executes the
+ * adapter, and returns the adapter's `result.object`. Validation remains the
+ * adapter's responsibility, just as it is for normal structured prompt
+ * execution.
+ *
+ * @remarks
+ * This bridge executes the full prompt lifecycle, including composed Safety.
+ * Do not attach a guardrail that calls this function back into the same prompt
+ * lifecycle, because doing so recurses.
  *
  * @param generate - Adapter `generate()` function to execute the synthetic prompt.
  * @param options - Optional bridge configuration.
  * @returns A framework-agnostic structured generation function.
+ * @throws {TypeError} When the adapter result has no structured `object`.
+ * Other adapter, lifecycle, and validation errors propagate unchanged.
  *
  * @example
  * ```ts
@@ -90,8 +95,15 @@ export function createGenerateObjectFnFromGenerate(
       id: options.promptId ?? DEFAULT_PROMPT_ID,
       input: z.object({}),
       output: generateOptions.schema,
-      ...(generateOptions.system !== undefined ? { system: generateOptions.system } : {}),
-      prompt: generateOptions.prompt,
+      ...(generateOptions.messages !== undefined
+        ? {
+            messages: () =>
+              foldSystemIntoMessages(generateOptions.system ?? '', generateOptions.messages),
+          }
+        : {
+            ...(generateOptions.system !== undefined ? { system: generateOptions.system } : {}),
+            prompt: generateOptions.prompt,
+          }),
     })
 
     const adapterOptions = {

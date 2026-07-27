@@ -7,10 +7,21 @@ import { googleHelpers } from './native'
  *
  * The helper is generated from the same provider runtime as
  * `createGoogle()`, sends the supplied schema to Google structured JSON
- * output, and preserves provider SDK errors.
+ * output, and preserves provider SDK errors. Pass a non-empty Google model ID
+ * in every call.
+ *
+ * @example
+ * ```ts
+ * const generateObject = createGenerateObjectFn(client)
+ * const result = await generateObject({
+ *   model: 'gemini-2.5-flash',
+ *   prompt: 'Return whether this request is safe.',
+ *   schema,
+ * })
+ * ```
  */
-export function createGenerateObjectFn(client: GoogleGenAI, model: string): GenerateObjectFn {
-  return googleHelpers.createGenerateObjectFn(client, model)
+export function createGenerateObjectFn(client: GoogleGenAI): GenerateObjectFn {
+  return googleHelpers.createGenerateObjectFn(client)
 }
 
 /**

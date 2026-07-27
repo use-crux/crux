@@ -14,12 +14,17 @@
  */
 
 import { selectedPath } from '../boundary'
+import type { SafetyFinding } from '../decision'
 import { StreamHoldLimitError } from '../errors'
 import { emitAdaptiveDeltaNotice } from '../guardrail/adaptive-notice'
 import { GuardrailBlockedError } from '../guardrail/errors'
+import {
+  createGuardrailFindingCollection,
+  mergeSafetyFindings,
+} from '../guardrail/findings'
 import { createGuardrailPipeline } from '../guardrail/pipeline'
 import type { GuardrailAudit, GuardrailContext, GuardrailRunResult } from '../guardrail/types'
-import { validateGuardrailRunResult } from '../guardrail/types'
+import { validateGuardrailRunResult } from '../guardrail/result-validation'
 import type { GuardrailBinding } from '../registry'
 import { recordStreamChunkAction } from './audit'
 import { heldMs, streamGuardDecision } from './decision'
@@ -170,27 +175,49 @@ export function createTextReplayEngine(options: TextReplayOptions): TextReplayEn
       }
 
       stage.buffer = stage.buffer.slice(segment.length)
-      const result = await runStageGuard(stage, segment, last)
+      const { result, findings } = await runStageGuard(stage, segment, last)
       const reportOnly = stage.binding.mode === 'report'
 
       switch (result.action) {
         case 'allow':
           stage.heldStartedAt = undefined
+          if (findings) {
+            recordStreamChunkAction(
+              options.appendGuardrailAudit,
+              stage.binding,
+              result,
+              undefined,
+              { findings },
+            )
+          }
           output += segment
           break
         case 'warn':
           stage.heldStartedAt = undefined
-          recordStreamChunkAction(options.appendGuardrailAudit, stage.binding, result, result.reason)
+          recordStreamChunkAction(
+            options.appendGuardrailAudit,
+            stage.binding,
+            result,
+            result.reason,
+            { findings },
+          )
           output += segment
           break
         case 'rewrite':
           stage.heldStartedAt = undefined
-          recordStreamChunkAction(options.appendGuardrailAudit, stage.binding, result)
+          recordStreamChunkAction(
+            options.appendGuardrailAudit,
+            stage.binding,
+            result,
+            undefined,
+            { findings },
+          )
           output += reportOnly ? segment : stringifyGuardrailValue(result.value)
           break
         case 'block':
           recordStreamChunkAction(options.appendGuardrailAudit, stage.binding, result, result.reason, {
             blocked: !reportOnly,
+            findings,
           })
           if (reportOnly) {
             stage.heldStartedAt = undefined
@@ -201,7 +228,9 @@ export function createTextReplayEngine(options: TextReplayOptions): TextReplayEn
             guardrailId: stage.binding.policy.id,
             phase: 'output',
             reason: result.reason,
-            decisions: [streamGuardDecision(stage.binding, result, segment)],
+            decisions: [
+              streamGuardDecision(stage.binding, result, segment, findings),
+            ],
           })
         case 'hold':
           if (reportOnly) {
@@ -225,11 +254,22 @@ export function createTextReplayEngine(options: TextReplayOptions): TextReplayEn
     }
   }
 
-  async function runStageGuard(stage: Stage, segment: string, last: boolean): Promise<GuardrailRunResult<unknown>> {
+  async function runStageGuard(
+    stage: Stage,
+    segment: string,
+    last: boolean,
+  ): Promise<{
+    readonly result: GuardrailRunResult<unknown>
+    readonly findings?: readonly SafetyFinding[]
+  }> {
     const context = guardContext(last, stage.buffer.length + segment.length, heldMs(stage))
     const guard = stage.binding.policy
     const boundary = stage.binding.boundary
-    return validateGuardrailRunResult(
+    const findingCollection = createGuardrailFindingCollection({
+      policyId: guard.id,
+      boundary: boundary.id,
+    })
+    const result = validateGuardrailRunResult(
       await guard.run(segment as never, {
         policy: { id: guard.id, mode: stage.binding.mode },
         boundary: { id: boundary.id as never, kind: boundary.id as never },
@@ -238,12 +278,17 @@ export function createTextReplayEngine(options: TextReplayOptions): TextReplayEn
         trace: { id: context.traceId },
         attempt: { index: 0, kind: 'initial' },
         metadata: context.metadata,
-        findings: { add() {} },
+        findings: findingCollection.collector,
         ...(context.stream ? { stream: context.stream } : {}),
         ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
       } as never),
       { streaming, last, policyId: guard.id, boundary: boundary.id },
     )
+    const findings = mergeSafetyFindings(
+      findingCollection.snapshot(),
+      result.action === 'rewrite' ? result.findings : undefined,
+    )
+    return { result, ...(findings ? { findings } : {}) }
   }
 
   function guardContext(last: boolean, heldChars: number, heldMsValue: number): GuardrailContext {

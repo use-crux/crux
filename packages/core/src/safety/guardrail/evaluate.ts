@@ -1,10 +1,14 @@
 import { selectedPath } from '../boundary'
 import type { BoundaryDef } from '../boundary'
 import { isMediaSafetyTargetId } from '../boundary'
-import type { SafetyRunContext } from '../decision'
+import type {
+  SafetyFindingCollector,
+  SafetyRunContext,
+} from '../decision'
 import { SafetyConfigError } from '../errors'
 import type { Guardrail } from './types'
-import { validateGuardrailRunResult } from './types'
+import { createGuardrailFindingCollection } from './findings'
+import { validateGuardrailRunResult } from './result-validation'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -63,13 +67,18 @@ export async function evaluateGuardrail(
   const results: GuardrailEvalCaseResult[] = []
 
   const boundary = stringEvaluationBoundary(guard)
-  const ctx = evaluationContext(guard, boundary)
-
   for (const evalCase of cases) {
     const start = performance.now()
 
     try {
-      const result = validateGuardrailRunResult(await guard.run(evalCase.input as never, ctx as never), {
+      const findings = createGuardrailFindingCollection({
+        policyId: guard.id,
+        boundary: boundary.id,
+      })
+      const result = validateGuardrailRunResult(await guard.run(
+        evalCase.input as never,
+        evaluationContext(guard, boundary, findings.collector) as never,
+      ), {
         streaming: false,
         last: true,
         policyId: guard.id,
@@ -125,7 +134,11 @@ function stringEvaluationBoundary(guard: Guardrail): BoundaryDef {
   return boundaries[0] ?? { _tag: 'Boundary', id: 'model.output.text' }
 }
 
-function evaluationContext<B extends BoundaryDef>(guard: Guardrail, boundary: B): SafetyRunContext<B> {
+function evaluationContext<B extends BoundaryDef>(
+  guard: Guardrail,
+  boundary: B,
+  findings: SafetyFindingCollector,
+): SafetyRunContext<B> {
   return {
     policy: { id: guard.id, mode: guard.mode },
     boundary: { id: boundary.id as never, kind: boundary.id as never },
@@ -134,7 +147,7 @@ function evaluationContext<B extends BoundaryDef>(guard: Guardrail, boundary: B)
     trace: { id: undefined },
     attempt: { index: 0, kind: 'initial' },
     metadata: {},
-    findings: { add() {} },
+    findings,
     ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
   }
 }

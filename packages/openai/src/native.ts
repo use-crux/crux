@@ -140,10 +140,7 @@ function createOpenAIRuntimeExtensions(client: OpenAI): {
       client,
       config.model,
     );
-    const generateObject = openAIHelpers.createGenerateObjectFn(
-      client,
-      config.model,
-    );
+    const generateObject = openAIHelpers.createGenerateObjectFn(client);
     return {
       generateText: (args) =>
         generateText(
@@ -162,7 +159,25 @@ function createOpenAIRuntimeExtensions(client: OpenAI): {
               },
         ),
       generateObject: (args) =>
-        generateObject({ ...args, model: config.model }),
+        generateObject(
+          args.messages !== undefined
+            ? {
+                model: config.model,
+                system: args.system,
+                messages: args.messages,
+                schema: args.schema,
+                temperature: args.temperature,
+                topP: args.topP,
+              }
+            : {
+                model: config.model,
+                system: args.system,
+                prompt: args.prompt ?? "",
+                schema: args.schema,
+                temperature: args.temperature,
+                topP: args.topP,
+              },
+        ),
     };
   };
   return {

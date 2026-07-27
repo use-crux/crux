@@ -94,6 +94,7 @@ export type { SafetyPolicy } from './plugin'
 export { guardrail, isGuardrail, getGuardrailDefinitionSource } from './guardrail/define'
 export { evaluateGuardrail } from './guardrail/evaluate'
 export { GuardrailBlockedError } from './guardrail/errors'
+export { MEDIA_CLASSIFIER_PROMPT_VERSION } from './guardrail/strategies'
 export type {
   Guardrail,
   GuardrailConfig,
@@ -103,6 +104,11 @@ export type {
   MediaGuardrailRunResult,
 } from './guardrail/types'
 export type {
+  MediaClassifierAction,
+  MediaClassifierCategory,
+  MediaClassifierModality,
+  MediaClassifierOptions,
+  MediaClassifierUnsupportedAction,
   MediaGuardrailAction,
   MediaGuardrailOptions,
   MediaSizeGuardrailRule,

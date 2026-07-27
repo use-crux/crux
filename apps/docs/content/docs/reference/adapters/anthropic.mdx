@@ -215,18 +215,34 @@ Convert canonical `Message[]` to Anthropic `MessageParam[]`.
 
 Assistant tool calls become ordered `tool_use` content blocks. Tool-result content keeps native Anthropic image and PDF blocks where supported, falling back to deterministic text references for unsupported media.
 
-### `createGenerateObjectFn(client, model)`
+### `createGenerateObjectFn(client)`
 
-Create a `GenerateObjectFn` bound to a client and model.
+Create a provider-native `GenerateObjectFn` bound only to a client. Every call
+must supply a non-empty Anthropic model id.
 
 | Field    | Type        | Description               |
 | -------- | ----------- | ------------------------- |
 | `client` | `Anthropic` | Anthropic client instance |
-| `model`  | `string`    | Model name                |
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper generated from the same native chat profile as `createAnthropic()`. It uses Anthropic's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+```ts
+const generateObject = createGenerateObjectFn(client);
+const { object } = await generateObject({
+  model: "claude-sonnet-4-5",
+  messages,
+  schema,
+});
+```
+
+This helper uses the same native chat profile and media codec as
+`createAnthropic()`. It accepts exactly one of `prompt` or canonical
+`messages`, uses Anthropic's structured parse surface, and returns `{ object }`
+while preserving provider errors. It does not run Crux prompt resolution,
+validation retry, safety, tools, memory capture, or instrumentation. Use
+`createGenerateObjectFnFromGenerate(generate)` from
+`@use-crux/core/compaction` only when full adapter runtime behavior is needed;
+do not call that bridge from a guardrail attached to the same lifecycle.
 
 ### `createGenerateTextFn(client, model)`
 

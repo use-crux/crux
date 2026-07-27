@@ -14,14 +14,19 @@
 
 import { selectedPath } from '../boundary'
 import type { BoundaryDef } from '../boundary'
-import type { SafetyRunContext } from '../decision'
+import type { SafetyFinding, SafetyRunContext } from '../decision'
 import { inputOriginAttributes } from '../input-origin-observability'
 import type { GuardrailBinding } from '../registry'
 import { observe } from '../../observability'
 import { guardrailDefinitionRef } from '../../observability/definition-ref'
 import { recordGuardrailBlockedEdge, recordGuardrailReport } from './observability'
+import {
+  createGuardrailFindingCollection,
+  mergeSafetyFindings,
+} from './findings'
+import { findingCountAttributes } from './finding-observability'
+import { validateGuardrailRunResult } from './result-validation'
 import type { GuardrailAuditEntry, GuardrailContext, GuardrailRunResult } from './types'
-import { validateGuardrailRunResult } from './types'
 
 export interface RunGuardInput {
   readonly binding: GuardrailBinding
@@ -49,6 +54,10 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
   const { binding, subject, ctx, phase, streaming, last } = input
   const guard = binding.policy
   const boundary = binding.boundary
+  const findingCollection = createGuardrailFindingCollection({
+    policyId: guard.id,
+    boundary: boundary.id,
+  })
   const start = performance.now()
   // `guardrail()` requires `id`, so this ref is always canonical.
   const span = observe.openSpan({
@@ -68,20 +77,48 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
   })
 
   let result: GuardrailRunResult<unknown>
+  let findings: readonly SafetyFinding[] | undefined
   let durationMs = 0
   try {
     result = validateGuardrailRunResult(
-      await span.withContext(async () => guard.run(subject as never, runContext(binding, ctx) as never)),
+      await span.withContext(async () =>
+        guard.run(
+          subject as never,
+          runContext(binding, ctx, findingCollection.collector) as never,
+        ),
+      ),
       { streaming, last, policyId: guard.id, boundary: boundary.id },
+    )
+    findings = mergeSafetyFindings(
+      findingCollection.snapshot(),
+      result.action === 'rewrite' ? result.findings : undefined,
     )
     durationMs = performance.now() - start
     const report = result
-    span.withContext(() => recordGuardrailReport(binding, auditAction(report), phase, durationMs, report, ctx.origin))
+    span.withContext(() =>
+      recordGuardrailReport(
+        binding,
+        auditAction(report),
+        phase,
+        durationMs,
+        report,
+        ctx.origin,
+        findings,
+      ),
+    )
     if (report.action === 'block' && binding.mode !== 'report') {
       const { reason } = report
-      span.withContext(() => recordGuardrailBlockedEdge(binding, reason, ctx.origin))
+      span.withContext(() =>
+        recordGuardrailBlockedEdge(binding, reason, ctx.origin, findings),
+      )
     }
-    span.end({ attributes: { action: auditAction(result), durationMs } })
+    span.end({
+      attributes: {
+        action: auditAction(result),
+        ...findingCountAttributes(findings),
+        durationMs,
+      },
+    })
   } catch (error) {
     span.error(error)
     throw error
@@ -96,6 +133,7 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
     phase,
     action: auditAction(result),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...(findings ? { findings } : {}),
     durationMs,
   }
 
@@ -112,6 +150,7 @@ export function auditAction(result: GuardrailRunResult<unknown>): string {
 export function runContext<B extends BoundaryDef>(
   binding: GuardrailBinding & { readonly boundary: B },
   ctx: GuardrailContext,
+  findings: SafetyRunContext<B>['findings'],
 ): SafetyRunContext<B> {
   const guard = binding.policy
   const boundary = binding.boundary
@@ -123,7 +162,7 @@ export function runContext<B extends BoundaryDef>(
     trace: { id: ctx.traceId },
     attempt: { index: 0, kind: 'initial' },
     metadata: ctx.metadata,
-    findings: { add() {} },
+    findings,
     ...(ctx.stream ? { stream: ctx.stream } : {}),
     ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
     ...(ctx.origin ? { origin: ctx.origin } : {}),

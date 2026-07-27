@@ -80,4 +80,42 @@ describe("Safety Catalog projection", () => {
       hasSafetyOptions: true,
     });
   });
+
+  it("projects only the indexed media-classifier strategy allowlist", () => {
+    const view = projectSafetyPolicyCatalog({
+      id: "guardrail:classified-media",
+      name: "classifiedMedia",
+      kind: "guardrail",
+      facts: {
+        boundaries: ["model.input.media", "model.output.media"],
+        strategy: {
+          kind: "mediaClassifier",
+          config: {
+            categoryIds: ["unsafe", "graphic-violence"],
+            threshold: 0.8,
+            thresholds: { "graphic-violence": 0.9 },
+            action: "block",
+            modalities: ["image", "file"],
+            unsupported: "strip",
+          },
+        },
+      },
+    });
+
+    expect(view?.strategy).toEqual({
+      kind: "mediaClassifier",
+      action: "block",
+      config: {
+        categoryIds: ["unsafe", "graphic-violence"],
+        threshold: 0.8,
+        thresholds: { "graphic-violence": 0.9 },
+        action: "block",
+        modalities: ["image", "file"],
+        unsupported: "strip",
+      },
+    });
+    expect(JSON.stringify(view)).not.toMatch(
+      /private rubric|secret-model|generateObject/,
+    );
+  });
 });

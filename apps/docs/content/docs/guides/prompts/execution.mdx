@@ -287,8 +287,10 @@ const result = await summarizeMessages({
 ```ts
 import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/openai";
 
-const generateObj = createGenerateObjectFn(client, "gpt-4o");
+const generateObj = createGenerateObjectFn(client);
 const generateTxt = createGenerateTextFn(client, "gpt-4o");
+
+await generateObj({ model: "gpt-4o", prompt, schema });
 ```
 
 </Tab>
@@ -297,8 +299,10 @@ const generateTxt = createGenerateTextFn(client, "gpt-4o");
 ```ts
 import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/google";
 
-const generateObj = createGenerateObjectFn(client, "gemini-2.5-flash");
+const generateObj = createGenerateObjectFn(client);
 const generateTxt = createGenerateTextFn(client, "gemini-2.5-flash");
+
+await generateObj({ model: "gemini-2.5-flash", prompt, schema });
 ```
 
 </Tab>
@@ -310,11 +314,14 @@ import {
   createGenerateTextFn,
 } from "@use-crux/anthropic";
 
-const generateObj = createGenerateObjectFn(
-  client,
-  "claude-sonnet-4-5-20250929",
-);
+const generateObj = createGenerateObjectFn(client);
 const generateTxt = createGenerateTextFn(client, "claude-haiku-4-5-20251001");
+
+await generateObj({
+  model: "claude-sonnet-4-5-20250929",
+  prompt,
+  schema,
+});
 ```
 
 </Tab>
@@ -342,8 +349,8 @@ const generateObj = createGenerateObjectFnFromGenerate(generate, {
   The Vercel AI SDK adapter exports pre-bound functions (`generateObjectFn`,
   `generateTextFn`) since the model is passed per-call. Its `generateObjectFn`
   shares the same structured-attempt mechanics as prompt structured generation.
-  The OpenAI, Google, and Anthropic adapters use factory functions that bind the
-  client and model upfront.
+  The OpenAI, Google, and Anthropic object factories bind the client; pass the
+  model in each object call. Their text factories still bind client and model.
 </Callout>
 
 Managed generation results are finalized before `hooks.onGenerate` runs. The

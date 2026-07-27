@@ -16,7 +16,7 @@ import {
 } from '../../tools/middleware'
 import type { ToolCallContext, ToolMatcher, ToolMiddleware, ToolMiddlewareNext } from '../../tools/types'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
-import { validateGuardrailRunResult } from '../guardrail/types'
+import { validateGuardrailRunResult } from '../guardrail/result-validation'
 import { blockedToolPolicy, createToolPolicyDecision } from './decision'
 import { recordToolPolicyDecision } from './observability'
 import { toolPolicyDefinitionRef } from '../../observability/definition-ref'

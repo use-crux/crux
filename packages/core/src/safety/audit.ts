@@ -1,4 +1,5 @@
 import type { ConstraintAudit } from './constraint/types'
+import type { SafetyFinding } from './decision'
 import type { GuardrailAudit, GuardrailAuditEntry } from './guardrail/types'
 
 /** Applied canonical Safety decisions for one public operation. */
@@ -25,7 +26,9 @@ export function freezeSafetyAudit(audit: SafetyAudit): SafetyAudit {
       ? {
           guardrails: Object.freeze({
             ...audit.guardrails,
-            applied: Object.freeze([...audit.guardrails.applied]),
+            applied: Object.freeze(
+              audit.guardrails.applied.map(freezeGuardrailAuditEntry),
+            ),
           }),
         }
       : {}),
@@ -36,6 +39,30 @@ export function freezeSafetyAudit(audit: SafetyAudit): SafetyAudit {
             entries: Object.freeze([...audit.constraints.entries]),
           }),
         }
+      : {}),
+  })
+}
+
+function freezeGuardrailAuditEntry(
+  entry: GuardrailAuditEntry,
+): GuardrailAuditEntry {
+  return Object.freeze({
+    ...entry,
+    ...(entry.findings
+      ? {
+          findings: Object.freeze(
+            entry.findings.map(freezeSafetyFinding),
+          ),
+        }
+      : {}),
+  })
+}
+
+function freezeSafetyFinding(finding: SafetyFinding): SafetyFinding {
+  return Object.freeze({
+    ...finding,
+    ...(finding.span
+      ? { span: Object.freeze({ ...finding.span }) }
       : {}),
   })
 }

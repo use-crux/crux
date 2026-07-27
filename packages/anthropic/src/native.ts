@@ -173,10 +173,7 @@ function createAnthropicRuntimeExtensions(client: Anthropic): {
       client,
       config.model,
     );
-    const generateObject = anthropicHelpers.createGenerateObjectFn(
-      client,
-      config.model,
-    );
+    const generateObject = anthropicHelpers.createGenerateObjectFn(client);
     return {
       generateText: (args) =>
         generateText(
@@ -195,7 +192,25 @@ function createAnthropicRuntimeExtensions(client: Anthropic): {
               },
         ),
       generateObject: (args) =>
-        generateObject({ ...args, model: config.model }),
+        generateObject(
+          args.messages !== undefined
+            ? {
+                model: config.model,
+                system: args.system,
+                messages: args.messages,
+                schema: args.schema,
+                temperature: args.temperature,
+                topP: args.topP,
+              }
+            : {
+                model: config.model,
+                system: args.system,
+                prompt: args.prompt ?? "",
+                schema: args.schema,
+                temperature: args.temperature,
+                topP: args.topP,
+              },
+        ),
     };
   };
   return {
