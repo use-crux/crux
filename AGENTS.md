@@ -23,7 +23,7 @@ Rankings, higher = better. Cost reflects what I actually pay (OpenAI is near-fre
 | gpt-5.6-sol | 7 | 9 | 7 |
 | gpt-5.6-terra | 8 | 7 | 6 |
 | gpt-5.6-luna | 9 | 5 | 6 |
-| grok-build | 9 | 6 | 5 |
+| grok-4.5 | 9 | 6 | 5 |
 | sonnet-5 | 5 | 5 | 7 |
 | opus-5 | 6 | 9 | 9 |
 | fable-5 | 2 | 9.5 | 9.5 |
