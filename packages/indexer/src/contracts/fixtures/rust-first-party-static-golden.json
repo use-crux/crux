@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 801,
-    "definitions": 88,
+    "files": 818,
+    "definitions": 87,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1568,
-    "canonicalBytes": 223273
+    "dependencies": 1586,
+    "canonicalBytes": 224985
   },
   "files": [
     {
@@ -390,6 +390,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
+    },
+    {
+      "file": "packages/ai/src/eval-task-options.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/ai/src/eval-task-variant.ts",
@@ -2786,6 +2795,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/eval/case.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/eval/evaluate.ts",
       "sha256": "601305c4ba64ad83c8c2e8e9cf6755a1b6a2ff772a7986ac494d353498ba3236",
       "bytes": 187,
@@ -2831,6 +2849,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/eval/internal/normalize-case-sources.ts",
+      "sha256": "5fbf183940dc310e1c94e8f98408446d6263bc5f8e3b79abb4e36720d317f185",
+      "bytes": 223,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/src/eval/internal/normalize-checks.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2841,18 +2868,18 @@
     },
     {
       "file": "packages/core/src/eval/internal/normalize-definition.ts",
-      "sha256": "a8fd9153981d34a37d1b65c89011b438ac6467d73eb3a2c337cbc0496e48ca68",
-      "bytes": 173,
+      "sha256": "65c265cdc6f1652ba107ceff5e57f55f38416c3b64dc001cb3c18175a469455c",
+      "bytes": 245,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/core/src/eval/internal/planner.ts",
-      "sha256": "7f584864bddeb0b61fa744ccb638ae0e3803776c6bd0f006280172d82a40fb45",
-      "bytes": 1374,
-      "definitions": 1,
+      "sha256": "d841e1f1516f1cb85fb02748e63f5036eb237ed614d24e684fee1748e70db1bd",
+      "bytes": 795,
+      "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 13
@@ -2894,13 +2921,22 @@
       "dependencies": 7
     },
     {
-      "file": "packages/core/src/eval/internal/task.ts",
-      "sha256": "93e4924f065d8029a12339378d5750547dff0192b89b2b5ed72d28d763e4f3af",
-      "bytes": 185,
+      "file": "packages/core/src/eval/internal/task-descriptor.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/eval/internal/task.ts",
+      "sha256": "0a7deb4c3f2f6b6d41a3c4ebaaebc4f616c2219e81fe992d81cae0d264da0f95",
+      "bytes": 312,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
     },
     {
       "file": "packages/core/src/eval/node.ts",
@@ -2930,6 +2966,15 @@
       "dependencies": 2
     },
     {
+      "file": "packages/core/src/eval/task-context.ts",
+      "sha256": "bcf28f223e5eed1faa406c7787e06e408f3d05e7b375e8899ee2df620e723ddd",
+      "bytes": 130,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/src/eval/task.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2937,6 +2982,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/eval/testing.ts",
+      "sha256": "bcf28f223e5eed1faa406c7787e06e408f3d05e7b375e8899ee2df620e723ddd",
+      "bytes": 130,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/eval/timeout-policy.ts",
+      "sha256": "42a47f03f563622f2aa4f306381f07bef5190e161611dd72908b1c5db7a56fd1",
+      "bytes": 116,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/flow/index.ts",
@@ -3018,6 +3081,33 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 2
+    },
+    {
+      "file": "packages/core/src/generation/timeout-ceiling.ts",
+      "sha256": "e8652ab48b7371cef76d395bd3250222b511b0553e9cde841fcea09ea69165b2",
+      "bytes": 123,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/generation/timeout-error.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/generation/timeout-options.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/core/src/index.ts",
@@ -3198,6 +3288,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/project-index/eval-facts.ts",
+      "sha256": "9ec30627e67d3fd66b16afcf069b634b9dceeee73f0827477cee9a34c221cb10",
+      "bytes": 172,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/project-index/index.ts",
@@ -4163,9 +4262,45 @@
       "dependencies": 0
     },
     {
+      "file": "packages/devtools/ui/src/features/evals/components/EvalTimeoutPolicy.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/evals/lib/parse-catalog.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/evals/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/devtools/ui/src/features/index/hooks/useIndex.ts",
       "sha256": "5790988b90647273f197d3cf9f1b80ca788d63811fad587ee564685cac528f29",
       "bytes": 134,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/index/v2/adapt.ts",
+      "sha256": "a457d8a3ecd6fd72f7c0e93e7603d31f7c006db8f23123e718b096fe3d131dd1",
+      "bytes": 127,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -4179,6 +4314,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/index/v2/eval-timeout-policy.tsx",
+      "sha256": "914a894763537aba8dd8f84696d4e57bef9da6f8ec09ebee71553d599c532d8e",
+      "bytes": 129,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/devtools/ui/src/features/memory/components/MemoryView.tsx",
@@ -4206,6 +4350,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/EvalCard.tsx",
+      "sha256": "599d529428bfacd6f4836494aec2b607fbdf3a075fcc7a77272fd1f9f2963458",
+      "bytes": 326,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/GenerationDecisions.tsx",
@@ -6135,12 +6288,12 @@
     },
     {
       "file": "packages/local-workers/bin/eval-coordinator.ts",
-      "sha256": "f764b13ac8919a6a54436311b385c242f9c5220c0d52f0e86653352981f4e5b0",
-      "bytes": 402,
+      "sha256": "0940a5b7c690ab54258de4abe0c37e2adc904b93baee2656503315da5cc97463",
+      "bytes": 474,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/local-workers/bin/project-indexer-deployment-manifest.ts",
