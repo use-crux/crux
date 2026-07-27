@@ -1,6 +1,13 @@
 # Message History Projection Design
 
-Status: **proposed**
+Status: **superseded in part**
+
+The [Whole-Request Context Management
+Design](./2026-07-27-whole-request-context-management-design.md) supersedes
+this document's public history-projection API and its context-budget and
+compaction assumptions. The canonical Thread ownership, history-source
+precedence, causal grouping, and commit semantics defined here remain
+applicable unless that design changes them.
 
 Related designs:
 
