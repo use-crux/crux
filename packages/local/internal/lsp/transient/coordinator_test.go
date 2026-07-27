@@ -82,7 +82,7 @@ func TestCoordinatorRetriesSameRevisionAfterPreviousCallerCancels(t *testing.T) 
 		_, err := coordinator.Analyze(context.Background(), query)
 		secondDone <- err
 	}()
-	waitForCoordinatorWaiter(t, coordinator)
+	waitForCoordinatorWaiters(t, coordinator, 1)
 	close(analyzer.releaseFirst)
 	if err := <-firstDone; !errors.Is(err, context.Canceled) {
 		t.Fatalf("first analysis error = %v, want context.Canceled", err)
@@ -92,13 +92,18 @@ func TestCoordinatorRetriesSameRevisionAfterPreviousCallerCancels(t *testing.T) 
 	}
 }
 
-func waitForCoordinatorWaiter(t *testing.T, coordinator *Coordinator) {
+func waitForCoordinatorWaiters(
+	t *testing.T,
+	coordinator *Coordinator,
+	count int,
+) {
 	t.Helper()
 
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		coordinator.mu.Lock()
-		waiting := coordinator.inflight != nil && coordinator.inflight.waiters > 0
+		waiting := coordinator.inflight != nil &&
+			coordinator.inflight.waiters >= count
 		coordinator.mu.Unlock()
 		if waiting {
 			return

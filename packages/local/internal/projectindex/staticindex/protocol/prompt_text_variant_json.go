@@ -13,7 +13,14 @@ func (b PromptTextBlock) MarshalJSON() ([]byte, error) {
 	}
 	switch b.Kind {
 	case PromptTextBlockHeading:
+		if b.Level < 1 || b.Level > 6 {
+			return nil, fmt.Errorf("marshal PromptText heading with invalid level %d", b.Level)
+		}
+		if b.Label == nil || *b.Label == "" {
+			return nil, fmt.Errorf("marshal PromptText heading without required label")
+		}
 		payload["level"] = b.Level
+		payload["label"] = *b.Label
 		if err := addRequiredRange(payload, "textRange", b.TextRange); err != nil {
 			return nil, err
 		}

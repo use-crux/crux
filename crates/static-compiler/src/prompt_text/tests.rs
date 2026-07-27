@@ -7,6 +7,8 @@ use crux_indexer_protocol::prompt_text::{
 use super::analyze;
 
 mod barrier_cases;
+mod folding_cases;
+mod heading_label_cases;
 mod structure_cases;
 mod support;
 mod surrogate_cases;
@@ -23,6 +25,7 @@ fn prompt_text_heading_preserves_construct_and_text_ranges() {
             index: 0,
             island: 0,
             level: 1,
+            label: "Hello".into(),
             range: range(0, 17, 0, 24),
             text_range: range(0, 19, 0, 24),
         }]
@@ -31,8 +34,12 @@ fn prompt_text_heading_preserves_construct_and_text_ranges() {
 
 #[test]
 fn prompt_text_output_limit_counts_only_compact_complete_template_objects() {
-    let source = "const value = md`# Hello`;";
+    let source = "const value = md`# \"Hello\"`;";
     let unbounded = analyze(request(source));
+    assert!(matches!(
+        &unbounded.templates[0].blocks[0],
+        PromptTextBlock::Heading { label, .. } if label == "\"Hello\""
+    ));
     let template_bytes = serde_json::to_vec(&unbounded.templates[0])
         .expect("PromptText template should serialize")
         .len();
@@ -83,6 +90,37 @@ fn prompt_text_output_limit_retains_the_longest_source_order_prefix() {
 
     assert_eq!(response.status, PromptTextAnalysisStatus::Truncated);
     assert_eq!(response.templates, vec![first]);
+}
+
+#[test]
+fn prompt_text_output_limit_counts_label_json_and_template_comma_exactly() {
+    let source = "const first = md`# \"One\"`;\nconst second = md`## Two`;";
+    let unbounded = analyze(request(source));
+    assert_eq!(unbounded.templates.len(), 2);
+    let exact_bytes = unbounded
+        .templates
+        .iter()
+        .map(|template| {
+            serde_json::to_vec(template)
+                .expect("PromptText template should serialize")
+                .len()
+        })
+        .sum::<usize>()
+        + 1;
+
+    let mut exact = request(source);
+    exact.limits.max_output_bytes =
+        u32::try_from(exact_bytes).expect("fixture should fit the protocol limit");
+    let exact_response = analyze(exact);
+    assert_eq!(exact_response.status, PromptTextAnalysisStatus::Complete);
+    assert_eq!(exact_response.templates.len(), 2);
+
+    let mut one_byte_under = request(source);
+    one_byte_under.limits.max_output_bytes =
+        u32::try_from(exact_bytes - 1).expect("fixture should fit the protocol limit");
+    let truncated = analyze(one_byte_under);
+    assert_eq!(truncated.status, PromptTextAnalysisStatus::Truncated);
+    assert_eq!(truncated.templates.len(), 1);
 }
 
 #[test]

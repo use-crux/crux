@@ -130,6 +130,12 @@ and supported.
 Folding, symbols, links, decoration roles, and preview derive from one
 normalized analysis per document revision. No consumer reparses Markdown.
 
+Normalized heading records also carry their required display label. Rust
+derives it from the existing CommonMark heading event slice—decoded visible
+text and code, visible link text and image alt text, normalized breaks and
+whitespace—while omitting markup and raw inline HTML. Go uses the label
+directly for document symbols and never slices an authored range.
+
 ### Preview surfaces
 
 - `crux.promptText.previewStatic` opens a reusable read-only
@@ -260,10 +266,14 @@ themes, settings, and cleanup separately from inline diagnostic decorations.
 An exhaustive `Record<Role, DecorationType>` makes missing mappings a type
 error.
 
-Rust reports literal link destinations. Go allows bounded workspace-relative
-files and safe web schemes. It rejects command/script/data schemes, malformed
-destinations, and paths outside the active scope. Resolution never reads or
-executes targets.
+Rust reports parser-confirmed literal link destinations and exact visible-text
+ranges. Go eagerly publishes only final targets for authored hierarchical
+`http`/`https` URIs and workspace-relative files that resolve lexically inside
+the active scope. It rejects every other scheme, malformed or ambiguous
+references, absolute local paths, and lexical scope escapes. Resolution never
+reads, stats, opens, fetches, resolves symlinks, or executes targets; physical
+symlink traversal after a user activates a link belongs to the editor and
+operating system.
 
 ## Failure, privacy, and performance
 

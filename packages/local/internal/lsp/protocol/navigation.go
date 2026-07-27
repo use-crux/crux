@@ -36,6 +36,7 @@ const (
 	SymbolKindMethod    SymbolKind = 6
 	SymbolKindInterface SymbolKind = 11
 	SymbolKindFunction  SymbolKind = 12
+	SymbolKindString    SymbolKind = 15
 	SymbolKindObject    SymbolKind = 19
 	SymbolKindEvent     SymbolKind = 24
 	SymbolKindOperator  SymbolKind = 25
@@ -43,11 +44,12 @@ const (
 
 // DocumentSymbol describes one symbol inside a document.
 type DocumentSymbol struct {
-	Name           string     `json:"name"`
-	Detail         string     `json:"detail,omitempty"`
-	Kind           SymbolKind `json:"kind"`
-	Range          Range      `json:"range"`
-	SelectionRange Range      `json:"selectionRange"`
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           SymbolKind       `json:"kind"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
 }
 
 // SymbolInformation describes one symbol and its workspace location.

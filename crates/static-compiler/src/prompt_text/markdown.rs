@@ -3,7 +3,7 @@ use crux_indexer_syntax_oxc::prompt_text::{ProjectedPromptTextTemplate, Projecte
 use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 
 use super::{
-    ranges,
+    heading_label, ranges,
     structure::{StructureWriter, heading_level},
 };
 
@@ -79,6 +79,8 @@ fn start(
             range,
         })),
         Tag::Heading { level, .. } => {
+            let level = heading_level(*level);
+            let label = heading_label::from_events(events, event_index, level)?;
             let text_range = writer.map(ranges::heading(
                 writer.text(),
                 projected_range,
@@ -87,7 +89,8 @@ fn start(
             Some(writer.block(|index, island| PromptTextBlock::Heading {
                 index,
                 island,
-                level: heading_level(*level),
+                level,
+                label,
                 range,
                 text_range,
             }))

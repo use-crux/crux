@@ -53,6 +53,7 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 			DefinitionProvider:     true,
 			ReferencesProvider:     true,
 			DocumentSymbolProvider: true,
+			FoldingRangeProvider:   true,
 			CodeActionProvider: protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
 			},

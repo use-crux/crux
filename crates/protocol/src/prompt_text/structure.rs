@@ -38,6 +38,11 @@ pub enum PromptTextBlock {
         index: u32,
         island: u32,
         level: u8,
+        #[serde(
+            serialize_with = "serialize_nonempty_heading_label",
+            deserialize_with = "deserialize_nonempty_heading_label"
+        )]
+        label: String,
         range: PromptTextRange,
         text_range: PromptTextRange,
     },
@@ -83,6 +88,31 @@ pub enum PromptTextBlock {
         island: u32,
         range: PromptTextRange,
     },
+}
+
+fn serialize_nonempty_heading_label<S>(label: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if label.is_empty() {
+        return Err(serde::ser::Error::custom(
+            "PromptText heading label must be nonempty",
+        ));
+    }
+    label.serialize(serializer)
+}
+
+fn deserialize_nonempty_heading_label<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let label = String::deserialize(deserializer)?;
+    if label.is_empty() {
+        return Err(serde::de::Error::custom(
+            "PromptText heading label must be nonempty",
+        ));
+    }
+    Ok(label)
 }
 
 /// One normalized inline CommonMark span with exact authored ranges.

@@ -54,7 +54,7 @@ func TestPromptTextV1DecodesTheSharedGoldenABI(t *testing.T) {
 		t.Fatalf("response = %#v, want one complete template", fixture.Response)
 	}
 	heading, ok := response.Templates[0].Blocks[0].Heading()
-	if !ok || heading.Range == heading.TextRange {
+	if !ok || heading.Label != "Hello" || heading.Range == heading.TextRange {
 		t.Fatalf("heading = %#v, %v; want distinct construct and text ranges", heading, ok)
 	}
 }

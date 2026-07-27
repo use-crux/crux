@@ -13,6 +13,7 @@ const (
 	MethodDefinition             = "textDocument/definition"
 	MethodReferences             = "textDocument/references"
 	MethodDocumentSymbol         = "textDocument/documentSymbol"
+	MethodFoldingRange           = "textDocument/foldingRange"
 	MethodInlayHint              = "textDocument/inlayHint"
 	MethodCodeLens               = "textDocument/codeLens"
 	MethodCompletion             = "textDocument/completion"

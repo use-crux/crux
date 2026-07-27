@@ -85,6 +85,7 @@
               "index": 0,
               "island": 0,
               "level": 1,
+              "label": "Hello",
               "range": {
                 "start": { "line": 3, "character": 13 },
                 "end": { "line": 3, "character": 20 }

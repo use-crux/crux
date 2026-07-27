@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::{
     process::WorkerResponseEnvelope,
-    prompt_text::{PromptTextQueryResponse, PromptTextWorkerRequest},
+    prompt_text::{PromptTextBlock, PromptTextQueryResponse, PromptTextWorkerRequest},
 };
 
 const GOLDEN: &str =
@@ -25,5 +25,40 @@ fn prompt_text_v1_matches_the_shared_golden_abi() {
         serde_json::to_value(WorkerResponseEnvelope::ok(401, response))
             .expect("response should serialize"),
         fixture["response"]
+    );
+}
+
+#[test]
+fn prompt_text_heading_label_is_required_and_nonempty() {
+    let fixture: Value = serde_json::from_str(GOLDEN).expect("golden fixture should decode");
+    for label in [None, Some("")] {
+        let mut response = fixture["response"]["response"].clone();
+        let heading = response["templates"][0]["blocks"][0]
+            .as_object_mut()
+            .expect("golden heading should be an object");
+        match label {
+            Some(value) => {
+                heading.insert("label".into(), Value::String(value.into()));
+            }
+            None => {
+                heading.remove("label");
+            }
+        }
+        assert!(
+            serde_json::from_value::<PromptTextQueryResponse>(response).is_err(),
+            "heading label {label:?} must be rejected"
+        );
+    }
+
+    let mut response: PromptTextQueryResponse =
+        serde_json::from_value(fixture["response"]["response"].clone())
+            .expect("golden response should decode");
+    let PromptTextBlock::Heading { label, .. } = &mut response.templates[0].blocks[0] else {
+        panic!("golden block should be a heading");
+    };
+    label.clear();
+    assert!(
+        serde_json::to_value(response).is_err(),
+        "an empty Rust-produced heading label must not serialize"
     );
 }

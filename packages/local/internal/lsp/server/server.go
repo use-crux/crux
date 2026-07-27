@@ -69,7 +69,7 @@ type Server struct {
 
 	promptTextMu       sync.Mutex
 	pendingPromptTexts map[string]*pendingPromptText
-	promptTextByURI    map[protocol.DocumentURI]*pendingPromptText
+	promptTextByURI    map[protocol.DocumentURI]map[*pendingPromptText]struct{}
 }
 
 type documentStatus struct {
@@ -103,7 +103,9 @@ func New(options Options) *Server {
 		pendingCompletions:    make(map[string]*pendingCompletion),
 		completionByURI:       make(map[protocol.DocumentURI]*pendingCompletion),
 		pendingPromptTexts:    make(map[string]*pendingPromptText),
-		promptTextByURI:       make(map[protocol.DocumentURI]*pendingPromptText),
+		promptTextByURI: make(
+			map[protocol.DocumentURI]map[*pendingPromptText]struct{},
+		),
 	}
 	server.promptText = lsprompttext.NewController(server.buffers)
 	return server
@@ -186,7 +188,9 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 	case protocol.MethodReferences:
 		return s.references(request.Params)
 	case protocol.MethodDocumentSymbol:
-		return s.documentSymbol(request.Params)
+		return s.documentSymbol(ctx, request.ID, request.Params)
+	case protocol.MethodFoldingRange:
+		return s.promptTextFolding(ctx, request.ID, request.Params)
 	case protocol.MethodInlayHint:
 		return s.inlayHint(request.Params)
 	case protocol.MethodCodeLens:
@@ -237,6 +241,7 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodDefinition ||
 		request.Method == protocol.MethodReferences ||
 		request.Method == protocol.MethodDocumentSymbol ||
+		request.Method == protocol.MethodFoldingRange ||
 		request.Method == protocol.MethodInlayHint ||
 		request.Method == protocol.MethodCodeLens ||
 		request.Method == protocol.MethodCompletion ||

@@ -302,6 +302,7 @@ pub enum PromptTextBlock {
         index: u32,
         island: u32,
         level: u8,
+        label: String,
         range: PromptTextRange,
         text_range: PromptTextRange,
     },
@@ -515,9 +516,175 @@ payload is a safe bounded prefix; `unsupported` requires all payload
 collections and preview to be empty. Consumers never downgrade a complete
 included template because the request-level status is truncated.
 
+#### V1 document-link projection and trust policy
+
+PromptText links use the standard `textDocument/documentLink` request. Server
+initialization advertises exactly:
+
+```json
+{
+  "documentLinkProvider": {
+    "resolveProvider": false
+  }
+}
+```
+
+Every returned link contains its final validated `target`. The server does not
+register `documentLink/resolve`, and returned links omit `data`, `tooltip`, and
+all Crux-private fields. Rejected destinations produce no unresolved record.
+Results preserve Rust/source order. Unavailable, stale, cancelled, or
+superseded analysis returns a non-nil empty array and never substitutes an
+older result.
+
+`DocumentLink.range` is Rust's parser-proven `textRange` for both inline links
+and autolinks. A missing, invalid, zero-width, out-of-island, or
+barrier-crossing `textRange` suppresses the record. Go never widens it to the
+full construct `range` or substitutes inline `destinationRange`; inline titles
+never participate in the clickable range. Reference-style links are
+non-publishable throughout V1; Rust does not resolve or guess definitions for
+this feature.
+
+Rust supplies the CommonMark-decoded literal `destination`. Go does not rescan
+Markdown or slice source. Before classifying that string, Go:
+
+1. requires a nonempty, valid UTF-8 string;
+2. rejects every literal Unicode whitespace scalar, C0 control, DEL, NUL, and
+   raw backslash;
+3. requires every percent sign to begin exactly two ASCII hexadecimal digits;
+4. parses one RFC 3986 URI reference, then percent-decodes each syntactic
+   component exactly once for validation, using URI percent semantics rather
+   than form/query `+` semantics;
+5. rejects decoded invalid UTF-8, NUL, C0 controls, DEL, and backslash; and
+6. never trims, environment-expands, home-expands, or decodes a second time.
+
+Here, literal Unicode whitespace means the fixed Unicode White_Space set
+`U+0009..U+000D`, `U+0020`, `U+0085`, `U+00A0`, `U+1680`,
+`U+2000..U+200A`, `U+2028`, `U+2029`, `U+202F`, `U+205F`, and `U+3000`.
+Do not delegate this decision to a locale-sensitive predicate.
+
+For example, `%252e` denotes literal filename text `%2e`; it does not become
+`.`. Percent-decoded non-control whitespace may remain a filename or URI
+component even though the ambiguous raw-whitespace spelling is rejected.
+
+Authored absolute web targets accept only `http` and `https`,
+case-insensitively, and normalize the scheme to lowercase. They must use
+hierarchical `scheme://authority` form with no opaque component, no userinfo,
+and a nonempty ASCII host. DNS/reg-name, IPv4, and bracketed IPv6 hosts are
+allowed. Percent-escaped hosts and IPv6 zone identifiers are rejected. An
+optional port must contain only decimal ASCII digits and have value
+`1..65535`; empty, zero, nondecimal, overflow, and malformed ports are
+rejected. Query and fragment are allowed. Web path dot segments and encoded
+slashes retain web-server semantics and are not cleaned. Go serializes the
+validated URI after lowercasing its scheme and never fetches, probes, or
+resolves its host.
+
+Protocol-relative `//host/path` references and every other authored scheme are
+rejected, including `file`, `command`, `javascript`, `data`, `mailto`, `ftp`,
+and unknown schemes. CommonMark email autolinks therefore produce no V1
+document link.
+
+A workspace-local target has no scheme or authority, a nonempty relative path,
+no query, and an optional fragment. Fragment-only references are suppressed.
+`guide.md#usage` is allowed; `guide.md?mode=raw` and `#usage` are not.
+Absolute and root-relative paths, Windows drive and UNC forms, raw
+backslashes, and percent-encoded `/` or `\` path separators are rejected.
+
+Local path resolution is deterministic and lexical:
+
+1. inspect the escaped path and reject encoded separators;
+2. percent-decode it exactly once and interpret `/` as its path separator;
+3. require cleaned absolute source-file and active-scope-root inputs;
+4. resolve against `filepath.Dir(sourceFile)` and apply lexical
+   `filepath.Clean`;
+5. use `filepath.Rel` to require both the source file and result to remain
+   inside the cleaned active scope root; and
+6. construct a fresh escaped `file:` URI from the cleaned absolute result,
+   attaching the already parsed fragment through URI serialization rather than
+   string concatenation.
+
+Literal or percent-encoded `..` is allowed when this cleaned result remains
+inside the scope and rejected when it escapes. Thus
+`../guide.md` from `scope/docs/source.ts` may resolve to
+`scope/guide.md`; `../../outside.md` does not. An encoded dot segment is
+decoded once before the same containment check. Percent-encoded separators
+remain rejected because decoding them would change the parsed component
+boundaries.
+
+Existence is irrelevant: a lexically valid target is returned even when no
+file currently exists. Production resolution must not call `EvalSymlinks`,
+`Lstat`, `Stat`, open/read APIs, directory traversal, DNS, or network APIs.
+Crux proves lexical containment only. It makes no claim about a physical
+target reached through an existing symlink after the user activates the link;
+that traversal belongs to VS Code and the operating system.
+
 Heading `range` contains the complete construct, including `#` markers and
 trailing authored content. `textRange` contains only the parser-proven heading
 text. Go and VS Code must never derive either range from the other.
+
+Heading `label` is a required, nonempty, provider-neutral display value emitted
+by Rust from the same balanced CommonMark event vector that produced the
+heading record. Go and VS Code never slice `textRange`, rescan source, or parse
+Markdown to derive it.
+
+For each `Start(Tag::Heading)`, Rust finds the balanced matching heading end and
+walks only the intervening events:
+
+- `Text` appends the parser-decoded value, so CommonMark entities and
+  backslash escapes contribute their decoded characters.
+- `Code` appends the parser-produced code value. Pulldown-cmark's code-span
+  normalization is authoritative before the label's whitespace normalization.
+- `SoftBreak` and `HardBreak` each contribute one whitespace boundary.
+- `InlineHtml`, including tags, declarations, processing instructions, and
+  comments, contributes nothing and no separator. Text between HTML events
+  still arrives as `Text` and is retained.
+- `Start` and `End` contribute nothing. Link/autolink visible child events and
+  image alt child events are retained, while destinations, titles, and
+  reference identifiers are never read.
+- `Html`, `FootnoteReference`, `TaskListMarker`, `InlineMath`, `DisplayMath`,
+  and `Rule` cannot occur in a heading under V1's `Options::empty()`. If
+  encountered defensively, they contribute nothing and no separator. Enabling
+  a parser option that makes one meaningful requires a contract amendment.
+
+Whitespace is exactly Unicode White_Space:
+
+```text
+U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680,
+U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000
+```
+
+Every nonempty whitespace run becomes one ASCII space and leading/trailing
+whitespace is removed. Adjacent retained event fragments receive no implicit
+separator. No NFC/NFKC normalization, case folding, punctuation rewriting, or
+grapheme rewriting occurs; all other Unicode scalar values are preserved.
+Empty normalized output becomes the exact, nonlocalized fallback
+`Heading <level>`, such as `Heading 3`.
+
+Label construction is template- and island-local and never crosses an
+interpolation barrier. Malformed inline syntax that CommonMark emits as literal
+`Text` remains visible as parser-decoded text. If the balanced heading end is
+unexpectedly absent, Rust suppresses the heading record rather than rescanning
+source or manufacturing a label.
+
+PromptText ABI V1 is amended in place because it is unreleased and Rust, Go,
+the worker, OWN, and ATTACHED ship atomically. Rust's `label: String` is
+required with no default, optional representation, or serialization omission.
+Go's flat tagged-union carrier uses `Label *string` to distinguish absence,
+while its typed `PromptTextHeading` exposes `Label string`. `Heading()` rejects
+a non-heading, missing `textRange`, missing or empty label, or level outside
+1–6. Heading JSON marshaling requires a nonempty label and omits the field for
+all other block variants.
+
+The shared V1 golden heading gains `"label": "Hello"`. Rust protocol/static
+compiler/worker assertions, strict Go decode/round-trip and typed-accessor
+assertions, Go service equality, and OWN/ATTACHED parity update atomically.
+
+The label is part of the finalized `PromptTextTemplate`, so existing
+`maxOutputBytes` accounting charges its complete compact JSON representation,
+including the field name, quotes, escaping, and UTF-8 label bytes. If `N` is
+the finalized serialized template length, `N` fits and `N - 1` truncates; the
+existing inter-template comma rule is unchanged. Tests derive `N` from the
+final object rather than preserving a pre-label size. Input-side
+`maxTemplateBytes` and ATTACHED request bounds do not change.
 
 #### V1 traversal and output accounting
 

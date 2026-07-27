@@ -45,6 +45,7 @@ type PromptTextBlock struct {
 	Index        uint32              `json:"index"`
 	Island       uint32              `json:"island"`
 	Level        uint8               `json:"level,omitempty"`
+	Label        *string             `json:"label,omitempty"`
 	Range        PromptTextRange     `json:"range"`
 	TextRange    *PromptTextRange    `json:"textRange,omitempty"`
 	MarkerRanges []PromptTextRange   `json:"markerRanges,omitempty"`
@@ -61,6 +62,7 @@ type PromptTextHeading struct {
 	Index     uint32
 	Island    uint32
 	Level     uint8
+	Label     string
 	Range     PromptTextRange
 	TextRange PromptTextRange
 }
@@ -68,12 +70,13 @@ type PromptTextHeading struct {
 // Heading returns the typed heading payload when the block discriminant
 // matches.
 func (b PromptTextBlock) Heading() (PromptTextHeading, bool) {
-	if b.Kind != PromptTextBlockHeading || b.TextRange == nil {
+	if b.Kind != PromptTextBlockHeading || b.TextRange == nil || b.Label == nil ||
+		*b.Label == "" || b.Level < 1 || b.Level > 6 {
 		return PromptTextHeading{}, false
 	}
 	return PromptTextHeading{
 		Index: b.Index, Island: b.Island, Level: b.Level,
-		Range: b.Range, TextRange: *b.TextRange,
+		Label: *b.Label, Range: b.Range, TextRange: *b.TextRange,
 	}, true
 }
 

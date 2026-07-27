@@ -24,15 +24,23 @@ func (s *Server) registerPromptText(
 	}
 	s.promptTextMu.Lock()
 	previousID := s.pendingPromptTexts[pending.key]
-	previousURI := s.promptTextByURI[uri]
 	s.pendingPromptTexts[pending.key] = pending
-	s.promptTextByURI[uri] = pending
+	requests := s.promptTextByURI[uri]
+	if requests == nil {
+		requests = make(map[*pendingPromptText]struct{})
+		s.promptTextByURI[uri] = requests
+	}
+	requests[pending] = struct{}{}
+	if previousID != nil {
+		previousRequests := s.promptTextByURI[previousID.uri]
+		delete(previousRequests, previousID)
+		if len(previousRequests) == 0 {
+			delete(s.promptTextByURI, previousID.uri)
+		}
+	}
 	s.promptTextMu.Unlock()
 	if previousID != nil {
 		previousID.cancel()
-	}
-	if previousURI != nil && previousURI != previousID {
-		previousURI.cancel()
 	}
 	return ctx, pending
 }
@@ -42,7 +50,9 @@ func (s *Server) finishPromptText(pending *pendingPromptText) {
 	if s.pendingPromptTexts[pending.key] == pending {
 		delete(s.pendingPromptTexts, pending.key)
 	}
-	if s.promptTextByURI[pending.uri] == pending {
+	requests := s.promptTextByURI[pending.uri]
+	delete(requests, pending)
+	if len(requests) == 0 {
 		delete(s.promptTextByURI, pending.uri)
 	}
 	s.promptTextMu.Unlock()
@@ -64,13 +74,23 @@ func (s *Server) cancelPromptTextRequest(raw json.RawMessage) {
 
 func (s *Server) cancelDocumentPromptText(uri protocol.DocumentURI) {
 	s.promptTextMu.Lock()
-	pending := s.promptTextByURI[uri]
-	if pending != nil {
-		delete(s.promptTextByURI, uri)
+	requests := s.promptTextByURI[uri]
+	delete(s.promptTextByURI, uri)
+	for pending := range requests {
+		if s.pendingPromptTexts[pending.key] == pending {
+			delete(s.pendingPromptTexts, pending.key)
+		}
 	}
 	s.promptTextMu.Unlock()
-	if pending != nil {
+	for pending := range requests {
 		pending.cancel()
+	}
+}
+
+func (s *Server) retireDocumentPromptText(uri protocol.DocumentURI) {
+	s.cancelDocumentPromptText(uri)
+	if s.promptText != nil {
+		s.promptText.Invalidate(uri)
 	}
 }
 
@@ -78,7 +98,9 @@ func (s *Server) closePromptTextRequests() {
 	s.promptTextMu.Lock()
 	pending := s.pendingPromptTexts
 	s.pendingPromptTexts = make(map[string]*pendingPromptText)
-	s.promptTextByURI = make(map[protocol.DocumentURI]*pendingPromptText)
+	s.promptTextByURI = make(
+		map[protocol.DocumentURI]map[*pendingPromptText]struct{},
+	)
 	s.promptTextMu.Unlock()
 	for _, request := range pending {
 		request.cancel()

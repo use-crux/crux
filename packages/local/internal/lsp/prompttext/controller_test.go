@@ -117,6 +117,16 @@ func TestControllerRejectsLocalSameNameWithoutSemanticSourceRef(t *testing.T) {
 		len(result.Decorations) != 0 {
 		t.Fatalf("name-only result = %#v, want exact clear without analysis", result)
 	}
+	symbols := controller.Symbols(context.Background(), Request{
+		URI: uri, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1,
+		Analyzer:    panicTransientSource{},
+		Views:       indexview.NewSavedProvider(store),
+	})
+	if symbols.Revision != document.Revision || symbols.Symbols == nil ||
+		len(symbols.Symbols) != 0 {
+		t.Fatalf("name-only symbols = %#v, want exact empty without analysis", symbols)
+	}
 }
 
 func intPointer(value int) *int { return &value }

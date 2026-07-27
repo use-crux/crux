@@ -14,6 +14,7 @@ func (s *Server) didOpen(raw json.RawMessage) {
 	if json.Unmarshal(raw, &params) != nil || params.TextDocument.URI == "" {
 		return
 	}
+	s.retireDocumentPromptText(params.TextDocument.URI)
 	s.traceDocumentBufferLimit(context.Background(), s.buffers.Open(params.TextDocument))
 	s.setDocumentOpen(params.TextDocument.URI, true)
 	if workspace := s.currentWorkspace(); workspace != nil {
@@ -27,7 +28,6 @@ func (s *Server) didChange(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
-	s.cancelDocumentPromptText(params.TextDocument.URI)
 	_, notice := s.buffers.ApplyChanges(
 		params.TextDocument.URI,
 		params.TextDocument.Version,
@@ -37,6 +37,7 @@ func (s *Server) didChange(raw json.RawMessage) {
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidChange(params.TextDocument.URI, params.TextDocument.Version, params.ContentChanges)
 	}
+	s.retireDocumentPromptText(params.TextDocument.URI)
 }
 
 func (s *Server) didSave(raw json.RawMessage) {
@@ -56,12 +57,12 @@ func (s *Server) didClose(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
-	s.cancelDocumentPromptText(params.TextDocument.URI)
 	s.buffers.Close(params.TextDocument.URI)
 	s.setDocumentOpen(params.TextDocument.URI, false)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidClose(params.TextDocument.URI)
 	}
+	s.retireDocumentPromptText(params.TextDocument.URI)
 }
 
 func (s *Server) setDocumentOpen(uri protocol.DocumentURI, open bool) {

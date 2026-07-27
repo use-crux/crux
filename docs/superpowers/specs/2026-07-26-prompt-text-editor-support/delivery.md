@@ -137,6 +137,20 @@ Focused tests cover:
 - identical TypeScript tokens and interpolation provider results with
   decorations enabled and disabled;
 - folding, symbols, links, navigation, and hover;
+- Rust-owned heading-label normalization across decoded text/entities/escapes,
+  code, links, image alt text, inline HTML, breaks, Unicode whitespace, and
+  empty-heading fallback;
+- the amended V1 golden, required Rust/Go heading-label fields and accessors,
+  OWN/ATTACHED parity, and finalized-template output-byte boundaries;
+- document links using Rust `textRange`, eager final targets, and
+  `resolveProvider: false`;
+- HTTP(S) host/userinfo/port/query/fragment policy plus rejection of opaque,
+  protocol-relative, email, file, command, script, data, and unknown targets;
+- exactly-once percent decoding, raw/encoded separator and control rejection,
+  local fragment/query behavior, literal and encoded dot segments, lexical
+  scope containment, and nonexistent targets without filesystem/network I/O;
+- stale/cancelled link suppression and one shared-analysis identity across
+  decorations, folding, symbols, and links;
 - preview golden parity, placeholders, fragments, and truncation;
 - diagnostic type inference, evidence schemas, actions, and stale edits;
 - ATTACHED and OWN end-to-end behavior;

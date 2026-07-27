@@ -3,6 +3,7 @@
 //! Oxc supplies tag-neutral literal projections. This module is the sole
 //! production Markdown classifier and returns only normalized protocol data.
 
+mod heading_label;
 mod limits;
 mod markdown;
 mod preview;

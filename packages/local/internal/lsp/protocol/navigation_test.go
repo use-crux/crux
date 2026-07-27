@@ -72,6 +72,18 @@ func TestNavigationResultsPinWireNames(t *testing.T) {
 			want:  `{"name":"writer","detail":"prompt","kind":12,"range":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}},"selectionRange":{"start":{"line":4,"character":2},"end":{"line":4,"character":2}}}`,
 		},
 		{
+			name: "nested heading symbol",
+			value: DocumentSymbol{
+				Name: "Root", Kind: SymbolKindString, Range: location.Range,
+				SelectionRange: location.Range,
+				Children: []DocumentSymbol{{
+					Name: "Child", Kind: SymbolKindString, Range: location.Range,
+					SelectionRange: location.Range,
+				}},
+			},
+			want: `{"name":"Root","kind":15,"range":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}},"selectionRange":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}},"children":[{"name":"Child","kind":15,"range":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}},"selectionRange":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}}}]}`,
+		},
+		{
 			name:  "symbol information",
 			value: SymbolInformation{Name: "writer", Kind: SymbolKindFunction, Location: location, ContainerName: "repo"},
 			want:  `{"name":"writer","kind":12,"location":{"uri":"file:///repo/src/writer.ts","range":{"start":{"line":4,"character":2},"end":{"line":4,"character":8}}},"containerName":"repo"}`,

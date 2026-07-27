@@ -76,7 +76,9 @@ func NewCoordinator(source Source) *Coordinator {
 }
 
 // Analyze coalesces equal requests and accepts a result only while its
-// document revision and OWN/ATTACHED source epoch remain current.
+// document revision and OWN/ATTACHED source epoch remain current. Cancelling
+// one caller releases only that waiter; shared compiler work is cancelled when
+// its last waiter leaves, a newer identity supersedes it, or Close is called.
 func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error) {
 	if c == nil || c.source == nil || query.Analyzer == nil {
 		return Analysis{}, ErrUnavailable
@@ -111,7 +113,7 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 		call := c.inflight
 		call.waiters++
 		c.mu.Unlock()
-		analysis, err := waitForAnalysis(ctx, call)
+		analysis, err := c.waitForAnalysis(ctx, call)
 		if errors.Is(err, context.Canceled) && ctx.Err() == nil {
 			return c.Analyze(ctx, query)
 		}
@@ -120,17 +122,30 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	if c.inflight != nil {
 		c.inflight.cancel()
 	}
-	queryContext, cancel := context.WithCancel(ctx)
-	call := &analysisCall{key: key, done: make(chan struct{}), cancel: cancel}
+	queryContext, cancel := context.WithCancel(context.Background())
+	call := &analysisCall{
+		key: key, done: make(chan struct{}), cancel: cancel, waiters: 1,
+	}
 	c.inflight = call
 	c.cached = nil
 	c.mu.Unlock()
 
-	result, err := query.Analyzer.PromptText(queryContext, readmodel.PromptTextRequest{
+	go c.runAnalysis(queryContext, call, query, document, fragments)
+	return c.waitForAnalysis(ctx, call)
+}
+
+func (c *Coordinator) runAnalysis(
+	ctx context.Context,
+	call *analysisCall,
+	query Query,
+	document Document,
+	fragments []indexprompttext.Fragment,
+) {
+	result, err := query.Analyzer.PromptText(ctx, readmodel.PromptTextRequest{
 		File: query.File, LanguageID: document.LanguageID,
 		Revision: document.Revision, Text: document.Text, Fragments: fragments,
 	})
-	cancel()
+	call.cancel()
 	analysis := Analysis{Revision: document.Revision, Result: result}
 	if err == nil && (result.File != query.File || result.Revision != document.Revision) {
 		err = ErrSuperseded
@@ -148,7 +163,7 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	} else {
 		c.inflight = nil
 		if err == nil {
-			c.cacheKey = key
+			c.cacheKey = call.key
 			c.cached = &analysis
 		}
 	}
@@ -156,16 +171,48 @@ func (c *Coordinator) Analyze(ctx context.Context, query Query) (Analysis, error
 	call.err = err
 	close(call.done)
 	c.mu.Unlock()
-	return analysis, err
 }
 
-func waitForAnalysis(ctx context.Context, call *analysisCall) (Analysis, error) {
+func (c *Coordinator) waitForAnalysis(
+	ctx context.Context,
+	call *analysisCall,
+) (Analysis, error) {
 	select {
 	case <-ctx.Done():
+		c.releaseWaiter(call)
 		return Analysis{}, ctx.Err()
 	case <-call.done:
 		return call.analysis, call.err
 	}
+}
+
+func (c *Coordinator) releaseWaiter(call *analysisCall) {
+	c.mu.Lock()
+	if call.waiters > 0 {
+		call.waiters--
+	}
+	if call.waiters == 0 && c.inflight == call {
+		call.cancel()
+	}
+	c.mu.Unlock()
+}
+
+// Invalidate retires cached and in-flight evidence for one document URI.
+// Other documents remain available to concurrent provider requests.
+func (c *Coordinator) Invalidate(uri protocol.DocumentURI) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.inflight != nil && c.inflight.key.uri == uri {
+		c.inflight.cancel()
+		c.inflight = nil
+	}
+	if c.cached != nil && c.cacheKey.uri == uri {
+		c.cached = nil
+		c.cacheKey = queryKey{}
+	}
+	c.mu.Unlock()
 }
 
 // Close cancels the current query and drops the cached transient result.

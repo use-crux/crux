@@ -21,11 +21,12 @@ func TestControllerAcceptsAliasedCanonicalSemanticRefWithoutReadingTagName(t *te
 	sourceRef.Metadata["promptText"].(map[string]any)["tag"] = "text"
 	controller := NewController(&fixedDocumentSource{document: document})
 
-	result := controller.Decorations(context.Background(), Request{
+	request := Request{
 		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
 		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
 		Views: semanticIdentityProvider(document, file, sourceRef),
-	})
+	}
+	result := controller.Decorations(context.Background(), request)
 
 	if len(result.Decorations) != 1 ||
 		result.Decorations[0] != (Decoration{
@@ -37,6 +38,10 @@ func TestControllerAcceptsAliasedCanonicalSemanticRefWithoutReadingTagName(t *te
 		}) {
 		t.Fatalf("aliased canonical decorations = %#v, want one heading", result)
 	}
+	symbols := controller.Symbols(context.Background(), request)
+	if len(symbols.Symbols) != 1 || symbols.Symbols[0].Name != "Alias" {
+		t.Fatalf("aliased canonical symbols = %#v, want Rust-labelled heading", symbols)
+	}
 }
 
 func TestControllerMatchesSemanticSourceColumnsAsUTF16(t *testing.T) {
@@ -45,11 +50,12 @@ func TestControllerMatchesSemanticSourceColumnsAsUTF16(t *testing.T) {
 	document, file, sourceRef, analysis := unicodeIdentityFixture()
 	controller := NewController(&fixedDocumentSource{document: document})
 
-	result := controller.Decorations(context.Background(), Request{
+	request := Request{
 		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
 		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
 		Views: semanticIdentityProvider(document, file, sourceRef),
-	})
+	}
+	result := controller.Decorations(context.Background(), request)
 
 	if len(result.Decorations) != 1 ||
 		result.Decorations[0] != (Decoration{
@@ -61,6 +67,14 @@ func TestControllerMatchesSemanticSourceColumnsAsUTF16(t *testing.T) {
 		}) {
 		t.Fatalf("Unicode-prefixed canonical decorations = %#v, want one heading", result)
 	}
+	symbols := controller.Symbols(context.Background(), request)
+	if len(symbols.Symbols) != 1 ||
+		symbols.Symbols[0].SelectionRange != (protocol.Range{
+			Start: protocol.Position{Line: 0, Character: 40},
+			End:   protocol.Position{Line: 0, Character: 45},
+		}) {
+		t.Fatalf("Unicode-prefixed symbols = %#v, want exact UTF-16 selection", symbols)
+	}
 }
 
 func TestControllerRejectsCandidateWhoseWholeRangeDiffersFromSemanticRef(t *testing.T) {
@@ -70,15 +84,40 @@ func TestControllerRejectsCandidateWhoseWholeRangeDiffersFromSemanticRef(t *test
 	analysis.Templates[0].Range.End.Character--
 	controller := NewController(&fixedDocumentSource{document: document})
 
-	result := controller.Decorations(context.Background(), Request{
+	request := Request{
 		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
 		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
 		Views: semanticIdentityProvider(document, file, sourceRef),
-	})
+	}
+	result := controller.Decorations(context.Background(), request)
 
 	if result.Revision != document.Revision || result.Decorations == nil ||
 		len(result.Decorations) != 0 {
 		t.Fatalf("off-by-one candidate result = %#v, want exact clear", result)
+	}
+	symbols := controller.Symbols(context.Background(), request)
+	if symbols.Symbols == nil || len(symbols.Symbols) != 0 {
+		t.Fatalf("off-by-one candidate symbols = %#v, want exact empty", symbols)
+	}
+}
+
+func TestControllerSymbolsRequireCurrentSemanticView(t *testing.T) {
+	t.Parallel()
+
+	document, file, sourceRef, _ := aliasedIdentityFixture()
+	savedDocument := document
+	savedDocument.Revision.SourceHash = "different-saved-source"
+	controller := NewController(&fixedDocumentSource{document: document})
+
+	result := controller.Symbols(context.Background(), Request{
+		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1, Analyzer: panicTransientSource{},
+		Views: semanticIdentityProvider(savedDocument, file, sourceRef),
+	})
+
+	if result.Revision != document.Revision || result.Symbols == nil ||
+		len(result.Symbols) != 0 {
+		t.Fatalf("different-buffer symbols = %#v, want exact empty without analysis", result)
 	}
 }
 
@@ -144,7 +183,8 @@ func aliasedIdentityFixture() (
 				Kind: staticprotocol.PromptTextStatusComplete,
 			},
 			Blocks: []staticprotocol.PromptTextBlock{{
-				Kind:  staticprotocol.PromptTextBlockHeading,
+				Kind: staticprotocol.PromptTextBlockHeading, Level: 1,
+				Label: promptTextLabel("Alias"),
 				Range: headingRange, TextRange: &textRange,
 			}},
 		}},

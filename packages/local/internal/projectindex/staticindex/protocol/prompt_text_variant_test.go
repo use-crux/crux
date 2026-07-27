@@ -10,18 +10,20 @@ func TestPromptTextVariantsMarshalRustRequiredZeroAndNullFields(t *testing.T) {
 	t.Parallel()
 
 	sourceRange := PromptTextRange{}
+	headingLabel := "Heading 1"
 	cases := []struct {
 		name  string
 		value any
 		want  string
 	}{
 		{
-			name: "heading zero level",
+			name: "heading required fields",
 			value: PromptTextBlock{
-				Kind: PromptTextBlockHeading, TextRange: &sourceRange,
+				Kind: PromptTextBlockHeading, Level: 1, Label: &headingLabel,
+				TextRange: &sourceRange,
 			},
 			want: `{
-				"kind":"heading","index":0,"island":0,"level":0,
+				"kind":"heading","index":0,"island":0,"level":1,"label":"Heading 1",
 				"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},
 				"textRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}
 			}`,
@@ -97,6 +99,42 @@ func TestPromptTextVariantsMarshalRustRequiredZeroAndNullFields(t *testing.T) {
 			t.Parallel()
 			assertPromptTextJSONEqual(t, testCase.value, testCase.want)
 		})
+	}
+}
+
+func TestPromptTextHeadingMarshalRejectsInvalidRequiredFields(t *testing.T) {
+	t.Parallel()
+
+	sourceRange := PromptTextRange{}
+	label := "Heading"
+	empty := ""
+	for _, block := range []PromptTextBlock{
+		{Kind: PromptTextBlockHeading, Level: 1, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 1, Label: &empty, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 0, Label: &label, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 7, Label: &label, TextRange: &sourceRange},
+	} {
+		if _, err := json.Marshal(block); err == nil {
+			t.Fatalf("json.Marshal(%#v) succeeded, want invalid heading error", block)
+		}
+	}
+}
+
+func TestPromptTextHeadingAccessorRejectsInvalidRequiredFields(t *testing.T) {
+	t.Parallel()
+
+	sourceRange := PromptTextRange{}
+	label := "Heading"
+	empty := ""
+	for _, block := range []PromptTextBlock{
+		{Kind: PromptTextBlockHeading, Level: 1, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 1, Label: &empty, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 0, Label: &label, TextRange: &sourceRange},
+		{Kind: PromptTextBlockHeading, Level: 7, Label: &label, TextRange: &sourceRange},
+	} {
+		if heading, ok := block.Heading(); ok {
+			t.Fatalf("Heading(%#v) = %#v, true; want invalid", block, heading)
+		}
 	}
 }
 
