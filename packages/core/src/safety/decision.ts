@@ -7,6 +7,7 @@ import type {
   SafetyTargetId,
 } from './boundary'
 import type { ModelInputOrigin } from './input-origin'
+import type { ToolDefinitionOrigin } from './input-tool-boundary'
 
 /** Safe, structured finding metadata emitted by safety policies. */
 export interface SafetyFinding {
@@ -50,7 +51,7 @@ export interface SafetyDecision {
   readonly kind: 'guardrail' | 'constraint' | 'toolPolicy'
   readonly boundary: SafetyTargetId
   /** Privacy-safe semantic provenance for model-ingress decisions. */
-  readonly origin?: ModelInputOrigin
+  readonly origin?: ModelInputOrigin | ToolDefinitionOrigin
   readonly stage?: 'stream.segment' | 'stream.final'
   readonly mode: 'enforce' | 'report'
   readonly action: SafetyDecisionAction

@@ -8,30 +8,35 @@
  * @module
  */
 
-import { observe } from '../observability'
-import type { JsonObject } from '../storage'
-import type { SemanticCacheMode } from '../prompt/prompt-types'
+import { observe } from "../observability";
+import type { JsonObject } from "../storage";
+import type { SemanticCacheMode } from "../prompt/prompt-types";
 
 /** Emit a `cache.report` artifact for a lookup hit or write and link it to the span. */
 export function emitSemanticCacheArtifact(
-  spanId: ReturnType<typeof observe.openSpan>['spanId'],
-  event: 'lookup-hit' | 'write',
+  spanId: ReturnType<typeof observe.openSpan>["spanId"],
+  event: "lookup-hit" | "lookup-reject" | "write",
   preview: JsonObject,
 ): void {
   const artifactId = observe.artifact({
-    kind: 'cache.report',
-    contentType: 'application/json',
-    encoding: 'json',
+    kind: "cache.report",
+    contentType: "application/json",
+    encoding: "json",
     preview: {
-      kind: 'cache.report',
-      cacheKind: 'semantic',
-      status: event === 'lookup-hit' ? 'hit' : 'write',
+      kind: "cache.report",
+      cacheKind: "semantic",
+      status:
+        event === "lookup-hit"
+          ? "hit"
+          : event === "lookup-reject"
+            ? "rejected"
+            : "write",
       event,
       ...preview,
     },
     attributes: {
-      primitive: 'cache.lookup',
-      cacheKind: 'semantic',
+      primitive: "cache.lookup",
+      cacheKind: "semantic",
       event,
       cacheId: preview.cacheId,
       promptId: preview.promptId,
@@ -40,33 +45,70 @@ export function emitSemanticCacheArtifact(
       version: preview.version,
       queryHash: preview.queryHash,
     },
-  })
-  if (!artifactId) return
+  });
+  if (!artifactId) return;
   observe.edge({
-    edgeType: 'produced',
-    from: { kind: 'span', id: spanId },
-    to: { kind: 'artifact', id: artifactId },
-    attributes: { primitive: 'cache.lookup', cacheKind: 'semantic', event },
-  })
+    edgeType: "produced",
+    from: { kind: "span", id: spanId },
+    to: { kind: "artifact", id: artifactId },
+    attributes: { primitive: "cache.lookup", cacheKind: "semantic", event },
+  });
+}
+
+/** Emit content-free evidence that current policy rejected a stored candidate. */
+export function emitSemanticCacheRejection(args: {
+  spanId: ReturnType<typeof observe.openSpan>["spanId"];
+  cacheId: string;
+  promptId: string | undefined;
+  operation: "generate" | "stream";
+  scopeHash: string;
+  version: string;
+  queryHash: string;
+  category: "schema" | "guardrail" | "constraint";
+}): void {
+  observe.event({
+    name: "semantic-cache.reject",
+    attributes: {
+      cacheKind: "semantic",
+      cacheOperation: "lookup",
+      cacheId: args.cacheId,
+      promptId: args.promptId,
+      operation: args.operation,
+      scopeHash: args.scopeHash,
+      version: args.version,
+      queryHash: args.queryHash,
+      rejectionCategory: args.category,
+    },
+  });
+  emitSemanticCacheArtifact(args.spanId, "lookup-reject", {
+    cacheId: args.cacheId,
+    promptId: args.promptId,
+    operation: args.operation,
+    scopeHash: args.scopeHash,
+    version: args.version,
+    queryHash: args.queryHash,
+    hit: false,
+    rejectionCategory: args.category,
+  });
 }
 
 /** Open and immediately close a `semantic-cache.skip` span explaining the skip. */
 export function emitSemanticCacheSkipSpan(args: {
-  cacheId: string
-  namespace: string
-  promptId: string | undefined
-  operation: 'generate' | 'stream'
-  scopeHash: string
-  version: string
-  mode: SemanticCacheMode
-  reason: string
+  cacheId: string;
+  namespace: string;
+  promptId: string | undefined;
+  operation: "generate" | "stream";
+  scopeHash: string;
+  version: string;
+  mode: SemanticCacheMode;
+  reason: string;
 }): void {
   const span = observe.openSpan({
-    name: 'semantic-cache.skip',
-    primitive: 'cache.lookup',
+    name: "semantic-cache.skip",
+    primitive: "cache.lookup",
     attributes: {
-      cacheKind: 'semantic',
-      cacheOperation: 'skip',
+      cacheKind: "semantic",
+      cacheOperation: "skip",
       cacheId: args.cacheId,
       namespace: args.namespace,
       promptId: args.promptId,
@@ -76,24 +118,24 @@ export function emitSemanticCacheSkipSpan(args: {
       mode: args.mode,
       reason: args.reason,
     },
-  })
+  });
   span.withContext(() => {
     observe.event({
-      name: 'semantic-cache.skip',
+      name: "semantic-cache.skip",
       attributes: {
-        cacheKind: 'semantic',
-        cacheOperation: 'skip',
+        cacheKind: "semantic",
+        cacheOperation: "skip",
         cacheId: args.cacheId,
         promptId: args.promptId,
         operation: args.operation,
         reason: args.reason,
       },
-    })
-  })
+    });
+  });
   span.end({
     attributes: {
-      cacheKind: 'semantic',
-      cacheOperation: 'skip',
+      cacheKind: "semantic",
+      cacheOperation: "skip",
       cacheId: args.cacheId,
       promptId: args.promptId,
       operation: args.operation,
@@ -102,5 +144,5 @@ export function emitSemanticCacheSkipSpan(args: {
       skipped: true,
       reason: args.reason,
     },
-  })
+  });
 }

@@ -50,6 +50,7 @@ describe('Safety decisions in TurnDecisionReport', () => {
     const labels = [
       'model.input.text',
       'model.input.media',
+      'model.input.tools',
       'model.instructions',
       'future.model.input',
     ].map((boundary) =>
@@ -66,6 +67,7 @@ describe('Safety decisions in TurnDecisionReport', () => {
     expect(labels).toEqual([
       'Model input · Text',
       'Model input · Media',
+      'Model input · Tools',
       'Model instructions',
       'future.model.input',
     ])

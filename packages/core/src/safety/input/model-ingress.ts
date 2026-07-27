@@ -2,7 +2,11 @@ import { latestRewritePolicyId } from '../audit'
 import { SafetyResultError } from '../errors'
 import { createGuardrailPipeline } from '../guardrail/pipeline'
 import type { GuardrailAudit, GuardrailContext } from '../guardrail/types'
-import type { ModelInputOrigin } from '../input-origin'
+import type {
+  ModelInputOrigin,
+  ModelInputOriginFor,
+  TextInputSource,
+} from '../input-origin'
 import { visitMedia } from '../media/visit'
 import type { GuardrailBinding } from '../registry'
 import type {
@@ -24,7 +28,7 @@ export type ToolModelInputOrigin = Extract<ModelInputOrigin, { readonly source: 
 export interface CanonicalTextIngress {
   readonly kind: 'text'
   readonly value: string
-  readonly origin: ModelInputOrigin
+  readonly origin: ModelInputOriginFor<TextInputSource>
 }
 
 /** @internal Guarded canonical text ready for model delivery. */

@@ -24,7 +24,10 @@ import { constraint } from '../../src/safety/constraint'
 import { ValidationExhaustedError } from '../../src/generation/validation-retry'
 import { ConstraintViolationError } from '../../src/safety/constraint/errors'
 import { resetHooks } from '../../src/runtime/runtime'
-import { resetObservabilityRuntime, subscribeObservability } from '../../src/observability'
+import {
+  resetObservabilityRuntime,
+  subscribeObservability,
+} from '../../src/observability'
 
 afterEach(() => {
   resetHooks()
@@ -70,7 +73,10 @@ function scriptedStreamDialect(scripts: readonly (readonly string[])[]) {
     call: async () => {
       throw new Error('not used')
     },
-    stream: async (_client, args): Promise<StreamHandle<AsyncIterable<{ text: string }>>> => {
+    stream: async (
+      _client,
+      args,
+    ): Promise<StreamHandle<AsyncIterable<{ text: string }>>> => {
       calls.push([...args.messages])
       const deltas = queue.shift() ?? ['']
       return {
@@ -109,7 +115,10 @@ async function drainStream(result: {
 const titleConstraint = constraint({
   id: 'title-nonempty',
   on: boundary.output.object<{ title: string; count: number }>().path('title'),
-  run: (title: string) => (title.length > 0 ? { pass: true } : { pass: false, feedback: 'title must not be empty' }),
+  run: (title: string) =>
+    title.length > 0
+      ? { pass: true }
+      : { pass: false, feedback: 'title must not be empty' },
 })
 
 // A root (whole-object) assert holds every byte until completion, so a rejected
@@ -118,13 +127,17 @@ const countConstraint = constraint({
   id: 'count-positive',
   on: boundary.output.object<{ title: string; count: number }>(),
   run: (obj: { title: string; count: number }) =>
-    obj.count > 1 ? { pass: true } : { pass: false, feedback: 'count must exceed 1' },
+    obj.count > 1
+      ? { pass: true }
+      : { pass: false, feedback: 'count must exceed 1' },
 })
 
 describe('native structured stream coordinator', () => {
   // ── RED 1: no commit gate → byte-for-byte progressive path, one provider call.
   it('streams byte-for-byte with no commit gate (single provider call)', async () => {
-    const { dialect, calls } = scriptedStreamDialect([['{"title":"hi",', '"count":2}']])
+    const { dialect, calls } = scriptedStreamDialect([
+      ['{"title":"hi",', '"count":2}'],
+    ])
     const result = await createAdapterExecution(dialect).stream({
       prompt: structuredPrompt(),
       model: 'm',
@@ -141,6 +154,7 @@ describe('native structured stream coordinator', () => {
   // ── A scalar-path assert rejects attempt 0 and restreams; only the accepted
   // attempt's bytes reach the consumer, and the retry carries corrective feedback.
   it('retries a rejected assert attempt and publishes only the accepted stream', async () => {
+    const feedbackOrigins: unknown[] = []
     const { dialect, calls } = scriptedStreamDialect([
       ['{"title":"a",', '"count":1}'], // fails count-positive at completion
       ['{"title":"a","count":2}'], // passes
@@ -151,6 +165,22 @@ describe('native structured stream coordinator', () => {
       modelInfo: { provider: 'mock-stream', modelId: 'm' },
       input: { message: 'go' },
       constraints: [countConstraint],
+      guardrails: [
+        guardrail({
+          id: 'rewrite-native-stream-feedback',
+          on: boundary.input.text({ from: 'feedback' }),
+          run: (value, context) => {
+            feedbackOrigins.push(context.origin)
+            return {
+              action: 'rewrite',
+              value: value
+                .replace('"count":1', '"count":0')
+                .replace('count must exceed 1', 'count must be positive'),
+              rewrite: { kind: 'redact' },
+            }
+          },
+        }),
+      ],
     })
     const text = await drainStream(result)
     const meta = await result.completion()
@@ -159,9 +189,45 @@ describe('native structured stream coordinator', () => {
     expect(meta?.object).toEqual({ title: 'a', count: 2 })
     expect(calls).toHaveLength(2)
     // The retry conversation carried the full rejected answer + corrective feedback.
-    const retryContents = calls[1]!.map((message) => String(message.content)).join('\n')
-    expect(retryContents).toContain('{"title":"a","count":1}')
-    expect(retryContents).toContain('count must exceed 1')
+    const retryContents = calls[1]!
+      .map((message) => String(message.content))
+      .join('\n')
+    expect(retryContents).toContain('{"title":"a","count":0}')
+    expect(retryContents).toContain('count must be positive')
+    expect(retryContents).not.toContain('{"title":"a","count":1}')
+    expect(feedbackOrigins).toEqual([
+      { source: 'feedback', kind: 'rejected-output', attempt: 1 },
+      { source: 'feedback', kind: 'constraint-feedback', attempt: 1 },
+    ])
+  })
+
+  it('starts no next stream attempt when corrective writeback blocks', async () => {
+    const { dialect, calls } = scriptedStreamDialect([
+      ['{"title":"a","count":1}'],
+      ['{"title":"unreachable","count":2}'],
+    ])
+    const result = await createAdapterExecution(dialect).stream({
+      prompt: structuredPrompt(),
+      model: 'm',
+      modelInfo: { provider: 'mock-stream', modelId: 'm' },
+      input: { message: 'go' },
+      constraints: [countConstraint],
+      guardrails: [
+        guardrail({
+          id: 'block-native-stream-feedback',
+          on: boundary.input.text({ from: 'feedback' }),
+          run: () => ({
+            action: 'block',
+            reason: 'unsafe retry writeback',
+          }),
+        }),
+      ],
+    })
+
+    await expect(drainStream(result)).rejects.toMatchObject({
+      name: 'GuardrailBlockedError',
+    })
+    expect(calls).toHaveLength(1)
   })
 
   // ── A scalar-path assert rejects EARLY (as soon as the bad value completes),
@@ -183,7 +249,9 @@ describe('native structured stream coordinator', () => {
     expect(text).toBe('{"title":"ok","count":2}')
     expect(meta?.object).toEqual({ title: 'ok', count: 2 })
     expect(calls).toHaveLength(2)
-    expect(calls[1]!.map((m) => String(m.content)).join('\n')).toContain('title must not be empty')
+    expect(calls[1]!.map((m) => String(m.content)).join('\n')).toContain(
+      'title must not be empty',
+    )
   })
 
   // ── A pre-commit rejection leaks zero consumer bytes even when the failing
@@ -214,9 +282,15 @@ describe('native structured stream coordinator', () => {
   // re-evaluated at completion (a `constraint.judge()` would run exactly once).
   it('does not re-run an accepted stream assert at completion (runs once)', async () => {
     const run = vi.fn((obj: { title: string; count: number }) =>
-      obj.count > 0 ? { pass: true } : { pass: false, feedback: 'count must be positive' },
+      obj.count > 0
+        ? { pass: true }
+        : { pass: false, feedback: 'count must be positive' },
     )
-    const once = constraint({ id: 'count-once', on: boundary.output.object<{ title: string; count: number }>(), run })
+    const once = constraint({
+      id: 'count-once',
+      on: boundary.output.object<{ title: string; count: number }>(),
+      run,
+    })
     const { dialect } = scriptedStreamDialect([['{"title":"a","count":2}']])
     const result = await createAdapterExecution(dialect).stream({
       prompt: structuredPrompt(),
@@ -259,7 +333,9 @@ describe('native structured stream validation-retry gate', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
     expect(onRetry).toHaveBeenCalledWith(1, expect.anything())
     // The retry conversation carried validation feedback.
-    expect(calls[1]!.map((m) => String(m.content)).join('\n')).toContain('Validation failed')
+    expect(calls[1]!.map((m) => String(m.content)).join('\n')).toContain(
+      'Validation failed',
+    )
   })
 
   // Validation exhaustion → ValidationExhaustedError with the retry-count semantics.
@@ -291,8 +367,11 @@ describe('native structured stream validation-retry gate', () => {
     const seen: string[] = []
     const titleAssert = constraint({
       id: 'title-nonempty',
-      on: boundary.output.object<{ title: string; count: number }>().path('title'),
-      run: (title: string) => (title.length > 0 ? { pass: true } : { pass: false, feedback: 'empty' }),
+      on: boundary.output
+        .object<{ title: string; count: number }>()
+        .path('title'),
+      run: (title: string) =>
+        title.length > 0 ? { pass: true } : { pass: false, feedback: 'empty' },
     })
     const { dialect } = scriptedStreamDialect([
       ['{"title":"a","count":"bad"}'], // title assert passes; count invalid → validation fails
@@ -323,8 +402,11 @@ describe('native structured stream validation-retry gate', () => {
   it('an assert failure (schema-valid value) throws ConstraintViolationError', async () => {
     const countAssert = constraint({
       id: 'count-positive',
-      on: boundary.output.object<{ title: string; count: number }>().path('count'),
-      run: (count: number) => (count > 0 ? { pass: true } : { pass: false, feedback: 'positive' }),
+      on: boundary.output
+        .object<{ title: string; count: number }>()
+        .path('count'),
+      run: (count: number) =>
+        count > 0 ? { pass: true } : { pass: false, feedback: 'positive' },
     })
     // Schema-valid numbers that all fail the assert (count <= 0); exhaust the assert.
     const { dialect } = scriptedStreamDialect([
@@ -407,16 +489,24 @@ describe('adapter release-gate parity', () => {
   it('proves raw bypasses Safety rewrites that rawStream applies', async () => {
     const redactor = guardrail({
       id: 'redact-secret',
-      on: boundary.output.object<{ title: string; count: number }>().path('title'),
+      on: boundary.output
+        .object<{ title: string; count: number }>()
+        .path('title'),
       run: (title: string) =>
         title === 'secret'
-          ? { action: 'rewrite' as const, value: 'REDACTED', rewrite: { kind: 'redact' as const } }
+          ? {
+              action: 'rewrite' as const,
+              value: 'REDACTED',
+              rewrite: { kind: 'redact' as const },
+            }
           : { action: 'allow' as const },
     })
     const wire = '{"title":"secret","count":1}'
 
     // The gated surface applies the rewrite.
-    const gated = await createAdapterExecution(scriptedStreamDialect([[wire]]).dialect).stream({
+    const gated = await createAdapterExecution(
+      scriptedStreamDialect([[wire]]).dialect,
+    ).stream({
       prompt: structuredPrompt(),
       model: 'm',
       modelInfo: { provider: 'mock-stream', modelId: 'm' },
@@ -426,7 +516,9 @@ describe('adapter release-gate parity', () => {
     expect(await drainStream(gated)).toContain('REDACTED')
 
     // `raw` is the provider stream: draining it directly bypasses that rewrite.
-    const unsafe = await createAdapterExecution(scriptedStreamDialect([[wire]]).dialect).stream({
+    const unsafe = await createAdapterExecution(
+      scriptedStreamDialect([[wire]]).dialect,
+    ).stream({
       prompt: structuredPrompt(),
       model: 'm',
       modelInfo: { provider: 'mock-stream', modelId: 'm' },
@@ -465,9 +557,16 @@ describe('native structured stream attempt spans', () => {
   // ── RED 6: one logical run id, one `generation.stream`, and a distinct
   // `generation.stream.attempt` child per physical provider call.
   it('emits one attempt span per provider call under a single logical stream', async () => {
-    const starts: Array<{ primitive?: string; runId?: string; spanId?: string; attributes?: Record<string, unknown> }> =
-      []
-    const ends: Array<{ spanId?: string; attributes?: Record<string, unknown> }> = []
+    const starts: Array<{
+      primitive?: string
+      runId?: string
+      spanId?: string
+      attributes?: Record<string, unknown>
+    }> = []
+    const ends: Array<{
+      spanId?: string
+      attributes?: Record<string, unknown>
+    }> = []
     subscribeObservability(['span:start'], (record) => starts.push(record))
     subscribeObservability(['span:end'], (record) => ends.push(record))
 
@@ -491,30 +590,50 @@ describe('native structured stream attempt spans', () => {
     await drainStream(result)
     await result.completion()
 
-    const streamSpans = starts.filter((r) => r.primitive === 'generation.stream')
-    const attemptSpans = starts.filter((r) => r.primitive === 'generation.stream.attempt')
+    const streamSpans = starts.filter(
+      (r) => r.primitive === 'generation.stream',
+    )
+    const attemptSpans = starts.filter(
+      (r) => r.primitive === 'generation.stream.attempt',
+    )
     // Exactly one logical stream span; one attempt span per provider call.
     expect(streamSpans).toHaveLength(1)
     expect(attemptSpans).toHaveLength(2)
     // Attempt spans share the logical run id.
-    expect(attemptSpans.every((s) => s.runId === streamSpans[0]?.runId)).toBe(true)
+    expect(attemptSpans.every((s) => s.runId === streamSpans[0]?.runId)).toBe(
+      true,
+    )
     // Causes are truthful: initial, then a constraint retry.
-    expect(attemptSpans.map((s) => s.attributes?.cause)).toEqual(['initial', 'constraint-retry'])
+    expect(attemptSpans.map((s) => s.attributes?.cause)).toEqual([
+      'initial',
+      'constraint-retry',
+    ])
     expect(attemptSpans.map((s) => s.attributes?.attemptIndex)).toEqual([0, 1])
     // Outcomes: the rejected attempt is `discarded` (policy), not a provider error.
     const attemptSpanIds = new Set(attemptSpans.map((s) => s.spanId))
     const attemptEnds = ends.filter((r) => attemptSpanIds.has(r.spanId))
-    expect(attemptEnds.map((s) => s.attributes?.outcome)).toEqual(['discarded', 'accepted'])
-    expect(attemptEnds[0]?.attributes?.failedPolicies).toEqual(['count-positive'])
+    expect(attemptEnds.map((s) => s.attributes?.outcome)).toEqual([
+      'discarded',
+      'accepted',
+    ])
+    expect(attemptEnds[0]?.attributes?.failedPolicies).toEqual([
+      'count-positive',
+    ])
   })
 
   it('emits an attempt span for an ordinary single-attempt stream', async () => {
-    const starts: Array<{ primitive?: string; attributes?: Record<string, unknown> }> = []
+    const starts: Array<{
+      primitive?: string
+      attributes?: Record<string, unknown>
+    }> = []
     subscribeObservability(['span:start'], (record) => starts.push(record))
     const titleAssert = constraint({
       id: 'title-nonempty',
-      on: boundary.output.object<{ title: string; count: number }>().path('title'),
-      run: (title: string) => (title.length > 0 ? { pass: true } : { pass: false, feedback: 'empty' }),
+      on: boundary.output
+        .object<{ title: string; count: number }>()
+        .path('title'),
+      run: (title: string) =>
+        title.length > 0 ? { pass: true } : { pass: false, feedback: 'empty' },
     })
     const { dialect } = scriptedStreamDialect([['{"title":"a","count":1}']])
     const result = await createAdapterExecution(dialect).stream({
@@ -526,7 +645,9 @@ describe('native structured stream attempt spans', () => {
     })
     await drainStream(result)
     await result.completion()
-    const attempts = starts.filter((r) => r.primitive === 'generation.stream.attempt')
+    const attempts = starts.filter(
+      (r) => r.primitive === 'generation.stream.attempt',
+    )
     expect(attempts).toHaveLength(1)
     expect(attempts[0]?.attributes?.cause).toBe('initial')
   })
@@ -536,8 +657,15 @@ describe('native structured stream attempt spans', () => {
   // withheld and re-streamed, and provably nothing of the withheld candidate itself.
   it('renders a buffering explanation with no held content (devtools fixture)', async () => {
     const SECRET = 'withheld-draft-title'
-    const starts: Array<{ primitive?: string; spanId?: string; attributes?: Record<string, unknown> }> = []
-    const ends: Array<{ spanId?: string; attributes?: Record<string, unknown> }> = []
+    const starts: Array<{
+      primitive?: string
+      spanId?: string
+      attributes?: Record<string, unknown>
+    }> = []
+    const ends: Array<{
+      spanId?: string
+      attributes?: Record<string, unknown>
+    }> = []
     subscribeObservability(['span:start'], (record) => starts.push(record))
     subscribeObservability(['span:end'], (record) => ends.push(record))
 
@@ -546,7 +674,9 @@ describe('native structured stream attempt spans', () => {
       on: boundary.output.object<{ title: string; count: number }>(),
       // Feedback is authored instruction prose only — no model output interpolated.
       run: (obj: { title: string; count: number }) =>
-        obj.count > 0 ? { pass: true } : { pass: false, feedback: 'count must be positive' },
+        obj.count > 0
+          ? { pass: true }
+          : { pass: false, feedback: 'count must be positive' },
     })
     const { dialect } = scriptedStreamDialect([
       [`{"title":"${SECRET}","count":-1}`], // rejected → discarded, never published
@@ -562,17 +692,33 @@ describe('native structured stream attempt spans', () => {
     await drainStream(result)
     await result.completion()
 
-    const attemptStarts = starts.filter((r) => r.primitive === 'generation.stream.attempt')
+    const attemptStarts = starts.filter(
+      (r) => r.primitive === 'generation.stream.attempt',
+    )
     const attemptSpanIds = new Set(attemptStarts.map((s) => s.spanId))
     const timeline = attemptStarts.map((start, index) => ({
       ...(start.attributes as Record<string, unknown>),
-      ...(ends.find((e) => e.spanId === start.spanId)?.attributes as Record<string, unknown>),
+      ...(ends.find((e) => e.spanId === start.spanId)?.attributes as Record<
+        string,
+        unknown
+      >),
       order: index,
     }))
 
     expect(timeline).toEqual([
-      { order: 0, attemptIndex: 0, cause: 'initial', outcome: 'discarded', failedPolicies: ['count-positive'] },
-      { order: 1, attemptIndex: 1, cause: 'constraint-retry', outcome: 'accepted' },
+      {
+        order: 0,
+        attemptIndex: 0,
+        cause: 'initial',
+        outcome: 'discarded',
+        failedPolicies: ['count-positive'],
+      },
+      {
+        order: 1,
+        attemptIndex: 1,
+        cause: 'constraint-retry',
+        outcome: 'accepted',
+      },
     ])
     // The rendered timeline never carries the discarded candidate.
     expect(JSON.stringify(timeline)).not.toContain(SECRET)
@@ -593,7 +739,9 @@ describe('native structured stream attempt spans', () => {
       id: 'count-positive',
       on: boundary.output.object<{ title: string; count: number }>(),
       run: (obj: { title: string; count: number }) =>
-        obj.count > 0 ? { pass: true } : { pass: false, feedback: 'count must be positive' },
+        obj.count > 0
+          ? { pass: true }
+          : { pass: false, feedback: 'count must be positive' },
     })
     const { dialect } = scriptedStreamDialect([
       [`{"title":"${SECRET}","count":-1}`], // discarded: never published
@@ -625,7 +773,9 @@ describe('native structured stream attempt spans', () => {
   it('still records token text on an ordinary ungated stream', async () => {
     const records: unknown[] = []
     subscribeObservability((record) => records.push(record))
-    const { dialect } = scriptedStreamDialect([['{"title":"visible","count":1}']])
+    const { dialect } = scriptedStreamDialect([
+      ['{"title":"visible","count":1}'],
+    ])
     const result = await createAdapterExecution(dialect).stream({
       prompt: structuredPrompt(),
       model: 'm',
@@ -639,7 +789,9 @@ describe('native structured stream attempt spans', () => {
       (r) => (r as { name?: string }).name === 'token.chunk',
     ) as Array<{ attributes?: Record<string, unknown> }>
     expect(tokenChunks.length).toBeGreaterThan(0)
-    expect(tokenChunks.map((c) => c.attributes?.text).join('')).toContain('visible')
+    expect(tokenChunks.map((c) => c.attributes?.text).join('')).toContain(
+      'visible',
+    )
   })
 })
 
@@ -664,9 +816,15 @@ async function drainForError(result: {
 describe('native text-boundary assert parity', () => {
   it('retries a rejected text assert instead of failing closed on the first attempt', async () => {
     const run = vi.fn((text: string) =>
-      text.includes('[1]') ? { pass: true as const } : { pass: false as const, feedback: 'Cite a source.' },
+      text.includes('[1]')
+        ? { pass: true as const }
+        : { pass: false as const, feedback: 'Cite a source.' },
     )
-    const cite = constraint({ id: 'cite-sources', on: boundary.output.text(), run })
+    const cite = constraint({
+      id: 'cite-sources',
+      on: boundary.output.text(),
+      run,
+    })
     const { dialect, calls } = scriptedStreamDialect([
       ['no citation here'], // rejected → discarded, never published
       ['now with [1]'], // accepted
@@ -697,9 +855,15 @@ describe('native text-boundary assert parity', () => {
       on: boundary.output.text(),
       maxRetries: 1,
       run: (text: string) =>
-        text.includes('[1]') ? { pass: true as const } : { pass: false as const, feedback: 'Cite a source.' },
+        text.includes('[1]')
+          ? { pass: true as const }
+          : { pass: false as const, feedback: 'Cite a source.' },
     })
-    const { dialect } = scriptedStreamDialect([['nope'], ['still nope'], ['still nope']])
+    const { dialect } = scriptedStreamDialect([
+      ['nope'],
+      ['still nope'],
+      ['still nope'],
+    ])
     const result = await createAdapterExecution(dialect).stream({
       prompt: textPrompt(),
       model: 'm',
@@ -724,7 +888,10 @@ describe('native text-boundary assert parity', () => {
 const countGreaterThanOne = constraint({
   id: 'count-gt-1',
   on: boundary.output.object<{ title: string; count: number }>().path('count'),
-  run: (count: number) => (count > 1 ? { pass: true } : { pass: false, feedback: 'count must exceed 1' }),
+  run: (count: number) =>
+    count > 1
+      ? { pass: true }
+      : { pass: false, feedback: 'count must exceed 1' },
 })
 
 // A rejected attempt must actually cancel its provider stream. The coordinator awaits
@@ -753,7 +920,9 @@ describe('rejected attempt cancellation', () => {
       call: async () => {
         throw new Error('not used')
       },
-      stream: async (): Promise<StreamHandle<AsyncIterable<{ text: string }>>> => {
+      stream: async (): Promise<
+        StreamHandle<AsyncIterable<{ text: string }>>
+      > => {
         const index = attempt++
         const deltas = scripts[index] ?? ['']
         // A generator observes cancellation through `finally` when `.return()` runs.
@@ -806,9 +975,14 @@ describe('coordinated completion is independent of consumption', () => {
     // No `drainStream` — completion must settle on its own.
     const meta = await Promise.race([
       result.completion(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('completion deadlocked')), 4000)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('completion deadlocked')), 4000),
+      ),
     ])
-    expect((meta as { object?: unknown })?.object).toEqual({ title: 'a', count: 2 })
+    expect((meta as { object?: unknown })?.object).toEqual({
+      title: 'a',
+      count: 2,
+    })
   })
 
   it('still replays every delta to a consumer that attaches after completion', async () => {
@@ -834,7 +1008,9 @@ describe('deferred commitment across a downstream rewrite', () => {
     id: 'name-safe',
     on: boundary.output.object<{ name: string; n: number }>().path('name'),
     run: (name: string) =>
-      name === 'safe' ? { pass: true } : { pass: false, feedback: 'name must be safe' },
+      name === 'safe'
+        ? { pass: true }
+        : { pass: false, feedback: 'name must be safe' },
   })
 
   function mixedPrompt() {
@@ -856,7 +1032,11 @@ describe('deferred commitment across a downstream rewrite', () => {
       run: (text: string) => {
         calls += 1
         return calls === 1
-          ? { action: 'rewrite' as const, value: text.replace('"safe"', '"unsafe"'), rewrite: { kind: 'redact' as const } }
+          ? {
+              action: 'rewrite' as const,
+              value: text.replace('"safe"', '"unsafe"'),
+              rewrite: { kind: 'redact' as const },
+            }
           : { action: 'allow' as const }
       },
     })
@@ -921,7 +1101,10 @@ describe('one authored parse per candidate', () => {
   it('parses each rejected candidate once as well', async () => {
     let parses = 0
     const counted = z
-      .object({ title: z.string(), count: z.number().refine((n) => n > 1, 'too small') })
+      .object({
+        title: z.string(),
+        count: z.number().refine((n) => n > 1, 'too small'),
+      })
       .transform((value) => {
         parses += 1
         return value

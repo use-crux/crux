@@ -14,6 +14,10 @@ import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { MiddlewareResult } from '../runtime/types'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { TimeoutOptions } from './timeout'
+import {
+  cachedCandidateFinalizer,
+  type CachedCandidateFinalizer,
+} from '../runtime/internal/cached-candidate-finalizer'
 
 /**
  * Context for generate/stream orchestration. Adapters construct this
@@ -55,6 +59,8 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   }) => MiddlewareResult
   /** Structured timeout budgets for this managed operation. */
   timeout?: TimeoutOptions
+  /** @internal Adapter-owned release gate for hydrated cached candidates. */
+  readonly [cachedCandidateFinalizer]?: CachedCandidateFinalizer
 }
 
 /** Stream-specific subset consumed by the shared orchestration boundary. */
@@ -73,6 +79,7 @@ export type StreamOrchestrationSpec<
   | 'outputMode'
   | 'createCachedStreamResult'
   | 'timeout'
+  | typeof cachedCandidateFinalizer
 > & {
   /**
    * Whether a commit gate can still discard the attempt these deltas belong to.

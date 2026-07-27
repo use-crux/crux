@@ -31,7 +31,8 @@ function zerr(): z.ZodError {
 }
 
 /** A scripted attempt: a sequence of coordinator events, or a rejection to throw. */
-type AuditEntry = import('../../src/safety/constraint/types').ConstraintAuditEntry
+type AuditEntry =
+  import('../../src/safety/constraint/types').ConstraintAuditEntry
 type Script =
   | { readonly events: readonly StreamAttemptEvent[] }
   | {
@@ -42,15 +43,23 @@ type Script =
   | { readonly validationReject: string }
 
 function sealed(text: string): StreamAttemptEvent {
-  return { kind: 'sealed', seal: { text, parsed: undefined, pending: text }, settlement: { attemptId: 'a', settled: [], audit: [] } }
+  return {
+    kind: 'sealed',
+    seal: { text, parsed: undefined, pending: text },
+    settlement: { attemptId: 'a', settled: [], audit: [] },
+  }
 }
 
 /** An accepted attempt that commits immediately, then seals `text`. */
 function accept(text: string): Script {
-  return { events: [{ kind: 'committed' }, { kind: 'delta', text }, sealed(text)] }
+  return {
+    events: [{ kind: 'committed' }, { kind: 'delta', text }, sealed(text)],
+  }
 }
 
-function toFailures(failures: readonly Partial<StreamAttemptFailure>[]): readonly StreamAttemptFailure[] {
+function toFailures(
+  failures: readonly Partial<StreamAttemptFailure>[],
+): readonly StreamAttemptFailure[] {
   return failures.map((failure) => ({
     name: failure.name ?? 'c',
     severity: 'assert' as const,
@@ -90,14 +99,22 @@ function coordinator(overrides: {
   const aborted: boolean[] = []
   let steps = 0
 
-  const startAttempt: StreamAttemptStart = async ({ corrective, attemptIndex }) => {
+  const startAttempt: StreamAttemptStart = async ({
+    corrective,
+    attemptIndex,
+  }) => {
     correctives.push([...corrective])
     aborted[attemptIndex] = false
     const script = queue.shift() ?? accept('exhausted')
     return {
       events: (async function* () {
-        if ('validationReject' in script) throw new StreamValidationRejection({ error: zerr(), text: script.validationReject })
-        if ('reject' in script) throw rejection(script.reject, script.text, script.audit ?? [])
+        if ('validationReject' in script)
+          throw new StreamValidationRejection({
+            error: zerr(),
+            text: script.validationReject,
+          })
+        if ('reject' in script)
+          throw rejection(script.reject, script.text, script.audit ?? [])
         for (const event of script.events) yield event
       })(),
       abort: async () => {
@@ -118,14 +135,21 @@ function coordinator(overrides: {
         incrementStep: () => {
           steps += 1
         },
-        formatFeedback: (failures) => [{ role: 'user', content: failures.map((f) => f.feedback).join('; ') }],
+        formatFeedback: (failures) => [
+          { role: 'user', content: failures.map((f) => f.feedback).join('; ') },
+        ],
+        guardFeedback: async (input) => input.text,
         ...(overrides.signal ? { signal: overrides.signal } : {}),
-        ...(overrides.validationRetry ? { validationRetry: overrides.validationRetry } : {}),
+        ...(overrides.validationRetry
+          ? { validationRetry: overrides.validationRetry }
+          : {}),
       }),
   }
 }
 
-async function drain(stream: ReturnType<typeof runCoordinatedStream>): Promise<string[]> {
+async function drain(
+  stream: ReturnType<typeof runCoordinatedStream>,
+): Promise<string[]> {
   const out: string[] = []
   for await (const delta of stream.deltas) out.push(delta)
   return out
@@ -144,7 +168,9 @@ describe('coordinated stream-attempt loop', () => {
   })
 
   it('retries a rejected attempt with corrective feedback, then publishes the accepted one', async () => {
-    const co = coordinator({ script: [{ reject: [{ feedback: 'too short' }] }, accept('fixed')] })
+    const co = coordinator({
+      script: [{ reject: [{ feedback: 'too short' }] }, accept('fixed')],
+    })
     const stream = co.run()
     const deltas = await drain(stream)
     const result = await stream.completion()
@@ -158,20 +184,32 @@ describe('coordinated stream-attempt loop', () => {
 
   it('throws the public ConstraintViolationError when the shared budget is exhausted', async () => {
     const co = coordinator({
-      script: [{ reject: [{ name: 'c1' }] }, { reject: [{ name: 'c1' }] }, { reject: [{ name: 'c1' }] }],
+      script: [
+        { reject: [{ name: 'c1' }] },
+        { reject: [{ name: 'c1' }] },
+        { reject: [{ name: 'c1' }] },
+      ],
       maxSteps: 2,
     })
     const stream = co.run()
-    await expect(stream.completion()).rejects.toBeInstanceOf(ConstraintViolationError)
+    await expect(stream.completion()).rejects.toBeInstanceOf(
+      ConstraintViolationError,
+    )
     expect(co.steps()).toBe(2)
   })
 
   it('throws when every failed constraint has exhausted its per-constraint retries', async () => {
     const co = coordinator({
-      script: [{ reject: [{ name: 'c1', maxRetries: 1 }] }, { reject: [{ name: 'c1', maxRetries: 1 }] }],
+      script: [
+        { reject: [{ name: 'c1', maxRetries: 1 }] },
+        { reject: [{ name: 'c1', maxRetries: 1 }] },
+      ],
       maxSteps: 10,
     })
-    const error = await co.run().completion().catch((e) => e)
+    const error = await co
+      .run()
+      .completion()
+      .catch((e) => e)
     expect(error).toBeInstanceOf(ConstraintViolationError)
     expect((error as ConstraintViolationError).totalAttempts).toBe(2)
   })
@@ -181,12 +219,24 @@ describe('coordinated stream-attempt loop', () => {
       script: [
         {
           reject: [{ name: 'c1', maxRetries: 0 }],
-          audit: [{ constraint: 'c1', severity: 'assert', pass: false, feedback: 'x', attempts: 1, durationMs: 1 }],
+          audit: [
+            {
+              constraint: 'c1',
+              severity: 'assert',
+              pass: false,
+              feedback: 'x',
+              attempts: 1,
+              durationMs: 1,
+            },
+          ],
         },
       ],
       maxSteps: 10,
     })
-    const error = (await co.run().completion().catch((e) => e)) as ConstraintViolationError
+    const error = (await co
+      .run()
+      .completion()
+      .catch((e) => e)) as ConstraintViolationError
     expect(error).toBeInstanceOf(ConstraintViolationError)
     expect(error.totalAttempts).toBe(1)
     expect(error.audit.entries).toHaveLength(1)
@@ -196,13 +246,18 @@ describe('coordinated stream-attempt loop', () => {
   it('stops and throws when the caller signal aborts before an attempt', async () => {
     const controller = new AbortController()
     controller.abort()
-    const co = coordinator({ script: [accept('never')], signal: controller.signal })
+    const co = coordinator({
+      script: [accept('never')],
+      signal: controller.signal,
+    })
     await expect(co.run().completion()).rejects.toThrow()
     expect(co.steps()).toBe(0)
   })
 
   it('aborts the rejected attempt before retrying', async () => {
-    const co = coordinator({ script: [{ reject: [{ feedback: 'retry me' }] }, accept('ok')] })
+    const co = coordinator({
+      script: [{ reject: [{ feedback: 'retry me' }] }, accept('ok')],
+    })
     const stream = co.run()
     await drain(stream)
     const result = await stream.completion()
@@ -237,7 +292,10 @@ describe('coordinated stream-attempt loop', () => {
   it('emits zero consumer deltas for a rejected (pre-commit) attempt', async () => {
     // First attempt holds (no committed event) then rejects; second accepts.
     const co = coordinator({
-      script: [{ reject: [{ name: 'items', feedback: 'too long' }] }, accept('{"items":["ok"]}')],
+      script: [
+        { reject: [{ name: 'items', feedback: 'too long' }] },
+        accept('{"items":["ok"]}'),
+      ],
     })
     const stream = co.run()
     const deltas = await drain(stream)
@@ -283,7 +341,10 @@ describe('coordinated stream-attempt loop', () => {
       maxSteps: 10,
       validationRetry: { maxRetries: 1, onExhausted },
     })
-    const error = (await co.run().completion().catch((e) => e)) as ValidationExhaustedError
+    const error = (await co
+      .run()
+      .completion()
+      .catch((e) => e)) as ValidationExhaustedError
     expect(error).toBeInstanceOf(ValidationExhaustedError)
     expect(error.attempts).toBe(1) // validation retries performed
     expect(error.maxAttempts).toBe(1)
@@ -292,21 +353,34 @@ describe('coordinated stream-attempt loop', () => {
 
   it('constraint retry then validation exhaustion → ValidationExhaustedError', async () => {
     const co = coordinator({
-      script: [{ reject: [{ name: 'c1' }] }, { validationReject: 'x' }, { validationReject: 'y' }],
+      script: [
+        { reject: [{ name: 'c1' }] },
+        { validationReject: 'x' },
+        { validationReject: 'y' },
+      ],
       maxSteps: 10,
       validationRetry: { maxRetries: 1 },
     })
-    const error = await co.run().completion().catch((e) => e)
+    const error = await co
+      .run()
+      .completion()
+      .catch((e) => e)
     expect(error).toBeInstanceOf(ValidationExhaustedError)
   })
 
   it('validation retry then constraint exhaustion → ConstraintViolationError', async () => {
     const co = coordinator({
-      script: [{ validationReject: 'x' }, { reject: [{ name: 'c1', maxRetries: 0 }] }],
+      script: [
+        { validationReject: 'x' },
+        { reject: [{ name: 'c1', maxRetries: 0 }] },
+      ],
       maxSteps: 10,
       validationRetry: { maxRetries: 2 },
     })
-    const error = await co.run().completion().catch((e) => e)
+    const error = await co
+      .run()
+      .completion()
+      .catch((e) => e)
     expect(error).toBeInstanceOf(ConstraintViolationError)
   })
 })

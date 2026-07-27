@@ -14,9 +14,12 @@ import {
 } from "./output/step";
 import { guardStreamCompletionContent } from "./output/completion";
 import type { ConstraintContext } from "./constraint/types";
-import type { GuardrailAudit, GuardrailContext } from "./guardrail/types";
+import type {
+  GuardrailAudit,
+  GuardrailContext,
+  GuardrailOrigin,
+} from "./guardrail/types";
 import type { GuardrailBinding } from "./registry";
-import type { ModelInputOrigin } from "./input-origin";
 import { inputBindingsFor } from "./input/source";
 import type { SessionConstraintRunner } from "./session-constraints";
 import type {
@@ -45,12 +48,22 @@ import {
   structuredStreamOpenRaw,
   streamOpenRaw,
   streamCommitPlan,
+  toolDefinitionGuard,
+  toolDescriptionGuard,
+  memoryWriteGuard,
   type SafetySession,
   type StructuredSafetyContext,
 } from "./session-bridge";
 import { createStructuredSafetyStream } from "./stream/structured-engine";
 import { failClosedOnRejection } from "./stream/fail-closed";
 import { guardModelIngress } from "./input/model-ingress";
+import type {
+  FeedbackIngressGuard,
+  SafetyRegenerate,
+} from "./session-feedback-guard";
+import { feedbackIngressGuard } from "./session-bridge";
+import type { ToolExposureGuards } from "../adapter/tool/exposure/types";
+import type { ManagedMemoryWriteGuard } from "../memory/managed-write-guard";
 interface SessionMethodOptions {
   readonly options: SafetyCallOptions;
   readonly enabled: boolean;
@@ -59,15 +72,19 @@ interface SessionMethodOptions {
   readonly phaseBindings: (
     phase: "input" | "output",
   ) => readonly GuardrailBinding[];
-  readonly guardContext: (
+  readonly guardContext: <
+    TOrigin extends GuardrailOrigin = import("./input-origin").ModelInputOrigin,
+  >(
     phase: "input" | "output",
     messages: readonly Message[],
     override?: { readonly model?: string; readonly systemPrompt?: string },
-    origin?: ModelInputOrigin,
-  ) => GuardrailContext;
+    origin?: TOrigin,
+  ) => GuardrailContext<TOrigin>;
   readonly constraintContext: () => ConstraintContext;
   readonly appendGuardrailAudit: (audit: GuardrailAudit) => void;
   readonly guardrailAudit: () => GuardrailAudit | undefined;
+  /** Whether a post-result managed-memory guard may append audit entries. */
+  readonly lateGuardrailAudit: boolean;
   readonly constraintRunner: SessionConstraintRunner;
   readonly transcript: SafetyProtocolEvent[];
   readonly messages: {
@@ -76,12 +93,14 @@ interface SessionMethodOptions {
   };
   readonly finalizeLanguageOutput: (
     output: SafetyOutput,
-    regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    regenerate: SafetyRegenerate,
     opts:
       | {
           readonly suspended?: boolean;
           readonly messages?: readonly Message[];
           readonly schema?: z.ZodType;
+          readonly retryAuthority?: "none";
+          readonly stepOutputAlreadyGated?: boolean;
           readonly prepareValidated?: (
             guarded: SafetyOutput,
             guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
@@ -95,6 +114,9 @@ interface SessionMethodOptions {
   ) => Promise<SafetyOutput>;
   readonly openStream: () => SafetyStream;
   readonly openStreamRaw: () => SafetyStream;
+  readonly guardFeedback: FeedbackIngressGuard;
+  readonly toolExposureGuards: ToolExposureGuards;
+  readonly managedMemoryWriteGuard: ManagedMemoryWriteGuard;
 }
 /** Build the method table after session state and runners are initialized. */
 export function createSafetySessionMethods(
@@ -110,23 +132,27 @@ export function createSafetySessionMethods(
         binding.boundary.id === "model.output" ||
         binding.boundary.id === "model.output.media",
     );
-  const guardIngress = (input: Parameters<SafetySession[typeof modelIngressGuard]>[0]) =>
+  const guardIngress = (
+    input: Parameters<SafetySession[typeof modelIngressGuard]>[0],
+  ) =>
     guardModelIngress({
       bindings: state.phaseBindings("input"),
       input,
       context: state.guardContext("input", state.messages.get()),
       appendAudit: state.appendGuardrailAudit,
     });
-  const ingressSources = (['user', 'tool', 'retrieval'] as const).filter((source) => {
-    const inputBindings = state.phaseBindings("input");
-    const matchesText = inputBindingsFor(inputBindings, "model.input.text", source).length > 0;
-    const matchesMedia =
-      source !== "retrieval" && inputBindingsFor(inputBindings, "model.input.media", source).length > 0;
-    return matchesText || matchesMedia;
-  });
-  const buildStructuredStream = (
-    structuredContext?: StructuredSafetyContext,
-  ) =>
+  const ingressSources = (["user", "tool", "retrieval"] as const).filter(
+    (source) => {
+      const inputBindings = state.phaseBindings("input");
+      const matchesText =
+        inputBindingsFor(inputBindings, "model.input.text", source).length > 0;
+      const matchesMedia =
+        source !== "retrieval" &&
+        inputBindingsFor(inputBindings, "model.input.media", source).length > 0;
+      return matchesText || matchesMedia;
+    },
+  );
+  const buildStructuredStream = (structuredContext?: StructuredSafetyContext) =>
     createStructuredSafetyStream({
       objectBindings: outputBindings().filter(
         (binding) => binding.boundary.id === "model.output.object",
@@ -159,7 +185,9 @@ export function createSafetySessionMethods(
   const guardInput = async (
     input: Parameters<SafetySession["guardInput"]>[0],
     systemIngress?: Parameters<SafetySession[typeof resolvedInputGuard]>[1],
-    systemIngressScope?: Parameters<SafetySession[typeof resolvedInputGuard]>[2],
+    systemIngressScope?: Parameters<
+      SafetySession[typeof resolvedInputGuard]
+    >[2],
   ) => {
     state.messages.set(input.messages);
     const result = await guardSafetyInput({
@@ -167,7 +195,8 @@ export function createSafetySessionMethods(
       input,
       ...(systemIngress ? { systemIngress } : {}),
       ...(systemIngressScope ? { systemIngressScope } : {}),
-      context: (messages, origin) => state.guardContext("input", messages, undefined, origin),
+      context: (messages, origin) =>
+        state.guardContext("input", messages, undefined, origin),
       appendAudit: state.appendGuardrailAudit,
       transcript: state.transcript,
     });
@@ -184,6 +213,10 @@ export function createSafetySessionMethods(
       ),
     },
     [modelIngressGuard]: guardIngress,
+    [feedbackIngressGuard]: state.guardFeedback,
+    [toolDefinitionGuard]: state.toolExposureGuards.root,
+    [toolDescriptionGuard]: state.toolExposureGuards.descriptions,
+    [memoryWriteGuard]: state.managedMemoryWriteGuard,
     [modelIngressSources]: Object.freeze(ingressSources),
     [resolvedInputGuard]: guardInput,
     [outputDownstreamMutators]: hasDownstreamMutator(),
@@ -241,7 +274,12 @@ export function createSafetySessionMethods(
     },
 
     [languageTerminalFinalize]: (output, regenerate, opts) =>
-      state.finalizeLanguageOutput(output, regenerate, opts, true),
+      state.finalizeLanguageOutput(
+        output,
+        regenerate,
+        opts,
+        opts?.stepOutputAlreadyGated ?? true,
+      ),
 
     [streamCompletionGuard]: (
       content,
@@ -366,9 +404,11 @@ export function createSafetySessionMethods(
       if (!state.enabled) return meta;
       state.transcript.push({ t: "stamp" });
       const guardrails = state.guardrailAudit();
-      return {
+      const stamped = {
         ...meta,
-        ...(guardrails && (guardrails.applied.length > 0 || guardrails.blocked)
+        ...(!state.lateGuardrailAudit &&
+        guardrails &&
+        (guardrails.applied.length > 0 || guardrails.blocked)
           ? { guardrails }
           : {}),
         ...(state.constraintRunner.audit &&
@@ -376,6 +416,18 @@ export function createSafetySessionMethods(
           ? { constraints: state.constraintRunner.audit }
           : {}),
       };
+      if (state.lateGuardrailAudit) {
+        Object.defineProperty(stamped, "guardrails", {
+          enumerable: true,
+          get: () => {
+            const audit = state.guardrailAudit();
+            return audit && (audit.applied.length > 0 || audit.blocked)
+              ? audit
+              : undefined;
+          },
+        });
+      }
+      return stamped;
     },
 
     openStream: state.openStream,

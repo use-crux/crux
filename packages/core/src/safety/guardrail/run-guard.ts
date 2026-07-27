@@ -26,20 +26,54 @@ import {
 } from './findings'
 import { findingCountAttributes } from './finding-observability'
 import { validateGuardrailRunResult } from './result-validation'
-import type { GuardrailAuditEntry, GuardrailContext, GuardrailRunResult } from './types'
+import type {
+  MemoryWriteGuardrailResult,
+  ToolDefinitionGuardrailResult,
+} from './specialized-results'
+import type {
+  GuardrailAuditEntry,
+  GuardrailContext,
+  GuardrailOrigin,
+  GuardrailRunResult,
+} from './types'
+import type { ModelInputOrigin } from '../input-origin'
 
-export interface RunGuardInput {
+type ObservableGuardrailResult =
+  | GuardrailRunResult<unknown>
+  | ToolDefinitionGuardrailResult
+  | MemoryWriteGuardrailResult
+
+interface GuardrailResultValidationOptions {
+  readonly streaming: boolean
+  readonly last: boolean
+  readonly policyId: string
+  readonly boundary: string
+}
+
+type GuardrailResultValidator<TResult extends ObservableGuardrailResult> = (
+  value: unknown,
+  options: GuardrailResultValidationOptions,
+) => TResult
+
+export interface RunGuardInput<
+  TResult extends ObservableGuardrailResult = GuardrailRunResult<unknown>,
+  TOrigin extends GuardrailOrigin = ModelInputOrigin,
+> {
   readonly binding: GuardrailBinding
   /** The already-resolved subject for this guard (terminal content or occurrence value). */
   readonly subject: unknown
-  readonly ctx: GuardrailContext
+  readonly ctx: GuardrailContext<TOrigin>
   readonly phase: 'input' | 'output'
   readonly streaming: boolean
   readonly last: boolean
+  /** Specialized validator for closed non-standard result families. */
+  readonly validateResult?: GuardrailResultValidator<TResult>
 }
 
-export interface RunGuardOutcome {
-  readonly result: GuardrailRunResult<unknown>
+export interface RunGuardOutcome<
+  TResult extends ObservableGuardrailResult = GuardrailRunResult<unknown>,
+> {
+  readonly result: TResult
   readonly entry: GuardrailAuditEntry
   readonly durationMs: number
 }
@@ -50,7 +84,12 @@ export interface RunGuardOutcome {
  * The span, report edge, and (for an enforced block) blocked edge are recorded
  * here; the caller decides what to do with the result.
  */
-export async function runGuardWithObservability(input: RunGuardInput): Promise<RunGuardOutcome> {
+export async function runGuardWithObservability<
+  TResult extends ObservableGuardrailResult = GuardrailRunResult<unknown>,
+  TOrigin extends GuardrailOrigin = ModelInputOrigin,
+>(
+  input: RunGuardInput<TResult, TOrigin>,
+): Promise<RunGuardOutcome<TResult>> {
   const { binding, subject, ctx, phase, streaming, last } = input
   const guard = binding.policy
   const boundary = binding.boundary
@@ -76,22 +115,33 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
     },
   })
 
-  let result: GuardrailRunResult<unknown>
+  let result: TResult
   let findings: readonly SafetyFinding[] | undefined
   let durationMs = 0
   try {
-    result = validateGuardrailRunResult(
-      await span.withContext(async () =>
-        guard.run(
-          subject as never,
-          runContext(binding, ctx, findingCollection.collector) as never,
-        ),
+    const raw = await span.withContext(async () =>
+      guard.run(
+        subject as never,
+        runContext(binding, ctx, findingCollection.collector) as never,
       ),
-      { streaming, last, policyId: guard.id, boundary: boundary.id },
     )
+    const validationOptions = {
+      streaming,
+      last,
+      policyId: guard.id,
+      boundary: boundary.id,
+    }
+    result = input.validateResult
+      ? input.validateResult(raw, validationOptions)
+      : (validateGuardrailRunResult(
+          raw,
+          validationOptions,
+        ) as TResult)
     findings = mergeSafetyFindings(
       findingCollection.snapshot(),
-      result.action === 'rewrite' ? result.findings : undefined,
+      result.action === 'rewrite' && 'findings' in result
+        ? result.findings
+        : undefined,
     )
     durationMs = performance.now() - start
     const report = result
@@ -132,7 +182,7 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
     mode: binding.mode,
     phase,
     action: auditAction(result),
-    ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...('reason' in result ? { reason: result.reason } : {}),
     ...(findings ? { findings } : {}),
     durationMs,
   }
@@ -141,15 +191,18 @@ export async function runGuardWithObservability(input: RunGuardInput): Promise<R
 }
 
 /** The audit/observability action name for a run result (rewrite → its rewrite kind). */
-export function auditAction(result: GuardrailRunResult<unknown>): string {
+export function auditAction(result: ObservableGuardrailResult): string {
   if (result.action === 'rewrite') return result.rewrite.kind === 'normalize' ? 'transform' : result.rewrite.kind
   return result.action
 }
 
 /** Build the `SafetyRunContext` handed to a guard policy for one execution. */
-export function runContext<B extends BoundaryDef>(
+export function runContext<
+  B extends BoundaryDef,
+  TOrigin extends GuardrailOrigin,
+>(
   binding: GuardrailBinding & { readonly boundary: B },
-  ctx: GuardrailContext,
+  ctx: GuardrailContext<TOrigin>,
   findings: SafetyRunContext<B>['findings'],
 ): SafetyRunContext<B> {
   const guard = binding.policy

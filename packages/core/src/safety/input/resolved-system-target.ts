@@ -2,10 +2,7 @@
 
 import type { Message } from "../../generation/messages";
 import { joinSystemText } from "../../resolver/adaptation";
-import type {
-  ResolvedSystemIngressCarrier,
-  SystemIngressBlock,
-} from "../../resolver/system-ingress-provenance";
+import type { ResolvedSystemIngressCarrier } from "../../resolver/system-ingress-provenance";
 import { SafetyResultError } from "../errors";
 import type { GuardrailBinding } from "../registry";
 
@@ -49,12 +46,6 @@ export function resolveSystemIngressTarget(
     prefix: expectedSystem,
     suffix: prefixMatches ? content!.slice(input.carrier.prefixLength) : "",
   };
-}
-
-/** Read the privacy-safe retriever identifier owned by the resolver. */
-export function systemIngressRetrieverId(block: SystemIngressBlock): string {
-  const id = block.contextId ?? block.source;
-  return id.startsWith("retriever:") ? id.slice("retriever:".length) : id;
 }
 
 function mismatch(binding: GuardrailBinding | undefined): never {

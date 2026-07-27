@@ -4,24 +4,20 @@ import type { z } from "zod";
 import type { Message } from "../../generation/messages";
 import { latestRewritePolicyId } from "../audit";
 import { createGuardrailPipeline } from "../guardrail/pipeline";
-import type {
-  GuardrailAudit,
-  GuardrailContext,
-} from "../guardrail/types";
+import type { GuardrailAudit, GuardrailContext } from "../guardrail/types";
 import type { GuardrailBinding } from "../registry";
 import type { StructuredSafetyContext } from "../session-bridge";
 import type { ConstraintOccurrenceSettlement } from "../constraint/settlement";
 import type { SafetyOutput, SafetyProtocolEvent } from "../session";
 import { resyncStructuredText } from "../structured";
 import { gateStructuredOccurrences } from "../stream/structured-gating";
+import type { SafetyRegenerate } from "../session-feedback-guard";
 
 interface FinalizeLanguageTerminalOptions {
   /** Already step-guarded terminal candidate. */
   readonly output: SafetyOutput;
   /** Corrective provider call owned by the selected dialect. */
-  readonly regenerate: (
-    corrective: readonly Message[],
-  ) => Promise<SafetyOutput>;
+  readonly regenerate: SafetyRegenerate;
   /** Full output binding set for the call. */
   readonly bindings: readonly GuardrailBinding[];
   /** Run only object/both bindings when step guards already ran. */
@@ -30,6 +26,8 @@ interface FinalizeLanguageTerminalOptions {
   readonly suspended?: boolean;
   readonly messages: readonly Message[];
   readonly schema?: z.ZodType;
+  /** Cached candidate evaluations run constraints once without regeneration. */
+  readonly retryAuthority?: "none";
   /**
    * Adapter-owned candidate validator injected between terminal guardrails and
    * constraints. It runs the single authoritative Zod `safeParse` (and any
@@ -57,9 +55,10 @@ interface FinalizeLanguageTerminalOptions {
   readonly settled?: readonly ConstraintOccurrenceSettlement[];
   readonly applyConstraints: (
     output: SafetyOutput,
-    regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    regenerate: SafetyRegenerate,
     guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
     settled?: readonly ConstraintOccurrenceSettlement[],
+    retryAuthority?: "none",
   ) => Promise<SafetyOutput>;
   readonly applyReportConstraints: (output: SafetyOutput) => Promise<void>;
 }
@@ -107,6 +106,7 @@ export async function finalizeLanguageTerminal(
       options.regenerate,
       prepareCandidate,
       options.settled,
+      options.retryAuthority,
     );
   }
   if (options.enabled) await options.applyReportConstraints(current);
@@ -142,16 +142,20 @@ async function applyTerminalGuards(
     !options.objectOccurrencesAlreadyGated &&
     current.parsed !== undefined
   ) {
-    const gated = await gateStructuredOccurrences(current.parsed, objectBindings, {
-      guardContext: options.context,
-      appendGuardrailAudit: (audit) => {
-        options.appendAudit(audit);
-        for (const entry of audit.applied) actions.push(entry.action);
+    const gated = await gateStructuredOccurrences(
+      current.parsed,
+      objectBindings,
+      {
+        guardContext: options.context,
+        appendGuardrailAudit: (audit) => {
+          options.appendAudit(audit);
+          for (const entry of audit.applied) actions.push(entry.action);
+        },
+        ...(options.structuredContext?.canonicalSchema
+          ? { canonicalSchema: options.structuredContext.canonicalSchema }
+          : {}),
       },
-      ...(options.structuredContext?.canonicalSchema
-        ? { canonicalSchema: options.structuredContext.canonicalSchema }
-        : {}),
-    });
+    );
     if (gated !== current.parsed) {
       current = { text: serializeCanonical(gated), parsed: gated };
     }

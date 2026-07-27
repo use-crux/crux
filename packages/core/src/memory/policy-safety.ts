@@ -12,6 +12,7 @@
 import type { SafetyDecision } from '../safety/decision'
 import { safeCaptureSummary } from '../safety/errors'
 import type { MemoryBlockContext, MemoryPolicy } from './contracts'
+import { guardManagedMemoryWrite } from './managed-write-guard'
 
 /** Policy hook that produced one memory write decision. */
 export type MemoryPolicyDecisionHook = 'redact' | 'validate' | 'shouldRemember'
@@ -57,6 +58,10 @@ export async function applyMemoryPolicy<T>(
       durationMs: options.now() - startedAt,
     })
   }
+
+  const guarded = await guardManagedMemoryWrite(next, ctx)
+  if (guarded.action === 'drop') return null
+  next = guarded.value
 
   if (policy?.validate) {
     const startedAt = options.now()

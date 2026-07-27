@@ -14,6 +14,7 @@ import {
 } from "../../../static/instrumentation";
 import type { StaticFactParseResult } from "../../../static/types";
 import { staticRecordRuntimePrepareFacts } from "./runtime-prepare";
+import { staticRecordToolBoundaryFacts } from "./safety-tool-facts";
 import { staticRecordTreePathDefinitions } from "./tree-paths";
 import type { StaticRecordProjectionCache } from "./projection-cache";
 import type {
@@ -135,8 +136,17 @@ export async function parseStaticFactsFromSyntaxRecords(
     nativeFactProjection === "native-only"
       ? []
       : staticRecordRuntimePrepareFacts(record);
+  const toolBoundaryFacts =
+    nativeFactProjection === "native-only"
+      ? []
+      : staticRecordToolBoundaryFacts(input.root, record);
   const facts = withDeferredWorkContainment(
-    [...exported.facts, ...discovered.facts, ...runtimePrepareFacts],
+    [
+      ...exported.facts,
+      ...discovered.facts,
+      ...runtimePrepareFacts,
+      ...toolBoundaryFacts,
+    ],
     [...exported.found, ...discovered.found],
   );
   const foundForPathProjection = [...exported.found, ...discovered.found];

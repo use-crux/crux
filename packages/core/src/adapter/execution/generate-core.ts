@@ -23,7 +23,11 @@ import {
   finalizeSafetySessionLanguageOutput,
   guardSafetySessionLanguageStep,
   guardSafetySessionResolvedInput,
+  safetySessionFeedbackGuard,
+  safetySessionMemoryWriteGuard,
   safetySessionModelIngressGuard,
+  safetySessionToolDefinitionGuard,
+  safetySessionToolDescriptionGuard,
 } from "../../safety/session";
 import type { SafetyOutput } from "../../safety/session";
 import {
@@ -57,19 +61,30 @@ import type {
   CoreStepDialect,
   ObservedAdapterExecutionGenerateResult,
 } from "./types";
-import { appendAssistantResultMessage, initialCoreMessageState } from "./messages";
+import {
+  appendAssistantResultMessage,
+  initialCoreMessageState,
+} from "./messages";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
   withSkillActivationInput,
 } from "./shared";
 import { materializeToolSources } from "./tool-sources";
-import { replaceResponseContent, replaceResponseText } from "./response-text";
+import {
+  replaceResponseContent,
+  replaceResponseText,
+  replaceResponseTranscriptText,
+} from "./response-text";
 import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
+import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
 import {
   applySystemMessagePrefixPatch,
   systemMessagePrefixPatch,
 } from "./system-prefix-patch";
+import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
+import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -135,6 +150,7 @@ export async function generateCore<
   let lastRaw: TRawResponse | undefined;
   let lastExtracted: AdapterResponse | undefined;
   let parsedObject: unknown;
+  let acceptedCanonicalInput: unknown;
   let pendingApprovals: readonly ApprovalRequestInfo[] | undefined;
   let stoppedBy: StopCondition | undefined;
   let steps = 0;
@@ -166,6 +182,23 @@ export async function generateCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
+  const cachedFinalizer = resolved.schema
+    ? createCachedGenerateCandidateFinalizer({
+        output: "object",
+        safety,
+        messages: () => messages,
+        schema: resolved.schema,
+        promptId: prompt.id ?? "unknown",
+        structuredContext: {
+          canonicalSchema,
+          decodeManifest,
+        },
+      })
+    : createCachedGenerateCandidateFinalizer({
+        output: "text",
+        safety,
+        messages: () => messages,
+      });
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -183,13 +216,20 @@ export async function generateCore<
     );
     return normalized;
   };
-  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
-    messages,
-    system: currentSystem,
-  }, {
-    resolvedMessages:
-      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
-  });
+  const guardedInput = await guardSafetySessionResolvedInput(
+    safety,
+    resolved,
+    {
+      messages,
+      system: currentSystem,
+    },
+    {
+      resolvedMessages:
+        initialMessages.source === "resolved-messages"
+          ? "selected"
+          : "discarded",
+    },
+  );
   messages = [...guardedInput.messages];
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
@@ -224,6 +264,7 @@ export async function generateCore<
       timeout: args.timeout,
       abortSignal: args.signal,
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
       guardSkillAmendment,
@@ -232,6 +273,10 @@ export async function generateCore<
       ...(dialect.structuredOutput
         ? { structuredOutputCapabilities: dialect.structuredOutput.accepts }
         : {}),
+    });
+    await lifecycle.guardExposure({
+      root: safetySessionToolDefinitionGuard(safety),
+      descriptions: safetySessionToolDescriptionGuard(safety),
     });
     messages = (await lifecycle.resume(messages)).messages;
   } catch (error) {
@@ -262,28 +307,31 @@ export async function generateCore<
   const generated = await sourceSession
     .withContext(() =>
       orchestrateGenerateWithCompletion(
-        {
-          promptId: prompt.id,
-          promptConfig: prompt.config ?? ({} as typeof prompt.config),
-          preparedArgs: {
+        attachCachedCandidateFinalizer(
+          {
+            promptId: prompt.id,
+            promptConfig: prompt.config ?? ({} as typeof prompt.config),
+            preparedArgs: {
+              model: modelInfo.modelId,
+              system: currentSystem,
+              systemBlocks: currentSystemBlocks,
+              messages,
+              settings: mappedSettings,
+              schema: resolved.schema,
+              outputSchema,
+              tools: lifecycle.descriptors,
+              extra: (args.extra ?? {}) as TExtra,
+              input: args.input ?? {},
+            },
             model: modelInfo.modelId,
-            system: currentSystem,
-            systemBlocks: currentSystemBlocks,
-            messages,
-            settings: mappedSettings,
-            schema: resolved.schema,
-            outputSchema,
-            tools: lifecycle.descriptors,
-            extra: (args.extra ?? {}) as TExtra,
             input: args.input ?? {},
+            provider: modelInfo.provider,
+            resolved,
+            outputMode: resolved.schema ? "object" : "text",
+            timeout: args.timeout,
           },
-          model: modelInfo.modelId,
-          input: args.input ?? {},
-          provider: modelInfo.provider,
-          resolved,
-          outputMode: resolved.schema ? "object" : "text",
-          timeout: args.timeout,
-        },
+          cachedFinalizer,
+        ),
         async () => {
           let lastCallArgs: CallArgs<TExtra> | undefined;
           let suspendedApproval = false;
@@ -392,10 +440,23 @@ export async function generateCore<
             // by validation retry and constraint regeneration.
             const repromptProvider = async (
               corrective: readonly Message[],
+              writeback: import("../../safety/session-feedback-guard").CorrectiveWriteback,
             ): Promise<string> => {
+              const guardedWriteback = await guardCorrectiveWriteback({
+                ...writeback,
+                corrective,
+                guard: safetySessionFeedbackGuard(safety),
+              });
               replaceLastStep(replaceResponseText(lastExtracted!, ""));
-              messages = dialect.appendToolRound(messages, lastExtracted!, []);
-              messages = [...messages, ...corrective];
+              messages = dialect.appendToolRound(
+                messages,
+                replaceResponseTranscriptText(
+                  lastExtracted!,
+                  guardedWriteback.rejectedOutput,
+                ),
+                [],
+              );
+              messages = [...messages, ...guardedWriteback.corrective];
               const providerMessages = await prepareProviderMessages(messages);
               const regen = await callProvider({
                 ...lastCallArgs!,
@@ -448,17 +509,19 @@ export async function generateCore<
               if (!suspended) applyFinalText(initial.text);
               const result = await completion.finalize(initial, { suspended });
               applyFinalText(result.text);
+              acceptedCanonicalInput = result.canonicalInput;
               parsedObject = result.object;
             } else {
               // Non-structured text path: constraint regeneration shares the same
               // maxSteps budget; once exhausted, no further provider call is made.
               const textRegenerate = async (
                 corrective: readonly Message[],
+                writeback: import("../../safety/session-feedback-guard").CorrectiveWriteback,
               ): Promise<SafetyOutput> =>
                 steps >= maxSteps
                   ? { text: lastExtracted!.text, parsed: undefined }
                   : {
-                      text: await repromptProvider(corrective),
+                      text: await repromptProvider(corrective, writeback),
                       parsed: undefined,
                     };
               const finalOutput = await finalizeSafetySessionLanguageOutput(
@@ -494,7 +557,7 @@ export async function generateCore<
           const accumulator = createResultAccumulator();
           for (const facts of stepFacts) accumulator.addStep(facts);
 
-          return accumulator.finalize({
+          const result = accumulator.finalize({
             raw: lastRaw,
             messages: resultMessages,
             _meta: meta,
@@ -502,6 +565,11 @@ export async function generateCore<
             ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
             ...(pendingApprovals ? { pendingApprovals } : {}),
           });
+          return resolved.schema &&
+            !suspendedApproval &&
+            acceptedCanonicalInput !== undefined
+            ? attachCachedStructuredCandidate(result, acceptedCanonicalInput)
+            : result;
         },
         async (result) => {
           await lifecycle.captureTurn({

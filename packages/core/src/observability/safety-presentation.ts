@@ -5,6 +5,8 @@ export function safetyTargetLabel(target: string): string {
       return 'Model input · Text'
     case 'model.input.media':
       return 'Model input · Media'
+    case 'model.input.tools':
+      return 'Model input · Tools'
     case 'model.instructions':
       return 'Model instructions'
     default:

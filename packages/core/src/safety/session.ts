@@ -16,11 +16,16 @@ export {
 export {
   createSafetyLanguageStepTransformer,
   finalizeSafetySessionLanguageOutput,
+  guardSafetySessionFeedback,
   guardSafetySessionInputOperationMedia,
   guardSafetySessionInputOperationText,
   guardSafetySessionLanguageStep,
   guardSafetySessionModelIngress,
   safetySessionModelIngressGuard,
+  safetySessionFeedbackGuard,
+  safetySessionMemoryWriteGuard,
+  safetySessionToolDefinitionGuard,
+  safetySessionToolDescriptionGuard,
   guardSafetySessionOutputMedia,
   guardSafetySessionOutputOperationText,
   guardSafetySessionStreamCompletion,
@@ -35,6 +40,8 @@ export {
 } from "./session-bridge";
 
 export type {
+  FeedbackIngress,
+  FeedbackIngressGuard,
   StreamCommitPlan,
   StructuredSafetyContext,
   TerminalFinalizeOptions,

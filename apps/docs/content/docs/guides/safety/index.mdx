@@ -41,14 +41,31 @@ export const grounded = constraint({
 ```
 
 Useful targets include `boundary.input.text()`, `boundary.input.media()`,
-`boundary.input.instructions()`, `boundary.output.text()`,
+`boundary.input.instructions()`, `boundary.input.tools()`,
+`boundary.output.text()`,
 `boundary.output.media()`, `boundary.output.object<T>()`,
 `boundary.output.object<T>().path('a.b')`, `boundary.memory.write<T>()`, and
-`boundary.validation.feedback()`.
+`boundary.input.text({ from: "feedback" })`.
 The optionless input helpers cover all supported sources. Advanced policies can
 filter with `boundary.input.text({ from: "retrieval" })` or
 `boundary.input.media({ from: "tool" })`. Use `toolPolicy.args()` and
 `toolPolicy.result()` for raw tool lifecycle decisions.
+
+Think of an input boundary as **destination plus provenance**. The destination
+states what the provider will receive; `from` states who supplied that canonical
+content:
+
+```ts
+const lifecycleText = boundary.input.text({
+  from: ["memory", "handoff", "feedback"],
+});
+const discoveredTools = boundary.input.tools({ from: "discovered" });
+```
+
+Rendered managed memory and blackboard state both use source `memory`, with
+distinct `ctx.origin.kind` values. Handoff context uses `handoff`; validation
+and constraint retry writeback uses `feedback`. Provenance is safe metadata,
+not the guarded text or payload.
 
 See [Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
 for the exact language, structured, stream, image, speech, and transcription
@@ -72,6 +89,9 @@ await adapter.generate(prompt, {
 
 Tune changes only `mode` and `enabled`. The streaming unit is not tunable: it is
 part of the policy's boundary, so a call site cannot widen what a policy sees.
+In report mode, input envelopes, exposed tools, generated candidates, retry
+feedback, and memory writes remain unchanged; Crux records what the policy
+would have done.
 
 Built-in text guardrails such as `guardrail.pii()`, `guardrail.secrets()`, and
 `guardrail.injection()` check sentences by default; `guardrail.classifier()`
@@ -128,12 +148,19 @@ Rules of thumb:
 
 Safety decisions emit observability artifacts, Turn Decision Report rows, and
 Project Index definitions. Devtools opens runtime interventions in Runs Explain
-with model, action, semantic target, source (`User`, `Tool`, or `Retrieval`),
+with model, action, semantic target, source (`User`, `Tool`, `Retrieval`,
+`Memory`, `Blackboard`, `Handoff`, `Feedback`, `Authored tool`, or
+`Discovered tool`),
 privacy-safe origin coordinates, and strip escalation. Catalog shows authored
 canonical boundary tuples, strategy helper configuration and action, links from
 policies to completed operations, operation-side Safety attachments, and
 duplicate policy-id lints. Source filters affect runtime matching but are not
 stored as Project Index facts.
+
+Safety sessions currently govern the application-facing model call. Internal
+judge, summarizer, reranker, and classifier model calls are not automatically
+wrapped by the originating session; configure their own Safety policy when
+their implementation exposes one.
 
 In Evals, use safety signal assertions for guardrail/constraint audits or the
 decision report matcher for the canonical safety read model:

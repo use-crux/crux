@@ -148,20 +148,66 @@ function assertValidGuardrailBoundaryFamilies(sources: readonly PolicySource[]):
   for (const source of sources) {
     if (source.kind !== 'guardrail') continue
     const boundaries = boundariesFor(source.policy)
-    const hasMedia = boundaries.some((boundary) => isMediaSafetyTargetId(boundary.id))
-    const hasOther = boundaries.some((boundary) => !isMediaSafetyTargetId(boundary.id))
+    const problem = guardrailBoundaryFamilyProblem(boundaries)
+    if (!problem) continue
     const ids = boundaries.map((boundary) => boundary.id)
-    if (hasMedia && hasOther) {
-      throw new SafetyConfigError({
-        message:
-          `Safety policy "${source.policy.id}" mixes media and non-media boundaries (${ids.join(', ')}). ` +
-          'A media guardrail can target only media boundaries.',
-        boundaries: ids,
-        kinds: [source.kind],
-        scopes: [source.scope],
-      })
-    }
+    throw new SafetyConfigError({
+      message:
+        `Safety policy "${source.policy.id}" mixes incompatible boundary families ` +
+        `(${boundaries.map(bindingIdentity).join(', ')}). ${problem}`,
+      boundaries: ids,
+      kinds: [source.kind],
+      scopes: [source.scope],
+    })
   }
+}
+
+function guardrailBoundaryFamilyProblem(
+  boundaries: readonly BoundaryDef[],
+): string | undefined {
+  if (
+    boundaries.some((boundary) => isMediaSafetyTargetId(boundary.id)) &&
+    !boundaries.every((boundary) => isMediaSafetyTargetId(boundary.id))
+  ) {
+    return 'A media guardrail can target only media boundaries.'
+  }
+  if (
+    boundaries.some(isRootToolDefinitionBoundary) &&
+    !boundaries.every(isRootToolDefinitionBoundary)
+  ) {
+    return 'A root tool-definition guardrail can target only root tool definitions.'
+  }
+  if (
+    boundaries.some(isToolDescriptionBoundary) &&
+    !boundaries.every(isToolDescriptionCompatibleBoundary)
+  ) {
+    return 'A tool-description guardrail can target only closed string boundaries.'
+  }
+  if (
+    boundaries.some((boundary) => boundary.id === 'memory.write') &&
+    !boundaries.every((boundary) => boundary.id === 'memory.write')
+  ) {
+    return 'A memory-write guardrail can target only memory-write boundaries.'
+  }
+  return undefined
+}
+
+function isRootToolDefinitionBoundary(boundary: BoundaryDef): boolean {
+  return boundary.id === 'model.input.tools' && boundary.selector !== 'descriptions'
+}
+
+function isToolDescriptionBoundary(boundary: BoundaryDef): boolean {
+  return boundary.id === 'model.input.tools' && boundary.selector === 'descriptions'
+}
+
+function isToolDescriptionCompatibleBoundary(boundary: BoundaryDef): boolean {
+  return (
+    isToolDescriptionBoundary(boundary) ||
+    boundary.id === 'model.input.text' ||
+    boundary.id === 'model.instructions' ||
+    boundary.id === 'model.output.text' ||
+    boundary.id === 'validation.feedback'
+  )
 }
 
 function expandBindings(
@@ -202,7 +248,7 @@ function boundariesFor(policy: Guardrail | Constraint): readonly BoundaryDef[] {
 function assertUniqueBoundaries(policyId: string, boundaries: readonly BoundaryDef[]): void {
   const seen = new Set<string>()
   for (const boundary of boundaries) {
-    const key = selectedPath(boundary) ? `${boundary.id}:${selectedPath(boundary)}` : boundary.id
+    const key = bindingIdentity(boundary)
     if (seen.has(key)) {
       throw new SafetyConfigError({
         message: `Safety policy "${policyId}" attaches to boundary "${key}" more than once.`,
@@ -210,6 +256,12 @@ function assertUniqueBoundaries(policyId: string, boundaries: readonly BoundaryD
     }
     seen.add(key)
   }
+}
+
+function bindingIdentity(boundary: BoundaryDef): string {
+  return [boundary.id, selectedPath(boundary), boundary.selector]
+    .filter((part): part is string => part !== undefined)
+    .join(':')
 }
 
 function tunedFields(tune: SafetyTunePolicyOptions | undefined): readonly ('mode' | 'enabled')[] {

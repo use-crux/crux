@@ -9,13 +9,21 @@
  * @module
  */
 
-import { observe } from '../observability'
-import { getHooks } from '../runtime/runtime'
-import type { MiddlewareResult } from '../runtime/types'
-import { buildHitMeta, hydrateResult, lookupEntry, resultKindFromArgs } from './entry'
-import { emitSemanticCacheArtifact } from './observability'
-import { hashStable, resolveQueryText, resolveSemanticCacheStores } from './query'
-import type { SemanticCacheCall } from './types'
+import { observe } from "../observability";
+import type { MiddlewareResult } from "../runtime/types";
+import { finalizeCachedCandidate } from "../runtime/internal/cached-candidate-finalizer";
+import { attachCachedReleaseSeal } from "../runtime/internal/cached-release-seal";
+import { hydrateResult, lookupEntry, resultKindFromArgs } from "./entry";
+import {
+  emitSemanticCacheArtifact,
+  emitSemanticCacheRejection,
+} from "./observability";
+import {
+  hashStable,
+  resolveQueryText,
+  resolveSemanticCacheStores,
+} from "./query";
+import type { SemanticCacheCall } from "./types";
 
 /**
  * Run the cache lookup phase for a call.
@@ -23,18 +31,27 @@ import type { SemanticCacheCall } from './types'
  * @param call - The per-call cache context.
  * @returns The cached result on a hit, or `undefined` on a miss.
  */
-export async function performLookup(call: SemanticCacheCall): Promise<MiddlewareResult | undefined> {
-  const { config, namespace, args, promptHint, cacheId, scopeHash } = call
-  const stores = resolveSemanticCacheStores(config)
-  const { promptId, operation, version, mode, toolsPresent, threshold: effectiveThreshold } = call.lookupCtx
+export async function performLookup(
+  call: SemanticCacheCall,
+): Promise<MiddlewareResult | undefined> {
+  const { config, namespace, args, promptHint, cacheId, scopeHash } = call;
+  const stores = resolveSemanticCacheStores(config);
+  const {
+    promptId,
+    operation,
+    version,
+    mode,
+    toolsPresent,
+    threshold: effectiveThreshold,
+  } = call.lookupCtx;
 
-  const lookupStarted = Date.now()
+  const lookupStarted = Date.now();
   const lookupSpan = observe.openSpan({
-    name: 'semantic-cache.lookup',
-    primitive: 'cache.lookup',
+    name: "semantic-cache.lookup",
+    primitive: "cache.lookup",
     attributes: {
-      cacheKind: 'semantic',
-      cacheOperation: 'lookup',
+      cacheKind: "semantic",
+      cacheOperation: "lookup",
       cacheId,
       namespace,
       promptId,
@@ -46,16 +63,31 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
       toolsPresent,
       resultKind: args.outputMode ?? resultKindFromArgs(args),
     },
-  })
+  });
 
   return lookupSpan.withContext(async () => {
-    let queryHash: string | undefined
+    let queryHash: string | undefined;
 
     try {
-      const queryText = await resolveQueryText(promptHint, args)
-      const dense = await config.embedding.embed(queryText)
-      queryHash = hashStable(queryText)
-
+      if (operation === "stream" && !args.createCachedStreamResult) {
+        lookupSpan.end({
+          attributes: {
+            cacheKind: "semantic",
+            cacheOperation: "lookup",
+            cacheId,
+            promptId,
+            operation,
+            scopeHash,
+            version,
+            hit: false,
+            durationMs: Date.now() - lookupStarted,
+          },
+        });
+        return undefined;
+      }
+      const queryText = await resolveQueryText(promptHint, args);
+      const dense = await config.embedding.embed(queryText);
+      queryHash = hashStable(queryText);
 
       const hit = await lookupEntry(stores.records, stores.vectors, {
         namespace,
@@ -65,17 +97,49 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
         resultKind: args.outputMode ?? resultKindFromArgs(args),
         dense,
         threshold: effectiveThreshold,
-      })
-
+      });
 
       if (hit) {
-        const entry = hit.value
-        const ageMs = Date.now() - entry.createdAt
+        const entry = hit.value;
+        const ageMs = Date.now() - entry.createdAt;
+        const decision = await finalizeCachedCandidate(
+          call.middlewareNext,
+          hydrateResult(entry, hit.score),
+        );
+        if (decision.kind === "reject") {
+          emitSemanticCacheRejection({
+            spanId: lookupSpan.spanId,
+            cacheId,
+            promptId,
+            operation,
+            scopeHash,
+            version,
+            queryHash,
+            category: decision.category,
+          });
+          lookupSpan.end({
+            attributes: {
+              cacheKind: "semantic",
+              cacheOperation: "lookup",
+              cacheId,
+              promptId,
+              operation,
+              scopeHash,
+              version,
+              queryHash,
+              hit: false,
+              rejectionCategory: decision.category,
+              durationMs: Date.now() - lookupStarted,
+            },
+          });
+          return undefined;
+        }
+        const accepted = decision.result;
         observe.event({
-          name: 'semantic-cache.hit',
+          name: "semantic-cache.hit",
           attributes: {
-            cacheKind: 'semantic',
-            cacheOperation: 'lookup',
+            cacheKind: "semantic",
+            cacheOperation: "lookup",
             cacheId,
             promptId,
             operation,
@@ -86,8 +150,8 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
             ageMs,
             resultKind: entry.resultKind,
           },
-        })
-        emitSemanticCacheArtifact(lookupSpan.spanId, 'lookup-hit', {
+        });
+        emitSemanticCacheArtifact(lookupSpan.spanId, "lookup-hit", {
           cacheId,
           promptId,
           operation,
@@ -98,11 +162,11 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           ageMs,
           resultKind: entry.resultKind,
           hit: true,
-        })
+        });
         lookupSpan.end({
           attributes: {
-            cacheKind: 'semantic',
-            cacheOperation: 'lookup',
+            cacheKind: "semantic",
+            cacheOperation: "lookup",
             cacheId,
             promptId,
             operation,
@@ -114,24 +178,31 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
             ageMs,
             durationMs: Date.now() - lookupStarted,
           },
-        })
-        if (operation === 'stream') {
-          const replayStarted = Date.now()
+        });
+        if (operation === "stream") {
           const replay = args.createCachedStreamResult?.({
-            text: entry.result.text,
-            object: entry.result.object,
-            meta: buildHitMeta(entry, hit.score),
-          })
-          if (replay !== undefined) return replay
+            text: accepted.text,
+            object: accepted.object,
+            meta: accepted._meta ? { ...accepted._meta } : undefined,
+          });
+          if (replay !== undefined) {
+            return attachCachedReleaseSeal(replay, {
+              resultKind: entry.resultKind,
+              text: accepted.text ?? "",
+              ...(accepted.object !== undefined
+                ? { object: accepted.object }
+                : {}),
+            });
+          }
         }
-        return hydrateResult(entry, hit.score)
+        return accepted;
       }
 
       observe.event({
-        name: 'semantic-cache.miss',
+        name: "semantic-cache.miss",
         attributes: {
-          cacheKind: 'semantic',
-          cacheOperation: 'lookup',
+          cacheKind: "semantic",
+          cacheOperation: "lookup",
           cacheId,
           promptId,
           operation,
@@ -139,11 +210,11 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           version,
           queryHash,
         },
-      })
+      });
       lookupSpan.end({
         attributes: {
-          cacheKind: 'semantic',
-          cacheOperation: 'lookup',
+          cacheKind: "semantic",
+          cacheOperation: "lookup",
           cacheId,
           promptId,
           operation,
@@ -153,12 +224,12 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           hit: false,
           durationMs: Date.now() - lookupStarted,
         },
-      })
-      return undefined
+      });
+      return undefined;
     } catch (error) {
       lookupSpan.error(error, {
-        cacheKind: 'semantic',
-        cacheOperation: 'lookup',
+        cacheKind: "semantic",
+        cacheOperation: "lookup",
         cacheId,
         promptId,
         operation,
@@ -167,8 +238,8 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
         queryHash,
         hit: false,
         durationMs: Date.now() - lookupStarted,
-      })
-      throw error
+      });
+      throw error;
     }
-  })
+  });
 }

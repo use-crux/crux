@@ -16,7 +16,9 @@ guardrail({
   on: boundary.input.text(),
   run: (_subject, context) => {
     expectTypeOf(context.boundary.id).toEqualTypeOf<'model.input.text'>()
-    expectTypeOf(context.origin).toEqualTypeOf<ModelInputOrigin>()
+    expectTypeOf(context.origin).toEqualTypeOf<
+      Extract<ModelInputOrigin, { readonly source: TextInputSource }>
+    >()
     return { action: 'allow' }
   },
 })
@@ -35,7 +37,6 @@ guardrail({
 const selectedTextSources: readonly TextInputSource[] = ['tool', 'retrieval']
 boundary.input.text({ from: selectedTextSources })
 
-// @ts-expect-error - text ingress does not have an arbitrary source namespace.
 boundary.input.text({ from: 'memory' })
 
 // @ts-expect-error - an explicitly empty selector can never match a contribution.

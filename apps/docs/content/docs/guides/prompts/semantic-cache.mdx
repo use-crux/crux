@@ -163,6 +163,34 @@ See the [store capability rule](/docs/reference/crux-core/cache#store-capability
 
 Redis records alone are not enough for semantic cache lookup. Pair `upstashRedisRecordStore()` with `upstashVectorStore()` or another pre-filter-capable `VectorStore`.
 
+## Safety Release Gates
+
+A cache hit skips the provider call, not the current output contract. Before
+Crux publishes cached generate or stream output, it runs the same release
+gates as a live candidate:
+
+```text
+approved input → cache lookup → output guardrails → authored schema parse
+               → constraints → publish
+```
+
+Structured entries keep a private, versioned copy of the accepted canonical
+schema input alongside the public output. On a hit, current output guardrails
+run over that canonical input, the authored Zod schema parses exactly once, and
+constraints evaluate the resulting output. Crux never feeds an old `z.output`
+back through the authored schema.
+
+If a cached candidate is blocked, fails its schema, violates a constraint, or
+comes from an older entry without canonical input, Crux rejects the hit and
+falls through to one live provider call. The rejected hit consumes no provider
+step, retry, or billing budget. Unexpected exceptions thrown by an authored
+schema callback still propagate.
+
+No cache-specific Safety option is required: the prompt, context, plugin, and
+call-site policies already attached to the request are the current release
+gates. Constraint and validation feedback is sent only for eligible live
+retries, never for rejecting a cache hit.
+
 ## Observability
 
 Semantic cache emits `semantic-cache:*` events for lookup start/end, hit, miss, write, skip, and stream replay. They flow through devtools, OTel, the dev server, CLI stats, and the TUI dashboard.

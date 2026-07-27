@@ -12,10 +12,11 @@ import {
   type MemoryCaptureSchedulingResult,
 } from './scheduling'
 import { startMemoryCaptureObservation } from './observability'
+import type { ManagedMemoryWriteGuardCarrier } from '../managed-write-guard'
 
 type CaptureOptions = Readonly<Partial<MemoryRuntimeOptions>> & {
   readonly input?: Record<string, unknown>
-}
+} & ManagedMemoryWriteGuardCarrier
 
 interface PendingCapture {
   readonly sequence: number

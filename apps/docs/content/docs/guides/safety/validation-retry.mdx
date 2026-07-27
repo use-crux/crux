@@ -99,11 +99,11 @@ is thrown having published nothing.
 
 Three limits apply, and the tightest one wins:
 
-| Limit                         | Bounds                                                    |
-| ----------------------------- | ---------------------------------------------------------- |
-| `maxSteps`                    | every provider call on the request — tool rounds, validation re-streams, and constraint re-streams together |
-| `validationRetry.maxRetries`  | how many of those may be validation retries                |
-| a constraint's `maxRetries`   | how many may be retries for that constraint                |
+| Limit                        | Bounds                                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `maxSteps`                   | every provider call on the request — tool rounds, validation re-streams, and constraint re-streams together |
+| `validationRetry.maxRetries` | how many of those may be validation retries                                                                 |
+| a constraint's `maxRetries`  | how many may be retries for that constraint                                                                 |
 
 So `maxSteps: 5` with `validationRetry: { maxRetries: 3 }` allows at most three
 validation re-streams and never more than five provider calls in total; if tool
@@ -117,8 +117,8 @@ validation failure throws `ValidationExhaustedError`. They are never combined.
   stream resolves before terminal Safety and describes only one attempt, so
   reading it would expose content a commit gate withheld — including a rejected
   attempt Crux discarded and re-streamed. Everything published on `textStream`,
-  `fullStream`, and `partialOutputStream` has cleared every gate that could still
-  block or change it.
+  `fullStream`, and `partialOutputStream` has cleared every gate that could
+  still block or change it.
 </Callout>
 
 ## Feedback sanitization
@@ -129,17 +129,28 @@ your schema messages and failed output can still contain user-controlled data.
 
 Use normal prompt sanitization for any user text you place in custom messages.
 When you need to inspect or redact corrective feedback itself, attach a
-guardrail to `boundary.validation.feedback()`:
+guardrail to the canonical feedback provenance:
 
 ```ts
 import { boundary, guardrail } from "@use-crux/core/safety";
 
 const redactFeedback = guardrail({
   id: "validation-feedback-pii",
-  on: boundary.validation.feedback(),
+  on: boundary.input.text({ from: "feedback" }),
   run: guardrail.pii({ strategy: "mask" }),
 });
 ```
+
+On a retry, Crux guards the rejected output and the generated feedback
+separately with the same one-based `ctx.origin.attempt`. The guard runs only
+after retry eligibility is established. An enforced block prevents the next
+physical provider call; report mode records intent and preserves the original
+message envelope.
+
+`boundary.validation.feedback()` remains operational for validation feedback
+during its compatibility window, but is deprecated. It does not cover
+constraint feedback or rejected output; use the source-filtered input boundary
+for all new policies.
 
 ## Error handling
 

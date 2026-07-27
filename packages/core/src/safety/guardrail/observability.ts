@@ -3,7 +3,7 @@ import type { MediaGuardrailRunResult } from './types'
 import type { MediaPartLocation } from '../boundary'
 import { mediaLocationAttributes } from '../media/location'
 import type { GuardrailBinding } from '../registry'
-import type { ModelInputOrigin } from '../input-origin'
+import type { GuardrailOrigin } from './types'
 import { inputOriginAttributes } from '../input-origin-observability'
 import { safetyTarget } from '../../observability/safety-presentation'
 import type { SafetyFinding } from '../decision'
@@ -20,7 +20,7 @@ export function recordGuardrailReport(
   phase: 'input' | 'output',
   durationMs: number,
   result: unknown,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   findings?: readonly SafetyFinding[],
 ): void {
   const guard = binding.policy
@@ -85,7 +85,7 @@ export function recordGuardrailReport(
 export function recordGuardrailBlockedEdge(
   binding: GuardrailBinding,
   reason: string,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   findings?: readonly SafetyFinding[],
 ): void {
   recordBlockedEdge(binding, reason, origin, {}, findings)
@@ -98,7 +98,7 @@ export function recordMediaGuardrailReport(
   location: MediaPartLocation,
   durationMs: number,
   escalatedToBlock: boolean,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   findings?: readonly SafetyFinding[],
 ): void {
   const guardrailName = binding.policy.id
@@ -179,7 +179,7 @@ export function recordMediaGuardrailBlockedEdge(
   reason: string,
   location: MediaPartLocation,
   escalatedToBlock: boolean,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   findings?: readonly SafetyFinding[],
 ): void {
   recordBlockedEdge(
@@ -194,7 +194,7 @@ export function recordMediaGuardrailBlockedEdge(
 function recordBlockedEdge(
   binding: GuardrailBinding,
   reason: string,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   details: Readonly<Record<string, string | number | true>> = {},
   findings?: readonly SafetyFinding[],
 ): void {
@@ -259,7 +259,7 @@ function guardrailReportPreview(
   phase: 'input' | 'output',
   action: string,
   result: unknown,
-  origin?: ModelInputOrigin,
+  origin?: GuardrailOrigin,
   findings?: readonly SafetyFinding[],
 ): Record<string, unknown> {
   const base = {

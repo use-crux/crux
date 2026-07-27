@@ -19,7 +19,10 @@ import { ValidationExhaustedError } from '../../src/generation/validation-retry'
 import { StreamValidationRejection } from '../../src/adapter/execution/stream-rejection'
 import { createCoordinatedStreamPlan } from '../../src/adapter/execution/stream-attempt-plan-factory'
 import { resetHooks } from '../../src/runtime/runtime'
-import { resetObservabilityRuntime, subscribeObservability } from '../../src/observability'
+import {
+  resetObservabilityRuntime,
+  subscribeObservability,
+} from '../../src/observability'
 
 afterEach(() => {
   resetHooks()
@@ -30,7 +33,10 @@ function zerr(): z.ZodError {
   return (z.number().safeParse('nope') as { error: z.ZodError }).error
 }
 
-function constraintRejection(name = 'c1', maxRetries = 2): StreamConstraintRejection {
+function constraintRejection(
+  name = 'c1',
+  maxRetries = 2,
+): StreamConstraintRejection {
   return new StreamConstraintRejection({
     failures: [{ name, severity: 'assert', feedback: 'nope', maxRetries }],
     text: 'bad',
@@ -69,8 +75,13 @@ function plan(overrides?: {
       incrementStep: () => {
         steps += 1
       },
-      formatFeedback: (failures) => [{ role: 'user', content: failures.map((f) => f.feedback).join('; ') }],
-      ...(overrides?.validationRetry ? { validationRetry: overrides.validationRetry } : {}),
+      formatFeedback: (failures) => [
+        { role: 'user', content: failures.map((f) => f.feedback).join('; ') },
+      ],
+      guardFeedback: async (input) => input.text,
+      ...(overrides?.validationRetry
+        ? { validationRetry: overrides.validationRetry }
+        : {}),
       ...(overrides?.signal ? { signal: overrides.signal } : {}),
       promptId: 'p',
     }),
@@ -98,6 +109,7 @@ describe('coordinated stream plan (SDK port)', () => {
     expect(next?.attemptIndex).toBe(1)
     expect(next?.cause).toBe('constraint-retry')
     expect(next?.corrective).toEqual([{ role: 'user', content: 'nope' }])
+    expect(next?.rejectedOutput).toBe('bad')
     expect(harness.steps()).toBe(2)
     // Each attempt gets a FRESH safety stream (never reused across attempts).
     expect(next?.safety).not.toBe(first.safety)
@@ -107,7 +119,9 @@ describe('coordinated stream plan (SDK port)', () => {
     const harness = plan({ validationRetry: { maxRetries: 2 } })
     const first = await harness.plan.beginAttempt()
     first.reportSteps({ steps: 1, resumable: true })
-    const next = await first.reject(new StreamValidationRejection({ error: zerr(), text: 'bad' }))
+    const next = await first.reject(
+      new StreamValidationRejection({ error: zerr(), text: 'bad' }),
+    )
     expect(next?.cause).toBe('validation-retry')
     expect(String(next?.corrective[0]?.content)).toContain('Validation failed')
   })
@@ -116,7 +130,9 @@ describe('coordinated stream plan (SDK port)', () => {
     const harness = plan()
     const first = await harness.plan.beginAttempt()
     first.reportSteps({ steps: 1, resumable: true })
-    await expect(first.reject(constraintRejection('c1', 0))).rejects.toBeInstanceOf(ConstraintViolationError)
+    await expect(
+      first.reject(constraintRejection('c1', 0)),
+    ).rejects.toBeInstanceOf(ConstraintViolationError)
   })
 
   it('throws ValidationExhaustedError when validation retries are exhausted', async () => {
@@ -134,7 +150,9 @@ describe('coordinated stream plan (SDK port)', () => {
   it('refuses to start an attempt the shared budget cannot afford', async () => {
     const harness = plan({ maxSteps: 1 })
     const first = await harness.plan.beginAttempt() // consumes the only step
-    await expect(first.reject(constraintRejection())).rejects.toBeInstanceOf(ConstraintViolationError)
+    await expect(first.reject(constraintRejection())).rejects.toBeInstanceOf(
+      ConstraintViolationError,
+    )
     expect(harness.steps()).toBe(1) // no second provider call was started
   })
 
@@ -148,7 +166,10 @@ describe('coordinated stream plan (SDK port)', () => {
   })
 
   it('surfaces bufferUntilValidated so the runtime holds output to EOF-and-validate', async () => {
-    const harness = plan({ bufferUntilValidated: true, validationRetry: { maxRetries: 1 } })
+    const harness = plan({
+      bufferUntilValidated: true,
+      validationRetry: { maxRetries: 1 },
+    })
     const attempt = await harness.plan.beginAttempt()
     expect(attempt.bufferUntilValidated).toBe(true)
   })
@@ -167,7 +188,9 @@ describe('coordinated stream plan (SDK port)', () => {
     next?.accept()
 
     expect(starts.filter((s) => s.primitive === 'run')).toHaveLength(0)
-    expect(starts.filter((s) => s.primitive === 'generation.stream')).toHaveLength(0)
+    expect(
+      starts.filter((s) => s.primitive === 'generation.stream'),
+    ).toHaveLength(0)
   })
 })
 

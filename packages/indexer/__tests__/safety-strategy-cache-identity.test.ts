@@ -40,7 +40,7 @@ describe('Safety strategy cache identity', () => {
     expect(base.identity.cacheInputs).toContainEqual({
       kind: 'compiler-projection',
       name: 'safety-strategy-facts',
-      version: '2',
+      version: '3',
       phase: 'extract',
     })
     await base.extractFile(file)

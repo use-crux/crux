@@ -13,14 +13,16 @@ import type {
   SafetyOutput,
   SafetyProtocolEvent,
 } from "./session-contract";
+import type { SafetyRegenerate } from "./session-feedback-guard";
 
 export interface SessionConstraintRunner {
   readonly audit: ConstraintAudit | undefined;
   apply(
     output: SafetyOutput,
-    regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    regenerate: SafetyRegenerate,
     guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
     settled?: readonly ConstraintOccurrenceSettlement[],
+    retryAuthority?: "none",
   ): Promise<SafetyOutput>;
   report(output: SafetyOutput): Promise<void>;
   replaceAudit(audit: ConstraintAudit | undefined): void;
@@ -45,8 +47,9 @@ export function createSessionConstraintRunner(
       return audit;
     },
 
-    async apply(output, regenerate, guardCandidate, settled) {
+    async apply(output, regenerate, guardCandidate, settled, retryAuthority) {
       let rounds = 0;
+      let rejected = output;
       const result = await runConstraints(
         options.constraints,
         { text: output.text, parsed: output.parsed },
@@ -60,15 +63,21 @@ export function createSessionConstraintRunner(
             typeof formatted === "string"
               ? [{ role: "user", content: formatted }]
               : formatted;
-          const next = await regenerate(corrective);
+          const next = await regenerate(corrective, {
+            kind: "constraint-feedback",
+            attempt: rounds,
+            rejectedOutput: rejected.text,
+          });
           const guarded = await guardCandidate({
             text: next.text,
             parsed: next.parsed,
           });
+          rejected = guarded;
           return { text: guarded.text, parsed: guarded.parsed };
         },
         {
-          constraintMaxRetries: options.constraintMaxRetries,
+          constraintMaxRetries:
+            retryAuthority === "none" ? 0 : options.constraintMaxRetries,
           ...(settled && settled.length > 0 ? { settled } : {}),
           onCheck: () => {},
           onRetry: (_failed, attempt) => {

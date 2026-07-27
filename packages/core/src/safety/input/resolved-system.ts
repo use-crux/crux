@@ -15,8 +15,11 @@ import { guardModelTextInput, type ModelTextInputResult } from "./model-text";
 import { inputBindingsFor } from "./source";
 import {
   resolveSystemIngressTarget,
-  systemIngressRetrieverId,
 } from "./resolved-system-target";
+import {
+  classifySystemIngressBlock,
+  type SystemIngressClassification,
+} from "./system-ingress-classification";
 
 interface GuardResolvedSystemOptions {
   readonly bindings: readonly GuardrailBinding[];
@@ -54,30 +57,34 @@ export async function guardResolvedSystemInput(
   options: GuardResolvedSystemOptions,
 ): Promise<ResolvedSystemInputResult> {
   const fullInput = options.scope !== "carrier";
-  const retrievalBindings = inputBindingsFor(
-    options.bindings,
-    "model.input.text",
-    "retrieval",
-  );
   const instructionBindings = options.bindings.filter(
     (binding) => binding.boundary.id === "model.instructions",
   );
+  const classifications = options.carrier.blocks.map((block, blockIndex) =>
+    classifySystemIngressBlock(block, blockIndex),
+  );
   const targetApplicable =
     options.scope === "carrier" ||
-    options.carrier.blocks.some((block) =>
-      block.family === "retriever"
-        ? retrievalBindings.length > 0
-        : instructionBindings.length > 0,
+    classifications.some(
+      (classification) =>
+        bindingsForClassification(
+          options.bindings,
+          instructionBindings,
+          classification,
+        ).length > 0,
     ) ||
     (fullInput &&
       options.carrier.mode === "messages" &&
       options.carrier.hasTrustedSuffix &&
       instructionBindings.length > 0);
-  const mismatchBinding =
-    retrievalBindings.length > 0 &&
-    options.carrier.blocks.some((block) => block.family === "retriever")
-      ? retrievalBindings[0]!
-      : instructionBindings[0];
+  const mismatchBinding = classifications
+    .flatMap((classification) =>
+      bindingsForClassification(
+        options.bindings,
+        instructionBindings,
+        classification,
+      ),
+    )[0];
   const target = targetApplicable
     ? resolveSystemIngressTarget(options, mismatchBinding)
     : undefined;
@@ -92,8 +99,14 @@ export async function guardResolvedSystemInput(
     blockIndex++
   ) {
     const block = options.carrier.blocks[blockIndex]!;
-    if (block.family === "retriever") {
-      if (retrievalBindings.length === 0) {
+    const classification = classifications[blockIndex]!;
+    const bindings = bindingsForClassification(
+      options.bindings,
+      instructionBindings,
+      classification,
+    );
+    if (classification.boundary === "model.input.text") {
+      if (bindings.length === 0) {
         guardedBlocks.push(block.text);
         continue;
       }
@@ -104,12 +117,7 @@ export async function guardResolvedSystemInput(
         input: {
           kind: "text",
           value: block.text,
-          origin: {
-            source: "retrieval",
-            kind: "retrieval-context",
-            retrieverId: systemIngressRetrieverId(block),
-            blockIndex,
-          },
+          origin: classification.origin,
         },
         context: options.context(options.messages),
         appendAudit: (value) => {
@@ -117,21 +125,21 @@ export async function guardResolvedSystemInput(
         },
       });
       if (guarded.kind !== "text") {
-        throw new Error("Retrieval model ingress returned a non-text patch.");
+        throw new Error("System model ingress returned a non-text patch.");
       }
       appendAudit(applied, actions, audit);
       guardedBlocks.push(guarded.value);
       continue;
     }
 
-    if (instructionBindings.length === 0) {
+    if (bindings.length === 0) {
       guardedBlocks.push(block.text);
       continue;
     }
     ran = true;
-    const result = await createGuardrailPipeline(instructionBindings).runInput(
+    const result = await createGuardrailPipeline(bindings).runInput(
       block.text,
-      options.context(options.messages),
+      options.context(options.messages, classification.origin),
     );
     appendAudit(applied, actions, result.audit);
     guardedBlocks.push(result.content);
@@ -151,7 +159,13 @@ export async function guardResolvedSystemInput(
       ran = true;
       const result = await createGuardrailPipeline(
         instructionBindings,
-      ).runInput(suffix, options.context(messages));
+      ).runInput(
+        suffix,
+        options.context(messages, {
+          source: "instructions",
+          kind: "provider-adaptation",
+        }),
+      );
       appendAudit(applied, actions, result.audit);
       suffix = result.content;
     }
@@ -181,7 +195,11 @@ export async function guardResolvedSystemInput(
         ...(options.carrier.mode === "messages"
           ? { skipMessageIndex: options.carrier.targetMessageIndex }
           : {}),
-        context: (current) => options.context(current),
+        context: (current) =>
+          options.context(current, {
+            source: "instructions",
+            kind: "provider-adaptation",
+          }),
       })
     : {
         messages,
@@ -200,6 +218,20 @@ export async function guardResolvedSystemInput(
     ran,
     systemIngress,
   };
+}
+
+function bindingsForClassification(
+  bindings: readonly GuardrailBinding[],
+  instructionBindings: readonly GuardrailBinding[],
+  classification: SystemIngressClassification,
+): readonly GuardrailBinding[] {
+  return classification.boundary === "model.input.text"
+    ? inputBindingsFor(
+        bindings,
+        classification.boundary,
+        classification.origin.source,
+      )
+    : instructionBindings;
 }
 
 function unchangedDelivery(

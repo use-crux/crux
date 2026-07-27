@@ -48,8 +48,8 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v77");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v74");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v78");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v77");
   });
 
   it("takes the Workspace snapshot relation semantic epoch", () => {

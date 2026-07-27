@@ -4,24 +4,36 @@ import type {
   InputSource,
   InputSourcesFromOptions,
   MediaInputSource,
+  ModelInputOrigin,
   ModelInputOriginFor,
   NonEmptyInputBoundaryOptions,
   TextInputSource,
 } from "./input-origin";
 import type { MediaPartSubject } from "./media/types";
 
-const TEXT_SOURCES = ["user", "tool", "retrieval"] as const;
+const TEXT_SOURCES = [
+  "user",
+  "tool",
+  "retrieval",
+  "memory",
+  "handoff",
+  "feedback",
+] as const;
 const MEDIA_SOURCES = ["user", "tool"] as const;
 
 /**
  * Target untrusted text immediately before it enters a governed model.
  *
- * With no options, the boundary matches user, tool, and rendered retrieval
- * text. Use {@link toolPolicy} instead when policy logic needs the raw tool
- * result before canonical model-output conversion.
+ * @remarks
+ * With no options, the boundary matches user, tool, rendered retrieval,
+ * memory, handoff, and framework-feedback text. Use {@link toolPolicy} instead
+ * when policy logic needs the raw tool result before canonical model-output
+ * conversion. Enforce mode may block or rewrite matching text; report mode
+ * records intent while preserving the original message envelope.
  *
- * @param options Optional semantic source filter.
+ * @param options - Optional semantic provenance filter.
  * @returns A frozen text boundary with callback origin narrowed to `from`.
+ * @throws {TypeError} When `from` is empty or contains an unsupported source.
  *
  * @example
  * ```ts
@@ -52,12 +64,15 @@ function text<
 /**
  * Target canonical untrusted media immediately before it enters a governed model.
  *
+ * @remarks
  * With no options, the boundary matches user and tool media. Retrieval is not
  * a media source because retrieved assets are not implicitly hydrated. Use
- * {@link toolPolicy} for raw tool results before canonical conversion.
+ * {@link toolPolicy} for raw tool results before canonical conversion. Enforce
+ * mode may block or strip matching media; report mode preserves the request.
  *
- * @param options Optional semantic source filter.
+ * @param options - Optional semantic provenance filter.
  * @returns A frozen media boundary whose subject is a {@link MediaPartSubject}.
+ * @throws {TypeError} When `from` is empty or contains an unsupported source.
  *
  * @example
  * ```ts
@@ -88,9 +103,11 @@ function media<
 /**
  * Target trusted developer and system instructions sent to a governed model.
  *
+ * @remarks
  * This boundary has no source filter. A system message is not trusted merely
- * because of its role: rendered retrieval text remains on {@link text} with
- * source `retrieval`. Raw tool values belong in {@link toolPolicy}.
+ * because of its role: rendered retrieval, memory, blackboard, and handoff text
+ * remain on {@link text} with their untrusted sources. Raw tool values belong
+ * in {@link toolPolicy}.
  *
  * @returns A frozen trusted-instructions boundary.
  *
@@ -99,7 +116,11 @@ function media<
  * const trustedInstructions = boundary.input.instructions()
  * ```
  */
-function instructions(): BoundaryDef<"model.instructions", string> {
+function instructions(): BoundaryDef<
+  "model.instructions",
+  string,
+  Extract<ModelInputOrigin, { readonly source: "instructions" }>
+> {
   return createInputBoundary("model.instructions");
 }
 

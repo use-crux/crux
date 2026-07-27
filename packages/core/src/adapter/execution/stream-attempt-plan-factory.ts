@@ -24,6 +24,10 @@ import type {
   SdkAttemptOutcome,
   SdkStreamAttempt,
 } from "./stream-attempt-plan";
+import {
+  guardCorrectiveWriteback,
+  type FeedbackIngressGuard,
+} from "../../safety/session-feedback-guard";
 
 export interface CoordinatedStreamPlanOptions {
   /** Whether any commit gate (assert or positive validation-retry) is active. */
@@ -37,13 +41,17 @@ export interface CoordinatedStreamPlanOptions {
   readonly maxSteps: number;
   readonly steps: () => number;
   readonly incrementStep: () => void;
-  readonly formatFeedback: (failures: readonly ConstraintFailure[]) => readonly Message[];
+  readonly formatFeedback: (
+    failures: readonly ConstraintFailure[],
+  ) => readonly Message[];
   readonly validationRetry?: ValidationRetryOptions;
   readonly promptId?: string;
   /** Caller abort/deadline signal; composed into each attempt's signal. */
   readonly signal?: AbortSignal;
   /** Run each attempt-span open/close inside the owning `generation.stream` context. */
   readonly withStreamContext?: <T>(work: () => T) => T | Promise<T>;
+  /** Guard eligible retry writeback before the next SDK attempt is granted. */
+  readonly guardFeedback: FeedbackIngressGuard;
 }
 
 /** Create the plan handed to a loop-owning SDK runtime. */
@@ -53,12 +61,16 @@ export function createCoordinatedStreamPlan(
   let acceptedSeal: SafetyStreamSeal | undefined;
   // The validation gate's parse of the committed candidate, so completion publishes THAT
   // parse instead of running the authored schema a second time.
-  let committedCandidate: { readonly value: unknown; readonly data: unknown } | undefined;
+  let committedCandidate:
+    | { readonly value: unknown; readonly data: unknown }
+    | undefined;
   const policy = createStreamRetryPolicy({
     maxSteps: options.maxSteps,
     steps: options.steps,
     formatFeedback: options.formatFeedback,
-    ...(options.validationRetry ? { validationRetry: options.validationRetry } : {}),
+    ...(options.validationRetry
+      ? { validationRetry: options.validationRetry }
+      : {}),
     ...(options.promptId ? { promptId: options.promptId } : {}),
   });
 
@@ -66,6 +78,7 @@ export function createCoordinatedStreamPlan(
     attemptIndex: number,
     cause: StreamAttemptCause,
     corrective: readonly Message[],
+    rejectedOutput: string | undefined,
   ): Promise<SdkStreamAttempt> => {
     // Budget gate BEFORE consuming a provider call. One step is reserved up front so a
     // runtime that never reports back still cannot run free; the reported count replaces
@@ -76,7 +89,9 @@ export function createCoordinatedStreamPlan(
 
     const controller = new AbortController();
     const onAbort = () =>
-      controller.abort((options.signal as { reason?: unknown } | undefined)?.reason);
+      controller.abort(
+        (options.signal as { reason?: unknown } | undefined)?.reason,
+      );
     if (options.signal?.aborted) controller.abort();
     else options.signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -92,7 +107,9 @@ export function createCoordinatedStreamPlan(
       : open())) as ReturnType<typeof observe.openSpan>;
 
     let settled = false;
-    let reported: { readonly steps: number; readonly resumable: boolean } | undefined;
+    let reported:
+      | { readonly steps: number; readonly resumable: boolean }
+      | undefined;
     const close = (
       outcome: SdkAttemptOutcome,
       failedPolicies?: readonly string[],
@@ -105,7 +122,9 @@ export function createCoordinatedStreamPlan(
           attemptIndex,
           cause,
           outcome,
-          ...(failedPolicies && failedPolicies.length > 0 ? { failedPolicies } : {}),
+          ...(failedPolicies && failedPolicies.length > 0
+            ? { failedPolicies }
+            : {}),
         },
       });
     };
@@ -128,6 +147,7 @@ export function createCoordinatedStreamPlan(
       attemptIndex,
       cause,
       corrective,
+      rejectedOutput,
       safety,
       signal: controller.signal,
       bufferUntilValidated: options.bufferUntilValidated,
@@ -180,25 +200,44 @@ export function createCoordinatedStreamPlan(
         }
         // Throws the typed public terminal error when no retry is available.
         const grant = policy.onRejection(error, attemptIndex);
-        return startAttempt(attemptIndex + 1, grant.cause, grant.corrective);
+        const nextAttempt = attemptIndex + 1;
+        const guarded = await guardCorrectiveWriteback({
+          corrective: grant.corrective,
+          rejectedOutput: grant.rejectedOutput,
+          kind:
+            grant.cause === "validation-retry"
+              ? "validation-feedback"
+              : "constraint-feedback",
+          attempt: nextAttempt,
+          guard: options.guardFeedback,
+        });
+        return startAttempt(
+          nextAttempt,
+          grant.cause,
+          guarded.corrective,
+          guarded.rejectedOutput,
+        );
       },
     };
   };
 
   return {
     active: options.active,
-    beginAttempt: () => startAttempt(0, "initial", []),
+    beginAttempt: () => startAttempt(0, "initial", [], undefined),
     acceptedSeal: () => acceptedSeal,
     committedCandidate: () => committedCandidate,
   };
 }
 
 function failedPolicyIds(error: unknown): readonly string[] | undefined {
-  const failures = (error as { failures?: readonly { name: string }[] }).failures;
+  const failures = (error as { failures?: readonly { name: string }[] })
+    .failures;
   return failures?.map((failure) => failure.name);
 }
 
 function abortReason(signal: AbortSignal): Error {
   const reason = (signal as { reason?: unknown }).reason;
-  return reason instanceof Error ? reason : new DOMException("Aborted", "AbortError");
+  return reason instanceof Error
+    ? reason
+    : new DOMException("Aborted", "AbortError");
 }

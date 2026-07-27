@@ -15,7 +15,10 @@ import {
   createSafetyWithBindingApplicability,
   guardSafetySessionResolvedInput,
   openSafetySessionStructuredStream,
+  safetySessionMemoryWriteGuard,
   safetySessionModelIngressGuard,
+  safetySessionToolDefinitionGuard,
+  safetySessionToolDescriptionGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { LiveTextSlot } from "../../safety/output/completion";
@@ -56,6 +59,9 @@ import type {
   StructuredOutputDecodeManifest,
 } from "../structured-output";
 import { withDefaultResolverPorts } from "../../resolver/ports";
+import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
+import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -117,13 +123,20 @@ export async function streamCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
-    messages,
-    system: currentSystem,
-  }, {
-    resolvedMessages:
-      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
-  });
+  const guardedInput = await guardSafetySessionResolvedInput(
+    safety,
+    resolved,
+    {
+      messages,
+      system: currentSystem,
+    },
+    {
+      resolvedMessages:
+        initialMessages.source === "resolved-messages"
+          ? "selected"
+          : "discarded",
+    },
+  );
   messages = [...guardedInput.messages];
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
@@ -152,11 +165,16 @@ export async function streamCore<
       timeout: args.timeout,
       abortSignal: args.signal,
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
       ...(dialect.structuredOutput
         ? { structuredOutputCapabilities: dialect.structuredOutput.accepts }
         : {}),
+    });
+    await lifecycle.guardExposure({
+      root: safetySessionToolDefinitionGuard(safety),
+      descriptions: safetySessionToolDescriptionGuard(safety),
     });
     const tools = lifecycle.descriptors
       ? [...lifecycle.descriptors]
@@ -182,6 +200,23 @@ export async function streamCore<
       structuredDecodeManifest = plan.decodeManifest;
       structuredCanonicalSchema = plan.canonicalSchema;
     }
+    const cachedFinalizer = resolved.schema
+      ? createCachedStreamCandidateFinalizer({
+          output: "object",
+          safety,
+          messages: () => messages,
+          schema: resolved.schema,
+          promptId: prompt.id ?? "unknown",
+          structuredContext: {
+            canonicalSchema: structuredCanonicalSchema!,
+            decodeManifest: structuredDecodeManifest,
+          },
+        })
+      : createCachedStreamCandidateFinalizer({
+          output: "text",
+          safety,
+          messages: () => messages,
+        });
     const providerMessages = await normalizeInvocationMessages(messages, {
       provider: modelInfo.provider,
     });
@@ -223,20 +258,23 @@ export async function streamCore<
     let providerRawStream: TRawStream | undefined;
     const handle = await sourceSession.withContext(() =>
       orchestrateStream(
-        {
-          discardableAttempt: gates.coordinated,
-          promptId: prompt.id,
-          promptConfig: prompt.config ?? ({} as typeof prompt.config),
-          preparedArgs: { ...callArgs, input: args.input ?? {} },
-          input: args.input ?? {},
-          provider: modelInfo.provider,
-          model: modelInfo.modelId,
-          resolved,
-          outputMode: resolved.schema ? "object" : "text",
-          timeout: args.timeout,
-          createCachedStreamResult: (cached) =>
-            createCachedStreamHandle(cached) as unknown as MiddlewareResult,
-        },
+        attachCachedCandidateFinalizer(
+          {
+            discardableAttempt: gates.coordinated,
+            promptId: prompt.id,
+            promptConfig: prompt.config ?? ({} as typeof prompt.config),
+            preparedArgs: { ...callArgs, input: args.input ?? {} },
+            input: args.input ?? {},
+            provider: modelInfo.provider,
+            model: modelInfo.modelId,
+            resolved,
+            outputMode: resolved.schema ? "object" : "text",
+            timeout: args.timeout,
+            createCachedStreamResult: (cached) =>
+              createCachedStreamHandle(cached) as unknown as MiddlewareResult,
+          },
+          cachedFinalizer,
+        ),
         async () => {
           emitInputTokenEstimate({
             messages: providerMessages,
@@ -268,13 +306,14 @@ export async function streamCore<
     );
 
     const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
+    const cachedRelease = readCachedReleaseSeal(handle);
 
     // A live enforce `assert` commit gate on a structured stream can reject an
     // attempt (RFC #173). Route it through the coordinated route so a rejected
     // attempt is discarded and restreamed (buffer-until-commitment: no leaked
     // bytes) — while any stream with no commit gate keeps the byte-for-byte
     // progressive path below unchanged.
-    if (gates.coordinated) {
+    if (gates.coordinated && !cachedRelease) {
       return {
         ...openCoordinatedStructuredStream(
           {
@@ -296,12 +335,8 @@ export async function streamCore<
             ...(args.validationRetry
               ? { validationRetry: args.validationRetry }
               : {}),
-            ...(structuredCanonicalSchema
-              ? { structuredCanonicalSchema }
-              : {}),
-            ...(structuredDecodeManifest
-              ? { structuredDecodeManifest }
-              : {}),
+            ...(structuredCanonicalSchema ? { structuredCanonicalSchema } : {}),
+            ...(structuredDecodeManifest ? { structuredDecodeManifest } : {}),
             closeSources,
             captureTurn: (turn) =>
               lifecycle.captureTurn({
@@ -332,8 +367,9 @@ export async function streamCore<
     // for an unguarded structured prompt (RFC #173).
     const canonicalizes =
       (structuredDecodeManifest?.operations.length ?? 0) > 0;
-    const trackedSafety =
-      resolved.schema && (safety.enabled || canonicalizes)
+    const trackedSafety = cachedRelease
+      ? undefined
+      : resolved.schema && (safety.enabled || canonicalizes)
         ? trackSafetyStreamSeal(
             openSafetySessionStructuredStream(safety, {
               ...(structuredCanonicalSchema
@@ -400,6 +436,7 @@ export async function streamCore<
             safety,
             meta,
             assembleWithoutSafety: true,
+            ...(cachedRelease ? { cachedRelease } : {}),
             liveText,
             representedText: streamedAssistant.providerText || undefined,
             liveTextSlots,

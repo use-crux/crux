@@ -43,6 +43,10 @@ import { createGenerationPerformanceTracker } from './performance-metrics'
 import type { CruxRunId } from '../observability'
 import { stampCruxRunId } from './run-id'
 import { maybeWarnMissingSemanticCache } from './orchestrate-cache'
+import {
+  attachCachedCandidateFinalizer,
+  cachedCandidateFinalizer,
+} from '../runtime/internal/cached-candidate-finalizer'
 
 /**
  * Shared generate orchestration. Wraps an adapter's SDK-specific `doGenerate`
@@ -164,6 +168,10 @@ async function orchestrateGenerateInner<
     let result: TResult
     if (middleware) {
       const next = createFinalizingMiddlewareNext(doGenerate, operation)
+      const candidateFinalizer = spec[cachedCandidateFinalizer]
+      if (candidateFinalizer) {
+        attachCachedCandidateFinalizer(next, candidateFinalizer)
+      }
       result = (await middleware(
         {
           promptId: spec.promptId,
@@ -269,6 +277,10 @@ async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TRe
   try {
     if (middleware) {
       const next = createFinalizingMiddlewareNext(doStream, operation)
+      const candidateFinalizer = spec[cachedCandidateFinalizer]
+      if (candidateFinalizer) {
+        attachCachedCandidateFinalizer(next, candidateFinalizer)
+      }
       const result = (await middleware(
         {
           promptId: spec.promptId,

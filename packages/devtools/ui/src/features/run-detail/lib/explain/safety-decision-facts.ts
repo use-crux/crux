@@ -17,9 +17,13 @@ export function safetyDecisionFacts(
   if (!safety) return undefined
 
   const origin = inputOriginFacts(safety.origin)
+  const target = safetyTargetLabel(safety.target.id)
 
   return {
-    target: safety.target.label || safetyTargetLabel(safety.target.id) || 'Unknown safety target',
+    target:
+      target !== safety.target.id
+        ? target
+        : safety.target.label || target || 'Unknown safety target',
     ...origin,
     posture: safety.changed ? `${safety.mode} · changed` : safety.mode,
   }

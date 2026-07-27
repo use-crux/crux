@@ -13,6 +13,10 @@ import type { Message } from '../../generation/messages'
 import type { SkillActivationSession } from '../../skill/session'
 import type { MemoryCaptureToolCall } from './memory-capture'
 import { messageText } from '../../content'
+import {
+  attachManagedMemoryWriteGuard,
+  type ManagedMemoryWriteGuard,
+} from '../../memory/managed-write-guard'
 
 /**
  * Read the explicit skill activation session set by prompt resolution.
@@ -43,6 +47,8 @@ export async function captureMemoryTurn(
     messages: readonly Message[]
     assistantText?: string
     toolCalls?: readonly MemoryCaptureToolCall[]
+    /** @internal Per-call Safety capability for managed memory commits. */
+    memoryWriteGuard?: ManagedMemoryWriteGuard
   },
 ): Promise<void> {
   if (!resolved.memoryBindings || resolved.memoryBindings.length === 0) return
@@ -61,10 +67,10 @@ export async function captureMemoryTurn(
 
   await Promise.all(
     resolved.memoryBindings.map(async (binding) => {
-      const options = {
+      const options = attachManagedMemoryWriteGuard({
         input: binding.input ?? args.input,
         promptId: binding.promptId ?? args.promptId,
-      }
+      }, args.memoryWriteGuard)
       await binding.memory.captureTurn(
         {
           messages: [...userMessages, ...assistantMessages],

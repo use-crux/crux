@@ -4,6 +4,7 @@ import {
   normalizeTurnDecisionReport,
   type RuntimeTurnDecisionReport,
 } from "@/features/run-detail/lib/explain/report";
+import type { TurnDecision } from "@/types";
 import { DecisionRow } from "./Decisions";
 
 describe("DecisionRow Safety provenance", () => {
@@ -72,4 +73,108 @@ describe("DecisionRow Safety provenance", () => {
     expect(html).toContain("docs");
     expect(html).toContain("enforce · changed");
   });
+
+  it("renders the friendly tool target and every content-free provenance label", () => {
+    const origins = [
+      { source: "memory", kind: "memory-context", memoryId: "conversation" },
+      {
+        source: "memory",
+        kind: "blackboard-context",
+        boardId: "shared-plan",
+      },
+      {
+        source: "handoff",
+        kind: "handoff-context",
+        handoffId: "delegation-1",
+      },
+      { source: "feedback", kind: "rejected-output", attempt: 2 },
+      {
+        source: "tool-definition",
+        kind: "authored",
+        toolName: "lookup",
+        descriptionKind: "tool",
+      },
+      {
+        source: "tool-definition",
+        kind: "discovered",
+        toolName: "search",
+        sourceId: "catalog",
+        sourceKind: "registry",
+        descriptionKind: "schema",
+        schemaDepth: 2,
+        schemaPath: "properties.private.description",
+        content: "PRIVATE_SCHEMA_CONTENT",
+      },
+    ];
+    const html = origins
+      .map((origin, index) =>
+        renderToStaticMarkup(
+          <DecisionRow
+            decision={safetyDecision(`decision-${index}`, origin)}
+          />,
+        ),
+      )
+      .join("");
+
+    expect(html).toContain("Model input · Tools");
+    for (const label of [
+      "Memory",
+      "Blackboard",
+      "Handoff",
+      "Feedback",
+      "Authored tool",
+      "Discovered tool",
+    ]) {
+      expect(html).toContain(label);
+    }
+    expect(html).not.toContain("model.input.tools");
+    expect(html).not.toContain("properties.private");
+    expect(html).not.toContain("PRIVATE_SCHEMA_CONTENT");
+  });
+
+  it("renders unknown future origins with safe generic copy", () => {
+    const html = renderToStaticMarkup(
+      <DecisionRow
+        decision={safetyDecision("decision-future", {
+          source: "future-secret-source",
+          kind: "future-kind",
+          content: "PRIVATE_FUTURE_CONTENT",
+        })}
+      />,
+    );
+
+    expect(html).toContain("Other source");
+    expect(html).not.toContain("future-secret-source");
+    expect(html).not.toContain("future-kind");
+    expect(html).not.toContain("PRIVATE_FUTURE_CONTENT");
+  });
 });
+
+function safetyDecision(
+  id: string,
+  origin: Record<string, unknown>,
+): TurnDecision {
+  return {
+    id,
+    phase: "checks",
+    kind: "guardrail.run",
+    subject: {
+      kind: "guardrail",
+      id: "tool-boundaries",
+      name: "tool-boundaries",
+    },
+    outcome: "allow",
+    reason: {
+      code: "guardrail.allowed",
+      text: "guardrail decision was observed.",
+      source: "span-attribute",
+      evidenceLevel: "observed",
+    },
+    safety: {
+      target: { id: "model.input.tools", label: "model.input.tools" },
+      mode: "enforce",
+      changed: false,
+      origin,
+    },
+  } as unknown as TurnDecision;
+}

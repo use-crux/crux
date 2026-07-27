@@ -54,11 +54,12 @@ must not absorb Eval, Inspect, or Review projections.
 and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
 cache, or Static Index internals directly.
 
-The Go-owned Project Index snapshot cache epoch is 48 because runtime-rich Eval facts now include
-the client-visible timeout-policy projection. Epoch 47 snapshots are rejected after restart so they
-cannot hide that policy. This is a Project Index read-model migration only; static/semantic Index
-cache identities, Eval Run V4, Eval Host V2, task/scorer evidence identity, and Baseline identity
-remain at their already-established versions and epochs.
+The Go-owned Project Index snapshot cache epoch is 49 because it combines the runtime-rich Eval
+timeout-policy facts introduced at epoch 48 with provider-visible tool Safety boundary metadata.
+Epoch 48 snapshots are rejected after restart so they cannot hide the Safety metadata. This is a
+Project Index read-model migration only; static/semantic Index cache identities, Eval Run V4, Eval
+Host V2, task/scorer evidence identity, and Baseline identity remain at their already-established
+versions and epochs.
 
 Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
 state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,
