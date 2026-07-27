@@ -150,12 +150,20 @@ Authoring semantics are:
 - `null` is the preferred explicit inheritance override; and
 - existing non-positive or non-finite values remain disabled for compatibility.
 
-Normalization validates, freezes, and stores the policy in the inert
-definition. The frozen task-context projection preserves explicit `null`,
-including named Tool disables, so forwarding it cannot fall through to
-inherited `toolMs`. The canonical `toolBudgetMs()` resolver changes to
-distinguish an absent named override from explicit `null`, so direct generation
-calls honor the same semantics.
+Normalization is semantic and JSON-portable. Missing fields remain absent.
+Positive finite numbers use the same floored-millisecond normalization as
+runtime budgets. An explicitly authored non-positive or non-finite number
+canonicalizes to `null`, not omission, so it remains an override while all
+disabled numeric spellings share one identity.
+
+The inert definition retains `case.timeout: null` as a whole-policy clear.
+Resolving that Case materializes `null` for exactly the scalar fields and named
+Tool entries inherited from the Eval. The full resolved policy retains a
+`totalMs` clear for identity and cell-deadline resolution; the task-context
+projection omits `totalMs` but preserves every other materialized `null`. It
+does not synthesize clears for fields or Tool names that were not inherited.
+The canonical `toolBudgetMs()` resolver distinguishes an absent named override
+from explicit `null`, so direct generation calls honor the same semantics.
 
 Widening canonical timeout fields to include `null` is intentionally
 source-breaking for consumers that read an optional field as `number` without

@@ -11,6 +11,7 @@
 import type { LeaseToken, RuntimeTargetId, WorkId } from "../ports/ids";
 import type { RuntimeWork } from "../ports/work";
 import { cloneRuntimeResultRef, type RuntimeResultRef } from "../results/types";
+import type { JsonValue } from "../../storage";
 
 /** Durable execution status for a runtime work item. */
 export type WorkStatus =
@@ -30,6 +31,8 @@ export interface WorkItemError {
   readonly message: string;
   /** Time when the runtime recorded this error. */
   readonly at: Date;
+  /** Optional durable machine-readable context owned by the error producer. */
+  readonly details?: JsonValue;
 }
 
 /** Durable runtime work record owned by the kernel state machine. */

@@ -3,8 +3,11 @@ import { z } from "zod";
 
 import { caseFile, evaluate } from "../../src/eval";
 import { getEvalDefinitionForInternalUse } from "../../src/eval/internal/definition";
+import { defineTimeoutAuthoringBehavior } from "./authoring-timeout.behavior";
 
 describe("evaluate()", () => {
+  defineTimeoutAuthoringBehavior();
+
   it("rejects unknown and removed top-level options with actionable remedies", () => {
     const base = {
       task: async (input: string) => input,

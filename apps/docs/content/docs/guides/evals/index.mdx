@@ -127,6 +127,106 @@ ambient environment variables, filesystem contents, or network state. Route
 that variability through Case input, call options, or Variants; use `--fresh`
 when ambient behavior is intentional.
 
+## Bound task execution time
+
+Set a timeout on the Eval and override only the budgets that differ for a
+Case:
+
+```ts title="evals/support.eval.ts"
+export default evaluate({
+  id: "support",
+  task: support,
+  timeout: {
+    totalMs: 30_000,
+    stepMs: 10_000,
+    toolMs: 5_000,
+    tools: { search: 2_000 },
+  },
+  cases: [
+    {
+      id: "standard",
+      input: { question: "Can I get a refund?" },
+    },
+    {
+      id: "slow-search",
+      input: { question: "Find my archived order" },
+      timeout: {
+        stepMs: 15_000,
+        tools: { search: null },
+      },
+    },
+    {
+      id: "no-eval-ceiling",
+      input: { question: "Run the production policy unchanged" },
+      timeout: null,
+    },
+  ],
+});
+```
+
+Missing Case fields inherit from the Eval. Scalar fields replace by field, and
+`tools` merges by Tool name. A field or named Tool set to `null` clears that
+inherited Eval ceiling; setting the Case's entire `timeout` to `null` clears
+the whole inherited policy. It does not disable a timeout already owned by the
+production task.
+
+`totalMs` belongs to the Eval cell and limits only the task attempt. Nested
+`stepMs`, `chunkMs`, `firstToken`, `toolMs`, and named Tool budgets are ceilings
+on managed production calls. A managed `generate.task()` or `stream.task()`
+receives the cell signal and nested ceilings automatically.
+
+An ordinary async task can forward the active context explicitly:
+
+```ts title="src/opaque-support.ts"
+import { openai } from "@ai-sdk/openai";
+import { generate, stableModel } from "@use-crux/ai";
+import { evalContext } from "@use-crux/core/eval";
+import { supportInput, supportPrompt } from "./support";
+import type { z } from "zod";
+
+const model = stableModel(openai("gpt-4o-mini"));
+
+export async function opaqueSupport(input: z.infer<typeof supportInput>) {
+  const { signal, timeout } = evalContext();
+  return generate(supportPrompt, { model, input, signal, timeout });
+}
+```
+
+Pass the exact `timeout` object returned by `evalContext()`; cloning or
+spreading it discards its Eval-ceiling identity. Outside an Eval, direct
+`generate()` and `stream()` calls also accept a caller-owned `signal`. When a
+signal and structured budget are both active, the first cancellation source
+wins.
+
+An unhandled canonical timeout produces a complete, non-passing `timed_out`
+cell, distinct from `errored`. Code may catch a canonical timeout and recover
+normally. Cancellation is cooperative: user or provider code that ignores the
+signal may continue, but a sealed cell rejects late evidence and remote result
+publication. Scorers and Case assertions run after the task boundary and are
+not covered by the task timeout.
+
+## Inspect timeouts
+
+Crux exposes configured policy before a run and the winning timeout after one:
+
+- **Index** shows the Eval's effective default under **Task timeout**.
+- **Evals** shows whether each inline or file-backed Case inherits, overrides,
+  disables part of, or clears the whole Eval policy. Expand an override to see
+  its effective policy.
+- **Eval Runs** distinguishes **Timed out** from failed and errored cells,
+  shows the winning budget, limit, and Tool when applicable, and includes
+  timeout counts in the run summary.
+- **Runs** opens the cell's `eval.case` observation. Its child generation and
+  Tool work remain available in the normal trace, while an exact structured
+  timeout terminal explains the cancellation without parsing error text.
+
+A timed-out cell is complete but non-passing, so it remains in the pass-rate
+denominator. Baseline promotion retains its terminal outcome and writes
+`null` for declared metric values that the task could not produce.
+Cancellation remains cooperative rather than forced: after the timeout, Crux
+quarantines late Eval evidence, but user or provider work that ignores the
+signal may continue outside the sealed cell.
+
 ## Cases in files
 
 ```ts

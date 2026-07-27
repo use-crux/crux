@@ -14,6 +14,7 @@ import type {
   EmbeddingFacts,
   RagIndexerFacts,
 } from "./embedding-facts";
+import type { EvalFacts } from "./eval-facts";
 import {
   CruxLintConfigSchema,
   IndexLintFindingSchema,
@@ -40,6 +41,7 @@ export type {
   EmbeddingSpaceFacts,
   RagIndexerFacts,
 } from "./embedding-facts";
+export * from "./eval-facts";
 export * from "./definition-kind-coverage";
 export * from "./lint-schemas";
 export * from "./lint-types";
@@ -944,14 +946,6 @@ export interface ScorerFacts {
   hasDetailSchema?: boolean;
   chainOfThought?: boolean;
   criteriaPreview?: string;
-}
-
-export interface EvalFacts {
-  kind: "eval" | "eval.case";
-  targetDefinitionId?: string;
-  evalId?: string;
-  caseCount?: number;
-  scorerIds?: string[];
 }
 
 export type PrimitiveSpecificFacts =

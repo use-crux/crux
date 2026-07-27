@@ -15,8 +15,11 @@ import {
   TOKEN,
 } from "./fixture";
 import { fingerprintEvalValue } from "../../../src/eval/internal/identity";
+import { defineInFlightTimeoutBehavior } from "./in-flight-timeout.behavior";
 
 describe("memory Eval host", () => {
+  defineInFlightTimeoutBehavior();
+
   it("returns the authenticated, sorted deployed manifest without source content", async () => {
     const registry = fixtureRegistry();
     const host = createMemoryEvalHost({
@@ -39,7 +42,7 @@ describe("memory Eval host", () => {
       deploymentId: "production-eu",
       hostKind: "memory",
       privacyFingerprint: registry.privacyFingerprint,
-      capabilities: ["asset-store", "result-ref"],
+      capabilities: ["asset-store", "result-ref", "structured-timeout"],
       resultMaxBytes: 1024 * 1024,
       evals: [
         {
@@ -163,7 +166,8 @@ describe("memory Eval host", () => {
         result: { response: { runId: string }; runIds: string[] };
       }
     ).result;
-    expect(result.runIds).toEqual([result.response.runId]);
+    expect(result.runIds).toHaveLength(1);
+    expect(result.runIds[0]).not.toBe(result.response.runId);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 

@@ -73,7 +73,10 @@ export interface ExecutorGenerateBaseOptions<
    * Caller-owned cooperative cancellation signal.
    *
    * When combined with structured timeouts or routing signals, the first
-   * cancellation source wins.
+   * cancellation source wins. Cancellation is cooperative; provider or Tool
+   * code that ignores the signal may continue after the caller settles.
+   *
+   * @defaultValue `undefined`
    */
   readonly signal?: AbortSignal;
   /** Validation-feedback retry policy for structured output. */

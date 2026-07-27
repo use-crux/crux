@@ -1,4 +1,5 @@
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS, type WakeEnvelope } from '@use-crux/core/runtime'
+import type { JsonValue } from '@use-crux/core/storage'
 import type {
   EventCursor,
   FlowId,
@@ -243,6 +244,7 @@ function decodeLastError(value: unknown): WorkItem['lastError'] {
     code: String(record.code),
     message: String(record.message),
     at: requiredDate(record.at),
+    ...(record.details !== undefined ? { details: record.details as JsonValue } : {}),
   }
 }
 

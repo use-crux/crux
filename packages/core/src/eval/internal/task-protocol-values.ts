@@ -2,7 +2,11 @@
 
 import type { JsonValue } from "../../storage/types";
 import type { EvalCapability } from "../task";
-import type { EvalTaskDescriptor, EvalTaskIdentityProjection } from "./task";
+import type {
+  EvalTaskDescriptor,
+  EvalTaskIdentityProjection,
+} from "./task-descriptor";
+import { EVAL_TASK_IDENTITY_EPOCH } from "./task-descriptor";
 
 export function isCompatibleEvalTaskDescriptor(
   value: unknown,
@@ -13,6 +17,7 @@ export function isCompatibleEvalTaskDescriptor(
   const descriptor = value as Record<string, unknown>;
   return (
     descriptor._tag === "CruxEvalTaskDescriptor" &&
+    descriptor.identityEpoch === EVAL_TASK_IDENTITY_EPOCH &&
     (descriptor.operation === "generate" ||
       descriptor.operation === "stream") &&
     descriptor.adapterId === "ai-sdk" &&

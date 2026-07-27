@@ -9,8 +9,12 @@ import {
   fingerprintManagedEvalTaskForInternalUse,
   getEvalTaskDescriptorForInternalUse,
 } from "../../src/eval/internal/task";
+import { taskContextProtocolBehavior } from "./task-context-protocol.behavior";
+import { managedProtocolTask } from "./task-protocol-fixtures";
 
 describe("Eval task execution protocol", () => {
+  taskContextProtocolBehavior();
+
   it("rejects a callable that was not created as a managed Eval task", async () => {
     const task = async (input: { question: string }) => input.question;
 
@@ -37,6 +41,7 @@ describe("Eval task execution protocol", () => {
       {
         value: Object.freeze({
           _tag: "CruxEvalTaskDescriptor",
+          identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
           operation: "generate",
           adapterId: "ai-sdk",
           promptId: "support",
@@ -224,6 +229,7 @@ describe("Eval task execution protocol", () => {
     };
     attachEvalTaskDescriptorForInternalUse(task, {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
       operation: "generate",
       adapterId: "ai-sdk",
       inputSchema: schema,
@@ -258,11 +264,11 @@ describe("Eval task execution protocol", () => {
   });
 
   it("identifies managed task contracts without hashing JavaScript source rendering", () => {
-    const local = managedTask(
+    const local = managedProtocolTask(
       async () => ({ object: "local closure" }),
       undefined,
     );
-    const remote = managedTask(
+    const remote = managedProtocolTask(
       async () => ({ object: "different remote closure" }),
       ["record-store"],
     );
@@ -294,7 +300,7 @@ describe("Eval task execution protocol", () => {
       });
     }
 
-    expect(EVAL_TASK_IDENTITY_EPOCH).toBe(1);
+    expect(EVAL_TASK_IDENTITY_EPOCH).toBe(2);
     expect(localFingerprint!).toBe(remoteFingerprint!);
     expect(
       fingerprintManagedEvalTaskForInternalUse(
@@ -305,35 +311,10 @@ describe("Eval task execution protocol", () => {
   });
 });
 
-function managedTask(
-  execute: () => Promise<{ object: string }>,
-  requiredHostCapabilities: readonly "record-store"[] | undefined,
-) {
-  return attachEvalTaskDescriptorForInternalUse(async () => undefined, {
-    _tag: "CruxEvalTaskDescriptor",
-    operation: "generate",
-    adapterId: "ai-sdk",
-    capabilities: ["modelCalls"],
-    ...(requiredHostCapabilities !== undefined
-      ? { requiredHostCapabilities }
-      : {}),
-    defaults: {},
-    overrideKeys: [],
-    outputContractFingerprint: "output-v1",
-    callContractFingerprint: "call-v1",
-    projectIdentity: () => ({
-      reusable: true,
-      fingerprintMaterial: { contract: "adapter-projection-v1" },
-    }),
-    execute,
-    projectOutput: (result) => result.object,
-    projectResponse: () => ({}) as never,
-  });
-}
-
 function compatibleDescriptor(execute: () => Promise<unknown>) {
   return Object.freeze({
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: Object.freeze(["modelCalls"]),

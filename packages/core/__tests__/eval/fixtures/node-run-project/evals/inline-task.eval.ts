@@ -5,6 +5,7 @@ const inlineTask = attachEvalTaskDescriptorForInternalUse(
   async (input: { question: string }) => input.question,
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],

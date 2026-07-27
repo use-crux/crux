@@ -1063,6 +1063,12 @@ boundary so a dead devtools server or tunnel cannot change the Eval result. This
 references and the canonical `/api/observability/runs/{runId}` graph in the same backend whenever
 Evals execute with devtools attached. Each persisted cell retains immutable Case, Variant, task, and
 definition fingerprints so regressions remain attributable without rereading mutable source files.
+Every live managed or opaque task attempt also opens one terminal-once `eval.case` observation root,
+and executes task work inside its context so generation and Tool spans remain children. Exact timeout
+terminals use `cancelled` plus the bounded `evalOutcome`, `timeoutBudget`, `timeoutLimitMs`, and
+Tool-only `timeoutToolName` attributes; reused and skipped cells do not fabricate observation runs.
+The product-surface projection retains Eval Run V4 and Host V2 and does not advance task/scorer
+evidence, Baseline, or judge identity epochs.
 
 **Rules:**
 
@@ -1939,6 +1945,18 @@ Eval run and Baseline records are versioned durable contracts. Reuse is automati
 prove exact task, input, Variant, trial, schema, and scorer identity. `--offline` performs no external
 work, `--fresh` bypasses reusable task and managed-scorer evidence, and incomplete runs never pass or
 become Baselines. The Go CLI reports plans and results but does not redefine those policies.
+One controller owns each live task attempt and is the only owner that arms the Eval `totalMs`
+deadline. A task-only async-local context exposes that signal plus marked nested timeout ceilings;
+scorers and assertions run after the context and deadline have ended. Cancellation is cooperative.
+The cell scope seals before abort, so ignored work may continue but cannot publish late evidence,
+observability, cost corrections, or remote results.
+
+Current producers write Run V4, whose `timed_out` cells are complete and non-passing; TypeScript,
+Go, and Devtools retain explicit Run V3 readers. Baseline remains schema V3 and stores aligned
+terminal outcomes plus nullable metric values under fingerprint epoch 5. Eval Host V2 transports
+deadline provenance and structured pre-start/in-flight timeout terminals with bounded poll grace.
+Host V1 records remain readable, but V1 cannot advertise the capability required for new remote
+work.
 Cell execution evidence stores ordered logical run IDs, while assertion outcomes
 store exact assertion span IDs; neither field is a substitute for W3C trace IDs.
 

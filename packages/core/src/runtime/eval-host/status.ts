@@ -2,7 +2,7 @@ import type { JsonValue } from "../../storage";
 import type { WorkItem } from "../engine/work";
 import type { WorkId } from "../ports/ids";
 import type { RuntimeWork } from "../ports/work";
-import type { SubmitEvalJobV1 } from "./types";
+import type { EvalHostTimeoutV2, SubmitEvalJob } from "./types";
 import type { EvalHostStore } from "./types";
 
 /** Project one Runtime work row into the stable Eval host poll union. */
@@ -20,7 +20,7 @@ export async function projectEvalJobStatus(input: {
       body: { error: hostError("EVAL_JOB_NOT_FOUND", "admission") },
     };
   }
-  const request = work.work.input as unknown as SubmitEvalJobV1;
+  const request = work.work.input as unknown as SubmitEvalJob;
   const common = {
     jobId: request.jobId,
     evalRunId: request.evalRunId,
@@ -53,16 +53,25 @@ export async function projectEvalJobStatus(input: {
       };
     case "blocked": {
       const code = work.lastError?.code ?? "EVAL_JOB_EXECUTION_FAILED";
+      const timeout =
+        request.protocol === "crux.eval-host.v2"
+          ? timeoutFromWork(work)
+          : undefined;
+      const expired =
+        request.protocol === "crux.eval-host.v1"
+          ? code.includes("DEADLINE")
+          : timeout !== undefined;
       return {
         statusCode: 200,
         body: {
           ...common,
-          status: code.includes("DEADLINE") ? "expired" : "failed",
+          status: expired ? "expired" : "failed",
           revision: 3,
           error: hostError(
             code,
             code.startsWith("EVAL_RESULT_") ? "result" : "execute",
           ),
+          ...(timeout !== undefined ? { timeout } : {}),
         },
       };
     }
@@ -78,6 +87,46 @@ export async function projectEvalJobStatus(input: {
         },
       };
   }
+}
+
+function timeoutFromWork(work: WorkItem): JsonValue | undefined {
+  const details = work.lastError?.details;
+  if (
+    !isRecord(details) ||
+    details.kind !== "eval-host-timeout-v2" ||
+    !isRecord(details.timeout)
+  ) {
+    return undefined;
+  }
+  const timeout = details.timeout;
+  if (
+    !isTimeoutBudget(timeout.budget) ||
+    !Number.isSafeInteger(timeout.limitMs) ||
+    Number(timeout.limitMs) <= 0 ||
+    (timeout.phase !== "pre_start" && timeout.phase !== "in_flight") ||
+    (timeout.toolName !== undefined &&
+      (timeout.budget !== "tool" || typeof timeout.toolName !== "string"))
+  ) {
+    return undefined;
+  }
+  return {
+    budget: timeout.budget,
+    limitMs: timeout.limitMs as number,
+    ...(typeof timeout.toolName === "string"
+      ? { toolName: timeout.toolName }
+      : {}),
+    phase: timeout.phase,
+  };
+}
+
+function isTimeoutBudget(value: unknown): value is EvalHostTimeoutV2["budget"] {
+  return ["total", "step", "chunk", "firstToken", "tool"].includes(
+    String(value),
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function workId(jobId: string): WorkId {

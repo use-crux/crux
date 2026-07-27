@@ -37,9 +37,12 @@ import {
   loadProjectEvalSettings,
 } from "./project-settings";
 import { fingerprintEvalValue } from "../internal/identity";
+import { fingerprintEvalPersistencePolicy } from "../internal/redact";
 import {
-  fingerprintEvalPersistencePolicy,
-} from "../internal/redact";
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+  EVAL_HOST_RESULT_CODEC_VERSION,
+  EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
+} from "../../runtime/eval-host/types";
 
 export interface NodeEvalCoordinatorOptions {
   readonly variant?: string;
@@ -74,8 +77,7 @@ export async function createNodeEvalCoordinatorSession(
 ): Promise<NodeEvalCoordinatorSession> {
   if (options.offline === true) {
     return Object.freeze({
-      persistencePolicy:
-        await loadGeneratedEvalPersistencePolicy(projectRoot),
+      persistencePolicy: await loadGeneratedEvalPersistencePolicy(projectRoot),
       deployment: createNodeEvalHostDeployment({ projectRoot }),
     });
   }
@@ -267,8 +269,9 @@ export function projectRemoteHostContractFingerprint(input: {
   readonly privacyFingerprint: string;
 }): string {
   return [
-    "crux.eval-host.v1",
-    "result-codec.v1",
+    CRUX_EVAL_HOST_PROTOCOL_V2,
+    EVAL_HOST_RESULT_CODEC_VERSION,
+    EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
     input.deploymentId,
     [...input.requiredHostCapabilities].sort().join(","),
     input.privacyFingerprint,

@@ -24,6 +24,7 @@ import type {
 } from "@use-crux/core/adapter";
 import type { EvalTask } from "@use-crux/core/eval";
 import {
+  EVAL_TASK_IDENTITY_EPOCH,
   attachEvalTaskDescriptorForInternalUse,
   type EvalTaskDescriptor,
 } from "@use-crux/core/eval/internal/task";
@@ -161,6 +162,7 @@ export function createStreamTaskFactory(
     );
     const descriptor: EvalTaskDescriptor<StreamCompletion<unknown>, unknown> = {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
       operation: "stream",
       adapterId: "ai-sdk",
       ...(prompt.id !== undefined ? { promptId: prompt.id } : {}),
@@ -210,7 +212,7 @@ export function createStreamTaskFactory(
         prompt,
         defaults: normalizedDefaults,
       }),
-      execute: (input, callOptions, overrides = {}) =>
+      execute: (input, callOptions, overrides, executionContext) =>
         renderedPromptIdentity.execute(
           async (effectivePrompt, options) =>
             drainStream(await stream(effectivePrompt, options)),
@@ -218,6 +220,7 @@ export function createStreamTaskFactory(
             input,
             ...(callOptions !== undefined ? { call: callOptions } : {}),
             overrides,
+            executionContext,
           },
         ),
       projectOutput: (completion) =>

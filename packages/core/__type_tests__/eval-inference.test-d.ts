@@ -23,9 +23,23 @@ declare const cancellableRoutedTask: EvalTask<
   object,
   "modelCalls"
 >;
-expectTypeOf<
-  CaseOf<typeof cancellableRoutedTask>["call"]
->().toEqualTypeOf<{
+expectTypeOf<CaseOf<typeof cancellableRoutedTask>["call"]>().toEqualTypeOf<{
+  tenantId: string;
+  locale?: string;
+}>();
+
+evaluate({
+  task: cancellableRoutedTask,
+  timeout: { totalMs: null, toolMs: 1_000 },
+  cases: [
+    {
+      input: { question: "Refund?" },
+      call: { tenantId: "acme", locale: "nl" },
+      timeout: { tools: { search: null } },
+    },
+  ],
+});
+expectTypeOf<CaseOf<typeof cancellableRoutedTask>["call"]>().toEqualTypeOf<{
   tenantId: string;
   locale?: string;
 }>();

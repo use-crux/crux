@@ -1,9 +1,12 @@
 /** Functional async-scope carrier for one live Eval task attempt. */
 
 import { createAsyncScopeFacet } from "../../async-scope";
+import {
+  isEvalTimeoutCeilingForInternalUse,
+  markEvalTimeoutCeilingForInternalUse,
+} from "../../generation/timeout-ceiling";
 import type { EvalTaskContext, EvalTaskTimeout } from "../task-context";
 
-const EVAL_TASK_TIMEOUT_MARKER = Symbol.for("@use-crux/core/EvalTaskTimeout");
 const NESTED_TIMEOUT_KEYS = [
   "stepMs",
   "chunkMs",
@@ -32,11 +35,10 @@ export function normalizeEvalTaskContext(
     context.timeout.tools === undefined
       ? undefined
       : Object.freeze({ ...context.timeout.tools });
-  const timeout = {
+  const timeout = markEvalTimeoutCeilingForInternalUse({
     ...context.timeout,
     ...(tools === undefined ? {} : { tools }),
-  } as EvalTaskTimeout;
-  Object.defineProperty(timeout, EVAL_TASK_TIMEOUT_MARKER, { value: true });
+  } as EvalTaskTimeout);
 
   return Object.freeze({
     signal: context.signal,
@@ -56,6 +58,28 @@ export function runWithEvalTaskContext<T>(
   callback: () => T,
 ): T {
   return taskContextScope.run(normalizeEvalTaskContext(context), callback);
+}
+
+/**
+ * Install an engine-resolved context while preserving its marked timeout.
+ *
+ * @internal
+ */
+export function runWithPreparedEvalTaskContext<T>(
+  context: EvalTaskContext,
+  callback: () => T,
+): T {
+  if (
+    !isAbortSignal(context.signal) ||
+    !Object.isFrozen(context.timeout) ||
+    !isEvalTimeoutCeilingForInternalUse(context.timeout)
+  ) {
+    throw new TypeError("Expected a resolved Eval task timeout context.");
+  }
+  return taskContextScope.run(
+    Object.freeze({ signal: context.signal, timeout: context.timeout }),
+    callback,
+  );
 }
 
 function assertEvalTaskContext(

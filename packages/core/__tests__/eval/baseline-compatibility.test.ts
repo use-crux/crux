@@ -19,6 +19,7 @@ import {
 import { scorers } from "../../src/eval/internal/scorers/types";
 import type { Scorer } from "../../src/eval/internal/scorers/types";
 import { UNVERSIONED_LOCAL_SCORER_CONTRACT } from "../../src/eval/internal/scorers/runtime";
+import { baselineEpochCompatibilityBehavior } from "./baseline-epoch.behavior";
 
 const promotion = {
   baselineId: "baseline-1",
@@ -27,6 +28,8 @@ const promotion = {
 };
 
 describe("granular Eval Baseline compatibility", () => {
+  baselineEpochCompatibilityBehavior();
+
   async function runWithAssessment(input: {
     readonly scorer?: Scorer<unknown, unknown, unknown>;
     readonly recorded?: number;
@@ -34,7 +37,7 @@ describe("granular Eval Baseline compatibility", () => {
     const definition = evaluate({
       id: "assessment-contract",
       task: async (value: string) => value,
-      cases: [{ id: "case", input: "answer" }],
+      cases: [{ id: "case", input: "answer", expected: "answer" }],
       ...(input.scorer !== undefined ? { scorers: [input.scorer] } : {}),
       ...(input.recorded !== undefined
         ? {
@@ -454,11 +457,7 @@ describe("granular Eval Baseline compatibility", () => {
       cases: [{ id: "refund", input: Symbol("dynamic"), trials: 0 }],
     });
     expect(() =>
-      compareEvalDefinitionToBaseline(
-        invalidTrials,
-        "definition-v2",
-        baseline,
-      ),
+      compareEvalDefinitionToBaseline(invalidTrials, "definition-v2", baseline),
     ).toThrow(/trials must be a positive integer/i);
   });
 });

@@ -76,6 +76,11 @@ live in the focused
 [Eval cancellation API contract](./2026-07-26-eval-cell-cancellation-api.md).
 The architecture below treats that contract as binding.
 
+Policy identity fingerprints semantic normalization: positive finite budgets
+use integer milliseconds; explicit disabled numbers canonicalize to `null`.
+Whole-Case `null` resolves to clears for exactly inherited Eval fields/Tools
+and participates in definition, deployment, and evidence identity.
+
 ## Execution lifecycle
 
 The cell controller owns an `AbortController`, deadline timers, and the
@@ -176,16 +181,16 @@ readonly outcomes: readonly {
 }[]
 ```
 
-A timed-out trial is eligible for promotion, remains in `trials`, has a matching
-`outcomes` entry, and contributes `value: null` for each declared
-output-dependent metric. Existing `arithmetic_mean_non_null_v1` aggregation
-ignores those nulls. `errored` cells continue to block complete promotion.
+A timed-out trial remains promotable and contributes `value: null` per declared
+metric. Every V4 cell persists its admitted scorer names/contracts, so promotion
+can seed metrics when all trials time out; `{}` means no scorer was declared.
+`arithmetic_mean_non_null_v1` ignores nulls; `errored` still blocks promotion.
 
-Trial-index equality remains the coverage-compatibility rule. For matching
-indices, comparison reports terminal outcome changes separately; an outcome
-change makes output-dependent metric comparison unavailable rather than
-shrinking the sample. The bumped Baseline fingerprint epoch makes old coverage
-without `outcomes` incompatible and requires explicit repromotion.
+After trial-index equality, divergent outcomes return Case `incompatible` /
+`trial_outcomes_changed` without metric comparisons. With matching outcomes, a
+metric whose mean is null on either side returns `missing` /
+`metric_value_unavailable`, making the Case `missing`. The new fingerprint epoch
+makes coverage without outcomes incompatible and requires repromotion.
 
 A timed-out task never writes reusable task evidence. Late completion cannot
 change the cell, evidence store, run, cost settlement, or gate result.

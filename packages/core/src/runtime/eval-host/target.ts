@@ -5,12 +5,22 @@ import type { RuntimeTargetId } from "../ports/ids";
 import type { DeployedEvalRegistry } from "../eval-registry";
 import { resolveDeployedEval } from "../eval-registry";
 import { CruxRuntimeError } from "../engine/errors";
-import type { SubmitEvalJobV1 } from "./types";
+import type { SubmitEvalJob } from "./types";
 import type { EvalHostStore } from "./types";
 import { encodeEvalHostResult } from "./result-codec";
 import { isEvalSnapshotRedactionSafe } from "../../eval/internal/redact";
 import { isReusableEvalValue } from "../../eval/internal/identity";
 import { openEvalCellScope, runEvalScope } from "../../eval/internal/scope";
+import { snapshotEvalCellObservation } from "../../eval/internal/cell-observation";
+import type {
+  EvalCellTimeout,
+  EvalTaskHostResult,
+} from "../../eval/internal/types";
+import {
+  executeEvalHostTaskWithDeadline,
+  observedTaskRequest,
+} from "./execute-deadline";
+import { timeoutEvalCellObservabilityRun } from "../../eval/internal/cell-observability-run";
 
 export const EVAL_EXECUTE_TARGET_ID = "_crux.eval.execute" as RuntimeTargetId;
 
@@ -31,12 +41,14 @@ export function createEvalExecuteTarget(input: {
       ) {
         return blocked("EVAL_HOST_INVALID_WORK", input.now());
       }
-      const request = work.work.input as unknown as SubmitEvalJobV1;
+      const request = work.work.input as unknown as SubmitEvalJob;
       return runEvalScope(request.evalId, async () => {
         const cell = openEvalCellScope(request);
         if (new Date(request.deadlineAt).getTime() <= input.now().getTime()) {
           cell.seal("timeout");
-          return blocked("EVAL_JOB_DEADLINE_EXCEEDED", input.now());
+          return request.protocol === "crux.eval-host.v2"
+            ? timedOut(request.deadline.limitMs, "pre_start", input.now())
+            : blocked("EVAL_JOB_DEADLINE_EXCEEDED", input.now());
         }
         try {
           const result = await cell.run(async () => {
@@ -48,27 +60,32 @@ export function createEvalExecuteTarget(input: {
             }
             const resolved = resolveDeployedEval(input.registry, request);
             try {
-              const evidence = await executeObservedEvalTaskForInternalUse(
-                {
-                  evalId: request.evalId,
-                  caseId: request.caseId,
-                  variant: request.variant,
-                  trial: request.trial,
-                  task: resolved.variant.task,
-                  overrides: resolved.variant.overrides,
-                  input: resolved.case.authored.input as Readonly<
-                    Record<string, unknown>
-                  >,
-                  ...(resolved.case.authored.call !== undefined
-                    ? {
-                        call: resolved.case.authored.call as Readonly<
-                          Record<string, unknown>
-                        >,
-                      }
-                    : {}),
-                },
-                () => input.now().getTime(),
-              );
+              const evidence =
+                request.protocol === "crux.eval-host.v2"
+                  ? await executeV2Task({
+                      request,
+                      resolved,
+                      now: () => input.now().getTime(),
+                      expire: (abort) =>
+                        cell.run(() => {
+                          timeoutEvalCellObservabilityRun(abort.timeout);
+                          const observation = snapshotEvalCellObservation();
+                          cell.seal("timeout");
+                          abort.abort();
+                          return observation;
+                        }),
+                    })
+                  : await executeObservedEvalTaskForInternalUse(
+                      observedTaskRequest(request, resolved),
+                      () => input.now().getTime(),
+                    );
+              if ("timeout" in evidence) {
+                return blocked(
+                  "EVAL_JOB_DEADLINE_EXCEEDED",
+                  input.now(),
+                  timeoutDetails(evidence.timeout, "in_flight"),
+                );
+              }
               if (
                 !isReusableEvalValue(evidence.output) ||
                 (evidence.response !== undefined &&
@@ -93,6 +110,12 @@ export function createEvalExecuteTarget(input: {
                 evalRunId: request.evalRunId,
                 evidence,
               });
+              const publishable = await input.store.state.getWork(work.workId, {
+                namespace: work.namespace,
+              });
+              if (publishable?.status !== "leased") {
+                return blocked("EVAL_JOB_CANCELLED", input.now());
+              }
               const resultRef = await input.store.results.put(payload, {
                 namespace: work.namespace,
               });
@@ -109,7 +132,7 @@ export function createEvalExecuteTarget(input: {
               return blocked("EVAL_JOB_EXECUTION_FAILED", input.now());
             }
           });
-          cell.seal(scopeOutcomeFor(result));
+          if (!isTimedOut(result)) cell.seal(scopeOutcomeFor(result));
           return result;
         } catch (error) {
           cell.seal("error");
@@ -118,6 +141,53 @@ export function createEvalExecuteTarget(input: {
       });
     },
   });
+}
+
+async function executeV2Task(
+  input: Parameters<typeof executeEvalHostTaskWithDeadline>[0],
+): Promise<EvalTaskHostResult | { readonly timeout: EvalCellTimeout }> {
+  const result = await executeEvalHostTaskWithDeadline(input);
+  return result.status === "completed"
+    ? result.evidence
+    : Object.freeze({ timeout: result.timeout });
+}
+
+function timedOut(
+  limitMs: number,
+  phase: "pre_start" | "in_flight",
+  now: Date,
+) {
+  return blocked(
+    "EVAL_JOB_DEADLINE_EXCEEDED",
+    now,
+    timeoutDetails({ budget: "total", limitMs }, phase),
+  );
+}
+
+function timeoutDetails(
+  timeout: EvalCellTimeout,
+  phase: "pre_start" | "in_flight",
+) {
+  return Object.freeze({
+    kind: "eval-host-timeout-v2",
+    timeout: Object.freeze({ ...timeout, phase }),
+  });
+}
+
+function isTimedOut(
+  result:
+    | Awaited<ReturnType<typeof blocked>>
+    | { readonly status: "completed" },
+): boolean {
+  return (
+    result.status === "blocked" &&
+    isRecord(result.error.details) &&
+    result.error.details.kind === "eval-host-timeout-v2"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function scopeOutcomeFor(
@@ -132,6 +202,7 @@ function scopeOutcomeFor(
 function blocked(
   code: string,
   now: Date,
+  details?: WorkItemError["details"],
 ): {
   readonly status: "blocked";
   readonly error: WorkItemError;
@@ -142,6 +213,7 @@ function blocked(
       code,
       message: messageForCode(code),
       at: now,
+      ...(details !== undefined ? { details } : {}),
     }),
   });
 }

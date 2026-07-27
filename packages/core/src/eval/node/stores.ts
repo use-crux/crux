@@ -15,7 +15,7 @@ import {
   type EvalTaskEvidenceEntry,
 } from "../internal/evidence";
 import type { EvalEvidenceStore, EvalRunStore } from "../internal/ports";
-import { parseEvalRunV3 } from "../internal/run-schema";
+import { parseEvalRun } from "../internal/run-v4-schema";
 import {
   readScorerEvidenceEntry,
   type EvalScorerEvidenceEntry,
@@ -34,7 +34,7 @@ import {
 
 export { EvalBaselineMigrationError } from "./baseline-index";
 export { evalRunV3Schema, isEvalRunPromotable } from "../internal/run-schema";
-
+export { evalRunV4Schema } from "../internal/run-v4-schema";
 export type EvalRunReadResult =
   | { readonly status: "found"; readonly run: EvalRun }
   | { readonly status: "missing" }
@@ -147,7 +147,7 @@ export async function setEvalBaseline(input: {
   });
 }
 
-/** Create an atomic filesystem store for terminal Eval V3 records. */
+/** Create the atomic filesystem store for V4 and retained V3 Eval runs. */
 export function createEvalRunFileStore(
   options: EvalFileStoreOptions,
 ): EvalRunStore & { read(runId: string): Promise<EvalRunReadResult> } {
@@ -155,7 +155,7 @@ export function createEvalRunFileStore(
   return {
     async write(run) {
       const path = artifactPath(directory, run.runId);
-      const persisted = parseEvalRunV3(
+      const persisted = parseEvalRun(
         parseJson(
           serializeJson(
             sanitizeEvalRunForPersistence(run, options.persistencePolicy),
@@ -170,7 +170,7 @@ export function createEvalRunFileStore(
     async read(runId) {
       const path = artifactPath(directory, runId);
       try {
-        const run = parseEvalRunV3(parseJson(await readFile(path, "utf8")));
+        const run = parseEvalRun(parseJson(await readFile(path, "utf8")));
         return run.runId === runId
           ? { status: "found", run }
           : { status: "corrupt", error: "runId does not match its file name" };

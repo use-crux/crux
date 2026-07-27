@@ -1,9 +1,10 @@
 import { RUNTIME_RESULT_MAX_BYTES } from "../results/types";
 import type { DeployedEvalRegistry } from "../eval-registry";
 import {
-  CRUX_EVAL_HOST_PROTOCOL,
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+  EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
   type EvalHostKind,
-  type EvalHostManifestV1,
+  type EvalHostManifestV2,
 } from "./types";
 
 /** Project the generated allowlist into the privacy-safe host manifest. */
@@ -12,14 +13,18 @@ export function createEvalHostManifest(input: {
   readonly hostKind: EvalHostKind;
   readonly registry: DeployedEvalRegistry;
   readonly hostCapabilities?: readonly string[];
-}): EvalHostManifestV1 {
+}): EvalHostManifestV2 {
   return Object.freeze({
-    protocol: CRUX_EVAL_HOST_PROTOCOL,
+    protocol: CRUX_EVAL_HOST_PROTOCOL_V2,
     deploymentId: input.deploymentId,
     hostKind: input.hostKind,
     privacyFingerprint: input.registry.privacyFingerprint,
     capabilities: Object.freeze(
-      ["result-ref", ...(input.hostCapabilities ?? [])]
+      [
+        "result-ref",
+        EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
+        ...(input.hostCapabilities ?? []),
+      ]
         .filter((value, index, values) => values.indexOf(value) === index)
         .sort(compareCodepoint),
     ),

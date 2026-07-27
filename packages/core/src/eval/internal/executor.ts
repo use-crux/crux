@@ -7,7 +7,7 @@ import {
 } from "./execute-cell";
 import { evaluateBlockingGates } from "./gates";
 import type { EvalExecutionPorts } from "./ports";
-import type { EvalPlan, EvalRun } from "./types";
+import type { EvalPlan, EvalRunV4 } from "./types";
 import { assertEvalPreflightReady } from "./offline";
 import { assertEvalCostAdmitted } from "./cost-plan";
 import { reserveEvalCostPlan } from "./reservation";
@@ -18,7 +18,7 @@ import { runEvalScope } from "./scope";
 export async function executeEvalPlan(
   plan: EvalPlan,
   ports: EvalExecutionPorts,
-): Promise<EvalRun> {
+): Promise<EvalRunV4> {
   assertEvalPreflightReady(plan.evalId, plan.preflight);
   assertEvalHostReady(plan);
   assertEvalCostAdmitted(plan.cost);
@@ -57,7 +57,7 @@ async function executeReservedEvalPlan(
   ports: EvalExecutionPorts,
   costLease: Awaited<ReturnType<typeof reserveEvalCostPlan>>,
   runId: string,
-): Promise<EvalRun> {
+): Promise<EvalRunV4> {
   const startedAt = ports.clock.now();
   const results: EvalCellExecutionResult[] = [];
   for (const planned of plan.cells) {
@@ -122,7 +122,7 @@ async function executeReservedEvalPlan(
       : actualCosts.reduce((total, cost) => total + cost, 0);
   const evidence = summarizeEvidenceWrites(results);
   const base = {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     runId,
     evalId: plan.evalId,
     sourceKey: plan.sourceKey,
@@ -182,7 +182,7 @@ async function executeReservedEvalPlan(
             }),
     }),
   };
-  const run: EvalRun = Object.freeze(
+  const run: EvalRunV4 = Object.freeze(
     incompleteReasons.length === 0
       ? { ...base, status: "complete" as const, passed: gates.passed }
       : {

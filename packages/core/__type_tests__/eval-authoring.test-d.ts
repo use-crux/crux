@@ -75,6 +75,32 @@ evaluate({
   ],
 });
 
+evaluate({
+  task: classify,
+  timeout: {
+    totalMs: null,
+    stepMs: 1_000,
+    tools: { search: null },
+  },
+  cases: [
+    {
+      input: { question: "Inherit" },
+      timeout: { stepMs: null, tools: { search: 250 } },
+    },
+    { input: { question: "Clear all" }, timeout: null },
+  ],
+});
+
+evaluate({
+  task: classify,
+  cases: [{ input: { question: "Invalid timeout" } }],
+  timeout: {
+    totalMs: 1_000,
+    // @ts-expect-error — timeout policies reject unrelated keys
+    retryMs: 250,
+  },
+});
+
 declare const managedTask: EvalTask<
   { question: string },
   { readonly text: string; readonly usage: number },

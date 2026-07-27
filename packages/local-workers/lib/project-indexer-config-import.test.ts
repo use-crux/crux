@@ -124,7 +124,7 @@ describe("built project-indexer TypeScript imports", () => {
         'import { evaluate } from "@use-crux/core/eval"',
         'import { attachEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task"',
         "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        '  _tag: "CruxEvalTaskDescriptor", operation: "generate", adapterId: "ai-sdk",',
+        '  _tag: "CruxEvalTaskDescriptor", identityEpoch: 2, operation: "generate", adapterId: "ai-sdk",',
         '  capabilities: [], requiredHostCapabilities: ["record-store"], overrideKeys: [], defaults: {},',
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),",
         "  execute: async (input: unknown) => ({ output: input }),",

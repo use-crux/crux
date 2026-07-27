@@ -9,6 +9,7 @@
  */
 
 import type { ProjectDefinitionKind } from "../project-index";
+import type { TimeoutOptions } from "../generation/timeout";
 import type { BoundScorerLib, Scorer } from "./internal/scorers/types";
 import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
@@ -118,6 +119,26 @@ export interface EvaluateOptions<
         >,
       ) => TScorers);
   gates?: EvalGates<ScorerNamesOf<TScorers> | "pass">;
+  /**
+   * Structured timeout policy inherited by every Case.
+   *
+   * @remarks
+   * Case fields override this policy by field and Tool name. Explicit `null`
+   * disables an inherited ceiling; a Case-level `timeout: null` clears the
+   * complete inherited policy.
+   *
+   * @defaultValue `undefined`
+   *
+   * @example
+   * ```ts
+   * evaluate({
+   *   task,
+   *   timeout: { totalMs: 30_000, tools: { search: 5_000 } },
+   *   cases: [{ input }, { input: slowInput, timeout: { toolMs: null } }],
+   * })
+   * ```
+   */
+  readonly timeout?: TimeoutOptions | null;
   trials?: number;
   tags?: readonly string[];
   description?: string;

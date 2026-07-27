@@ -17,16 +17,14 @@ import { router } from "@use-crux/core/routing";
 import type { AIGenerate } from "@use-crux/ai";
 import { createCruxAi, generate } from "../src";
 import { objectGenerationError, scriptedGateway } from "./scripted-gateway";
-
-function model(modelId = "gpt-4o"): LanguageModel {
-  return {
-    provider: "openai",
-    modelId,
-    specificationVersion: "v3",
-  } as unknown as LanguageModel;
-}
+import { generateEvalTaskContextBehavior } from "./eval-task-context.behavior";
+import { generateEvalTimeoutPrecedenceBehavior } from "./eval-timeout-precedence.behavior";
+import { evalTaskModel as model } from "./eval-task-fixtures";
 
 describe("generate.task()", () => {
+  generateEvalTaskContextBehavior();
+  generateEvalTimeoutPrecedenceBehavior();
+
   it("forwards a direct caller signal to provider execution", async () => {
     const scripted = scriptedGateway({
       generateText: [{ text: "cancel-aware" }],

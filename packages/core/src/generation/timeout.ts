@@ -17,6 +17,12 @@ export {
   withAbortSignal,
   withBudget,
 } from "./timeout-budget";
+export {
+  clampEvalTimeoutCeilingForInternalUse,
+  isEvalTimeoutCeilingForInternalUse,
+  markEvalTimeoutCeilingForInternalUse,
+  resolveTimeoutOverrideForInternalUse,
+} from "./timeout-ceiling";
 export type {
   BudgetOptions,
   BudgetSignal,

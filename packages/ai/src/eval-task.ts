@@ -21,6 +21,7 @@ import type {
 import type { GenerateResult, StreamCompletion } from "@use-crux/core/adapter";
 import type { EvalTask, EvalTaskLike } from "@use-crux/core/eval";
 import {
+  EVAL_TASK_IDENTITY_EPOCH,
   attachEvalTaskDescriptorForInternalUse,
   type EvalTaskDescriptor,
 } from "@use-crux/core/eval/internal/task";
@@ -167,6 +168,7 @@ export function createGenerateTaskFactory(
       unknown
     > = {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
       operation: "generate",
       adapterId: "ai-sdk",
       ...(prompt.id !== undefined ? { promptId: prompt.id } : {}),
@@ -216,13 +218,14 @@ export function createGenerateTaskFactory(
         prompt,
         defaults: normalizedDefaults,
       }),
-      execute: (input, callOptions, overrides = {}) =>
+      execute: (input, callOptions, overrides, executionContext) =>
         renderedPromptIdentity.execute(
           (effectivePrompt, options) => generate(effectivePrompt, options),
           {
             input,
             ...(callOptions !== undefined ? { call: callOptions } : {}),
             overrides,
+            executionContext,
           },
         ),
       projectOutput: (result) =>

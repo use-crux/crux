@@ -8,47 +8,7 @@ import {
   projectDeployedEvalVariants,
   resolveDeployedEval,
 } from "../../../src/runtime/eval-registry";
-
-function managedTask() {
-  return attachEvalTaskDescriptorForInternalUse(
-    async (input: { message: string }) => input.message,
-    {
-      _tag: "CruxEvalTaskDescriptor",
-      operation: "generate",
-      adapterId: "ai-sdk",
-      capabilities: [],
-      requiredHostCapabilities: ["asset-store"],
-      defaults: {},
-      overrideKeys: ["temperature"],
-      projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),
-      execute: async (input) => ({ output: input }),
-      projectOutput: (result) => result.output,
-      projectResponse: (result) => ({ output: result.output }),
-    },
-  );
-}
-
-function hostedTask() {
-  return attachEvalTaskDescriptorForInternalUse(
-    async (input: { message: string }) => input.message,
-    {
-      _tag: "CruxEvalTaskDescriptor",
-      operation: "generate",
-      adapterId: "ai-sdk",
-      capabilities: [],
-      requiredHostCapabilities: ["asset-store"],
-      defaults: {},
-      overrideKeys: [],
-      projectIdentity: () => ({
-        reusable: true,
-        fingerprintMaterial: { task: "hosted" },
-      }),
-      execute: async (input) => ({ output: input }),
-      projectOutput: (result) => result.output,
-      projectResponse: (result) => ({ output: result.output }),
-    },
-  );
-}
+import { hostedTask, managedTask } from "./registry-test-tasks";
 
 describe("deployed Eval registry", () => {
   it("advertises every arm identity but resolves only runtime arms", () => {
@@ -70,7 +30,11 @@ describe("deployed Eval registry", () => {
           cases: [
             {
               id: "case",
-              fingerprint: fingerprintDeployedEvalCase("case", authored),
+              fingerprint: fingerprintDeployedEvalCase(
+                evalValue,
+                "case",
+                authored,
+              ),
               authored,
             },
           ],
@@ -91,7 +55,7 @@ describe("deployed Eval registry", () => {
       evalId: "mixed",
       evalFingerprint: "eval",
       caseId: "case",
-      caseFingerprint: fingerprintDeployedEvalCase("case", authored),
+      caseFingerprint: fingerprintDeployedEvalCase(evalValue, "case", authored),
     };
 
     expect(registry.entries[0]?.variants).toHaveLength(2);
@@ -130,7 +94,11 @@ describe("deployed Eval registry", () => {
           cases: [
             {
               id: "refund",
-              fingerprint: fingerprintDeployedEvalCase("refund", authored),
+              fingerprint: fingerprintDeployedEvalCase(
+                evalValue,
+                "refund",
+                authored,
+              ),
               authored,
             },
           ],
@@ -153,7 +121,11 @@ describe("deployed Eval registry", () => {
       evalId: "support",
       evalFingerprint: "eval-fingerprint",
       caseId: "refund",
-      caseFingerprint: fingerprintDeployedEvalCase("refund", authored),
+      caseFingerprint: fingerprintDeployedEvalCase(
+        evalValue,
+        "refund",
+        authored,
+      ),
       variant: "concise",
       variantFingerprint:
         projectDeployedEvalVariants(evalValue)[1]!.fingerprint,
@@ -173,6 +145,7 @@ describe("deployed Eval registry", () => {
     const execute = vi.fn();
     const task = attachEvalTaskDescriptorForInternalUse(execute, {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: 2,
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
@@ -200,7 +173,11 @@ describe("deployed Eval registry", () => {
           cases: [
             {
               id: "refund",
-              fingerprint: fingerprintDeployedEvalCase("refund", authored),
+              fingerprint: fingerprintDeployedEvalCase(
+                evalValue,
+                "refund",
+                authored,
+              ),
               authored,
             },
           ],
@@ -223,7 +200,11 @@ describe("deployed Eval registry", () => {
         evalId: "support",
         evalFingerprint: "stale",
         caseId: "refund",
-        caseFingerprint: fingerprintDeployedEvalCase("refund", authored),
+        caseFingerprint: fingerprintDeployedEvalCase(
+          evalValue,
+          "refund",
+          authored,
+        ),
         variant: "current",
         variantFingerprint:
           projectDeployedEvalVariants(evalValue)[0]!.fingerprint,
@@ -274,6 +255,7 @@ describe("deployed Eval registry", () => {
       async (input: unknown) => input,
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -292,7 +274,11 @@ describe("deployed Eval registry", () => {
       cases: [{ id: "refund", input: {} }],
     });
     const authored = { id: "refund", input: {} } as const;
-    const caseFingerprint = fingerprintDeployedEvalCase("refund", authored);
+    const caseFingerprint = fingerprintDeployedEvalCase(
+      evalValue,
+      "refund",
+      authored,
+    );
     const variantFingerprint =
       projectDeployedEvalVariants(evalValue)[0]!.fingerprint;
     const registry = createDeployedEvalRegistry({

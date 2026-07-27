@@ -30,6 +30,12 @@ import {
   appendToolApprovalResponse,
   findToolApprovalRequests,
 } from "../../src/tools/approvals";
+import { evalTimeoutCeilingBehavior } from "./eval-timeout-ceiling.behavior";
+import type {
+  MockClient,
+  MockResponse,
+  MockStream,
+} from "./define-adapter-fixtures";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -38,19 +44,6 @@ afterEach(() => {
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
 // ─────────────────────────────────────────────────────────────────
-
-interface MockClient {
-  apiKey: string;
-}
-
-interface MockResponse {
-  id: string;
-  content: string;
-}
-
-interface MockStream {
-  [Symbol.asyncIterator]: () => AsyncIterator<{ text: string }>;
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Helpers
@@ -326,6 +319,8 @@ describe("adapter", () => {
       await assertion;
       await expect(result).rejects.toBeInstanceOf(CruxAdapterError);
     });
+
+    evalTimeoutCeilingBehavior();
 
     it("uses totalMs as a ceiling across provider and tool work", async () => {
       vi.useFakeTimers();

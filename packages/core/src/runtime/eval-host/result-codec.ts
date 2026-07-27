@@ -2,9 +2,15 @@
 
 import type { JsonValue } from "../../storage";
 import type { EvalTaskHostResult } from "../../eval/internal/types";
-import { CRUX_EVAL_HOST_PROTOCOL } from "./types";
+import {
+  CRUX_EVAL_HOST_PROTOCOL_V1,
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+} from "./types";
 import { assertRuntimeJsonValue } from "../engine/json-value";
-import { fingerprintEvalValue } from "../../eval/internal/identity";
+import {
+  isEvalHostResultIdentity,
+  projectEvalHostResultIdentity,
+} from "./result-identity";
 
 const OUTER_KEYS = [
   "schemaVersion",
@@ -58,14 +64,6 @@ const CAPABILITIES = new Set([
   "routing",
   "decisionReport",
 ]);
-const IDENTITY_REASONS = new Set([
-  "identity_unavailable",
-  "model_identity_unattested",
-  "untracked_external_dependency",
-  "unresolved_source_dependency",
-  "implicit_media",
-]);
-
 /** Build and validate the exact result envelope persisted by an Eval host. */
 export function encodeEvalHostResult(input: {
   readonly jobId: string;
@@ -74,12 +72,14 @@ export function encodeEvalHostResult(input: {
 }): JsonValue {
   const payload = {
     schemaVersion: 2,
-    protocol: CRUX_EVAL_HOST_PROTOCOL,
+    protocol: CRUX_EVAL_HOST_PROTOCOL_V2,
     jobId: input.jobId,
     evalRunId: input.evalRunId,
     ...input.evidence,
     renderedPromptFingerprint: input.evidence.renderedPromptFingerprint ?? null,
-    observedIdentity: projectObservedIdentity(input.evidence.observedIdentity),
+    observedIdentity: projectEvalHostResultIdentity(
+      input.evidence.observedIdentity,
+    ),
   };
   // Preserve Runtime's typed durable-media classification before applying the
   // stricter Eval wire shape checks.
@@ -93,6 +93,32 @@ export function decodeEvalHostResult(
   value: unknown,
   expected: { readonly jobId: string; readonly evalRunId: string },
 ): EvalTaskHostResult {
+  return decodeEvalHostResultV2(value, expected);
+}
+
+/** Decode one strict legacy V1 result belonging to the expected job. */
+export function decodeEvalHostResultV1(
+  value: unknown,
+  expected: { readonly jobId: string; readonly evalRunId: string },
+): EvalTaskHostResult {
+  return decodeResult(value, expected, CRUX_EVAL_HOST_PROTOCOL_V1);
+}
+
+/** Decode one strict current V2 result belonging to the expected job. */
+export function decodeEvalHostResultV2(
+  value: unknown,
+  expected: { readonly jobId: string; readonly evalRunId: string },
+): EvalTaskHostResult {
+  return decodeResult(value, expected, CRUX_EVAL_HOST_PROTOCOL_V2);
+}
+
+function decodeResult(
+  value: unknown,
+  expected: { readonly jobId: string; readonly evalRunId: string },
+  protocol:
+    | typeof CRUX_EVAL_HOST_PROTOCOL_V1
+    | typeof CRUX_EVAL_HOST_PROTOCOL_V2,
+): EvalTaskHostResult {
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, OUTER_KEYS) ||
@@ -100,7 +126,7 @@ export function decodeEvalHostResult(
       (key) => key === "renderedPromptFingerprint" || key in value,
     ) ||
     value.schemaVersion !== 2 ||
-    value.protocol !== CRUX_EVAL_HOST_PROTOCOL ||
+    value.protocol !== protocol ||
     value.jobId !== expected.jobId ||
     value.evalRunId !== expected.evalRunId ||
     !isJsonValue(value.output) ||
@@ -109,7 +135,7 @@ export function decodeEvalHostResult(
     !isCapabilityArray(value.capturedSignals) ||
     !isMetrics(value.metrics) ||
     !isOptionalFingerprint(value.renderedPromptFingerprint) ||
-    !isIdentity(value.observedIdentity)
+    !isEvalHostResultIdentity(value.observedIdentity)
   ) {
     throw incompatible();
   }
@@ -188,32 +214,6 @@ function isMetrics(value: unknown): value is {
     finiteNonnegative(value.durationMs) &&
     (value.costUsd === undefined || finiteNonnegative(value.costUsd))
   );
-}
-
-function isIdentity(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  if (value.reusable === true) {
-    return (
-      hasExactKeys(value, ["reusable", "fingerprint"]) &&
-      typeof value.fingerprint === "string" &&
-      /^[a-f0-9]{64}$/u.test(value.fingerprint)
-    );
-  }
-  return (
-    value.reusable === false &&
-    hasExactKeys(value, ["reusable", "reason"]) &&
-    IDENTITY_REASONS.has(String(value.reason))
-  );
-}
-
-function projectObservedIdentity(
-  identity: EvalTaskHostResult["observedIdentity"],
-): EvalTaskHostResult["observedIdentity"] {
-  if (!identity.reusable || "fingerprint" in identity) return identity;
-  return Object.freeze({
-    reusable: true as const,
-    fingerprint: fingerprintEvalValue(identity.fingerprintMaterial),
-  });
 }
 
 function isJsonValue(value: unknown, seen = new WeakSet<object>()): boolean {

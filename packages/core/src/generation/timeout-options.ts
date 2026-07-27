@@ -16,6 +16,9 @@ export type TimeoutBudget = "total" | "step" | "chunk" | "tool" | "firstToken";
  * A present `tools[name]` replaces `toolMs` for that named Tool, including
  * when the named value is `null`.
  *
+ * Timers abort cooperatively. A caller that ignores its signal may keep doing
+ * work after the managed operation has settled.
+ *
  * @example
  * ```ts
  * import type { TimeoutOptions } from '@use-crux/core'
@@ -38,7 +41,12 @@ export interface TimeoutOptions {
   readonly firstToken?: number | null;
   /** Default budget for each Tool execution. */
   readonly toolMs?: number | null;
-  /** Per-Tool execution budgets keyed by Tool name. */
+  /**
+   * Per-Tool execution budgets keyed by Tool name.
+   *
+   * A named `null` disables that Tool's inherited `toolMs`; an absent key
+   * continues to inherit it.
+   */
   readonly tools?: Readonly<Record<string, number | null>>;
 }
 

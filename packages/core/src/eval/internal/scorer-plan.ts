@@ -22,6 +22,11 @@ import {
   getEvalTaskDescriptorForInternalUse,
   isManagedEvalTaskForInternalUse,
 } from "./task";
+import {
+  deterministicScorerContract,
+  scorerContractName,
+} from "./scorer-contract";
+import type { EvalScorerContract } from "./cell-types";
 
 export function resolveEvalScorers(
   raw: unknown,
@@ -39,6 +44,29 @@ export function resolveEvalScorers(
     );
   }
   return resolved as readonly Scorer<unknown, unknown, unknown>[];
+}
+
+/** Project the exact per-cell scorer catalog without invoking a scorer. */
+export function projectEvalCellScorerContracts(input: {
+  readonly scorers: readonly Scorer<unknown, unknown, unknown>[];
+  readonly cell: EvalPlannedCell;
+  readonly authoredSourceFingerprint?: string;
+}): readonly EvalScorerContract[] {
+  return Object.freeze(
+    input.scorers.map((scorer) =>
+      Object.freeze({
+        name: scorerContractName(scorer),
+        contractFingerprint:
+          scorer.costClass === "model"
+            ? (projectScorerContract(
+                scorer,
+                input.cell,
+                input.authoredSourceFingerprint,
+              ) ?? "identity_unavailable")
+            : deterministicScorerContract(scorer),
+      }),
+    ),
+  );
 }
 
 export async function planExternalScorers(input: {

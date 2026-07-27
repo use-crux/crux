@@ -202,6 +202,13 @@ configuration without guessing whether a runtime host will retain a particular c
 changes output for unchanged source, the static parse cache identity must advance with the compiler
 projection; runtime capture disposition remains observability evidence and never becomes an Index fact.
 
+Eval timeout policy is different: runtime-rich Eval discovery already imports the inert definition
+and projects its canonical authored/effective default through Core. The Indexer mirrors that
+marker-free projection into Eval metadata/facts; the hydrated Eval catalog separately projects
+authored/effective policy for inline and file-backed Cases. This product projection does not add
+static or semantic extraction, so the static parse epoch, semantic facts epoch, and semantic compiler
+options identity remain unchanged.
+
 Config remains valid for policy, trust, and overrides:
 
 - source include/exclude overrides;

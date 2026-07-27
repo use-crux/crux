@@ -1,4 +1,8 @@
-import type { ProjectDefinition } from "@use-crux/core/project-index";
+import type { AnyEval } from "@use-crux/core/eval";
+import {
+  projectEvalTimeoutPolicyForInternalUse,
+  type ProjectDefinition,
+} from "@use-crux/core/project-index";
 import {
   projectEvalTaskExecution,
   projectEvalVariantTaskExecution,
@@ -7,10 +11,7 @@ import {
 import { definition, safeId } from "./definitions";
 
 /** Inert Eval handle shape visible to runtime-rich Project Index discovery. */
-export interface DiscoveredAuthoredEval {
-  readonly _tag: "CruxEval";
-  readonly id?: string;
-}
+export type DiscoveredAuthoredEval = AnyEval;
 
 /** Runtime-rich placement projected from one authored Current or Variant arm. */
 export type AuthoredEvalExecutionArm = Readonly<
@@ -60,6 +61,8 @@ export async function definitionFromAuthoredEval(
         }),
   );
   const requiredHostCapabilities = runtimeCapabilityUnion(executionArms);
+  const timeout = projectEvalTimeoutPolicyForInternalUse(evalValue);
+  const timeoutFacts = timeout === undefined ? {} : { timeout };
   return definition(
     root,
     file,
@@ -73,11 +76,13 @@ export async function definitionFromAuthoredEval(
       explicitId: evalValue.id !== undefined,
       requiredHostCapabilities,
       evalExecutionArms: projectedArms,
+      ...timeoutFacts,
       facts: {
         kind: "eval",
         evalContract: "crux.eval",
         requiredHostCapabilities,
         evalExecutionArms: projectedArms,
+        ...timeoutFacts,
       },
     },
   );

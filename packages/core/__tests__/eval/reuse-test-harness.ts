@@ -4,6 +4,7 @@ import type {
   EvalPlanningPorts,
 } from "../../src/eval/internal/ports";
 import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
+import type { TimeoutOptions } from "../../src/generation/timeout";
 
 export const task = attachEvalTaskDescriptorForInternalUse(
   Object.assign(async () => "unused", {
@@ -12,6 +13,7 @@ export const task = attachEvalTaskDescriptorForInternalUse(
   }),
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],
@@ -27,11 +29,12 @@ export const task = attachEvalTaskDescriptorForInternalUse(
   },
 );
 
-export function evalValue(taskValue = task) {
+export function evalValue(taskValue = task, timeout?: TimeoutOptions | null) {
   return evaluate({
     id: "support",
     task: taskValue,
     cases: [{ id: "refund", input: { question: "yes" } }],
+    ...(timeout === undefined ? {} : { timeout }),
   });
 }
 

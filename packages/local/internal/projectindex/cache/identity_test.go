@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 47 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want prompt-text source-ref epoch 47", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 48 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Eval timeout policy epoch 48", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -28,6 +28,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"direct named-export evidence",
 		"Epoch 47",
 		"prompt-text source-ref metadata",
+		"runtime-rich Eval timeout policy facts",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -38,10 +39,29 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-47", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-48", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
+	}
+}
+
+func TestProjectIndexFactStoreMissesPreEvalTimeoutSnapshotEpoch(t *testing.T) {
+	root := t.TempDir()
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-47", "index.db")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("pre-Eval-timeout snapshot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	currentPath := projectIndexFactStoreDBFile(root)
+	if currentPath == oldPath {
+		t.Fatalf("current snapshot path reused epoch-47 snapshot %q", currentPath)
+	}
+	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
+		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)
 	}
 }
 

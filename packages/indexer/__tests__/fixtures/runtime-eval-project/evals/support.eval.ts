@@ -10,6 +10,7 @@ const task = attachEvalTaskDescriptorForInternalUse(
   async (input: { message: string }) => input.message,
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],

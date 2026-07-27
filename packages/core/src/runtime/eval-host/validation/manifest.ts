@@ -1,8 +1,40 @@
-import { CRUX_EVAL_HOST_PROTOCOL, type EvalHostManifestV1 } from "../types";
+import {
+  CRUX_EVAL_HOST_PROTOCOL_V1,
+  CRUX_EVAL_HOST_PROTOCOL_V2,
+  type EvalHostManifest,
+  type EvalHostManifestV1,
+  type EvalHostManifestV2,
+} from "../types";
 import { hasExactKeys, isRecord } from "./common";
 
-/** Validate an authenticated host manifest before coordinator preflight. */
-export function decodeEvalHostManifest(value: unknown): EvalHostManifestV1 {
+/** Validate an authenticated legacy V1 manifest. */
+export function decodeEvalHostManifestV1(value: unknown): EvalHostManifestV1 {
+  return decodeManifest(value, CRUX_EVAL_HOST_PROTOCOL_V1);
+}
+
+/** Validate an authenticated current V2 manifest. */
+export function decodeEvalHostManifestV2(value: unknown): EvalHostManifestV2 {
+  return decodeManifest(value, CRUX_EVAL_HOST_PROTOCOL_V2);
+}
+
+/** Decode a strict known manifest version before coordinator preflight. */
+export function decodeEvalHostManifest(value: unknown): EvalHostManifest {
+  if (isRecord(value) && value.protocol === CRUX_EVAL_HOST_PROTOCOL_V1) {
+    return decodeEvalHostManifestV1(value);
+  }
+  return decodeEvalHostManifestV2(value);
+}
+
+function decodeManifest<
+  TProtocol extends
+    | typeof CRUX_EVAL_HOST_PROTOCOL_V1
+    | typeof CRUX_EVAL_HOST_PROTOCOL_V2,
+>(
+  value: unknown,
+  protocol: TProtocol,
+): TProtocol extends typeof CRUX_EVAL_HOST_PROTOCOL_V1
+  ? EvalHostManifestV1
+  : EvalHostManifestV2 {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
@@ -14,7 +46,7 @@ export function decodeEvalHostManifest(value: unknown): EvalHostManifestV1 {
       "resultMaxBytes",
       "evals",
     ]) ||
-    value.protocol !== CRUX_EVAL_HOST_PROTOCOL ||
+    value.protocol !== protocol ||
     typeof value.deploymentId !== "string" ||
     !isFingerprint(value.privacyFingerprint) ||
     !["memory", "node", "serverless", "convex", "cloudflare"].includes(
@@ -29,10 +61,10 @@ export function decodeEvalHostManifest(value: unknown): EvalHostManifestV1 {
   ) {
     throw new EvalHostManifestCompatibilityError();
   }
-  return value as unknown as EvalHostManifestV1;
+  return value as never;
 }
 
-/** Authenticated manifest bytes that do not satisfy the selected V1 protocol. */
+/** Authenticated manifest bytes that do not satisfy a known exact protocol. */
 export class EvalHostManifestCompatibilityError extends TypeError {
   override readonly name = "EvalHostManifestCompatibilityError";
 

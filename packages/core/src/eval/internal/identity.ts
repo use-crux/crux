@@ -3,6 +3,7 @@
 import { sha256Hex } from "../../content/sha256";
 import { TASK_EVIDENCE_CACHE_EPOCH } from "./evidence/cache-epochs";
 import { canonicalFingerprintJson } from "./evidence/canonical-fingerprint";
+import type { NormalizedEvalTimeoutPolicy } from "../timeout-policy";
 
 export { TASK_EVIDENCE_CACHE_EPOCH };
 
@@ -13,6 +14,7 @@ export interface TaskEvidenceIdentityInput {
   readonly call?: unknown;
   readonly variant: string;
   readonly trial: number;
+  readonly timeout: NormalizedEvalTimeoutPolicy;
   readonly managedTaskFingerprint: string;
   readonly adapterFingerprint: string;
   readonly hostContractFingerprint: string;
@@ -36,6 +38,7 @@ export function createTaskEvidenceIdentity(
     callFingerprint: fingerprintEvalValue(input.call ?? null),
     variant: input.variant,
     trial: input.trial,
+    timeout: input.timeout,
     managedTaskFingerprint: input.managedTaskFingerprint,
     adapterFingerprint: input.adapterFingerprint,
     hostContractFingerprint: input.hostContractFingerprint,

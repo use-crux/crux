@@ -10,11 +10,9 @@ import { createStepAccessor } from "./assertions/runtime";
 import type { CellSignals } from "./execution-signals";
 import {
   invokeScorer,
-  SCORER_IDENTITY,
   UNVERSIONED_LOCAL_SCORER_CONTRACT,
-  type MaybeIdentifiedScorer,
 } from "./scorers/runtime";
-import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
+import { deterministicScorerContract } from "./scorer-contract";
 import type { Score, Scorer } from "./scorers/types";
 import { resolveEvalScorers } from "./scorer-plan";
 import type {
@@ -264,15 +262,6 @@ function assertValidScore(score: Score): void {
       "Scorers must return a name and a finite 0-1 score or null.",
     );
   }
-}
-
-function deterministicScorerContract(
-  scorer: Scorer<unknown, unknown, unknown>,
-): string {
-  const identity = (scorer as MaybeIdentifiedScorer)[SCORER_IDENTITY];
-  return identity !== undefined && isReusableEvalValue(identity)
-    ? fingerprintEvalValue(identity)
-    : UNVERSIONED_LOCAL_SCORER_CONTRACT;
 }
 
 function errorScore(

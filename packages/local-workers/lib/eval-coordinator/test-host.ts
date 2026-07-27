@@ -42,7 +42,11 @@ export async function startTestEvalHost(
         cases: entry.cases.map((item) => ({
           id: item.id,
           authored: item.authored,
-          fingerprint: fingerprintDeployedEvalCase(item.id, item.authored),
+          fingerprint: fingerprintDeployedEvalCase(
+            entry.eval,
+            item.id,
+            item.authored,
+          ),
         })),
         variants: projectDeployedEvalVariants(entry.eval),
         runtimeArms: projectEvalExecutionArms(entry.eval).flatMap((arm) =>

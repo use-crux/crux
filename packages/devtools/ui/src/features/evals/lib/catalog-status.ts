@@ -89,7 +89,12 @@ export function currentArmStatus(
     cells.some((cell) => cell.status === "errored" || cell.status === "skipped")
   )
     return "incomplete";
-  if (cells.some((cell) => cell.status === "failed")) return "failed";
+  if (
+    cells.some(
+      (cell) => cell.status === "failed" || cell.status === "timed_out",
+    )
+  )
+    return "failed";
   const currentGates = run.gates?.results.filter(
     (gate) => gate.variantName === "current",
   );

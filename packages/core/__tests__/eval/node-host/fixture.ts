@@ -14,16 +14,31 @@ import {
   DEFAULT_EVAL_PERSISTENCE_POLICY,
   fingerprintEvalPersistencePolicy,
 } from "../../../src/eval/internal/redact";
+import type { TimeoutOptions } from "../../../src/generation/timeout";
+import type { EvalTaskExecutionContext } from "../../../src/eval/internal/task-execution-context";
 
-export function hydratedEntry() {
+type RemoteExecute = (
+  input: unknown,
+  call: Readonly<object> | undefined,
+  overrides: Readonly<object>,
+  context: EvalTaskExecutionContext,
+) => Promise<{ output: string }>;
+
+export function hydratedEntry(
+  options: {
+    readonly timeout?: TimeoutOptions | null;
+    readonly execute?: RemoteExecute;
+  } = {},
+) {
   const authored = Object.freeze({
     id: "refund",
     input: { question: "refund" },
   });
   const evalValue = evaluate({
     id: "support",
-    task: remoteTask(),
+    task: remoteTask(undefined, options.execute),
     cases: [authored],
+    ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
   });
   return Object.freeze({
     id: "support",
@@ -65,13 +80,13 @@ export function manifest(
   deploymentId: string,
 ) {
   return {
-    protocol: "crux.eval-host.v1",
+    protocol: "crux.eval-host.v2",
     deploymentId,
     hostKind: "memory",
     privacyFingerprint: fingerprintEvalPersistencePolicy(
       DEFAULT_EVAL_PERSISTENCE_POLICY,
     ),
-    capabilities: ["record-store", "result-ref"],
+    capabilities: ["record-store", "result-ref", "structured-timeout"],
     resultMaxBytes: 1024 * 1024,
     evals: [
       {
@@ -79,6 +94,7 @@ export function manifest(
         evalFingerprint: entry.definitionFingerprint,
         cases: {
           refund: fingerprintDeployedEvalCase(
+            entry.eval,
             "refund",
             entry.cases[0]!.authored,
           ),
@@ -109,6 +125,7 @@ export function registry(entry: ReturnType<typeof hydratedEntry>) {
             id: "refund",
             authored: entry.cases[0]!.authored,
             fingerprint: fingerprintDeployedEvalCase(
+              entry.eval,
               "refund",
               entry.cases[0]!.authored,
             ),
@@ -143,6 +160,7 @@ function remoteTask(
     | "record-store"
     | "vector-store"
   )[] = ["record-store"],
+  execute: RemoteExecute = async () => ({ output: "yes" }),
 ) {
   return attachEvalTaskDescriptorForInternalUse(
     Object.assign(async () => "unused", {
@@ -151,6 +169,7 @@ function remoteTask(
     }),
     {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: 2,
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
@@ -162,7 +181,7 @@ function remoteTask(
         reusable: true,
         fingerprintMaterial: { adapter: "fixture" },
       }),
-      execute: async () => ({ output: "yes" }),
+      execute,
       projectOutput: (result) => result.output,
       projectResponse: () => ({
         runId: createCruxRunId(),

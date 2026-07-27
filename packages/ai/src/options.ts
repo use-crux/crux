@@ -153,6 +153,10 @@ interface AIGenerateBaseOptions<
    * Caller-owned cooperative cancellation signal.
    *
    * When combined with structured timeouts, the first cancellation source wins.
+   * Aborting does not forcibly terminate provider or Tool code that ignores the
+   * signal.
+   *
+   * @defaultValue `undefined`
    */
   readonly signal?: AbortSignal;
   /** User-supplied SDK call transport using this adapter's public codec params. */

@@ -152,6 +152,24 @@ func TestParseBaselineRejectsMalformedNestedV3Artifacts(t *testing.T) {
 		{"promotion", func(value map[string]any) { value["promotedAt"] = -1 }, "promotedAt"},
 		{"promoted by", func(value map[string]any) { value["promotedBy"] = 42 }, "promotedBy"},
 		{"coverage", func(value map[string]any) { value["coverage"].([]any)[0].(map[string]any)["trials"] = []any{-1} }, "coverage[0]"},
+		{"missing outcomes", func(value map[string]any) {
+			delete(value["coverage"].([]any)[0].(map[string]any), "outcomes")
+		}, "coverage[0].outcomes"},
+		{"misaligned outcomes", func(value map[string]any) {
+			value["coverage"].([]any)[0].(map[string]any)["outcomes"] = []any{
+				map[string]any{"trial": float64(1), "status": "passed"},
+			}
+		}, "coverage[0].outcomes"},
+		{"unknown outcome", func(value map[string]any) {
+			value["coverage"].([]any)[0].(map[string]any)["outcomes"] = []any{
+				map[string]any{"trial": float64(0), "status": "errored"},
+			}
+		}, "coverage[0].outcomes[0]"},
+		{"fabricated timeout score", func(value map[string]any) {
+			value["coverage"].([]any)[0].(map[string]any)["outcomes"] = []any{
+				map[string]any{"trial": float64(0), "status": "timed_out"},
+			}
+		}, "coverage[0].metrics.helpful.values[0].value"},
 		{"metric", func(value map[string]any) {
 			value["coverage"].([]any)[0].(map[string]any)["metrics"].(map[string]any)["helpful"].(map[string]any)["aggregation"] = "median"
 		}, "coverage[0].metrics.helpful"},
@@ -213,6 +231,80 @@ func TestReadRunPreservesSharedGoldenBytesAndUnknownFields(t *testing.T) {
 	}
 }
 
+func TestReadRunAcceptsSharedV4TimeoutEvidence(t *testing.T) {
+	raw, err := os.ReadFile(sharedRunV4Path(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	runsDir := filepath.Join(root, ".crux", "evals", "runs")
+	if err := os.MkdirAll(runsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runsDir, "eval-run-timeout-golden.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	run, found, err := OpenProject(root).ReadRun("eval-run-timeout-golden")
+	if err != nil || !found {
+		t.Fatalf("ReadRun V4: found=%v err=%v", found, err)
+	}
+	if run.SchemaVersion != 4 || run.Status != "complete" || run.Passed {
+		t.Fatalf("unexpected V4 fields: %+v", run)
+	}
+	if !bytes.Contains(run.Raw, []byte(`"status": "timed_out"`)) ||
+		!bytes.Contains(run.Raw, []byte(`"timedOut": 1`)) ||
+		!bytes.Contains(run.Raw, []byte(`"scorerContracts"`)) {
+		t.Fatal("V4 timeout evidence, scorer catalog, or aggregate was not retained")
+	}
+}
+
+func TestParseRunRejectsMalformedV4TimeoutEvidence(t *testing.T) {
+	raw, err := os.ReadFile(sharedRunV4Path(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(map[string]any)
+		want   string
+	}{
+		{"missing scorer catalog", func(run map[string]any) {
+			delete(firstCell(run), "scorerContracts")
+		}, "cells[0].scorerContracts"},
+		{"malformed scorer catalog", func(run map[string]any) {
+			firstCell(run)["scorerContracts"] = []any{
+				map[string]any{"name": "", "contractFingerprint": ""},
+			}
+		}, "cells[0].scorerContracts[0]"},
+		{"missing timeout", func(run map[string]any) {
+			delete(firstCell(run), "timeout")
+		}, "cells[0].timeout"},
+		{"disabled limit", func(run map[string]any) {
+			firstCell(run)["timeout"].(map[string]any)["limitMs"] = 0
+		}, "cells[0].timeout"},
+		{"impossible aggregate", func(run map[string]any) {
+			run["aggregates"].(map[string]any)["current"].(map[string]any)["timedOut"] = 0
+		}, "aggregates.current"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var run map[string]any
+			if err := json.Unmarshal(raw, &run); err != nil {
+				t.Fatal(err)
+			}
+			test.mutate(run)
+			malformed, err := json.Marshal(run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseRun(malformed); err == nil || !bytes.Contains([]byte(err.Error()), []byte(test.want)) {
+				t.Fatalf("parseRun error = %v, want field %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestReadRunRejectsIncompletePassingRecord(t *testing.T) {
 	root := t.TempDir()
 	runsDir := filepath.Join(root, ".crux", "evals", "runs")
@@ -254,13 +346,43 @@ func TestParseBaselineReportsRequiredFingerprintEpoch(t *testing.T) {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		t.Fatal(err)
 	}
-	value["baselineFingerprintEpoch"] = 3
+	value["baselineFingerprintEpoch"] = 4
 	stale, err := json.Marshal(value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ParseBaseline(stale); err == nil || !bytes.Contains([]byte(err.Error()), []byte("fingerprint epoch 4")) {
-		t.Fatalf("ParseBaseline error = %v, want fingerprint epoch 4", err)
+	if _, err := ParseBaseline(stale); err == nil || !bytes.Contains([]byte(err.Error()), []byte("fingerprint epoch 4 is incompatible; repromote with the current Crux version (expected epoch 5)")) {
+		t.Fatalf("ParseBaseline error = %v, want actionable epoch 5 repromotion diagnostic", err)
+	}
+}
+
+func TestParseBaselineAcceptsTimedOutOutcomeWithNullMetric(t *testing.T) {
+	raw, err := os.ReadFile(sharedBaselinePath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	coverage := value["coverage"].([]any)[0].(map[string]any)
+	coverage["outcomes"] = []any{
+		map[string]any{"trial": float64(0), "status": "timed_out"},
+	}
+	metric := coverage["metrics"].(map[string]any)["helpful"].(map[string]any)
+	metric["values"].([]any)[0].(map[string]any)["value"] = nil
+	delete(value, "snapshotFingerprint")
+	fingerprint, err := fingerprintJSONValue(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value["snapshotFingerprint"] = fingerprint
+	updated, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseBaseline(updated); err != nil {
+		t.Fatalf("ParseBaseline rejected timed-out null metric: %v", err)
 	}
 }
 
@@ -285,5 +407,17 @@ func sharedGoldenPath(t *testing.T) string {
 	return filepath.Clean(filepath.Join(
 		filepath.Dir(file), "..", "..", "..", "core", "__tests__", "eval",
 		"fixtures", "run-v3.golden.json",
+	))
+}
+
+func sharedRunV4Path(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime caller unavailable")
+	}
+	return filepath.Clean(filepath.Join(
+		filepath.Dir(file), "..", "..", "..", "core", "__tests__", "eval",
+		"fixtures", "run-v4.golden.json",
 	))
 }

@@ -28,5 +28,8 @@ recover.
 | ``Project privacy policy is not ready for strict offline Evals. Run `crux runtime generate`, then retry.``                                                                          | Regenerate the project Runtime artifacts before using `--offline`.                                                                                                                |
 | `The selected Runtime was generated with a different observability.redactPaths policy.`                                                                                             | Run `crux runtime generate`, redeploy the selected Runtime, then retry.                                                                                                           |
 
-Provider, abort, timeout, adapter, and validation-exhaustion errors pass
-through unchanged. Fix them at their originating provider or adapter layer.
+Provider, adapter, and validation-exhaustion errors pass through unchanged.
+Caller aborts remain cancellation errors. An unhandled canonical Crux
+`TimeoutError` leaving the task becomes a structured `timed_out` Eval cell;
+provider-native timeout errors remain provider-owned errors. Catch and recover
+from a canonical timeout only when the task can return a valid result.

@@ -27,8 +27,8 @@ func TestInspectViewSafelyProjectsUntrustedMetadataAndMalformedPayload(t *testin
 		t.Fatalf("inspect view retained authored terminal controls: %q", view)
 	}
 	plain := ansi.Strip(view)
-	if !strings.Contains(plain, "visible") || !strings.Contains(plain, "…") {
-		t.Fatalf("inspect view lost safe text or clipping cue:\n%s", plain)
+	if !strings.Contains(plain, "visible") || strings.Count(plain, "界") < 80 {
+		t.Fatalf("inspect view lost safely wrapped text:\n%s", plain)
 	}
 	for index, line := range strings.Split(plain, "\n") {
 		if width := lipgloss.Width(line); width > 60 {
@@ -37,7 +37,7 @@ func TestInspectViewSafelyProjectsUntrustedMetadataAndMalformedPayload(t *testin
 	}
 }
 
-func TestInspectViewClipsWideValidJSONByTerminalCells(t *testing.T) {
+func TestInspectViewWrapsWideValidJSONByTerminalCells(t *testing.T) {
 	payload, err := json.Marshal(map[string]string{"result": strings.Repeat("界", 100)})
 	if err != nil {
 		t.Fatal(err)
@@ -50,8 +50,8 @@ func TestInspectViewClipsWideValidJSONByTerminalCells(t *testing.T) {
 		t.Fatalf("inspect view split valid multibyte JSON: %q", view)
 	}
 	plain := ansi.Strip(view)
-	if !strings.Contains(plain, "…") {
-		t.Fatalf("inspect view did not expose clipping cue:\n%s", plain)
+	if strings.Count(plain, "界") != 100 {
+		t.Fatalf("inspect view did not preserve wrapped text:\n%s", plain)
 	}
 	for index, line := range strings.Split(plain, "\n") {
 		if width := lipgloss.Width(line); width > 60 {
