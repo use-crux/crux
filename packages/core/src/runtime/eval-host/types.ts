@@ -8,9 +8,22 @@ import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition
 import type { RuntimeWakeRequestVerifier } from "../handler/verify";
 import type { WorkItem } from "../engine/work";
 import type { RuntimeHandlerTarget } from "../handler/targets";
+import type { TimeoutBudget } from "../../generation/timeout";
 
-/** Stable private wire protocol spoken by deployed Eval execution hosts. */
-export const CRUX_EVAL_HOST_PROTOCOL = "crux.eval-host.v1" as const;
+/** Strict legacy wire protocol retained for decoding existing host records. */
+export const CRUX_EVAL_HOST_PROTOCOL_V1 = "crux.eval-host.v1" as const;
+
+/** Current wire protocol emitted for all newly admitted Eval host work. */
+export const CRUX_EVAL_HOST_PROTOCOL_V2 = "crux.eval-host.v2" as const;
+
+/** Current private wire protocol spoken by deployed Eval execution hosts. */
+export const CRUX_EVAL_HOST_PROTOCOL = CRUX_EVAL_HOST_PROTOCOL_V2;
+
+/** Capability proving in-flight structured timeout terminal support. */
+export const EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY = "structured-timeout";
+
+/** Semantic identity of the current strict private result envelope. */
+export const EVAL_HOST_RESULT_CODEC_VERSION = "result-codec.v2";
 
 /** Runtime substrates covered by the Eval host conformance contract. */
 export type EvalHostKind =
@@ -20,9 +33,7 @@ export type EvalHostKind =
   | "convex"
   | "cloudflare";
 
-/** Authenticated deployment manifest safe for coordinator preflight. */
-export interface EvalHostManifestV1 {
-  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL;
+interface EvalHostManifestBase {
   readonly deploymentId: string;
   readonly hostKind: EvalHostKind;
   /** Secret-free identity of the generated persistence policy. */
@@ -31,6 +42,19 @@ export interface EvalHostManifestV1 {
   readonly resultMaxBytes: number;
   readonly evals: readonly EvalHostManifestEntryV1[];
 }
+
+/** Authenticated legacy deployment manifest retained for readiness diagnostics. */
+export interface EvalHostManifestV1 extends EvalHostManifestBase {
+  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL_V1;
+}
+
+/** Authenticated current deployment manifest safe for new remote work. */
+export interface EvalHostManifestV2 extends EvalHostManifestBase {
+  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL_V2;
+}
+
+/** Strict authenticated manifest versions understood by the coordinator. */
+export type EvalHostManifest = EvalHostManifestV1 | EvalHostManifestV2;
 
 /** Allowlisted identity and capability facts for one deployed Eval. */
 export interface EvalHostManifestEntryV1 {
@@ -71,7 +95,7 @@ export type EvalHostStore = RuntimeStoreAdapter & {
 export interface EvalHostAdmissionInput {
   readonly namespace: string;
   readonly workId: string;
-  readonly job: SubmitEvalJobV1;
+  readonly job: SubmitEvalJob;
   readonly maxConcurrentJobs: number;
   readonly now: Date;
 }
@@ -150,9 +174,7 @@ export interface MemoryEvalHost extends EvalHostFetchHandler {
   readonly store: InMemoryRuntimeStore;
 }
 
-/** Exact deployed-Case request admitted by Eval host V1. */
-export interface SubmitEvalJobV1 {
-  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL;
+interface SubmitEvalJobIdentity {
   readonly jobId: string;
   readonly evalRunId: string;
   readonly evalId: string;
@@ -162,8 +184,29 @@ export interface SubmitEvalJobV1 {
   readonly variant: string;
   readonly variantFingerprint: string;
   readonly trial: number;
+}
+
+/** Exact deployed-Case request retained for strict V1 decoding. */
+export interface SubmitEvalJobV1 extends SubmitEvalJobIdentity {
+  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL_V1;
   readonly deadlineAt: string;
 }
+
+/** Source and relative limit that selected one V2 absolute deadline. */
+export interface EvalHostDeadlineV2 {
+  readonly source: "eval" | "host";
+  readonly limitMs: number;
+}
+
+/** Exact deployed-Case request emitted for newly admitted V2 work. */
+export interface SubmitEvalJobV2 extends SubmitEvalJobIdentity {
+  readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL_V2;
+  readonly deadlineAt: string;
+  readonly deadline: EvalHostDeadlineV2;
+}
+
+/** Strict submission shapes understood by the current host reader. */
+export type SubmitEvalJob = SubmitEvalJobV1 | SubmitEvalJobV2;
 
 /** Stable non-retryable error returned by the private host protocol. */
 export interface EvalHostErrorV1 {
@@ -193,4 +236,30 @@ export type EvalHostJobStatusV1 =
   | (EvalHostJobStatusBaseV1 & {
       readonly status: "failed" | "cancelled" | "expired";
       readonly error: EvalHostErrorV1;
+    });
+
+/** Structured timeout metadata retained by an expired V2 job. */
+export interface EvalHostTimeoutV2 {
+  readonly budget: TimeoutBudget;
+  readonly limitMs: number;
+  readonly toolName?: string;
+  readonly phase: "pre_start" | "in_flight";
+}
+
+/** Durable V2 Runtime work projection returned by job poll and reconnect. */
+export type EvalHostJobStatusV2 =
+  | (EvalHostJobStatusBaseV1 & { readonly status: "accepted" | "running" })
+  | (EvalHostJobStatusBaseV1 & {
+      readonly status: "succeeded";
+      readonly resultRef: RuntimeResultRef;
+      readonly result: JsonValue;
+    })
+  | (EvalHostJobStatusBaseV1 & {
+      readonly status: "failed" | "cancelled";
+      readonly error: EvalHostErrorV1;
+    })
+  | (EvalHostJobStatusBaseV1 & {
+      readonly status: "expired";
+      readonly error: EvalHostErrorV1;
+      readonly timeout: EvalHostTimeoutV2;
     });

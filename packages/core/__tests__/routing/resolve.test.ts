@@ -84,6 +84,48 @@ describe("resolveModel() — raw model", () => {
     expect(calls).toEqual(["raw-model"]);
     expect(result.text).toBe("response from raw-model");
   });
+
+  it("preserves caller cancellation through nested routing wrappers", async () => {
+    const routed = cascade({
+      tiers: [
+        {
+          model: router({
+            classify: () => "nested" as const,
+            routes: {
+              nested: fallback([
+                retry(
+                  split({
+                    seed: () => "stable",
+                    routes: {
+                      stable: { model: "nested-model", weight: 1 },
+                    },
+                  }),
+                  { attempts: 1 },
+                ),
+                "backup-model",
+              ]),
+              default: "default-model",
+            },
+          }),
+        },
+      ],
+    });
+    const controller = new AbortController();
+    let providerSignal: AbortSignal | undefined;
+
+    await resolveModel(
+      routed,
+      {},
+      async (model, options) => {
+        providerSignal = options?.signal;
+        return fakeGenerate(model);
+      },
+      extractModelId,
+      { signal: controller.signal },
+    );
+
+    expect(providerSignal).toBe(controller.signal);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────

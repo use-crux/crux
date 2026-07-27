@@ -31,7 +31,11 @@ import type {
   ValidationRetryOptions,
 } from "@use-crux/core";
 import type { AnyRoutable, RoutingCallOptions } from "@use-crux/core/routing";
-import type { StreamCompletion, StreamEvent } from "@use-crux/core/adapter";
+import type {
+  ExecutorModelArg,
+  StreamCompletion,
+  StreamEvent,
+} from "@use-crux/core/adapter";
 import type {
   Constraint,
   Guardrail,
@@ -145,6 +149,16 @@ interface AIGenerateBaseOptions<
   tokenBudget?: number;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
+  /**
+   * Caller-owned cooperative cancellation signal.
+   *
+   * When combined with structured timeouts, the first cancellation source wins.
+   * Aborting does not forcibly terminate provider or Tool code that ignores the
+   * signal.
+   *
+   * @defaultValue `undefined`
+   */
+  readonly signal?: AbortSignal;
   /** User-supplied SDK call transport using this adapter's public codec params. */
   transport?: AITransport;
   /**
@@ -208,5 +222,31 @@ export type AIGenerateOptions<
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
     : { input: MergedInput<TOwnInput, TContexts> });
+
+/** Erased option shape used only by the bound AI executor implementation. @internal */
+export type AIExecutorCallOptions = Record<string, unknown> & {
+  model: ExecutorModelArg<LanguageModel>;
+  routing?: unknown;
+  route?: string;
+  tools?: ToolSet;
+  toolsContext?: Readonly<Record<string, unknown>>;
+  runtimeContext?: unknown;
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  toolApproval?: ToolApprovalMap;
+  messages?: AIMessageHistory;
+  maxSteps?: number;
+  extra?: AIExtra;
+  activeTools?: readonly string[];
+  tokenBudget?: number;
+  timeout?: TimeoutOptions;
+  signal?: AbortSignal;
+  validationRetry?: ValidationRetryOptions;
+  constraints?: Constraint[];
+  constraintMaxRetries?: number;
+  guardrails?: Guardrail[];
+  safety?: SafetyTuneOptions;
+  input?: Record<string, unknown>;
+  transport?: AITransport;
+};
 
 /** Model-bound prompt execution options with public inference preserved. */

@@ -19,6 +19,7 @@ const task = attachEvalTaskDescriptorForInternalUse(
   }),
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],
@@ -115,6 +116,7 @@ describe("Variant-local exact reuse", () => {
       }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         inputSchema: z.object({ accountId: z.string() }),

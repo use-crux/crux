@@ -3,6 +3,7 @@ import {
   CruxAdapterError,
   cruxProviderError,
   isCruxAdapterError,
+  normalizeAdapterCallError,
   redactProviderMessage,
   type CruxFinishReason,
   type CruxProviderError,
@@ -108,5 +109,27 @@ describe("normalized adapter outcome taxonomy", () => {
     expect(isCruxAdapterError(error)).toBe(true);
     expect(isCruxAdapterError(new Error("plain"))).toBe(false);
     expect(isCruxAdapterError(undefined)).toBe(false);
+  });
+
+  it("normalizes a canonical timeout from another Core copy", () => {
+    const error = Object.assign(new Error("step timeout exceeded 25ms"), {
+      name: "TimeoutError",
+      budget: "step",
+      limitMs: 25,
+    });
+    Object.defineProperty(error, Symbol.for("@use-crux/core/TimeoutError"), {
+      value: true,
+    });
+
+    expect(
+      normalizeAdapterCallError(error, { providerId: "test" }),
+    ).toMatchObject({
+      providerError: {
+        kind: "timeout",
+        code: "crux.timeout.step",
+        retryable: true,
+      },
+      cause: error,
+    });
   });
 });

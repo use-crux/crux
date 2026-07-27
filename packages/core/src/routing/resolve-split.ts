@@ -35,6 +35,8 @@ export interface ResolveSplitArgs<M, R> {
   readonly deadline: Deadline;
   /** Current execution mode. */
   readonly mode?: "generate" | "stream";
+  /** Caller-owned cancellation inherited from the outer resolution. */
+  readonly signal?: AbortSignal;
   /** Stream first-token timeout budget inherited from the call site. */
   readonly firstTokenMs?: number;
   /** Call-site routing context. */
@@ -49,6 +51,7 @@ export interface ResolveSplitArgs<M, R> {
     options: {
       readonly deadline: Deadline;
       readonly mode?: "generate" | "stream";
+      readonly signal?: AbortSignal;
       readonly firstTokenMs?: number;
       readonly context?: unknown;
       readonly forcedRoute?: string;
@@ -65,6 +68,7 @@ export async function resolveSplit<M, R>({
   input,
   deadline,
   mode,
+  signal,
   firstTokenMs,
   context,
   forcedRoute,
@@ -114,6 +118,7 @@ export async function resolveSplit<M, R>({
       const result = await resolveCandidate(selected.model, {
         deadline,
         mode,
+        signal,
         firstTokenMs,
         context,
         forcedRoute: undefined,

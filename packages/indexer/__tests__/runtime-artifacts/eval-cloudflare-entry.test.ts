@@ -46,7 +46,7 @@ describe("generated Cloudflare Eval registry", () => {
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['asset-store'], overrideKeys: [], defaults: {},",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['asset-store'], overrideKeys: [], defaults: {},",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
         "  projectOutput: (result: { output: unknown }) => result.output, projectResponse: (() => ({})) as never,",
         "})",

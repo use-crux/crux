@@ -1,8 +1,21 @@
-import type { EvalHostJobStatusV1 } from "../types";
+import type { EvalHostJobStatusV1, EvalHostJobStatusV2 } from "../types";
+import { EVAL_HOST_MAX_DEADLINE_HORIZON_MS } from "../protocol";
 import { hasExactKeys, isCanonicalTimestamp, isRecord } from "./common";
 
-/** Validate one exact job projection before the coordinator consumes it. */
-export function decodeEvalHostJobStatus(value: unknown): EvalHostJobStatusV1 {
+/** Validate one exact legacy V1 job projection. */
+export function decodeEvalHostJobStatusV1(value: unknown): EvalHostJobStatusV1 {
+  return decodeStatus(value, "v1") as EvalHostJobStatusV1;
+}
+
+/** Validate one exact V2 job projection with structured expiration metadata. */
+export function decodeEvalHostJobStatusV2(value: unknown): EvalHostJobStatusV2 {
+  return decodeStatus(value, "v2") as EvalHostJobStatusV2;
+}
+
+/** Validate the current V2 projection before the coordinator consumes it. */
+export const decodeEvalHostJobStatus = decodeEvalHostJobStatusV2;
+
+function decodeStatus(value: unknown, protocol: "v1" | "v2"): unknown {
   if (!isRecord(value) || typeof value.status !== "string") return invalid();
   const terminal =
     value.status === "succeeded"
@@ -10,7 +23,12 @@ export function decodeEvalHostJobStatus(value: unknown): EvalHostJobStatusV1 {
       : value.status === "failed" ||
           value.status === "cancelled" ||
           value.status === "expired"
-        ? ["error"]
+        ? [
+            "error",
+            ...(protocol === "v2" && value.status === "expired"
+              ? ["timeout"]
+              : []),
+          ]
         : [];
   if (
     !hasExactKeys(value, [
@@ -44,10 +62,37 @@ export function decodeEvalHostJobStatus(value: unknown): EvalHostJobStatusV1 {
     ((value.status === "failed" ||
       value.status === "cancelled" ||
       value.status === "expired") &&
-      !isError(value.error))
+      !isError(value.error)) ||
+    (protocol === "v2" &&
+      value.status === "expired" &&
+      !isTimeout(value.timeout))
   )
     return invalid();
-  return value as unknown as EvalHostJobStatusV1;
+  return value;
+}
+
+function isTimeout(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "budget",
+      "limitMs",
+      "phase",
+      ...(value.toolName === undefined ? [] : ["toolName"]),
+    ]) ||
+    !["total", "step", "chunk", "firstToken", "tool"].includes(
+      value.budget as string,
+    ) ||
+    !Number.isSafeInteger(value.limitMs) ||
+    (value.limitMs as number) <= 0 ||
+    (value.limitMs as number) > EVAL_HOST_MAX_DEADLINE_HORIZON_MS ||
+    (value.phase !== "pre_start" && value.phase !== "in_flight") ||
+    (value.toolName !== undefined &&
+      (value.budget !== "tool" || typeof value.toolName !== "string"))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function isResultRef(value: unknown): boolean {

@@ -1,39 +1,47 @@
-/** Portable immutable plan and run records for the Eval kernel. @internal */
+/** Portable immutable plan records for the Eval kernel. @internal */
 
-import type { StreamCompletion } from "../../adapter";
-import type { CellAssertionOutcome } from "./assertion-types";
-import type { EvalCapability } from "../task";
 import type { EvalTaskEvidenceEntry } from "./evidence";
-import type { EvalTaskIdentityProjection } from "./task";
 import type { EvalScorerAction } from "./scorer-action-types";
-import type { EvalGateSummary } from "./gate-types";
 import type { NormalizedEvalCheck } from "./definition";
-import type { EvalScoreEvidence } from "./score-types";
 import type { EvalCostPlan } from "./cost-types";
 import type { EvalPlanPreflight } from "./offline-types";
-import type { EvalBaselineComparison } from "./baseline-types";
+import type { ResolvedEvalTimeoutPolicy } from "../timeout-policy";
+import type {
+  EvalFreshnessSource,
+  EvalScorerContract,
+  EvalTaskNonReusableReason,
+} from "./cell-types";
+import type { Scorer } from "./scorers/types";
 
 export type { EvalScorerAction } from "./scorer-action-types";
 export type { EvalGateResult, EvalGateSummary } from "./gate-types";
 export type { EvalScoreEvidence } from "./score-types";
-
-export type EvalTaskNonReusableReason =
-  | "identity_unavailable"
-  | "model_identity_unattested"
-  | "untracked_external_dependency"
-  | "nondeterministic_renderer"
-  | "task_binding_untracked"
-  | "unresolved_source_dependency"
-  | "implicit_media"
-  | "registry_identity_unavailable"
-  | "host_contract_unavailable";
-
-export type EvalFreshnessSource =
-  | "latency_gate"
-  | "eval_expect"
-  | "eval_after_scores"
-  | "case_expect"
-  | "case_after_scores";
+export type {
+  EvalAssertionSummary,
+  EvalCell,
+  EvalCellTimeout,
+  EvalCellV3,
+  EvalCellV4,
+  EvalFreshnessSource,
+  EvalScorerContract,
+  EvalTaskExecutionEvidence,
+  EvalTaskHostRequest,
+  EvalTaskHostResult,
+  EvalTaskNonReusableReason,
+  EvalTaskWorkDecision,
+  EvalTaskWorkDecisionV3,
+} from "./cell-types";
+export type {
+  EvalRun,
+  EvalRunComplete,
+  EvalRunIncomplete,
+  EvalRunV3,
+  EvalRunV4,
+  EvalRunVariant,
+  EvalVariantAggregate,
+  EvalVariantAggregateV3,
+  EvalVariantAggregateV4,
+} from "./run-types";
 
 export interface EvalSourceKey {
   readonly relativeFile: string;
@@ -90,10 +98,16 @@ export interface EvalPlannedCell {
   readonly trial: number;
   readonly blocking: boolean;
   readonly task: unknown;
+  /** Frozen outer deadline and privately marked nested timeout ceiling. */
+  readonly timeout: ResolvedEvalTimeoutPolicy;
   /** Frozen managed capabilities projected during cell planning. */
   readonly requiredHostCapabilities: readonly string[];
   readonly overrides: Readonly<Record<string, unknown>>;
   readonly action: EvalPlanAction;
+  /** Scorers resolved and admitted for this exact cell without invocation. */
+  readonly scorers: readonly Scorer<unknown, unknown, unknown>[];
+  /** Frozen catalog projected from the exact admitted scorer bindings. */
+  readonly scorerContracts: readonly EvalScorerContract[];
   readonly scorerActions: readonly EvalScorerAction[];
   readonly input: unknown;
   readonly call?: Readonly<Record<string, unknown>>;
@@ -152,211 +166,3 @@ export interface EvalPlan {
   readonly scorerActions: readonly EvalScorerAction[];
   readonly cells: readonly EvalPlannedCell[];
 }
-
-export interface EvalTaskHostRequest {
-  readonly evalId: string;
-  readonly caseId: string;
-  readonly variant: string;
-  readonly trial: number;
-  readonly task: unknown;
-  readonly overrides: Readonly<Record<string, unknown>>;
-  readonly input: unknown;
-  readonly call?: Readonly<Record<string, unknown>>;
-  /**
-   * Unique identity for an explicitly fresh execution. Omitted for ordinary
-   * work so a retry can reconnect to the same admitted host job.
-   */
-  readonly executionAttemptId?: string;
-}
-
-export interface EvalTaskExecutionEvidence {
-  readonly output: unknown;
-  readonly response?: StreamCompletion<unknown>;
-  readonly capturedSignals: readonly EvalCapability[];
-  readonly runIds: readonly string[];
-  readonly metrics: {
-    readonly durationMs: number;
-    readonly costUsd?: number;
-  };
-  readonly renderedPromptFingerprint?: string;
-}
-
-export interface EvalTaskHostResult extends EvalTaskExecutionEvidence {
-  readonly observedIdentity:
-    | EvalTaskIdentityProjection
-    | {
-        readonly reusable: true;
-        /** One-way identity projected by a remote execution host. */
-        readonly fingerprint: string;
-      };
-}
-
-export interface EvalAssertionSummary {
-  readonly ran: number;
-  readonly notEvaluated: number;
-  readonly outcomes: readonly CellAssertionOutcome[];
-}
-
-export type EvalTaskWorkDecision =
-  | { readonly status: "skipped"; readonly reason: "source_skipped" }
-  | {
-      readonly status: "executed";
-      readonly reason:
-        | "live_required"
-        | "fresh_requested"
-        | "performance_freshness"
-        | "no_exact_evidence"
-        | EvalTaskNonReusableReason;
-      readonly evidenceFingerprint?: string;
-      readonly evidenceRef?: string;
-      readonly freshnessSource?: EvalFreshnessSource;
-    }
-  | {
-      readonly status: "reused";
-      readonly reason: "exact_evidence";
-      readonly evidenceFingerprint: string;
-      readonly evidenceRef: string;
-    }
-  | { readonly status: "errored"; readonly reason: "task_error" };
-
-export interface EvalCell {
-  readonly caseId: string;
-  readonly caseName?: string;
-  readonly variant: string;
-  readonly trial: number;
-  readonly status: "passed" | "failed" | "errored" | "skipped";
-  readonly skipReason?: string;
-  readonly task: EvalTaskWorkDecision;
-  readonly scores: readonly EvalScoreEvidence[];
-  readonly assertions: EvalAssertionSummary;
-  readonly input: unknown;
-  readonly call?: Readonly<Record<string, unknown>>;
-  readonly output?: unknown;
-  readonly expected?: unknown;
-  readonly unvalidatedExpected?: true;
-  readonly response?: StreamCompletion<unknown>;
-  /** Persisted runs omit unsafe or oversized responses; the trace remains linked by runIds. */
-  readonly responseOmitted?: "persistence_size_limit" | "persistence_unsafe";
-  readonly error?: {
-    readonly message: string;
-    readonly phase: "execute" | "expect" | "afterScores" | "score";
-  };
-  readonly metrics: { readonly durationMs: number; readonly costUsd?: number };
-  readonly runIds: readonly string[];
-  readonly capturedSignals: readonly EvalCapability[];
-}
-
-export interface EvalRunVariant<VariantName extends string = string> {
-  readonly name: "current" | VariantName;
-  readonly fingerprint: string;
-  readonly overrideKeys: readonly string[];
-  readonly blocking: boolean;
-}
-
-export interface EvalVariantAggregate<ScoreName extends string = string> {
-  readonly cells: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly errored: number;
-  readonly skipped: number;
-  readonly passRate: number;
-  readonly scores: Readonly<
-    Partial<
-      Record<
-        ScoreName,
-        { readonly mean: number; readonly sem: number; readonly n: number }
-      >
-    >
-  >;
-  readonly trialConsistency: number;
-  readonly latencyMs: number;
-  readonly knownCostUsd?: number;
-}
-
-interface EvalRunBase<
-  ScoreName extends string = string,
-  VariantName extends string = string,
-> {
-  readonly schemaVersion: 3;
-  readonly runId: string;
-  readonly evalId: string;
-  readonly sourceKey: EvalSourceKey;
-  readonly startedAt: number;
-  readonly endedAt: number;
-  readonly definitionFingerprint: string;
-  readonly selection: EvalSelection;
-  readonly costControl: "not_required" | "max_cost" | "unknown";
-  readonly blockingVariants: readonly string[];
-  readonly cells: readonly EvalCell[];
-  readonly variants: readonly EvalRunVariant<VariantName>[];
-  readonly aggregates: Readonly<
-    Partial<Record<"current" | VariantName, EvalVariantAggregate<ScoreName>>>
-  >;
-  readonly comparison?: EvalBaselineComparison;
-  readonly gates: EvalGateSummary;
-  readonly cost: {
-    readonly actualUsd?: number;
-    readonly reservedMaximumUsd: number;
-    readonly unknownActionCount: number;
-    readonly task: { readonly actualUsd?: number };
-    readonly judge: { readonly actualUsd?: number };
-  };
-  readonly provenance: {
-    readonly task: "managed" | "opaque";
-    readonly host: "injected";
-    readonly evidenceStore:
-      | "none"
-      | {
-          readonly identity: string;
-          readonly consistency: "read_after_write" | "eventual";
-          readonly write:
-            | "written"
-            | "failed"
-            | "not_eligible"
-            | "not_attempted";
-          readonly writeReason?:
-            | "identity_unavailable"
-            | "task_binding_untracked"
-            | "model_identity_unattested"
-            | "untracked_external_dependency"
-            | "unresolved_source_dependency"
-            | "implicit_media"
-            | "capture_policy"
-            | "observed_identity_mismatch";
-        };
-  };
-}
-
-export interface EvalRunComplete<
-  ScoreName extends string = string,
-  VariantName extends string = string,
-> extends EvalRunBase<ScoreName, VariantName> {
-  readonly status: "complete";
-  readonly passed: boolean;
-}
-
-export interface EvalRunIncomplete<
-  ScoreName extends string = string,
-  VariantName extends string = string,
-> extends EvalRunBase<ScoreName, VariantName> {
-  readonly status: "incomplete";
-  readonly passed: false;
-  readonly reasons: readonly (
-    | "task_error"
-    | "assertion_error"
-    | "scorer_error"
-    | "baseline_missing"
-    | "baseline_evidence_incomplete"
-    | "score_missing"
-    | "score_null"
-    | "score_errored"
-    | "cost_missing"
-  )[];
-}
-
-export type EvalRun<
-  ScoreName extends string = string,
-  VariantName extends string = string,
-> =
-  | EvalRunComplete<ScoreName, VariantName>
-  | EvalRunIncomplete<ScoreName, VariantName>;

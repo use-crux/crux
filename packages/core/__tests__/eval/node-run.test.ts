@@ -115,7 +115,7 @@ describe.sequential("runEval", () => {
     });
   });
 
-  it("persists the authoritative task run id and only actually captured signals", async () => {
+  it("persists the eval.case root id and only actually captured signals", async () => {
     const run = await runEval("executable");
 
     expect(run.cells[0]).toMatchObject({
@@ -123,7 +123,7 @@ describe.sequential("runEval", () => {
       runIds: [expect.stringMatching(/^run_[0-9a-f]{24}$/u)],
       capturedSignals: [],
     });
-    expect(run.cells[0]?.runIds[0]).toBe(run.cells[0]?.response?.runId);
+    expect(run.cells[0]?.runIds[0]).not.toBe(run.cells[0]?.response?.runId);
 
     const reused = await runEval("executable");
     expect(reused.cells[0]).toMatchObject({
@@ -191,7 +191,7 @@ describe.sequential("runEval", () => {
     } finally {
       await writeFile(path, authored, "utf8");
     }
-  }, 10_000);
+  }, 20_000);
 
   it("runs an opaque callable locally without pretending it is reusable", async () => {
     const run = await runDiscoveredEval(

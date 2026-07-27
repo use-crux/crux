@@ -14,6 +14,7 @@ const expectedSchema = z.object({ answer: z.string() })
 const task = async (input: { question: string }) => input.question
 const managedTask = attachEvalTaskDescriptorForInternalUse(task, {
   _tag: 'CruxEvalTaskDescriptor',
+  identityEpoch: 2,
   operation: 'generate',
   adapterId: 'ai-sdk',
   inputSchema,

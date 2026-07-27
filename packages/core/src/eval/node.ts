@@ -67,7 +67,28 @@ export function runEval<T extends AnyEval>(
   evalOrId: T,
   options: RunEvalObjectOptions<T>,
 ): Promise<EvalPlan | RunOf<T>>;
-/** Discover and run one authored Eval through the Node coordinator. */
+/**
+ * Discover and run one authored Eval through the Node coordinator.
+ *
+ * @remarks
+ * Live execution emits Run V4. A timed-out task produces a complete,
+ * non-passing `timed_out` cell; scorers and assertions remain outside the task
+ * deadline. Cancellation is cooperative, so ignored late work may continue
+ * but cannot change the sealed cell or publish reusable evidence.
+ *
+ * @param evalOrId - An exact discovered Eval object or non-empty Eval selector.
+ * @param options - Selection, freshness, offline, planning, and cost controls.
+ * @returns A plan when `plan: true`; otherwise the persisted Eval Run.
+ * @throws {TypeError} When the selector, Eval object, or cost limit is invalid.
+ *
+ * @example
+ * ```ts
+ * import { runEval } from '@use-crux/core/eval/node'
+ *
+ * const run = await runEval('support')
+ * const timedOut = run.cells.filter((cell) => cell.status === 'timed_out')
+ * ```
+ */
 export async function runEval(
   evalOrId: AnyEval | string,
   options: RunEvalOptions = {},

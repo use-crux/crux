@@ -8,6 +8,7 @@ export const task = attachEvalTaskDescriptorForInternalUse(
   async (input: { question: string }) => input.question,
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     callContractFingerprint: "fixture.generate.call.v1",
@@ -48,6 +49,7 @@ export const replacementTask = attachEvalTaskDescriptorForInternalUse(
   async (input: { question: string }) => input.question,
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     callContractFingerprint: "fixture.generate.call.v1",

@@ -1,3 +1,5 @@
+import type { EvalTimeoutPolicyProjection } from "@use-crux/core/project-index";
+
 export interface EvalCatalogEntry {
   readonly id: string;
   readonly definitionFingerprint: string;
@@ -5,7 +7,9 @@ export interface EvalCatalogEntry {
   readonly cases: readonly {
     readonly id: string;
     readonly unvalidatedExpected?: true;
+    readonly timeout?: EvalTimeoutPolicyProjection;
   }[];
+  readonly timeout?: EvalTimeoutPolicyProjection;
   readonly variants: readonly string[];
   readonly description?: string;
   readonly tags?: readonly string[];
@@ -61,10 +65,11 @@ export type EvalTaskWork =
       readonly evidenceRef: string;
     }
   | { readonly status: "errored"; readonly reason: "task_error" }
-  | { readonly status: "skipped"; readonly reason: "source_skipped" };
+  | { readonly status: "skipped"; readonly reason: "source_skipped" }
+  | { readonly status: "timed_out"; readonly reason?: never };
 
 export interface EvalRunRecord {
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 3 | 4;
   readonly runId: string;
   readonly evalId: string;
   readonly sourceKey: {
@@ -84,8 +89,17 @@ export interface EvalRunRecord {
     readonly caseName?: string;
     readonly variant: string;
     readonly trial?: number;
-    readonly status: string;
+    readonly status: "passed" | "failed" | "errored" | "skipped" | "timed_out";
     readonly task: EvalTaskWork;
+    readonly timeout?: {
+      readonly budget: "total" | "step" | "chunk" | "firstToken" | "tool";
+      readonly limitMs: number;
+      readonly toolName?: string;
+    };
+    readonly scorerContracts?: readonly {
+      readonly name: string;
+      readonly contractFingerprint: string;
+    }[];
     readonly scores?: readonly {
       readonly status: "computed" | "reused" | "missing" | "errored";
       readonly reason: string;
@@ -143,9 +157,15 @@ export interface EvalRunRecord {
     Record<
       string,
       {
+        readonly cells: number;
+        readonly passed: number;
+        readonly failed: number;
+        readonly errored: number;
+        readonly skipped: number;
         readonly passRate: number;
         readonly latencyMs: number;
         readonly knownCostUsd?: number;
+        readonly timedOut?: number;
       }
     >
   >;

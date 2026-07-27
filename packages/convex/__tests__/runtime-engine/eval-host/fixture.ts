@@ -28,6 +28,7 @@ export function fixtureRegistry(
     async (input: { message: string }) => input.message,
     {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: 2,
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
@@ -77,7 +78,11 @@ export function fixtureRegistry(
         cases: [
           {
             id: "refund",
-            fingerprint: fingerprintDeployedEvalCase("refund", authored),
+            fingerprint: fingerprintDeployedEvalCase(
+              evalValue,
+              "refund",
+              authored,
+            ),
             authored,
           },
         ],
@@ -98,7 +103,7 @@ export function fixtureRegistry(
 export function jobBody(registry: ReturnType<typeof fixtureRegistry>) {
   const entry = registry.entries[0]!;
   return {
-    protocol: "crux.eval-host.v1",
+    protocol: "crux.eval-host.v2",
     jobId: "job-support-refund-current-0",
     evalRunId: "eval-run-1",
     evalId: entry.id,
@@ -108,6 +113,7 @@ export function jobBody(registry: ReturnType<typeof fixtureRegistry>) {
     variant: entry.variants[0]!.name,
     variantFingerprint: entry.variants[0]!.fingerprint,
     trial: 0,
-    deadlineAt: "2026-07-16T19:00:00.000Z",
+    deadlineAt: "2026-07-16T18:10:00.000Z",
+    deadline: { source: "host", limitMs: 10 * 60_000 },
   } as const;
 }

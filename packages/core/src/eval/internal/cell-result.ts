@@ -14,6 +14,7 @@ export function cellIdentity(planned: EvalPlannedCell) {
     ...(planned.caseName !== undefined ? { caseName: planned.caseName } : {}),
     variant: planned.variant,
     trial: planned.trial,
+    scorerContracts: planned.scorerContracts,
     input: planned.input,
     ...(planned.call !== undefined ? { call: planned.call } : {}),
     ...(planned.expected !== undefined ? { expected: planned.expected } : {}),
@@ -45,16 +46,22 @@ export function dependencyFailedScores(
   );
 }
 
-export function freezeCell(cell: EvalCell): EvalCell {
+export function freezeCell<Cell extends EvalCell>(cell: Cell): Cell {
   return Object.freeze({
     ...cell,
     task: Object.freeze({ ...cell.task }),
     scores: Object.freeze([...cell.scores]),
+    scorerContracts: Object.freeze(
+      cell.scorerContracts.map((contract) => Object.freeze({ ...contract })),
+    ),
     metrics: Object.freeze({ ...cell.metrics }),
     runIds: Object.freeze([...cell.runIds]),
     capturedSignals: Object.freeze([...cell.capturedSignals]),
     ...(cell.error !== undefined
       ? { error: Object.freeze({ ...cell.error }) }
       : {}),
-  });
+    ...(cell.timeout !== undefined
+      ? { timeout: Object.freeze({ ...cell.timeout }) }
+      : {}),
+  }) as Cell;
 }

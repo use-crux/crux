@@ -7,7 +7,6 @@ import { fingerprintEvalValue } from "../../src/eval/internal/identity";
 import type {
   EvalEvidenceStore,
   EvalExecutionPorts,
-  EvalPlanningPorts,
 } from "../../src/eval/internal/ports";
 import {
   evalValue,
@@ -15,8 +14,15 @@ import {
   planningPorts,
   taskResult,
 } from "./reuse-test-harness";
+import { defineTimeoutReuseBehavior } from "./reuse-timeout.behavior";
+import { reuseAfterTimeoutBehavior } from "./reuse-after-timeout.behavior";
+import { reuseInvalidEvidenceBehavior } from "./reuse-invalid-evidence.behavior";
 
 describe("automatic exact Eval task reuse", () => {
+  defineTimeoutReuseBehavior();
+  reuseAfterTimeoutBehavior();
+  reuseInvalidEvidenceBehavior();
+
   it("writes successful evidence once and reuses it on an identical second run", async () => {
     const evidenceStore = memoryEvidenceStore();
     const hostExecute = vi.fn(async () => taskResult());
@@ -79,6 +85,7 @@ describe("automatic exact Eval task reuse", () => {
       }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -141,6 +148,7 @@ describe("automatic exact Eval task reuse", () => {
       }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -289,6 +297,7 @@ describe("automatic exact Eval task reuse", () => {
       }),
       {
         _tag: "CruxEvalTaskDescriptor",
+        identityEpoch: 2,
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
@@ -361,43 +370,4 @@ describe("automatic exact Eval task reuse", () => {
     });
   });
 
-  it.each([
-    ["corrupt", { nope: true }],
-    [
-      "old epoch",
-      { schemaVersion: 1, taskEvidenceCacheEpoch: 2, status: "complete" },
-    ],
-    ["error", { schemaVersion: 1, taskEvidenceCacheEpoch: 9, status: "error" }],
-    [
-      "partial",
-      { schemaVersion: 1, taskEvidenceCacheEpoch: 9, status: "partial" },
-    ],
-  ])("treats a %s entry as a miss", async (_label, invalidEntry) => {
-    const evidenceStore = memoryEvidenceStore();
-    const ports: EvalPlanningPorts = {
-      evidenceStore: {
-        ...evidenceStore,
-        read: async () => invalidEntry,
-      },
-      costEstimator: { estimate: () => ({ kind: "none" }) },
-      taskIdentity: {
-        describe: async () => ({
-          managedTaskFingerprint: "task-v1",
-          hostContractFingerprint: "host-v1",
-          reusable: true,
-        }),
-      },
-    };
-
-    const plan = await planEval(
-      evalValue(),
-      { sourceKey: { relativeFile: "support.eval.ts", export: "default" } },
-      ports,
-    );
-
-    expect(plan.cells[0].action).toMatchObject({
-      kind: "execute",
-      reason: "no_exact_evidence",
-    });
-  });
 });

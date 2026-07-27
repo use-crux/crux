@@ -160,4 +160,40 @@ describe("EvalRunSummary", () => {
     expect(markup).toContain("rendered differently for the same input");
     expect(markup).toContain("Case input");
   });
+
+  it("shows persisted outcome counts and appends nonzero timeouts", () => {
+    const run = {
+      schemaVersion: 4,
+      runId: "eval-run-timeouts",
+      evalId: "support",
+      sourceKey: { relativeFile: "support.eval.ts", export: "default" },
+      definitionFingerprint: "definition-v1",
+      startedAt: 1,
+      endedAt: 43,
+      status: "complete",
+      passed: false,
+      selection: {},
+      cells: [],
+      aggregates: {
+        current: {
+          cells: 4,
+          passed: 1,
+          failed: 1,
+          errored: 1,
+          skipped: 0,
+          timedOut: 1,
+          passRate: 0.25,
+          latencyMs: 42,
+        },
+      },
+    } satisfies EvalRunRecord;
+
+    const markup = renderToStaticMarkup(<EvalRunSummary run={run} />);
+
+    for (const copy of ["Passed", "Failed", "Errored", "Timed out"]) {
+      expect(markup).toContain(copy);
+    }
+    expect(markup).toContain("current: 25%");
+    expect(markup).toContain("1 timed out");
+  });
 });

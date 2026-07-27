@@ -243,22 +243,19 @@ export function createMemoryStatePort(
     },
   };
 }
-
 function isPrunableWorkStatus(status: WorkItem["status"]): boolean {
   return (
     status === "completed" || status === "cancelled" || status === "dead-letter"
   );
 }
-
 function isPrunableSnapshotStatus(status: FlowSnapshot["status"]): boolean {
   return (
-    status === 'completed' ||
-    status === 'blocked' ||
-    status === 'expired' ||
-    status === 'cancelled'
-  )
+    status === "completed" ||
+    status === "blocked" ||
+    status === "expired" ||
+    status === "cancelled"
+  );
 }
-
 export function cloneWorkItem(work: WorkItem): WorkItem {
   return Object.freeze({
     workId: work.workId,
@@ -277,6 +274,14 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
           code: work.lastError.code,
           message: work.lastError.message,
           at: new Date(work.lastError.at),
+          ...(work.lastError.details === undefined
+            ? {}
+            : {
+                details: cloneJsonValue(
+                  work.lastError.details,
+                  "work error details",
+                ),
+              }),
         }
       : undefined,
     resultRef: work.resultRef
@@ -286,7 +291,6 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
     updatedAt: new Date(work.updatedAt),
   });
 }
-
 function incrementCounter(
   data: MemoryRuntimeData,
   namespace: string,
@@ -297,7 +301,6 @@ function incrementCounter(
   data.idleCounters.set(key, next);
   return next;
 }
-
 function statusAllowed(
   status: WorkItem["status"],
   from: SetWorkPendingOptions["from"],
@@ -306,7 +309,6 @@ function statusAllowed(
     from === undefined ? ["suspended"] : Array.isArray(from) ? from : [from];
   return allowed.includes(status);
 }
-
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
   return Object.freeze({
     flowId: snapshot.flowId,
@@ -361,7 +363,6 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     updatedAt: new Date(snapshot.updatedAt),
   });
 }
-
 function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
   return Object.freeze({
     namespace: record.namespace,
@@ -369,7 +370,6 @@ function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
     completedAt: new Date(record.completedAt),
   });
 }
-
 function clonePendingSuspend(
   suspend: RuntimePendingSuspend,
 ): RuntimePendingSuspend {

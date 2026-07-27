@@ -1,7 +1,7 @@
 /** Canonical portable schema and codec for persisted Eval V3 runs. @internal */
 
 import { z } from "zod";
-import type { EvalRun } from "./types";
+import type { EvalRun, EvalRunV3 } from "./types";
 import { evalCellV3Schema } from "./run-cell-schema";
 import { evalBaselineComparisonSchema } from "./baseline-comparison-schema";
 
@@ -27,6 +27,7 @@ const aggregateSchema = z
     knownCostUsd: nonnegative.optional(),
   })
   .passthrough();
+export const evalRunAggregateV3Schema = aggregateSchema;
 
 const gateSchema = z
   .object({
@@ -136,6 +137,19 @@ const runBase = z
       .passthrough(),
   })
   .passthrough();
+export const evalRunV3BaseSchema = runBase;
+
+export const incompleteEvalRunReasonsSchema = z.enum([
+  "task_error",
+  "assertion_error",
+  "scorer_error",
+  "baseline_missing",
+  "baseline_evidence_incomplete",
+  "score_missing",
+  "score_null",
+  "score_errored",
+  "cost_missing",
+]);
 
 /** Standard Schema-compatible authority for private Eval run records. */
 export const evalRunV3Schema = z.discriminatedUnion("status", [
@@ -143,25 +157,13 @@ export const evalRunV3Schema = z.discriminatedUnion("status", [
   runBase.extend({
     status: z.literal("incomplete"),
     passed: z.literal(false),
-    reasons: z.array(
-      z.enum([
-        "task_error",
-        "assertion_error",
-        "scorer_error",
-        "baseline_missing",
-        "baseline_evidence_incomplete",
-        "score_missing",
-        "score_null",
-        "score_errored",
-        "cost_missing",
-      ]),
-    ),
+    reasons: z.array(incompleteEvalRunReasonsSchema),
   }),
 ]);
 
 /** Parse a JSON-decoded value as an additive Eval V3 record. */
-export function parseEvalRunV3(value: unknown): EvalRun {
-  return evalRunV3Schema.parse(value) as EvalRun;
+export function parseEvalRunV3(value: unknown): EvalRunV3 {
+  return evalRunV3Schema.parse(value) as EvalRunV3;
 }
 
 /** Complete V3 runs are eligible; failing runs still require explicit warned acceptance. */

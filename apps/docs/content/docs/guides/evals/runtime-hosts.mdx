@@ -113,6 +113,14 @@ protocol, durable reservation/job/result storage, wake recovery, and
 content-addressed result references. Generated registries contain identities,
 not functions, prompts, models, module paths, or credentials.
 
+Current hosts enforce the same task-only deadline as local execution and return
+the same structured `timed_out` Run outcome. They abort the in-flight task
+cooperatively, quarantine late evidence and direct result writes, and retain a
+short bounded terminal-publication grace for clock skew. An independent Host
+safety ceiling remains a deployment failure, not an authored Eval timeout.
+Legacy Host protocol records remain readable, but a legacy Host is not ready
+for new timeout-enabled remote work.
+
 `--plan` may make one authenticated read-only manifest request when remote
 work is required. Missing credentials produce an unverified plan with exact
 setup remedies. `--offline`, including `--offline --plan`, never accesses the

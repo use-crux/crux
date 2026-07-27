@@ -10,7 +10,6 @@ import {
 import type { RuntimeArtifactFinding } from "./types";
 
 type HydratedEval = EvalNodeRunnerCore.HydratedEval;
-
 export interface GeneratedEvalArtifacts {
   readonly manifestEntries: readonly RuntimeArtifactManifestEval[];
   readonly entryImports: readonly string[];
@@ -386,6 +385,7 @@ function projectEntry(
   const cases = entry.cases.map((evalCase) => ({
     id: evalCase.id,
     fingerprint: nodeRunner.fingerprintDeployedEvalCase(
+      entry.eval,
       evalCase.id,
       evalCase.authored,
     ),

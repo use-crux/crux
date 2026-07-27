@@ -21,7 +21,7 @@ describe("Cloudflare Eval host", () => {
     await expect(authorized.json()).resolves.toMatchObject({
       deploymentId: "production-eu",
       hostKind: "cloudflare",
-      protocol: "crux.eval-host.v1",
+      protocol: "crux.eval-host.v2",
       privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(env.CRUX_EVAL_HOST).toBeDefined();
@@ -39,7 +39,7 @@ describe("Cloudflare Eval host", () => {
     };
     const entry = manifest.evals[0]!;
     const body = {
-      protocol: "crux.eval-host.v1",
+      protocol: "crux.eval-host.v2",
       jobId: "job-support-refund-current-0",
       evalRunId: "eval-run-1",
       evalId: entry.id,
@@ -49,7 +49,8 @@ describe("Cloudflare Eval host", () => {
       variant: "current",
       variantFingerprint: entry.variants.current,
       trial: 0,
-      deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+      deadlineAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      deadline: { source: "host", limitMs: 10 * 60_000 },
     };
 
     const accepted = await authorizedFetch("/jobs", {

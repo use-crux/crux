@@ -18,6 +18,7 @@ const task = attachEvalTaskDescriptorForInternalUse(
   }),
   {
     _tag: "CruxEvalTaskDescriptor",
+    identityEpoch: 2,
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],

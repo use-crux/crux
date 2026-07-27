@@ -4,13 +4,14 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { startTestEvalHost } from "./test-host";
+import { registerEvalCatalogTimeoutBehavior } from "./catalog-timeout.behavior";
 
 const require = createRequire(import.meta.url);
 const tsx = require.resolve("tsx/cli");
 const coordinator = resolve(__dirname, "../../bin/eval-coordinator.ts");
 const project = resolve(__dirname, "../__fixtures__/eval-project");
-
 describe("Eval coordinator", { timeout: 60_000 }, () => {
+  registerEvalCatalogTimeoutBehavior(run);
   it("adds and rediscovers one canonical Review sidecar Case", async () => {
     const sidecar = resolve(project, "evals/managed.cases.jsonl");
     await rm(sidecar, { force: true });
@@ -475,7 +476,6 @@ describe("Eval coordinator", { timeout: 60_000 }, () => {
     }
   });
 });
-
 function run(
   args: readonly string[],
   environment: NodeJS.ProcessEnv = process.env,

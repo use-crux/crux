@@ -3,14 +3,28 @@ import { createTaskEvidenceIdentity } from "../../../src/eval/internal/identity"
 import { projectRemoteHostContractFingerprint } from "../../../src/eval/node/coordinator";
 
 describe("remote Eval evidence identity", () => {
+  it("identifies the V2 structured-timeout host contract", () => {
+    expect(
+      projectRemoteHostContractFingerprint({
+        deploymentId: "production",
+        requiredHostCapabilities: ["record-store"],
+        privacyFingerprint: "privacy-default",
+      }),
+    ).toContain("crux.eval-host.v2:result-codec.v2:structured-timeout");
+  });
+
   it("misses across locally selected deployments", () => {
-    const identity = (deploymentId: string, privacyFingerprint = "privacy-default") =>
+    const identity = (
+      deploymentId: string,
+      privacyFingerprint = "privacy-default",
+    ) =>
       createTaskEvidenceIdentity({
         evalId: "support",
         caseId: "refund",
         input: { question: "refund" },
         variant: "current",
         trial: 0,
+        timeout: {},
         managedTaskFingerprint: "registry-and-source-v1",
         adapterFingerprint: "adapter-v1",
         hostContractFingerprint: projectRemoteHostContractFingerprint({

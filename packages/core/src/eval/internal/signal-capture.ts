@@ -3,12 +3,14 @@
 import { observe } from "../../observability";
 import type { CruxGraphRecord } from "../../observability/contract";
 import type { EvalCaptureSession } from "./capture-context";
+import { recordEvalCellObservation } from "./cell-observation";
 
 /** Create one capture bucket shared by every cell in an Eval run. @internal */
 export function installSignalCapture(): EvalCaptureSession {
   const byRun = new Map<string, CruxGraphRecord[]>();
   return Object.freeze({
     send(records: readonly CruxGraphRecord[]) {
+      recordEvalCellObservation(records);
       for (const record of records) {
         const bucket = byRun.get(record.runId);
         if (bucket) bucket.push(record);

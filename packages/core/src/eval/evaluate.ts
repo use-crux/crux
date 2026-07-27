@@ -9,13 +9,14 @@
  */
 
 import type { ProjectDefinitionKind } from "../project-index";
+import type { TimeoutOptions } from "../generation/timeout";
 import type { BoundScorerLib, Scorer } from "./internal/scorers/types";
 import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
 import type { EvalGates } from "./gates";
 import type {
-  CallOf,
   CapsOf,
+  EvalCaseCallOf,
   EvalTaskLike,
   InputOf,
   OutputOf,
@@ -48,7 +49,7 @@ type ScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
 /** Task projections cached behind short aliases for public diagnostics. */
 type TaskInput<TTask> = InputOf<TTask>;
 type TaskOutput<TTask> = OutputOf<TTask>;
-type TaskCall<TTask> = CallOf<TTask>;
+type TaskCall<TTask> = EvalCaseCallOf<TTask>;
 type TaskVariant<TTask> = VariantOf<TTask>;
 type TaskCapabilities<TTask> = CapsOf<TTask>;
 type TaskResponse<TTask> = ResponseOf<TTask>;
@@ -118,6 +119,26 @@ export interface EvaluateOptions<
         >,
       ) => TScorers);
   gates?: EvalGates<ScorerNamesOf<TScorers> | "pass">;
+  /**
+   * Structured timeout policy inherited by every Case.
+   *
+   * @remarks
+   * Case fields override this policy by field and Tool name. Explicit `null`
+   * disables an inherited ceiling; a Case-level `timeout: null` clears the
+   * complete inherited policy.
+   *
+   * @defaultValue `undefined`
+   *
+   * @example
+   * ```ts
+   * evaluate({
+   *   task,
+   *   timeout: { totalMs: 30_000, tools: { search: 5_000 } },
+   *   cases: [{ input }, { input: slowInput, timeout: { toolMs: null } }],
+   * })
+   * ```
+   */
+  readonly timeout?: TimeoutOptions | null;
   trials?: number;
   tags?: readonly string[];
   description?: string;

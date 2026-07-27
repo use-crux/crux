@@ -1,11 +1,65 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Deadline, TimeoutError, withBudget } from "../../src/generation/timeout";
+import {
+  Deadline,
+  TimeoutError,
+  toolBudgetMs,
+  withBudget,
+} from "../../src/generation/timeout";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe("generation timeout budgets", () => {
+  it("distinguishes a named Tool clear from an absent override", () => {
+    const cases = [
+      {
+        label: "named null clears the inherited default",
+        timeout: { toolMs: 5_000, tools: { search: null } },
+        expected: undefined,
+      },
+      {
+        label: "an absent name inherits the default",
+        timeout: { toolMs: 5_000, tools: {} },
+        expected: 5_000,
+      },
+      {
+        label: "a null default is disabled",
+        timeout: { toolMs: null },
+        expected: undefined,
+      },
+      {
+        label: "zero is disabled",
+        timeout: { toolMs: 0 },
+        expected: undefined,
+      },
+      {
+        label: "negative values are disabled",
+        timeout: { toolMs: -1 },
+        expected: undefined,
+      },
+      {
+        label: "NaN is disabled",
+        timeout: { toolMs: Number.NaN },
+        expected: undefined,
+      },
+      {
+        label: "positive infinity is disabled",
+        timeout: { toolMs: Number.POSITIVE_INFINITY },
+        expected: undefined,
+      },
+      {
+        label: "negative infinity is disabled",
+        timeout: { toolMs: Number.NEGATIVE_INFINITY },
+        expected: undefined,
+      },
+    ] as const;
+
+    for (const { label, timeout, expected } of cases) {
+      expect(toolBudgetMs(timeout, "search"), label).toBe(expected);
+    }
+  });
+
   it("rejects with a typed TimeoutError carrying budget metadata", async () => {
     vi.useFakeTimers();
 
@@ -29,6 +83,35 @@ describe("generation timeout budgets", () => {
 
     await assertion;
     await instanceAssertion;
+  });
+
+  it("recognizes canonical timeout errors across package copies", () => {
+    const marker = Symbol.for("@use-crux/core/TimeoutError");
+    const local = new TimeoutError({ budget: "step", limitMs: 50 });
+
+    class ForeignTimeoutError extends Error {
+      override readonly name = "TimeoutError";
+      readonly budget = "step";
+      readonly limitMs = 50;
+
+      constructor() {
+        super("step timeout exceeded 50ms");
+        Object.defineProperty(this, marker, { value: true });
+      }
+    }
+
+    const renamed = new Error("not canonical");
+    renamed.name = "TimeoutError";
+
+    expect(TimeoutError.isInstance(local)).toBe(true);
+    expect(TimeoutError.isInstance(new ForeignTimeoutError())).toBe(true);
+    expect(TimeoutError.isInstance(new Error("ordinary"))).toBe(false);
+    expect(TimeoutError.isInstance({ name: "TimeoutError" })).toBe(false);
+    expect(TimeoutError.isInstance(renamed)).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(local, marker)).toMatchObject({
+      enumerable: false,
+      value: true,
+    });
   });
 
   it("includes the tool name when a per-tool budget expires", async () => {

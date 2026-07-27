@@ -6,6 +6,7 @@ import (
 )
 
 type runV3Contract struct {
+	SchemaVersion         *int                          `json:"schemaVersion"`
 	Status                *string                       `json:"status"`
 	Passed                *bool                         `json:"passed"`
 	Reasons               json.RawMessage               `json:"reasons"`
@@ -46,6 +47,7 @@ type cellContract struct {
 	Status              *string              `json:"status"`
 	SkipReason          *string              `json:"skipReason"`
 	Task                *taskContract        `json:"task"`
+	ScorerContracts     *[]scorerContract    `json:"scorerContracts"`
 	Scores              *[]scoreContract     `json:"scores"`
 	Assertions          *assertionsContract  `json:"assertions"`
 	Input               json.RawMessage      `json:"input"`
@@ -53,6 +55,7 @@ type cellContract struct {
 	Response            json.RawMessage      `json:"response"`
 	UnvalidatedExpected *bool                `json:"unvalidatedExpected"`
 	Error               *cellErrorContract   `json:"error"`
+	Timeout             *cellTimeoutContract `json:"timeout"`
 	Metrics             *cellMetricsContract `json:"metrics"`
 	RunIDs              *[]string            `json:"runIds"`
 	CapturedSignals     *[]string            `json:"capturedSignals"`
@@ -137,6 +140,7 @@ type aggregateContract struct {
 	Passed           *int                               `json:"passed"`
 	Failed           *int                               `json:"failed"`
 	Errored          *int                               `json:"errored"`
+	TimedOut         *int                               `json:"timedOut"`
 	Skipped          *int                               `json:"skipped"`
 	PassRate         *float64                           `json:"passRate"`
 	Scores           *map[string]aggregateScoreContract `json:"scores"`
@@ -187,10 +191,13 @@ type runProvenanceContract struct {
 	EvidenceStore json.RawMessage `json:"evidenceStore"`
 }
 
-func validateRunV3(raw []byte) error {
+func validateRun(raw []byte) error {
 	var value runV3Contract
 	if err := decodeContract(raw, "run", &value); err != nil {
 		return err
+	}
+	if value.SchemaVersion == nil || !oneOfInt(*value.SchemaVersion, 3, 4) {
+		return contractError("schemaVersion", "must be 3 or 4")
 	}
 	if value.SourceKey == nil || value.SourceKey.RelativeFile == nil || value.SourceKey.Export == nil || *value.SourceKey.Export != "default" {
 		return contractError("sourceKey", "requires relativeFile and export=default")
@@ -228,7 +235,7 @@ func validateRunV3(raw []byte) error {
 		return contractError("cells/variants/aggregates", "are required")
 	}
 	for index := range *value.Cells {
-		if err := validateCell((*value.Cells)[index], fmt.Sprintf("cells[%d]", index)); err != nil {
+		if err := validateCell((*value.Cells)[index], fmt.Sprintf("cells[%d]", index), *value.SchemaVersion); err != nil {
 			return err
 		}
 	}
@@ -238,7 +245,7 @@ func validateRunV3(raw []byte) error {
 		}
 	}
 	for name, aggregate := range *value.Aggregates {
-		if err := validateAggregate(aggregate, "aggregates."+name); err != nil {
+		if err := validateAggregate(aggregate, "aggregates."+name, *value.SchemaVersion); err != nil {
 			return err
 		}
 	}
@@ -267,69 +274,6 @@ func validateSelection(value *selectionContract) error {
 		if trials <= 0 {
 			return contractError("selection.caseTrials", "values must be positive")
 		}
-	}
-	return nil
-}
-
-func validateCell(cell cellContract, path string) error {
-	if cell.CaseID == nil || cell.Variant == nil || cell.Trial == nil || *cell.Trial < 0 || cell.Status == nil || !oneOf(*cell.Status, "passed", "failed", "errored", "skipped") {
-		return contractError(path, "identity or status is malformed")
-	}
-	if err := validateTask(cell.Task, path+".task"); err != nil {
-		return err
-	}
-	if cell.Scores == nil {
-		return contractError(path+".scores", "is required")
-	}
-	for index, score := range *cell.Scores {
-		if err := validateScore(score, fmt.Sprintf("%s.scores[%d]", path, index)); err != nil {
-			return err
-		}
-	}
-	if err := validateAssertions(cell.Assertions, path+".assertions"); err != nil {
-		return err
-	}
-	if len(cell.Input) == 0 || !rawObject(cell.Call) || !rawObject(cell.Response) {
-		return contractError(path, "input/call/response is malformed")
-	}
-	if cell.UnvalidatedExpected != nil && !*cell.UnvalidatedExpected {
-		return contractError(path+".unvalidatedExpected", "may only be true when present")
-	}
-	if cell.Error != nil && (cell.Error.Message == nil || cell.Error.Phase == nil || !oneOf(*cell.Error.Phase, "execute", "expect", "afterScores", "score")) {
-		return contractError(path+".error", "is malformed")
-	}
-	if cell.Metrics == nil || cell.Metrics.DurationMS == nil || !validNonnegative(*cell.Metrics.DurationMS) || (cell.Metrics.CostUSD != nil && !validNonnegative(*cell.Metrics.CostUSD)) {
-		return contractError(path+".metrics", "is malformed")
-	}
-	if cell.RunIDs == nil || cell.CapturedSignals == nil {
-		return contractError(path+".runIds/capturedSignals", "are required")
-	}
-	return nil
-}
-
-func validateTask(task *taskContract, path string) error {
-	if task == nil || task.Status == nil || task.Reason == nil {
-		return contractError(path, "is malformed")
-	}
-	switch *task.Status {
-	case "executed":
-		if !oneOf(*task.Reason, "live_required", "fresh_requested", "performance_freshness", "no_exact_evidence", "identity_unavailable", "model_identity_unattested", "untracked_external_dependency", "nondeterministic_renderer", "task_binding_untracked", "unresolved_source_dependency", "implicit_media", "registry_identity_unavailable", "host_contract_unavailable") {
-			return contractError(path, "has an invalid executed reason")
-		}
-	case "reused":
-		if *task.Reason != "exact_evidence" || task.EvidenceFingerprint == nil || task.EvidenceRef == nil || task.FreshnessSource != nil {
-			return contractError(path, "reused task requires exact evidence")
-		}
-	case "errored":
-		if *task.Reason != "task_error" || task.EvidenceFingerprint != nil || task.EvidenceRef != nil || task.FreshnessSource != nil {
-			return contractError(path, "errored task is malformed")
-		}
-	case "skipped":
-		if *task.Reason != "source_skipped" || task.EvidenceFingerprint != nil || task.EvidenceRef != nil || task.FreshnessSource != nil {
-			return contractError(path, "skipped task is malformed")
-		}
-	default:
-		return contractError(path, "has an unknown status")
 	}
 	return nil
 }
@@ -419,12 +363,15 @@ func validateAssertions(value *assertionsContract, path string) error {
 	return nil
 }
 
-func validateAggregate(value aggregateContract, path string) error {
+func validateAggregate(value aggregateContract, path string, schemaVersion int) error {
 	counts := []*int{value.Cells, value.Passed, value.Failed, value.Errored, value.Skipped}
 	for _, count := range counts {
 		if count == nil || *count < 0 {
 			return contractError(path, "counts are malformed")
 		}
+	}
+	if schemaVersion == 4 && (value.TimedOut == nil || *value.TimedOut < 0 || *value.Cells != *value.Passed+*value.Failed+*value.Errored+*value.TimedOut) {
+		return contractError(path, "V4 active counts are inconsistent")
 	}
 	if value.PassRate == nil || *value.PassRate < 0 || *value.PassRate > 1 || value.TrialConsistency == nil || *value.TrialConsistency < 0 || *value.TrialConsistency > 1 || value.LatencyMS == nil || !validNonnegative(*value.LatencyMS) || value.Scores == nil || (value.KnownCostUSD != nil && !validNonnegative(*value.KnownCostUSD)) {
 		return contractError(path, "metrics are malformed")
@@ -435,6 +382,15 @@ func validateAggregate(value aggregateContract, path string) error {
 		}
 	}
 	return nil
+}
+
+func oneOfInt(value int, expected ...int) bool {
+	for _, candidate := range expected {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func validateGates(value *gatesContract) error {

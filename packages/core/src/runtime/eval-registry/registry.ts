@@ -147,7 +147,11 @@ function normalizeEntry(
   }
   const cases = Object.freeze(
     input.cases.map((entry) => {
-      const fingerprint = fingerprintDeployedEvalCase(entry.id, entry.authored);
+      const fingerprint = fingerprintDeployedEvalCase(
+        input.eval,
+        entry.id,
+        entry.authored,
+      );
       if (fingerprint !== entry.fingerprint) {
         registryError(
           "registry_invalid",
@@ -241,7 +245,6 @@ function normalizeEntry(
     arms,
   });
 }
-
 function sameRuntimeArms(
   actual: DeployedEvalRegistryEntryInput["runtimeArms"],
   expected: DeployedEvalRegistryEntryInput["runtimeArms"],
@@ -259,7 +262,6 @@ function sameRuntimeArms(
     })
   );
 }
-
 function assertIndexAgreement(input: DeployedEvalRegistryEntryInput): void {
   const actual = [
     input.id,
@@ -278,7 +280,6 @@ function assertIndexAgreement(input: DeployedEvalRegistryEntryInput): void {
     );
   }
 }
-
 function sameVariants(
   identities: DeployedEvalRegistryEntryInput["variants"],
   arms: ReturnType<typeof resolveEvalArms>,
@@ -295,7 +296,6 @@ function sameVariants(
     })
   );
 }
-
 function sorted(values: readonly string[]): readonly string[] {
   return [...new Set(values)].sort(compareCodepoint);
 }

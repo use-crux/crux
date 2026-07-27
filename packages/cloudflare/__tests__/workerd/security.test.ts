@@ -53,7 +53,7 @@ async function deployedJob(jobId: string) {
   };
   const entry = manifest.evals[0]!;
   return {
-    protocol: "crux.eval-host.v1",
+    protocol: "crux.eval-host.v2",
     jobId,
     evalRunId: `run-${jobId}`,
     evalId: entry.id,
@@ -63,7 +63,8 @@ async function deployedJob(jobId: string) {
     variant: "current",
     variantFingerprint: entry.variants.current,
     trial: 0,
-    deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+    deadlineAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+    deadline: { source: "host", limitMs: 10 * 60_000 },
   };
 }
 

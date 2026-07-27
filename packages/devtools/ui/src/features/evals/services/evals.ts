@@ -1,14 +1,14 @@
 import { expectOk, fetchJson, postJson } from "@/shared/services/http";
 import type {
-  EvalCatalogEntry,
   RunEvalResult,
   SetEvalBaselineResult,
 } from "../types";
 import { parseEvalRun, parseEvalRunList } from "../lib/parse-run";
+import { parseEvalCatalog } from "../lib/parse-catalog";
 
 export const evalsService = {
-  catalog: (signal?: AbortSignal) =>
-    fetchJson<readonly EvalCatalogEntry[]>("/api/eval/catalog", signal),
+  catalog: async (signal?: AbortSignal) =>
+    parseEvalCatalog(await fetchJson<unknown>("/api/eval/catalog", signal)),
   runs: async (signal?: AbortSignal) =>
     parseEvalRunList(await fetchJson<unknown>("/api/eval/runs", signal)),
   run: async (runId: string, signal?: AbortSignal) =>

@@ -1,10 +1,25 @@
 import type {
-  EvalHostJobStatusV1,
-  EvalHostManifestV1,
-  SubmitEvalJobV1,
+  EvalHostJobStatusV2,
+  EvalHostManifest,
+  SubmitEvalJobV2,
 } from "./types";
 import { decodeEvalHostManifest } from "./validation/manifest";
 import { decodeEvalHostJobStatus } from "./validation/status";
+import {
+  createEvalHostRequestControl,
+  type EvalHostRequestControl,
+} from "./client-control";
+import {
+  EvalHostClientError,
+  EvalHostClientTransportError,
+  type EvalHostClientOperation,
+} from "./client-errors";
+
+export {
+  EvalHostClientError,
+  EvalHostClientTransportError,
+} from "./client-errors";
+export type { EvalHostClientTransportErrorCode } from "./client-errors";
 
 /** Default hard ceiling for one host request, including response streaming. */
 export const EVAL_HOST_REQUEST_TIMEOUT_MS = 10_000;
@@ -21,24 +36,22 @@ export interface EvalHostClientRequestOptions {
   readonly timeoutMs?: number;
 }
 
-/** Narrow authenticated coordinator client for Eval host V1. */
+/** Narrow authenticated V2 coordinator client with known-manifest reads. */
 export interface EvalHostClient {
-  manifest(options?: EvalHostClientRequestOptions): Promise<EvalHostManifestV1>;
+  manifest(options?: EvalHostClientRequestOptions): Promise<EvalHostManifest>;
   submit(
-    job: SubmitEvalJobV1,
+    job: SubmitEvalJobV2,
     options?: EvalHostClientRequestOptions,
-  ): Promise<EvalHostJobStatusV1>;
+  ): Promise<EvalHostJobStatusV2>;
   poll(
     jobId: string,
     options?: EvalHostClientRequestOptions,
-  ): Promise<EvalHostJobStatusV1>;
+  ): Promise<EvalHostJobStatusV2>;
   cancel(
     jobId: string,
     options?: EvalHostClientRequestOptions,
-  ): Promise<EvalHostJobStatusV1>;
+  ): Promise<EvalHostJobStatusV2>;
 }
-
-type EvalHostClientOperation = "manifest" | "submit" | "poll" | "cancel";
 
 /** Create a transport-neutral client that sends only protocol identities. */
 export function createEvalHostClient(options: {
@@ -67,7 +80,7 @@ export function createEvalHostClient(options: {
     init: RequestInit = {},
     requestOptions: EvalHostClientRequestOptions = {},
   ) => {
-    const control = createRequestControl({
+    const control = createEvalHostRequestControl({
       operation,
       timeoutMs: boundedLimit(
         requestOptions.timeoutMs,
@@ -123,7 +136,7 @@ export function createEvalHostClient(options: {
         await request("manifest", "manifest", {}, requestOptions),
       ),
     submit: async (
-      job: SubmitEvalJobV1,
+      job: SubmitEvalJobV2,
       requestOptions?: EvalHostClientRequestOptions,
     ) =>
       decodeEvalHostJobStatus(
@@ -161,99 +174,11 @@ export function createEvalHostClient(options: {
   });
 }
 
-/** HTTP failure retaining the decoded, byte-bounded host error body. */
-export class EvalHostClientError extends Error {
-  override readonly name = "EvalHostClientError";
-  constructor(
-    readonly status: number,
-    readonly body: unknown,
-  ) {
-    super(`Eval host request failed with HTTP ${status}.`);
-  }
-}
-
-export type EvalHostClientTransportErrorCode =
-  | "EVAL_HOST_REQUEST_TIMEOUT"
-  | "EVAL_HOST_REQUEST_ABORTED"
-  | "EVAL_HOST_RESPONSE_TOO_LARGE"
-  | "EVAL_HOST_INVALID_RESPONSE"
-  | "EVAL_HOST_TRANSPORT_FAILED";
-
-/** Stable transport diagnostic that never retains request credentials or bodies. */
-export class EvalHostClientTransportError extends Error {
-  override readonly name = "EvalHostClientTransportError";
-  constructor(
-    readonly code: EvalHostClientTransportErrorCode,
-    readonly operation: EvalHostClientOperation,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-interface RequestControl {
-  readonly signal: AbortSignal;
-  race<T>(promise: Promise<T>): Promise<T>;
-  throwIfAborted(): void;
-  dispose(): void;
-}
-
-function createRequestControl(input: {
-  readonly operation: EvalHostClientOperation;
-  readonly timeoutMs: number;
-  readonly externalSignal?: AbortSignal;
-}): RequestControl {
-  const controller = new AbortController();
-  let failure: EvalHostClientTransportError | undefined;
-  let rejectAbort!: (error: EvalHostClientTransportError) => void;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    rejectAbort = reject;
-  });
-  // The timer or caller may abort before a hostile transport reaches race().
-  // Keep that rejection observed without changing what race() propagates.
-  void aborted.catch(() => undefined);
-  const abort = (kind: "timeout" | "external") => {
-    if (failure !== undefined) return;
-    failure =
-      kind === "timeout"
-        ? new EvalHostClientTransportError(
-            "EVAL_HOST_REQUEST_TIMEOUT",
-            input.operation,
-            `The Eval host ${input.operation} request exceeded its bounded deadline. Verify host availability or retry the Eval.`,
-          )
-        : new EvalHostClientTransportError(
-            "EVAL_HOST_REQUEST_ABORTED",
-            input.operation,
-            `The Eval host ${input.operation} request was cancelled by its caller.`,
-          );
-    controller.abort();
-    rejectAbort(failure);
-  };
-  const onExternalAbort = () => abort("external");
-  if (input.externalSignal?.aborted) onExternalAbort();
-  else
-    input.externalSignal?.addEventListener("abort", onExternalAbort, {
-      once: true,
-    });
-  const timer = setTimeout(() => abort("timeout"), input.timeoutMs);
-  return {
-    signal: controller.signal,
-    race: <T>(promise: Promise<T>) => Promise.race([promise, aborted]),
-    throwIfAborted() {
-      if (failure !== undefined) throw failure;
-    },
-    dispose() {
-      clearTimeout(timer);
-      input.externalSignal?.removeEventListener("abort", onExternalAbort);
-    },
-  };
-}
-
 async function decodeBoundedJsonResponse(
   response: Response,
   operation: EvalHostClientOperation,
   maxBytes: number,
-  control: RequestControl,
+  control: EvalHostRequestControl,
 ): Promise<unknown> {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {

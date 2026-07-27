@@ -6,6 +6,7 @@
 
 export { evaluate } from "./evaluate";
 export { caseFile } from "./case-file";
+export { evalContext, tryEvalContext } from "./task-context";
 
 export type { Eval, AnyEval, EvalCoverageTargetId } from "./evaluate";
 export type {
@@ -15,6 +16,7 @@ export type {
   EvalAssertContext,
 } from "./case";
 export type { CaseFile } from "./case-file";
+export type { EvalTaskContext, EvalTaskTimeout } from "./task-context";
 export type {
   EvalTask,
   EvalTaskLike,

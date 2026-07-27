@@ -1,18 +1,13 @@
 import type {
-  EvalHostClient,
-  EvalHostJobStatusV1,
-  EvalHostManifestV1,
+  EvalHostManifest,
   EvalHostTransport,
 } from "../../../runtime/eval-host";
 import {
-  EVAL_HOST_REQUEST_TIMEOUT_MS,
-  EvalHostClientTransportError,
+  EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY,
   EvalHostManifestCompatibilityError,
 } from "../../../runtime/eval-host";
 import { RUNTIME_RESULT_MAX_BYTES } from "../../../runtime/results/types";
-import { decodeEvalHostResult } from "../../../runtime/eval-host/result-codec";
 import {
-  fingerprintDeployedEvalCase,
   projectDeployedEvalRequiredHostCapabilities,
   projectDeployedEvalVariants,
 } from "../../../runtime/eval-registry/projection";
@@ -21,97 +16,21 @@ import type { EvalHostReadinessProvider } from "../../internal/ports";
 import type {
   EvalHostReadiness,
   EvalTaskHostRequest,
-  EvalTaskHostResult,
 } from "../../internal/types";
-import { fingerprintEvalValue } from "../../internal/identity";
 import {
   DEFAULT_EVAL_PERSISTENCE_POLICY,
   fingerprintEvalPersistencePolicy,
   type EvalPersistencePolicy,
 } from "../../internal/redact";
 import type { HydratedEval } from "../cases";
+import { projectHydratedEvalCaseFingerprints } from "../deployment-identity";
 import { resolveNodeEvalHostConnection } from "./connection";
 import { loadSelectedRuntimeDefinition } from "./runtime-config";
-
-interface EvalHostPollingOptions {
-  readonly now?: () => number;
-  readonly sleep?: (durationMs: number) => Promise<void>;
-  readonly pollIntervalMs?: number;
-  readonly requestTimeoutMs?: number;
-  readonly signal?: AbortSignal;
-}
-
-/** Poll one durable host job until it settles or its admitted deadline passes. @internal */
-export async function pollEvalHostJobForInternalUse(
-  client: EvalHostClient,
-  initial: EvalHostJobStatusV1,
-  deadlineAtMs: number,
-  options: EvalHostPollingOptions = {},
-): Promise<EvalHostJobStatusV1> {
-  const now = options.now ?? Date.now;
-  const sleep =
-    options.sleep ??
-    ((durationMs: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, durationMs)));
-  const pollIntervalMs = options.pollIntervalMs ?? 250;
-  const requestTimeoutMs =
-    options.requestTimeoutMs ?? EVAL_HOST_REQUEST_TIMEOUT_MS;
-  let status = initial;
-  while (status.status === "accepted" || status.status === "running") {
-    const remainingMs = deadlineAtMs - now();
-    if (remainingMs <= 0) return status;
-    await waitForNextPoll(
-      sleep(Math.min(pollIntervalMs, remainingMs)),
-      options.signal,
-    );
-    const requestRemainingMs = deadlineAtMs - now();
-    if (requestRemainingMs <= 0) return status;
-    const timeoutMs = Math.min(requestRemainingMs, requestTimeoutMs);
-    const deadlineBound = requestRemainingMs <= requestTimeoutMs;
-    try {
-      status = await client.poll(status.jobId, {
-        ...(options.signal ? { signal: options.signal } : {}),
-        timeoutMs,
-      });
-    } catch (error) {
-      if (
-        deadlineBound &&
-        error instanceof EvalHostClientTransportError &&
-        error.code === "EVAL_HOST_REQUEST_TIMEOUT"
-      ) {
-        return status;
-      }
-      throw error;
-    }
-  }
-  return status;
-}
-
-async function waitForNextPoll(
-  pending: Promise<void>,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  if (!signal) return pending;
-  if (signal.aborted) throw pollAborted();
-  let onAbort!: () => void;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => reject(pollAborted());
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try {
-    await Promise.race([pending, aborted]);
-  } finally {
-    signal.removeEventListener("abort", onAbort);
-  }
-}
-
-function pollAborted(): EvalHostClientTransportError {
-  return new EvalHostClientTransportError(
-    "EVAL_HOST_REQUEST_ABORTED",
-    "poll",
-    "The Eval host poll request was cancelled by its caller.",
-  );
-}
+import { executeRemoteEvalCell } from "./remote-execution";
+export {
+  EVAL_HOST_TERMINAL_GRACE_MS,
+  pollEvalHostJobForInternalUse,
+} from "./poll-job";
 
 /** Invocation-scoped manifest resolver shared by CLI and programmatic runs. */
 export function createNodeEvalHostReadiness(input: {
@@ -166,7 +85,7 @@ export function createNodeEvalHostRuntime(input: {
       resolve: async () => (await resolved()).readiness,
     }),
     execute: async (request: EvalTaskHostRequest) =>
-      await executeRemote(input.entry, request, await resolved()),
+      await executeRemoteEvalCell(input.entry, request, await resolved()),
   });
 }
 
@@ -257,67 +176,24 @@ function withoutEntry(
   };
 }
 
-async function executeRemote(
-  entry: HydratedEval,
-  request: EvalTaskHostRequest,
-  resolved: Awaited<ReturnType<typeof resolveReadiness>>,
-): Promise<EvalTaskHostResult> {
-  if (!resolved.connection || resolved.readiness.status !== "verified") {
-    throw new TypeError("The selected deployed Runtime was not verified.");
-  }
-  const evalCase = entry.cases.find((item) => item.id === request.caseId);
-  const variant = projectDeployedEvalVariants(entry.eval).find(
-    (item) => item.name === request.variant,
-  );
-  if (!evalCase || !variant)
-    throw new TypeError("The planned remote Eval cell is stale.");
-  const identity = fingerprintEvalValue({
-    eval: entry.definitionFingerprint,
-    case: request.caseId,
-    variant: request.variant,
-    trial: request.trial,
-    ...(request.executionAttemptId !== undefined
-      ? { executionAttempt: request.executionAttemptId }
-      : {}),
-  });
-  const deadlineAtMs = Date.now() + 10 * 60_000;
-  const jobId = `job-${identity}`;
-  const evalRunId = `run-${identity}`;
-  const submitted = await resolved.connection.client.submit({
-    protocol: "crux.eval-host.v1",
-    jobId,
-    evalRunId,
-    evalId: entry.id,
-    evalFingerprint: entry.definitionFingerprint,
-    caseId: request.caseId,
-    caseFingerprint: fingerprintDeployedEvalCase(
-      evalCase.id,
-      evalCase.authored,
-    ),
-    variant: request.variant,
-    variantFingerprint: variant.fingerprint,
-    trial: request.trial,
-    deadlineAt: new Date(deadlineAtMs).toISOString(),
-  });
-  const status = await pollEvalHostJobForInternalUse(
-    resolved.connection.client,
-    submitted,
-    deadlineAtMs,
-  );
-  if (status.status !== "succeeded") {
-    const code =
-      "error" in status ? status.error.code : "EVAL_HOST_POLL_TIMEOUT";
-    throw new TypeError(`Deployed Eval execution failed (${code}).`);
-  }
-  return decodeEvalHostResult(status.result, { jobId, evalRunId });
-}
-
 function compareManifest(
   entry: HydratedEval,
   expectedDeploymentId: string,
   expectedPrivacyFingerprint: string,
-  manifest: EvalHostManifestV1,
+  manifest: EvalHostManifest,
 ): Extract<EvalHostReadiness, { status: "mismatch" }> | undefined {
+  if (manifest.protocol !== "crux.eval-host.v2") {
+    return mismatch(
+      "The authenticated Runtime manifest uses an incompatible Eval host protocol.",
+    );
+  }
+  if (
+    !manifest.capabilities.includes(EVAL_HOST_STRUCTURED_TIMEOUT_CAPABILITY)
+  ) {
+    return mismatch(
+      "The selected Runtime does not advertise structured timeout support.",
+    );
+  }
   if (manifest.deploymentId !== expectedDeploymentId) {
     return mismatch(
       `Expected Runtime deployment '${expectedDeploymentId}', but the authenticated host reported '${manifest.deploymentId}'.`,
@@ -338,12 +214,7 @@ function compareManifest(
   );
   if (!deployed)
     return mismatch(`Eval '${entry.id}' is missing from the selected Runtime.`);
-  const expectedCases = Object.fromEntries(
-    entry.cases.map((item) => [
-      item.id,
-      fingerprintDeployedEvalCase(item.id, item.authored),
-    ]),
-  );
+  const expectedCases = projectHydratedEvalCaseFingerprints(entry);
   const expectedVariants = Object.fromEntries(
     projectDeployedEvalVariants(entry.eval).map((item) => [
       item.name,

@@ -102,4 +102,31 @@ describe("EvalCellDetail", () => {
     expect(markup).toContain("Run evidence unavailable locally");
     expect(markup).not.toContain("Open observed run run-missing");
   });
+
+  it.each([
+    ["total", "Timed out · Total budget · 30 s"],
+    ["step", "Timed out · Step budget · 30 s"],
+    ["chunk", "Timed out · Chunk budget · 30 s"],
+    ["firstToken", "Timed out · First token budget · 30 s"],
+    ["tool", "Timed out · Tool budget · 30 s · search_docs"],
+  ] as const)("renders the structured %s timeout cause", (budget, copy) => {
+    const cell: EvalRunRecord["cells"][number] = {
+      caseId: "refund",
+      variant: "current",
+      status: "timed_out",
+      task: { status: "timed_out" },
+      timeout: {
+        budget,
+        limitMs: 30_000,
+        ...(budget === "tool" ? { toolName: "search_docs" } : {}),
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <EvalCellDetail cell={cell} onOpenRun={() => undefined} />,
+    );
+
+    expect(markup).toContain(copy);
+    expect(markup).not.toContain("timed_out");
+  });
 });

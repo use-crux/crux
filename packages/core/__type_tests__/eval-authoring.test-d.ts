@@ -75,6 +75,32 @@ evaluate({
   ],
 });
 
+evaluate({
+  task: classify,
+  timeout: {
+    totalMs: null,
+    stepMs: 1_000,
+    tools: { search: null },
+  },
+  cases: [
+    {
+      input: { question: "Inherit" },
+      timeout: { stepMs: null, tools: { search: 250 } },
+    },
+    { input: { question: "Clear all" }, timeout: null },
+  ],
+});
+
+evaluate({
+  task: classify,
+  cases: [{ input: { question: "Invalid timeout" } }],
+  timeout: {
+    totalMs: 1_000,
+    // @ts-expect-error — timeout policies reject unrelated keys
+    retryMs: 250,
+  },
+});
+
 declare const managedTask: EvalTask<
   { question: string },
   { readonly text: string; readonly usage: number },
@@ -96,6 +122,47 @@ expectTypeOf<VariantOf<typeof managedTask>>().toEqualTypeOf<{
   readonly model?: unknown;
 }>();
 expectTypeOf<CapsOf<typeof managedTask>>().toEqualTypeOf<"modelCalls">();
+
+declare const signalOwnedManagedTask: EvalTask<
+  { question: string },
+  { readonly text: string },
+  string,
+  { readonly tenantId: string; readonly signal?: AbortSignal },
+  object,
+  "modelCalls"
+>;
+signalOwnedManagedTask(
+  { question: "Refund?" },
+  { tenantId: "acme", signal: new AbortController().signal },
+);
+evaluate({
+  task: signalOwnedManagedTask,
+  cases: [
+    { input: { question: "Refund?" }, call: { tenantId: "acme" } },
+    {
+      input: { question: "Shipping?" },
+      call: {
+        tenantId: "acme",
+        // @ts-expect-error — a managed Case cannot author the engine-owned signal
+        signal: new AbortController().signal,
+      },
+    },
+  ],
+});
+
+const opaqueSignalTask = async (
+  input: { question: string },
+  call: { readonly signal: "user-owned"; readonly locale?: string },
+) => `${call.signal}:${input.question}`;
+evaluate({
+  task: opaqueSignalTask,
+  cases: [
+    {
+      input: { question: "Refund?" },
+      call: { signal: "user-owned", locale: "nl" },
+    },
+  ],
+});
 
 declare const requiredCallTask: EvalTask<
   { question: string },

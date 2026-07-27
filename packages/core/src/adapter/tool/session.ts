@@ -1066,7 +1066,7 @@ export function createToolLifecycle(
         }
         if (err instanceof Error && err.name === "AbortError") throw err;
         if (isPolicyTerminal(err)) throw err;
-        if (err instanceof TimeoutError) {
+        if (TimeoutError.isInstance(err)) {
           span.error(err, {
             ...provenance?.errorAttributes,
             isError: true,

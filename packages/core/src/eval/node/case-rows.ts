@@ -5,6 +5,7 @@ import type { StandardSchemaV1 } from "../internal/schema";
 import type { JsonValue } from "../../storage";
 import type { RawEvalCase } from "../internal/definition";
 import { fingerprintEvalValueForInternalUse } from "../internal/runner";
+import { normalizeEvalTimeoutPolicy } from "../timeout-policy";
 import type { LoadedEvalCase } from "./cases";
 import { EvalCaseFileError } from "./case-path";
 
@@ -139,6 +140,10 @@ async function normalizeRow(
             origin,
             "expected",
           );
+  const timeout =
+    record.timeout === undefined
+      ? undefined
+      : normalizeEvalTimeoutPolicy(record.timeout, `${origin} timeout`);
   const authored: RawEvalCase = Object.freeze({
     ...(typeof record.id === "string" ? { id: record.id } : {}),
     ...(typeof record.name === "string" ? { name: record.name } : {}),
@@ -148,6 +153,7 @@ async function normalizeRow(
     ...(expected !== undefined && options.expectedSchema === undefined
       ? { unvalidatedExpected: true as const }
       : {}),
+    ...(timeout === undefined ? {} : { timeout }),
     ...(typeof record.trials === "number" ? { trials: record.trials } : {}),
     ...(Array.isArray(record.tags)
       ? { tags: Object.freeze([...record.tags]) as readonly string[] }

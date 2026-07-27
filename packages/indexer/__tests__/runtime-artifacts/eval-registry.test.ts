@@ -29,7 +29,7 @@ describe("generated deployed Eval registry", () => {
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const inputSchema = { '~standard': { version: 1, vendor: 'fixture', validate: (value: unknown) => ({ value }) } } as const",
         "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk',",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk',",
         "  inputSchema, capabilities: [], requiredHostCapabilities: ['asset-store'], overrideKeys: [],",
         "  defaults: { prompt: 'DO_NOT_SERIALIZE_PROMPT', model: 'DO_NOT_SERIALIZE_MODEL', apiKey: 'DO_NOT_SERIALIZE_CREDENTIAL' },",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),",
@@ -152,7 +152,7 @@ describe("generated deployed Eval registry", () => {
       const responseText = await response.clone().text();
       await expect(response.json()).resolves.toMatchObject({
         privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-        capabilities: ["result-ref"],
+        capabilities: ["result-ref", "structured-timeout"],
         evals: [
           expect.objectContaining({
             id: "support",
@@ -303,7 +303,7 @@ describe("generated deployed Eval registry", () => {
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
         "const hosted = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], overrideKeys: [], defaults: {},",
+        "  _tag: 'CruxEvalTaskDescriptor', identityEpoch: 2, operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], overrideKeys: [], defaults: {},",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
         "  projectOutput: (result: { output: unknown }) => result.output, projectResponse: (() => ({})) as never,",
         "})",

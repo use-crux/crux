@@ -164,7 +164,7 @@ export function normalizeAdapterCallError(
 ): CruxAdapterError {
   if (isCruxAdapterError(error)) return error;
 
-  if (error instanceof TimeoutError) {
+  if (TimeoutError.isInstance(error)) {
     return new CruxAdapterError(
       cruxProviderError({
         kind: "timeout",

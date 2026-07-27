@@ -3,18 +3,21 @@
 /**
  * Bump when task-evidence identity or reuse semantics change.
  *
- * 10: structured-output normalization changed observable task output
- * (`result.object` is now the authored Zod `safeParse.data`, and tool call
- * arguments are decoded + Zod-validated before execution) without changing the
- * adapter fingerprint, so pre-normalization cached task outputs are stale.
+ * 11: effective Eval/Case timeout policy now participates in exact evidence
+ * identity, so evidence from the policy-unaware epoch must not be reused.
  */
-export const TASK_EVIDENCE_CACHE_EPOCH = 10;
+export const TASK_EVIDENCE_CACHE_EPOCH = 11;
 
 /** Bump when managed external-scorer result identity changes. */
 export const SCORER_RESULT_CACHE_EPOCH = 3;
 
-/** Bump when baseline config-fingerprint composition changes. */
-export const BASELINE_FINGERPRINT_EPOCH = 4;
+/**
+ * Bump when Baseline coverage or provenance fingerprint composition changes.
+ *
+ * 5: per-trial terminal outcomes now participate in coverage and snapshot
+ * identity, so outcome-unaware Baselines must be explicitly repromoted.
+ */
+export const BASELINE_FINGERPRINT_EPOCH = 5;
 
 /** Bump when the built-in judge prompt template changes. */
 export const JUDGE_PROMPT_VERSION = 1;

@@ -30,6 +30,12 @@ import {
   appendToolApprovalResponse,
   findToolApprovalRequests,
 } from "../../src/tools/approvals";
+import { evalTimeoutCeilingBehavior } from "./eval-timeout-ceiling.behavior";
+import type {
+  MockClient,
+  MockResponse,
+  MockStream,
+} from "./define-adapter-fixtures";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -38,19 +44,6 @@ afterEach(() => {
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
 // ─────────────────────────────────────────────────────────────────
-
-interface MockClient {
-  apiKey: string;
-}
-
-interface MockResponse {
-  id: string;
-  content: string;
-}
-
-interface MockStream {
-  [Symbol.asyncIterator]: () => AsyncIterator<{ text: string }>;
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Helpers
@@ -327,6 +320,8 @@ describe("adapter", () => {
       await expect(result).rejects.toBeInstanceOf(CruxAdapterError);
     });
 
+    evalTimeoutCeilingBehavior();
+
     it("uses totalMs as a ceiling across provider and tool work", async () => {
       vi.useFakeTimers();
       const spec = createMockSpec({
@@ -396,6 +391,51 @@ describe("adapter", () => {
       await vi.advanceTimersByTimeAsync(25);
 
       await assertion;
+    });
+
+    it("propagates a canonical Tool timeout from another Core copy", async () => {
+      const error = Object.assign(new Error("tool timeout exceeded 25ms"), {
+        name: "TimeoutError",
+        budget: "tool",
+        limitMs: 25,
+        toolName: "lookup",
+      });
+      Object.defineProperty(error, Symbol.for("@use-crux/core/TimeoutError"), {
+        value: true,
+      });
+      const callSpy = vi
+        .fn()
+        .mockResolvedValueOnce({
+          raw: { id: "raw_123", content: "tool" },
+          extracted: createMockResponse("", [
+            { id: "tc_1", name: "lookup", args: { q: "x" } },
+          ]),
+        })
+        .mockResolvedValueOnce({
+          raw: { id: "raw_456", content: "continued" },
+          extracted: createMockResponse("continued"),
+        });
+      const adapter = makeAdapter(createMockSpec({ call: callSpy }))(
+        mockClient,
+      );
+      const prompt = createTestPrompt({
+        tools: {
+          lookup: {
+            description: "lookup",
+            execute: async () => {
+              throw error;
+            },
+          },
+        },
+      });
+
+      await expect(
+        adapter.generate(prompt, {
+          model: "test-model",
+          input: { instruction: "Use tool" },
+        }),
+      ).rejects.toBe(error);
+      expect(callSpy).toHaveBeenCalledOnce();
     });
 
     it("returns raw response with _meta", async () => {

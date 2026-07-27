@@ -63,6 +63,18 @@ describe("Eval invalidation matrix", () => {
         actions: ["execute"],
       },
       {
+        name: "Case timeout",
+        eval: definition(baseTask, [
+          {
+            id: "a",
+            input: { value: 1 },
+            call: { seed: 1 },
+            timeout: { totalMs: 1_000 },
+          },
+        ]),
+        actions: ["execute"],
+      },
+      {
         name: "trial count",
         eval: definition(
           baseTask,
@@ -167,6 +179,7 @@ function managedTask(material: Readonly<Record<string, unknown>>) {
     }),
     {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: 2,
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],

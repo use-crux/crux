@@ -35,10 +35,12 @@ return diagnostics and small fixes rather than turning config into a second prod
 
 ## Eval and Inspect Filesystem Boundaries
 
-Eval V3 artifacts and Inspect state live under the explicit `.crux/evals` boundary.
+Versioned Eval artifacts and Inspect state live under the explicit `.crux/evals`
+boundary.
 
-- `internal/evalfs` validates and reads authoritative Eval V3 run and Baseline records while
-  preserving exact stored bytes.
+- `internal/evalfs` validates authoritative Run V3/V4 and Baseline V3 records
+  while preserving exact stored bytes. Current writers emit Run V4; retained
+  Run V3 reads and the Baseline fingerprint-epoch diagnostic remain explicit.
 - `internal/inspectfs` owns Inspect insight records plus status and silence streams.
 - `internal/review` owns durable feedback and Review projections; repository writes go through
   `internal/reviewwriter` and the project-local Eval Case contract.
@@ -51,6 +53,13 @@ must not absorb Eval, Inspect, or Review projections.
 `internal/projectindex/service` is the Local facade for Project Index refreshes. Server, route, TUI,
 and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
 cache, or Static Index internals directly.
+
+The Go-owned Project Index snapshot cache epoch is 49 because it combines the runtime-rich Eval
+timeout-policy facts introduced at epoch 48 with provider-visible tool Safety boundary metadata.
+Epoch 48 snapshots are rejected after restart so they cannot hide the Safety metadata. This is a
+Project Index read-model migration only; static/semantic Index cache identities, Eval Run V4, Eval
+Host V2, task/scorer evidence identity, and Baseline identity remain at their already-established
+versions and epochs.
 
 Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
 state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,
@@ -119,7 +128,7 @@ claims should be enforced by tests.
 
 Keep the storage packages split by responsibility:
 
-- `internal/evalfs`: read and validate Eval V3 run/Baseline artifacts.
+- `internal/evalfs`: read and validate Run V3/V4 and Baseline V3 artifacts.
 - `internal/inspectfs`: normalize, persist, and fold Inspect insight state.
 - `internal/review`: persist immutable feedback submissions and Review action history.
 - `internal/reviewwriter`: coordinate validated, atomic Add-to-eval source writes.

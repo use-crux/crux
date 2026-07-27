@@ -5,8 +5,8 @@ import { currentEvalCaptureSession } from "./capture-context";
 import { runWithinEvalScopes } from "./scope";
 import { executeEvalTaskForInternalUse } from "./task";
 import type { EvalTaskHostRequest, EvalTaskHostResult } from "./types";
-import { observe } from "../../observability";
 import { fingerprintEvalValue } from "./identity";
+import { openEvalCellObservabilityRun } from "./cell-observability-run";
 
 /** Shared local and deployed task path; declarations never masquerade as observations. */
 export async function executeObservedEvalTaskForInternalUse(
@@ -24,37 +24,45 @@ async function executeObservedManagedTask(
 ): Promise<EvalTaskHostResult> {
   const startedAt = now();
   const capture = requireEvalCaptureSession();
-  const result = await executeEvalTaskForInternalUse(
-    request.task as never,
-    request.input as never,
-    request.call as never,
-    request.overrides,
-  );
-  await capture.settle();
-  const runId = result.response.runId;
-  const signals = extractCellSignals(capture.take(runId));
-  const costUsd = result.response.cost ?? signals.costUsd;
-  const { renderedPromptIdentity, ...taskResult } = result;
-  return Object.freeze({
-    ...taskResult,
-    ...(renderedPromptIdentity?.reusable === true
-      ? {
-          renderedPromptFingerprint: fingerprintEvalValue(
-            renderedPromptIdentity.fingerprintMaterial,
-          ),
-        }
-      : {}),
-    capturedSignals: Object.freeze([...signals.captured]),
-    runIds: Object.freeze([runId]),
-    metrics: Object.freeze({
-      durationMs: Math.max(0, now() - startedAt),
-      ...(typeof costUsd === "number" &&
-      Number.isFinite(costUsd) &&
-      costUsd >= 0
-        ? { costUsd }
+  const observation = openEvalCellObservabilityRun(request);
+  try {
+    const result = await observation.withContext(() =>
+      executeEvalTaskForInternalUse(
+        request.task as never,
+        request.input as never,
+        request.call as never,
+        request.overrides,
+      ),
+    );
+    observation.ok();
+    await capture.settle();
+    const signals = extractCellSignals(capture.take(observation.runId));
+    const costUsd = result.response.cost ?? signals.costUsd;
+    const { renderedPromptIdentity, ...taskResult } = result;
+    return Object.freeze({
+      ...taskResult,
+      ...(renderedPromptIdentity?.reusable === true
+        ? {
+            renderedPromptFingerprint: fingerprintEvalValue(
+              renderedPromptIdentity.fingerprintMaterial,
+            ),
+          }
         : {}),
-    }),
-  });
+      capturedSignals: Object.freeze([...signals.captured]),
+      runIds: Object.freeze([observation.runId]),
+      metrics: Object.freeze({
+        durationMs: Math.max(0, now() - startedAt),
+        ...(typeof costUsd === "number" &&
+        Number.isFinite(costUsd) &&
+        costUsd >= 0
+          ? { costUsd }
+          : {}),
+      }),
+    });
+  } catch (error) {
+    observation.error(error);
+    throw error;
+  }
 }
 
 /** Execute an authored opaque callable inside a real Eval observability run. */
@@ -77,29 +85,20 @@ async function executeObservedOpaqueTask(
   const task = request.task;
   const startedAt = now();
   const capture = requireEvalCaptureSession();
-  const run = observe.openRun({
-    name: `${request.evalId}:${request.caseId}:${request.variant}`,
-    rootPrimitive: "eval.case",
-    attributes: {
-      evalId: request.evalId,
-      caseId: request.caseId,
-      variant: request.variant,
-      trial: request.trial,
-    },
-  });
+  const observation = openEvalCellObservabilityRun(request);
   try {
-    const output = await run.withContext(() =>
+    const output = await observation.withContext(() =>
       request.call === undefined
         ? task(request.input)
         : task(request.input, request.call),
     );
-    run.end();
+    observation.ok();
     await capture.settle();
-    const signals = extractCellSignals(capture.take(run.runId));
+    const signals = extractCellSignals(capture.take(observation.runId));
     return Object.freeze({
       output,
       capturedSignals: Object.freeze([...signals.captured]),
-      runIds: Object.freeze([run.runId]),
+      runIds: Object.freeze([observation.runId]),
       metrics: Object.freeze({
         durationMs: Math.max(0, now() - startedAt),
         ...(signals.costUsd !== undefined ? { costUsd: signals.costUsd } : {}),
@@ -110,7 +109,7 @@ async function executeObservedOpaqueTask(
       }),
     });
   } catch (error) {
-    run.error(error);
+    observation.error(error);
     throw error;
   }
 }

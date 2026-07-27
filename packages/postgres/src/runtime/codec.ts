@@ -198,7 +198,12 @@ export function decodeDeferredIntent(row: JsonRecord): RuntimeDeferredIntent {
 
 function decodeLastError(value: unknown): WorkItemError | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const record = value as { code?: unknown; message?: unknown; at?: unknown }
+  const record = value as {
+    code?: unknown
+    message?: unknown
+    at?: unknown
+    details?: unknown
+  }
   if (
     typeof record.code !== 'string' ||
     typeof record.message !== 'string' ||
@@ -210,6 +215,9 @@ function decodeLastError(value: unknown): WorkItemError | undefined {
     code: record.code,
     message: record.message,
     at: new Date(record.at),
+    ...(record.details !== undefined
+      ? { details: record.details as WorkItemError['details'] }
+      : {}),
   }
 }
 

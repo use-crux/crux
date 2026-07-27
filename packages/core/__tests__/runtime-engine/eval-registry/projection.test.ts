@@ -30,6 +30,7 @@ function managedTask(
     async (input: string) => input,
     {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: 2,
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],

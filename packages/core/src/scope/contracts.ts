@@ -56,7 +56,7 @@ export interface RunScopeOptions {
 /** Controller for execution whose lifetime spans multiple restored segments. */
 export interface ScopeController {
   readonly scope: ExecutionScope;
-  run<T>(segment: () => T | PromiseLike<T>): T | PromiseLike<T>;
+  run<T>(segment: () => T): T;
   seal(outcome: ScopeCloseOutcome): void;
 }
 

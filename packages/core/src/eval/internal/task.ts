@@ -9,220 +9,43 @@
  */
 
 import type { StreamCompletion } from "../../adapter/result-accumulator";
-import type { StandardSchemaV1 } from "./schema";
-import type { JsonValue } from "../../storage/types";
 export type { EvalCostEstimate, EvalCostEstimationRequest } from "./cost-types";
-import type { EvalCostEstimate, EvalCostEstimationRequest } from "./cost-types";
-import type {
-  CallOf,
-  EvalCapability,
-  EvalTaskLike,
-  InputOf,
-  OutputOf,
-} from "../task";
+import type { CallOf, EvalTaskLike, InputOf, OutputOf } from "../task";
 import {
   isCompatibleEvalTaskDescriptor,
   normalizeEvalTaskIdentityProjection,
 } from "./task-protocol-values";
 import { fingerprintEvalValue } from "./identity";
-import type { ScorerRunContext } from "./scorers/runtime";
-import type { GenerateFn } from "./capabilities";
+import { evalTaskExecutionContextForInternalUse } from "./task-execution-context";
+import {
+  EVAL_TASK_IDENTITY_EPOCH,
+  EVAL_TASK_INTERNAL,
+  EvalTaskExecutionError,
+  type EvalTaskDescriptor,
+  type EvalTaskDiagnostics,
+  type EvalTaskExecutionResult,
+  type EvalTaskIdentityProjection,
+  type EvalTaskIdentityProjectionRequest,
+} from "./task-descriptor";
 
-/** Global storage key shared by compatible Core module copies. */
-export const EVAL_TASK_INTERNAL: unique symbol = Symbol.for(
-  "@use-crux/core/eval/task-descriptor",
-) as never;
-
-/**
- * Persisted identity epoch for the adapter task protocol.
- *
- * Bump this when descriptor execution/projection semantics change without an
- * authored definition or adapter identity-projection change.
- */
-export const EVAL_TASK_IDENTITY_EPOCH = 1;
-
-/** Stable failure categories for the managed Eval task protocol. */
-export type EvalTaskExecutionErrorCode =
-  | "descriptor_missing"
-  | "descriptor_incompatible"
-  | "structured_output_missing";
-
-/** Diagnostic identity attached to managed task execution failures. */
-export interface EvalTaskDiagnostics {
-  readonly operation: "generate" | "stream";
-  readonly adapterId: "ai-sdk";
-  readonly promptId?: string;
-}
-
-/** Adapter-owned, provider-neutral semantic identity projection. */
-export type EvalTaskIdentityProjection =
-  | {
-      readonly reusable: true;
-      readonly fingerprintMaterial: JsonValue;
-    }
-  | {
-      readonly reusable: false;
-      readonly reason:
-        | "identity_unavailable"
-        | "model_identity_unattested"
-        | "untracked_external_dependency"
-        | "unresolved_source_dependency"
-        | "implicit_media";
-    };
-
-/** Inputs available before execution and after observing its terminal result. */
-export type EvalTaskIdentityProjectionRequest<TResult> =
-  | {
-      readonly phase: "plan";
-      readonly input: unknown;
-      readonly call?: Readonly<object>;
-      readonly overrides: Readonly<object>;
-    }
-  | {
-      readonly phase: "observed";
-      readonly input: unknown;
-      readonly call?: Readonly<object>;
-      readonly overrides: Readonly<object>;
-      readonly result: TResult;
-    };
-
-/** Inert inputs used to project or bind a managed scorer to its task adapter. */
-export interface EvalTaskScorerContextRequest {
-  readonly input: unknown;
-  readonly call?: Readonly<object>;
-  readonly overrides: Readonly<object>;
-  readonly model?: unknown;
-  readonly generate?: GenerateFn;
-  readonly authoredSourceFingerprint?: string;
-}
-
-/**
- * Private execution descriptor attached to a production-callable Eval task.
- *
- * The protocol is intentionally unversioned: structural validation rejects a
- * descriptor from an incompatible package pair before its closure can run.
- */
-export interface EvalTaskDescriptor<
-  TResult = unknown,
-  TOutput = unknown,
-> extends EvalTaskDiagnostics {
-  /** Structural discriminator checked before any provider closure is called. */
-  readonly _tag: "CruxEvalTaskDescriptor";
-  /** Prompt input schema retained by reference for later Case validation. */
-  readonly inputSchema?: StandardSchemaV1;
-  /** Prompt output schema retained by reference for semantic validation. */
-  readonly outputSchema?: StandardSchemaV1;
-  /** Adapter-owned semantic contract for replacement output compatibility. */
-  readonly outputContractFingerprint?: string;
-  /** Adapter-owned semantic contract for replacement call compatibility. */
-  readonly callContractFingerprint?: string;
-  /** Trace-signal families captured by this task kind. */
-  readonly capabilities: readonly EvalCapability[];
-  /** Durable host services required when this task is deployed remotely. */
-  readonly requiredHostCapabilities?: readonly EvalRequiredHostCapability[];
-  /** Input-independent adapter options bound to the task. */
-  readonly defaults: Readonly<object>;
-  /** Bound option keys eligible for later override validation. */
-  readonly overrideKeys: readonly string[];
-  /** Adapter-owned runtime guard for untyped JavaScript Variant authoring. */
-  readonly validateVariantOverrides?: (
-    overrides: Readonly<Record<string, unknown>>,
-  ) => void;
-  /** Adapter-owned validation for the effective Variant input contract. */
-  readonly validateVariantInput?: (
-    input: unknown,
-    overrides: Readonly<Record<string, unknown>>,
-  ) => void | Promise<void>;
-  /** Adapter-owned validation for per-Case call requirements introduced by a Variant. */
-  readonly validateVariantCall?: (
-    call: Readonly<Record<string, unknown>> | undefined,
-    overrides: Readonly<Record<string, unknown>>,
-  ) => void;
-  /** Project complete adapter semantics without performing I/O. */
-  readonly projectIdentity: (
-    request: EvalTaskIdentityProjectionRequest<TResult>,
-  ) => EvalTaskIdentityProjection;
-  /** Re-render the provider-bound prompt only when exact evidence is a candidate. */
-  readonly projectRenderedPromptIdentity?: (
-    request: Extract<
-      EvalTaskIdentityProjectionRequest<TResult>,
-      { readonly phase: "plan" }
-    >,
-  ) => Promise<EvalTaskIdentityProjection>;
-  /** Read the exact rendered prompt captured by the real adapter invocation. */
-  readonly readRenderedPromptIdentity?: (
-    result: TResult,
-  ) => EvalTaskIdentityProjection;
-  /** Project the exact adapter/model context a managed scorer will inherit. */
-  readonly projectScorerContext?: (
-    request: EvalTaskScorerContextRequest,
-  ) => EvalTaskIdentityProjection;
-  /** Bind actual adapter execution context only after scorer admission. */
-  readonly createScorerContext?: (
-    request: EvalTaskScorerContextRequest,
-  ) => ScorerRunContext;
-  /** Conservative adapter-owned maximum; omitted means pricing is unknown. */
-  readonly estimateCost?: (
-    request: EvalCostEstimationRequest,
-  ) => EvalCostEstimate;
-  /** Provider-neutral invocation seam captured by the adapter package. */
-  readonly execute: (
-    input: unknown,
-    callOptions?: Readonly<object>,
-    overrides?: Readonly<object>,
-  ) => Promise<TResult>;
-  /** Project the rich production result to the Case's semantic output. */
-  readonly projectOutput: (result: TResult) => TOutput | undefined;
-  /** Remove provider handles from the terminal production response. */
-  readonly projectResponse: (result: TResult) => StreamCompletion<TOutput>;
-}
-
-/** Portable value returned by the private Eval executor seam. */
-export interface EvalTaskExecutionResult<TOutput> {
-  /** Non-optional semantic value assessed by Eval checks and scorers. */
-  readonly output: TOutput;
-  /** Provider-neutral terminal completion retained as execution evidence. */
-  readonly response: StreamCompletion<TOutput>;
-  /** Adapter semantics observed from the completed production path. */
-  readonly observedIdentity: EvalTaskIdentityProjection;
-  /** Exact rendered prompt used by adapters that validate managed renderers. */
-  readonly renderedPromptIdentity?: EvalTaskIdentityProjection;
-}
-
-/** Allowlisted durable services a managed task may require from its host. */
-export type EvalRequiredHostCapability =
-  | "asset-store"
-  | "record-store"
-  | "vector-store";
-
-/** Coded configuration failure raised by the managed Eval task protocol. */
-export class EvalTaskExecutionError extends Error {
-  override readonly name = "EvalTaskExecutionError" as const;
-  /** Stable protocol failure category. */
-  readonly code: EvalTaskExecutionErrorCode;
-  /** Managed operation involved when descriptor metadata is available. */
-  readonly operation?: "generate" | "stream";
-  /** Adapter identity involved when descriptor metadata is available. */
-  readonly adapterId?: string;
-  /** Prompt identity involved when the managed prompt is named. */
-  readonly promptId?: string;
-
-  constructor(
-    code: EvalTaskExecutionErrorCode,
-    message: string,
-    diagnostics: {
-      readonly operation?: "generate" | "stream";
-      readonly adapterId?: string;
-      readonly promptId?: string;
-    } = {},
-  ) {
-    super(message);
-    this.code = code;
-    this.operation = diagnostics.operation;
-    this.adapterId = diagnostics.adapterId;
-    this.promptId = diagnostics.promptId;
-  }
-}
+export {
+  applyEvalTaskExecutionContext,
+  resolveTaskTimeoutOverrideForInternalUse,
+  type EvalTaskExecutionContext,
+} from "./task-execution-context";
+export {
+  EVAL_TASK_IDENTITY_EPOCH,
+  EVAL_TASK_INTERNAL,
+  EvalTaskExecutionError,
+  type EvalRequiredHostCapability,
+  type EvalTaskDescriptor,
+  type EvalTaskDiagnostics,
+  type EvalTaskExecutionErrorCode,
+  type EvalTaskExecutionResult,
+  type EvalTaskIdentityProjection,
+  type EvalTaskIdentityProjectionRequest,
+  type EvalTaskScorerContextRequest,
+} from "./task-descriptor";
 
 /** Attach and freeze a Core-owned descriptor before freezing its callable. */
 export function attachEvalTaskDescriptorForInternalUse<
@@ -323,6 +146,7 @@ export async function executeEvalTaskForInternalUse<TTask extends EvalTaskLike>(
     input,
     callOptions,
     overrides,
+    evalTaskExecutionContextForInternalUse(),
   );
   const output = descriptor.projectOutput(productionResult);
   if (output === undefined) {

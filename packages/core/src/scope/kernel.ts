@@ -62,7 +62,7 @@ export function openScope(
 
   return Object.freeze({
     scope,
-    run<T>(segment: () => T | PromiseLike<T>): T | PromiseLike<T> {
+    run<T>(segment: () => T): T {
       return runWithCapturedAsyncScope(
         capturedFrame as CapturedAsyncScope,
         segment,

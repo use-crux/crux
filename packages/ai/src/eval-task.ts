@@ -21,11 +21,21 @@ import type {
 import type { GenerateResult, StreamCompletion } from "@use-crux/core/adapter";
 import type { EvalTask, EvalTaskLike } from "@use-crux/core/eval";
 import {
+  EVAL_TASK_IDENTITY_EPOCH,
   attachEvalTaskDescriptorForInternalUse,
   type EvalTaskDescriptor,
 } from "@use-crux/core/eval/internal/task";
-import type { BoundOk, InputOk, PromptInputOf } from "@use-crux/core/routing";
-import type { AIGenerateOptions, AISupportedModel } from "./options";
+import type { AISupportedModel } from "./options";
+import type {
+  AIGenerateTaskCall,
+  AIGenerateTaskCallOptions,
+  AIGenerateTaskDefaults,
+  StructuredPromptForModel,
+  TaskCallTools,
+  TaskModel,
+  TaskRuntimeContext,
+  ValidateTaskDefaults,
+} from "./eval-task-options";
 import {
   createAiTaskIdentityProjector,
   createAiScorerContextBinder,
@@ -48,76 +58,6 @@ export type AIPromptEvalCapability =
   | "citations"
   | "safety"
   | "decisionReport";
-
-/** Input-independent options bound when a structured task is created. */
-export type AIGenerateTaskDefaults<
-  TOwnInput extends z.ZodType,
-  TContexts extends readonly ContextEntry[],
-  TCallTools extends ToolSet | undefined,
-  TPrompt extends Prompt<
-    TOwnInput,
-    z.ZodType | undefined,
-    TContexts,
-    AnyToolSet | undefined
-  >,
-  TRuntimeContext,
-  TModel,
-> = Omit<
-  AIGenerateOptions<
-    TOwnInput,
-    TContexts,
-    TCallTools,
-    TPrompt,
-    TRuntimeContext,
-    TModel
-  >,
-  "input"
->;
-
-/** Flatten an inferred option intersection at the public callable boundary. */
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
-
-/** Remaining per-call options after exact task defaults have been bound. */
-export type AIGenerateTaskCallOptions<
-  TCall extends object,
-  TDefaults extends object,
-> = Simplify<
-  Omit<TCall, keyof TDefaults> &
-    Partial<Pick<TCall, Extract<keyof TDefaults, keyof TCall>>>
->;
-
-/** Validate only the keys a caller actually binds as task defaults. */
-export type ValidateTaskDefaults<
-  TDefaults extends object,
-  TCall extends object,
-> = {
-  [K in keyof TDefaults]: K extends keyof TCall ? TCall[K] : never;
-};
-
-/** Model or routing tree bound by the exact defaults object. */
-export type TaskModel<TDefaults extends object> = TDefaults extends {
-  readonly model: infer TModel extends AISupportedModel;
-}
-  ? TModel
-  : AISupportedModel;
-
-/** Call-tool surface bound by defaults, or the normal open call-site surface. */
-export type TaskCallTools<TDefaults extends object> = TDefaults extends {
-  readonly tools: infer TTools extends ToolSet;
-}
-  ? TTools
-  : ToolSet | undefined;
-
-/** Runtime context bound by defaults when one is authored. */
-export type TaskRuntimeContext<TDefaults extends object> = TDefaults extends {
-  readonly runtimeContext: infer TRuntimeContext;
-}
-  ? TRuntimeContext
-  : unknown;
-
-export type StructuredPromptForModel<P extends AnyPrompt, M> = P &
-  BoundOk<M, P> &
-  InputOk<M, PromptInputOf<P>>;
 
 /** Rich production result selected from the prompt's output declaration. */
 type ManagedGenerateReturn<TOutput extends z.ZodType | undefined> =
@@ -169,7 +109,7 @@ export interface AIGenerateTaskFactory {
     ManagedGenerateReturn<TOutput>,
     ManagedGenerateOutput<TOutput>,
     AIGenerateTaskCallOptions<
-      AIGenerateTaskDefaults<
+      AIGenerateTaskCall<
         TOwnInput,
         TContexts,
         TaskCallTools<TDefaults>,
@@ -228,6 +168,7 @@ export function createGenerateTaskFactory(
       unknown
     > = {
       _tag: "CruxEvalTaskDescriptor",
+      identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
       operation: "generate",
       adapterId: "ai-sdk",
       ...(prompt.id !== undefined ? { promptId: prompt.id } : {}),
@@ -277,13 +218,14 @@ export function createGenerateTaskFactory(
         prompt,
         defaults: normalizedDefaults,
       }),
-      execute: (input, callOptions, overrides = {}) =>
+      execute: (input, callOptions, overrides, executionContext) =>
         renderedPromptIdentity.execute(
           (effectivePrompt, options) => generate(effectivePrompt, options),
           {
             input,
             ...(callOptions !== undefined ? { call: callOptions } : {}),
             overrides,
+            executionContext,
           },
         ),
       projectOutput: (result) =>

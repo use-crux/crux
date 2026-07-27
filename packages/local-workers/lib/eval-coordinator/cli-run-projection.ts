@@ -14,7 +14,10 @@ export function projectEvalRunForCli(run: EvalRun): unknown {
       variant: cell.variant,
       trial: cell.trial,
       status: cell.status,
-      task: { status: cell.task.status, reason: cell.task.reason },
+      task: {
+        status: cell.task.status,
+        ...("reason" in cell.task ? { reason: cell.task.reason } : {}),
+      },
       scores: cell.scores.map((score) => ({
         status: score.status,
         reason: score.reason,

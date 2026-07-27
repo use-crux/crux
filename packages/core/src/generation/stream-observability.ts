@@ -35,7 +35,7 @@ export function attachStreamObservability<TResult>(
   result: TResult,
   span: ReturnType<typeof observe.openSpan>,
   performance: GenerationPerformanceTracker,
-  chunkMs?: number,
+  chunkMs?: number | null,
   discardableAttempt = false,
 ): TResult {
   if (!result || typeof result !== "object") {
@@ -163,7 +163,7 @@ async function* observedStream(
   span: ReturnType<typeof observe.openSpan>,
   finalizer: StreamSpanFinalizer,
   performance: GenerationPerformanceTracker,
-  chunkMs?: number,
+  chunkMs?: number | null,
   discardableAttempt = false,
 ): AsyncIterable<unknown> {
   let completed = false;

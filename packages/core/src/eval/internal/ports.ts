@@ -18,6 +18,7 @@ import type {
 } from "./cost-types";
 import type { EvalBaselineV3 } from "./baseline-types";
 import type { EvalPersistencePolicy } from "./redact";
+import type { CellDeadlineClock } from "./cell-deadline";
 
 export interface EvalTaskHost {
   execute(request: EvalTaskHostRequest): Promise<EvalTaskHostResult>;
@@ -126,6 +127,8 @@ export interface ExternalScorerHost {
 export interface EvalExecutionPorts {
   readonly taskHost: EvalTaskHost;
   readonly clock: EvalClock;
+  /** Private task-deadline clock; production falls back to platform timers. */
+  readonly cellDeadlineClock?: CellDeadlineClock;
   readonly ids: EvalIdGenerator;
   readonly runStore: EvalRunStore;
   readonly evidenceStore?: EvalEvidenceStore;

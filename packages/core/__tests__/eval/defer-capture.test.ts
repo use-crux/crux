@@ -26,6 +26,7 @@ import {
   runEvalScope,
 } from "../../src/eval/internal/scope";
 import { nonBillablePlanningPorts } from "./reuse-test-harness";
+import { defineTimeoutDeferBehavior } from "./timeout-defer.behavior";
 
 const previousHooks = getHooks();
 
@@ -35,6 +36,8 @@ afterEach(() => {
 });
 
 describe("Eval defer capture", () => {
+  defineTimeoutDeferBehavior();
+
   it("reports captured diagnostics-only work without invoking it", async () => {
     const callback = vi.fn();
     let scheduled: DiagnosticsOnlyDeferredWorkHandle | undefined;

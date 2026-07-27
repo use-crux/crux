@@ -39,13 +39,25 @@ export function EvalRunSummary({ run }: { readonly run: EvalRunRecord }) {
         <Stat label="Completeness" value={run.status} />
       </div>
       {aggregates.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {aggregates.map(([variant, aggregate]) => (
-            <Chip key={variant} tone={aggregate.passRate === 1 ? "ok" : "warn"}>
-              {variant}: {Math.round(aggregate.passRate * 100)}% ·{" "}
-              {Math.round(aggregate.latencyMs)} ms
-            </Chip>
-          ))}
+        <div className="space-y-2">
+          {aggregates.map(([variant, aggregate]) => {
+            const timedOut = aggregate.timedOut ?? 0;
+            return (
+              <div key={variant} className="space-y-2">
+                <Chip tone={aggregate.passRate === 1 ? "ok" : "warn"}>
+                  {variant}: {Math.round(aggregate.passRate * 100)}% ·{" "}
+                  {Math.round(aggregate.latencyMs)} ms
+                  {timedOut > 0 ? ` · ${timedOut} timed out` : ""}
+                </Chip>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Stat label="Passed" value={String(aggregate.passed)} />
+                  <Stat label="Failed" value={String(aggregate.failed)} />
+                  <Stat label="Errored" value={String(aggregate.errored)} />
+                  <Stat label="Timed out" value={String(timedOut)} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : null}
       {hasUnattestedModel ? (
