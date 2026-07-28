@@ -1,7 +1,7 @@
 ---
 "@use-crux/core": minor
 "@use-crux/openai": minor
-"@use-crux/google": major
+"@use-crux/google": minor
 "@use-crux/indexer": minor
 "@use-crux/local": minor
 "@use-crux/devtools": minor
