@@ -1,3 +1,5 @@
+import { compile } from "@mdx-js/mdx";
+import { remarkHeading } from "fumadocs-core/mdx-plugins";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -14,21 +16,13 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(read(path)) as Record<string, unknown>;
 }
 
-function headingSlug(heading: string): string {
-  return heading
-    .toLowerCase()
-    .replace(/<[^>]+>/g, "")
-    .replace(/[`*_~]/g, "")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
-function headingSlugs(markdown: string): readonly string[] {
-  return markdown.split("\n").flatMap((line) => {
-    const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
-    return heading === undefined ? [] : [headingSlug(heading)];
+async function headingSlugs(markdown: string): Promise<readonly string[]> {
+  const file = await compile(markdown, {
+    remarkPlugins: [remarkHeading],
   });
+  const toc = file.data.toc as readonly { url: string }[] | undefined;
+
+  return toc?.map(({ url }) => url.slice(1)) ?? [];
 }
 
 const mediaPages = [
@@ -55,6 +49,26 @@ const ownedDocs = [
 ] as const;
 
 describe("media guide information architecture", () => {
+  it("uses rendered MDX heading anchors for fragment validation", async () => {
+    expect(
+      await headingSlugs(`
+## Read the [media guide](/docs/guides/media)
+## Repeated heading
+## Repeated heading
+## Stable label [#stable-label]
+
+\`\`\`md
+## This is example content
+\`\`\`
+`),
+    ).toEqual([
+      "read-the-media-guide",
+      "repeated-heading",
+      "repeated-heading-1",
+      "stable-label",
+    ]);
+  });
+
   it("promotes Media into Building blocks with a real landing page", () => {
     const guides = readJson(`${guidesRoot}/meta.json`);
     const pages = guides.pages as string[];
@@ -133,7 +147,7 @@ describe("media guide information architecture", () => {
     ).toContain("## `adapter.transcribe(options)`");
   });
 
-  it("keeps every owned page focused and every internal link resolvable", () => {
+  it("keeps every owned page focused and every internal link resolvable", async () => {
     const sources = ownedDocs.map((path) => read(path));
     for (const [index, source] of sources.entries()) {
       expect(source.split("\n").length, ownedDocs[index]).toBeLessThan(300);
@@ -154,7 +168,7 @@ describe("media guide information architecture", () => {
 
       expect(existsSync(`${root}${target}`), link).toBe(true);
       if (fragment !== undefined) {
-        expect(headingSlugs(read(target)), link).toContain(
+        expect(await headingSlugs(read(target)), link).toContain(
           decodeURIComponent(fragment),
         );
       }
