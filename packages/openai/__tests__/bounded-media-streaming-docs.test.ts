@@ -61,7 +61,7 @@ async function openAICompletedMediaExample(
   const assets = inMemoryAssetStore();
 
   const picture = await openai.generateImage({
-    model: "gpt-image-1",
+    model: "gpt-image-2",
     prompt: "A restrained editorial illustration of a quiet canal",
     size: "1024x1024",
     n: 2,

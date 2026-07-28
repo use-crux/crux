@@ -22,7 +22,7 @@ const pngOnly = guardrail({
 });
 
 const picture = await openai.generateImage({
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   prompt: "A quiet canal at sunrise",
   guardrails: [pngOnly],
 });
@@ -124,7 +124,7 @@ Use per-call tuning to shadow or disable an attached policy:
 
 ```ts
 await openai.generateImage({
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   prompt,
   guardrails: [generatedMediaPolicy],
   safety: {

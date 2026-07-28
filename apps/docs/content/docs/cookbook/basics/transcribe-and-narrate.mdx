@@ -9,6 +9,7 @@ generates speech. Each stage has its own result and failure boundary.
 ## 1. Bind the adapter
 
 ```ts
+import { readFile } from "node:fs/promises";
 import OpenAI from "openai";
 import { createOpenAI } from "@use-crux/openai";
 import { inMemoryAssetStore } from "@use-crux/core/storage";
@@ -20,6 +21,8 @@ const assets = inMemoryAssetStore();
 ## 2. Transcribe measured detail
 
 ```ts
+const recording = await readFile("./recordings/weekly-sync.wav");
+
 const transcript = await openai.transcribe({
   model: "gpt-4o-mini-transcribe",
   audio: recording,

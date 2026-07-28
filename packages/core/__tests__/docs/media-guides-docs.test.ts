@@ -14,6 +14,23 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(read(path)) as Record<string, unknown>;
 }
 
+function headingSlug(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[`*_~]/g, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+function headingSlugs(markdown: string): readonly string[] {
+  return markdown.split("\n").flatMap((line) => {
+    const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
+    return heading === undefined ? [] : [headingSlug(heading)];
+  });
+}
+
 const mediaPages = [
   "index",
   "inputs",
@@ -123,19 +140,24 @@ describe("media guide information architecture", () => {
     }
 
     const source = sources.join("\n");
-    const routes = [
-      ...source.matchAll(/\]\((\/docs\/[^)#?]+)(?:#[^)]+)?\)/g),
-    ].map((match) => match[1] as string);
+    const links = [...source.matchAll(/\]\((\/docs\/[^)\s]+)\)/g)].map(
+      (match) => match[1] as string,
+    );
 
-    expect(routes.length).toBeGreaterThan(20);
-    for (const route of new Set(routes)) {
+    expect(links.length).toBeGreaterThan(20);
+    for (const link of new Set(links)) {
+      const [route, fragment] = link.split("#");
       const relative = route.replace(/^\/docs\//, "");
       const file = `apps/docs/content/docs/${relative}.mdx`;
       const index = `apps/docs/content/docs/${relative}/index.mdx`;
-      expect(
-        existsSync(`${root}${file}`) || existsSync(`${root}${index}`),
-        route,
-      ).toBe(true);
+      const target = existsSync(`${root}${file}`) ? file : index;
+
+      expect(existsSync(`${root}${target}`), link).toBe(true);
+      if (fragment !== undefined) {
+        expect(headingSlugs(read(target)), link).toContain(
+          decodeURIComponent(fragment),
+        );
+      }
     }
   });
 
@@ -148,15 +170,30 @@ describe("media guide information architecture", () => {
         "transcribe-and-narrate",
       ]),
     );
-    expect(
-      read(
-        "apps/docs/content/docs/cookbook/basics/safe-image-generation.mdx",
-      ).replace(/\s+/g, " "),
-    ).toContain("retry the same asset rather than generating another image");
-    expect(
-      read(
-        "apps/docs/content/docs/cookbook/basics/transcribe-and-narrate.mdx",
-      ).replace(/\s+/g, " "),
-    ).toContain("three independent application decisions");
+    const safeImage = read(
+      "apps/docs/content/docs/cookbook/basics/safe-image-generation.mdx",
+    );
+    expect(safeImage.replace(/\s+/g, " ")).toContain(
+      "retry the same asset rather than generating another image",
+    );
+    expect(safeImage).toContain("saveImageRef({");
+    expect(safeImage).toContain("imageId,");
+    expect(safeImage).not.toMatch(/return\s+\{[^}]*ref:\s*stored\.ref/s);
+
+    const narration = read(
+      "apps/docs/content/docs/cookbook/basics/transcribe-and-narrate.mdx",
+    );
+    expect(narration.replace(/\s+/g, " ")).toContain(
+      "three independent application decisions",
+    );
+    expect(narration).toContain(
+      'const recording = await readFile("./recordings/weekly-sync.wav")',
+    );
+
+    const currentImageExamples = [
+      ...mediaPages.map((page) => read(`${mediaRoot}/${page}.mdx`)),
+      safeImage,
+    ].join("\n");
+    expect(currentImageExamples).not.toContain('model: "gpt-image-1"');
   });
 });

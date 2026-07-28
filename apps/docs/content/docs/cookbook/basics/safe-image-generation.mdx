@@ -4,8 +4,8 @@ description: Generate, guard, persist, and deliver an image while keeping model,
 ---
 
 This recipe produces one image, evaluates canonical output policy, stores the
-approved asset, and returns an application URL rather than raw media or a
-bearer reference.
+approved asset, and returns an application identifier rather than raw media or
+a bearer reference.
 
 ## 1. Bind the adapter and store
 
@@ -42,9 +42,9 @@ For semantic classification, replace the local MIME check with an explicit
 ## 3. Generate and persist
 
 ```ts
-async function createIllustration(prompt: string) {
+async function createIllustration(ownerId: string, prompt: string) {
   const result = await openai.generateImage({
-    model: "gpt-image-1",
+    model: "gpt-image-2",
     prompt,
     n: 1,
     extra: { output_format: "png" },
@@ -57,9 +57,15 @@ async function createIllustration(prompt: string) {
 
   // This is a storage retry boundary, not a model retry boundary.
   const stored = await assets.put(result.image);
+  const imageId = crypto.randomUUID();
+  await saveImageRef({
+    imageId,
+    ownerId,
+    ref: stored.ref,
+  });
 
   return {
-    ref: stored.ref,
+    imageId,
     mediaType: stored.mediaType,
     traceId: result._meta.traceId,
   };
@@ -70,10 +76,14 @@ If `generateImage()` fails, apply your model-routing or product fallback. If
 `assets.put()` fails, retry the same asset rather than generating another
 image.
 
+`saveImageRef()` is application code that persists the owner, application ID,
+and store-owned ref in server-only metadata. The returned `imageId` is safe to
+place in an application route; it does not grant access to the asset store.
+
 ## 4. Deliver through your application
 
-Treat `stored.ref` as a bearer reference. Do not return it directly to an
-untrusted client. Resolve it behind your authorization boundary:
+The store-owned ref remains server-side. Resolve the application ID behind your
+authorization boundary:
 
 ```ts
 async function GET(
@@ -99,8 +109,8 @@ async function GET(
 }
 ```
 
-`lookupAuthorizedImageRef()` is application code: it authenticates the caller
-and maps an application identifier to the store-owned ref.
+`lookupAuthorizedImageRef()` authenticates the caller, verifies ownership, and
+maps the application identifier to the store-owned ref.
 
 ## 5. Inspect without retaining the image
 

@@ -16,7 +16,7 @@ import { createOpenAI } from "@use-crux/openai";
 const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
 
 const result = await openai.generateImage({
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   prompt: "A restrained editorial illustration of a quiet canal",
   size: "1024x1024",
   n: 2,
@@ -56,14 +56,13 @@ instead of silently dropping a requested behavior.
 
 ```ts
 const edited = await openai.generateImage({
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   prompt: {
     text: "Replace the sky with a soft evening gradient.",
     images: [sourceImage],
     mask: editMask,
   },
   extra: {
-    input_fidelity: "high",
     output_format: "png",
   },
 });
@@ -77,7 +76,7 @@ Typed prompts can also produce image prompt text and infer their `input`:
 
 ```ts
 const result = await openai.generateImage({
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   prompt: campaignIllustration,
   input: { subject: "A canal house", mood: "quiet" },
 });
