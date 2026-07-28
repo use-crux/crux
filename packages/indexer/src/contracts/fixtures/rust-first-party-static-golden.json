@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 826,
+    "files": 829,
     "definitions": 138,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1610,
-    "canonicalBytes": 288355
+    "dependencies": 1617,
+    "canonicalBytes": 289134
   },
   "files": [
     {
@@ -3641,15 +3641,6 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/runtime/config-types.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
       "file": "packages/core/src/runtime/config.ts",
       "sha256": "6d4f4f64531baf2cf7425f7c607e69c7c7fe13d6379b08c56a3a18043ada505b",
       "bytes": 233,
@@ -4451,6 +4442,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/devtools/ui/src/features/run-detail/components/RedactionEvidence.tsx",
+      "sha256": "7d70ede890ba448d8d646a1b0a6bafce9a818844a79f9cfa75bf3f5b6fc3e97c",
+      "bytes": 147,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/devtools/ui/src/features/run-detail/components/RoutingReceiptReport.tsx",
       "sha256": "cc760b56ea1a422726d5354a43dfe8ef725d2bb9695dbb96f1ad2b01e4f72022",
       "bytes": 407,
@@ -4458,6 +4458,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 4
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/RunContextStrip.tsx",
+      "sha256": "581782310ef3a958e2d551ed6bc9381f60a35824862d1fe3082665c7f9a43751",
+      "bytes": 229,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/RunHeader.tsx",
+      "sha256": "581782310ef3a958e2d551ed6bc9381f60a35824862d1fe3082665c7f9a43751",
+      "bytes": 229,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SessionCanvas.tsx",
@@ -4470,21 +4488,21 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SpanInspector.tsx",
-      "sha256": "035e3f1873ccf3debb9fcbb9be1bbfabd100ac73ccf61f52538c1fe7c6ce9699",
-      "bytes": 489,
+      "sha256": "0eb3ec387f38bf953787e68599b8a6dda84ec3e83ae31915d8189142cac9207f",
+      "bytes": 576,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SpanTree.tsx",
-      "sha256": "8fa8f1aa32b3c826b03e0a7454f61534934679c68b17fdf80d48e42e5d097f50",
-      "bytes": 150,
+      "sha256": "d4197858673354daef623a8448e24ae7615bc65e1c065c0f08a90d05b73fef68",
+      "bytes": 237,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/lib/definition-ref-links.ts",
@@ -4515,6 +4533,15 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/lib/project-health.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/lib/redaction-evidence.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
