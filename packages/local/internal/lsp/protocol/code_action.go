@@ -23,8 +23,31 @@ type CodeAction struct {
 	Command     *Command       `json:"command,omitempty"`
 }
 
+// CodeActionClientCapabilities contains the standard literal support gate.
+type CodeActionClientCapabilities struct {
+	CodeActionLiteralSupport *CodeActionLiteralSupport `json:"codeActionLiteralSupport,omitempty"`
+}
+
+// CodeActionLiteralSupport lists the action kinds a client can preserve.
+type CodeActionLiteralSupport struct {
+	CodeActionKind CodeActionKindLiteralSupport `json:"codeActionKind"`
+}
+
+// CodeActionKindLiteralSupport is the standard supported-kind value set.
+type CodeActionKindLiteralSupport struct {
+	ValueSet []CodeActionKind `json:"valueSet"`
+}
+
 type WorkspaceEdit struct {
-	Changes map[DocumentURI][]TextEdit `json:"changes"`
+	Changes         map[DocumentURI][]TextEdit `json:"changes,omitempty"`
+	DocumentChanges []TextDocumentEdit         `json:"documentChanges,omitempty"`
+}
+
+// TextDocumentEdit is the only WorkspaceEdit document change emitted by
+// PromptText quick fixes.
+type TextDocumentEdit struct {
+	TextDocument VersionedTextDocumentIdentifier `json:"textDocument"`
+	Edits        []TextEdit                      `json:"edits"`
 }
 
 type TextEdit struct {

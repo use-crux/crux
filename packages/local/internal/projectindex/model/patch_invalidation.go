@@ -116,6 +116,24 @@ func filterSources(sources []store.IndexSourceFile, invalidatedFiles map[string]
 	return next
 }
 
+func removeSourceDiagnosticIDs(
+	sources []store.IndexSourceFile,
+	diagnosticIDs []string,
+) []store.IndexSourceFile {
+	removed := stringSetFromSlice(diagnosticIDs)
+	if len(removed) == 0 {
+		return sources
+	}
+	next := append([]store.IndexSourceFile(nil), sources...)
+	for index := range next {
+		next[index].Diagnostics = filterStringsNotInSet(
+			next[index].Diagnostics,
+			removed,
+		)
+	}
+	return next
+}
+
 func filterDiagnosticsByPhase(byPhase map[IndexPatchPhase][]store.IndexDiagnostic, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool, invalidatedDiagnosticIDs map[string]bool) map[IndexPatchPhase][]store.IndexDiagnostic {
 	next := map[IndexPatchPhase][]store.IndexDiagnostic{}
 	for phase, diagnostics := range byPhase {

@@ -48,12 +48,16 @@ type Server struct {
 	inlayHintRefreshSupport  bool
 	codeLensRefreshSupport   bool
 	promptTextRefreshSupport bool
+	diagnosticVersionSupport bool
+	diagnosticDataSupport    bool
+	codeActionLiteralSupport bool
 	openDevtoolsCommand      bool
 	trusted                  bool
 	workspace                workspaceController
 	documents                map[protocol.DocumentURI]documentStatus
 	buffers                  *documentBuffers
 	promptText               *lsprompttext.Controller
+	diagnostics              *diagnosticComposer
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
@@ -74,6 +78,7 @@ type Server struct {
 
 type documentStatus struct {
 	Open    bool
+	Version int
 	SavedAt time.Time
 }
 
@@ -108,6 +113,7 @@ func New(options Options) *Server {
 		),
 	}
 	server.promptText = lsprompttext.NewController(server.buffers)
+	server.diagnostics = newServerDiagnosticComposer(server)
 	return server
 }
 
@@ -178,7 +184,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		}
 		return jsonrpc.HandlerResult{Stop: true}
 	case protocol.MethodCodeAction:
-		return s.codeAction(request.Params)
+		return s.codeActionRequest(ctx, request.ID, request.Params)
 	case protocol.MethodExecuteCommand:
 		return s.executeCommand(ctx, request.Params)
 	case protocol.MethodHover:

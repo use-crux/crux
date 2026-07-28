@@ -98,8 +98,10 @@ export interface StaticIndexCacheIdentitySharedFixture {
 
 /** Shared Project Index worker event stream fixture. */
 export interface WorkerEventsSharedFixture {
-  /** Complete event stream for one AST patch transaction. */
+  /** Complete event stream from a fact-group-aware V3 producer. */
   readonly events: readonly ProjectIndexWorkerEvent[];
+  /** Minimal event stream from a legacy V3 producer without factGroups. */
+  readonly legacyEvents: readonly ProjectIndexWorkerEvent[];
 }
 
 /** Shared worker-event edge cases that should fail or route through non-patch collectors. */

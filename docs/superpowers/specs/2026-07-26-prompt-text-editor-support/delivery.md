@@ -178,7 +178,42 @@ Focused tests cover:
   compatibility/equality rejection; content-only virtual documents; CodeLens
   metadata; URI/title privacy; source/reconnect lifecycle; and 16-resource
   capacity including split editors;
-- diagnostic type inference, evidence schemas, actions, and stale edits;
+- recursively strict PromptText evidence schemas, canonical runtime-kind
+  ordering, invalid optional-field combinations, and permissive outer
+  `IndexDiagnostic` compatibility;
+- diagnostic type inference across aliases, enums, intersections, never,
+  uncertainty, exact literals, objects, PromptText identity, mutable/readonly
+  sequences, tuples, optional/rest/generic/recursive shapes, and unions;
+- exact nested required tuple paths, cause precedence, comma-join proof,
+  whole-expression `mdJsonApplicable`, and canonical `.json()` accepted/
+  rejected call shapes;
+- deterministic diagnostic IDs, exact error projection/messages/source points,
+  prohibited-word scanning, source-ref ambiguity/lifecycle/nesting joins, and
+  one conclusion per owner/interpolation;
+- JavaScript/native byte-equivalent normalized conclusions, stale semantic
+  cache misses, evidence retention, actions, and stale edits;
+- V3 fact-group presence for omitted, empty, and populated array groups;
+- canonical all-group ordering; exact singleton cardinality and `factCount`;
+- rejection of null, non-array, unknown, duplicate, out-of-order, undeclared,
+  or envelope-inconsistent presence claims without partial phase state;
+- legacy V3 omission behavior, old/new TypeScript and Go goldens, and Go
+  nil-versus-nonnil-empty reconstruction;
+- lint and PromptText lane isolation, ordered complete replacements, and proof
+  that transient work never runs under the lint publisher lock;
+- synchronous PromptText clears for every invalidation, change-to-saved
+  recovery, save/reindex gaps, source loss/gain, and close;
+- exact revision, source-epoch, generation, and complete-view stamp rejection
+  for every stale or cancelled diagnostic result;
+- required open-document diagnostic versions, post-save version retention,
+  closed-document version omission, and capability-gated PromptText output;
+- exact expression ranges, strict minimal diagnostic data, and absence of
+  semantic evidence on the LSP wire;
+- request-time action regeneration, range/ID matching, final stamp rechecks,
+  and suppression for closed, changed, unavailable, or cancelled requests;
+- one versioned `TextDocumentEdit` containing one edit, with no legacy
+  `changes`, resolve handler, resource operations, or annotations;
+- exact action titles/order, no JSON-serialization action, and race tests
+  proving clears and version guards cannot be overtaken;
 - ATTACHED and OWN end-to-end behavior;
 - byte-for-byte cache/store non-mutation; and
 - final Go tests under the race detector.
@@ -193,8 +228,10 @@ The transient query does not alter saved static output, so it does not require
 
 Saved semantic evidence requires:
 
-- `SEMANTIC_FACTS_CACHE_EPOCH` to advance;
-- `ProjectIndexSnapshotCacheEpoch` to advance;
+- Phase 10 to advance `SEMANTIC_FACTS_CACHE_EPOCH` when JavaScript conclusions
+  begin changing saved semantic output;
+- Phase 11 to advance `ProjectIndexSnapshotCacheEpoch` when the Go snapshot
+  begins retaining the evidence;
 - JavaScript/native semantic parity fixtures; and
 - migration tests proving old snapshots cannot hide missing evidence.
 

@@ -38,6 +38,8 @@ export interface SemanticBackendParityFixture {
     readonly relationTypes?: readonly string[];
     readonly sourceRefRoles?: readonly string[];
     readonly lintRuleIds?: readonly string[];
+    readonly diagnosticCodes?: readonly string[];
+    readonly diagnosticDefinitionIds?: readonly string[];
     /** Exact prompt-text refs with project-relative source paths. */
     readonly promptTextSourceRefs?: readonly ExpectedPromptTextSourceRef[];
   };

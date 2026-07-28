@@ -20,6 +20,7 @@ export type {
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
   ProjectIndexFactFidelity,
+  ProjectIndexFactGroup,
   ProjectIndexFactExtractorProvenance,
   ProjectIndexFactProvenance,
   ProjectIndexFactProducer,

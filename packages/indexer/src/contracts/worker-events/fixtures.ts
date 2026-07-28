@@ -35,10 +35,23 @@ export const workerEventFixturePatch = {
     diagnostics: [
       {
         id: 'diagnostic:contract-spine',
-        severity: 'info',
-        code: 'index.contract',
-        message: 'contract fixture indexed',
+        severity: 'error',
+        code: 'CRUX_PROMPT_TEXT_INVALID_INTERPOLATION',
+        message:
+          'PromptText interpolation 0 is always invalid (boolean). Use a string, finite number, PromptText fragment, false, null, undefined, or a supported sequence.',
         source: { file: '/repo/src/contract.ts', line: 2 },
+        relatedDefinitionIds: ['prompt:contract-spine'],
+        evidence: {
+          kind: 'prompt-text',
+          sourceRefId: 'prompt:contract-spine:source:prompt',
+          interpolationIndex: 0,
+          proof: 'semantic-exact',
+          cause: {
+            kind: 'invalid-interpolation',
+            runtimeKinds: ['boolean'],
+            mdJsonApplicable: true,
+          },
+        },
       },
     ],
     sources: [

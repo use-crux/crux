@@ -27,12 +27,20 @@ import { createTsgoNativeSourceLookup } from "./source-lookup";
 import type { TsgoSemanticSyntaxSourceFile } from "./syntax-view";
 import { interceptedCanonicalModuleNames } from "../../compiler-options";
 import type { SemanticCacheValidationDependencyCollector } from "../../cache-validation";
+import type { IndexSourceRefFact } from "../../../patches";
+import type { PromptTextDiagnosticConclusion } from "../../evidence/prompt-text-diagnostics";
+import { nativePromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
+import { projectPromptTextDiagnosticConclusions } from "../../evidence/prompt-text-diagnostics";
 
 export interface TsgoSemanticCompilerSession {
   /** Source files selected for analyzer candidate discovery. */
   readonly sourceFiles: readonly TsgoSemanticSyntaxSourceFile[];
   /** Compiler view backed by the TypeScript-Go API. */
   readonly view: TsgoSemanticCompilerView;
+  /** Native-private classifier projected into compiler-free conclusions. */
+  readonly promptTextDiagnosticConclusions: (
+    sourceRefs: readonly IndexSourceRefFact[],
+  ) => readonly PromptTextDiagnosticConclusion[];
   /** Disposes the native snapshot and temporary config for this analysis. */
   close(): void;
 }
@@ -160,19 +168,31 @@ export function createTsgoSemanticCompilerHost(
       const view = sourceLookup
         ? createTsgoCompilerView(input.identity, project!, sourceLookup)
         : undefined;
-      const direct =
-        project && view && sourceLookup
-          ? nativeDirectEvidenceForFiles(
-              input.root,
-              project,
-              candidateFiles,
-              view,
-              sourceLookup,
-            )
-          : undefined;
+      if (!project || !sourceLookup || !view) return undefined;
+      const direct = nativeDirectEvidenceForFiles(
+        input.root,
+        project,
+        candidateFiles,
+        view,
+        sourceLookup,
+      );
       if (!direct) return undefined;
+      const promptTextDiagnostics = projectPromptTextDiagnosticConclusions(
+        nativePromptTextDiagnosticConclusions({
+          checker: project.checker,
+          sourceFiles: sourceLookup.sourceFiles(direct.supportedFiles),
+          sourceRefs: direct.facts.sourceRefs ?? [],
+          view,
+        }),
+      );
       return {
-        facts: direct.facts,
+        facts: {
+          ...direct.facts,
+          diagnostics: [
+            ...(direct.facts.diagnostics ?? []),
+            ...promptTextDiagnostics,
+          ],
+        },
         supportedFiles: direct.supportedFiles,
         unsupportedFiles: sortedUnique([
           ...direct.unsupportedFiles,
@@ -216,10 +236,19 @@ export function createTsgoSemanticCompilerHost(
         project,
         sourceLookup,
       );
+      const sourceFiles = sourceLookup.sourceFiles(analyzeInput.files);
 
       return {
-        sourceFiles: sourceLookup.sourceFiles(analyzeInput.files),
+        sourceFiles,
         view,
+        promptTextDiagnosticConclusions(sourceRefs) {
+          return nativePromptTextDiagnosticConclusions({
+            checker: project.checker,
+            sourceFiles,
+            sourceRefs,
+            view,
+          });
+        },
         close() {
           closeTsgoAnalysisResources(snapshot);
         },

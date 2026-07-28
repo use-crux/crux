@@ -103,6 +103,15 @@ func (b *documentBuffers) Snapshot(uri protocol.DocumentURI) (documentSnapshot, 
 	return document.snapshot, true
 }
 
+// Version returns the tracked LSP version even when bounded buffering made
+// the document text unavailable.
+func (b *documentBuffers) Version(uri protocol.DocumentURI) (int, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	document, ok := b.documents[uri]
+	return document.snapshot.Version, ok
+}
+
 func (b *documentBuffers) Close(uri protocol.DocumentURI) {
 	b.mu.Lock()
 	b.removeBytesLocked(b.documents[uri])

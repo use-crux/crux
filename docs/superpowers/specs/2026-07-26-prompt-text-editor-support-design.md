@@ -274,9 +274,50 @@ downgrade. Pending, cancelled, incomplete, older-document, or old-generation
 dirty results are never fallback evidence. See the exact contract in
 [Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
 
+### Saved semantic fact transport
+
+V3 worker events carry explicit fact-group presence in the optional
+`phase:done.summary.factGroups` field. New producers always emit the canonical
+group list, including `[]`; legacy omission remains readable. The collector
+validates group declarations, envelopes, singleton cardinality, and
+`factCount` as one transaction before reconstructing a patch. Declared empty
+array groups become real empty replacements, while undeclared groups remain no
+patch. Go decodes the optional field through `json.RawMessage` so omission,
+explicit `[]`, and invalid `null` cannot collapse together. The exact
+vocabulary, ordering, compatibility behavior, and rejection rules live in
+[Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
+
 Semantic source-profile identity is private validation state for future dirty
 views. It is not stored on saved views, persisted in Project Index data, or
 derived from saved source rows.
+
+### Semantic construction conclusions
+
+The JavaScript TypeScript backend owns V1 classification but emits only a
+closed backend-neutral `PromptTextDiagnosticConclusion`. Raw compiler nodes,
+types, symbols, checker state, and flow objects stay backend-private. The
+native backend later proves exact parity over the same conclusion union before
+the shared projector creates public `IndexDiagnostic`s.
+
+The classifier is conservative: accepted or uncertain possibilities suppress
+an invalid conclusion; `never` is not diagnosed; only required tuple paths
+prove nested invalid leaves; and recursive type visits become uncertain rather
+than pretending to prove a cyclic runtime array. Inline sequence conclusions
+use #270's normalized line-position rule. Comma-join evidence requires only
+strings or finite numeric literals across every possible top-level element.
+
+Direct JSON conclusions recognize only a canonical Core `md` receiver, a
+normal noncomputed `.json` property call, and exactly one argument.
+`JSON_SERIALIZATION` requires an all-possibilities proof that native
+`JSON.stringify` returns `undefined`. The serialization action flag is
+narrower still: only a whole top-level literal `true` or syntactically exact
+nonfinite number may be wrapped automatically.
+
+Public diagnostics are deterministic errors with exact messages, a
+domain-separated content ID, one related owning definition, structured
+evidence, and the exact one-based interpolation-expression start. They omit
+suggested edits. Duplicate or ambiguous source-ref joins, missing coordinates,
+uncertainty, or mismatched ownership/lifecycle suppress output.
 
 ## Feature evidence
 
@@ -299,6 +340,22 @@ brackets, and selection there.
 
 Standard LSP methods serve folding ranges, document symbols, document links,
 diagnostics, hovers, definitions, references, and code actions.
+
+A client-session diagnostic composer owns the final complete replacement sent
+to `textDocument/publishDiagnostics`. The synchronous lint publisher and
+asynchronous PromptText controller update independent lanes; the composer
+serializes those updates without running transient work or network writes
+under the lint lock. PromptText invalidations synchronously enqueue a composed
+clear and cannot be overtaken by stale analysis.
+
+Open-document PromptText diagnostics are versioned and carry only a strict
+`{kind:"prompt-text", id}` locator. Code actions never trust that locator as
+evidence: they regenerate the current semantic/transient join and edit, then
+recheck every document, source, request, and view stamp before returning one
+version-pinned `TextDocumentEdit`. Client version and diagnostic-data support
+gate PromptText diagnostics/actions without changing existing lint behavior.
+The complete event, wire, capability, and stale-result matrices live in
+[Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
 
 A narrow versioned Crux request returns identity-filtered decoration roles and
 ranges. A dedicated VS Code PromptText controller owns scheduling, staleness,

@@ -15,8 +15,10 @@ func (s *Server) didOpen(raw json.RawMessage) {
 		return
 	}
 	s.retireDocumentPromptText(params.TextDocument.URI)
-	s.traceDocumentBufferLimit(context.Background(), s.buffers.Open(params.TextDocument))
-	s.setDocumentOpen(params.TextDocument.URI, true)
+	s.traceDocumentBufferLimit(
+		context.Background(),
+		s.openDocument(params.TextDocument),
+	)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidOpen(params.TextDocument.URI, params.TextDocument.Version)
 	}
@@ -28,16 +30,11 @@ func (s *Server) didChange(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
-	_, notice := s.buffers.ApplyChanges(
-		params.TextDocument.URI,
-		params.TextDocument.Version,
-		params.ContentChanges,
-	)
-	s.traceDocumentBufferLimit(context.Background(), notice)
+	s.traceDocumentBufferLimit(context.Background(), s.changeDocument(params))
+	s.retireDocumentPromptText(params.TextDocument.URI)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidChange(params.TextDocument.URI, params.TextDocument.Version, params.ContentChanges)
 	}
-	s.retireDocumentPromptText(params.TextDocument.URI)
 }
 
 func (s *Server) didSave(raw json.RawMessage) {
@@ -46,6 +43,7 @@ func (s *Server) didSave(raw json.RawMessage) {
 		return
 	}
 	s.recordDocumentSave(params.TextDocument.URI)
+	s.retireDocumentPromptText(params.TextDocument.URI)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidSave(params.TextDocument.URI)
 	}
@@ -57,20 +55,11 @@ func (s *Server) didClose(raw json.RawMessage) {
 		return
 	}
 	s.cancelDocumentCompletion(params.TextDocument.URI)
-	s.buffers.Close(params.TextDocument.URI)
-	s.setDocumentOpen(params.TextDocument.URI, false)
+	s.closeDocument(params.TextDocument.URI)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidClose(params.TextDocument.URI)
 	}
 	s.retireDocumentPromptText(params.TextDocument.URI)
-}
-
-func (s *Server) setDocumentOpen(uri protocol.DocumentURI, open bool) {
-	s.mu.Lock()
-	state := s.documents[uri]
-	state.Open = open
-	s.documents[uri] = state
-	s.mu.Unlock()
 }
 
 func (s *Server) recordDocumentSave(uri protocol.DocumentURI) {

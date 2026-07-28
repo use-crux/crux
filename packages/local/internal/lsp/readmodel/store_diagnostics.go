@@ -23,6 +23,7 @@ func cloneIndexDiagnostics(diagnostics []api.IndexDiagnostic) []api.IndexDiagnos
 		result[index] = diagnostic
 		result[index].Source = cloneSource(diagnostic.Source)
 		result[index].RelatedDefinitionIDs = append([]string(nil), diagnostic.RelatedDefinitionIDs...)
+		result[index].Evidence = append([]byte(nil), diagnostic.Evidence...)
 	}
 	return result
 }

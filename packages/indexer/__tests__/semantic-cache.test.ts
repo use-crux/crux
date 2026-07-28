@@ -46,11 +46,11 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the combined media-stream and PromptText fragment-join epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v36");
+  it("uses the combined media-stream and PromptText diagnostic epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v37");
   });
 
-  it("does not reuse a valid artifact from the pre-fragment-join v35 namespace", async () => {
+  it("does not reuse a valid artifact from the pre-diagnostic v36 namespace", async () => {
     const root = await fixtureRoot();
     const file = join(root, "src/writer.ts");
     await writeFile(file, `export const writer = true`);
@@ -78,7 +78,7 @@ describe("semantic facts cache", () => {
       ".crux/cache/index",
       SEMANTIC_FACTS_CACHE_EPOCH,
     );
-    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v35");
+    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v36");
     await mkdir(staleDir, { recursive: true });
     await copyFile(join(currentDir, cacheName), join(staleDir, cacheName));
     await rm(currentDir, { recursive: true, force: true });

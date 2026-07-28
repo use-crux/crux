@@ -698,13 +698,14 @@ type ProjectRelation struct {
 
 // IndexDiagnostic describes an indexer or index-fidelity issue.
 type IndexDiagnostic struct {
-	ID                   string     `json:"id"`
-	Severity             string     `json:"severity"`
-	Code                 string     `json:"code"`
-	Message              string     `json:"message"`
-	Source               *SourceLoc `json:"source,omitempty"`
-	RelatedDefinitionIDs []string   `json:"relatedDefinitionIds,omitempty"`
-	SuggestedFix         string     `json:"suggestedFix,omitempty"`
+	ID                   string                        `json:"id"`
+	Severity             string                        `json:"severity"`
+	Code                 string                        `json:"code"`
+	Message              string                        `json:"message"`
+	Source               *SourceLoc                    `json:"source,omitempty"`
+	RelatedDefinitionIDs []string                      `json:"relatedDefinitionIds,omitempty"`
+	SuggestedFix         string                        `json:"suggestedFix,omitempty"`
+	Evidence             *PromptTextDiagnosticEvidence `json:"evidence,omitempty"`
 }
 
 // IndexLintFinding describes an actionable authored-graph issue.

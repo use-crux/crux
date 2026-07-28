@@ -35,15 +35,19 @@ type fixActionWorkspace interface {
 }
 
 type scopeSession struct {
-	scope              readmodel.Scope
-	folderName         string
-	publisher          *Publisher
-	views              indexview.ViewProvider
-	mode               readmodel.Mode
-	transient          readmodel.TransientSource
-	sourceEpoch        uint64
-	completionFailures int
-	cancel             context.CancelFunc
+	scope                   readmodel.Scope
+	folderName              string
+	publisher               *Publisher
+	views                   indexview.ViewProvider
+	mode                    readmodel.Mode
+	transient               readmodel.TransientSource
+	sourceEpoch             uint64
+	completionFailures      int
+	promptTextDiagnostics   map[protocol.DocumentURI]*promptTextDiagnosticRequest
+	promptTextAcceptedViews map[protocol.DocumentURI]indexview.ViewStamp
+	promptTextRetiredViews  map[protocol.DocumentURI]indexview.ViewStamp
+	promptTextTransition    sync.Mutex
+	cancel                  context.CancelFunc
 }
 
 type workspaceRuntime struct {
@@ -81,6 +85,15 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 		session := &scopeSession{
 			scope: scope, folderName: workspaceFolderName(scope.Root, folders),
 			views: indexview.NewSavedProvider(w.store),
+			promptTextDiagnostics: make(
+				map[protocol.DocumentURI]*promptTextDiagnosticRequest,
+			),
+			promptTextAcceptedViews: make(
+				map[protocol.DocumentURI]indexview.ViewStamp,
+			),
+			promptTextRetiredViews: make(
+				map[protocol.DocumentURI]indexview.ViewStamp,
+			),
 		}
 		session.publisher = NewPublisher(PublisherOptions{
 			ScopeID:    scope.ID,
@@ -91,7 +104,8 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 			Notify: func(method string, params any) {
 				w.server.Notify(ctx, method, params)
 			},
-			OnPublish: w.server.requestEditorAnnotationsRefreshIfEnabled,
+			SubmitDiagnostics: w.server.diagnostics.SubmitLint,
+			OnPublish:         w.server.requestEditorAnnotationsRefreshIfEnabled,
 			Log: func(message string) {
 				fmt.Fprintf(w.logs, "crux lsp: %s\n", message)
 			},
@@ -131,17 +145,20 @@ func (w *workspaceRuntime) UpdateSettings(settings Settings) {
 func (w *workspaceRuntime) DidOpen(uri protocol.DocumentURI, version int) {
 	for _, session := range w.sessionsForURI(uri) {
 		session.publisher.DidOpen(uri, version)
+		w.openPromptTextDiagnostics(session, uri)
 	}
 }
 
 func (w *workspaceRuntime) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
 	for _, session := range w.sessionsForURI(uri) {
 		session.publisher.DidChange(uri, version, changes)
+		w.resetPromptTextDiagnostics(session, uri, true)
 	}
 }
 
 func (w *workspaceRuntime) DidSave(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
+		w.savePromptTextDiagnostics(session, uri)
 		session.publisher.DidSave(uri)
 	}
 }
@@ -149,6 +166,7 @@ func (w *workspaceRuntime) DidSave(uri protocol.DocumentURI) {
 func (w *workspaceRuntime) DidClose(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
 		w.resetCompletionFailures(session)
+		w.closePromptTextDiagnostics(session, uri)
 		session.publisher.DidClose(uri)
 	}
 }
@@ -200,6 +218,10 @@ func (w *workspaceRuntime) Close() {
 	w.closed = true
 	for _, session := range w.sessions {
 		session.completionFailures = 0
+		for _, request := range session.promptTextDiagnostics {
+			request.cancel()
+		}
+		session.promptTextDiagnostics = nil
 		if session.cancel != nil {
 			session.cancel()
 		}

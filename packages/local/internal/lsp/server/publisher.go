@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
@@ -22,6 +21,9 @@ type PublisherOptions struct {
 	Store      *readmodel.Store
 	Lines      *mapping.LineIndex
 	Notify     func(string, any)
+	// SubmitDiagnostics replaces the lint diagnostic lane after Publisher has
+	// released its lock. Production supplies the client-session composer.
+	SubmitDiagnostics func(protocol.DocumentURI, []protocol.Diagnostic)
 	// OnPublish runs after the displayed document views become coherent.
 	OnPublish func()
 	// Log records malformed or out-of-order client behavior.
@@ -43,7 +45,17 @@ type Publisher struct {
 	// fullChangeTraced persists across close/open cycles for the publisher session.
 	fullChangeTraced map[protocol.DocumentURI]struct{}
 	timer            *time.Timer
+	submissions      []diagnosticLaneSubmission
+	onPublishPending bool
 	closed           bool
+
+	// submissionMu preserves the queue order after the mapping lock is released.
+	submissionMu sync.Mutex
+}
+
+type diagnosticLaneSubmission struct {
+	uri         protocol.DocumentURI
+	diagnostics []protocol.Diagnostic
 }
 
 // NewPublisher creates a scope-local diagnostic publisher.
@@ -56,6 +68,16 @@ func NewPublisher(options PublisherOptions) *Publisher {
 	}
 	if options.Notify == nil {
 		options.Notify = func(string, any) {}
+	}
+	if options.SubmitDiagnostics == nil {
+		options.SubmitDiagnostics = func(
+			uri protocol.DocumentURI,
+			diagnostics []protocol.Diagnostic,
+		) {
+			options.Notify(protocol.MethodPublishDiagnostics, protocol.PublishDiagnosticsParams{
+				URI: uri, Diagnostics: diagnostics,
+			})
+		}
 	}
 	if options.OnPublish == nil {
 		options.OnPublish = func() {}
@@ -92,39 +114,44 @@ func (p *Publisher) Change(change readmodel.Change) {
 	}
 
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed {
+		p.mu.Unlock()
 		return
 	}
 	if change.Immediate {
 		p.stopTimerLocked()
 		p.publishLocked("", true)
+		p.mu.Unlock()
+		p.flushDiagnosticSubmissions()
 		return
 	}
 	if p.timer != nil {
 		p.timer.Stop()
 	}
 	p.timer = time.AfterFunc(p.options.Debounce, p.publishDebounced)
+	p.mu.Unlock()
 }
 
 // UpdateFilter immediately republishes diagnostics affected by editor settings.
 func (p *Publisher) UpdateFilter(filter mapping.FilterOptions) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed || p.filter == filter {
+		p.mu.Unlock()
 		return
 	}
 	p.filter = filter
 	p.stopTimerLocked()
 	p.publishLocked("", true)
+	p.mu.Unlock()
+	p.flushDiagnosticSubmissions()
 }
 
 // DidOpen rebuilds the document's authoritative view and immediately
 // republishes its diagnostics, even when their hash is unchanged.
 func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed {
+		p.mu.Unlock()
 		return
 	}
 	document := p.documentLocked(uri)
@@ -136,6 +163,8 @@ func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 	// Recompute every URI as an authoritative view while forcing only the
 	// opened document. Other dirty documents must retain buffer-space ranges.
 	p.publishLocked(uri, true)
+	p.mu.Unlock()
+	p.flushDiagnosticSubmissions()
 }
 
 // DidChange shifts the currently displayed diagnostics and navigation view
@@ -143,12 +172,13 @@ func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 // changes for closed documents are ignored.
 func (p *Publisher) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed {
+		p.mu.Unlock()
 		return
 	}
 	document, ok := p.documents[uri]
 	if !ok || !document.open {
+		p.mu.Unlock()
 		return
 	}
 	if document.hasVersion && version <= document.version {
@@ -158,6 +188,7 @@ func (p *Publisher) DidChange(uri protocol.DocumentURI, version int, changes []p
 			uri,
 			document.version,
 		))
+		p.mu.Unlock()
 		return
 	}
 	document.version = version
@@ -178,6 +209,8 @@ func (p *Publisher) DidChange(uri protocol.DocumentURI, version int, changes []p
 	} else if navigationChanged {
 		document.view = transformed
 	}
+	p.mu.Unlock()
+	p.flushDiagnosticSubmissions()
 }
 
 // DidSave invalidates cached source lines, applies the newest held
@@ -187,9 +220,9 @@ func (p *Publisher) DidSave(uri protocol.DocumentURI) {
 		p.options.Lines.Invalidate(file)
 	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	document, ok := p.documents[uri]
 	if !ok {
+		p.mu.Unlock()
 		return
 	}
 	document.dirty = false
@@ -197,7 +230,9 @@ func (p *Publisher) DidSave(uri protocol.DocumentURI) {
 		held := cloneDocumentView(*document.held)
 		document.held = nil
 		p.setDisplayedLocked(uri, held, false)
-		p.options.OnPublish()
+		p.onPublishPending = true
+		p.mu.Unlock()
+		p.flushDiagnosticSubmissions()
 		return
 	}
 	publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
@@ -205,15 +240,17 @@ func (p *Publisher) DidSave(uri protocol.DocumentURI) {
 	document.view.definitions = diskView.definitions
 	document.view.relationCounts = diskView.relationCounts
 	document.view.sites = diskView.sites
+	p.mu.Unlock()
+	p.flushDiagnosticSubmissions()
 }
 
 // DidClose drops buffer-tracking metadata while leaving workspace diagnostics
 // visible until the next authoritative update.
 func (p *Publisher) DidClose(uri protocol.DocumentURI) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	document, ok := p.documents[uri]
 	if !ok {
+		p.mu.Unlock()
 		return
 	}
 	document.open = false
@@ -225,6 +262,8 @@ func (p *Publisher) DidClose(uri protocol.DocumentURI) {
 	document.view.relationCounts = nil
 	document.view.sites = nil
 	p.deleteDocumentIfIdleLocked(uri, document)
+	p.mu.Unlock()
+	p.flushDiagnosticSubmissions()
 }
 
 // LeadingWhitespace reads indentation for a zero-based LSP source line.
@@ -242,48 +281,6 @@ func (p *Publisher) Close() {
 	p.closed = true
 	p.stopTimerLocked()
 	p.mu.Unlock()
-}
-
-func (p *Publisher) publishDebounced() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.closed {
-		return
-	}
-	p.timer = nil
-	p.publishLocked("", true)
-}
-
-func (p *Publisher) currentDiagnostics(publication readmodel.Publication) (
-	map[protocol.DocumentURI][]protocol.Diagnostic,
-	map[string]api.IndexLintFinding,
-) {
-	findings := make([]api.IndexLintFinding, 0)
-	for _, values := range publication.Findings {
-		findings = append(findings, values...)
-	}
-	filtered := mapping.FilterFindings(findings, p.filter)
-	byID := make(map[string]api.IndexLintFinding, len(filtered))
-	for _, finding := range filtered {
-		byID[finding.ID] = finding
-	}
-	mapper := mapping.New(mapping.Options{
-		Root:       p.options.Root,
-		ConfigFile: p.options.ConfigFile,
-		Lines:      p.options.Lines,
-		Definition: func(id string) (api.ProjectDefinition, bool) {
-			definition, ok := publication.DefinitionsByID[id]
-			return definition, ok
-		},
-	})
-	return mapper.MapFindings(filtered), byID
-}
-
-func (p *Publisher) stopTimerLocked() {
-	if p.timer != nil {
-		p.timer.Stop()
-		p.timer = nil
-	}
 }
 
 func (p *Publisher) sourcePath(file string) string {

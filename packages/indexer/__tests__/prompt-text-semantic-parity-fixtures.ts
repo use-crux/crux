@@ -1,11 +1,13 @@
 import type { SemanticBackendParityFixture } from "./semantic-backend-parity-fixtures";
 import { promptTextSemanticDirectFixture } from "./prompt-text-semantic-direct-fixture";
 import { promptTextSemanticSharedFixtures } from "./prompt-text-semantic-shared-fixtures";
+import { promptTextDiagnosticParityFixture } from "./prompt-text-diagnostic-parity-fixture";
 
 /** Prompt-text fixtures shared by JavaScript and native semantic backends. */
 export const promptTextSemanticParityFixtures: readonly SemanticBackendParityFixture[] =
   [
     promptTextSemanticDirectFixture,
+    promptTextDiagnosticParityFixture,
     ...promptTextSemanticSharedFixtures,
     {
       name: "prompt-text-rejects-other-core-root-export-as-tag",

@@ -81,6 +81,7 @@ type SaveOptions struct {
 
 type CodeActionOptions struct {
 	CodeActionKinds []CodeActionKind `json:"codeActionKinds"`
+	ResolveProvider bool             `json:"resolveProvider"`
 }
 
 type ExecuteCommandOptions struct {

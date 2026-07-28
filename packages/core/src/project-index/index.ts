@@ -16,6 +16,10 @@ import type {
 } from "./embedding-facts";
 import type { EvalFacts } from "./eval-facts";
 import {
+  PromptTextDiagnosticEvidenceSchema,
+  type PromptTextDiagnosticEvidence,
+} from "./diagnostic-evidence";
+import {
   CruxLintConfigSchema,
   IndexLintFindingSchema,
   IndexRuleDescriptorSchema,
@@ -43,6 +47,7 @@ export type {
 } from "./embedding-facts";
 export * from "./eval-facts";
 export * from "./definition-kind-coverage";
+export * from "./diagnostic-evidence";
 export * from "./lint-schemas";
 export * from "./lint-types";
 export * from "./manifest";
@@ -1063,6 +1068,7 @@ export interface IndexDiagnostic {
   source?: SourceLocation;
   relatedDefinitionIds?: string[];
   suggestedFix?: string;
+  evidence?: PromptTextDiagnosticEvidence;
 }
 
 export interface IndexSourceFile {
@@ -1741,6 +1747,7 @@ export const IndexDiagnosticSchema = z.object({
   source: SourceLocationSchema.optional(),
   relatedDefinitionIds: z.array(z.string()).optional(),
   suggestedFix: z.string().optional(),
+  evidence: PromptTextDiagnosticEvidenceSchema.optional(),
 }) satisfies z.ZodType<IndexDiagnostic>;
 
 export const IndexSourceFileSchema = z.object({

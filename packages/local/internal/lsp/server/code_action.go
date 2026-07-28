@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -18,6 +20,14 @@ type diagnosticActionData struct {
 }
 
 func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
+	return s.codeActionRequest(context.Background(), nil, raw)
+}
+
+func (s *Server) codeActionRequest(
+	ctx context.Context,
+	id json.RawMessage,
+	raw json.RawMessage,
+) jsonrpc.HandlerResult {
 	var params protocol.CodeActionParams
 	if err := json.Unmarshal(raw, &params); err != nil || params.TextDocument.URI == "" {
 		return jsonrpc.HandlerResult{Error: &protocol.ResponseError{
@@ -28,9 +38,10 @@ func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
 	if workspace == nil {
 		return jsonrpc.HandlerResult{Result: []protocol.CodeAction{}}
 	}
-	if _, ok := workspace.LeadingWhitespace(params.TextDocument.URI, params.Range.Start.Line); !ok {
-		return jsonrpc.HandlerResult{Result: []protocol.CodeAction{}}
-	}
+	_, lintDocument := workspace.LeadingWhitespace(
+		params.TextDocument.URI,
+		params.Range.Start.Line,
+	)
 
 	s.mu.Lock()
 	isVSCode := s.clientInfo != nil && strings.Contains(s.clientInfo.Name, "Visual Studio Code")
@@ -39,7 +50,9 @@ func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
 	fixWorkspace, supportsFixes := workspace.(fixActionWorkspace)
 	actions := make([]protocol.CodeAction, 0)
 	for _, diagnostic := range params.Context.Diagnostics {
-		if diagnostic.Source != "crux" {
+		if isPromptTextDiagnosticKind(diagnostic.Data) ||
+			!lintDocument ||
+			diagnostic.Source != "crux" {
 			continue
 		}
 		var data diagnosticActionData
@@ -103,7 +116,39 @@ func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
 			})
 		}
 	}
-	return jsonrpc.HandlerResult{Result: actions}
+	locators := s.promptTextActionLocators(params)
+	promptTextWorkspace, supportsPromptText :=
+		workspace.(promptTextActionWorkspace)
+	if len(locators) == 0 || !supportsPromptText {
+		return jsonrpc.HandlerResult{Result: actions}
+	}
+	queryContext, pending := s.registerPromptText(
+		ctx,
+		id,
+		params.TextDocument.URI,
+	)
+	return jsonrpc.HandlerResult{Deferred: func() jsonrpc.HandlerResult {
+		defer s.finishPromptText(pending)
+		result := append([]protocol.CodeAction(nil), actions...)
+		contribution := promptTextWorkspace.PromptTextActions(
+			queryContext,
+			params.TextDocument.URI,
+			locators,
+		)
+		result = append(result, contribution.Actions...)
+		if errors.Is(
+			context.Cause(queryContext),
+			errPromptTextClientCancelled,
+		) {
+			return jsonrpc.HandlerResult{Error: &protocol.ResponseError{
+				Code: protocol.RequestCancelledCode, Message: "Request cancelled",
+			}}
+		}
+		if queryContext.Err() != nil {
+			return jsonrpc.HandlerResult{Result: actions}
+		}
+		return jsonrpc.HandlerResult{Result: result}
+	}}
 }
 
 func canSuppress(diagnostic protocol.Diagnostic, suppression *api.IndexLintSuppression) bool {

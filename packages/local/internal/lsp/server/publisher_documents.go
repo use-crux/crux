@@ -72,7 +72,7 @@ func (p *Publisher) publishLocked(force protocol.DocumentURI, authoritative bool
 		document.held = nil
 		p.setDisplayedLocked(uri, view, uri == force)
 	}
-	p.options.OnPublish()
+	p.onPublishPending = true
 }
 
 func (p *Publisher) setDisplayedLocked(
@@ -99,8 +99,8 @@ func (p *Publisher) setDisplayedLocked(
 	if current == nil {
 		current = []protocol.Diagnostic{}
 	}
-	p.options.Notify(protocol.MethodPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI: uri, Diagnostics: current,
+	p.submissions = append(p.submissions, diagnosticLaneSubmission{
+		uri: uri, diagnostics: cloneDiagnostics(current),
 	})
 	document.view = cloneDocumentView(view)
 	document.view.diagnostics = current

@@ -1239,36 +1239,185 @@ text, byte counts, and hints, and remains separate from compiler/cache identity.
 - Decorations require current semantic identity.
 - Folding and static preview remain transient syntax features.
 
-## Diagnostic evidence
+### V3 semantic fact-group presence
 
-`IndexDiagnostic` gains an optional discriminated evidence field:
+V3 fact envelopes preserve rows but cannot alone distinguish an omitted fact
+group from an explicitly empty replacement. Extend the existing
+`phase:done.summary` additively:
 
 ```ts
-type PromptTextDiagnosticEvidence = {
-  kind: "prompt-text";
-  sourceRefId: string;
-  interpolationIndex?: number;
-  interpolationPath?: readonly number[];
-  proof: "syntax-exact" | "semantic-exact";
-  cause:
+export type IndexFactGroup =
+  | "prompts"
+  | "contexts"
+  | "tools"
+  | "lint"
+  | "definitions"
+  | "relations"
+  | "sourceRefs"
+  | "diagnostics"
+  | "lintFindings"
+  | "ruleDescriptors"
+  | "sources"
+  | "sourceGraph";
+
+export interface ProjectIndexPhaseSummary {
+  readonly factCount: number;
+
+  /**
+   * Fact groups that were own properties of the original patch.
+   *
+   * Omission identifies a legacy producer. An empty array is an explicit
+   * presence claim and must not be collapsed to omission.
+   */
+  readonly factGroups?: readonly IndexFactGroup[];
+}
+```
+
+The canonical group order is exactly the union order above. New producers
+always emit `factGroups`, including `[]`. They derive it from the original
+`patch.facts` before stripping facts from `phase:done.patch`: include a group
+exactly when its value is not `undefined`. Therefore explicit empty arrays,
+nonempty arrays, and defined singleton `lint` or `sourceGraph` values are
+present; omitted or `undefined` groups are absent; `null` is invalid.
+
+`factCount` remains the exact number of emitted fact envelopes. Empty arrays
+contribute zero. The presence field applies to every fact group, not only
+diagnostics.
+
+When `factGroups` is present, validation is strict:
+
+- it must be a JSON array, never `null`;
+- values must be known strings in canonical order, without duplicates;
+- every emitted envelope kind must be declared;
+- undeclared groups must emit no envelope;
+- declared array groups may emit zero or more envelopes;
+- each declared singleton group, `lint` and `sourceGraph`, must emit exactly
+  one envelope; and
+- `factCount` must equal the total emitted envelope count.
+
+Any inconsistent or malformed presence claim rejects the complete phase
+transaction. No part of that phase may be applied, published, retained, or
+cached.
+
+Reconstruction first creates an own empty array for every declared array group,
+then appends its envelopes. Declared singleton groups are populated by their
+required envelope. Undeclared array groups remain absent in TypeScript and nil
+in Go. This preserves the existing patch meanings:
+
+```text
+omitted = no patch
+empty   = clear
+values  = replace
+```
+
+Go must preserve omission, explicit empty presence, and invalid `null` at the
+wire boundary. A pointer to a slice is prohibited because `encoding/json`
+collapses omitted and `null` to the same nil value. Decode through raw JSON and
+immediately validate into typed state:
+
+```go
+type IndexFactGroup string
+
+type PhaseDoneSummary struct {
+	FactCount  int64           `json:"factCount"`
+	FactGroups json.RawMessage `json:"factGroups,omitempty"`
+	// Existing fields remain unchanged.
+}
+
+type DecodedFactGroups struct {
+	Present bool
+	Value   []IndexFactGroup
+}
+
+func DecodeFactGroups(raw json.RawMessage) (DecodedFactGroups, error)
+```
+
+`DecodeFactGroups` returns `{Present:false, Value:nil}` only for nil or
+zero-length raw bytes. It rejects trimmed `null`, non-arrays, malformed JSON,
+trailing content, null or non-string elements, unknown values, duplicates, and
+noncanonical order. A decoded `[]` becomes `{Present:true}` with a nonnil empty
+slice. Only this validated typed value may reach reconstruction; raw bytes are
+not inspected or retained afterward.
+
+New Go producers assign a nonnil canonical `json.RawMessage`; an empty typed
+input encodes as exact `[]`. With `omitempty`, nil raw bytes preserve legacy
+omission and nonnil `[]` bytes preserve explicit presence.
+
+An older producer with no `factGroups` field remains valid. Consumers infer
+only groups represented by its envelopes and never invent an empty clear. This
+is intentionally lossy only for legacy producers. The additive field does not
+bump protocol V3. New TypeScript and Go consumers must decode both old and new
+goldens, and known legacy consumers must ignore the new summary field. If a
+legacy consumer rejects it, stop and return to architecture rather than
+silently changing the representation.
+
+## Diagnostic evidence
+
+`IndexDiagnostic` gains an optional discriminated evidence field. Public types
+and schemas live in `packages/core/src/project-index/diagnostic-evidence.ts`
+and are re-exported from the existing Project Index entry point:
+
+```ts
+export type PromptTextRuntimeKind =
+  | "non-finite-number"
+  | "boolean"
+  | "bigint"
+  | "symbol"
+  | "function"
+  | "object"
+  | "cyclic-array";
+
+export type PromptTextDiagnosticEvidence = {
+  readonly kind: "prompt-text";
+  readonly sourceRefId: string;
+  readonly interpolationIndex: number;
+  readonly interpolationPath?: readonly number[];
+  readonly proof: "syntax-exact" | "semantic-exact";
+  readonly cause:
     | {
-        kind: "invalid-interpolation";
-        runtimeKinds: readonly PromptTextInvalidRuntimeKind[];
-        mdJsonApplicable?: true;
+        readonly kind: "invalid-interpolation";
+        readonly runtimeKinds: readonly PromptTextRuntimeKind[];
+        readonly mdJsonApplicable?: true;
       }
     | {
-        kind: "inline-sequence";
-        joinableWithComma?: true;
+        readonly kind: "inline-sequence";
+        readonly joinableWithComma?: true;
       }
     | {
-        kind: "json-serialization";
-        reason: "undefined-result";
+        readonly kind: "json-serialization";
+        readonly reason: "undefined-result";
       };
 };
 ```
 
-Runtime kinds are finite closed literals: non-finite number, boolean, bigint,
-symbol, function, object, and cyclic array.
+`sourceRefId` is nonempty. `interpolationIndex` is a safe integer in
+`0..2^31-1`. `interpolationPath`, when present, requires the index, contains
+`1..64` elements, and every element is a safe integer in `0..2^31-1`; an empty
+path is noncanonical. The path is legal only for `invalid-interpolation`.
+
+`runtimeKinds` contains `1..7` unique entries already ordered as:
+
+```text
+non-finite-number
+boolean
+bigint
+symbol
+function
+object
+cyclic-array
+```
+
+`mdJsonApplicable: true` is schema-legal only when the kind set is a nonempty
+subset of `non-finite-number | boolean`. Production has the stricter whole-
+expression proof below. `joinableWithComma` is legal only for
+`inline-sequence`. `json-serialization` admits only `kind` and
+`reason: "undefined-result"`.
+
+Every new evidence and cause object rejects unknown fields recursively. Do not
+retroactively make the outer `IndexDiagnostic` or all Project Index schemas
+strict; their existing compatibility behavior remains. Phase 10 emits only
+`proof: "semantic-exact"`. `syntax-exact` remains accepted for future
+normalized compiler evidence.
 
 Only #270 construction diagnostics ship:
 
@@ -1278,18 +1427,373 @@ Only #270 construction diagnostics ship:
 
 They are hard compiler diagnostics, not configurable `IndexLintFinding`s.
 
-Publication requires:
+### Backend-neutral semantic conclusion
+
+The backend-private type classifier projects only the following Crux-owned
+record from
+`packages/indexer/src/indexer/semantic/evidence/prompt-text-diagnostics.ts`.
+TypeScript nodes, types, checker objects, symbols, and flow objects never cross
+this boundary:
+
+```ts
+interface PromptTextDiagnosticConclusionBase {
+  readonly kind: "prompt-text-diagnostic";
+  readonly definitionId: string;
+  readonly sourceRefId: string;
+  readonly owner: {
+    readonly role: "prompt" | "system";
+    readonly property: "prompt" | "system";
+    readonly lifecycle: "static" | "dynamic";
+  };
+  readonly proof: "semantic-exact";
+}
+
+interface PromptTextDiagnosticPoint {
+  readonly file: string;
+  readonly line: number;
+  readonly column: number;
+}
+
+interface PromptTextInterpolationPoint {
+  readonly index: number;
+  readonly source: PromptTextDiagnosticPoint;
+}
+
+export type PromptTextDiagnosticConclusion =
+  | (PromptTextDiagnosticConclusionBase & {
+      readonly interpolation: PromptTextInterpolationPoint & {
+        readonly path?: readonly number[];
+      };
+      readonly cause: {
+        readonly kind: "invalid-interpolation";
+        readonly runtimeKinds: readonly PromptTextRuntimeKind[];
+        readonly mdJsonApplicable?: true;
+      };
+    })
+  | (PromptTextDiagnosticConclusionBase & {
+      readonly interpolation: PromptTextInterpolationPoint & {
+        readonly path?: never;
+      };
+      readonly cause: {
+        readonly kind: "inline-sequence";
+        readonly joinableWithComma?: true;
+      };
+    })
+  | (PromptTextDiagnosticConclusionBase & {
+      readonly interpolation: PromptTextInterpolationPoint & {
+        readonly path?: never;
+      };
+      readonly cause: {
+        readonly kind: "json-serialization";
+        readonly reason: "undefined-result";
+      };
+    });
+```
+
+`PromptTextDiagnosticPoint.file` is nonempty. `line` and `column` are integers
+in `1..2^32-1`; `function` is not representable. A backend that cannot prove
+the exact file, line, and column suppresses the conclusion instead of
+defaulting the column or falling back to the tag/source-ref start. Public
+projection copies exactly `{file, line, column}`.
+
+Phase 11 makes the native backend produce byte-for-byte normalized parity over
+this record. The internal classifier representation remains backend-private;
+only the behavior and conclusion union are shared.
+
+Sort conclusions by:
+
+```text
+source.file
+source.line
+source.column
+definitionId
+sourceRefId
+interpolation.index
+interpolation.path lexicographically
+cause precedence
+```
+
+Cause precedence is `json-serialization`, `invalid-interpolation`, then
+`inline-sequence`. Emit at most one conclusion per owner/source-ref/
+interpolation. A direct canonical `md.json()` undefined result wins over every
+outer interpolation conclusion. Otherwise, an invalid required tuple leaf
+wins over inline-sequence; otherwise emit the proven inline sequence.
+
+### Public diagnostic projection
+
+Every PromptText diagnostic uses:
+
+```ts
+{
+  severity: "error",
+  relatedDefinitionIds: [conclusion.definitionId],
+  source: {
+    file: conclusion.interpolation.source.file,
+    line: conclusion.interpolation.source.line,
+    column: conclusion.interpolation.source.column,
+  },
+  evidence: promptTextDiagnosticEvidence,
+}
+```
+
+Omit `suggestedFix`. Later phases derive actions from evidence plus exact
+transient ranges; messages and fixes never encode edits.
+
+Codes and messages are exact. `<path>` is the concatenation `[n][m]` or empty;
+`<runtimeKinds>` is the canonical comma-space-joined list.
+
+```text
+CRUX_PROMPT_TEXT_INVALID_INTERPOLATION
+PromptText interpolation <index><path> is always invalid (<runtimeKinds>). Use a string, finite number, PromptText fragment, false, null, undefined, or a supported sequence.
+
+CRUX_PROMPT_TEXT_INLINE_SEQUENCE
+PromptText interpolation <index> is a sequence in inline position. Move it to its own line or join supported scalar values explicitly.
+
+CRUX_PROMPT_TEXT_JSON_SERIALIZATION
+md.json() cannot produce text because JSON.stringify() is proven to return undefined for this value.
+```
+
+The diagnostic ID is:
+
+```text
+"prompt-text:" + lowercase_hex(SHA-256(stream))
+```
+
+The canonical stream is:
+
+```text
+ASCII "crux-prompt-text-diagnostic-v1\0"
+string(definitionId)
+string(sourceRefId)
+string(code)
+string(source.file)
+u32be(source.line)
+u32be(source.column)
+u32be(interpolationIndex)
+u32be(path length)
+u32be(each path element)
+string(cause kind)
+cause payload
+```
+
+`string(value)` is `u32be(UTF-8 byte length) || exact UTF-8`. Cause payloads
+are:
+
+```text
+invalid-interpolation:
+  u32be(runtime kind count)
+  string(each canonical runtime kind)
+  u8(mdJsonApplicable ? 1 : 0)
+
+inline-sequence:
+  u8(joinableWithComma ? 1 : 0)
+
+json-serialization:
+  string("undefined-result")
+```
+
+IDs and files must satisfy existing Project Index invariants. Every numeric ID
+input must fit `u32`; every length prefix must fit. Suppress rather than wrap
+or truncate on overflow.
+
+An ASCII case-insensitive substring fixture scans exactly diagnostic `code`,
+`message`, and serialized `suggestedFix` when present, rejecting:
+
+```text
+sanitize
+sanitization
+encode
+encoding
+escape
+escaping
+trust
+trusted
+raw
+xml
+safe
+safety
+nested input
+double-encoding
+```
+
+It does not scan IDs, source paths, related-definition IDs, or structured
+evidence.
+
+### Proof lattice
+
+Conceptually, classification yields `accepted`, `invalid`, `sequence`,
+`uncertain`, or `uninhabited`. The concrete classifier representation is
+backend-private.
+
+- `any`, `unknown`, and unconstrained type parameters are uncertain.
+- `never` is uninhabited and is never diagnosed vacuously.
+- Resolve aliases fully before classification.
+- Only canonical Core `PromptText` is accepted; structural lookalikes are not.
+- `string`, string literals, and branded string intersections are accepted.
+- Finite numeric literal types are accepted.
+- `number`, branded number, and numeric widening are uncertain.
+- Prove nonfinite numbers only for exact, unshadowed `NaN`, `Infinity`,
+  `+Infinity`, `-Infinity`, or numeric literal syntax whose parsed IEEE-754
+  value is nonfinite. Transparent wrappers may be removed.
+- `false` is accepted. `true` is invalid `boolean`. Widened `boolean` and
+  `true | false` are uncertain because they include accepted `false`.
+- `null` and `undefined` are accepted. An exact syntactic `void expression` is
+  accepted. Type `void` alone is uncertain because a void-typed call may return
+  another runtime value.
+- `bigint` and BigInt literals are invalid `bigint`.
+- Primitive `symbol` and unique symbol are invalid `symbol`.
+- Callable or constructable types are invalid `function`, unless uncertainty
+  comes through an unconstrained generic.
+- A class/interface/object type provably neither PromptText nor Array is
+  invalid `object`. Broad `object`, `{}`, and empty structural object types are
+  uncertain because they may contain PromptText or arrays.
+- Reduce intersections first. A never-reduced intersection is uninhabited;
+  string refinements remain accepted; number refinements remain uncertain
+  unless a finite literal; object refinements are invalid only when they
+  exclude PromptText and arrays; unresolved generic intersections are
+  uncertain.
+- Classify finite enums as their known member-value union. Widened numeric
+  enums are uncertain; string members are accepted; mixed accepted/invalid
+  members are uncertain.
+- For unions, discard uninhabited members. A union is invalid only when every
+  remaining member is invalid; combine kinds uniquely in canonical order. It
+  is a sequence only when every remaining member is a sequence. Any accepted
+  or uncertain member prevents invalid diagnosis.
+- Memoize recursive traversal by backend-neutral type identity. Revisiting an
+  active type yields uncertain. Never infer `cyclic-array` from a recursive
+  TypeScript type.
+
+Mutable arrays, readonly arrays, and tuples are sequences. Inline position is
+the #270 rule after construction normalization: the interpolation is inline
+unless it is the only interpolation on a line whose other bytes are spaces or
+tabs. A definitely sequential value in inline position produces
+`INLINE_SEQUENCE`, including an empty array type.
+
+Visit required tuple elements in ascending index order. Emit nested invalid
+evidence only when an exact required tuple path guarantees reaching the
+invalid leaf. Optional elements and array/rest elements do not guarantee a
+runtime leaf. Generic or recursive element uncertainty never creates nested
+invalid evidence. For example:
+
+```text
+[true]                 -> invalid at [0]
+[true?] inline         -> inline sequence
+[true, ...string[]]    -> invalid at [0]
+true[] inline          -> inline sequence
+true[] block           -> no hard diagnostic
+```
+
+`joinableWithComma: true` requires a definitely sequential top-level value,
+at least one possible element, and every possible top-level element to be a
+string or finite numeric literal. Optional elements, rest/generic uncertainty,
+nullable values, PromptText, nested sequences, objects, widened `number`, and
+uncertain unions disqualify it. Therefore `string[]`, `(1 | 2)[]`, and
+`[string, 1]` qualify; `number[]`, `T extends string[]`, `[string?]`,
+fragments, and nested arrays do not.
+
+`mdJsonApplicable: true` has a stricter production proof than its public-schema
+shape. Emit it only when `interpolationPath` is absent and the complete
+top-level interpolation is proven to be exactly:
+
+- literal `true`; or
+- an exact syntactic nonfinite number accepted above.
+
+Literal `true` may flow through transparent wrappers or a const alias whose
+exact literal type is preserved. Nonfinite proof must remain exact syntax after
+transparent wrappers; aliases do not qualify. Never emit it for a nested path,
+array/tuple (including `[true]`), union containing anything else, `any`,
+unknown, generics, BigInt, symbol, function, object, cyclic, or uncertain
+value.
+
+### Canonical `md.json(...)`
+
+Recognize exactly one normal `CallExpression` with one non-spread argument, a
+noncomputed and nonoptional property access named exactly `json`, no optional
+call, and a receiver resolved through existing canonical package/export
+identity to Core `md`.
+
+Accept:
+
+```ts
+md.json(value);
+text.json(value); // import/re-export alias of canonical md
+core.md.json(value); // canonical namespace import
+(md as MdTag).json(value);
+(md satisfies MdTag).json(value);
+md!.json(value);
+```
+
+Transparent parentheses around the receiver or complete callee are also
+accepted: `(md).json(value)` and
+`(md.json)(value)` are accepted even when a formatter removes those
+parentheses. Parentheses, `as`, type assertions, `satisfies`, and non-null
+wrappers may be removed.
+
+Reject:
+
+```ts
+md["json"](value);
+md?.json(value);
+md.json?.(value);
+md?.json?.(value);
+const { json } = md;
+json(value);
+const json = md.json;
+json(value);
+const text = md;
+text.json(value);
+wrapper(md).json(value);
+md.json.call(undefined, value);
+md.json();
+md.json(a, b);
+md.json(...args);
+```
+
+Local receiver aliases, destructuring, property aliases, computed access, and
+optional chains are outside V1 even when a checker could follow them.
+
+Emit `JSON_SERIALIZATION` only when every possible top-level argument value
+makes `JSON.stringify` return `undefined`, rather than throw. Qualifying proofs
+are exact `undefined`, exact syntactic `void expression`, primitive
+symbol/unique-symbol, or a union containing only those plus `never`.
+
+Function/callable types do not qualify because a runtime function may have
+`toJSON`. BigInt may throw. `any`, `unknown`, generics, objects, arrays,
+PromptText, and any union containing a serializable, throwing, or uncertain
+possibility do not qualify.
+
+### Source-reference join
+
+Publication requires all three records:
 
 1. a resolved canonical source ref with matching owner/lifecycle;
 2. normalized saved semantic diagnostic evidence; and
 3. exact current transient syntax mapping.
 
-Diagnose only when every possible value is invalid. Do not diagnose `any`,
-`unknown`, unconstrained generics, or unions containing an accepted value.
-Promises retain runtime kind `object`. Initial JSON diagnosis is limited to a
-direct canonical `md.json(...)` proven to return undefined.
+For each conclusion:
 
-Both semantic backends emit normalized evidence with exact parity.
+1. Start from one source ref with `fidelity: "resolved"`, canonical
+   `metadata.promptText.tag: "md"`, exact owning definition/role/property/
+   lifecycle, and an exact nontruncated snippet/tagged-template range.
+2. Match the semantic tagged-template node by exact file and full tag range.
+3. Enumerate that template's interpolations in source order from zero.
+4. Attach a nested named-fragment conclusion to that fragment's own source ref,
+   not to the outer interpolation that references it.
+5. Reset interpolation indices for every nested template/source ref.
+6. Suppress when zero or multiple source refs match one definition/tag/
+   lifecycle occurrence.
+7. Existing source-ref deduplication yields one conclusion per owning
+   definition/source ref, not per reachability path.
+8. Point the public diagnostic at the complete interpolation expression start.
+   A tuple path does not invent a narrower public range.
+9. Point a direct `md.json()` diagnostic at the call start, which is also the
+   offending interpolation expression start.
+10. Phase 12 uses exact transient syntax to recover the current full range;
+    Phase 10 adds no public range.
+
+Promises retain runtime kind `object`. `cyclic-array` remains in the public
+vocabulary but Phase 10 never infers it from recursive types. Both semantic
+backends ultimately emit normalized evidence with exact parity.
 
 ## Actions
 
@@ -1310,6 +1814,225 @@ errors initially have no automatic fix.
 Encoding, sanitization, suspicious-content, nested-input migration, `safe`,
 `xml`, `escapeXml`, trust/raw markers, and suppression remain blocked on
 #276/#277.
+
+### Diagnostic publication lifecycle
+
+Maintain two independent diagnostic lanes for every canonical document URI:
+
+```text
+lint lane        owned synchronously by server.Publisher
+PromptText lane  owned asynchronously by the PromptText controller
+```
+
+One client-session diagnostic composer combines them immediately before
+`textDocument/publishDiagnostics`. The lint publisher snapshots or replaces
+its lane under its existing lock, releases that lock, and then submits the lane
+update. Transient analysis, view selection, joins, sorting, serialization, and
+network writes never run under the lint publisher lock.
+
+The composer:
+
+- serializes lane updates and sends them in submission order;
+- orders lint diagnostics first, then PromptText diagnostics sorted by range,
+  code, and diagnostic ID;
+- never deduplicates across lanes;
+- emits one complete replacement on every send, including
+  `diagnostics: []`;
+- captures the current open-document version at composition time; and
+- excludes any PromptText lane whose stored revision is not the exact current
+  revision.
+
+A synchronous clear means the invalidation handler clears the PromptText lane
+and enqueues the composed replacement before returning. The transport may
+finish writing asynchronously, but no later PromptText result may overtake the
+clear.
+
+A nonempty PromptText lane is stamped with:
+
+```text
+canonical URI
++ document open epoch, LSP version, source hash
++ transient source epoch
++ complete selected ViewStamp
++ PromptText controller request generation
+```
+
+Publication requires the document to remain open and every stamp component to
+match exactly. It also requires a fresh `EvidenceSemantic + RequireCurrent`
+selection with `ViewExact`, complete selected `ViewStamp` equality, the exact
+resolved canonical source-ref owner/lifecycle join, and the exact current
+transient template/interpolation match. Any mismatch discards the result; it
+never restores, transforms, or publishes older PromptText diagnostics.
+
+The lifecycle is exact:
+
+| Event                                          | Immediate PromptText lane action                                                                      | Follow-up                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `didOpen`                                      | Reset to empty and enqueue the composed lint-only set with the open version                           | Schedule current analysis                                                     |
+| accepted `didChange`                           | Cancel prior work, increment generation, clear, and enqueue using the new version                     | Schedule immediately; coordinator cancellation/coalescing handles rapid edits |
+| `didSave`                                      | Cancel and clear because the previous semantic selection retires; enqueue with the still-open version | Schedule; remain empty until a coherent saved generation is available         |
+| `didClose`                                     | Cancel, clear, enqueue lint-only without `version`, then remove PromptText document state             | Do not schedule                                                               |
+| coherent semantic publication change           | Cancel and clear every affected open scope document, then enqueue                                     | Schedule each affected current document                                       |
+| transient source epoch change                  | Cancel, clear, and enqueue before accepting the new epoch                                             | Schedule when the new source is available                                     |
+| transient source or worker availability loss   | Cancel, clear, and enqueue immediately                                                                | Remain empty                                                                  |
+| transient source or worker availability gain   | Never restore stale results                                                                           | Schedule current analysis                                                     |
+| current analysis returns unavailable or errors | Clear and enqueue only if a nonempty current lane could otherwise remain                              | No saved fallback                                                             |
+| superseded or cancelled result                 | Discard only                                                                                          | Never mutate a newer lane                                                     |
+
+`didChange` schedules even before #266, allowing an edit that returns exactly
+to saved bytes to regain saved semantic evidence. Cancelling code-action
+revalidation never mutates the diagnostic lane.
+
+Use the complete Rust
+`PromptTextInterpolationBarrier.expressionRange` as the LSP diagnostic range.
+It excludes `${` and `}` and contains the complete interpolation expression.
+Nested evidence paths retain this outer expression range.
+
+PromptText diagnostic data is a strict locator only:
+
+```ts
+interface PromptTextDiagnosticData {
+  readonly kind: "prompt-text";
+  readonly id: string;
+}
+```
+
+`id` must match `^prompt-text:[0-9a-f]{64}$`. The complete diagnostic is:
+
+```ts
+{
+  range: expressionRange,
+  severity: 1,
+  code: exactCruxCode,
+  source: "crux",
+  message: exactFrozenMessage,
+  data: {
+    kind: "prompt-text",
+    id: indexDiagnostic.id,
+  },
+}
+```
+
+The data object rejects unknown fields. Omit `codeDescription`, `tags`,
+`relatedInformation`, and all semantic evidence.
+
+For every open document, `PublishDiagnosticsParams.version` is required and
+equals the exact current `TextDocumentItem.version`, including before and
+after save:
+
+```ts
+{
+  uri,
+  version: currentOpenDocumentVersion,
+  diagnostics,
+}
+```
+
+For a closed document, the PromptText lane is absent, the lint-only complete
+replacement omits `version`, and `diagnostics: []` is sent when needed to clear
+prior diagnostics. Project Index generation, overlay revision, open epoch, and
+source hash are never used as the LSP version.
+
+PromptText diagnostics require client
+`textDocument.publishDiagnostics.versionSupport === true`; otherwise the
+PromptText lane stays empty and lint behavior is unchanged. PromptText quick
+fixes additionally require
+`textDocument.publishDiagnostics.dataSupport === true`.
+
+### Code-action revalidation
+
+PromptText contributes eager standard `quickfix` actions only. Do not
+implement `codeAction/resolve`.
+
+For every distinct context diagnostic whose data strictly decodes as
+`PromptTextDiagnosticData`:
+
+1. Require its echoed range to equal the currently regenerated expression
+   range.
+2. Require the request range to intersect the expression range. A zero-width
+   request position qualifies when it is within the closed endpoint interval.
+3. Capture the current open document revision, source epoch, and request
+   generation.
+4. Perform a fresh `EvidenceSemantic + RequireCurrent` selection.
+5. Obtain exact current transient analysis. Reusing the coordinator's exact
+   current-revision result is allowed; reusing the published diagnostic lane
+   is prohibited.
+6. Regenerate the joined PromptText diagnostic from current evidence.
+7. Require exact diagnostic ID and expression-range equality.
+8. Recompute action eligibility and edit bytes from regenerated evidence and
+   syntax.
+9. Immediately before returning, recheck open state, open epoch, version,
+   source hash, source epoch, request generation, and the complete selected
+   `ViewStamp`.
+
+Ignore client-echoed code, message, severity, source, and every field except
+the strict `{kind, id}` locator and echoed range. Never accept client-echoed
+semantic evidence.
+
+A changed or closed document, unavailable view or worker, failed join, stale
+generation, mismatched ID or range, unsupported `context.only`, or failed
+final recheck returns no PromptText actions. A superseded request returns an
+empty PromptText contribution. Protocol cancellation uses the standard
+cancelled-request response.
+
+Extend the local protocol with these standard narrow shapes:
+
+```ts
+interface VersionedTextDocumentIdentifier {
+  readonly uri: string;
+  readonly version: number;
+}
+
+interface TextDocumentEdit {
+  readonly textDocument: VersionedTextDocumentIdentifier;
+  readonly edits: readonly [TextEdit];
+}
+
+interface WorkspaceEdit {
+  readonly documentChanges: readonly [TextDocumentEdit];
+}
+```
+
+The version is never `null`. Every PromptText quick fix contains exactly one
+`TextDocumentEdit` and one unannotated `TextEdit`, using the current canonical
+URI and exact current open-document version. It contains no legacy `changes`,
+resource operations, or change annotations. Closed documents receive no
+action, and a version change during computation suppresses the action. The
+versioned edit remains the final client-side race guard after the response.
+
+Each action contains exactly:
+
+```ts
+{
+  title: frozenActionTitle,
+  kind: "quickfix",
+  diagnostics: [currentRegeneratedDiagnostic],
+  edit: versionedWorkspaceEdit,
+}
+```
+
+Omit `isPreferred`, `disabled`, `command`, and `data`. Return applicable
+actions in this order:
+
+1. `Serialize with \`md.json()\``
+2. `.join(", ")`
+3. `Put sequence on its own line — changes layout`
+
+`CRUX_PROMPT_TEXT_JSON_SERIALIZATION` has no action.
+
+No new Crux initialize capability is added. Advertise standard code actions
+as:
+
+```ts
+{
+  codeActionKinds: ["quickfix"],
+  resolveProvider: false,
+}
+```
+
+PromptText actions additionally require client CodeAction literal support,
+diagnostic data support, and an open versioned document. Existing non-
+PromptText code-action behavior remains compatible.
 
 ## Static preview safety
 

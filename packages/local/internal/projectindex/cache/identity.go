@@ -15,6 +15,7 @@ package cache
 // privacy-safe effective observability policy to Project Identity snapshots.
 // Epoch 51 adds bounded media stream operation facts.
 // Epoch 52 adds semantic PromptText fragment-join evidence.
+// Epoch 53 adds PromptText diagnostic evidence.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 52
+const ProjectIndexSnapshotCacheEpoch = 53

@@ -11,6 +11,9 @@ import {
   type TypeScriptSemanticCompilerView,
 } from "./compiler-view";
 import type { SemanticCacheValidationDependencyCollector } from "../../cache-validation";
+import type { IndexSourceRefFact } from "../../../patches";
+import type { PromptTextDiagnosticConclusion } from "../../evidence/prompt-text-diagnostics";
+import { typeScriptPromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
 
 export interface SemanticIndexFactsOptions {
   /** Optional timing hook for semantic analyzer phases. */
@@ -34,6 +37,10 @@ export interface SemanticSourceFileFactInput<
   readonly sourceFiles: readonly SemanticAnalyzerSourceFile<TView>[];
   /** Backend-owned compiler view used for semantic resolution. */
   readonly view: TView;
+  /** Backend-private classifier projected into compiler-free conclusions. */
+  readonly promptTextDiagnosticConclusions?: (
+    sourceRefs: readonly IndexSourceRefFact[],
+  ) => readonly PromptTextDiagnosticConclusion[];
 }
 
 /** Creates source files and a compiler view for the JavaScript TypeScript backend. */
@@ -70,5 +77,13 @@ export function createTypeScriptSemanticFactInput(
     root,
     sourceFiles: view.sourceFiles(files),
     view,
+    promptTextDiagnosticConclusions(sourceRefs) {
+      return typeScriptPromptTextDiagnosticConclusions({
+        checker,
+        sourceFiles: view.sourceFiles(files),
+        sourceRefs,
+        view,
+      });
+    },
   };
 }

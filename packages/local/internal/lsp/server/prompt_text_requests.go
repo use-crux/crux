@@ -3,12 +3,18 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
+var (
+	errPromptTextClientCancelled = errors.New("PromptText request cancelled by client")
+	errPromptTextSuperseded      = errors.New("PromptText request superseded")
+)
+
 type pendingPromptText struct {
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 	key    string
 	uri    protocol.DocumentURI
 }
@@ -18,7 +24,7 @@ func (s *Server) registerPromptText(
 	id json.RawMessage,
 	uri protocol.DocumentURI,
 ) (context.Context, *pendingPromptText) {
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
 	pending := &pendingPromptText{
 		cancel: cancel, key: completionRequestKey(id), uri: uri,
 	}
@@ -40,7 +46,7 @@ func (s *Server) registerPromptText(
 	}
 	s.promptTextMu.Unlock()
 	if previousID != nil {
-		previousID.cancel()
+		previousID.cancel(errPromptTextSuperseded)
 	}
 	return ctx, pending
 }
@@ -56,7 +62,7 @@ func (s *Server) finishPromptText(pending *pendingPromptText) {
 		delete(s.promptTextByURI, pending.uri)
 	}
 	s.promptTextMu.Unlock()
-	pending.cancel()
+	pending.cancel(nil)
 }
 
 func (s *Server) cancelPromptTextRequest(raw json.RawMessage) {
@@ -68,7 +74,7 @@ func (s *Server) cancelPromptTextRequest(raw json.RawMessage) {
 	pending := s.pendingPromptTexts[completionRequestKey(params.ID)]
 	s.promptTextMu.Unlock()
 	if pending != nil {
-		pending.cancel()
+		pending.cancel(errPromptTextClientCancelled)
 	}
 }
 
@@ -83,7 +89,7 @@ func (s *Server) cancelDocumentPromptText(uri protocol.DocumentURI) {
 	}
 	s.promptTextMu.Unlock()
 	for pending := range requests {
-		pending.cancel()
+		pending.cancel(errPromptTextSuperseded)
 	}
 }
 
@@ -103,7 +109,7 @@ func (s *Server) closePromptTextRequests() {
 	)
 	s.promptTextMu.Unlock()
 	for _, request := range pending {
-		request.cancel()
+		request.cancel(errPromptTextSuperseded)
 	}
 	if s.promptText != nil {
 		s.promptText.Close()

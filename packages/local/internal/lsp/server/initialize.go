@@ -37,6 +37,9 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 	s.hoverFormat = preferredHoverFormat(params.Capabilities)
 	s.inlayHintRefreshSupport, s.codeLensRefreshSupport = refreshSupport(params.Capabilities)
 	s.promptTextRefreshSupport = promptTextRefreshSupport(params.Capabilities)
+	s.diagnosticVersionSupport, s.diagnosticDataSupport =
+		promptTextDiagnosticSupport(params.Capabilities)
+	s.codeActionLiteralSupport = codeActionLiteralSupport(params.Capabilities)
 	s.openDevtoolsCommand = initializationClientCommands(params.InitializationOptions).OpenDevtools
 	s.settings = mergeSettings(s.settings, params.InitializationOptions)
 	s.trusted = initializationWorkspaceTrusted(params.InitializationOptions)
@@ -59,6 +62,7 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 			},
 			CodeActionProvider: protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
+				ResolveProvider: false,
 			},
 			ExecuteCommandProvider: protocol.ExecuteCommandOptions{
 				Commands: []string{runFixCommand},
@@ -78,6 +82,32 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 		},
 		ServerInfo: protocol.ServerInfo{Name: "crux-lsp", Version: s.options.Version},
 	}}
+}
+
+func promptTextDiagnosticSupport(
+	capabilities *protocol.ClientCapabilities,
+) (version, data bool) {
+	if capabilities == nil || capabilities.TextDocument == nil ||
+		capabilities.TextDocument.PublishDiagnostics == nil {
+		return false, false
+	}
+	diagnostics := capabilities.TextDocument.PublishDiagnostics
+	return diagnostics.VersionSupport, diagnostics.DataSupport
+}
+
+func codeActionLiteralSupport(capabilities *protocol.ClientCapabilities) bool {
+	if capabilities == nil || capabilities.TextDocument == nil ||
+		capabilities.TextDocument.CodeAction == nil ||
+		capabilities.TextDocument.CodeAction.CodeActionLiteralSupport == nil {
+		return false
+	}
+	for _, kind := range capabilities.TextDocument.CodeAction.
+		CodeActionLiteralSupport.CodeActionKind.ValueSet {
+		if kind == protocol.CodeActionQuickFix {
+			return true
+		}
+	}
+	return false
 }
 
 type clientCommands struct {

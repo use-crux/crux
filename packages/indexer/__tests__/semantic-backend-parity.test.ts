@@ -168,6 +168,14 @@ function assertFixtureCoverage(
   expect(coverage.lintRuleIds).toEqual(
     expect.arrayContaining([...(fixture.expect.lintRuleIds ?? [])]),
   );
+  expect(coverage.diagnosticCodes).toEqual(
+    expect.arrayContaining([...(fixture.expect.diagnosticCodes ?? [])]),
+  );
+  expect(coverage.diagnosticDefinitionIds).toEqual(
+    expect.arrayContaining([
+      ...(fixture.expect.diagnosticDefinitionIds ?? []),
+    ]),
+  );
   for (const [definitionId, expectedFacts] of Object.entries(
     fixture.expect.definitionFacts ?? {},
   )) {
@@ -204,6 +212,8 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
   readonly relationTypes: readonly string[];
   readonly sourceRefRoles: readonly string[];
   readonly lintRuleIds: readonly string[];
+  readonly diagnosticCodes: readonly string[];
+  readonly diagnosticDefinitionIds: readonly string[];
 } {
   return {
     definitionIds: [
@@ -217,6 +227,16 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
     ].sort(),
     lintRuleIds: [
       ...new Set((facts.lintFindings ?? []).map((finding) => finding.ruleId)),
+    ].sort(),
+    diagnosticCodes: [
+      ...new Set((facts.diagnostics ?? []).map((diagnostic) => diagnostic.code)),
+    ].sort(),
+    diagnosticDefinitionIds: [
+      ...new Set(
+        (facts.diagnostics ?? []).flatMap(
+          (diagnostic) => diagnostic.relatedDefinitionIds ?? [],
+        ),
+      ),
     ].sort(),
   };
 }

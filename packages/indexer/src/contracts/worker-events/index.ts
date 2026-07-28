@@ -20,6 +20,7 @@ export type {
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
   ProjectIndexFactFidelity,
+  ProjectIndexFactGroup,
   ProjectIndexFactExtractorProvenance,
   ProjectIndexFactProvenance,
   ProjectIndexFactProducer,
@@ -43,7 +44,4 @@ export {
   projectIndexArtifactToWorkerEvent,
   projectIndexArtifactToWorkerEvents,
 } from './schema'
-export {
-  workerEventFixtureOptions,
-  workerEventFixturePatch,
-} from './fixtures'
+export { workerEventFixtureOptions, workerEventFixturePatch } from './fixtures'
