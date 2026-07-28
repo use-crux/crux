@@ -1,0 +1,14 @@
+{
+  "title": "Media",
+  "description": "Use media in model messages, generate images and speech, transcribe audio, stream output, apply Safety, and persist assets.",
+  "pages": [
+    "index",
+    "inputs",
+    "image-generation",
+    "speech-generation",
+    "transcription",
+    "streaming",
+    "safety",
+    "storage-and-delivery"
+  ]
+}

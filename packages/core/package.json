@@ -416,9 +416,11 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.4",
     "@cloudflare/workers-types": "^5.20260710.1",
+    "@mdx-js/mdx": "^3.1.1",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.0",
     "fast-check": "^4.8.0",
+    "fumadocs-core": "^16.9.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.7",
     "wrangler": "^4.110.0"

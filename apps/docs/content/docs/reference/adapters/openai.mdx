@@ -18,8 +18,10 @@ import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/openai";
 ```
 
 <Callout type="info">
-  For usage examples and provider comparison, see the [Execution
-  guide](/docs/guides/prompts/execution).
+  For media workflows, start with [Media and multimodal](/docs/guides/media),
+  then use [Streaming generated media](/docs/guides/media/streaming) for
+  `streamImage()` and `streamSpeech()`. For text usage and provider comparison,
+  see the [Execution guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createOpenAI(client)`
@@ -51,6 +53,9 @@ unguarded; see the [content-primitive matrix](/docs/reference/crux-core/safety-c
 | ---------------------------- | ------------------------------------------------------------------------------ |
 | `.generate(prompt, options)` | Execute a prompt via `chat.completions.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                      |
+| `.generateImage(options)`    | Generate or edit completed images through the native Images API                |
+| `.transcribe(options)`       | Transcribe or translate audio with requested native detail                     |
+| `.generateSpeech(options)`   | Generate one completed native speech asset                                     |
 | `.streamImage(options)`      | Stream genuine Images API preview/final events                                 |
 | `.streamSpeech(options)`     | Stream genuine Speech API response-body bytes                                  |
 | `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with OpenAI params                              |
@@ -158,50 +163,12 @@ before terminal Safety and describes only one attempt, so exposing it would
 bypass guardrail holds, structured occurrence gating, commit gates, and
 validation retry.
 
-### `adapter.streamImage(options)`
+## Media operations
 
-Start one finite, eagerly executing Images API stream. Initial model support is:
-
-- `gpt-image-1`
-- `gpt-image-1-mini`
-- `gpt-image-1.5`
-- `gpt-image-2`
-- `gpt-image-2-2026-04-21`
-- `chatgpt-image-latest`
-
-The request is image-generation-only and single-output in this release.
-Omitting `n` means one; `n !== 1`, edits/references/masks, unsupported portable
-controls, and DALL·E models fail capability preflight before SDK I/O.
-`extra.partial_images` accepts `0` through `3`.
-
-OpenAI partial-image events become complete `image-preview` replacements at
-`outputIndex: 0`; the native partial index is the zero-based sequence. The
-final `image` event shares its guarded asset with `completion.image`.
-`completion.raw` is the exact `ImageGenCompletedEvent`, including usage. It
-does not contain or synthesize DALL·E 3's completed-only `revised_prompt`.
-
-### `adapter.streamSpeech(options)`
-
-Start one finite Speech API response-body stream. Initial model support is:
-
-- `tts-1`
-- `tts-1-hd`
-- `gpt-4o-mini-tts`
-- `gpt-4o-mini-tts-2025-12-15`
-
-The adapter fixes native `stream_format: "audio"` and publishes each response
-body chunk as an ordered `audio-delta`. Portable `outputFormat` selects `mp3`,
-`opus`, `aac`, `flac`, `wav`, or raw `pcm`; the final `audio` asset is assembled
-from those retained chunks. `completion.raw` is the exact SDK `Response`.
-
-Both bounded streams share Core's replay, cancellation, timeout, Safety, and
-routing laws. Every `fullStream` reader replays the same canonical events.
-`cancel(reason)` or `abortSignal` stops the logical operation. Enforcing
-output-media Safety guards complete previews and holds incomplete deltas until
-the final asset passes; report mode may leave deltas live. The first public
-preview or live delta commits the selected route, so later provider failure is
-terminal. Crux never persists previews, chunks, or completion media; persist
-the final asset explicitly.
+Completed and streaming image, transcription, and speech behavior is documented
+separately in [OpenAI media operations](/docs/reference/adapters/openai-media).
+That page owns native endpoints, typed `extra` controls, model gates, terminal
+`raw` types, and stream framing.
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

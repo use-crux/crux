@@ -1,0 +1,166 @@
+---
+title: Speech generation
+description: Turn text into usable audio with portable controls, provider-native voices, streaming, Safety, and correct format handling.
+---
+
+Use `generateSpeech()` when your application needs one completed audio asset.
+Use `streamSpeech()` when progressive provider bytes materially improve
+latency or playback.
+
+## Generate speech
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const result = await openai.generateSpeech({
+  model: "gpt-4o-mini-tts",
+  text: "Welcome aboard.",
+  voice: "alloy",
+  instructions: "Warm, concise, and unhurried.",
+  outputFormat: "mp3",
+});
+
+result.audio; // usable DataAsset
+```
+
+Crux returns the bytes and their media type as a `DataAsset`. It does not play,
+upload, transcode, or persist them.
+
+## Portable options
+
+| Option                  | Meaning                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `model`                 | Speech model or supported routing expression            |
+| `text`                  | Exact text to synthesize                                |
+| `voice`                 | Adapter-typed voice name or structured native selection |
+| `instructions`          | Delivery/style instructions where supported             |
+| `outputFormat`          | Requested provider format where supported               |
+| `speed`                 | Provider-supported speaking speed                       |
+| `language`              | Language hint or code where supported                   |
+| `abortSignal`           | Cooperative cancellation                                |
+| `timeout`               | Total and per-attempt budgets                           |
+| `guardrails` / `safety` | Input-text, instruction, and output-audio policy        |
+| `extra`                 | Typed provider-native controls                          |
+
+The portable shape does not imply universal provider support. OpenAI and Google
+validate unsupported controls before I/O rather than approximating them through
+prompt text.
+
+## Generate two-speaker audio with Google
+
+Google accepts a structured multi-speaker voice:
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { createGoogle } from "@use-crux/google";
+
+const google = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
+
+const dialogue = await google.generateSpeech({
+  model: "gemini-2.5-flash-preview-tts",
+  text: "Alex: Welcome. Sam: Thanks, it is good to be here.",
+  language: "en",
+  voice: {
+    speakerVoiceConfigs: [
+      {
+        speaker: "Alex",
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
+      },
+      {
+        speaker: "Sam",
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
+      },
+    ],
+  },
+});
+```
+
+Speaker names in the voice configuration should match the text. Google owns the
+native voice structure; Crux preserves its type instead of reducing every
+provider to a string.
+
+## Preserve the returned format
+
+Always use `result.audio.mediaType` as the source of truth:
+
+```ts
+const blob = new Blob([result.audio.data], {
+  type: result.audio.mediaType,
+});
+```
+
+Google TTS may return headerless raw PCM with parameters describing its rate,
+sample width, and channels. Crux preserves the native MIME string and does not
+invent a WAV header. A consumer that requires WAV must explicitly wrap or
+transcode the PCM bytes.
+
+OpenAI completed speech supports provider-native encoded formats such as MP3,
+Opus, AAC, FLAC, WAV, and PCM where the selected model supports them.
+
+## Choose completed or streaming
+
+Prefer completed speech when:
+
+- the consumer needs a complete playable file;
+- output-media Safety must approve audio before publication;
+- you want the simplest retry, storage, and delivery behavior.
+
+Use [`streamSpeech()`](/docs/guides/media/streaming#stream-speech) when the
+provider emits genuine audio bytes progressively. Deltas are append-only but
+may not be independently playable, depending on the native framing.
+
+## Apply Safety
+
+Speech operations expose:
+
+- `boundary.input.text()` for text to speak;
+- `boundary.input.instructions()` for delivery instructions;
+- `boundary.output.media()` for generated audio.
+
+Input text and instructions can be blocked or rewritten before provider I/O.
+Generated audio can be allowed, warned on, blocked, or stripped. Because audio
+is required for a successful speech result, enforced output `strip` blocks
+instead of returning an empty success.
+
+Provider-native `raw`, metadata, and warnings remain unguarded. Do not display
+or log them as though they passed canonical output policy.
+
+See [Media safety](/docs/guides/media/safety).
+
+## Persist and deliver
+
+```ts
+const stored = await assetStore.put(result.audio);
+```
+
+Persist only after successful completion and Safety. Keep storage retry
+separate from synthesis retry. Use the stored asset's MIME type and your own
+authorization boundary when serving it to a browser or mobile client.
+
+See [Storage and delivery](/docs/guides/media/storage-and-delivery).
+
+## Provider behavior
+
+- **OpenAI**: native Speech API, string or provider-supported custom voices,
+  encoded output format controls, and native streaming bytes.
+- **Google**: native audio generation, single- or two-speaker configuration,
+  native PCM details, and a narrower streaming model allowlist.
+- **Anthropic**: no specialized speech operation.
+
+Current model restrictions and native options belong in the
+[OpenAI](/docs/reference/adapters/openai-media) and
+[Google](/docs/reference/adapters/google-media) media references.
+
+## Common failures
+
+- Empty text, invalid speed, or invalid timeout budgets fail before I/O.
+- Known model/control mismatches produce `UnsupportedCapabilityError`.
+- Missing audio bytes or a non-audio MIME type fail result validation.
+- A Google speech stream without a successful terminal `STOP` fails rather
+  than publishing a final audio event.
+- Provider failures remain provider failures and retain their original cause.

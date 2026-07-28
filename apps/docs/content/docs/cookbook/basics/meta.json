@@ -6,6 +6,8 @@
     "chat-with-memory",
     "structured-extraction",
     "streaming-with-tools",
+    "safe-image-generation",
+    "transcribe-and-narrate",
     "workspace-files",
     "workspace-source-mounts",
     "workspace-editable-source-mounts",

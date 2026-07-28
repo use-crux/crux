@@ -1,0 +1,147 @@
+---
+title: Google media operations
+description: Google media input, Imagen and Gemini images, composed transcription, speech generation, native options, and finite streams.
+---
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { createGoogle } from "@use-crux/google";
+
+const google = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
+```
+
+Peer dependency: `@google/genai` (`^2.0.0`).
+
+Start with the [Media guides](/docs/guides/media) for application workflows.
+This page documents Google-specific endpoint behavior.
+
+## Media in generation
+
+Google generation accepts native image, audio, video, and document content.
+Data-backed parts map to `inlineData`. URL-backed image/file parts map to
+`fileData` and require `mediaType`.
+
+Assistant inline/file media decodes back into canonical content. Function
+response media uses the same provider-local part table as messages.
+
+## `adapter.generateImage(options)`
+
+Endpoint selection follows the model and prompt:
+
+| Request                            | Native endpoint          | `extra` namespace |
+| ---------------------------------- | ------------------------ | ----------------- |
+| Imagen text-to-image               | `models.generateImages`  | `extra.imagen`    |
+| Imagen references/mask             | `models.editImage`       | `extra.edit`      |
+| Gemini image generation/references | `models.generateContent` | `extra.gemini`    |
+
+Crux owns prompt, references, mask, count, aspect ratio, seed, cancellation,
+timeout, routing, and Safety. The three endpoint-specific `extra` namespaces
+exclude those portable fields and are mutually checked before I/O.
+
+Google image generation does not support portable `size`. Gemini supports one
+image when `n` is provided and does not emulate masks. Imagen edit references
+and masks must be data assets.
+
+`result.raw` is the exact `GenerateImagesResponse`,
+`GenerateContentResponse`, or `EditImageResponse` selected by the request.
+
+## `adapter.transcribe(options)`
+
+Google transcription is one composed `generateContent` call over audio. It is
+not a native measured transcription endpoint.
+
+The adapter uses a fixed transcript-only instruction and structured response
+schema. It returns guarded text, detected language when supplied by the model,
+composed execution facts, and a warning describing the composition.
+
+It rejects:
+
+- every timestamp request;
+- diarization;
+- translation tasks;
+- call-specific `language` and prompt controls;
+- known non-audio model families.
+
+`segments` and `words` stay empty. `result.raw` is the exact
+`GenerateContentResponse`; safe metadata contains only validated transcript
+facts.
+
+## `adapter.generateSpeech(options)`
+
+Runs one native `models.generateContent` audio request. `voice` accepts a
+prebuilt name, native voice config, or native two-speaker config.
+
+```ts
+await google.generateSpeech({
+  model: "gemini-2.5-flash-preview-tts",
+  text: "Alex: Welcome. Sam: Thank you.",
+  voice: {
+    speakerVoiceConfigs: [
+      {
+        speaker: "Alex",
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
+      },
+      {
+        speaker: "Sam",
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
+      },
+    ],
+  },
+});
+```
+
+Google owns native `extra` generation controls. Portable `outputFormat`,
+`instructions`, and `speed` are unsupported rather than prompt-emulated.
+`result.raw` is the exact `GenerateContentResponse`.
+
+The returned `DataAsset` preserves Google's audio MIME type. Native TTS output
+may be headerless PCM.
+
+## `adapter.streamImage(options)`
+
+Starts one stateless finite `v1beta` Interactions request. Initial support is
+exactly:
+
+- `gemini-2.5-flash-image`;
+- `gemini-3-pro-image`;
+- `gemini-3.1-flash-image`.
+
+Crux fixes `stream: true`, `store: false`, and
+`response_format: { type: "image" }`. It exposes no continuation/session API
+and sends no previous interaction, background execution, tool, or webhook
+state.
+
+The adapter binds the SDK 2.x
+`interaction.created`/`step.delta`/`interaction.completed` schema. Native image
+step indexes receive dense first-seen `outputIndex` values shared by deltas and
+final assets.
+
+`completion.raw` is the exact `InteractionCompletedEvent` envelope.
+Payload-free metadata is projected from its interaction resource.
+
+## `adapter.streamSpeech(options)`
+
+Starts finite `models.generateContentStream()` TTS. Initial support is exactly
+`gemini-3.1-flash-tts-preview`; completed-only 2.5 TTS and unknown identifiers
+fail before I/O.
+
+Each `audio-delta` contains decoded bytes and the exact first `audio/*` MIME
+string. Later chunks must match. Crux assembles the final raw-PCM `Blob`
+without adding a WAV header.
+
+Successful completion requires
+`candidates[0].finishReason === "STOP"`. `completion.raw` is the exact final
+`GenerateContentResponse`. Missing/different terminal state or any response
+after `STOP` fails without publishing final audio or `finish`.
+
+## Shared stream behavior
+
+Both streams use Core replay, cancellation, timeout, routing, Safety, and
+ownership laws. Enforcing output-media Safety holds incomplete deltas until
+final validation. The first live delta commits routing. Crux never persists
+chunks or final media.
+
+See [Streaming generated media](/docs/guides/media/streaming) and the exact
+[Core media-streaming contract](/docs/reference/crux-core/media-streaming).

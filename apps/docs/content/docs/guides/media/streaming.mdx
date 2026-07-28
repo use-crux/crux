@@ -1,0 +1,281 @@
+---
+title: Streaming generated media
+description: Stream genuine image and speech output with replay, cancellation, routing commitment, Safety, and final-result ownership.
+---
+
+`streamImage()` and `streamSpeech()` expose genuine finite provider progress.
+They are not text `stream()`, simulated chunks, or completed files divided
+after the fact.
+
+Prefer completed `generateImage()` and `generateSpeech()` unless progressive
+media materially improves the experience.
+
+## Understand the result
+
+Both operations start eagerly and return:
+
+```ts
+interface StreamingOperationResult<TEvent, TResult> {
+  readonly runId: string;
+  readonly _meta: {
+    readonly traceId: string;
+    readonly spanId: string;
+  };
+  readonly fullStream: AsyncIterable<TEvent>;
+  readonly completion: Promise<TResult>;
+  cancel(reason?: unknown): void;
+}
+```
+
+`fullStream` is the canonical progressive history. `completion` resolves to the
+same result family as the completed operation. Final event assets share object
+identity with the corresponding completion assets.
+
+Execution starts once preflight succeeds; it does not wait for a reader.
+
+## Stream images
+
+Image streams may contain:
+
+| Event           | Meaning                                             |
+| --------------- | --------------------------------------------------- |
+| `start`         | Core-owned logical operation start                  |
+| `image-preview` | Complete provisional replacement for one output     |
+| `image-delta`   | Append-only bytes that may not render independently |
+| `image`         | Final validated asset                               |
+| `finish`        | Successful logical completion                       |
+
+Terminal failures throw from the iterator and reject `completion`; they do not
+emit an error or finish event.
+
+### Render OpenAI previews
+
+OpenAI image previews are complete replacements. Keep only the newest preview
+for each output:
+
+```ts
+import OpenAI from "openai";
+import type { Asset } from "@use-crux/core";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+const previews = new Map<number, Asset>();
+const finalImages = new Map<number, Asset>();
+const imageChunks = new Map<number, Uint8Array[]>();
+const assets = inMemoryAssetStore();
+const controller = new AbortController();
+
+const result = await openai.streamImage({
+  model: "gpt-image-2",
+  prompt: "A quiet canal at sunrise",
+  abortSignal: controller.signal,
+  extra: { partial_images: 2 },
+});
+
+for await (const event of result.fullStream) {
+  switch (event.type) {
+    case "start":
+    case "finish":
+      break;
+    case "image-preview":
+      previews.set(event.outputIndex, event.image);
+      break;
+    case "image-delta": {
+      const chunks = imageChunks.get(event.outputIndex) ?? [];
+      chunks.push(event.data);
+      imageChunks.set(event.outputIndex, chunks);
+      break;
+    }
+    case "image":
+      finalImages.set(event.outputIndex, event.image);
+      break;
+  }
+}
+
+const picture = await result.completion;
+const storedPicture = await assets.put(picture.image);
+```
+
+OpenAI currently emits preview/final framing for one output. A later preview
+with the same `outputIndex` replaces the earlier provisional image.
+
+### Accumulate Google image deltas
+
+Google emits append-only `image-delta` bytes. Group them by `outputIndex` and
+append in zero-based `sequence` order:
+
+```ts
+const result = await google.streamImage({
+  model: "gemini-3.1-flash-image",
+  prompt: "A quiet canal at sunrise",
+});
+
+const chunks = new Map<number, Uint8Array[]>();
+
+for await (const event of result.fullStream) {
+  if (event.type === "image-delta") {
+    const output = chunks.get(event.outputIndex) ?? [];
+    output.push(event.data);
+    chunks.set(event.outputIndex, output);
+  }
+}
+
+const final = await result.completion;
+```
+
+A delta may not be independently renderable. Native content indexes map to
+dense, first-seen `outputIndex` values so each output keeps one identity across
+deltas and final assets.
+
+## Stream speech
+
+Speech streams contain:
+
+| Event         | Meaning                            |
+| ------------- | ---------------------------------- |
+| `start`       | Core-owned logical operation start |
+| `audio-delta` | Append-only provider audio bytes   |
+| `audio`       | Final validated audio asset        |
+| `finish`      | Successful logical completion      |
+
+Accumulate bytes only when your playback or transport understands the native
+framing:
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+import { createGoogle } from "@use-crux/google";
+
+const google = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
+const audioChunks: Uint8Array[] = [];
+const assets = inMemoryAssetStore();
+const controller = new AbortController();
+let audioMediaType: string | undefined;
+
+const result = await google.streamSpeech({
+  model: "gemini-3.1-flash-tts-preview",
+  text: "Welcome aboard",
+  voice: "Kore",
+  abortSignal: controller.signal,
+});
+
+for await (const event of result.fullStream) {
+  switch (event.type) {
+    case "start":
+    case "finish":
+      break;
+    case "audio-delta":
+      audioChunks.push(event.data);
+      audioMediaType ??= event.mediaType;
+      break;
+    case "audio":
+      audioMediaType = event.audio.mediaType;
+      break;
+  }
+}
+
+const narration = await result.completion;
+const storedNarration = await assets.put(narration.audio);
+```
+
+The MIME type must remain consistent across chunks. Google TTS emits headerless
+raw PCM; Crux preserves its native parameters and does not synthesize a WAV
+header. OpenAI streams native Speech API response-body bytes in the selected
+format.
+
+## Replay and multiple readers
+
+Every `fullStream` iterator starts from the same retained `start` event and
+replays the same event objects:
+
+```ts
+const uiReader = consumeForUi(result.fullStream);
+const metricsReader = consumeForMetrics(result.fullStream);
+
+await Promise.all([uiReader, metricsReader, result.completion]);
+```
+
+Returning from one iterator detaches only that reader. It does not stop eager
+execution, cancel other readers, or reject completion. Replay is process-local
+and retained only for the operation lifetime.
+
+## Cancel the logical operation
+
+Use either the call signal or `cancel()`:
+
+```ts
+const controller = new AbortController();
+const result = await openai.streamSpeech({
+  model: "gpt-4o-mini-tts",
+  text,
+  voice: "alloy",
+  abortSignal: controller.signal,
+});
+
+result.cancel("consumer disconnected");
+```
+
+Cancellation stops the active provider attempt. Current readers, later readers,
+and `completion` fail with the same normalized error identity.
+
+`timeout.totalMs` bounds the logical stream; `timeout.stepMs` bounds one
+provider attempt. Timeout is terminal once the route is committed.
+
+## Safety release
+
+Complete image previews are individually guardable occurrences. Incomplete
+image and audio deltas cannot be judged honestly on their own.
+
+When output-media policy enforces, Crux holds incomplete deltas and publishes
+only guarded final media after successful native completion. A blocked final
+asset discards held bytes. Report-only policy may leave deltas live.
+
+This changes what readers observe, but not the provider terminal result stored
+in `completion.raw`. See [Media safety](/docs/guides/media/safety).
+
+## Routing and retries
+
+Routing may retry or fall back only before the first canonical provider event
+becomes public:
+
+```text
+provider attempt
+  ├─ no public media yet → retry/fallback may continue
+  └─ preview or live delta published → route committed
+```
+
+Held or Safety-stripped provisional media does not commit a route. A visible
+preview or live delta does. After commitment, a provider failure is terminal;
+Crux cannot switch providers without presenting two physical attempts as one
+continuous output.
+
+## Persist the final asset
+
+Streaming does not change storage ownership. Persist
+`(await result.completion).image` or `.audio` after success. Do not persist
+provisional chunks as though they were final validated assets.
+
+See [Storage and delivery](/docs/guides/media/storage-and-delivery) for storage,
+MIME, playback, and observability guidance.
+
+## Inspect the run
+
+Catalog marks these calls as bounded media streams, distinct from text
+`stream()`. Runs presents one logical operation and separate physical attempts,
+including per-attempt progress counts, bytes, validated MIME types, timing,
+route commitment, terminal state, and Safety provenance.
+
+No preview, chunk, final payload, URL, filename, ref, or native event enters
+the read model.
+
+## Current boundaries
+
+- Image and speech streams are finite and stateless.
+- Transcription streaming is not currently supported.
+- Provider-native event streams are not public Crux output.
+- OpenAI streaming image output is currently one image.
+- Google streaming support uses explicit model allowlists documented in the
+  [Google media reference](/docs/reference/adapters/google-media).

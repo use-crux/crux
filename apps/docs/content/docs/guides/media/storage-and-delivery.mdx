@@ -1,0 +1,220 @@
+---
+title: Storage and delivery
+description: Persist, serve, render, and observe generated media without accidental regeneration, retention, or payload exposure.
+---
+
+Crux keeps generation separate from storage. A completed operation returns a
+usable asset; your application decides whether and where to persist it.
+
+## Use the asset directly
+
+Generated images and audio are ordinary canonical assets:
+
+```ts
+const picture = await openai.generateImage({
+  model: "gpt-image-2",
+  prompt: "A quiet canal at sunrise",
+});
+
+if (picture.image.type !== "data") {
+  throw new Error(
+    "This delivery path requires locally materialized image data.",
+  );
+}
+
+const imageBlob = new Blob([picture.image.data], {
+  type: picture.image.mediaType,
+});
+```
+
+Use the returned MIME type rather than assuming PNG, MP3, or WAV. Provider
+configuration and native output may select a different representation.
+
+## Persist explicitly
+
+```ts
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const assets = inMemoryAssetStore();
+const stored = await assets.put(picture.image);
+
+console.log(stored.ref);
+```
+
+No model operation accepts an `AssetStore` or writes implicitly. This keeps two
+different failures separate:
+
+```text
+generation failed → retry or route the model operation
+storage failed    → retry storage with the already generated asset
+```
+
+Do not repeat a paid generation call merely because a database or object-store
+write failed.
+
+## Hydrate before reuse
+
+An `AssetRef` is a bearer reference owned by its store, not model input:
+
+```ts
+import { z } from "zod";
+import { prompt, type Asset } from "@use-crux/core";
+
+const inspectPicture = prompt({
+  input: z.object({ picture: z.custom<Asset>() }),
+  messages: ({ input }) => [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Describe this image." },
+        { type: "image", source: input.picture },
+      ],
+    },
+  ],
+});
+
+const reusable = await assets.get(stored.ref);
+
+await openai.generate(inspectPicture, {
+  model: "gpt-4o",
+  input: { picture: reusable },
+});
+```
+
+Store namespaces organize references; they are not an authorization boundary.
+Authorize the caller before hydration and again before serving a stored asset.
+
+## Deliver images
+
+In a browser, create an object URL for short-lived local display:
+
+```ts
+if (picture.image.type !== "data") {
+  throw new Error(
+    "This browser path requires locally materialized image data.",
+  );
+}
+
+const blob = new Blob([picture.image.data], {
+  type: picture.image.mediaType,
+});
+const objectUrl = URL.createObjectURL(blob);
+
+try {
+  imageElement.src = objectUrl;
+} finally {
+  URL.revokeObjectURL(objectUrl);
+}
+```
+
+For durable delivery, serve stored bytes through an authenticated application
+route or a deliberately scoped signed URL. Do not place bearer references or
+private provider file identifiers into public markup.
+
+Image previews are provisional. Replace the previous preview for the same
+`outputIndex`; do not accumulate complete preview replacements as though they
+were frames.
+
+## Deliver audio
+
+Encoded formats such as MP3 or WAV can usually become a `Blob` directly:
+
+```ts
+const audioBlob = new Blob([narration.audio.data], {
+  type: narration.audio.mediaType,
+});
+```
+
+Some Google speech output is headerless raw PCM. The MIME parameters describe
+the native sample format. A browser audio element generally cannot play those
+bytes directly. Explicitly:
+
+1. stream them to a PCM-capable playback path;
+2. wrap them in a correct container after reading the declared parameters; or
+3. transcode them in application infrastructure.
+
+Crux does not synthesize a WAV header because an incorrect header would turn
+unknown framing into corrupted audio.
+
+## Own stream accumulation
+
+Media streams retain replay data only for the operation lifetime. They are not
+an asset store:
+
+```ts
+const result = await google.streamSpeech(options);
+const chunks: Uint8Array[] = [];
+
+for await (const event of result.fullStream) {
+  if (event.type === "audio-delta") chunks.push(event.data);
+}
+
+const completed = await result.completion;
+await assets.put(completed.audio);
+```
+
+Persist the validated final asset rather than provisional chunks. If the
+consumer leaves, call `cancel()` when the logical operation should stop; merely
+returning from one iterator detaches that reader and does not cancel eager
+execution.
+
+## Keep framework ownership clear
+
+AI SDK and Convex integrations own their native attachment, thread, and file
+lifecycles. Crux translates supported model-visible content at the call
+boundary but does not duplicate framework uploads or autosave behavior.
+
+When moving an asset between systems, make the transfer explicit and document:
+
+- which system authorizes reads;
+- which system owns deletion and retention;
+- whether the destination receives bytes or a remote URL;
+- whether the transfer changes privacy or provider residency.
+
+## Inspect media work
+
+Project Index and Catalog show authored `generateImage`, `streamImage`,
+`transcribe`, `generateSpeech`, `streamSpeech`, and ingestion operations. They
+include modality, portable option facts, provider support, source navigation,
+Safety relations, and deterministic lints.
+
+Runs shows execution as one logical operation with a separate physical-attempt
+timeline:
+
+- route selection and commitment;
+- preview, delta, and final counts;
+- byte totals and validated MIME types;
+- first-public-event and total duration;
+- cancellation, timeout, failure, or success;
+- preview/final Safety provenance.
+
+An exact safe media-operation definition identity links Runs back to Catalog.
+Crux does not guess by provider, model, name, or an untrusted attribute.
+
+## Privacy contract
+
+Local capture and production telemetry never include media payloads. Media
+observability excludes:
+
+- bytes and base64/data URLs;
+- `AssetRef` values and provider file IDs;
+- filenames and hashes;
+- signed URL details;
+- native stream events;
+- thumbnails, waveform data, or playback.
+
+Text and transcript capture follows its own capture policy. Enabling more text
+capture does not enable raw media capture.
+
+Read [Runs and delivery](/docs/guides/observability/runs-and-delivery),
+[Telemetry](/docs/guides/observability/telemetry), and
+[Privacy](/docs/guides/observability/privacy) for the complete observability
+contract.
+
+## Derive instead of exposing
+
+Ingestion can derive attributed text from media without putting media bodies
+into vector metadata. Retrieval returns structured source facts and does not
+hydrate the original media. Use
+[Multimodal search](/docs/guides/retrieval/multimodal-search) when the query
+itself should be embedded as media.

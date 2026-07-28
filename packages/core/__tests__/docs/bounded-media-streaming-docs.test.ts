@@ -10,9 +10,7 @@ function read(path: string): string {
 
 describe("bounded media streaming documentation", () => {
   it("keeps the guide examples complete and copyable", () => {
-    const guide = read(
-      "apps/docs/content/docs/guides/advanced/bounded-media-streaming.mdx",
-    );
+    const guide = read("apps/docs/content/docs/guides/media/streaming.mdx");
 
     for (const fragment of [
       'import OpenAI from "openai"',
@@ -23,7 +21,7 @@ describe("bounded media streaming documentation", () => {
       'import { createGoogle } from "@use-crux/google"',
       "const google = createGoogle(",
       "const audioChunks: Uint8Array[] = []",
-      "`streamImage` and `streamSpeech`",
+      "`streamImage()` and `streamSpeech()`",
     ]) {
       expect(guide, fragment).toContain(fragment);
     }
@@ -31,17 +29,23 @@ describe("bounded media streaming documentation", () => {
 
   it("documents the public Core and provider contracts", () => {
     expect(
-      read("apps/docs/content/docs/reference/crux-core/multimodal.mdx"),
-    ).toContain("## Bounded media streams");
+      read("apps/docs/content/docs/reference/crux-core/media-streaming.mdx"),
+    ).toContain("## `StreamingOperationResult`");
 
-    const openai = read("apps/docs/content/docs/reference/adapters/openai.mdx");
-    expect(openai).toContain("### `adapter.streamImage(options)`");
-    expect(openai).toContain("### `adapter.streamSpeech(options)`");
+    const openai = read(
+      "apps/docs/content/docs/reference/adapters/openai-media.mdx",
+    );
+    expect(openai).toContain("## `adapter.streamImage(options)`");
+    expect(openai).toContain("## `adapter.streamSpeech(options)`");
 
-    const google = read("apps/docs/content/docs/reference/adapters/google.mdx");
-    expect(google).toContain("### `adapter.streamImage(options)`");
-    expect(google).toContain("### `adapter.streamSpeech(options)`");
-    expect(google).toContain(
+    const google = read(
+      "apps/docs/content/docs/reference/adapters/google-media.mdx",
+    );
+    expect(google).toContain("## `adapter.streamImage(options)`");
+    expect(google).toContain("## `adapter.streamSpeech(options)`");
+    expect(
+      read("apps/docs/content/docs/reference/adapters/google.mdx"),
+    ).toContain(
       "All five specialized media operations use the portable media-operation Safety contracts",
     );
     expect(google).not.toContain("All three operations");

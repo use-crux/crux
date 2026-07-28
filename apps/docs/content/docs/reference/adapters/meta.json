@@ -1,5 +1,5 @@
 {
   "title": "Adapters",
   "description": "@use-crux/ai, @use-crux/anthropic, @use-crux/openai, @use-crux/google plus the custom adapter interface.",
-  "pages": ["index", "ai", "anthropic", "openai", "google"]
+  "pages": ["index", "ai", "anthropic", "openai", "openai-media", "google", "google-media"]
 }
