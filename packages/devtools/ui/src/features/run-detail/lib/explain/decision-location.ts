@@ -14,8 +14,15 @@ export function decisionLocationLabel(location: DecisionLocation): string {
       } · ${partType}`
     case 'step':
       return `step ${origin.stepIndex} · part ${origin.partIndex} · ${partType}`
-    case 'operation':
-      return `${origin.operation} · ${origin.phase} · ${origin.field} · part ${origin.partIndex} · ${partType}`
+    case 'operation': {
+      const coordinate =
+        'partIndex' in origin
+          ? `part ${origin.partIndex}`
+          : `output ${origin.outputIndex}${
+              'sequence' in origin ? ` · sequence ${origin.sequence}` : ''
+            }`
+      return `${origin.operation} · ${origin.phase} · ${origin.field} · ${coordinate} · ${partType}`
+    }
     default:
       return assertNever(origin)
   }

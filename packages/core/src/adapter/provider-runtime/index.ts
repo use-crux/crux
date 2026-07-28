@@ -11,6 +11,10 @@ export type {
   ProviderCompletedOperationFactory,
 } from "./completed-operations";
 export type {
+  ProviderStreamingOperationFactories,
+  ProviderStreamingOperationFactory,
+} from "./streaming-operations";
+export type {
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,

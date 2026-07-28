@@ -47,6 +47,8 @@ import { createGoogleImageOperation } from "./image-generation";
 import { createGoogleTranscriptionOperation } from "./transcription";
 import { createGoogleSpeechOperation } from "./speech";
 import { materializeGoogleToolSource } from "./mcp-materializer";
+import { createGoogleImageStreamingOperation } from "./image-streaming";
+import { createGoogleSpeechStreamingOperation } from "./speech-streaming";
 
 /** Configuration for `google.retrievalModel()`. */
 export interface GoogleRetrievalModelConfig {
@@ -135,6 +137,10 @@ const google = defineSingleTurnProviderBundle({
   image: createGoogleImageOperation,
   transcription: createGoogleTranscriptionOperation,
   speech: createGoogleSpeechOperation,
+  streaming: {
+    image: createGoogleImageStreamingOperation,
+    speech: createGoogleSpeechStreamingOperation,
+  },
   extend: ({ client }) => createGoogleRuntimeExtensions(client),
 });
 

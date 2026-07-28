@@ -187,11 +187,30 @@ describe("MediaRunPanel", () => {
     expect(unavailable).toMatch(/Catalog source join unavailable/i);
     expect(unavailable).toContain('role="status"');
     expect(unavailable).not.toContain("media.operation:");
+
+    const ambiguous = renderToStaticMarkup(
+      <MediaRunPanel
+        view={baseView({
+          catalogJoin: {
+            status: "unavailable",
+            reason: "ambiguous-runtime-join",
+          },
+        })}
+      />,
+    );
+    expect(ambiguous).toContain("conflicting authored definition identities");
+    expect(ambiguous).not.toContain("media.operation:");
   });
 
   it("never renders a secret definition id when no display name was recorded", () => {
-    const catalogJoin = resolveMediaCatalogJoin({
-      definitionId: SECRET_DEFINITION_ID,
+    const catalogJoin = resolveMediaCatalogJoin(undefined, {
+      definitionRefs: [
+        {
+          id: SECRET_DEFINITION_ID,
+          kind: "media.operation",
+          role: "invoked-media-operation",
+        },
+      ],
     });
     const html = renderToStaticMarkup(
       <MediaRunPanel view={baseView({ catalogJoin })} />,

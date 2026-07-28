@@ -4,7 +4,7 @@ import {
   formatRedactionSurfaces,
   hasRedactionEvidence,
   REDACTION_EVIDENCE_TOOLTIP,
-} from "../lib/redaction-evidence";
+} from "@/features/observability/lib/redaction-evidence";
 
 /** Compact marker for explicit successful-redaction evidence. */
 export function RedactionBadge({

@@ -1,38 +1,46 @@
-import { observe } from '../../observability'
+import { observe } from "../../observability";
 import type {
   SafetyFinding,
   SafetyFindingCollector,
   SafetyRunContext,
-} from '../decision'
-import type { ModelInputOrigin } from '../input-origin'
-import { safeCaptureSummary } from '../errors'
-import { GuardrailBlockedError } from '../guardrail/errors'
-import { findingCountAttributes } from '../guardrail/finding-observability'
-import { recordMediaGuardrailBlockedEdge, recordMediaGuardrailReport } from '../guardrail/observability'
-import type { GuardrailAudit, GuardrailAuditEntry, GuardrailContext, MediaGuardrailRunResult } from '../guardrail/types'
-import type { GuardrailBinding } from '../registry'
-import type { MediaPartLocation } from './types'
+} from "../decision";
+import type { ModelInputOrigin } from "../input-origin";
+import { safeCaptureSummary } from "../errors";
+import { GuardrailBlockedError } from "../guardrail/errors";
+import { findingCountAttributes } from "../guardrail/finding-observability";
+import {
+  recordMediaGuardrailBlockedEdge,
+  recordMediaGuardrailReport,
+} from "../guardrail/observability";
+import type {
+  GuardrailAudit,
+  GuardrailAuditEntry,
+  GuardrailContext,
+  MediaGuardrailRunResult,
+} from "../guardrail/types";
+import type { GuardrailBinding } from "../registry";
+import type { MediaPartLocation } from "./types";
 
 /** @internal One completed media-policy evaluation awaiting final group state. */
 export interface MediaEvaluation {
-  readonly groupId: string
-  readonly binding: GuardrailBinding
-  readonly result: MediaGuardrailRunResult
-  readonly findings?: readonly SafetyFinding[]
-  readonly location: MediaPartLocation
-  readonly model?: string
+  readonly groupId: string;
+  readonly binding: GuardrailBinding;
+  readonly result: MediaGuardrailRunResult;
+  readonly findings?: readonly SafetyFinding[];
+  readonly location: MediaPartLocation;
+  readonly model?: string;
   /** Privacy-safe semantic provenance shared across media projections. */
-  readonly origin?: ModelInputOrigin
-  readonly durationMs: number
-  readonly span: ReturnType<typeof observe.openSpan>
-  escalatedToBlock: boolean
+  readonly origin?: ModelInputOrigin;
+  readonly durationMs: number;
+  readonly span: ReturnType<typeof observe.openSpan>;
+  escalatedToBlock: boolean;
 }
 
 /** Finalize ordered media observations and audit after group validation. */
 export function finalizeMediaEvaluations(
   options: Readonly<{
-    phase: 'input' | 'output'
-    appendAudit: (audit: GuardrailAudit) => void
+    phase: "input" | "output";
+    appendAudit: (audit: GuardrailAudit) => void;
   }>,
   evaluations: readonly MediaEvaluation[],
   terminal?: MediaEvaluation,
@@ -48,7 +56,7 @@ export function finalizeMediaEvaluations(
       durationMs,
       escalatedToBlock,
       span,
-    } = evaluation
+    } = evaluation;
     span.withContext(() => {
       recordMediaGuardrailReport(
         binding,
@@ -58,8 +66,8 @@ export function finalizeMediaEvaluations(
         escalatedToBlock,
         origin,
         findings,
-      )
-      if (evaluation === terminal && result.action !== 'allow') {
+      );
+      if (evaluation === terminal && result.action !== "allow") {
         recordMediaGuardrailBlockedEdge(
           binding,
           result.reason,
@@ -67,9 +75,9 @@ export function finalizeMediaEvaluations(
           escalatedToBlock,
           origin,
           findings,
-        )
+        );
       }
-    })
+    });
     span.end({
       attributes: {
         action: result.action,
@@ -77,27 +85,31 @@ export function finalizeMediaEvaluations(
         ...findingCountAttributes(findings),
         durationMs,
       },
-    })
+    });
     options.appendAudit({
-      applied: [auditEntry(
-        options.phase,
-        binding,
-        result,
-        location,
-        model,
-        origin,
-        durationMs,
+      applied: [
+        auditEntry(
+          options.phase,
+          binding,
+          result,
+          location,
+          model,
+          origin,
+          durationMs,
+          escalatedToBlock,
+          evaluation.findings,
+        ),
+      ],
+      blocked:
+        (result.action === "block" && binding.mode === "enforce") ||
         escalatedToBlock,
-        evaluation.findings,
-      )],
-      blocked: (result.action === 'block' && binding.mode === 'enforce') || escalatedToBlock,
-    })
+    });
   }
 }
 
 /** Build the canonical terminal error for a media block or escalation. */
 export function mediaBlockedError(
-  phase: 'input' | 'output',
+  phase: "input" | "output",
   binding: GuardrailBinding,
   reason: string,
   location: MediaPartLocation,
@@ -114,11 +126,11 @@ export function mediaBlockedError(
     decisions: [
       {
         policyId: binding.policy.id,
-        kind: 'guardrail',
+        kind: "guardrail",
         boundary: binding.boundary.id,
         ...(origin ? { origin } : {}),
         mode: binding.mode,
-        action: 'block',
+        action: "block",
         reason,
         ...(model ? { model } : {}),
         location,
@@ -126,10 +138,10 @@ export function mediaBlockedError(
         ...(findings ? { findings } : {}),
         ...(binding.tuned ? { tuned: binding.tuned } : {}),
         durationMs,
-        captured: safeCaptureSummary(''),
+        captured: safeCaptureSummary(""),
       },
     ],
-  })
+  });
 }
 
 /** Project the private session context into one public media callback context. */
@@ -137,22 +149,23 @@ export function mediaRunContext(
   binding: GuardrailBinding,
   context: GuardrailContext,
   findings: SafetyFindingCollector,
-): Omit<SafetyRunContext, 'origin'> & { readonly origin?: ModelInputOrigin } {
+): Omit<SafetyRunContext, "origin"> & { readonly origin?: ModelInputOrigin } {
   return {
     policy: { id: binding.policy.id, mode: binding.mode },
     boundary: { id: binding.boundary.id, kind: binding.boundary.id },
     prompt: { id: context.promptId },
     model: { id: context.model },
     trace: { id: context.traceId },
-    attempt: { index: 0, kind: 'initial' },
+    attempt: { index: 0, kind: "initial" },
     metadata: context.metadata,
     findings,
+    ...(context.stream ? { stream: context.stream } : {}),
     ...(context.origin ? { origin: context.origin } : {}),
-  }
+  };
 }
 
 function auditEntry(
-  phase: 'input' | 'output',
+  phase: "input" | "output",
   binding: GuardrailBinding,
   result: MediaGuardrailRunResult,
   location: MediaPartLocation,
@@ -164,17 +177,19 @@ function auditEntry(
 ): GuardrailAuditEntry {
   return {
     guard: binding.policy.id,
-    ...(binding.policy.category !== undefined ? { category: binding.policy.category } : {}),
+    ...(binding.policy.category !== undefined
+      ? { category: binding.policy.category }
+      : {}),
     boundary: binding.boundary.id,
     ...(origin ? { origin } : {}),
     mode: binding.mode,
     phase,
     action: result.action,
-    ...(result.action === 'allow' ? {} : { reason: result.reason }),
+    ...(result.action === "allow" ? {} : { reason: result.reason }),
     ...(model ? { model } : {}),
     location,
     ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
     ...(findings ? { findings } : {}),
     durationMs,
-  }
+  };
 }

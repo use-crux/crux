@@ -446,8 +446,8 @@ importers:
   packages/google:
     dependencies:
       '@google/genai':
-        specifier: ^1.0.0 || ^2.0.0
-        version: 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+        specifier: ^2.0.0
+        version: 2.13.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@use-crux/core':
         specifier: workspace:*
         version: link:../core
@@ -1853,8 +1853,8 @@ packages:
       tailwindcss:
         optional: true
 
-  '@google/genai@1.52.0':
-    resolution: {integrity: sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q==}
+  '@google/genai@2.13.0':
+    resolution: {integrity: sha512-GM7C8Kaomvjz05x5JEO6+l3d/pciL9LxAG9dUjJLD7nTPZ9X0Cfsf2Z7eET6UjgWyUmxXCHtYnQoQ77F9+ZIOQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -9104,7 +9104,7 @@ snapshots:
       '@tailwindcss/oxide': 4.3.0
       tailwindcss: 4.3.0
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
+  '@google/genai@2.13.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2

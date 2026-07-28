@@ -15,6 +15,10 @@ import type {
   ProviderCompletedOperationFactories,
   ProviderCompletedOperationFactory,
 } from "./completed-operations";
+import type {
+  DefinedStreamingOperations,
+  ProviderStreamingOperationFactories,
+} from "./streaming-operations";
 
 /**
  * Single-turn runtime contract accepted by `defineProviderRuntime()`.
@@ -65,6 +69,8 @@ export interface SingleTurnProviderRuntimeSpec<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 > extends ProviderCompletedOperationFactories<
   TClient,
   TImage,
@@ -91,11 +97,14 @@ export interface SingleTurnProviderRuntimeSpec<
     TDeps,
     TProviderMessage
   >;
+  /** Genuine bounded media streams. Omit unsupported operations. */
+  readonly streaming?: TStreaming;
   /** Provider-specific capabilities to expose next to generation. */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
     SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra> &
-      DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
+      DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+      DefinedStreamingOperations<TStreaming>,
     TExtensions
   >;
   /** Disallow mixing provider runtime dialects. */

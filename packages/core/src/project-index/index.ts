@@ -512,8 +512,10 @@ export interface MediaOperationFacts {
     | "generate"
     | "stream"
     | "generateImage"
+    | "streamImage"
     | "transcribe"
     | "generateSpeech"
+    | "streamSpeech"
     | "describe";
   readonly inputModalities?: readonly ProjectIndexMediaModality[];
   readonly outputModalities?: readonly ProjectIndexMediaModality[];

@@ -7,7 +7,7 @@ import {
   workspaceSnapshotErrorCode,
   workspaceSnapshotOperation,
   type WorkspaceSnapshotOperation,
-} from "@/features/workspace-snapshot/contract";
+} from "@/shared/lib/workspace-snapshot";
 
 export type WorkspaceSnapshotRunPresentation =
   | {

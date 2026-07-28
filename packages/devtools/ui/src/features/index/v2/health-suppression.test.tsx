@@ -10,7 +10,7 @@ import {
   filterIndexHealthFindings,
   indexHealthFilterCounts,
 } from "./health";
-import { indexHealthSubtitle } from "../components/IndexHealth";
+import { indexHealthSubtitle } from "@/features/index/components/IndexHealth";
 
 function suppressedIndex(reason: string | null = "intentional handoff") {
   return buildIndex({

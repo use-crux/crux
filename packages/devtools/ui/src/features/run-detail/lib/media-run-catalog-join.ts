@@ -1,12 +1,12 @@
 /**
  * Runtime → Catalog source join for multimodal Runs.
  *
- * Exact join only. Completed media operations currently emit provider,
- * operation, model, execution, and call facts — not a Catalog definition id.
- * Project Index `media.operation` definitions also set `runtimeJoin: false`.
- * Until an upstream contract records `definitionId` (or equivalent) on the
- * media span, the join is an explicit unavailable state. Do not invent fuzzy
- * matches from operation name / provider / model.
+ * Exact join only. Media operations do not normally observe the authored local
+ * identity used by Project Index. A caller may, however, attach an exact
+ * `media.operation` DefinitionRef with role `invoked-media-operation` when
+ * that identity is genuinely available. Without one, the join stays
+ * explicitly unavailable. Do not invent fuzzy matches from operation name,
+ * provider, model, attributes, or source coordinates.
  *
  * Labels never derive from definitionId (including suffix stripping). The id
  * remains internal for navigation only.
@@ -16,9 +16,6 @@
 
 import { stringValue } from "./media-run-helpers";
 import type { MediaCatalogJoin } from "./media-run-projection-types";
-
-/** Exact attribute keys accepted as recorded Catalog definition identity. */
-const DEFINITION_ID_KEYS = ["definitionId", "catalogDefinitionId"] as const;
 
 const DEFINITION_NAME_KEYS = [
   "definitionName",
@@ -33,16 +30,36 @@ export const GENERIC_CATALOG_MEDIA_LABEL = "Catalog media operation";
  * Resolve the Catalog join from recorded span attributes / explicit options.
  *
  * @param attributes - Merged media span attributes after capture/retention.
- * @param options.catalogJoinId - Optional exact definition id already known to
- *   the caller (tests or a future presentation field). Not a fuzzy guess.
+ * @param options.definitionRefs - Runtime definition references. Only exact
+ *   invoked-media-operation references are eligible for navigation.
  */
 export function resolveMediaCatalogJoin(
   attributes: Readonly<Record<string, unknown>> | undefined,
-  options: Readonly<{ catalogJoinId?: string }> = {},
+  options: Readonly<{
+    definitionRefs?: readonly Readonly<{
+      id: string;
+      kind: string;
+      role?: string;
+    }>[];
+  }> = {},
 ): MediaCatalogJoin {
-  const definitionId =
-    firstString(attributes, DEFINITION_ID_KEYS) ??
-    stringValue(options.catalogJoinId);
+  const definitionIds = new Set(
+    (options.definitionRefs ?? [])
+      .filter(
+        (reference) =>
+          reference.kind === "media.operation" &&
+          reference.role === "invoked-media-operation",
+      )
+      .map((reference) => stringValue(reference.id))
+      .filter((value): value is string => value !== undefined),
+  );
+  if (definitionIds.size > 1) {
+    return Object.freeze({
+      status: "unavailable",
+      reason: "ambiguous-runtime-join",
+    });
+  }
+  const definitionId = [...definitionIds][0];
   if (!definitionId) {
     return Object.freeze({
       status: "unavailable",

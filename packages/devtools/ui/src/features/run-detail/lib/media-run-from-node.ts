@@ -25,7 +25,7 @@ import {
 export function projectMediaRunFromNode(
   root: ObservabilityRunDetailNode,
   selectedMediaSpanId: string,
-  options: Readonly<{ exportMode?: boolean; catalogJoinId?: string }> = {},
+  options: Readonly<{ exportMode?: boolean }> = {},
 ): MediaRunView | undefined {
   return projectMediaRunView(flattenNodeGraph(root), {
     ...options,
@@ -56,6 +56,7 @@ function flattenNodeGraph(
       attributes,
       provider: node.provider,
       model: node.model,
+      definitionRefs: node.definitionRefs,
     });
     records.push({
       type: "span:end",

@@ -8,6 +8,13 @@
  * @module
  */
 
+import {
+  isMediaOperationName,
+  type MediaOperationName,
+} from "./media-operation-presentation";
+
+export type { MediaOperationName } from "./media-operation-presentation";
+
 /** Closed modality vocabulary shared by media and embedding Catalog views. */
 export const MEDIA_MODALITIES = [
   "text",
@@ -21,14 +28,6 @@ export const MEDIA_MODALITIES = [
 export type MediaModality = (typeof MEDIA_MODALITIES)[number];
 
 export type MediaExecutionSupport = "native" | "composed" | "unknown";
-
-export type MediaOperationName =
-  | "generate"
-  | "stream"
-  | "generateImage"
-  | "transcribe"
-  | "generateSpeech"
-  | "describe";
 
 /** Allowlisted authored options retained for Catalog display. */
 export type MediaAuthoredOptions = Readonly<{
@@ -102,15 +101,6 @@ export type MediaCatalogFilter =
   | "unknown-support"
   | "has-warnings";
 
-const MEDIA_OPS = new Set<string>([
-  "generate",
-  "stream",
-  "generateImage",
-  "transcribe",
-  "generateSpeech",
-  "describe",
-]);
-
 const MODALITIES = new Set<string>(MEDIA_MODALITIES);
 
 /** Project a Project Index definition into a media-operation Catalog card. */
@@ -135,10 +125,7 @@ export function projectMediaOperationCatalog(
     kind: "media.operation",
     id: input.id,
     name: input.name,
-    operation:
-      operation && MEDIA_OPS.has(operation)
-        ? (operation as MediaOperationName)
-        : "unknown",
+    operation: isMediaOperationName(operation) ? operation : "unknown",
     inputModalities: mediaModalityList(facts?.inputModalities),
     outputModalities: mediaModalityList(facts?.outputModalities),
     ...(stringValue(facts?.adapter)

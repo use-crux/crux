@@ -135,6 +135,11 @@ export const PAYLOAD_ATTRIBUTE_KEYS = [
   'delta',
   'body',
   'filter',
+  'data',
+  'bytes',
+  'base64',
+  'raw',
+  'nativeEvent',
 ] as const
 
 export type CruxObservabilityArtifactCaptureDecision =

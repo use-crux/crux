@@ -25,6 +25,13 @@ badge (`User`, `Tool`, or `Retrieval`) plus a tool/retriever identifier, but nev
 the guarded content. Catalog stores canonical boundary ids; runtime-only `from`
 filters are not Project Index facts.
 
+Authored `streamImage()` and `streamSpeech()` calls appear in the media Catalog
+as bounded media streams with safe modalities/options, source navigation,
+relations, support, and warnings. Their Runs presentation separates one logical
+operation from physical attempts and shows only scalar progress/timing/Safety
+facts. It never renders media, and links back to Catalog only from an exact
+recorded media definition identity.
+
 ## `withDevtools(options)`
 
 Creates a `CruxPlugin` that installs the canonical local observability transport.

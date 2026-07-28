@@ -113,6 +113,33 @@ describe("OpenAI image generation", () => {
     expectTypeOf(openai.generateImage).toBeFunction();
   });
 
+  it("preserves DALL-E 3 revised prompts on completed generation", async () => {
+    const raw = {
+      created: 1,
+      data: [
+        {
+          b64_json: "AQI=",
+          revised_prompt: "A quiet Amsterdam canal at blue hour",
+        },
+      ],
+    };
+    const { client, generate } = clientWith(raw);
+
+    const result = await createOpenAI(client).generateImage({
+      model: "dall-e-3",
+      prompt: "A quiet canal",
+    });
+
+    expect(generate.mock.calls[0]?.[0]).toMatchObject({
+      model: "dall-e-3",
+      stream: false,
+    });
+    expect(result.raw).toBe(raw);
+    expect(result.raw.data?.[0]?.revised_prompt).toBe(
+      "A quiet Amsterdam canal at blue hour",
+    );
+  });
+
   it("uses the native edit operation for byte references and a mask", async () => {
     const { client, generate, edit } = clientWith({
       created: 1,

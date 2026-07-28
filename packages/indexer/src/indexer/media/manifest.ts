@@ -7,8 +7,10 @@ export const mediaOperationNames = [
   "generate",
   "stream",
   "generateImage",
+  "streamImage",
   "transcribe",
   "generateSpeech",
+  "streamSpeech",
   "describe",
 ] as const satisfies readonly MediaOperationFacts["operation"][];
 
@@ -17,8 +19,10 @@ export const mediaOperationConfigArguments = Object.freeze({
   generate: 1,
   stream: 1,
   generateImage: 0,
+  streamImage: 0,
   transcribe: 0,
   generateSpeech: 0,
+  streamSpeech: 0,
   describe: 0,
 } as const satisfies Readonly<
   Record<MediaOperationFacts["operation"], number>
@@ -51,6 +55,32 @@ export const mediaUnsupportedCapabilities = Object.freeze([
   }),
 ]);
 
+/** Provider operations whose public adapter shape proves native execution. */
+export const mediaNativeCapabilities = Object.freeze([
+  Object.freeze({
+    adapter: "openai",
+    operations: Object.freeze(["streamImage", "streamSpeech"] as const),
+  }),
+  Object.freeze({
+    adapter: "google",
+    operations: Object.freeze(["streamImage", "streamSpeech"] as const),
+  }),
+]);
+
+/** Resolve compiler-proven native media support without inspecting payloads. */
+export function nativeMediaExecution(
+  adapter: string | undefined,
+  operation: MediaOperationFacts["operation"],
+): MediaOperationFacts["execution"] | undefined {
+  return mediaNativeCapabilities.some(
+    (capability) =>
+      capability.adapter === adapter &&
+      capability.operations.some((candidate) => candidate === operation),
+  )
+    ? "native"
+    : undefined;
+}
+
 export const mediaRelationDeclarations = [
   ["media.owner", "owner"],
   ["media.uses_prompt", "prompt"],
@@ -64,7 +94,7 @@ export const mediaRelationDeclarations = [
 
 /** Data-only first-party declaration shared by static and native projection lanes. */
 export const authoredMediaPrimitiveManifest = Object.freeze({
-  version: 3,
+  version: 4,
   definitions: Object.freeze([
     Object.freeze({
       kind: "media.operation",
@@ -105,4 +135,5 @@ export const authoredMediaPrimitiveManifest = Object.freeze({
     semantic: Object.freeze({ backend: "tsgo", mode: "shared-analyzer" }),
   }),
   unsupportedCapabilities: mediaUnsupportedCapabilities,
+  nativeCapabilities: mediaNativeCapabilities,
 });

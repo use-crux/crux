@@ -1,6 +1,6 @@
 import type { ExtractContext } from "../extensions";
 
-const policyOptions = [
+export const operationPolicyOptions = [
   ["guardrail.applies_to", "guardrails"],
   ["constraint.applies_to", "constraints"],
 ] as const;
@@ -10,7 +10,7 @@ export function operationPolicyReferences(
   ctx: ExtractContext,
   definitionId: string,
 ) {
-  return policyOptions.flatMap(([type, property]) =>
+  return operationPolicyOptions.flatMap(([type, property]) =>
     (ctx.config?.identifierArray(property) ?? []).map((fromVariable) => ({
       type,
       fromVariable,

@@ -7,6 +7,7 @@ import type {
   MediaOperationCatalogView,
 } from "./media-catalog";
 import type { EmbeddingConsumerCatalogView } from "./embedding-catalog";
+import { mediaOperationDeliveryBadge } from "./media-operation-presentation";
 
 type MediaCatalogView =
   | MediaOperationCatalogView
@@ -39,7 +40,9 @@ export function matchesMediaCatalogFilter(
       return (
         view.kind === "media.operation" &&
         (view.operation === "generateImage" ||
+          view.operation === "streamImage" ||
           view.operation === "generateSpeech" ||
+          view.operation === "streamSpeech" ||
           view.operation === "generate" ||
           view.operation === "stream")
       );
@@ -47,7 +50,9 @@ export function matchesMediaCatalogFilter(
       return view.kind === "media.operation" && view.operation === "transcribe";
     case "speech":
       return (
-        view.kind === "media.operation" && view.operation === "generateSpeech"
+        view.kind === "media.operation" &&
+        (view.operation === "generateSpeech" ||
+          view.operation === "streamSpeech")
       );
     case "native":
       return view.kind === "media.operation" && view.execution === "native";
@@ -76,8 +81,10 @@ export function mediaCatalogBadges(
       ...(view.warningCount > 0 ? [`${view.warningCount} warnings`] : []),
     ]);
   }
+  const delivery = mediaOperationDeliveryBadge(view.operation);
   return Object.freeze([
     view.operation,
+    ...(delivery ? [delivery] : []),
     view.execution === "unknown" ? "unknown support" : view.execution,
     ...view.inputModalities.map((modality) => `in:${modality}`),
     ...view.outputModalities.map((modality) => `out:${modality}`),

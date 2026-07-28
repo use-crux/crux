@@ -2,7 +2,10 @@ import type {
   MediaOperationAuthoredOptions,
   MediaOperationFacts,
 } from "@use-crux/core/project-index";
-import { mediaUnsupportedCapabilities } from "../media/manifest";
+import {
+  mediaUnsupportedCapabilities,
+  nativeMediaExecution,
+} from "../media/manifest";
 import type {
   SemanticAnalyzerNode,
   SemanticAnalyzerSourceFile,
@@ -28,14 +31,14 @@ export function semanticMediaOperationFacts(
   return {
     kind: "media.operation",
     operation,
-    ...(operation === "generateImage"
+    ...(operation === "generateImage" || operation === "streamImage"
       ? { outputModalities: ["image"] as const }
       : operation === "transcribe"
         ? {
             inputModalities: ["audio"] as const,
             outputModalities: ["text"] as const,
           }
-        : operation === "generateSpeech"
+        : operation === "generateSpeech" || operation === "streamSpeech"
           ? {
               inputModalities: ["text"] as const,
               outputModalities: ["audio"] as const,
@@ -46,7 +49,7 @@ export function semanticMediaOperationFacts(
             }),
     ...optional("adapter", adapter),
     ...optional("model", stringProperty(config, "model", view)),
-    execution: "unknown",
+    execution: nativeMediaExecution(adapter, operation) ?? "unknown",
     ...(Object.keys(authoredOptions).length ? { authoredOptions } : {}),
   };
 }

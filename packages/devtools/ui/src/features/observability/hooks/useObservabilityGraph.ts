@@ -34,7 +34,7 @@ import type {
 } from "@/types";
 import type { SpanNode } from "@/features/observability/lib/span-tree";
 import { orderRunDetailChildren } from "@/features/observability/lib/run-detail-order";
-import { hasLocalRedaction } from "@/features/run-detail/lib/redaction-evidence";
+import { hasLocalRedaction } from "@/features/observability/lib/redaction-evidence";
 import { observabilityService } from "../services/observability";
 import {
   observabilityEventIds,

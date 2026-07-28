@@ -117,17 +117,23 @@ describe('native semantic shared analyzer', () => {
   it('routes authored media through one complete shared analysis without partial direct facts', async () => {
     const root = await fixtureRoot()
     await writeTsconfig(root)
-    await linkWorkspacePackages(root, ['ai', 'core'])
+    await linkWorkspacePackages(root, ['ai', 'core', 'google', 'openai'])
     const file = join(root, 'src/media.ts')
     await writeFile(
       file,
       `
         import { generate, generateImage as image } from '@use-crux/ai'
         import { prompt, router } from '@use-crux/core'
+        import { createGoogle } from '@use-crux/google'
+        import { createOpenAI } from '@use-crux/openai'
         import type { ImageModel, LanguageModel } from 'ai'
 
         declare const imageModel: ImageModel
         declare const languageModel: LanguageModel
+        declare const googleClient: Parameters<typeof createGoogle>[0]
+        declare const openAIClient: Parameters<typeof createOpenAI>[0]
+        const google = createGoogle(googleClient)
+        const openai = createOpenAI(openAIClient)
         const render = image
         const visionPrompt = prompt({ id: 'vision-prompt' })
         const route = router({
@@ -139,6 +145,12 @@ describe('native semantic shared analyzer', () => {
           model: imageModel, n: 2,
         }
         export const cover = render(options)
+        export const preview = openai.streamImage({
+          model: 'gpt-image-1', prompt: 'private stream', n: 1,
+        })
+        export const narration = google.streamSpeech({
+          model: 'gemini-3.1-flash-tts-preview', text: 'private speech',
+        })
         export const unsafe = generate(visionPrompt, { model: route, messages: [{
           role: 'user', content: [{ type: 'image', source: {
             type: 'asset-ref', ref: { uri: 'private-ref' }

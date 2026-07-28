@@ -26,7 +26,6 @@ export {
   safetySessionMemoryWriteGuard,
   safetySessionToolDefinitionGuard,
   safetySessionToolDescriptionGuard,
-  guardSafetySessionOutputMedia,
   guardSafetySessionOutputOperationText,
   guardSafetySessionStreamCompletion,
   openSafetySessionStructuredStream,
@@ -38,6 +37,11 @@ export {
   safetyRequiresLanguageStepTransform,
   safetySessionStreamCommitPlan,
 } from "./session-bridge";
+
+export {
+  guardSafetySessionOutputMedia,
+  safetyEnforcesOutputMedia,
+} from "./session-media";
 
 export type {
   FeedbackIngress,

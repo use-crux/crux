@@ -6,7 +6,7 @@ import {
   optionalWorkspaceSnapshotCount,
   workspaceSnapshotErrorCode,
   type WorkspaceSnapshotOperation,
-} from "@/features/workspace-snapshot/contract";
+} from "@/shared/lib/workspace-snapshot";
 
 /** Input for the closed snapshot branch of the resource-activity adapter. */
 export interface WorkspaceSnapshotActivityInput {

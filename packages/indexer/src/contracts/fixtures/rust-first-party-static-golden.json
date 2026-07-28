@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 829,
-    "definitions": 138,
-    "relations": 7,
-    "diagnostics": 25,
-    "dependencies": 1618,
-    "canonicalBytes": 289214
+    "files": 845,
+    "definitions": 142,
+    "relations": 6,
+    "diagnostics": 28,
+    "dependencies": 1644,
+    "canonicalBytes": 295157
   },
   "files": [
     {
@@ -1788,11 +1788,11 @@
     },
     {
       "file": "packages/core/__type_tests__/completed-transcription-safety-options.ts",
-      "sha256": "d8d48d280ddb021262adc4fe7ca22a9dd76c6daafb09c812acbf47a0407eaea4",
-      "bytes": 2931,
+      "sha256": "a49336dcea44f905fa21751d80ba66634857a1dd8e5239e00f3f2c8db0d7a471",
+      "bytes": 3027,
       "definitions": 2,
-      "relations": 2,
-      "diagnostics": 1,
+      "relations": 1,
+      "diagnostics": 2,
       "dependencies": 2
     },
     {
@@ -2300,6 +2300,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/streaming-media-contracts.ts",
+      "sha256": "b2c5c93528198ecc73fce956f60490c812caabde607b759e8438a890722665c6",
+      "bytes": 3397,
+      "definitions": 4,
+      "relations": 0,
+      "diagnostics": 2,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/structured-output-capabilities-contract.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2427,12 +2436,12 @@
     },
     {
       "file": "packages/core/src/adapter/provider-runtime/define.ts",
-      "sha256": "e75db5af2cb89f3e6a598b746b95a6799541726950b447187fcdf8b2213633eb",
-      "bytes": 339,
+      "sha256": "fbda6a5a4e3d9d0fd5086df1c33c351ba3af5d99b4c9f05a3c8c1338ce99186a",
+      "bytes": 415,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/core/src/adapter/provider-runtime/index.ts",
@@ -3965,6 +3974,15 @@
       "dependencies": 8
     },
     {
+      "file": "packages/core/src/safety/output/media.ts",
+      "sha256": "403e9d965bddd8d59fb8142ed3ced36ec55972821d4c379fe5a3f1e443ea1842",
+      "bytes": 116,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/src/safety/output/terminal.ts",
       "sha256": "68514202feb2c685b172e3001ff4d4d05a23fbd278ade618440cd17d9adfe87a",
       "bytes": 276,
@@ -3981,6 +3999,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/safety/session-media.ts",
+      "sha256": "a1ec9640a2d60ee58aca67720652f5d9a4740ce3869c78d97a76865f20474eba",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/safety/stream/structured-engine.ts",
@@ -4397,6 +4424,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/devtools/ui/src/features/observability/lib/redaction-evidence.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/devtools/ui/src/features/run-detail/components/ContextComposition.tsx",
       "sha256": "64416ca5984028a4c571f298ec7e6eaf945cdbb6e5708f084c6b16c15c13a64d",
       "bytes": 151,
@@ -4443,12 +4479,12 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/RedactionEvidence.tsx",
-      "sha256": "7d70ede890ba448d8d646a1b0a6bafce9a818844a79f9cfa75bf3f5b6fc3e97c",
-      "bytes": 147,
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 0
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/RoutingReceiptReport.tsx",
@@ -4488,12 +4524,12 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SpanInspector.tsx",
-      "sha256": "d81e618e65cafa571ae43a3bcd2e98c5d2333825b52dda5b5482670118181b6a",
-      "bytes": 656,
+      "sha256": "0eb3ec387f38bf953787e68599b8a6dda84ec3e83ae31915d8189142cac9207f",
+      "bytes": 576,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 6
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SpanTree.tsx",
@@ -4533,15 +4569,6 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/lib/project-health.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "packages/devtools/ui/src/features/run-detail/lib/redaction-evidence.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4694,6 +4721,42 @@
       "dependencies": 2
     },
     {
+      "file": "packages/google/src/image-streaming-base64.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/src/image-streaming-options.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/src/image-streaming-source.ts",
+      "sha256": "f2b70dc2000a528d2d2e9fe63a4ad463e999add9901f3c0a425c95a2ea30eb60",
+      "bytes": 122,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/google/src/image-streaming.ts",
+      "sha256": "f167d3c886fed363efe82aad20616193fc28f2f2b40cf2fb8940fd32e639d5f6",
+      "bytes": 178,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
       "file": "packages/google/src/image-support.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -4749,12 +4812,12 @@
     },
     {
       "file": "packages/google/src/native.ts",
-      "sha256": "d72d0992dfc8c4d77a6030ffa6d9dc6f7862d91dccabc33f8ef96a9094519040",
-      "bytes": 517,
+      "sha256": "af669611b77125bdb44525479bb1c7249334ca3c971ce70cbbc02df3902b9c3e",
+      "bytes": 614,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 10
+      "dependencies": 12
     },
     {
       "file": "packages/google/src/request.ts",
@@ -4773,6 +4836,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/google/src/speech-streaming-source.ts",
+      "sha256": "887225f5bc3c30bf0e8182ff48de348977fff7cad10b90cd5485d5dc74ebe215",
+      "bytes": 106,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/google/src/speech-streaming.ts",
+      "sha256": "2f32e5221c591cb39bd50aa752592e69ea190a0bccfcb6868ddd6a15d3b9b3fa",
+      "bytes": 162,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/google/src/speech.ts",
@@ -5315,13 +5396,22 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/src/indexer/media/primitive-manifest.ts",
-      "sha256": "b6eeea4de2d1084af8706c00fd6e8f1ae26e44112a42fd53a3eb5f68061408e3",
-      "bytes": 256,
+      "file": "packages/indexer/src/indexer/media/operation-facts.ts",
+      "sha256": "dabd91e4ceb5e8be19fa82ec07dae4db7ad40d96f82ad2df3d4703fba311d985",
+      "bytes": 123,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/src/indexer/media/primitive-manifest.ts",
+      "sha256": "79122a8370713f827809485427fbe33f28426aff979f8e073cbc3b7e400a7d39",
+      "bytes": 319,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
     },
     {
       "file": "packages/indexer/src/indexer/merge.ts",
@@ -5397,12 +5487,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/relations/index.ts",
-      "sha256": "0fb078e737b9f0e3c7012c096e9d5f0ef6aefee154126b6a8748d8cbd89e83af",
-      "bytes": 328,
+      "sha256": "1236e259826ce31aecf31872839114fbfec23c917ad31b763f2558b9945b07af",
+      "bytes": 402,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/indexer/src/indexer/relations/runtime-use-targets.ts",
@@ -5739,12 +5829,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/media-facts.ts",
-      "sha256": "6c62cbc8ebf292941bd4476e099a74de3720b619e506b36d27813fbd1d980208",
-      "bytes": 581,
+      "sha256": "e8868a119f937f60aa3aee4e521c651048829a3530961c613bb0296897a10808",
+      "bytes": 653,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 9
     },
     {
       "file": "packages/indexer/src/indexer/semantic/media-lints.ts",
@@ -5754,6 +5844,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/media-policy-evidence.ts",
+      "sha256": "3704d0b2ea20630297b1eb7721e43d8bfc5b8e6068f29e0758027d862282ccff",
+      "bytes": 409,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
     },
     {
       "file": "packages/indexer/src/indexer/semantic/model/prompt-text-identity.ts",
@@ -5802,12 +5901,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/model/target-resolution.ts",
-      "sha256": "bab1a7e0a16ad4d151373e84e8f6664d51de129ea68d96b69fced0115866d447",
-      "bytes": 445,
+      "sha256": "5568162766ac32c28b083b45bc8470110b401de3f009fbb1c948753def782115",
+      "bytes": 524,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/indexer/src/indexer/semantic/patch.ts",
@@ -6854,6 +6953,33 @@
       "dependencies": 0
     },
     {
+      "file": "packages/openai/src/image-streaming-options.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/src/image-streaming-source.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/src/image-streaming.ts",
+      "sha256": "ee5ca0f2418db6f4fa6a015677e92e1c039691c75bb12d8c456751b3cdd3d718",
+      "bytes": 178,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
       "file": "packages/openai/src/index.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -6900,12 +7026,12 @@
     },
     {
       "file": "packages/openai/src/native.ts",
-      "sha256": "21427fe70cfd919a59533ef985dbc0b299e9cef1dba25891eea594b7e80b0fb1",
-      "bytes": 464,
+      "sha256": "7460b21c9e04b00d99259481859566a80d72629e2d6dc705f2cc32117f9066e2",
+      "bytes": 561,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 9
+      "dependencies": 11
     },
     {
       "file": "packages/openai/src/request.ts",
@@ -6924,6 +7050,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/openai/src/speech-streaming-source.ts",
+      "sha256": "0d2206508dd99b15568098393ca761c1b523153f9ee205c7768d8d714f2b71cd",
+      "bytes": 106,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/openai/src/speech-streaming.ts",
+      "sha256": "2e03f7c70d717de6ddb3e8c3a5960be15ae417ec9b3f6637dffb9f48ba9b7608",
+      "bytes": 162,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/openai/src/speech.ts",

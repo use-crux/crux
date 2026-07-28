@@ -17,6 +17,10 @@ import {
   bindProviderCompletedOperations,
   type ProviderCompletedOperationFactory,
 } from "./completed-operations";
+import {
+  bindProviderStreamingOperations,
+  type ProviderStreamingOperationFactories,
+} from "./streaming-operations";
 import { toolModelIngressDialect } from "../tool/model-ingress-port";
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
@@ -27,7 +31,8 @@ type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
   object,
   ProviderCompletedOperationFactory<unknown> | undefined,
   ProviderCompletedOperationFactory<unknown> | undefined,
-  ProviderCompletedOperationFactory<unknown> | undefined
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderStreamingOperationFactories<unknown> | undefined
 >;
 
 /**
@@ -63,6 +68,7 @@ export function createLoopOwnedProviderRuntime(
           portForBoundLoop(spec.id, loop, loop.bind(client, { id: spec.id })),
         ),
         ...bindProviderCompletedOperations(spec.id, client, spec),
+        ...bindProviderStreamingOperations(spec.id, client, spec.streaming),
       }),
     spec.extend,
   );

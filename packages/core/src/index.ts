@@ -299,7 +299,12 @@ export type {
   GenerateSpeech,
   GenerateSpeechOptions,
   GenerateSpeechResult,
+  SpeechStreamEvent,
+  StreamSpeech,
+  StreamSpeechOptions,
+  StreamSpeechResult,
 } from "./speech";
+export type { StreamingOperationResult } from "./adapter/streaming-operation";
 
 // Request-scoped deferred work
 export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
@@ -637,12 +642,16 @@ export type {
   GenerateImageOptions,
   GenerateImageResult,
   GenerateImageResultFields,
+  ImageStreamEvent,
   ImagePrompt,
   ImagePromptContent,
   ImagePromptLoweringContext,
   LoweredImagePrompt,
   NativeGeneratedImage,
   NoImageGeneratedError,
+  StreamImage,
+  StreamImageOptions,
+  StreamImageResult,
 } from "./generation";
 export type {
   CompletedOperationResult,

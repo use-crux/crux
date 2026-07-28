@@ -51,7 +51,7 @@ import {
   shortModelId,
   tokensPerSecond,
 } from "../lib/span-detail-inspection";
-import { localRedactionEvidence } from "../lib/redaction-evidence";
+import { localRedactionEvidence } from "@/features/observability/lib/redaction-evidence";
 
 type Relation = ObservabilityRunDetailNode["relations"][number];
 type Diagnostic = ObservabilityRunDetailNode["diagnostics"][number];

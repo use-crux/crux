@@ -22,9 +22,9 @@ pub(crate) fn media_operation_facts(
         .and_then(object_value);
     let proven_input = media_modalities(config, context);
     let (input, output) = match parts.callee_name {
-        "generateImage" => (None, Some(json!(["image"]))),
+        "generateImage" | "streamImage" => (None, Some(json!(["image"]))),
         "transcribe" => (Some(json!(["audio"])), Some(json!(["text"]))),
-        "generateSpeech" => (Some(json!(["text"])), Some(json!(["audio"]))),
+        "generateSpeech" | "streamSpeech" => (Some(json!(["text"])), Some(json!(["audio"]))),
         "describe" => (
             (!proven_input.is_empty()).then(|| json!(proven_input)),
             Some(json!(["text"])),
@@ -43,7 +43,8 @@ pub(crate) fn media_operation_facts(
     if let Some(output) = output {
         facts.insert("outputModalities".into(), output);
     }
-    if let Some(adapter) = adapter_for_module(parts.callee_module_specifier) {
+    let adapter = adapter_for_module(parts.callee_module_specifier);
+    if let Some(adapter) = adapter {
         facts.insert("adapter".into(), Value::String(adapter.into()));
     }
     if let Some(model) = config.and_then(|value| direct_string_property(value, "model")) {
@@ -51,10 +52,14 @@ pub(crate) fn media_operation_facts(
     }
     facts.insert(
         "execution".into(),
-        config
-            .and_then(|value| direct_string_property(value, "execution"))
-            .filter(|value| matches!(value.as_str(), "native" | "composed" | "unknown"))
-            .map(Value::String)
+        native_execution(adapter, parts.callee_name)
+            .map(|value| Value::String(value.into()))
+            .or_else(|| {
+                config
+                    .and_then(|value| direct_string_property(value, "execution"))
+                    .filter(|value| matches!(value.as_str(), "native" | "composed" | "unknown"))
+                    .map(Value::String)
+            })
             .unwrap_or_else(|| json!("unknown")),
     );
     if let Some(options) = config.and_then(|value| authored_options(value, context)) {
@@ -114,6 +119,13 @@ fn adapter_for_module(module_specifier: Option<&str>) -> Option<&'static str> {
         Some("@use-crux/convex") => Some("convex"),
         _ => None,
     }
+}
+
+fn native_execution(adapter: Option<&str>, operation: &str) -> Option<&'static str> {
+    matches!(adapter, Some("openai" | "google"))
+        .then_some(operation)
+        .filter(|operation| matches!(*operation, "streamImage" | "streamSpeech"))
+        .map(|_| "native")
 }
 
 fn media_modalities(

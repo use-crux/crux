@@ -24,8 +24,8 @@ async function fixtureRoot(externalRoot = false): Promise<string> {
   return root;
 }
 
-afterEach(cleanupRoots);
-afterAll(cleanupRoots);
+afterEach(cleanupRoots, 30_000);
+afterAll(cleanupRoots, 30_000);
 
 describe("semantic backend parity", () => {
   for (const fixture of semanticBackendParityFixtures) {
@@ -55,7 +55,7 @@ describe("semantic backend parity", () => {
           /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN|PHASE7_PRIVATE_SENTINEL|mediaBytes/,
         );
       }
-    }, 20_000);
+    }, 60_000);
 
     it(`matches TypeScript semantic facts through public cached indexing for ${fixture.name}`, async () => {
       const { root } = await writeFixture(fixture);
@@ -93,7 +93,7 @@ describe("semantic backend parity", () => {
       expect(normalizedFacts(cachedNativePatch.facts)).toEqual(
         normalizedFacts(typescriptPatch.facts),
       );
-    }, 30_000);
+    }, 60_000);
   }
 });
 

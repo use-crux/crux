@@ -30,8 +30,9 @@ Create an adapter bound to an OpenAI client.
 
 OpenAI Chat content support maps image parts to `image_url`, wav/mp3 `file` parts with data sources to `input_audio`, and supported file data/provider-file sources to OpenAI file parts. Unsupported model/content combinations throw after prompt resolution and before the client or custom transport runs. Assistant/user media returned in provider content arrays decodes back into canonical `ContentPart[]`. Chat Completions tool messages remain text-only; when a tool returns media, Crux sends the correlated text tool result followed by native media in a user content part on the same next turn.
 
-The package also exports native `generateImage()`, `transcribe()`, and
-`generateSpeech()` operations. Translation is selected through the
+The package also exports native `generateImage()`, `streamImage()`,
+`transcribe()`, `generateSpeech()`, and `streamSpeech()` operations.
+Translation is selected through the
 transcription task union; requested timing/detail must match the selected
 endpoint. Returned image/audio assets are usable immediately and are never
 persisted implicitly. Typed `extra` records expose endpoint-specific controls.
@@ -50,6 +51,8 @@ unguarded; see the [content-primitive matrix](/docs/reference/crux-core/safety-c
 | ---------------------------- | ------------------------------------------------------------------------------ |
 | `.generate(prompt, options)` | Execute a prompt via `chat.completions.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                      |
+| `.streamImage(options)`      | Stream genuine Images API preview/final events                                 |
+| `.streamSpeech(options)`     | Stream genuine Speech API response-body bytes                                  |
 | `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with OpenAI params                              |
 | `.retrievalModel(config)`    | Bind OpenAI generation to core retrieval recipe steps                          |
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                          |
@@ -154,6 +157,51 @@ There is deliberately no `raw` on a managed stream: a provider stream resolves
 before terminal Safety and describes only one attempt, so exposing it would
 bypass guardrail holds, structured occurrence gating, commit gates, and
 validation retry.
+
+### `adapter.streamImage(options)`
+
+Start one finite, eagerly executing Images API stream. Initial model support is:
+
+- `gpt-image-1`
+- `gpt-image-1-mini`
+- `gpt-image-1.5`
+- `gpt-image-2`
+- `gpt-image-2-2026-04-21`
+- `chatgpt-image-latest`
+
+The request is image-generation-only and single-output in this release.
+Omitting `n` means one; `n !== 1`, edits/references/masks, unsupported portable
+controls, and DALL·E models fail capability preflight before SDK I/O.
+`extra.partial_images` accepts `0` through `3`.
+
+OpenAI partial-image events become complete `image-preview` replacements at
+`outputIndex: 0`; the native partial index is the zero-based sequence. The
+final `image` event shares its guarded asset with `completion.image`.
+`completion.raw` is the exact `ImageGenCompletedEvent`, including usage. It
+does not contain or synthesize DALL·E 3's completed-only `revised_prompt`.
+
+### `adapter.streamSpeech(options)`
+
+Start one finite Speech API response-body stream. Initial model support is:
+
+- `tts-1`
+- `tts-1-hd`
+- `gpt-4o-mini-tts`
+- `gpt-4o-mini-tts-2025-12-15`
+
+The adapter fixes native `stream_format: "audio"` and publishes each response
+body chunk as an ordered `audio-delta`. Portable `outputFormat` selects `mp3`,
+`opus`, `aac`, `flac`, `wav`, or raw `pcm`; the final `audio` asset is assembled
+from those retained chunks. `completion.raw` is the exact SDK `Response`.
+
+Both bounded streams share Core's replay, cancellation, timeout, Safety, and
+routing laws. Every `fullStream` reader replays the same canonical events.
+`cancel(reason)` or `abortSignal` stops the logical operation. Enforcing
+output-media Safety guards complete previews and holds incomplete deltas until
+the final asset passes; report mode may leave deltas live. The first public
+preview or live delta commits the selected route, so later provider failure is
+terminal. Crux never persists previews, chunks, or completion media; persist
+the final asset explicitly.
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

@@ -133,6 +133,67 @@ warnings stay provider-owned and unguarded. See
 [Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
 for the exact matrix and strip/escalation rules.
 
+## Bounded media streams
+
+`streamImage()` and `streamSpeech()` are genuine finite provider operations,
+not text `stream()` and not completed assets divided into artificial chunks.
+They execute eagerly and return:
+
+```ts
+interface StreamingOperationResult<TEvent, TResult> {
+  readonly runId: string;
+  readonly _meta: { readonly traceId: string; readonly spanId: string };
+  readonly fullStream: AsyncIterable<TEvent>;
+  readonly completion: Promise<TResult>;
+  cancel(reason?: unknown): void;
+}
+```
+
+`completion` is the same canonical result family as the completed operation:
+`GenerateImageResult` or `GenerateSpeechResult`. Provider `raw`, metadata, and
+warnings retain their provider-specific terminal types. Final `image`/`audio`
+event assets are the same objects exposed by `completion`.
+
+### Image events
+
+| Event           | Fields                                             | Meaning                                                                 |
+| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `start`         | —                                                  | Core-owned logical start.                                               |
+| `image-preview` | `image`, `outputIndex`, `sequence`                 | Complete provisional replacement for one output.                       |
+| `image-delta`   | `data`, `mediaType`, `outputIndex`, `sequence`     | Append-only bytes that may not be independently renderable.             |
+| `image`         | `image`, `outputIndex`                             | Final validated asset at its original provider output index.            |
+| `finish`        | —                                                  | Successful logical completion; failures throw instead of emitting this. |
+
+Providers expose only framing they genuinely receive. OpenAI currently emits
+complete preview replacements for one output; Google emits append-only image
+deltas and may assemble multiple densely indexed outputs.
+
+### Speech events
+
+| Event         | Fields                        | Meaning                                                                 |
+| ------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `start`       | —                             | Core-owned logical start.                                               |
+| `audio-delta` | `data`, `mediaType`, `sequence` | Append-only provider audio bytes.                                       |
+| `audio`       | `audio`                       | Final validated asset shared with `completion.audio`.                   |
+| `finish`      | —                             | Successful logical completion; failures throw instead of emitting this. |
+
+Each `fullStream` iterator starts at the same retained `start` event and
+replays the same event objects. Returning from one iterator detaches only that
+reader. `cancel(reason)` or `abortSignal` stops the logical operation; all
+current and later readers plus `completion` fail with the same normalized error
+identity.
+
+Complete previews pass output-media Safety before publication. Incomplete
+deltas are not independently judged: enforcing output-media policies hold them
+until the final asset passes, while report mode may publish them live. A
+visible preview or live delta commits routing. Held or stripped provisional
+media does not, so retry/fallback remains possible until the first public
+provider event. After commitment, provider failure is terminal.
+
+Replay is process-local and bounded by the operation lifetime. Crux does not
+cache or persist stream events, chunks, or final media; store the completed
+asset explicitly after success.
+
 ## Privacy
 
 Observability uses a stricter descriptor projection than `contentText()`. At every capture level it excludes bytes, base64/data URLs, bearer refs, provider file IDs, filenames, signed URL details, and native media payloads. Local text/transcript capture defaults on and production export defaults off; neither mode enables raw media.

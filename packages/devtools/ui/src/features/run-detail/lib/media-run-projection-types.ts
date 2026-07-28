@@ -43,6 +43,52 @@ export type MediaRunAttempt = Readonly<{
   provider?: string;
   model?: string;
   durationMs?: number;
+  role?: "attempt";
+  attempt?: number;
+  committed?: boolean;
+  terminal?: MediaStreamTerminal;
+  previewCount?: number;
+  deltaCount?: number;
+  finalCount?: number;
+  byteCount?: number;
+  mediaTypes?: readonly string[];
+}>;
+
+export type MediaStreamTerminal = "ok" | "error" | "cancelled" | "timeout";
+
+export type MediaStreamSafetyOccurrence = Readonly<{
+  phase: "preview" | "final";
+  mode: "enforce" | "report" | "unknown";
+  action: "allow" | "strip" | "block" | "warn" | "unknown";
+  mediaPartType?: "image" | "audio" | "video" | "file";
+  outputIndex?: number;
+  sequence?: number;
+}>;
+
+/** Closed, payload-free view of one logical bounded media stream. */
+export type BoundedMediaStreamRun = Readonly<{
+  operation: "streamImage" | "streamSpeech";
+  role: "logical";
+  route?: string;
+  committed: boolean;
+  attemptCount: number;
+  previewCount: number;
+  deltaCount: number;
+  finalCount: number;
+  byteCount: number;
+  mediaTypes: readonly string[];
+  firstPublicEventMs?: number;
+  durationMs?: number;
+  terminal: MediaStreamTerminal;
+  safety: Readonly<{
+    occurrences: readonly MediaStreamSafetyOccurrence[];
+    blocked: boolean;
+    deltaDelivery:
+      | "live"
+      | "held-released"
+      | "held-discarded"
+      | "not-observed";
+  }>;
 }>;
 
 export type TranscriptSegmentView = Readonly<{
@@ -108,11 +154,12 @@ export type MediaCatalogJoin =
     }>
   | Readonly<{
       status: "unavailable";
-      reason: "missing-runtime-join";
+      reason: "missing-runtime-join" | "ambiguous-runtime-join";
     }>;
 
 export type MediaRunView = Readonly<{
   summary: MediaRunSummary;
+  boundedStream?: BoundedMediaStreamRun;
   inputs: readonly SafeRunMediaDescriptor[];
   outputs: readonly SafeRunMediaDescriptor[];
   attempts: readonly MediaRunAttempt[];
@@ -141,4 +188,9 @@ export type GraphLikeRecord = Readonly<{
   attributes?: Record<string, unknown>;
   preview?: unknown;
   artifactId?: string;
+  definitionRefs?: readonly Readonly<{
+    id: string;
+    kind: string;
+    role?: string;
+  }>[];
 }>;

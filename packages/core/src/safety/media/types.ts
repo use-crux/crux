@@ -1,11 +1,13 @@
-import type { ContentPart } from '../../types/content'
+import type { ContentPart } from "../../types/content";
 
 /** Canonical Safety targets whose subjects are individual media parts. */
-export type MediaSafetyTargetId = 'model.input.media' | 'model.output.media'
+export type MediaSafetyTargetId = "model.input.media" | "model.output.media";
 
 /** Narrow an unknown boundary id to the canonical media target vocabulary. */
-export function isMediaSafetyTargetId(value: unknown): value is MediaSafetyTargetId {
-  return value === 'model.input.media' || value === 'model.output.media'
+export function isMediaSafetyTargetId(
+  value: unknown,
+): value is MediaSafetyTargetId {
+  return value === "model.input.media" || value === "model.output.media";
 }
 
 /**
@@ -13,7 +15,7 @@ export function isMediaSafetyTargetId(value: unknown): value is MediaSafetyTarge
  *
  * Narrow `type` to access the canonical image, audio, video, or file fields.
  */
-export type MediaPart = Exclude<ContentPart, { readonly type: 'text' }>
+export type MediaPart = Exclude<ContentPart, { readonly type: "text" }>;
 
 /**
  * Stable location of a canonical media part before any enforcing strip.
@@ -24,56 +26,78 @@ export type MediaPart = Exclude<ContentPart, { readonly type: 'text' }>
  */
 export type MediaPartOrigin =
   | {
-      readonly kind: 'message'
-      readonly messageIndex: number
-      readonly partIndex: number
+      readonly kind: "message";
+      readonly messageIndex: number;
+      readonly partIndex: number;
     }
   | {
-      readonly kind: 'tool-result'
-      readonly toolName: string
-      readonly toolCallId?: string
-      readonly partIndex: number
+      readonly kind: "tool-result";
+      readonly toolName: string;
+      readonly toolCallId?: string;
+      readonly partIndex: number;
     }
   | {
-      readonly kind: 'step'
-      readonly stepIndex: number
-      readonly partIndex: number
+      readonly kind: "step";
+      readonly stepIndex: number;
+      readonly partIndex: number;
     }
   | {
-      readonly kind: 'operation'
-      readonly operation: 'generateImage'
-      readonly phase: 'input'
-      readonly field: 'images'
-      readonly partIndex: number
+      readonly kind: "operation";
+      readonly operation: "generateImage";
+      readonly phase: "input";
+      readonly field: "images";
+      readonly partIndex: number;
     }
   | {
-      readonly kind: 'operation'
-      readonly operation: 'generateImage'
-      readonly phase: 'input'
-      readonly field: 'mask'
-      readonly partIndex: 0
+      readonly kind: "operation";
+      readonly operation: "generateImage";
+      readonly phase: "input";
+      readonly field: "mask";
+      readonly partIndex: 0;
     }
   | {
-      readonly kind: 'operation'
-      readonly operation: 'generateImage'
-      readonly phase: 'output'
-      readonly field: 'images'
-      readonly partIndex: number
+      readonly kind: "operation";
+      readonly operation: "generateImage";
+      readonly phase: "output";
+      readonly field: "images";
+      readonly partIndex: number;
     }
   | {
-      readonly kind: 'operation'
-      readonly operation: 'generateSpeech'
-      readonly phase: 'output'
-      readonly field: 'audio'
-      readonly partIndex: 0
+      readonly kind: "operation";
+      readonly operation: "generateSpeech";
+      readonly phase: "output";
+      readonly field: "audio";
+      readonly partIndex: 0;
     }
   | {
-      readonly kind: 'operation'
-      readonly operation: 'transcribe'
-      readonly phase: 'input'
-      readonly field: 'audio'
-      readonly partIndex: 0
+      readonly kind: "operation";
+      readonly operation: "streamImage";
+      readonly phase: "preview";
+      readonly field: "images";
+      readonly outputIndex: number;
+      readonly sequence: number;
     }
+  | {
+      readonly kind: "operation";
+      readonly operation: "streamImage";
+      readonly phase: "final";
+      readonly field: "images";
+      readonly outputIndex: number;
+    }
+  | {
+      readonly kind: "operation";
+      readonly operation: "streamSpeech";
+      readonly phase: "final";
+      readonly field: "audio";
+      readonly outputIndex: 0;
+    }
+  | {
+      readonly kind: "operation";
+      readonly operation: "transcribe";
+      readonly phase: "input";
+      readonly field: "audio";
+      readonly partIndex: 0;
+    };
 
 /**
  * A canonical media part together with its stable pre-write-back origin.
@@ -84,15 +108,15 @@ export type MediaPartOrigin =
  */
 export interface MediaPartSubject {
   /** Canonical image, audio, video, or file part under evaluation. */
-  readonly part: MediaPart
+  readonly part: MediaPart;
   /** Stable location in the canonical surface under evaluation. */
-  readonly origin: MediaPartOrigin
+  readonly origin: MediaPartOrigin;
 }
 
 /** Privacy-safe location recorded for an evaluated canonical media part. */
 export interface MediaPartLocation {
   /** Stable origin without a media source, filename, URL, or payload. */
-  readonly origin: MediaPartOrigin
+  readonly origin: MediaPartOrigin;
   /** Safe canonical discriminant; never the media source. */
-  readonly partType: MediaPart['type']
+  readonly partType: MediaPart["type"];
 }

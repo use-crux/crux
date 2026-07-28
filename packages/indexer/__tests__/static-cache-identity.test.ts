@@ -48,12 +48,12 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v78");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v77");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v79");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v78");
   });
 
-  it("takes the Workspace snapshot relation semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v34");
+  it("takes the bounded media streaming semantic epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v35");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

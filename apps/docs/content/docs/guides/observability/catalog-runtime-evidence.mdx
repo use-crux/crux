@@ -19,7 +19,10 @@ The section adapts to what Crux can truthfully prove for the definition's kind:
 
 - **Direct activity**: the runtime recorded this definition's exact authored id on runs. You get status, timing, delivery health, and **View N runs**.
 - **Contributor**: the definition (a knowledge base, tool policy, or structural child) contributed to runs it does not own. Catalog shows _Referenced by N runs_, or reports the indexed parent's activity while stating the child was not independently observed.
-- **Runtime-observed, unjoined**: the kind's primitives appear in Runs (deferred work, media operations, ingest sources), but records do not carry this authored definition's id. Catalog names the relevant primitives and withholds per-definition counts rather than guessing.
+- **Runtime-observed, unjoined**: the kind's primitives appear in Runs
+  (deferred work, media operations, ingest sources), but normal runtime records
+  cannot observe the authored local identity. Catalog names the relevant
+  primitives and withholds per-definition counts rather than guessing.
 - **Eval-primary**: scorers correlate through the Eval join; a live `scoring.judge` span still surfaces when an authored `judge({ id })` ran.
 - **No runtime**: static or declarative definitions show no fabricated counts and no dead links.
 
@@ -47,6 +50,13 @@ Suppressed rows remain visibly tagged and show the finding source separately
 from the directive location, scope, and optional reason. A reasonless directive
 still renders as **no reason recorded**. If no Project Index is available, the
 context is absent rather than treated as a run error.
+
+Bounded media Runs follow the same exact-identity rule. If the runtime genuinely
+holds and records one `media.operation` `DefinitionRef`, Run Detail can navigate
+to that Catalog source. Most direct `streamImage()`/`streamSpeech()` call sites
+do not expose their compiler-local identity at runtime, so the link honestly
+says unavailable. Conflicting exact refs are ambiguous. Operation name,
+provider, model, span name, and source coordinates are never fuzzy join keys.
 
 Catalog Health uses the same active-versus-suppressed distinction. Its badges,
 severity, rule, affected-definition, and default verdict counts are active-only,

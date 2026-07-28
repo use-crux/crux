@@ -8,6 +8,8 @@
  */
 
 import { resolveMediaCatalogJoin } from "./media-run-catalog-join";
+import { projectBoundedMediaStreamRun } from "./bounded-media-stream-run";
+import { projectMediaRunAttempts } from "./media-run-attempts";
 import { projectMediaLineage } from "./media-run-lineage";
 import {
   asRecord,
@@ -48,7 +50,6 @@ export function projectMediaRunView(
   records: readonly GraphLikeRecord[],
   options: Readonly<{
     exportMode?: boolean;
-    catalogJoinId?: string;
     selectedSpanId?: string;
   }> = {},
 ): MediaRunView | undefined {
@@ -82,42 +83,18 @@ export function projectMediaRunView(
     scopedArtifacts.filter((artifact) => artifact.kind === "output"),
   );
 
-  const attempts = Object.freeze(
-    records
-      .filter(
-        (record) =>
-          record.type === "span:start" &&
-          typeof record.spanId === "string" &&
-          typeof record.primitive === "string" &&
-          attemptSpanIds.has(record.spanId),
-      )
-      .map((start) => {
-        const end = records.find(
-          (record) =>
-            record.type === "span:end" && record.spanId === start.spanId,
-        );
-        const provider =
-          stringValue(start.attributes?.provider) ??
-          stringValue(start.provider);
-        const model =
-          stringValue(start.attributes?.model) ?? stringValue(start.model);
-        return Object.freeze({
-          spanId: start.spanId!,
-          primitive: start.primitive!,
-          name: start.name ?? start.primitive!,
-          status: end?.status ?? "running",
-          parentSpanId: start.parentSpanId,
-          ...(provider ? { provider } : {}),
-          ...(model ? { model } : {}),
-          ...(numberValue(end?.durationMs) !== undefined
-            ? { durationMs: numberValue(end?.durationMs) }
-            : {}),
-        });
-      }),
+  const boundedStream = projectBoundedMediaStreamRun(
+    attributes,
+    scopedArtifacts,
+  );
+  const attempts = projectMediaRunAttempts(
+    records,
+    attemptSpanIds,
+    boundedStream !== undefined,
   );
 
   const catalogJoin = resolveMediaCatalogJoin(attributes, {
-    catalogJoinId: options.catalogJoinId,
+    definitionRefs: mediaStart.definitionRefs,
   });
 
   const lineage = projectMediaLineage(
@@ -156,6 +133,7 @@ export function projectMediaRunView(
         ? { segmentCount: numberValue(attributes.segments) }
         : {}),
     }),
+    ...(boundedStream ? { boundedStream } : {}),
     inputs,
     outputs,
     attempts,

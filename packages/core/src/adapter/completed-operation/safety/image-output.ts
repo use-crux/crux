@@ -7,6 +7,7 @@ import {
   guardSafetySessionOutputMedia,
   type Safety,
 } from "../../../safety/session";
+import type { GuardrailContext } from "../../../safety/guardrail/types";
 
 type GeneratedImageResult = CompletedOperationProviderPayload &
   Readonly<{
@@ -14,10 +15,36 @@ type GeneratedImageResult = CompletedOperationProviderPayload &
     readonly image: Asset;
   }>;
 
+export interface GuardedGeneratedImages<
+  TResult extends CompletedOperationProviderPayload,
+> {
+  readonly result: TResult;
+  readonly retained: readonly Readonly<{
+    image: Asset;
+    outputIndex: number;
+  }>[];
+}
+
 /** Guard generated images and write retained canonical assets back immutably. */
 export async function guardGeneratedImageOutput<
   TResult extends CompletedOperationProviderPayload,
 >(result: TResult, safety: Safety, model?: string): Promise<TResult> {
+  return (await guardGeneratedImageOutputSelection(result, safety, model))
+    .result;
+}
+
+/** Guard images while retaining their original provider output indexes. */
+export async function guardGeneratedImageOutputSelection<
+  TResult extends CompletedOperationProviderPayload,
+>(
+  result: TResult,
+  safety: Safety,
+  model?: string,
+  operation: "generateImage" | "streamImage" = "generateImage",
+  stream?:
+    | GuardrailContext["stream"]
+    | ((subject: MediaPartSubject) => GuardrailContext["stream"]),
+): Promise<GuardedGeneratedImages<TResult>> {
   if (!isGeneratedImageResult(result)) {
     throw new SafetyResultError({
       message:
@@ -30,17 +57,19 @@ export async function guardGeneratedImageOutput<
 
   const projected = result.images.map((image, partIndex) => ({
     image,
-    subject: imageSubject(image, partIndex),
+    outputIndex: partIndex,
+    subject: imageSubject(image, partIndex, operation),
   }));
   const guarded = await guardSafetySessionOutputMedia(
     safety,
     projected.map(({ subject }) => subject),
-    { minimumRetained: 1, model },
+    { minimumRetained: 1, model, stream },
   );
   const retained = new Set(guarded.subjects);
-  const images = projected
-    .filter(({ subject }) => retained.has(subject))
-    .map(({ image }) => image);
+  const retainedImages = projected.filter(({ subject }) =>
+    retained.has(subject),
+  );
+  const images = retainedImages.map(({ image }) => image);
   const [image, ...rest] = images;
   if (!image) {
     throw new SafetyResultError({
@@ -53,30 +82,58 @@ export async function guardGeneratedImageOutput<
   }
   const changed = images.length !== result.images.length;
   const audit = safety.audit;
-  if (!changed && !hasSafetyAudit(audit)) return result;
+  if (!changed && !hasSafetyAudit(audit)) {
+    return {
+      result,
+      retained: retainedImages.map(({ image, outputIndex }) => ({
+        image,
+        outputIndex,
+      })),
+    };
+  }
 
   const nonEmpty: readonly [Asset, ...Asset[]] = [image, ...rest];
-  return Object.freeze({
-    ...result,
-    ...(changed ? { image, images: Object.freeze(nonEmpty) } : {}),
-    ...(hasSafetyAudit(audit) ? { safety: freezeSafetyAudit(audit) } : {}),
-  });
+  return {
+    result: Object.freeze({
+      ...result,
+      ...(changed ? { image, images: Object.freeze(nonEmpty) } : {}),
+      ...(hasSafetyAudit(audit) ? { safety: freezeSafetyAudit(audit) } : {}),
+    }),
+    retained: retainedImages.map(({ image: retained, outputIndex }) => ({
+      image: retained,
+      outputIndex,
+    })),
+  };
 }
 
-function imageSubject(image: Asset, partIndex: number): MediaPartSubject {
+function imageSubject(
+  image: Asset,
+  outputIndex: number,
+  operation: "generateImage" | "streamImage",
+): MediaPartSubject {
   return Object.freeze({
     part: Object.freeze({
       type: "image" as const,
       source: image,
       ...(image.mediaType === undefined ? {} : { mediaType: image.mediaType }),
     }),
-    origin: Object.freeze({
-      kind: "operation" as const,
-      operation: "generateImage" as const,
-      phase: "output" as const,
-      field: "images" as const,
-      partIndex,
-    }),
+    origin: Object.freeze(
+      operation === "generateImage"
+        ? {
+            kind: "operation" as const,
+            operation,
+            phase: "output" as const,
+            field: "images" as const,
+            partIndex: outputIndex,
+          }
+        : {
+            kind: "operation" as const,
+            operation,
+            phase: "final" as const,
+            field: "images" as const,
+            outputIndex,
+          },
+    ),
   });
 }
 

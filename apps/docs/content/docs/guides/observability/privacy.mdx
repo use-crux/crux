@@ -152,6 +152,19 @@ There is no `providerEvidence` bag and no raw response-body field on the public 
 - Corpus / ingest identifiers export as **hashes**, not raw paths or URLs
 - W3C **baggage** is untrusted input: nothing is copied onto spans unless listed in `baggageAttributeAllowlist`
 
+### Bounded media streams
+
+`streamImage()` and `streamSpeech()` contribute operation/role, routing
+commitment, attempt and progressive event counts, byte totals, validated MIME
+facts, timing, terminal state, and canonical preview/final Safety coordinates.
+Those are descriptors, not media. The graph, Local read model, Runs UI, and
+OTel projection never receive prompts, chunks, assembled bytes, base64, URLs,
+filenames, hashes, refs, native provider events, or held Safety media.
+
+An enforcing policy may be presented as **held, then released** or **held, then
+discarded** based on terminal and Safety facts. That label does not imply the
+held bytes were captured. Report mode may be shown as live.
+
 ## Storage and Memory explorers
 
 DevTools Storage and related resource views show wiring, capabilities, and operation summaries. They do not display record values, vector contents, blob bodies, or signed URLs unless the application explicitly enables raw debug inspection.

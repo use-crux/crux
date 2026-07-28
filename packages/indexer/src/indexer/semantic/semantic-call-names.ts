@@ -1,4 +1,5 @@
 import { semanticStorageCallNames } from "./storage-model";
+import { mediaOperationNames } from "../media/manifest";
 
 const firstPartySemanticCallNames = [
   "Agent",
@@ -54,6 +55,7 @@ const firstPartySemanticCallNames = [
   "prompt",
   "when",
   "workspace",
+  ...mediaOperationNames,
   ...semanticStorageCallNames,
 ] as const;
 

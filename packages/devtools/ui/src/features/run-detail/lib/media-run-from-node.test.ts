@@ -404,29 +404,6 @@ describe("projectMediaRunFromNode", () => {
     expect(assertNoRetainedMediaSecrets(view)).toEqual([]);
   });
 
-  it("wires live Catalog join only from exact recorded definition identity", () => {
-    // Live completed-media spans today record provider/operation/model only —
-    // no Catalog definitionId — so the join is an explicit unavailable state.
-    const unavailable = projectMediaRunFromNode(mediaNode(), "span_media");
-    expect(unavailable?.catalogJoin).toEqual({
-      status: "unavailable",
-      reason: "missing-runtime-join",
-    });
-
-    const withIdentity = mediaNode();
-    (withIdentity as { attributes: Record<string, unknown> }).attributes = {
-      ...withIdentity.attributes,
-      definitionId: "media.operation:cover",
-      definitionName: "cover",
-    };
-    const joined = projectMediaRunFromNode(withIdentity, "span_media");
-    expect(joined?.catalogJoin).toEqual({
-      status: "joined",
-      definitionId: "media.operation:cover",
-      label: "cover",
-    });
-  });
-
   it("ignores non-media selected spans", () => {
     const node = mediaNode();
     (node as { primitive: string }).primitive = "generation.call";

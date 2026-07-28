@@ -31,7 +31,7 @@ function node(
   } as unknown as ObservabilityRunDetailNode;
 }
 
-describe("run-detail redaction evidence", () => {
+describe("observability redaction evidence", () => {
   it("formats the closed surface vocabulary with human labels", () => {
     expect(
       formatRedactionSurfaces({

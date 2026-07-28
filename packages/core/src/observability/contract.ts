@@ -625,9 +625,13 @@ export interface CruxGuardrailReportPreview {
   messageIndex?: number;
   stepIndex?: number;
   operation?: string;
-  operationPhase?: "input" | "output" | string;
+  operationPhase?: "input" | "output" | "preview" | "final" | string;
   field?: string;
   partIndex?: number;
+  /** Zero-based public media output coordinate for streaming Safety. */
+  outputIndex?: number;
+  /** Zero-based provisional-event coordinate within one media output. */
+  sequence?: number;
   escalatedToBlock?: true;
   /** Validated audit evidence; detailed values never become span attributes. */
   findings?: readonly CruxGuardrailFindingPreview[];
@@ -879,7 +883,8 @@ export type DefinitionRefRole =
   | "invoked-flow-step"
   | "invoked-composition-branch"
   | "invoked-recipe-step"
-  | "invoked-scorer";
+  | "invoked-scorer"
+  | "invoked-media-operation";
 
 /**
  * Evidence linking a runtime record back to the Project Index definition it

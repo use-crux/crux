@@ -12,6 +12,7 @@
 import type { SingleTurnProviderRuntimeSpec } from "./single-turn-types";
 import type { LoopOwnedProviderRuntimeSpec } from "./loop-owned-types";
 import type { ProviderCompletedOperationFactory } from "./completed-operations";
+import type { ProviderStreamingOperationFactories } from "./streaming-operations";
 
 export type {
   DefinedProviderRuntime,
@@ -55,7 +56,8 @@ export type ProviderRuntimeSpec =
       object,
       ProviderCompletedOperationFactory<unknown> | undefined,
       ProviderCompletedOperationFactory<unknown> | undefined,
-      ProviderCompletedOperationFactory<unknown> | undefined
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderStreamingOperationFactories<unknown> | undefined
     >
   | LoopOwnedProviderRuntimeSpec<
       unknown,
@@ -65,5 +67,6 @@ export type ProviderRuntimeSpec =
       object,
       ProviderCompletedOperationFactory<unknown> | undefined,
       ProviderCompletedOperationFactory<unknown> | undefined,
-      ProviderCompletedOperationFactory<unknown> | undefined
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderStreamingOperationFactories<unknown> | undefined
     >;

@@ -43,7 +43,7 @@ export type OpenAIGenerateSpeech = GenerateSpeech<
   Response
 >;
 
-type OpenAISpeechInput = GenerateSpeechOptions<
+export type OpenAISpeechInput = GenerateSpeechOptions<
   string,
   OpenAISpeechVoice,
   OpenAISpeechExtra
@@ -66,7 +66,7 @@ export function createOpenAISpeechOperation(client: OpenAI) {
     normalize(input: OpenAISpeechInput, context) {
       const options = { ...input, model: context.model };
       validateGenerateSpeechOptions(options);
-      const issue = speechIssue(options);
+      const issue = openAISpeechIssue(options);
       if (issue) {
         throw createUnsupportedCapabilityError({
           adapter: "openai",
@@ -80,21 +80,7 @@ export function createOpenAISpeechOperation(client: OpenAI) {
     invoke: (options, { signal, call }) =>
       call("audio.speech", async () => {
         const raw = await client.audio.speech.create(
-          {
-            model: options.model,
-            input: options.text,
-            voice: options.voice ?? "alloy",
-            ...(options.outputFormat === undefined
-              ? {}
-              : {
-                  response_format:
-                    options.outputFormat as SpeechCreateParams["response_format"],
-                }),
-            ...(options.instructions === undefined
-              ? {}
-              : { instructions: options.instructions }),
-            ...(options.speed === undefined ? {} : { speed: options.speed }),
-          },
+          openAISpeechRequest(options),
           { signal },
         );
         return { raw, bytes: new Uint8Array(await raw.arrayBuffer()) };
@@ -104,7 +90,7 @@ export function createOpenAISpeechOperation(client: OpenAI) {
         {
           type: "data",
           data: native.bytes,
-          mediaType: mediaTypeFor(options.outputFormat),
+          mediaType: openAISpeechMediaType(options.outputFormat),
         },
         {
           raw: native.raw,
@@ -118,7 +104,8 @@ export function createOpenAISpeechOperation(client: OpenAI) {
   });
 }
 
-function speechIssue(options: OpenAISpeechInput) {
+/** Return the first unsupported OpenAI speech control, if one exists. */
+export function openAISpeechIssue(options: OpenAISpeechInput) {
   if (
     options.extra &&
     Object.hasOwn(options.extra as object, "stream_format")
@@ -170,7 +157,31 @@ function speechIssue(options: OpenAISpeechInput) {
   return undefined;
 }
 
-function mediaTypeFor(format: string | undefined): string {
+/** Build the exact native request for completed or body-streaming speech. */
+export function openAISpeechRequest(
+  options: OpenAISpeechInput,
+  streamFormat?: "audio",
+): SpeechCreateParams {
+  return {
+    model: options.model,
+    input: options.text,
+    voice: options.voice ?? "alloy",
+    ...(options.outputFormat === undefined
+      ? {}
+      : {
+          response_format:
+            options.outputFormat as SpeechCreateParams["response_format"],
+        }),
+    ...(options.instructions === undefined
+      ? {}
+      : { instructions: options.instructions }),
+    ...(options.speed === undefined ? {} : { speed: options.speed }),
+    ...(streamFormat === undefined ? {} : { stream_format: streamFormat }),
+  };
+}
+
+/** Resolve the canonical media type for one OpenAI speech output format. */
+export function openAISpeechMediaType(format: string | undefined): string {
   switch (format) {
     case "opus":
       return "audio/opus";
