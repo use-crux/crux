@@ -46,6 +46,12 @@ func TestAttachTransportPromptTextPreservesExactRevision(t *testing.T) {
 			Kind: staticprotocol.PromptTextStatusComplete,
 		},
 		Templates: []staticprotocol.PromptTextTemplate{},
+		Refactors: staticprotocol.PromptTextRefactorAnalysis{
+			Status: staticprotocol.PromptTextAnalysisStatus{
+				Kind: staticprotocol.PromptTextStatusComplete,
+			},
+			Proofs: []staticprotocol.PromptTextRefactorProof{},
+		},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/project/index/prompt-text" {
@@ -122,6 +128,12 @@ func TestAttachTransportPromptTextRejectsMismatchedResponseIdentity(t *testing.T
 					Kind: staticprotocol.PromptTextStatusComplete,
 				},
 				Templates: []staticprotocol.PromptTextTemplate{},
+				Refactors: staticprotocol.PromptTextRefactorAnalysis{
+					Status: staticprotocol.PromptTextAnalysisStatus{
+						Kind: staticprotocol.PromptTextStatusComplete,
+					},
+					Proofs: []staticprotocol.PromptTextRefactorProof{},
+				},
 			}
 			mutate(&result)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

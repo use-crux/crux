@@ -39,6 +39,8 @@ func TestWorkspacePromptTextSymbolsRejectSourceEpochAdvance(t *testing.T) {
 			ID: "prompt:writer",
 			SourceRefs: []api.ProjectSourceRef{{
 				ID:       "prompt:writer:source:prompt:prompt-text",
+				Role:     "prompt",
+				Property: "prompt",
 				Fidelity: "resolved",
 				Source:   api.SourceLoc{File: file, Line: 1, Column: symbolInt(15)},
 				Snippet: &api.SourceSnippet{
@@ -49,7 +51,8 @@ func TestWorkspacePromptTextSymbolsRejectSourceEpochAdvance(t *testing.T) {
 					},
 				},
 				Metadata: map[string]any{"promptText": map[string]any{
-					"language": "markdown", "lifecycle": "static",
+					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"sourceKind": "owner",
 				}},
 			}},
 		}},

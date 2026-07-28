@@ -89,12 +89,17 @@ func contextSourceRef(
 	id, symbol string,
 	source api.SourceRange,
 ) api.ProjectSourceRef {
+	sourceKind := "owner"
+	if symbol != "" {
+		sourceKind = "named-fragment"
+	}
 	return api.ProjectSourceRef{
 		ID: id, Role: "prompt", Property: "prompt", Symbol: symbol,
 		Snippet:  &api.SourceSnippet{Source: "md`${shared}`", Range: source},
 		Fidelity: "resolved",
 		Metadata: map[string]any{"promptText": map[string]any{
 			"tag": "md", "language": "markdown", "lifecycle": "static",
+			"sourceKind": sourceKind,
 		}},
 	}
 }

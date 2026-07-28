@@ -91,6 +91,36 @@ export interface PromptTextFragmentJoinEvidence {
   readonly proof: "semantic-exact";
 }
 
+/**
+ * Semantic proof that an ordinary static prompt field can reuse one existing
+ * canonical Core `md` value binding without changing imports.
+ */
+export interface PromptTextRefactorEvidence {
+  readonly kind: "ordinary-string-to-md";
+  readonly proof: "semantic-exact";
+  readonly lifecycle: "static";
+  readonly target: "md";
+  readonly binding:
+    | {
+        readonly kind: "identifier";
+        readonly expression: string;
+      }
+    | {
+        readonly kind: "namespace-access";
+        readonly expression: string;
+      };
+}
+
+/**
+ * Compiler-owned reachability classification for a canonical PromptText
+ * source. Consumers must not infer this identity from roles, symbols, ranges,
+ * or the legacy `metadata.fragment` marker.
+ */
+export type PromptTextSourceKind =
+  | "owner"
+  | "named-fragment"
+  | "anonymous-fragment";
+
 export interface ProjectSourceRef {
   id: string;
   role: ProjectSourceRefRole;
@@ -120,9 +150,12 @@ export interface ProjectSourceRef {
       language: "markdown";
       /** Direct authored field versus value produced through a callback. */
       lifecycle: "static" | "dynamic";
+      /** Backend-neutral semantic reachability classification. */
+      sourceKind: PromptTextSourceKind;
       /** Exact named-fragment occurrences owned by this template. */
       fragmentJoins?: readonly PromptTextFragmentJoinEvidence[];
     };
+    promptTextRefactor?: PromptTextRefactorEvidence;
     extensions?: Record<string, unknown>;
   };
 }
@@ -1318,43 +1351,137 @@ export const PromptTextFragmentJoinEvidenceSchema = z.object({
   proof: z.literal("semantic-exact"),
 }) satisfies z.ZodType<PromptTextFragmentJoinEvidence>;
 
-export const ProjectSourceRefSchema = z.object({
-  id: z.string(),
-  role: ProjectSourceRefRoleSchema,
-  property: z.string().optional(),
-  symbol: z.string().optional(),
-  source: SourceLocationSchema,
-  snippet: SourceSnippetSchema.optional(),
-  fidelity: z.enum(["resolved", "partial"]),
-  description: z.string().optional(),
-  metadata: z
-    .object({
-      schemaKind: z.enum(["zod", "convex-validator", "json-schema"]).optional(),
-      parsedSchema: z.boolean().optional(),
-      referencedDefinitionIds: z.array(z.string()).optional(),
-      dataAccess: z.boolean().optional(),
-      injected: z.boolean().optional(),
-      nested: z.boolean().optional(),
-      fragment: z.boolean().optional(),
-      factoryArg: z.boolean().optional(),
-      argumentIndex: z.number().optional(),
-      argumentName: z.string().optional(),
-      toolMapContributor: z.enum(["spread", "property"]).optional(),
-      routingTarget: z.boolean().optional(),
-      promptText: z
+/** Strict runtime schema for compiler-owned PromptText source classification. */
+export const PromptTextSourceKindSchema = z.enum([
+  "owner",
+  "named-fragment",
+  "anonymous-fragment",
+]) satisfies z.ZodType<PromptTextSourceKind>;
+
+const PromptTextRefactorIdentifierSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(/^[$A-Z_a-z][$\w]*$/u);
+
+/**
+ * Strict runtime schema for insertion-ready ordinary-string refactor proof.
+ * The identifier grammar is intentionally ASCII, making the 256-character
+ * schema bound identical to the compiler's 256-byte UTF-8 bound.
+ */
+export const PromptTextRefactorEvidenceSchema = z
+  .object({
+    kind: z.literal("ordinary-string-to-md"),
+    proof: z.literal("semantic-exact"),
+    lifecycle: z.literal("static"),
+    target: z.literal("md"),
+    binding: z.discriminatedUnion("kind", [
+      z
         .object({
-          tag: z.literal("md"),
-          language: z.literal("markdown"),
-          lifecycle: z.enum(["static", "dynamic"]),
-          fragmentJoins: z
-            .array(PromptTextFragmentJoinEvidenceSchema)
-            .optional(),
+          kind: z.literal("identifier"),
+          expression: PromptTextRefactorIdentifierSchema,
         })
-        .optional(),
-      extensions: z.record(z.string(), z.unknown()).optional(),
-    })
-    .optional(),
-}) satisfies z.ZodType<ProjectSourceRef>;
+        .strict(),
+      z
+        .object({
+          kind: z.literal("namespace-access"),
+          expression: z
+            .string()
+            .min(3)
+            .max(256)
+            .regex(/^[$A-Z_a-z][$\w]*\.[$A-Z_a-z][$\w]*$/u),
+        })
+        .strict(),
+    ]),
+  })
+  .strict() satisfies z.ZodType<PromptTextRefactorEvidence>;
+
+export const ProjectSourceRefSchema = z
+  .object({
+    id: z.string(),
+    role: ProjectSourceRefRoleSchema,
+    property: z.string().optional(),
+    symbol: z.string().optional(),
+    source: SourceLocationSchema,
+    snippet: SourceSnippetSchema.optional(),
+    fidelity: z.enum(["resolved", "partial"]),
+    description: z.string().optional(),
+    metadata: z
+      .object({
+        schemaKind: z
+          .enum(["zod", "convex-validator", "json-schema"])
+          .optional(),
+        parsedSchema: z.boolean().optional(),
+        referencedDefinitionIds: z.array(z.string()).optional(),
+        dataAccess: z.boolean().optional(),
+        injected: z.boolean().optional(),
+        nested: z.boolean().optional(),
+        fragment: z.boolean().optional(),
+        factoryArg: z.boolean().optional(),
+        argumentIndex: z.number().optional(),
+        argumentName: z.string().optional(),
+        toolMapContributor: z.enum(["spread", "property"]).optional(),
+        routingTarget: z.boolean().optional(),
+        promptText: z
+          .object({
+            tag: z.literal("md"),
+            language: z.literal("markdown"),
+            lifecycle: z.enum(["static", "dynamic"]),
+            sourceKind: PromptTextSourceKindSchema,
+            fragmentJoins: z
+              .array(PromptTextFragmentJoinEvidenceSchema)
+              .optional(),
+          })
+          .optional(),
+        promptTextRefactor: PromptTextRefactorEvidenceSchema.optional(),
+        extensions: z.record(z.string(), z.unknown()).optional(),
+      })
+      .optional(),
+  })
+  .superRefine((sourceRef, context) => {
+    const promptText = sourceRef.metadata?.promptText;
+    const refactor = sourceRef.metadata?.promptTextRefactor;
+    const sourceKind = promptText?.sourceKind;
+    const matchingProperty =
+      sourceRef.role === sourceRef.property &&
+      (sourceRef.role === "prompt" || sourceRef.role === "system");
+    const consistent =
+      sourceKind === "named-fragment"
+        ? sourceRef.symbol !== undefined && sourceRef.symbol !== ""
+        : sourceKind === undefined ||
+          sourceRef.symbol === undefined ||
+          sourceRef.symbol === "";
+    if (!consistent) {
+      context.addIssue({
+        code: "custom",
+        path: ["symbol"],
+        message: "PromptText sourceKind is inconsistent with symbol evidence",
+      });
+    }
+    if (
+      promptText !== undefined &&
+      (sourceRef.fidelity !== "resolved" || !matchingProperty)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["metadata", "promptText"],
+        message: "PromptText metadata requires a resolved prompt/system source ref",
+      });
+    }
+    if (
+      refactor !== undefined &&
+      (promptText !== undefined ||
+        sourceRef.fidelity !== "resolved" ||
+        !matchingProperty)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["metadata", "promptTextRefactor"],
+        message:
+          "PromptText refactor evidence requires an exclusive resolved prompt/system source ref",
+      });
+    }
+  }) satisfies z.ZodType<ProjectSourceRef>;
 
 export const PrimitiveIntelligenceConfidenceSchema = z.enum([
   "static",

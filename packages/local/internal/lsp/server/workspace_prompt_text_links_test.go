@@ -104,6 +104,7 @@ func newWorkspacePromptTextLinkFixture(
 			ID: "prompt:writer",
 			SourceRefs: []api.ProjectSourceRef{{
 				ID: "prompt:writer:source:prompt-text", Fidelity: "resolved",
+				Role: "prompt", Property: "prompt",
 				Source: api.SourceLoc{
 					File: file, Line: 1, Column: symbolInt(15),
 				},
@@ -115,7 +116,8 @@ func newWorkspacePromptTextLinkFixture(
 					},
 				},
 				Metadata: map[string]any{"promptText": map[string]any{
-					"language": "markdown", "lifecycle": "static",
+					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"sourceKind": "owner",
 				}},
 			}},
 		}},

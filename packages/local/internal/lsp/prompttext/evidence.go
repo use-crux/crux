@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	promptview "github.com/use-crux/crux/packages/local/internal/lsp/prompttext/view"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
 	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
@@ -157,7 +158,7 @@ func semanticPromptTextRef(
 	sourceRef api.ProjectSourceRef,
 ) (semanticRef, bool) {
 	if sourceRef.ID == "" || sourceRef.Fidelity != "resolved" || sourceRef.Snippet == nil ||
-		sourceRef.Snippet.Truncated || !staticMarkdownMetadata(sourceRef.Metadata) ||
+		sourceRef.Snippet.Truncated || !staticMarkdownSourceRef(sourceRef) ||
 		!sameFile(root, sourceRef.Source.File, sourceRef.Snippet.Range.File) {
 		return semanticRef{}, false
 	}
@@ -219,10 +220,13 @@ func validSemanticJoin(
 	owner, target semanticRef,
 	join semanticFragmentJoin,
 ) bool {
+	targetKind, targetKindOK := staticMarkdownSourceKind(target.sourceRef)
 	return join.Kind == "named-fragment" && join.Proof == "semantic-exact" &&
 		join.OwnerSourceRefID == owner.sourceRef.ID &&
 		join.TargetSourceRefID == target.sourceRef.ID &&
-		target.sourceRef.Symbol != "" &&
+		targetKindOK && targetKind == promptview.PromptTextSourceNamedFragment &&
+		staticMarkdownSourceRef(owner.sourceRef) &&
+		staticMarkdownSourceRef(target.sourceRef) &&
 		joinContextMatches(owner.sourceRef, target.sourceRef) &&
 		sourceRangesEqual(join.OwnerTemplateRange, owner.sourceRef.Snippet.Range) &&
 		sourceRangesEqual(join.TargetTemplateRange, target.sourceRef.Snippet.Range) &&

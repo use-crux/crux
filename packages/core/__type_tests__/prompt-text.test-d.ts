@@ -62,11 +62,15 @@ const promptTextSourceRef = {
       tag: "md",
       language: "markdown",
       lifecycle: "static",
+      sourceKind: "owner",
     },
   },
 } satisfies ProjectSourceRef;
 
 expectTypeOf(promptTextSourceRef.metadata.promptText.tag).toEqualTypeOf<"md">();
+expectTypeOf(
+  promptTextSourceRef.metadata.promptText.sourceKind,
+).toEqualTypeOf<"owner">();
 
 // @ts-expect-error — PromptText is opaque, not a string.
 const promptTextAsString: string = fragment;

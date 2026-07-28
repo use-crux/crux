@@ -8,7 +8,13 @@ import (
 func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.Mode) {
 	session.promptTextTransition.Lock()
 	defer session.promptTextTransition.Unlock()
+	w.setSessionModeLocked(session, mode)
+}
 
+func (w *workspaceRuntime) setSessionModeLocked(
+	session *scopeSession,
+	mode readmodel.Mode,
+) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
@@ -21,6 +27,10 @@ func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.
 	}
 	w.mu.Unlock()
 
+	if session.promptTextViews != nil {
+		session.promptTextViews.RetireAll()
+		w.refreshPromptTextViews(session, nil)
+	}
 	uris := w.retireOpenPromptTextDiagnostics(session)
 	w.mu.Lock()
 	if w.closed {
@@ -44,7 +54,13 @@ func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.
 func (w *workspaceRuntime) setSessionTransientSource(session *scopeSession, source readmodel.TransientSource) {
 	session.promptTextTransition.Lock()
 	defer session.promptTextTransition.Unlock()
+	w.setSessionTransientSourceLocked(session, source)
+}
 
+func (w *workspaceRuntime) setSessionTransientSourceLocked(
+	session *scopeSession,
+	source readmodel.TransientSource,
+) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
@@ -52,6 +68,10 @@ func (w *workspaceRuntime) setSessionTransientSource(session *scopeSession, sour
 	}
 	w.mu.Unlock()
 
+	if session.promptTextViews != nil {
+		session.promptTextViews.RetireAll()
+		w.refreshPromptTextViews(session, nil)
+	}
 	uris := w.retireOpenPromptTextDiagnostics(session)
 	w.mu.Lock()
 	if w.closed {
@@ -71,7 +91,13 @@ func (w *workspaceRuntime) setSessionTransientSource(session *scopeSession, sour
 func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readmodel.Change) {
 	session.promptTextTransition.Lock()
 	defer session.promptTextTransition.Unlock()
+	w.handleScopeChangeLocked(session, change)
+}
 
+func (w *workspaceRuntime) handleScopeChangeLocked(
+	session *scopeSession,
+	change readmodel.Change,
+) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
@@ -79,13 +105,19 @@ func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readm
 	}
 	w.mu.Unlock()
 	session.publisher.Change(change)
+	w.refreshPromptTextViews(session, change.Files)
 	w.resetOpenPromptTextDiagnostics(session, change.Files)
 }
 
 func (w *workspaceRuntime) invalidateTransientSource(session *scopeSession) {
 	session.promptTextTransition.Lock()
 	defer session.promptTextTransition.Unlock()
+	w.invalidateTransientSourceLocked(session)
+}
 
+func (w *workspaceRuntime) invalidateTransientSourceLocked(
+	session *scopeSession,
+) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()

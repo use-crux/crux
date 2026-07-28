@@ -90,3 +90,24 @@ func quickFixRequested(only []protocol.CodeActionKind) bool {
 	}
 	return false
 }
+
+func (s *Server) promptTextRefactorRequested(
+	only []protocol.CodeActionKind,
+) bool {
+	s.mu.Lock()
+	supported := s.codeActionRefactorSupport
+	s.mu.Unlock()
+	if !supported {
+		return false
+	}
+	if len(only) == 0 {
+		return true
+	}
+	for _, kind := range only {
+		if kind == protocol.CodeActionRefactor ||
+			kind == protocol.CodeActionRefactorRewrite {
+			return true
+		}
+	}
+	return false
+}

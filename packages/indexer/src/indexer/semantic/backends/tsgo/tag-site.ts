@@ -31,7 +31,35 @@ export function tsgoTagSite(
   terminalSymbol: (
     symbol: TsgoSymbol | undefined,
   ) => TsgoSymbol | "type-only" | undefined,
+  namespaceExportName?: string,
 ): TsgoTagSite | undefined {
+  if (
+    namespaceExportName &&
+    isIdentifier(node) &&
+    node.parent &&
+    isNamespaceImport(node.parent)
+  ) {
+    const owner = nearestNativeImportDeclaration(node.parent);
+    if (owner?.importClause?.phaseModifier === SyntaxKind.TypeKeyword) {
+      return undefined;
+    }
+    const module = owner
+      ? project.checker.getSymbolAtLocation(owner.moduleSpecifier)
+      : undefined;
+    const exported = module
+      ? project.checker
+          .getExportsOfModule(module)
+          .find((symbol) => symbol.name === namespaceExportName)
+      : undefined;
+    const terminal = terminalSymbol(exported);
+    return terminal && terminal !== "type-only"
+      ? {
+          declaration: node.parent,
+          exportName: namespaceExportName,
+          terminal,
+        }
+      : undefined;
+  }
   const location = isPropertyAccessExpression(node) ? node.name : node;
   const terminal = terminalSymbol(
     project.checker.getSymbolAtLocation(location),

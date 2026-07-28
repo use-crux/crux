@@ -115,6 +115,7 @@ func promptTextDiagnosticSnapshot(text string) readmodel.Snapshot {
 				Fidelity: "resolved", Metadata: map[string]any{
 					"promptText": map[string]any{
 						"tag": "md", "language": "markdown", "lifecycle": "static",
+						"sourceKind": "owner",
 					},
 				},
 			}},

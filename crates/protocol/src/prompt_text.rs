@@ -74,6 +74,9 @@ pub struct PromptTextLimits {
     pub max_template_bytes: u32,
     pub max_traversal_nodes: u32,
     pub max_output_bytes: u32,
+    pub max_string_refactors: u32,
+    pub max_string_refactor_bytes: u32,
+    pub max_string_refactor_output_bytes: u32,
     pub max_fragments: u32,
     pub max_fragment_joins: u32,
     pub max_fragment_bytes: u32,
@@ -143,6 +146,40 @@ pub struct PromptTextWorkerRequest {
     pub query: PromptTextQueryRequest,
 }
 
+/// Strength of one compiler-owned ordinary-string conversion proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptTextRefactorProofLevel {
+    SyntaxExact,
+}
+
+/// One exact ordinary-string replacement proven independently of template
+/// classification.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PromptTextRefactorProof {
+    OrdinaryStringToMd {
+        candidate_id: u32,
+        range: PromptTextRange,
+        expected_text: String,
+        template_text: String,
+        proof: PromptTextRefactorProofLevel,
+    },
+}
+
+/// Independent completeness and source-order proofs for string refactors.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextRefactorAnalysis {
+    pub status: PromptTextAnalysisStatus,
+    pub proofs: Vec<PromptTextRefactorProof>,
+}
+
 /// Normalized result for one exact request revision.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -152,4 +189,5 @@ pub struct PromptTextQueryResponse {
     pub revision: PromptTextDocumentRevision,
     pub status: PromptTextAnalysisStatus,
     pub templates: Vec<PromptTextTemplate>,
+    pub refactors: PromptTextRefactorAnalysis,
 }

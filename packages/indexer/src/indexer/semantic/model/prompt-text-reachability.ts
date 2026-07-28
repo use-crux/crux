@@ -1,9 +1,15 @@
+import type { PromptTextSourceKind } from "@use-crux/core/project-index";
 import type {
   SemanticAnalyzerNode,
   SemanticAnalyzerView,
   SemanticDefinitionCandidate,
 } from "../candidates";
-import { semanticNodeKey, semanticPropertyName } from "../syntax-readers";
+import { semanticNodeKey } from "../syntax-readers";
+import {
+  promptTextPropertyExpression,
+  semanticPromptTextProperties,
+  type SemanticPromptTextPropertySpec,
+} from "./prompt-text/properties";
 import {
   promptTextCallbackExpression,
   promptTextNamedFragment,
@@ -16,6 +22,7 @@ export interface SemanticPromptTextEdge {
   readonly property: "system" | "prompt";
   readonly role: "system" | "prompt";
   readonly lifecycle: "static" | "dynamic";
+  readonly sourceKind: PromptTextSourceKind;
   readonly symbol?: string;
   readonly fragmentJoin?: {
     readonly ownerTag: SemanticAnalyzerNode<SemanticAnalyzerView>;
@@ -28,16 +35,14 @@ export interface SemanticPromptTextCandidateEdge extends SemanticPromptTextEdge 
   readonly canonical: boolean;
 }
 
-export interface SemanticPromptTextPropertySpec {
-  readonly property: "system" | "prompt";
-  readonly role: "system" | "prompt";
-}
+export { semanticPromptTextProperties };
+export type { SemanticPromptTextPropertySpec };
 
 /** Collects every canonical prompt-text tag reachable from one definition. */
 export function semanticPromptTextEdges(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
-  properties: readonly SemanticPromptTextPropertySpec[] = promptTextProperties(
+  properties: readonly SemanticPromptTextPropertySpec[] = semanticPromptTextProperties(
     candidate,
   ),
 ): readonly SemanticPromptTextEdge[] {
@@ -50,12 +55,12 @@ export function semanticPromptTextEdges(
 export function semanticPromptTextCandidateEdges(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
-  properties: readonly SemanticPromptTextPropertySpec[] = promptTextProperties(
+  properties: readonly SemanticPromptTextPropertySpec[] = semanticPromptTextProperties(
     candidate,
   ),
 ): readonly SemanticPromptTextCandidateEdge[] {
   return properties.flatMap((spec) => {
-    const expression = definitionPropertyExpression(
+    const expression = promptTextPropertyExpression(
       candidate.object,
       spec.property,
       view,
@@ -77,37 +82,9 @@ export function semanticPromptTextCandidateEdges(
       "static",
       view,
       new Set(),
+      "owner",
     );
   });
-}
-
-function promptTextProperties(
-  candidate: SemanticDefinitionCandidate,
-): readonly SemanticPromptTextPropertySpec[] {
-  if (candidate.kind === "prompt") {
-    return [
-      { property: "system", role: "system" },
-      { property: "prompt", role: "prompt" },
-    ];
-  }
-  return candidate.kind === "context"
-    ? [{ property: "system", role: "system" }]
-    : [];
-}
-
-function definitionPropertyExpression(
-  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
-  propertyName: string,
-  view: SemanticAnalyzerView,
-): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
-  const property = view.syntax
-    .objectProperties(object)
-    .find((entry) => semanticPropertyName(entry, view.syntax) === propertyName);
-  if (!property) return undefined;
-  return (
-    view.syntax.propertyInitializer(property) ??
-    (view.syntax.isKind(property, "methodDeclaration") ? property : undefined)
-  );
 }
 
 function collectReturnedExpression(
@@ -141,6 +118,7 @@ function collectReturnedExpression(
     "dynamic",
     view,
     new Set(),
+    "owner",
   );
 }
 
@@ -151,6 +129,10 @@ function collectPromptTextValue(
   lifecycle: "static" | "dynamic",
   view: SemanticAnalyzerView,
   seen: Set<string>,
+  unnamedSourceKind: Extract<
+    PromptTextSourceKind,
+    "owner" | "anonymous-fragment"
+  >,
   fragmentJoin?: SemanticPromptTextEdge["fragmentJoin"],
 ): readonly SemanticPromptTextCandidateEdge[] {
   const unwrapped = view.syntax.unwrapExpression(expression);
@@ -163,6 +145,7 @@ function collectPromptTextValue(
       undefined,
       view,
       seen,
+      unnamedSourceKind,
       fragmentJoin,
     );
   }
@@ -177,6 +160,7 @@ function collectPromptTextValue(
         view.syntax.text(unwrapped),
         view,
         seen,
+        unnamedSourceKind,
         fragmentJoin,
       )
     : [];
@@ -190,18 +174,26 @@ function collectTag(
   symbol: string | undefined,
   view: SemanticAnalyzerView,
   seen: Set<string>,
+  unnamedSourceKind: Extract<
+    PromptTextSourceKind,
+    "owner" | "anonymous-fragment"
+  >,
   fragmentJoin?: SemanticPromptTextEdge["fragmentJoin"],
 ): readonly SemanticPromptTextCandidateEdge[] {
   const tagExpression = view.syntax.taggedTemplateTag(tag);
   if (!tagExpression) return [];
   const canonical = isCanonicalPromptTextTag(tagExpression, view);
   const key = semanticNodeKey(tag, view.syntax);
-  const current = {
+  const sourceKind: PromptTextSourceKind = symbol
+    ? "named-fragment"
+    : unnamedSourceKind;
+  const current: SemanticPromptTextCandidateEdge = {
     tag,
     edge,
     ...spec,
     lifecycle,
     canonical,
+    sourceKind,
     ...(symbol ? { symbol } : {}),
     ...(symbol && fragmentJoin ? { fragmentJoin } : {}),
   };
@@ -244,6 +236,7 @@ function collectNestedExpression(
     lifecycle,
     view,
     seen,
+    "anonymous-fragment",
     { ownerTag, interpolationIndex, expression },
   );
   if (direct.length > 0) return direct;
@@ -274,6 +267,7 @@ function collectNestedDescendant(
     lifecycle,
     view,
     seen,
+    "anonymous-fragment",
   );
   if (direct.length > 0) return direct;
   return view.syntax.children(unwrapped).flatMap((child) => {

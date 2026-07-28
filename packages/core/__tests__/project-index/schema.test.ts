@@ -6,6 +6,7 @@ import {
   ProjectDefinitionKindSchema,
   ProjectIndexSnapshotSchema,
   ProjectSourceRefSchema,
+  PromptTextSourceKindSchema,
 } from "../../src/project-index";
 
 const finding = {
@@ -81,6 +82,7 @@ describe("Project Index schemas", () => {
             tag: "md",
             language: "markdown",
             lifecycle: "static",
+            sourceKind: "owner",
             fragmentJoins: [
               {
                 kind: "named-fragment",
@@ -118,6 +120,7 @@ describe("Project Index schemas", () => {
       tag: "md",
       language: "markdown",
       lifecycle: "static",
+      sourceKind: "owner",
       fragmentJoins: [
         {
           kind: "named-fragment",
@@ -149,6 +152,169 @@ describe("Project Index schemas", () => {
         },
       ],
     });
+  });
+
+  it("requires the compiler-owned prompt-text source classification", () => {
+    expect(PromptTextSourceKindSchema.parse("named-fragment")).toBe(
+      "named-fragment",
+    );
+    const sourceRef = {
+      id: "prompt:support:source:prompt:prompt:prompt-text:src-support:1:1",
+      role: "prompt",
+      property: "prompt",
+      source: { file: "src/support.ts", line: 1, column: 1 },
+      fidelity: "resolved",
+      metadata: {
+        promptText: {
+          tag: "md",
+          language: "markdown",
+          lifecycle: "static",
+        },
+      },
+    };
+
+    expect(() => ProjectSourceRefSchema.parse(sourceRef)).toThrow();
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        metadata: {
+          promptText: {
+            ...sourceRef.metadata.promptText,
+            sourceKind: "fragment",
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("requires source classification and symbol evidence to agree", () => {
+    const sourceRef = {
+      id: "prompt:support:source:prompt:prompt:prompt-text:src-support:1:1",
+      role: "prompt",
+      property: "prompt",
+      source: { file: "src/support.ts", line: 1, column: 1 },
+      fidelity: "resolved",
+      metadata: {
+        promptText: {
+          tag: "md",
+          language: "markdown",
+          lifecycle: "static",
+          sourceKind: "named-fragment",
+        },
+      },
+    };
+
+    expect(() => ProjectSourceRefSchema.parse(sourceRef)).toThrow();
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        symbol: "shared",
+      }),
+    ).not.toThrow();
+    for (const sourceKind of ["owner", "anonymous-fragment"] as const) {
+      expect(() =>
+        ProjectSourceRefSchema.parse({
+          ...sourceRef,
+          symbol: "shared",
+          metadata: {
+            promptText: {
+              ...sourceRef.metadata.promptText,
+              sourceKind,
+            },
+          },
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("requires canonical PromptText source-ref cross-field evidence", () => {
+    const sourceRef = {
+      id: "prompt:support:source:prompt:prompt:prompt-text:src-support:1:1",
+      role: "prompt",
+      property: "prompt",
+      source: { file: "src/support.ts", line: 1, column: 1 },
+      fidelity: "resolved",
+      metadata: {
+        promptText: {
+          tag: "md",
+          language: "markdown",
+          lifecycle: "static",
+          sourceKind: "owner",
+        },
+      },
+    } as const;
+
+    expect(() => ProjectSourceRefSchema.parse(sourceRef)).not.toThrow();
+    for (const invalid of [
+      { ...sourceRef, fidelity: "partial" },
+      { ...sourceRef, property: "system" },
+      { ...sourceRef, role: "description", property: "description" },
+    ]) {
+      expect(() => ProjectSourceRefSchema.parse(invalid)).toThrow();
+    }
+  });
+
+  it("strictly validates insertion-ready prompt-text refactor evidence", () => {
+    const sourceRef = {
+      id: "prompt:writer:source:prompt:prompt:prompt-text-refactor:src-writer:1:1",
+      role: "prompt",
+      property: "prompt",
+      source: { file: "src/writer.ts", line: 1, column: 1 },
+      fidelity: "resolved",
+      metadata: {
+        promptTextRefactor: {
+          kind: "ordinary-string-to-md",
+          proof: "semantic-exact",
+          lifecycle: "static",
+          target: "md",
+          binding: { kind: "namespace-access", expression: "core.md" },
+        },
+      },
+    } as const;
+    expect(
+      ProjectSourceRefSchema.parse(sourceRef).metadata?.promptTextRefactor,
+    ).toEqual(sourceRef.metadata.promptTextRefactor);
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        metadata: {
+          promptTextRefactor: {
+            ...sourceRef.metadata.promptTextRefactor,
+            extra: true,
+          },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        metadata: {
+          promptTextRefactor: {
+            ...sourceRef.metadata.promptTextRefactor,
+            binding: { kind: "identifier", expression: "core.md" },
+          },
+        },
+      }),
+    ).toThrow();
+    for (const invalid of [
+      { ...sourceRef, fidelity: "partial" },
+      { ...sourceRef, property: "system" },
+      { ...sourceRef, role: "description", property: "description" },
+      {
+        ...sourceRef,
+        metadata: {
+          ...sourceRef.metadata,
+          promptText: {
+            tag: "md",
+            language: "markdown",
+            lifecycle: "static",
+            sourceKind: "owner",
+          },
+        },
+      },
+    ]) {
+      expect(() => ProjectSourceRefSchema.parse(invalid)).toThrow();
+    }
   });
 
   it("accepts canonical and explicit active lint findings", () => {

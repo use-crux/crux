@@ -19,6 +19,7 @@ pub(crate) fn barriers(
                 index: index as u32,
                 range: map.bytes(left.end as usize..right.start as usize),
                 expression_range: map.span(expression.span()),
+                line_isolation_edit: None,
             })
         })
         .collect()

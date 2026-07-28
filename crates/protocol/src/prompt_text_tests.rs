@@ -2,7 +2,10 @@ use serde_json::Value;
 
 use crate::{
     process::WorkerResponseEnvelope,
-    prompt_text::{PromptTextBlock, PromptTextQueryResponse, PromptTextWorkerRequest},
+    prompt_text::{
+        PromptTextAnalysisStatus, PromptTextBlock, PromptTextQueryResponse,
+        PromptTextRefactorProof, PromptTextWorkerRequest,
+    },
 };
 
 const GOLDEN: &str =
@@ -21,6 +24,27 @@ fn prompt_text_v1_matches_the_shared_golden_abi() {
     let response: PromptTextQueryResponse =
         serde_json::from_value(fixture["response"]["response"].clone())
             .expect("golden response should decode");
+    assert_eq!(response.templates[0].backtick_ranges.len(), 2);
+    assert_eq!(
+        response.templates[2].status,
+        PromptTextAnalysisStatus::Unsupported
+    );
+    assert_eq!(response.templates[2].backtick_ranges.len(), 2);
+    assert!(response.templates[2].literal_islands.is_empty());
+    assert_eq!(
+        response.refactors.status,
+        PromptTextAnalysisStatus::Complete
+    );
+    assert!(matches!(
+        response.refactors.proofs.as_slice(),
+        [PromptTextRefactorProof::OrdinaryStringToMd {
+            candidate_id: 0,
+            expected_text,
+            template_text,
+            ..
+        }] if expected_text == "\"first\\nsecond\"" &&
+            template_text == "`\nfirst\nsecond\n`"
+    ));
     assert_eq!(
         serde_json::to_value(WorkerResponseEnvelope::ok(401, response))
             .expect("response should serialize"),

@@ -28,11 +28,13 @@ type DiagnosticResult struct {
 }
 
 type diagnosticMatch struct {
-	diagnostic      protocol.Diagnostic
-	indexDiagnostic api.IndexDiagnostic
-	evidence        store.PromptTextDiagnosticEvidence
-	tagExpression   string
-	expressionText  string
+	diagnostic        protocol.Diagnostic
+	indexDiagnostic   api.IndexDiagnostic
+	evidence          store.PromptTextDiagnosticEvidence
+	tagExpression     string
+	expressionText    string
+	expressionUnique  bool
+	lineIsolationEdit *protocol.TextEdit
 }
 
 // Diagnostics joins saved semantic conclusions to exact transient template
@@ -203,6 +205,12 @@ func joinPromptTextDiagnostic(
 	return diagnosticMatch{
 		diagnostic: mapped, indexDiagnostic: diagnostic, evidence: evidence,
 		tagExpression: tagExpression, expressionText: expressionText,
+		expressionUnique: uniqueBarrierExpressionRange(
+			template.InterpolationBarriers, barrier,
+		),
+		lineIsolationEdit: validatedLineIsolationEdit(
+			text, template, barrier,
+		),
 	}, true
 }
 
@@ -228,6 +236,8 @@ func promptTextDiagnosticCauseMatchesCode(
 		return code == "CRUX_PROMPT_TEXT_INVALID_INTERPOLATION"
 	case "json-serialization":
 		return code == "CRUX_PROMPT_TEXT_JSON_SERIALIZATION"
+	case "inline-sequence":
+		return code == "CRUX_PROMPT_TEXT_INLINE_SEQUENCE"
 	default:
 		return false
 	}

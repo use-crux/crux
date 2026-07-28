@@ -11,6 +11,7 @@ use super::{
     fragments::FragmentIndex,
     mapping::SourceMap,
     projection::{ProjectedPromptText, template},
+    string_refactors,
 };
 
 /// Projects every bounded tagged template without assigning semantic identity.
@@ -57,6 +58,13 @@ pub fn project(request: &PromptTextQueryRequest) -> ProjectedPromptText {
     };
     candidates.truncate(limit);
     let map = SourceMap::new(&request.source);
+    let refactors = string_refactors::project(
+        &request.source,
+        source_type,
+        &semantic,
+        &request.limits,
+        &map,
+    );
     let templates = candidates
         .into_iter()
         .enumerate()
@@ -71,7 +79,11 @@ pub fn project(request: &PromptTextQueryRequest) -> ProjectedPromptText {
             )
         })
         .collect();
-    ProjectedPromptText { status, templates }
+    ProjectedPromptText {
+        status,
+        templates,
+        refactors,
+    }
 }
 
 fn supported_language(language: &str) -> bool {
@@ -85,6 +97,10 @@ fn unsupported() -> ProjectedPromptText {
     ProjectedPromptText {
         status: PromptTextAnalysisStatus::Unsupported,
         templates: Vec::new(),
+        refactors: crux_indexer_protocol::prompt_text::PromptTextRefactorAnalysis {
+            status: PromptTextAnalysisStatus::Unsupported,
+            proofs: Vec::new(),
+        },
     }
 }
 
@@ -92,5 +108,9 @@ fn truncated() -> ProjectedPromptText {
     ProjectedPromptText {
         status: PromptTextAnalysisStatus::Truncated,
         templates: Vec::new(),
+        refactors: crux_indexer_protocol::prompt_text::PromptTextRefactorAnalysis {
+            status: PromptTextAnalysisStatus::Truncated,
+            proofs: Vec::new(),
+        },
     }
 }

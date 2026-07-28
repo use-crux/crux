@@ -1,5 +1,6 @@
 import ts from "typescript";
 import type {
+  SemanticCanonicalValueBinding,
   SemanticCompilerSourceFile,
   SemanticCompilerView,
 } from "../../compiler-view";
@@ -107,7 +108,73 @@ export function createTypeScriptSemanticCompilerView(
         ? { module: moduleName, export: exportName }
         : undefined;
     },
+    canonicalValueBindingsAt(node, moduleName, exportName) {
+      return canonicalValueBindingsAt(
+        node,
+        moduleName,
+        exportName,
+        checker,
+        canonicalExportIdentity,
+      );
+    },
   };
+}
+
+function canonicalValueBindingsAt(
+  node: ts.Node,
+  moduleName: string,
+  exportName: string,
+  checker: ts.TypeChecker,
+  canonical: (node: ts.Node, moduleName: string, exportName: string) => boolean,
+): readonly SemanticCanonicalValueBinding[] {
+  const result: SemanticCanonicalValueBinding[] = [];
+  for (const statement of node.getSourceFile().statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      statement.importClause?.isTypeOnly
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const specifier of bindings.elements) {
+        const local = specifier.name;
+        if (
+          !specifier.isTypeOnly &&
+          canonical(local, moduleName, exportName) &&
+          sameBindingAt(local, node, checker)
+        ) {
+          result.push({ kind: "identifier", expression: local.text });
+        }
+      }
+    } else if (
+      bindings &&
+      ts.isNamespaceImport(bindings) &&
+      canonical(bindings.name, moduleName, exportName) &&
+      sameBindingAt(bindings.name, node, checker)
+    ) {
+      result.push({
+        kind: "namespace-access",
+        expression: `${bindings.name.text}.${exportName}`,
+      });
+    }
+  }
+  return result;
+}
+
+function sameBindingAt(
+  binding: ts.Identifier,
+  node: ts.Node,
+  checker: ts.TypeChecker,
+): boolean {
+  const declared = checker.getSymbolAtLocation(binding);
+  const visible = checker.resolveName(
+    binding.text,
+    node,
+    ts.SymbolFlags.Value,
+    true,
+  );
+  return Boolean(declared && visible && declared === visible);
 }
 
 function shorthandAssignmentValueSymbol(

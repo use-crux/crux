@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 53 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want PromptText diagnostic evidence epoch 53", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 54 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want PromptText transformed-view epoch 54", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -41,6 +41,12 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"fragment-join evidence",
 		"Epoch 53",
 		"PromptText diagnostic evidence",
+		"Epoch 54",
+		"PromptText refactor source-ref metadata",
+		"compiler-owned source classification",
+		"Epoch 50",
+		"PromptText refactor source-ref metadata",
+		"compiler-owned source classification",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -51,7 +57,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-53", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-54", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -80,6 +86,10 @@ func TestProjectIndexFactStoreMissesPreFragmentJoinSnapshotEpoch(t *testing.T) {
 
 func TestProjectIndexFactStoreMissesPrePromptTextDiagnosticEvidenceEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 52, "pre-prompt-text-diagnostic-evidence snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPrePromptTextRefactorEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 53, "pre-prompt-text-refactor snapshot")
 }
 
 func assertSnapshotEpochMiss(t *testing.T, epoch int, contents string) {

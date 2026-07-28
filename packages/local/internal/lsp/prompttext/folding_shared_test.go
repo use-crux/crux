@@ -171,8 +171,10 @@ func canonicalFoldingViews(
 		Definitions: []api.ProjectDefinition{{
 			ID: "prompt:writer",
 			SourceRefs: []api.ProjectSourceRef{{
-				ID:     "prompt:writer:source:prompt:prompt-text",
-				Source: api.SourceLoc{File: file, Line: 1, Column: intPointer(15)},
+				ID:       "prompt:writer:source:prompt:prompt-text",
+				Role:     "prompt",
+				Property: "prompt",
+				Source:   api.SourceLoc{File: file, Line: 1, Column: intPointer(15)},
 				Snippet: &api.SourceSnippet{
 					Source: source[14 : len(source)-2], Language: "typescript",
 					Range: api.SourceRange{
@@ -183,6 +185,7 @@ func canonicalFoldingViews(
 				Fidelity: "resolved",
 				Metadata: map[string]any{"promptText": map[string]any{
 					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"sourceKind": "owner",
 				}},
 			}},
 		}},

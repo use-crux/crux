@@ -63,7 +63,9 @@ func (m *Manager) runOwn(ctx context.Context) {
 				snapshots = nil
 				continue
 			}
-			m.applySnapshot(snapshot)
+			if !m.applySnapshot(snapshot) {
+				return
+			}
 		case <-ticker.C:
 			probe, err := m.options.Transport.Probe(ctx, m.options.Root, m.options.Version, m.options.ProbeBudget)
 			if err != nil {
@@ -99,7 +101,10 @@ func (m *Manager) handoverToAttached(ctx context.Context, stopOwn context.Cancel
 		return false
 	}
 
-	m.applySnapshot(snapshot)
+	if !m.applySnapshot(snapshot) {
+		stream.Close()
+		return true
+	}
 	if delta != nil {
 		if err := m.applyDelta(ctx, *delta); err != nil {
 			stream.Close()

@@ -151,7 +151,8 @@ func canonicalLinkViews(
 		Definitions: []api.ProjectDefinition{{
 			ID: "prompt:writer",
 			SourceRefs: []api.ProjectSourceRef{{
-				ID: "prompt:writer:source:prompt-text",
+				ID: "prompt:writer:source:prompt-text", Role: "prompt",
+				Property: "prompt",
 				Source: api.SourceLoc{
 					File: file, Line: 1, Column: intPointer(15),
 				},
@@ -165,6 +166,7 @@ func canonicalLinkViews(
 				Fidelity: "resolved",
 				Metadata: map[string]any{"promptText": map[string]any{
 					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"sourceKind": "owner",
 				}},
 			}},
 		}},

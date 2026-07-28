@@ -158,6 +158,12 @@ export function createTsgoSemanticSyntaxView(
         return isIdentifier(node.name) ? node.name : undefined;
       return undefined;
     },
+    isComputedProperty(node) {
+      return (
+        isPropertyAssignment(node) &&
+        node.name.kind === SyntaxKind.ComputedPropertyName
+      );
+    },
     arrayElements(node) {
       return isArrayLiteralExpression(node)
         ? nativeNodeList(node.elements)
@@ -205,6 +211,10 @@ export function createTsgoSemanticSyntaxView(
       return isNumericLiteral(node) ? node.text : undefined;
     },
     unwrapExpression,
+    unwrapParentheses(node) {
+      while (isParenthesizedExpression(node)) node = node.expression;
+      return node;
+    },
     variableDeclarationName(node) {
       return isVariableDeclaration(node) ? node.name : undefined;
     },

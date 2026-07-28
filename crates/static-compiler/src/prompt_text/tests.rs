@@ -9,8 +9,10 @@ use super::analyze;
 mod barrier_cases;
 mod folding_cases;
 mod heading_label_cases;
+mod layout_cases;
 mod link_cases;
 mod preview_cases;
+mod refactor_cases;
 mod structure_cases;
 mod support;
 mod surrogate_cases;
@@ -179,6 +181,9 @@ fn request(source: &str) -> PromptTextQueryRequest {
             max_template_bytes: 256 << 10,
             max_traversal_nodes: 100_000,
             max_output_bytes: 1 << 20,
+            max_string_refactors: 128,
+            max_string_refactor_bytes: 256 << 10,
+            max_string_refactor_output_bytes: 256 << 10,
             max_fragments: 256,
             max_fragment_joins: 256,
             max_fragment_bytes: 64 << 10,

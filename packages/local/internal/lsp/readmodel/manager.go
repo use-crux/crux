@@ -50,7 +50,14 @@ type ManagerOptions struct {
 	Reprobe       time.Duration
 	Connect       func(context.Context, string) (MessageStream, error)
 	StartOwn      func(context.Context, OwnOptions) (OwnSource, error)
-	OnChange      func(Change)
+	// ApplyCurrent synchronously executes a Store mutation only while the
+	// embedding lifecycle still owns this manager. It must invoke apply exactly
+	// once before returning true and must not retain it after returning.
+	//
+	// A nil hook accepts every mutation. Returning false retires a superseded
+	// manager before queued snapshots or deltas can replace current state.
+	ApplyCurrent func(apply func()) bool
+	OnChange     func(Change)
 	// OnIndexChange invalidates transient queries whenever a snapshot replaces
 	// the source or an accepted delta advances its generation, even when no
 	// publication file changed.
@@ -163,7 +170,9 @@ func (m *Manager) consume(ctx, readyContext context.Context, stream MessageStrea
 		if err := m.validateRemoteSnapshot(snapshot); err != nil {
 			return fmt.Errorf("resync Project Index identity: %w", err)
 		}
-		m.applySnapshot(snapshot)
+		if !m.applySnapshot(snapshot) {
+			return errManagerSuperseded
+		}
 		m.setAttachedTransientSource(snapshot)
 		m.setMode(ModeAttached)
 	} else if err := m.awaitInitialSnapshot(readyContext, messages); err != nil {
@@ -197,7 +206,9 @@ func (m *Manager) consumeMessages(ctx context.Context, messages <-chan json.RawM
 					ignoreInitialSnapshot = false
 					continue
 				}
-				m.applySnapshot(*message.Snapshot)
+				if !m.applySnapshot(*message.Snapshot) {
+					return errManagerSuperseded
+				}
 				m.setAttachedTransientSource(*message.Snapshot)
 				continue
 			}
@@ -216,7 +227,9 @@ func (m *Manager) awaitInitialSnapshot(ctx context.Context, messages <-chan json
 	if err := m.validateRemoteSnapshot(snapshot); err != nil {
 		return fmt.Errorf("initial Project Index identity: %w", err)
 	}
-	m.applySnapshot(snapshot)
+	if !m.applySnapshot(snapshot) {
+		return errManagerSuperseded
+	}
 	if delta != nil {
 		if err := m.applyDelta(ctx, *delta); err != nil {
 			return err

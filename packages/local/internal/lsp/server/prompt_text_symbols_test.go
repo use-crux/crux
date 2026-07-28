@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	lsprompttext "github.com/use-crux/crux/packages/local/internal/lsp/prompttext"
@@ -105,6 +106,7 @@ func TestPromptTextDocumentSymbolsCancellationPreservesSavedSymbols(t *testing.T
 
 type blockingDocumentSymbolWorkspace struct {
 	workspaceController
+	mu        sync.RWMutex
 	saved     []protocol.DocumentSymbol
 	after     []protocol.DocumentSymbol
 	started   chan struct{}
@@ -118,6 +120,8 @@ func (w *blockingDocumentSymbolWorkspace) DidChange(
 	int,
 	[]protocol.TextDocumentContentChangeEvent,
 ) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.after != nil {
 		w.saved = w.after
 	}
@@ -126,7 +130,9 @@ func (w *blockingDocumentSymbolWorkspace) DidChange(
 func (w *blockingDocumentSymbolWorkspace) DocumentSymbols(
 	protocol.DocumentURI,
 ) []protocol.DocumentSymbol {
-	return w.saved
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return append([]protocol.DocumentSymbol(nil), w.saved...)
 }
 
 func (w *blockingDocumentSymbolWorkspace) PromptTextSymbols(

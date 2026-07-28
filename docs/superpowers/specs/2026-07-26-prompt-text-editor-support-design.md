@@ -184,10 +184,31 @@ resources are active; split views count once and closed resources are never
 cached.
 
 Devtools owns exact-preview inputs, runtime selection, validation display, and
-the explicit Preview action. The active application runtime invokes canonical
-Core inspection through an advertised Runtime Bridge capability. Opening UI,
-editing input, saving, or opening a panel never executes code. There is no
-fallback workspace evaluation.
+the explicit Preview action. The initial Runtime Bridge capability advertises
+only canonical Prompt definitions and invokes their public `Prompt.inspect()`
+path. Contexts remain static-preview-only until Core exposes a canonical
+`Context.inspect()` API; no bridge-private context renderer is permitted.
+`targetId` is the canonical Project Index definition ID.
+
+The active application process owns one immutable prompt catalogue shared by
+WebSocket and HTTP transports. Successful public configuration atomically
+replaces it; revisions, replacement, disposal, target retirement, and
+reconnects are explicit protocol state. Local selects a runtime deterministically
+from the requested peer/environment, exact target, and catalogue revision and
+fails on ambiguity instead of choosing map iteration order.
+
+Opening UI, editing input, saving, discovery, or rendering never executes code.
+Only the explicit Preview dispatch invokes inspection. Inspection is quiet
+with respect to provider generation, tool invocation, ordinary Runs, and Crux
+observability, but trusted application callbacks used by canonical inspection
+may perform side effects or I/O. Devtools must state that boundary at
+confirmation. Static-preview source, snippets, expressions, placeholders, and
+output never enter Devtools. Exact-preview input, validation, output, and
+provenance may transit only in memory to the explicitly opened Devtools
+session. Neither static nor exact data enters logs, traces, metrics, errors,
+caches, snapshots, persistence, or broadcasts. Exact execution data also
+remains out of Project Index and LSP. There is no fallback workspace
+evaluation.
 
 ## Architecture
 
@@ -274,6 +295,16 @@ downgrade. Pending, cancelled, incomplete, older-document, or old-generation
 dirty results are never fallback evidence. See the exact contract in
 [Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
 
+PromptText navigation and hover consume a second, server-neutral transformed-
+view port layered over `ViewProvider`. It selects one publication exactly once
+and atomically joins it to the client session's stable-ID range-transform
+snapshot. Consumers receive only detached normalized records, never raw
+publication values or a Publisher they could combine independently. Open
+requests always carry the current document revision, so exact and saved-
+fallback status is request-relative. Current complete transient syntax may
+veto saved identity, and final checks cover the project view, transform
+revision, request buffer, and every open destination.
+
 ### Saved semantic fact transport
 
 V3 worker events carry explicit fact-group presence in the optional
@@ -357,6 +388,38 @@ gate PromptText diagnostics/actions without changing existing lint behavior.
 The complete event, wire, capability, and stale-result matrices live in
 [Contracts](./2026-07-26-prompt-text-editor-support/contracts.md).
 
+Sequence actions retain the split proof boundary. Go may wrap exact current
+expression bytes with the fixed `.join(", ")` form when semantic evidence
+authorizes it. Line isolation is different: a private Rust Static Compiler
+module produces an optional exact edit only after a counterfactual run proves
+Core normalization, Markdown structure, every non-target interpolation, and
+all unrelated literal mappings remain equivalent. Go never derives layout
+applicability, indentation, or EOLs; it validates and copies a current proof.
+The optional edit amends unreleased V1 and participates in ordinary finalized-
+template output accounting.
+
+Navigation claims only PromptText backticks and literal-quasi regions. Tags and
+interpolation barriers remain native TypeScript territory. Owners, named
+fragments, references, and hover facts all come from the same transformed view
+and exact transient match. PromptText hover appends after existing finding and
+definition sections; it never proxies TypeScript hover or reports runtime,
+safety, or encoding claims.
+
+Owner, named-fragment, and anonymous-fragment identity is explicit
+backend-neutral semantic evidence under `metadata.promptText.sourceKind`.
+Shared reachability assigns it before JavaScript/native projection; Go and
+editor consumers never infer it from joins, symbols, nesting, roles, or the
+legacy top-level `metadata.fragment` marker. The legacy marker remains
+unchanged for general consumers. Missing or inconsistent classification fails
+closed, including for saved fallback.
+
+The ordinary multiline-string refactor is deliberately narrow. Semantic
+backends prove one PromptText-compatible field and one existing canonical Core
+`md` value binding. Rust proves an interpolation-free fixed-point conversion
+under #270 in both UTF-16 and UTF-8. Go joins those exact current records and
+returns one `refactor.rewrite` edit. Phase 14 never inserts or reformats
+imports.
+
 A narrow versioned Crux request returns identity-filtered decoration roles and
 ranges. A dedicated VS Code PromptText controller owns scheduling, staleness,
 themes, settings, and cleanup separately from inline diagnostic decorations.
@@ -379,10 +442,14 @@ unsupported syntax, missing identity, and stale results preserve normal
 TypeScript behavior. Explicit preview may present bounded unavailable or
 truncated states.
 
-Source, snippets, expressions, placeholders, and preview output never enter
-logs, traces, metrics, errors, caches, snapshots, broadcasts, or Devtools.
-Telemetry is limited to hashed URI, counts, sizes, duration, revisions,
-evidence level, result category, and stable reason.
+Static-preview source, snippets, expressions, placeholders, and output never
+enter Devtools. Exact-preview input, validation, output, and provenance may
+transit only in memory to the explicitly opened Devtools session. Neither
+static nor exact data enters logs, traces, metrics, errors, caches, snapshots,
+persistence, or broadcasts. Telemetry is limited to hashed URI, counts, sizes,
+duration, revisions, evidence level, result category, and stable reason; the
+exact-preview privacy allowlist in Contracts is narrower and authoritative for
+Runtime Bridge dispatch.
 
 Centralized limits cover source bytes, candidate count, projected bytes,
 fragment count/depth, Markdown nodes, preview bytes, and duration. Truncation

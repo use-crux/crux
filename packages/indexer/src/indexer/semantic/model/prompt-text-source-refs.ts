@@ -18,10 +18,12 @@ import {
   semanticSourceForNode,
 } from "../syntax-readers";
 import {
+  semanticPromptTextProperties,
   semanticPromptTextEdges,
   type SemanticPromptTextEdge,
   type SemanticPromptTextPropertySpec,
 } from "./prompt-text-reachability";
+import { semanticPromptTextRefactorSourceRefs } from "./prompt-text-refactors";
 import { suppressCyclicPromptTextJoins } from "./prompt-text-join-cycles";
 
 /** Builds canonical Project Index refs for every proven authored `md` region. */
@@ -31,7 +33,9 @@ export function semanticPromptTextSourceRefs(
   view: SemanticAnalyzerView,
   properties?: readonly SemanticPromptTextPropertySpec[],
 ): readonly ProjectSourceRef[] {
-  const edges = semanticPromptTextEdges(candidate, view, properties);
+  const effectiveProperties =
+    properties ?? semanticPromptTextProperties(candidate);
+  const edges = semanticPromptTextEdges(candidate, view, effectiveProperties);
   const earliestByTag = new Map<string, SemanticPromptTextEdge>();
   for (const edge of edges) {
     const key = promptTextDedupKey(candidate.definitionId, edge, view);
@@ -54,7 +58,7 @@ export function semanticPromptTextSourceRefs(
     ]),
   );
   const joinsByOwner = promptTextFragmentJoins(edges, refsByTag, view);
-  return refs.map((ref) => {
+  const templates = refs.map((ref) => {
     const joins = joinsByOwner.get(ref.id);
     if (!joins || joins.length === 0) return ref;
     return {
@@ -68,6 +72,15 @@ export function semanticPromptTextSourceRefs(
       },
     };
   });
+  return [
+    ...templates,
+    ...semanticPromptTextRefactorSourceRefs(
+      root,
+      candidate,
+      view,
+      effectiveProperties,
+    ),
+  ];
 }
 
 function promptTextFragmentJoins(
@@ -197,6 +210,7 @@ function promptTextSourceRef(
         tag: "md",
         language: "markdown",
         lifecycle: edge.lifecycle,
+        sourceKind: edge.sourceKind,
       },
     },
   };

@@ -16,6 +16,8 @@ package cache
 // Epoch 51 adds bounded media stream operation facts.
 // Epoch 52 adds semantic PromptText fragment-join evidence.
 // Epoch 53 adds PromptText diagnostic evidence.
+// Epoch 54 adds PromptText refactor source-ref metadata and compiler-owned
+// source classification across restart boundaries.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 53
+const ProjectIndexSnapshotCacheEpoch = 54

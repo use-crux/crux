@@ -35,29 +35,30 @@ type Options struct {
 type Server struct {
 	options Options
 
-	mu                       sync.Mutex
-	shutdown                 bool
-	exitCode                 int
-	folders                  []protocol.WorkspaceFolder
-	clientInfo               *protocol.ClientInfo
-	initialized              bool
-	scopeCancel              context.CancelFunc
-	outbound                 chan protocol.OutboundMessage
-	settings                 Settings
-	hoverFormat              protocol.MarkupKind
-	inlayHintRefreshSupport  bool
-	codeLensRefreshSupport   bool
-	promptTextRefreshSupport bool
-	diagnosticVersionSupport bool
-	diagnosticDataSupport    bool
-	codeActionLiteralSupport bool
-	openDevtoolsCommand      bool
-	trusted                  bool
-	workspace                workspaceController
-	documents                map[protocol.DocumentURI]documentStatus
-	buffers                  *documentBuffers
-	promptText               *lsprompttext.Controller
-	diagnostics              *diagnosticComposer
+	mu                        sync.Mutex
+	shutdown                  bool
+	exitCode                  int
+	folders                   []protocol.WorkspaceFolder
+	clientInfo                *protocol.ClientInfo
+	initialized               bool
+	scopeCancel               context.CancelFunc
+	outbound                  chan protocol.OutboundMessage
+	settings                  Settings
+	hoverFormat               protocol.MarkupKind
+	inlayHintRefreshSupport   bool
+	codeLensRefreshSupport    bool
+	promptTextRefreshSupport  bool
+	diagnosticVersionSupport  bool
+	diagnosticDataSupport     bool
+	codeActionLiteralSupport  bool
+	codeActionRefactorSupport bool
+	openDevtoolsCommand       bool
+	trusted                   bool
+	workspace                 workspaceController
+	documents                 map[protocol.DocumentURI]documentStatus
+	buffers                   *documentBuffers
+	promptText                *lsprompttext.Controller
+	diagnostics               *diagnosticComposer
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
@@ -188,11 +189,11 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 	case protocol.MethodExecuteCommand:
 		return s.executeCommand(ctx, request.Params)
 	case protocol.MethodHover:
-		return s.hover(request.Params)
+		return s.hover(ctx, request.ID, request.Params)
 	case protocol.MethodDefinition:
-		return s.definition(request.Params)
+		return s.definition(ctx, request.ID, request.Params)
 	case protocol.MethodReferences:
-		return s.references(request.Params)
+		return s.references(ctx, request.ID, request.Params)
 	case protocol.MethodDocumentSymbol:
 		return s.documentSymbol(ctx, request.ID, request.Params)
 	case protocol.MethodFoldingRange:

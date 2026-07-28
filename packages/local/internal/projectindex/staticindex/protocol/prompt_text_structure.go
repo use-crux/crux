@@ -8,11 +8,21 @@ type PromptTextLiteralIsland struct {
 	ProjectionLength uint32          `json:"projectionLength"`
 }
 
+// PromptTextLineIsolationEdit is an exact source replacement whose
+// applicability was proven counterfactually by Rust. Go validates and copies
+// these bytes but never derives layout, indentation, or line endings.
+type PromptTextLineIsolationEdit struct {
+	Range        PromptTextRange `json:"range"`
+	ExpectedText string          `json:"expectedText"`
+	NewText      string          `json:"newText"`
+}
+
 // PromptTextInterpolationBarrier is one opaque `${ expression }` region.
 type PromptTextInterpolationBarrier struct {
-	Index           uint32          `json:"index"`
-	Range           PromptTextRange `json:"range"`
-	ExpressionRange PromptTextRange `json:"expressionRange"`
+	Index             uint32                       `json:"index"`
+	Range             PromptTextRange              `json:"range"`
+	ExpressionRange   PromptTextRange              `json:"expressionRange"`
+	LineIsolationEdit *PromptTextLineIsolationEdit `json:"lineIsolationEdit,omitempty"`
 }
 
 // PromptTextSourceMapping maps UTF-16 projection offsets back to authored
@@ -149,6 +159,7 @@ type PromptTextTemplate struct {
 	Range                 PromptTextRange                  `json:"range"`
 	TagRange              PromptTextRange                  `json:"tagRange"`
 	TemplateRange         PromptTextRange                  `json:"templateRange"`
+	BacktickRanges        [2]PromptTextRange               `json:"backtickRanges"`
 	Status                PromptTextAnalysisStatus         `json:"status"`
 	LiteralIslands        []PromptTextLiteralIsland        `json:"literalIslands"`
 	InterpolationBarriers []PromptTextInterpolationBarrier `json:"interpolationBarriers"`

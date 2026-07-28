@@ -10,8 +10,10 @@
  */
 
 import {
+  SyntaxKind,
   isIdentifier,
   isImportDeclaration,
+  isNamedImports,
   isNamespaceImport,
   isPropertyAccessExpression,
   isShorthandPropertyAssignment,
@@ -21,11 +23,13 @@ import {
 } from "@typescript/native-preview/unstable/ast";
 import { formatSyntaxKind } from "@typescript/native-preview/unstable/ast/utils";
 import {
+  SymbolFlags,
   type Project,
   type Symbol as TsgoSymbol,
   type Type as TsgoType,
 } from "@typescript/native-preview/unstable/sync";
 import type {
+  SemanticCanonicalValueBinding,
   SemanticCompilerSourceFile,
   SemanticCompilerView,
 } from "../../compiler-view";
@@ -149,7 +153,74 @@ export function createTsgoCompilerView(
         ? { module: moduleName, export: exportName }
         : undefined;
     },
+    canonicalValueBindingsAt(node, moduleName, exportName) {
+      return canonicalValueBindingsAt(
+        node,
+        moduleName,
+        exportName,
+        project,
+        sourceLookup,
+      );
+    },
   };
+}
+
+function canonicalValueBindingsAt(
+  node: TsgoNode,
+  moduleName: string,
+  exportName: string,
+  project: Project,
+  sourceLookup: TsgoNativeSourceLookup,
+): readonly SemanticCanonicalValueBinding[] {
+  const result: SemanticCanonicalValueBinding[] = [];
+  const source = node.getSourceFile();
+  for (const statement of nativeNodeList(source.statements)) {
+    if (
+      !isImportDeclaration(statement) ||
+      statement.importClause?.phaseModifier === SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && isNamedImports(bindings)) {
+      for (const specifier of nativeNodeList(bindings.elements)) {
+        const local = specifier.name;
+        if (
+          !specifier.isTypeOnly &&
+          sourceLookup.isCanonicalExport(local, moduleName, exportName) &&
+          sameNativeBindingAt(local, node, project)
+        ) {
+          result.push({ kind: "identifier", expression: local.text });
+        }
+      }
+    } else if (
+      bindings &&
+      isNamespaceImport(bindings) &&
+      sourceLookup.isCanonicalExport(bindings.name, moduleName, exportName) &&
+      sameNativeBindingAt(bindings.name, node, project)
+    ) {
+      result.push({
+        kind: "namespace-access",
+        expression: `${bindings.name.text}.${exportName}`,
+      });
+    }
+  }
+  return result;
+}
+
+function sameNativeBindingAt(
+  binding: TsgoIdentifier,
+  node: TsgoNode,
+  project: Project,
+): boolean {
+  const declared = project.checker.getSymbolAtLocation(binding);
+  const visible = project.checker.resolveName(
+    binding.text,
+    SymbolFlags.Value,
+    node,
+    true,
+  );
+  return Boolean(declared && visible && declared.id === visible.id);
 }
 
 function cachedNativeResults<TValue>(

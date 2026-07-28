@@ -16,15 +16,18 @@ const (
 // DefaultLimits returns the centralized v1 transient-analysis bounds.
 func DefaultLimits() staticprotocol.PromptTextLimits {
 	return staticprotocol.PromptTextLimits{
-		MaxSourceBytes:    MaxDocumentBytes,
-		MaxTemplates:      256,
-		MaxTemplateBytes:  256 << 10,
-		MaxTraversalNodes: 100_000,
-		MaxOutputBytes:    1 << 20,
-		MaxFragments:      256,
-		MaxFragmentJoins:  256,
-		MaxFragmentBytes:  defaultMaxFragmentBytes,
-		MaxFragmentDepth:  16,
-		MaxPreviewBytes:   1 << 20,
+		MaxSourceBytes:               MaxDocumentBytes,
+		MaxTemplates:                 256,
+		MaxTemplateBytes:             256 << 10,
+		MaxTraversalNodes:            100_000,
+		MaxOutputBytes:               1 << 20,
+		MaxStringRefactors:           128,
+		MaxStringRefactorBytes:       256 << 10,
+		MaxStringRefactorOutputBytes: 256 << 10,
+		MaxFragments:                 256,
+		MaxFragmentJoins:             256,
+		MaxFragmentBytes:             defaultMaxFragmentBytes,
+		MaxFragmentDepth:             16,
+		MaxPreviewBytes:              1 << 20,
 	}
 }

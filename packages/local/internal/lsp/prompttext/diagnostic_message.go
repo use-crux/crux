@@ -26,6 +26,10 @@ func promptTextDiagnosticMessage(
 			"). Use a string, finite number, PromptText fragment, false, null, undefined, or a supported sequence."
 	case "json-serialization":
 		return "md.json() cannot produce text because JSON.stringify() is proven to return undefined for this value."
+	case "inline-sequence":
+		return "PromptText interpolation " +
+			strconv.Itoa(evidence.InterpolationIndex) +
+			" is a sequence in inline position. Move it to its own line or join supported scalar values explicitly."
 	default:
 		return ""
 	}

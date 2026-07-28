@@ -1,5 +1,6 @@
 use crux_indexer_protocol::prompt_text::{
-    PromptTextAnalysisStatus, PromptTextLiteralIsland, PromptTextPreview, PromptTextTemplate,
+    PromptTextAnalysisStatus, PromptTextLiteralIsland, PromptTextPreview,
+    PromptTextRefactorAnalysis, PromptTextTemplate,
 };
 use oxc_ast::ast::TaggedTemplateExpression;
 use oxc_semantic::Scoping;
@@ -52,6 +53,8 @@ pub struct ProjectedPromptText {
     pub status: PromptTextAnalysisStatus,
     /// Included candidates in authored source order.
     pub templates: Vec<ProjectedPromptTextTemplate>,
+    /// Independent ordinary-string refactor proof analysis.
+    pub refactors: PromptTextRefactorAnalysis,
 }
 
 pub(crate) fn template(
@@ -110,6 +113,7 @@ pub(crate) fn template(
             range: map.span(tagged.span()),
             tag_range: map.span(tagged.tag.span()),
             template_range: map.span(tagged.quasi.span()),
+            backtick_ranges: backtick_ranges(map, tagged.quasi.span()),
             status: PromptTextAnalysisStatus::Complete,
             literal_islands,
             interpolation_barriers: barriers(map, &quasi_spans, &tagged.quasi.expressions),
@@ -136,6 +140,7 @@ fn unsupported(
             range: map.span(tagged.span()),
             tag_range: map.span(tagged.tag.span()),
             template_range: map.span(tagged.quasi.span()),
+            backtick_ranges: backtick_ranges(map, tagged.quasi.span()),
             status: PromptTextAnalysisStatus::Unsupported,
             literal_islands: Vec::new(),
             interpolation_barriers: Vec::new(),
@@ -149,4 +154,14 @@ fn unsupported(
         islands: Vec::new(),
         interpolations: Vec::new(),
     }
+}
+
+fn backtick_ranges(
+    map: &SourceMap<'_>,
+    template: Span,
+) -> [crux_indexer_protocol::prompt_text::PromptTextRange; 2] {
+    [
+        map.bytes(template.start as usize..template.start as usize + 1),
+        map.bytes(template.end as usize - 1..template.end as usize),
+    ]
 }

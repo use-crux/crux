@@ -41,14 +41,17 @@ func TestControllerDecoratesOneHeadingForExactCanonicalIdentity(t *testing.T) {
 		Definitions: []api.ProjectDefinition{{
 			ID: "prompt:writer",
 			SourceRefs: []api.ProjectSourceRef{{
-				ID:     "prompt:writer:source:prompt:prompt-text",
-				Source: api.SourceLoc{File: file, Line: 4, Column: intPointer(11)},
+				ID:       "prompt:writer:source:prompt:prompt-text",
+				Role:     "prompt",
+				Property: "prompt",
+				Source:   api.SourceLoc{File: file, Line: 4, Column: intPointer(11)},
 				Snippet: &api.SourceSnippet{
 					Source: "md`# Hello`", Language: "typescript", Range: sourceRange,
 				},
 				Fidelity: "resolved",
 				Metadata: map[string]any{"promptText": map[string]any{
 					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"sourceKind": "owner",
 				}},
 			}},
 		}},

@@ -4,6 +4,7 @@
 //! production Markdown classifier and returns only normalized protocol data.
 
 mod heading_label;
+mod layout;
 mod limits;
 mod markdown;
 mod preview;
@@ -26,6 +27,7 @@ pub fn analyze(request: PromptTextQueryRequest) -> PromptTextQueryResponse {
         }
         markdown::classify(&request.source, projected);
     }
+    layout::prove_all(&request, &mut projection.templates);
     preview::render_all(
         &request,
         &request.source,
@@ -51,5 +53,6 @@ pub fn analyze(request: PromptTextQueryRequest) -> PromptTextQueryResponse {
         revision: request.revision,
         status: projection.status,
         templates,
+        refactors: projection.refactors,
     }
 }

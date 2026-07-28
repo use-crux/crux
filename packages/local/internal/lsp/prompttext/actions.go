@@ -17,7 +17,8 @@ type ActionRequest struct {
 	RequestRange    protocol.Range
 }
 
-// ActionResult is one regenerated eager action contribution.
+// ActionResult is one regenerated eager action contribution. Actions retain
+// their contract-defined order when independent fixes apply.
 type ActionResult struct {
 	Revision  transient.Revision
 	ViewStamp indexview.ViewStamp
@@ -65,13 +66,13 @@ func (c *Controller) Actions(
 		selection.View.Stamp != diagnostics.ViewStamp {
 		return empty
 	}
-	action, ok := serializationCodeAction(*match, document)
-	if !ok {
+	actions := promptTextCodeActions(*match, document)
+	if len(actions) == 0 {
 		return empty
 	}
 	return ActionResult{
 		Revision: diagnostics.Revision, ViewStamp: diagnostics.ViewStamp,
-		Actions: []protocol.CodeAction{action},
+		Actions: actions,
 	}
 }
 
@@ -107,10 +108,21 @@ func serializationCodeAction(
 		NewText: "(" + match.tagExpression + ").json(" +
 			match.expressionText + ")",
 	}
+	return versionedPromptTextCodeAction(
+		"Serialize with `md.json()`", match.diagnostic, edit, document,
+	), true
+}
+
+func versionedPromptTextCodeAction(
+	title string,
+	diagnostic protocol.Diagnostic,
+	edit protocol.TextEdit,
+	document transient.Document,
+) protocol.CodeAction {
 	return protocol.CodeAction{
-		Title:       "Serialize with `md.json()`",
+		Title:       title,
 		Kind:        protocol.CodeActionQuickFix,
-		Diagnostics: []protocol.Diagnostic{match.diagnostic},
+		Diagnostics: []protocol.Diagnostic{diagnostic},
 		Edit: &protocol.WorkspaceEdit{
 			DocumentChanges: []protocol.TextDocumentEdit{{
 				TextDocument: protocol.VersionedTextDocumentIdentifier{
@@ -122,7 +134,7 @@ func serializationCodeAction(
 				Edits: []protocol.TextEdit{edit},
 			}},
 		},
-	}, true
+	}
 }
 
 func rangesIntersectClosed(left, right protocol.Range) bool {

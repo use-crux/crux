@@ -39,12 +39,17 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 	s.promptTextRefreshSupport = promptTextRefreshSupport(params.Capabilities)
 	s.diagnosticVersionSupport, s.diagnosticDataSupport =
 		promptTextDiagnosticSupport(params.Capabilities)
-	s.codeActionLiteralSupport = codeActionLiteralSupport(params.Capabilities)
+	s.codeActionLiteralSupport, s.codeActionRefactorSupport =
+		codeActionLiteralSupport(params.Capabilities)
 	s.openDevtoolsCommand = initializationClientCommands(params.InitializationOptions).OpenDevtools
 	s.settings = mergeSettings(s.settings, params.InitializationOptions)
 	s.trusted = initializationWorkspaceTrusted(params.InitializationOptions)
 	s.mu.Unlock()
 
+	codeActionKinds := []protocol.CodeActionKind{protocol.CodeActionQuickFix}
+	if s.codeActionRefactorSupport {
+		codeActionKinds = append(codeActionKinds, protocol.CodeActionRefactorRewrite)
+	}
 	return jsonrpc.HandlerResult{Result: protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: protocol.TextDocumentSyncOptions{
@@ -61,7 +66,7 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 				ResolveProvider: false,
 			},
 			CodeActionProvider: protocol.CodeActionOptions{
-				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
+				CodeActionKinds: codeActionKinds,
 				ResolveProvider: false,
 			},
 			ExecuteCommandProvider: protocol.ExecuteCommandOptions{
@@ -95,19 +100,24 @@ func promptTextDiagnosticSupport(
 	return diagnostics.VersionSupport, diagnostics.DataSupport
 }
 
-func codeActionLiteralSupport(capabilities *protocol.ClientCapabilities) bool {
+func codeActionLiteralSupport(
+	capabilities *protocol.ClientCapabilities,
+) (quickFix, refactor bool) {
 	if capabilities == nil || capabilities.TextDocument == nil ||
 		capabilities.TextDocument.CodeAction == nil ||
 		capabilities.TextDocument.CodeAction.CodeActionLiteralSupport == nil {
-		return false
+		return false, false
 	}
 	for _, kind := range capabilities.TextDocument.CodeAction.
 		CodeActionLiteralSupport.CodeActionKind.ValueSet {
-		if kind == protocol.CodeActionQuickFix {
-			return true
+		switch kind {
+		case protocol.CodeActionQuickFix:
+			quickFix = true
+		case protocol.CodeActionRefactor, protocol.CodeActionRefactorRewrite:
+			refactor = true
 		}
 	}
-	return false
+	return quickFix, refactor
 }
 
 type clientCommands struct {

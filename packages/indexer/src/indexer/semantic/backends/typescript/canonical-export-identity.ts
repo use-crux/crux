@@ -1,7 +1,7 @@
 import ts from "typescript";
 import type { SemanticCacheValidationDependencyCollector } from "../../cache-validation";
 import { semanticValueExportTerminal } from "../../model/export-provenance";
-import { tagSite } from "./export-symbols";
+import { namespaceExportSite, tagSite } from "./export-symbols";
 import {
   createTypeScriptExportRoutes,
   type TypeScriptCanonicalPackageRoot,
@@ -27,7 +27,9 @@ export function createTypeScriptCanonicalExportIdentity(
 
   return (node, moduleName, exportName) => {
     if (input.interceptedModuleNames.has(moduleName)) return false;
-    const site = tagSite(node, input.checker);
+    const site =
+      namespaceExportSite(node, exportName, input.checker) ??
+      tagSite(node, input.checker);
     if (!site) return false;
     const packageTerminals = new Map<string, ts.Symbol>();
     const canonicalPackageRoot: TypeScriptCanonicalPackageRoot = (

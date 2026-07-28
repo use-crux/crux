@@ -10,12 +10,27 @@ pub struct PromptTextLiteralIsland {
     pub projection_length: u32,
 }
 
+/// One Rust-proven source replacement that makes a barrier block-positioned.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextLineIsolationEdit {
+    /// Half-open UTF-16 source range replaced by the edit.
+    pub range: PromptTextRange,
+    /// Exact authored source text currently occupying `range`.
+    pub expected_text: String,
+    /// Exact replacement text, including compiler-selected line endings.
+    pub new_text: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextInterpolationBarrier {
     pub index: u32,
     pub range: PromptTextRange,
     pub expression_range: PromptTextRange,
+    /// Optional counterfactual proof; production omits unavailable evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_isolation_edit: Option<PromptTextLineIsolationEdit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,6 +231,8 @@ pub struct PromptTextTemplate {
     pub range: PromptTextRange,
     pub tag_range: PromptTextRange,
     pub template_range: PromptTextRange,
+    /// Exact opening and closing one-code-unit backtick ranges.
+    pub backtick_ranges: [PromptTextRange; 2],
     pub status: PromptTextAnalysisStatus,
     pub literal_islands: Vec<PromptTextLiteralIsland>,
     pub interpolation_barriers: Vec<PromptTextInterpolationBarrier>,

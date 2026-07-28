@@ -58,6 +58,57 @@ pub(crate) fn normalize(islands: Vec<CookedIsland>) -> Option<Vec<ProjectedTextI
         .collect()
 }
 
+/// Applies the same Core construction-time whitespace rules to one scalar
+/// interpolation-free value. Refactor proofs use this to require a fixed
+/// point before and after encoding.
+pub(crate) fn scalar(value: &str) -> Option<String> {
+    let lines = value.split('\n').collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| !blank_text(line))
+        .unwrap_or(lines.len());
+    let end = lines
+        .iter()
+        .rposition(|line| !blank_text(line))
+        .map_or(start, |index| index + 1);
+    let kept = &lines[start..end];
+    if kept.is_empty() {
+        return Some(String::new());
+    }
+    let indent = kept
+        .iter()
+        .filter(|line| !blank_text(line))
+        .map(|line| &line[..leading_text_indent(line)])
+        .reduce(common_text_prefix)
+        .unwrap_or("");
+    Some(
+        kept.iter()
+            .map(|line| line.strip_prefix(indent).unwrap_or(line))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+fn blank_text(value: &str) -> bool {
+    value.bytes().all(|byte| matches!(byte, b' ' | b'\t'))
+}
+
+fn leading_text_indent(value: &str) -> usize {
+    value
+        .bytes()
+        .take_while(|byte| matches!(byte, b' ' | b'\t'))
+        .count()
+}
+
+fn common_text_prefix<'a>(left: &'a str, right: &'a str) -> &'a str {
+    let length = left
+        .bytes()
+        .zip(right.bytes())
+        .take_while(|(left, right)| left == right)
+        .count();
+    &left[..length]
+}
+
 fn logical_lines(islands: &[CookedIsland]) -> Vec<Line> {
     let mut lines = vec![Line::default()];
     for (island, projected) in islands.iter().enumerate() {

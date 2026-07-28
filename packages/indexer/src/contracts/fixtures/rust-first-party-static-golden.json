@@ -5936,13 +5936,31 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-source-refs.ts",
-      "sha256": "4c32c2370f9c666b8dfc4137edd06f590115c3a71f5f14b52342d83c13c17b8b",
-      "bytes": 346,
+      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-reachability.ts",
+      "sha256": "809b19bf7e036f6dd2f85455707ba202bcbcc72fe173b7d67d8e3a36a38a8e19",
+      "bytes": 366,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-refactors.ts",
+      "sha256": "9bdd0fb4dda6c4f53e5271fd3f30e16ec1a507eba019bcf1e4aaad0f0003f623",
+      "bytes": 262,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-source-refs.ts",
+      "sha256": "264ad2a804aa7617c26cd9c851fda873ff8aa20642cf37d04df218ddba9f2d1f",
+      "bytes": 424,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
     },
     {
       "file": "packages/indexer/src/indexer/semantic/model/relation-types.ts",

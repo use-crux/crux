@@ -20,6 +20,9 @@ func ValidateResult(response Result) error {
 		len(response.Templates) != 0 {
 		return fmt.Errorf("unsupported PromptText request contains templates")
 	}
+	if err := validateRefactors(response.Refactors, response.Status.Kind); err != nil {
+		return err
+	}
 	for index, template := range response.Templates {
 		if err := validateTemplate(template); err != nil {
 			return fmt.Errorf("PromptText template %d: %w", index, err)
@@ -40,6 +43,9 @@ func validateTemplate(template staticprotocol.PromptTextTemplate) error {
 		template.Links == nil ||
 		template.Nesting == nil {
 		return fmt.Errorf("template contains a null payload collection")
+	}
+	if !validBackticks(template) {
+		return fmt.Errorf("template contains invalid backtick ranges")
 	}
 	for _, block := range template.Blocks {
 		if !validBlock(block) {
@@ -69,6 +75,37 @@ func validateTemplate(template staticprotocol.PromptTextTemplate) error {
 		return fmt.Errorf("unsupported template contains payload")
 	}
 	return nil
+}
+
+func validBackticks(template staticprotocol.PromptTextTemplate) bool {
+	open, close := template.BacktickRanges[0], template.BacktickRanges[1]
+	return rangeWithin(template.TemplateRange, open) &&
+		rangeWithin(template.TemplateRange, close) &&
+		comparePromptTextPosition(open.Start, open.End) < 0 &&
+		comparePromptTextPosition(close.Start, close.End) < 0 &&
+		open.Start.Line == open.End.Line &&
+		close.Start.Line == close.End.Line &&
+		open.End.Character == open.Start.Character+1 &&
+		close.End.Character == close.Start.Character+1 &&
+		comparePromptTextPosition(open.End, close.Start) <= 0
+}
+
+func rangeWithin(outer, inner staticprotocol.PromptTextRange) bool {
+	return comparePromptTextPosition(outer.Start, inner.Start) <= 0 &&
+		comparePromptTextPosition(inner.End, outer.End) <= 0
+}
+
+func comparePromptTextPosition(
+	left, right staticprotocol.PromptTextPosition,
+) int {
+	if left.Line < right.Line ||
+		left.Line == right.Line && left.Character < right.Character {
+		return -1
+	}
+	if left == right {
+		return 0
+	}
+	return 1
 }
 
 func validAnalysisStatus(kind staticprotocol.PromptTextStatusKind) bool {

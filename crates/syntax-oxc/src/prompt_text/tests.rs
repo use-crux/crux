@@ -12,6 +12,7 @@ use super::ProjectedValue;
 use super::project;
 
 mod projection_boundaries;
+mod unsupported_cases;
 
 #[test]
 fn prompt_text_projection_is_tag_neutral_and_utf16_mapped() {
@@ -76,29 +77,6 @@ fn prompt_text_projection_uses_cooked_core_normalization_and_segmented_mappings(
             character: 13,
         }
     );
-}
-
-#[test]
-fn prompt_text_projection_rejects_an_invalid_cooked_quasi_without_raw_fallback() {
-    let projected = project(&request("const value = md`\\u{110000}`;"));
-
-    assert_eq!(projected.status, PromptTextAnalysisStatus::Complete);
-    assert_eq!(projected.templates.len(), 1);
-    let projected = &projected.templates[0];
-    assert!(projected.islands.is_empty());
-    assert_eq!(
-        projected.template.status,
-        PromptTextAnalysisStatus::Unsupported
-    );
-    assert!(projected.template.literal_islands.is_empty());
-    assert!(projected.template.interpolation_barriers.is_empty());
-    assert!(projected.template.mappings.is_empty());
-    assert!(projected.template.blocks.is_empty());
-    assert!(projected.template.spans.is_empty());
-    assert!(projected.template.links.is_empty());
-    assert!(projected.template.nesting.is_empty());
-    assert!(projected.template.preview.text.is_empty());
-    assert!(projected.template.preview.segments.is_empty());
 }
 
 #[test]
@@ -297,6 +275,9 @@ fn request(source: &str) -> PromptTextQueryRequest {
             max_template_bytes: 256 << 10,
             max_traversal_nodes: 100_000,
             max_output_bytes: 1 << 20,
+            max_string_refactors: 128,
+            max_string_refactor_bytes: 256 << 10,
+            max_string_refactor_output_bytes: 256 << 10,
             max_fragments: 256,
             max_fragment_joins: 256,
             max_fragment_bytes: 64 << 10,

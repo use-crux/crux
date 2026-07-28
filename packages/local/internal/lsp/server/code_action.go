@@ -119,7 +119,11 @@ func (s *Server) codeActionRequest(
 	locators := s.promptTextActionLocators(params)
 	promptTextWorkspace, supportsPromptText :=
 		workspace.(promptTextActionWorkspace)
-	if len(locators) == 0 || !supportsPromptText {
+	refactorWorkspace, supportsRefactor :=
+		workspace.(promptTextRefactorWorkspace)
+	refactorRequested := supportsRefactor &&
+		s.promptTextRefactorRequested(params.Context.Only)
+	if (len(locators) == 0 || !supportsPromptText) && !refactorRequested {
 		return jsonrpc.HandlerResult{Result: actions}
 	}
 	queryContext, pending := s.registerPromptText(
@@ -130,12 +134,22 @@ func (s *Server) codeActionRequest(
 	return jsonrpc.HandlerResult{Deferred: func() jsonrpc.HandlerResult {
 		defer s.finishPromptText(pending)
 		result := append([]protocol.CodeAction(nil), actions...)
-		contribution := promptTextWorkspace.PromptTextActions(
-			queryContext,
-			params.TextDocument.URI,
-			locators,
-		)
-		result = append(result, contribution.Actions...)
+		if len(locators) > 0 && supportsPromptText {
+			contribution := promptTextWorkspace.PromptTextActions(
+				queryContext,
+				params.TextDocument.URI,
+				locators,
+			)
+			result = append(result, contribution.Actions...)
+		}
+		if refactorRequested {
+			contribution := refactorWorkspace.PromptTextStringRefactor(
+				queryContext,
+				params.TextDocument.URI,
+				params.Range,
+			)
+			result = append(result, contribution.Actions...)
+		}
 		if errors.Is(
 			context.Cause(queryContext),
 			errPromptTextClientCancelled,

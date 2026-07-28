@@ -2,7 +2,11 @@ package protocol
 
 type CodeActionKind string
 
-const CodeActionQuickFix CodeActionKind = "quickfix"
+const (
+	CodeActionQuickFix        CodeActionKind = "quickfix"
+	CodeActionRefactor        CodeActionKind = "refactor"
+	CodeActionRefactorRewrite CodeActionKind = "refactor.rewrite"
+)
 
 type CodeActionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`

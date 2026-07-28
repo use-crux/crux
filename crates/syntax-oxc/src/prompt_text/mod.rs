@@ -11,6 +11,7 @@ mod interpolation;
 mod mapping;
 mod normalization;
 mod projection;
+mod string_refactors;
 #[cfg(test)]
 mod tests;
 mod value;

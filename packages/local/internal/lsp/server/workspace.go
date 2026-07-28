@@ -9,6 +9,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
+	lsprompttextview "github.com/use-crux/crux/packages/local/internal/lsp/prompttext/view"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 	indexview "github.com/use-crux/crux/packages/local/internal/lsp/view"
@@ -39,9 +40,11 @@ type scopeSession struct {
 	folderName              string
 	publisher               *Publisher
 	views                   indexview.ViewProvider
+	promptTextViews         *lsprompttextview.LiveProvider
 	mode                    readmodel.Mode
 	transient               readmodel.TransientSource
 	sourceEpoch             uint64
+	managerGeneration       uint64
 	completionFailures      int
 	promptTextDiagnostics   map[protocol.DocumentURI]*promptTextDiagnosticRequest
 	promptTextAcceptedViews map[protocol.DocumentURI]indexview.ViewStamp
@@ -82,9 +85,14 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 	w.settings = settings
 	for _, scope := range readmodel.DetectScopes(folders) {
 		lines := mapping.NewLineIndex()
+		savedViews := indexview.NewSavedProvider(w.store)
 		session := &scopeSession{
 			scope: scope, folderName: workspaceFolderName(scope.Root, folders),
-			views: indexview.NewSavedProvider(w.store),
+			views: savedViews,
+			promptTextViews: lsprompttextview.NewProvider(
+				savedViews,
+				lsprompttextview.Options{Root: scope.Root},
+			),
 			promptTextDiagnostics: make(
 				map[protocol.DocumentURI]*promptTextDiagnosticRequest,
 			),
@@ -124,20 +132,22 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 
 func (w *workspaceRuntime) UpdateSettings(settings Settings) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.closed {
+		w.mu.Unlock()
 		return
 	}
 	portChanged := w.settings.Port != settings.Port
 	w.settings = settings
+	sessions := append([]*scopeSession(nil), w.sessions...)
+	w.mu.Unlock()
 	filter := mapping.FilterOptions{
 		Profile:           settings.Profile,
 		IncludeSuppressed: settings.IncludeSuppressed,
 	}
-	for _, session := range w.sessions {
+	for _, session := range sessions {
 		session.publisher.UpdateFilter(filter)
 		if portChanged {
-			w.startManagerLocked(session)
+			w.restartManager(session)
 		}
 	}
 }
@@ -145,6 +155,7 @@ func (w *workspaceRuntime) UpdateSettings(settings Settings) {
 func (w *workspaceRuntime) DidOpen(uri protocol.DocumentURI, version int) {
 	for _, session := range w.sessionsForURI(uri) {
 		session.publisher.DidOpen(uri, version)
+		w.openPromptTextView(session, uri)
 		w.openPromptTextDiagnostics(session, uri)
 	}
 }
@@ -152,20 +163,24 @@ func (w *workspaceRuntime) DidOpen(uri protocol.DocumentURI, version int) {
 func (w *workspaceRuntime) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
 	for _, session := range w.sessionsForURI(uri) {
 		session.publisher.DidChange(uri, version, changes)
+		w.changePromptTextView(session, uri, changes)
 		w.resetPromptTextDiagnostics(session, uri, true)
 	}
 }
 
 func (w *workspaceRuntime) DidSave(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
+		w.retirePromptTextView(session, uri)
 		w.savePromptTextDiagnostics(session, uri)
 		session.publisher.DidSave(uri)
+		w.openPromptTextView(session, uri)
 	}
 }
 
 func (w *workspaceRuntime) DidClose(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
 		w.resetCompletionFailures(session)
+		w.retirePromptTextView(session, uri)
 		w.closePromptTextDiagnostics(session, uri)
 		session.publisher.DidClose(uri)
 	}
@@ -207,68 +222,6 @@ func (w *workspaceRuntime) FindingForURI(uri protocol.DocumentURI, id string) (s
 	session := sessions[0]
 	finding, ok := w.store.Finding(session.scope.ID, id)
 	return session.scope.Root, finding, ok
-}
-
-func (w *workspaceRuntime) Close() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed {
-		return
-	}
-	w.closed = true
-	for _, session := range w.sessions {
-		session.completionFailures = 0
-		for _, request := range session.promptTextDiagnostics {
-			request.cancel()
-		}
-		session.promptTextDiagnostics = nil
-		if session.cancel != nil {
-			session.cancel()
-		}
-		session.publisher.Close()
-	}
-}
-
-func (w *workspaceRuntime) startManagerLocked(session *scopeSession) {
-	if w.ctx == nil {
-		return
-	}
-	if session.cancel != nil {
-		session.cancel()
-	}
-	ctx, cancel := context.WithCancel(w.ctx)
-	session.cancel = cancel
-	manager := readmodel.NewManager(readmodel.ManagerOptions{
-		ScopeID:   session.scope.ID,
-		Root:      session.scope.Root,
-		Version:   w.version,
-		Transport: readmodel.NewAttachTransport(api.NewDefault(w.settings.Port)),
-		Store:     w.store,
-		Logs:      w.logs,
-		OnChange: func(change readmodel.Change) {
-			w.handleScopeChange(session, change)
-		},
-		OnIndexChange: func() {
-			w.invalidateTransientSource(session)
-		},
-		OnModeChange: func(mode readmodel.Mode) {
-			w.setSessionMode(session, mode)
-		},
-		OnTransientSource: func(source readmodel.TransientSource) {
-			w.setSessionTransientSource(session, source)
-		},
-		OnWarning: func(message string) {
-			w.server.Notify(ctx, protocol.MethodLogMessage, protocol.LogMessageParams{
-				Type: protocol.MessageTypeWarning, Message: message,
-			})
-		},
-		OnShowWarning: func(message string) {
-			w.server.Notify(ctx, protocol.MethodShowMessage, protocol.LogMessageParams{
-				Type: protocol.MessageTypeWarning, Message: message,
-			})
-		},
-	})
-	go manager.Run(ctx)
 }
 
 func (w *workspaceRuntime) sessionsForURI(uri protocol.DocumentURI) []*scopeSession {

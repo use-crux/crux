@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	promptview "github.com/use-crux/crux/packages/local/internal/lsp/prompttext/view"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/lsp/transient"
@@ -12,13 +13,10 @@ import (
 	staticprotocol "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func TestControllerAcceptsAliasedCanonicalSemanticRefWithoutReadingTagName(t *testing.T) {
+func TestControllerAcceptsAliasedCanonicalSemanticRef(t *testing.T) {
 	t.Parallel()
 
 	document, file, sourceRef, analysis := aliasedIdentityFixture()
-	// The semantic ref's existence is the identity proof. Its serialized tag
-	// label is descriptive and must not become a second name-based check.
-	sourceRef.Metadata["promptText"].(map[string]any)["tag"] = "text"
 	controller := NewController(&fixedDocumentSource{document: document})
 
 	request := Request{
@@ -41,6 +39,24 @@ func TestControllerAcceptsAliasedCanonicalSemanticRefWithoutReadingTagName(t *te
 	symbols := controller.Symbols(context.Background(), request)
 	if len(symbols.Symbols) != 1 || symbols.Symbols[0].Name != "Alias" {
 		t.Fatalf("aliased canonical symbols = %#v, want Rust-labelled heading", symbols)
+	}
+}
+
+func TestControllerRejectsForeignNormalizedPromptTextTag(t *testing.T) {
+	t.Parallel()
+
+	document, file, sourceRef, analysis := aliasedIdentityFixture()
+	sourceRef.Metadata["promptText"].(map[string]any)["tag"] = "lookalike"
+	controller := NewController(&fixedDocumentSource{document: document})
+
+	result := controller.Decorations(context.Background(), Request{
+		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
+		Views: semanticIdentityProvider(document, file, sourceRef),
+	})
+
+	if result.Decorations == nil || len(result.Decorations) != 0 {
+		t.Fatalf("foreign normalized tag decorations = %#v, want exact clear", result)
 	}
 }
 
@@ -74,6 +90,26 @@ func TestControllerMatchesSemanticSourceColumnsAsUTF16(t *testing.T) {
 			End:   protocol.Position{Line: 0, Character: 45},
 		}) {
 		t.Fatalf("Unicode-prefixed symbols = %#v, want exact UTF-16 selection", symbols)
+	}
+}
+
+func TestStaticMarkdownSourceKindIgnoresLegacyFragmentMarker(t *testing.T) {
+	_, _, sourceRef, _ := aliasedIdentityFixture()
+	sourceRef.Metadata["fragment"] = true
+	if kind, ok := staticMarkdownSourceKind(sourceRef); !ok ||
+		kind != promptview.PromptTextSourceOwner {
+		t.Fatalf("legacy-marked owner = %q, %v", kind, ok)
+	}
+
+	delete(sourceRef.Metadata["promptText"].(map[string]any), "sourceKind")
+	if _, ok := staticMarkdownSourceKind(sourceRef); ok {
+		t.Fatal("legacy marker substituted for missing compiler source kind")
+	}
+
+	_, _, sourceRef, _ = aliasedIdentityFixture()
+	sourceRef.Metadata["promptText"].(map[string]any)["tag"] = "lookalike"
+	if _, ok := staticMarkdownSourceKind(sourceRef); ok {
+		t.Fatal("foreign normalized tag was accepted as canonical PromptText")
 	}
 }
 
@@ -152,6 +188,8 @@ func aliasedIdentityFixture() (
 	}
 	sourceRef := api.ProjectSourceRef{
 		ID:       "prompt:aliased:source:prompt:prompt-text",
+		Role:     "prompt",
+		Property: "prompt",
 		Fidelity: "resolved",
 		Source:   api.SourceLoc{File: file, Line: 1, Column: intPointer(15)},
 		Snippet: &api.SourceSnippet{
@@ -164,6 +202,7 @@ func aliasedIdentityFixture() (
 		},
 		Metadata: map[string]any{"promptText": map[string]any{
 			"tag": "md", "language": "markdown", "lifecycle": "static",
+			"sourceKind": "owner",
 		}},
 	}
 	analysis := readmodel.PromptTextResult{

@@ -174,6 +174,11 @@ func promptTextSourceRef(
 	promptText := map[string]any{
 		"tag": "md", "language": "markdown", "lifecycle": "static",
 	}
+	if symbol == "" {
+		promptText["sourceKind"] = "owner"
+	} else {
+		promptText["sourceKind"] = "named-fragment"
+	}
 	if joins != nil {
 		promptText["fragmentJoins"] = joins
 	}

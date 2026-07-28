@@ -60,9 +60,10 @@ cooked value.
 An unpaired UTF-16 surrogate in any cooked quasi also makes only its containing
 template `unsupported`. The request remains `complete` unless an independent
 request-wide condition changes it, and other candidates remain analyzable. The
-unsupported template retains its candidate, tag, and template ranges, but its
-literal islands, interpolation barriers, mappings, blocks, spans, links,
-nesting, preview text, and preview segments are empty. CommonMark never
+unsupported template retains its candidate, tag, template, and two exact
+backtick ranges. Its literal islands, interpolation barriers, mappings, blocks,
+spans, links, nesting, preview text, and preview segments are empty. CommonMark
+never
 receives Oxc's private U+FFFD-plus-hex surrogate marker or a substituted
 replacement character.
 
@@ -249,6 +250,9 @@ pub struct PromptTextLimits {
     pub max_template_bytes: u32,
     pub max_traversal_nodes: u32,
     pub max_output_bytes: u32,
+    pub max_string_refactors: u32,
+    pub max_string_refactor_bytes: u32,
+    pub max_string_refactor_output_bytes: u32,
     pub max_fragments: u32,
     pub max_fragment_joins: u32,
     pub max_fragment_bytes: u32,
@@ -322,10 +326,53 @@ pub struct PromptTextLiteralIsland {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextLineIsolationEdit {
+    /// Half-open UTF-16 source range replaced by the edit.
+    pub range: PromptTextRange,
+    /// Exact authored source text currently occupying `range`.
+    pub expected_text: String,
+    /// Exact replacement text.
+    pub new_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptTextInterpolationBarrier {
     pub index: u32,
     pub range: PromptTextRange,
     pub expression_range: PromptTextRange,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_isolation_edit: Option<PromptTextLineIsolationEdit>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptTextRefactorProofLevel {
+    SyntaxExact,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PromptTextRefactorProof {
+    OrdinaryStringToMd {
+        candidate_id: u32,
+        range: PromptTextRange,
+        expected_text: String,
+        template_text: String,
+        proof: PromptTextRefactorProofLevel,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptTextRefactorAnalysis {
+    pub status: PromptTextAnalysisStatus,
+    pub proofs: Vec<PromptTextRefactorProof>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -562,6 +609,7 @@ pub struct PromptTextTemplate {
     pub range: PromptTextRange,
     pub tag_range: PromptTextRange,
     pub template_range: PromptTextRange,
+    pub backtick_ranges: [PromptTextRange; 2],
     pub status: PromptTextAnalysisStatus,
     pub literal_islands: Vec<PromptTextLiteralIsland>,
     pub interpolation_barriers: Vec<PromptTextInterpolationBarrier>,
@@ -581,6 +629,7 @@ pub struct PromptTextQueryResponse {
     pub revision: PromptTextDocumentRevision,
     pub status: PromptTextAnalysisStatus,
     pub templates: Vec<PromptTextTemplate>,
+    pub refactors: PromptTextRefactorAnalysis,
 }
 ```
 
@@ -606,6 +655,16 @@ evaluates expressions. No persistent constant-value facts are added.
 The backend-neutral Project Index record is attached to the owning source ref:
 
 ```ts
+/**
+ * Describes how a canonical PromptText template was reached from its owning
+ * definition. Compiler-owned semantic evidence is never inferred by editor or
+ * transport consumers.
+ */
+export type PromptTextSourceKind =
+  | "owner"
+  | "named-fragment"
+  | "anonymous-fragment";
+
 export interface PromptTextFragmentJoinEvidence {
   readonly kind: "named-fragment";
   readonly ownerSourceRefId: string;
@@ -623,11 +682,56 @@ export interface ProjectSourceRef {
       readonly tag: "md";
       readonly language: "markdown";
       readonly lifecycle: "static" | "dynamic";
+      readonly sourceKind: PromptTextSourceKind;
       readonly fragmentJoins?: readonly PromptTextFragmentJoinEvidence[];
     };
   };
 }
 ```
+
+Export `PromptTextSourceKindSchema` and require it from the strict
+`ProjectSourceRefSchema`. Whenever `metadata.promptText` exists, `sourceKind`
+is required for static and dynamic refs. New producers emit fields in the
+stable order `tag`, `language`, `lifecycle`, `sourceKind`, then optional
+`fragmentJoins`. Missing, null, unknown, or foreign values fail schema
+validation. This classification is saved semantic evidence and does not amend
+the transient Rust V1 ABI.
+
+The shared semantic reachability model assigns `sourceKind` before either
+backend projects facts:
+
+- `owner` means a tagged template used directly as a manifest-declared
+  `prompt` or `system` field, or returned directly from a supported callback
+  branch. Transparent wrappers and canonical tag aliases/namespace access do
+  not change it.
+- `named-fragment` means the template was reached through an exactly resolved
+  terminal `const` identifier or accepted object-property access. Local,
+  imported, aliased, default-imported, star-exported, and resolvable re-export
+  chains qualify. It remains named when it is the whole field value, when no
+  join survives, or when a cyclic/ambiguous occurrence suppresses its join.
+  Its `symbol` is required and nonempty.
+- `anonymous-fragment` means a canonical tagged template found within another
+  template's interpolation traversal without an accepted named binding,
+  including supported nested expression branches. Its `symbol` is absent or
+  empty.
+
+Traversal carries an explicit root-versus-nested origin. Do not derive owner
+versus anonymous from node/range equality or the final join set. Named
+resolution overrides traversal origin. Shared physical templates retain one
+definition-scoped ref per owner. Cycles retain named classification while
+their joins remain suppressed. Ambiguous or unresolved declarations/re-exports
+emit no ref, and unreachable standalone `md` constants remain outside the
+Project Index. Role never determines `sourceKind`: direct system templates are
+owners, named system targets are named fragments, and nested system templates
+are anonymous fragments.
+
+The existing top-level `metadata.fragment` field remains an independent legacy
+marker. System-role refs continue emitting `fragment: true`; prompt-role refs
+continue omitting it; producers never emit `false`. No PromptText semantic,
+transport, editor, preview, navigation, hover, decoration, symbol, link, or
+diagnostic consumer may use it to classify PromptText. In particular, a direct
+system owner with the marker is still an owner, while a prompt-role named
+fragment without the marker remains named.
 
 `SourceSnippet["range"]` is the existing file plus one-based, half-open
 line/column representation. The owner ID equals the ref carrying the array.
@@ -645,11 +749,23 @@ array.
 
 Go resolves both IDs and source-row hashes inside the selected immutable
 publication, converts one-based ranges to zero-based UTF-16, and builds the
-worker join. A missing row/hash or failed invariant suppresses it. This record
-changes semantic facts and the Go snapshot: bump
-`SEMANTIC_FACTS_CACHE_EPOCH` and `ProjectIndexSnapshotCacheEpoch`, update both
-semantic backends and parity/migration fixtures, but do not bump
-`STATIC_PARSE_CACHE_EPOCH`.
+worker join. A join target must be `named-fragment`; its owner may have any
+recognized source kind. A missing row/hash or failed invariant suppresses it.
+Both semantic backends emit identical source kinds; the native direct path
+consumes shared reachability classification or falls back to the complete
+shared analyzer. It must not duplicate classification in its manifest.
+
+These records change semantic facts and the Go snapshot. Phase 14's already
+planned `SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v37"` and
+`ProjectIndexSnapshotCacheEpoch = 50` jointly own refactor metadata and
+PromptText source classification; do not bump them a second time in this
+unreleased worktree. Pre-v37/pre-50 artifacts miss and rebuild. A live legacy
+record without `sourceKind` contributes no transformed PromptText view until
+reindex; it never falls back to `metadata.fragment`, `symbol`, nesting, or
+joins. Preserve `sourceKind` and the independent legacy marker through worker
+facts, Store/read-model capture, SQLite restart, snapshot/delta transport, OWN,
+and ATTACHED. Do not bump `STATIC_PARSE_CACHE_EPOCH` or
+`SEMANTIC_COMPILER_OPTIONS_ID`.
 
 The request-level status describes the file query:
 
@@ -1239,6 +1355,415 @@ text, byte counts, and hints, and remains separate from compiler/cache identity.
 - Decorations require current semantic identity.
 - Folding and static preview remain transient syntax features.
 
+### Coherent transformed PromptText view
+
+Every navigation or hover request for an open document snapshots the current
+buffer and passes its `DocumentRevision` to the view request:
+
+```go
+Document: &view.DocumentRevision{
+	OpenEpoch:  document.Revision.OpenEpoch,
+	Version:    document.Version,
+	SourceHash: document.Revision.SourceHash,
+}
+MinimumEvidence: view.EvidenceSemantic
+Freshness:       view.AllowSavedFallback
+```
+
+A missing or unavailable open-buffer snapshot makes only the PromptText
+contribution unavailable; it is never represented as `Document: nil`. Closed-
+document queries use nil. The ordinary-string refactor uses the same port with
+`EvidenceSemantic + RequireCurrent`.
+
+Add a client-session-owned, server-neutral concern:
+
+```text
+packages/local/internal/lsp/prompttext/view/
+  types.go
+  provider.go
+  transform.go
+```
+
+Its boundary is:
+
+```go
+type Provider interface {
+	Select(context.Context, Request) Selection
+	Current(Stamp) bool
+}
+
+type Request struct {
+	ScopeID         string
+	File            string
+	Document        *indexview.DocumentRevision
+	MinimumEvidence indexview.EvidenceLevel
+	Freshness       indexview.FreshnessPolicy
+}
+
+type Selection struct {
+	Status indexview.ViewStatus
+	View   *View
+}
+
+type Stamp struct {
+	Project           indexview.ViewStamp
+	TransformRevision uint64
+	RequestDocument   *indexview.DocumentRevision
+}
+
+type DocumentStamp struct {
+	File              string
+	Revision          indexview.DocumentRevision
+	BaseSourceHash    string
+	TransformRevision uint64
+}
+
+type SourceRefKey struct {
+	DefinitionID string
+	SourceRefID  string
+}
+
+type FragmentJoinKey struct {
+	DefinitionID       string
+	OwnerSourceRefID   string
+	InterpolationIndex uint32
+	TargetSourceRefID  string
+}
+
+type Location struct {
+	File  string
+	Range protocol.Range
+}
+
+type Definition struct {
+	ID                   string
+	Kind                 string
+	Name                 string
+	Description          string
+	Location             Location
+	IncomingRelations    int
+	OutgoingRelations    int
+	PromptTextSourceRefs []SourceRefKey
+}
+
+type Site struct {
+	ID                 string
+	TargetDefinitionID string
+	Role               string
+	Location           Location
+}
+
+type PromptTextSourceKind string
+
+const (
+	PromptTextSourceOwner            PromptTextSourceKind = "owner"
+	PromptTextSourceNamedFragment    PromptTextSourceKind = "named-fragment"
+	PromptTextSourceAnonymousFragment PromptTextSourceKind = "anonymous-fragment"
+)
+
+type PromptTextSourceRef struct {
+	Key        SourceRefKey
+	Role       string
+	Property   string
+	Symbol     string
+	Lifecycle  string
+	SourceKind PromptTextSourceKind
+	Fidelity   string
+	Template   Location
+}
+
+type FragmentJoin struct {
+	Key            FragmentJoinKey
+	OwnerTemplate  Location
+	Expression     Location
+	TargetTemplate Location
+	Proof          string
+}
+
+type RefactorBinding struct {
+	Kind       string
+	Expression string
+}
+
+type StringRefactorTarget struct {
+	Key        SourceRefKey
+	Role       string
+	Property   string
+	Lifecycle  string
+	Expression Location
+	Binding    RefactorBinding
+	Proof      string
+}
+
+type View struct {
+	Stamp           Stamp
+	Documents       []DocumentStamp
+	Definitions     []Definition
+	Sites           []Site
+	PromptTextRefs  []PromptTextSourceRef
+	FragmentJoins   []FragmentJoin
+	RefactorTargets []StringRefactorTarget
+}
+```
+
+All values are detached. Sort documents by canonical file; definitions by ID;
+sites by file, range, ID, and target; source refs by file, template range,
+definition ID, and source-ref ID; joins by owner file, expression range, and
+key; and refactor targets by file, expression range, and source-ref key.
+
+The result contains no raw publication, API Project Definition, metadata map,
+or Publisher object. Consumers never combine it with independently read
+Publisher state or raw publication records. The provider calls the configured
+`ViewProvider` exactly once, captures one detached publication, atomically
+joins it to one client-session transform snapshot, and returns only normalized
+records. It is not another mutable Project Index and never mutates the Store.
+
+Normalization requires canonical `md`, Markdown language, recognized
+lifecycle/source kind, resolved fidelity, exact role/property and snippet
+invariants, and a nonempty symbol only for `named-fragment`. Owner and
+anonymous refs require an empty symbol. Unknown, missing, null, or inconsistent
+classification drops the ref and every dependent join. Go never derives a
+replacement classification from legacy metadata. Use `SourceKind` in the
+stable non-range signature so a classification change invalidates saved range
+transformation.
+
+Stable identities are:
+
+- definition ID;
+- navigation-site ID;
+- `(definition ID, source-ref ID)`; and
+- `(definition ID, owner source-ref ID, interpolation index, target source-ref
+ID)`.
+
+Duplicate stable identities invalidate every duplicate.
+
+The transform snapshot tracks definition declarations, navigation sites,
+PromptText source-ref template ranges, all three fragment-join ranges, and
+ordinary-string refactor expression ranges.
+
+For ordered incremental edits:
+
+- an edit ending at or before a record start shifts the record;
+- a zero-width insertion at the start shifts it right;
+- an edit starting at or after the end leaves it unchanged;
+- a zero-width insertion at the end is after the record; and
+- every other overlap, containment, crossing, or interior insertion invalidates
+  the record.
+
+A full-document replacement invalidates every transformed record in that file.
+Invalid records disappear and never collapse to zero width. Fragment joins are
+atomic: unavailable owner ref, target ref, or any of their three ranges omits
+the complete join.
+
+An exact buffer hash uses selected ranges directly and reports exact, including
+after edit-and-revert. A saved-fallback transform chain is usable only when it
+started from the selected publication's saved source hash, the stable record's
+non-range signature remains equal, every edit transformed without overlap,
+and open epoch/version still match. A selected-generation advance may reuse
+the chain only with the same saved source hash.
+
+New selected records stay hidden in dirty open files without a current
+transformed range. Removed records disappear. A stable ID whose role, property,
+symbol, lifecycle, target, or proof changes is unavailable.
+
+Transform destinations in every other open document through the same atomic
+snapshot. Omit a destination whose base hash, open epoch, version, or record
+does not qualify. Closed destinations use selected saved ranges.
+
+`didSave`, `didClose`, full-document change, reconnect, handover, and scope
+retirement retire affected chains. After save, transformed evidence remains
+unavailable until a qualifying saved generation exists.
+
+Navigation and hover also require a current complete transient V1 analysis for
+the request document. The transformed template range must exactly match one
+current transient `template.range`; zero or multiple matches suppress the
+occurrence. Current syntax may veto saved identity but never invent it.
+
+Before returning, require a live request context, exact request revision,
+current project `ViewStamp`, current transform revision, matching transient
+revision, and every contributing open destination's `DocumentStamp`. Recompute
+once on mismatch while the request remains current. A second mismatch returns
+`null`/`[]` or drops only the PromptText hover section. Client cancellation
+returns standard `RequestCancelled`.
+
+### PromptText navigation
+
+PromptText V1 adds required:
+
+```rust
+pub backtick_ranges: [PromptTextRange; 2],
+```
+
+Wire name is `backtickRanges`. Oxc produces exactly two ordered one-UTF-16-unit
+ranges whose source byte is a backtick. They lie inside `templateRange` and
+never overlap the tag or a barrier. Unsupported templates retain candidate,
+tag, template, and backtick ranges while structural payloads remain empty.
+Their compact JSON bytes count normally in finalized-template
+`maxOutputBytes`; whole-template truncation is unchanged.
+
+For an exact transient/semantic match, claim cursor regions as follows:
+
+| Cursor region                                                                            | Crux behavior                    |
+| ---------------------------------------------------------------------------------------- | -------------------------------- |
+| Tag identifier, alias, namespace identifier, `.`, or `md` member                         | Do not claim; TypeScript owns it |
+| Opening or closing backtick                                                              | Claim the PromptText occurrence  |
+| Any authored literal-island byte                                                         | Claim                            |
+| Markdown block, span, link, or marker inside a literal island                            | Claim                            |
+| Literal whitespace, normalized-away outer whitespace, common-indent bytes, or quasi gaps | Claim                            |
+| `${`, interpolation expression/comments/nested syntax, or `}`                            | Explicitly veto                  |
+| Position after closing backtick                                                          | Do not claim                     |
+
+Use half-open containment; barrier ranges win when ranges touch. If current
+syntax recognizes the containing template but the semantic join is missing,
+ambiguous, unsupported, or unavailable, return no Crux PromptText definition
+or references. Do not fall through to the existing prompt/system line-based
+source-ref navigation. If transient analysis is unavailable or truncated,
+transformed template ranges may suppress that line fallback but cannot publish
+a PromptText target. Navigation outside these regions remains unchanged.
+
+Definition returns one standard `Location` or null:
+
+| Occurrence                                                   | Result                                             |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| Direct owner template literal/backtick                       | Canonical owner declaration                        |
+| Anonymous or non-runtime-addressable fragment with one owner | Canonical owner declaration                        |
+| Named fragment literal/backtick with one owner               | Canonical owner declaration                        |
+| Template shared by multiple owners                           | Null                                               |
+| Named-fragment reference expression                          | Null; TypeScript owns declaration navigation       |
+| Fragment declaration identifier                              | Outside claim                                      |
+| Tag alias, namespace, or re-export expression                | Null                                               |
+| Ambiguous/cyclic/unresolved fragment join                    | No fragment target; unique owner may still resolve |
+| Missing or range-invalid destination                         | Null                                               |
+| Self-jump                                                    | Remove; null if nothing remains                    |
+
+A self-jump targets the same URI with a range containing the request position.
+Import aliases, namespace access, and resolvable re-exports affect semantic
+identity only and never redirect to the tag declaration.
+
+References identify a named fragment only when the matched ref has
+`sourceKind: "named-fragment"`, has a nonempty symbol, and is the target of a
+valid join. Otherwise they identify the canonical owner. A named fragment with
+no valid incoming join retains its named label but follows owner-reference
+fallback. Anonymous fragments never gain inferred incoming references.
+
+Owner references contain the transformed declaration optionally, exact
+transformed full tagged-template source-ref ranges, and existing non-PromptText
+relation sites in their established shape. Named-fragment references contain
+the transformed full-template declaration optionally and exact transformed
+join expression ranges across owners. Anonymous fragments receive no inferred
+incoming references.
+
+Group shared fragment declarations only when canonical file, selected base
+source hash, saved declaration range, symbol, role, property, and lifecycle all
+agree. Never group by symbol spelling.
+
+With `includeDeclaration`, put the declaration first. Sort the rest by URI,
+range start, range end, and stable record identity. Deduplicate by exact URI
+and range. Without it, remove only the declaration. A request within any
+interpolation barrier or expression returns an empty Crux reference
+contribution.
+
+### PromptText hover
+
+Hover claims the same literal-island and backtick regions. Its range is the
+smallest current syntax range containing the cursor, with precedence:
+
+1. literal link;
+2. inline span;
+3. block;
+4. literal island;
+5. exact backtick.
+
+Equal ranges use that order. Tags and barriers have no PromptText section. If
+existing finding or definition hover content exists, retain its existing
+range; use the PromptText range only when it is the sole Crux contribution.
+
+Compose one Crux hover response in this order:
+
+1. existing displayed findings;
+2. existing coherent definition summary;
+3. PromptText.
+
+Use the existing Markdown horizontal rule or plaintext blank-section
+separator. Definition and PromptText semantic facts must come from the same
+transformed view; displayed findings remain the existing diagnostic lane.
+Crux does not proxy or synthesize native TypeScript hover.
+
+Markdown PromptText content is exactly:
+
+```md
+**Crux PromptText**
+
+**Owner:** <escaped name> — `<kind>` (`<definition-id>`)
+**Template:** <template-label> · <lifecycle> lifecycle
+**Composition:** <literal-count> literal island(s) · <barrier-count> interpolation barrier(s)
+**Fragments:** <outgoing-count> outgoing · <incoming-count> incoming proven named-fragment edge(s)
+**Evidence:** <evidence-label>
+```
+
+Omit `Fragments` when both counts are zero. Plaintext removes Markdown
+emphasis/backticks but otherwise uses the same labels and order:
+
+```text
+Crux PromptText
+
+Owner: <name> — <kind> (<definition-id>)
+Template: <template-label> · <lifecycle> lifecycle
+Composition: ...
+Fragments: ...
+Evidence: ...
+```
+
+Template labels are exactly:
+
+```text
+direct `prompt` template
+direct `system` template
+named fragment `<symbol>`
+anonymous fragment
+```
+
+Select the label from compiler-owned `sourceKind`, never role, symbol, joins,
+nesting, or legacy `metadata.fragment`. `owner` uses the direct prompt/system
+label from its exact role, `named-fragment` uses its required symbol, and
+`anonymous-fragment` uses the anonymous label. Incoming and outgoing counts
+come only from accepted joins; cyclic or ambiguous suppressed joins contribute
+zero.
+
+Evidence labels are:
+
+```text
+exact semantic view
+saved semantic fallback; current syntax matched
+```
+
+For a shared template, render at most three owners sorted by definition ID:
+
+```md
+**Owners:**
+
+- <owner>
+- <owner>
+- <owner>
+
+_…and N more owners_
+```
+
+Plaintext uses the same rows without Markdown markers. Inconsistent shared
+records suppress the PromptText section.
+
+The existing 4,000 UTF-16-unit hover cap, capped writer, whole-rune ellipsis,
+and three-finding cap remain authoritative. Never include source snippets,
+static preview, inferred values, runtime state, safety, trust, encoding,
+escaping, sanitization, or sink claims.
+
+Saved fallback requires exact transformation and current transient matching.
+An overlapping template edit suppresses the contribution; edits before or
+after may shift it. An invalid join expression suppresses only that edge.
+Unsupported/truncated transient results drop only PromptText. Internal
+unavailability or failed final validation may still return current finding-
+only content. Client cancellation returns `RequestCancelled`.
+
 ### V3 semantic fact-group presence
 
 V3 fact envelopes preserve rows but cannot alone distinguish an omitted fact
@@ -1814,6 +2339,431 @@ errors initially have no automatic fix.
 Encoding, sanitization, suspicious-content, nested-input migration, `safe`,
 `xml`, `escapeXml`, trust/raw markers, and suppression remain blocked on
 #276/#277.
+
+### Sequence action edits
+
+The comma-join action title is exactly:
+
+```text
+.join(", ")
+```
+
+It requires current `inline-sequence` evidence with
+`joinableWithComma: true` after every Phase 12 gate succeeds. Its sole edit
+replaces `barrier.expressionRange` with:
+
+```text
+(<exact authored expression bytes>).join(", ")
+```
+
+Always add exactly one outer pair of parentheses; never remove or deduplicate
+existing parentheses. Copy the expression-range bytes exactly once, including
+comments, Unicode, line endings, non-null assertions, `as`, `satisfies`,
+optional chains, nested templates, and every other TypeScript wrapper.
+Whitespace or comments between `${` and the AST expression, or between the
+expression and `}`, remain outside the range and untouched. Go may construct
+this fixed wrapper but must not parse, simplify, or otherwise rewrite the
+expression. A missing, empty, duplicate, or non-sliceable current expression
+range suppresses the action.
+
+General `number[]`, nullable values, fragments, uncertain unions, missing
+evidence, and absent or false `joinableWithComma` never receive the join
+action.
+
+#### Rust-owned line-isolation proof
+
+Rust owns layout applicability completely. Oxc retains ownership of parsing,
+cooked quasis, normalization inputs, barriers, and source mappings. A small
+private module under `crates/static-compiler/src/prompt_text/layout/` owns the
+counterfactual Core-normalization, Markdown, and composition proof. It remains
+tag-neutral and sequence-neutral.
+
+Go may only:
+
+- join an optional proof to current semantic `inline-sequence` evidence;
+- validate the current revision, ranges, and expected source text; and
+- copy the proven range and `newText` into the versioned LSP edit.
+
+Go never derives applicability, chooses an EOL, infers indentation, inspects
+source lines, simulates cooking, reruns normalization, or rescans Markdown.
+Absent or malformed proof means no layout action.
+
+PromptText V1 is amended in place with the optional
+`lineIsolationEdit` field shown in the ABI above. Go mirrors it as:
+
+```go
+type PromptTextLineIsolationEdit struct {
+	Range        PromptTextRange `json:"range"`
+	ExpectedText string          `json:"expectedText"`
+	NewText      string          `json:"newText"`
+}
+
+type PromptTextInterpolationBarrier struct {
+	Index             uint32                       `json:"index"`
+	Range             PromptTextRange              `json:"range"`
+	ExpressionRange   PromptTextRange              `json:"expressionRange"`
+	LineIsolationEdit *PromptTextLineIsolationEdit `json:"lineIsolationEdit,omitempty"`
+}
+```
+
+Production omits unavailable proofs and never emits `null`. Consumers treat
+absent or `null` as unavailable. Empty objects, empty strings, equal expected
+and replacement text, or invalid ranges are unavailable proofs.
+
+For a valid proof:
+
+- `range` is inside `templateRange` and excludes the tag and both backticks;
+- it contains the complete target barrier and no other barrier;
+- `expressionRange` remains strictly inside the barrier;
+- `expectedText` equals the exact UTF-8 source slice addressed by the
+  half-open UTF-16 range;
+- every boundary is exactly source-mappable;
+- `newText` preserves the target barrier bytes exactly once; and
+- only adjacent authored ASCII spaces or tabs, the barrier, inserted LF or
+  CRLF, and copied indentation participate.
+
+#### Exact line-isolation construction
+
+Use the same ECMAScript-cooked, Core-normalized logical-line model as
+PromptText placement while retaining exact authored mappings.
+
+A target is eligible only when it is currently inline, is the only
+interpolation on its normalized logical line, at least one side contains
+non-horizontal-whitespace literal content, and every involved boundary, gap,
+and carrier indentation maps exactly to source.
+
+Determine:
+
+- `leftContent`: non-space/tab literal content before the barrier on its
+  logical line;
+- `rightContent`: non-space/tab literal content after it;
+- `leftGap`: the maximal mapped authored ASCII spaces/tabs touching the
+  barrier on the left;
+- `rightGap`: the equivalent right gap; and
+- `carrierIndent`: exact authored ASCII spaces/tabs from raw template-content
+  line start to its first non-whitespace byte.
+
+Tabs are copied character-for-character and have no assumed width.
+Escape-derived, discontinuously mapped, or otherwise nonlinear gaps or
+indentation suppress the proof.
+
+Select EOLs source-locally:
+
+- `leftEOL` is the last physical LF/CRLF token before the replacement range,
+  otherwise the first after it, otherwise LF;
+- `rightEOL` is the first physical LF/CRLF token after the range, otherwise the
+  last before it, otherwise LF;
+- CRLF is one token; and
+- mixed-EOL input may therefore use CRLF on the left and LF on the right.
+
+A cooked line boundary derived from an escape, bare CR, U+2028, or U+2029 is
+ineligible in V1 unless the required LF/CRLF mapping is independently exact.
+
+The replacement is:
+
+```text
+(leftContent  ? leftEOL  + carrierIndent : "")
++ exactBarrierBytes
++ (rightContent ? rightEOL + carrierIndent : "")
+```
+
+The replacement range starts at `leftGap.start` when `leftContent`, otherwise
+at `barrier.start`. It ends at `rightGap.end` when `rightContent`, otherwise
+at `barrier.end`. Consume the maximal adjacent horizontal gap only on a side
+being split; preserve every other whitespace byte.
+
+Examples:
+
+```text
+start:  md`${xs} tail`
+range:      `${xs} `
+newText:    `${xs}\n`
+
+end:    md`head ${xs}`
+range:         ` ${xs}`
+newText:       `\n${xs}`
+
+middle: md`head ${xs} tail`
+range:         ` ${xs} `
+newText:       `\n${xs}\n`
+```
+
+With carrier indentation `\t  ` and CRLF:
+
+```text
+expectedText = " ${xs} "
+newText      = "\r\n\t  ${xs}\r\n\t  "
+```
+
+For CRLF before and LF after:
+
+```text
+newText = "\r\n<carrierIndent>${xs}\n<carrierIndent>"
+```
+
+At template or logical-line start, insert no leading newline. At its end,
+insert no trailing newline. The edit therefore never creates an exterior
+outer blank line merely to isolate the interpolation. Treat multiline or
+nested expressions and comments as an opaque barrier and copy their authored
+bytes unchanged.
+
+#### Counterfactual safety proof
+
+“Without altering another construct” requires a Rust counterfactual proof,
+never Go source-line heuristics. Apply the proposed edit to a compiler-private
+counterfactual template model and rerun the same cooking/normalization,
+Markdown classification, and composition placement logic. Emit the proof only
+when:
+
+1. The tag, interpolation count/order, every expression's authored bytes, and
+   every non-target barrier are unchanged.
+2. The target becomes the sole block-position interpolation on its normalized
+   line.
+3. Every other interpolation retains its exact inline/block placement.
+4. Every literal contribution outside the edit retains identical cooked text,
+   order, and mapping after range translation.
+5. Outer-blank trimming and common-indent removal outside the edit are
+   identical.
+6. The range-free Markdown signature is identical: block/span/link kinds,
+   heading levels/labels, list properties, code metadata, literal
+   destinations, and nesting topology. Ignore index and source-range shifts;
+   reject any added or removed break, emphasis, code span, link, heading,
+   list, blockquote, or other construct.
+7. Symbolic composition with empty, one-item, and two-item target sequences
+   preserves every non-target literal/interpolation atom and provenance. Only
+   the target's defined block-line and empty-seam behavior may change.
+8. No other tagged-template candidate changes except deterministic
+   source-position translation after the edit.
+
+A full source reparse is permitted but not required; a bounded
+counterfactual over Oxc's private projection is sufficient. Go reproduces none
+of this proof.
+
+The layout action title is exactly:
+
+```text
+Put sequence on its own line — changes layout
+```
+
+It uses U+2014 with one space on each side. If join and layout both apply,
+return separate actions in this order:
+
+1. `.join(", ")`
+2. `Put sequence on its own line — changes layout`
+
+Never combine their edits. Each action otherwise follows the Phase 12 eager,
+one-diagnostic, one-versioned-document, one-`TextEdit` wire contract.
+
+`lineIsolationEdit` is part of the finalized template object and counts
+normally under existing V1 `maxOutputBytes`: charge its compact `serde_json`
+UTF-8 field name, punctuation, ranges, strings, and all serializer escaping.
+Exact equality fits. On overflow, omit the complete template and every later
+template and report request-level `truncated`; never drop only the proof to
+make a template fit. An ambiguous proof merely omits the optional field and
+does not make the template unsupported.
+
+This transient-only V1 amendment changes no Project Index cache epoch.
+
+### Ordinary multiline string refactor
+
+Phase 14 converts only compiler-proven ordinary multiline prompt/system
+literals and reuses exactly one already-resolved local value binding for
+canonical Core `md`. It never inserts, reorders, merges, or otherwise edits
+imports.
+
+#### Semantic evidence
+
+Add strict public metadata:
+
+```ts
+type PromptTextRefactorBinding =
+  | {
+      readonly kind: "identifier";
+      readonly expression: string;
+    }
+  | {
+      readonly kind: "namespace-access";
+      readonly expression: string;
+    };
+
+type PromptTextRefactorEvidence = {
+  readonly kind: "ordinary-string-to-md";
+  readonly proof: "semantic-exact";
+  readonly lifecycle: "static";
+  readonly target: "md";
+  readonly binding: PromptTextRefactorBinding;
+};
+```
+
+It lives at
+`ProjectSourceRef.metadata.promptTextRefactor?: PromptTextRefactorEvidence`,
+not under `metadata.promptText`, because the expression is not yet PromptText.
+
+Both semantic backends emit a resolved source ref only when the owning
+primitive/property is manifest-proven PromptText-compatible, role and property
+are matching `prompt` or `system`, lifecycle is static, the initializer is a
+direct accepted literal, and exactly one in-scope value binding resolves to
+canonical Core `md`.
+
+The source ref has `fidelity: "resolved"`; its source/snippet covers exactly
+the literal token, excluding transparent parentheses; it carries
+`promptTextRefactor` and no `metadata.promptText`; and its ID is:
+
+```text
+<definitionId>:source:<role>:<property>:prompt-text-refactor:<normalized-project-relative-file>:<startLine>:<startColumn>
+```
+
+Accepted object members are noncomputed own `PropertyAssignment`s:
+
+```ts
+prompt: "..."
+"prompt": "..."
+system: `...`
+prompt: ("...")
+```
+
+Reject computed properties, aliased names, shorthand, spreads, methods,
+getters/setters, identifier/property initializer indirection, callback returns,
+TypeScript wrappers such as `as`/`satisfies`/non-null, concatenation,
+`String.raw`, substitutions, and unrelated objects whose property merely has
+the right spelling.
+
+Binding evidence accepts direct or renamed value imports, namespace access,
+and resolvable local re-export chains. Reject type-only imports, shadows,
+unresolved/ambiguous bindings, unrelated/path-remapped packages, ordinary
+`const alias = md` aliases, multiple usable bindings, and missing bindings.
+
+`binding.expression` is the exact insertion-ready identifier or namespace
+member expression, no more than 256 UTF-8 bytes. Semantic producers prove its
+grammar and canonical identity; Go only copies it.
+
+These source refs/metadata require JavaScript/native parity and are co-owned
+with PromptText source classification by Phase 14's already-advanced
+`SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v37"` and
+`ProjectIndexSnapshotCacheEpoch = 50`. Do not bump them again in this unreleased
+worktree. This changes neither `STATIC_PARSE_CACHE_EPOCH` nor
+`SEMANTIC_COMPILER_OPTIONS_ID`.
+
+#### Transient syntax proof
+
+The V1 ABI above adds three flat `PromptTextLimits` fields:
+
+```text
+maxStringRefactors: 128
+maxStringRefactorBytes: 262144
+maxStringRefactorOutputBytes: 262144
+```
+
+There is no nested refactor-limits wire object. A private nonserialized helper
+may group the values internally.
+
+`PromptTextQueryResponse.refactors` is required and has independent
+`complete | truncated | unsupported` status plus zero or more proofs. A proof
+range covers only the literal token; `expectedText` is its exact authored
+slice; `templateText` begins/ends with backticks and contains no interpolation.
+Candidate IDs are zero-based source order among direct syntactic
+prompt/system-literal property candidates, before semantic identity.
+
+Count compact proof JSON plus inter-proof commas against the independent
+refactor output budget. Array brackets, response envelope, and template
+objects do not count. Exact equality fits; overflow retains a source-order
+prefix and marks refactors truncated. Candidate-count, per-candidate-byte, or
+output overflow changes only refactor status and never template analysis.
+Consumers require complete status and publish no refactor from a truncated
+result. Unsupported language/source/parser state yields unsupported; traversal
+truncation yields truncated.
+
+Rust/Oxc accepts only a `StringLiteral`,
+`NoSubstitutionTemplateLiteral`, or transparent parentheses around either.
+The cooked UTF-16 value must contain at least one LF, contain no unpaired
+surrogate, convert losslessly to scalar UTF-8, and be an exact fixed point of
+settled #270 outer-blank/common-indent normalization.
+
+Let `V` be the original cooked scalar string. Prove:
+
+```text
+UTF-16(new PromptText output) == UTF-16(V)
+UTF-8(new PromptText output)  == UTF-8(V)
+```
+
+For a no-substitution template literal, reuse the exact original backtick token
+as `templateText` when fixed-point proof succeeds.
+
+For a quoted literal, synthesize:
+
+```text
+`
+<carrierIndent><encoded line 1>
+<carrierIndent><encoded line 2>
+<carrierIndent>`
+```
+
+Choose the last physical LF/CRLF before the literal, otherwise the first after
+it, otherwise LF. CRLF is one source token and cooks to LF.
+`carrierIndent` is the exact authored ASCII space/tab prefix of the literal's
+physical line; tabs have no assumed width. Wrapper lines are authored blank
+lines, and the same indent prefixes every value line and closing backtick.
+
+Encode content canonically:
+
+- LF becomes the selected physical EOL;
+- CR becomes `\r`;
+- backslash becomes `\\`;
+- backtick becomes backslash followed by backtick (`U+005C U+0060`);
+- `${` becomes `\${`;
+- NUL and other C0/DEL controls use fixed `\xHH`, except tab may use `\t`;
+- U+2028/U+2029 use `\u2028`/`\u2029`;
+- quotes stay literal; and
+- other scalar Unicode stays literal UTF-8.
+
+Rust reparses the generated template, reruns the same cooking and Core
+normalization, and emits only when it has zero interpolations and reconstructs
+`V` exactly. Leading/trailing blank lines removed by #270, removable common
+indent, all-whitespace multiline values, invalid escapes, and lone surrogates
+fail. Internal blank lines, quotes, slashes, literal `${`, CR, source CRLF,
+Unicode, tabs, and unequal indentation qualify only if both equality proofs
+pass.
+
+#### Refactor action
+
+The exact title is:
+
+```text
+Convert multiline string to `md` PromptText
+```
+
+The kind is `refactor.rewrite`. Add `CodeActionRefactor = "refactor"` and
+`CodeActionRefactorRewrite = "refactor.rewrite"`. Advertise
+`refactor.rewrite` only when the client's literal-support value set contains
+`refactor` or `refactor.rewrite`; quick-fix advertisement is unchanged.
+
+The action is diagnostic-free. With absent `context.only`, it is eligible.
+`refactor` or `refactor.rewrite` includes it; `quickfix`, other subtypes, and
+unrelated kinds exclude it.
+
+An empty request range must be inside the half-open literal range. A nonempty
+range must be wholly contained by exactly one literal. A range covering the
+property/object/multiple literals, or a position at the literal end, is
+ineligible.
+
+Require an exact current document snapshot, semantic/current `ViewExact`,
+complete view stamp, exactly one semantic target, exactly one current complete
+Rust proof with identical file/range/expected text, matching semantic/syntax
+ownership, and all Phase 12 source-epoch/generation/cancellation/final-current
+checks.
+
+The sole edit is:
+
+```go
+protocol.TextEdit{
+	Range:   proof.Range,
+	NewText: target.Binding.Expression + proof.TemplateText,
+}
+```
+
+Return one eager `TextDocumentEdit` pinned to current URI/version with exactly
+one edit. Omit diagnostics, legacy `changes`, command, data, annotations, and
+resolve behavior. No import edit is ever included.
 
 ### Diagnostic publication lifecycle
 
@@ -2432,3 +3382,604 @@ unavailable tab and:
 ```text
 VS Code cannot preserve this preview’s exact line-ending bytes.
 ```
+
+## Exact-preview Runtime Bridge
+
+Phase 15 adds one explicit, target-scoped Runtime Bridge command:
+
+```text
+prompt.previewExact → canonical Prompt.inspect()
+```
+
+It preserves the existing `store.read` command unchanged. The first release
+advertises only canonical Prompt definitions. It does not advertise contexts,
+named or anonymous fragments, ownerless prompts, arbitrary callbacks or
+workspace paths, or message-mode prompts whose canonical `InspectResult` does
+not expose their message payload. Contexts remain static-preview-only until
+Core has a public `Context.inspect()` API; the bridge must not add a private
+context renderer.
+
+One process-owned active prompt catalogue is shared by WebSocket and HTTP
+transports. Go and editor clients never hold callback registries or render
+prompts. The application runtime is the sole execution owner.
+
+### Strict wire schemas
+
+Every new exact-preview object rejects unknown fields recursively. Optional
+fields are omitted rather than encoded as `null`; `null` remains valid inside
+user JSON values. Existing `store.read` objects keep their current
+compatibility behavior and must not be tightened as a side effect. The bridge
+capability and request schemas become discriminated unions with a legacy store
+branch and the following preview branch.
+
+```ts
+const PromptPreviewCatalogueRevisionSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER);
+
+type StrictJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly StrictJsonValue[]
+  | { readonly [key: string]: StrictJsonValue };
+
+const ScalarValidStringSchema = z.string().superRefine((value, context) => {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit < 0xd800 || codeUnit > 0xdfff) continue;
+
+    const next = value.charCodeAt(index + 1);
+    if (codeUnit <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+      index += 1;
+      continue;
+    }
+
+    context.addIssue({ code: "custom", message: "Invalid Unicode scalar." });
+    return;
+  }
+});
+
+const StrictJsonValueSchema: z.ZodType<StrictJsonValue> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.boolean(),
+    z.number().finite(),
+    ScalarValidStringSchema,
+    z.array(StrictJsonValueSchema),
+    z.record(ScalarValidStringSchema, StrictJsonValueSchema),
+  ]),
+);
+
+const StrictJsonObjectSchema = z.record(
+  ScalarValidStringSchema,
+  StrictJsonValueSchema,
+);
+
+const PromptPreviewInputDescriptorSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("none") }).strict(),
+  z
+    .object({
+      mode: z.literal("schema"),
+      schema: StrictJsonObjectSchema,
+    })
+    .strict(),
+  z.object({ mode: z.literal("raw") }).strict(),
+]);
+
+const PromptPreviewTargetSchema = z
+  .object({
+    definitionId: z.string().min(1).max(512),
+    kind: z.literal("prompt"),
+    name: z.string().min(1).max(512),
+    description: z.string().min(1).max(4096).optional(),
+    input: PromptPreviewInputDescriptorSchema,
+  })
+  .strict();
+
+const PromptPreviewCapabilitySchema = z
+  .object({
+    command: z.literal("prompt.previewExact"),
+    catalogueRevision: PromptPreviewCatalogueRevisionSchema,
+    targets: z.array(PromptPreviewTargetSchema).min(1).max(512),
+  })
+  .strict();
+
+const PromptPreviewOptionsSchema = z
+  .object({
+    provider: z.string().min(1).max(128).optional(),
+    modelId: z.string().min(1).max(256).optional(),
+    tokenBudget: z.number().int().min(0).max(1_000_000).optional(),
+  })
+  .strict();
+
+const PromptPreviewPayloadSchema = z
+  .object({
+    input: StrictJsonObjectSchema,
+    options: PromptPreviewOptionsSchema.optional(),
+  })
+  .strict();
+
+const PromptPreviewRequestSchema = z
+  .object({
+    type: z.literal("command.request"),
+    commandId: z.string().min(1).max(128),
+    command: z.literal("prompt.previewExact"),
+    targetId: z.string().min(1).max(512),
+    catalogueRevision: PromptPreviewCatalogueRevisionSchema,
+    payload: PromptPreviewPayloadSchema,
+    deadlineMs: z.number().int().positive().max(30_000),
+  })
+  .strict();
+```
+
+`targetId` is exactly the canonical Project Index `definitionId`. It is never
+an authored ID, source path, source ref, symbol, or fragment ID.
+
+### Catalogue targets and lifecycle
+
+For an eligible prompt, use:
+
+```ts
+const definitionId = promptDefinitionRef(prompt.id).id;
+const name = prompt.id;
+```
+
+A target is eligible only when all of these hold:
+
+- it is a Core `Prompt`;
+- it has a nonempty authored ID;
+- it uses the canonical system/prompt inspection mode rather than
+  `config.messages`;
+- it belongs to the current active public configuration registry; and
+- its complete bounded wire projection is valid.
+
+Input descriptors mean:
+
+- `none`: the prompt has no merged input schema and accepts only `{}`;
+- `schema`: Core's canonical Zod-to-JSON-Schema projection can represent the
+  merged schema; and
+- `raw`: a merged schema exists but cannot be represented. Runtime validation
+  remains authoritative.
+
+Sort targets by code-point order of `definitionId`. Existing duplicate authored
+prompt IDs remain a configuration error. If distinct prompts collide on the
+canonical definition ID, omit every target in that collision. Omit an
+individually invalid target or a target whose compact schema exceeds 65,536
+UTF-8 bytes. After those and collision omissions, omit the entire preview
+capability, while retaining valid `store.read`, when no targets remain, more
+than 512 targets remain, or the complete compact capability exceeds 1,048,576
+UTF-8 bytes:
+
+| Bound                    | Limit                 |
+| ------------------------ | --------------------- |
+| Remaining targets        | 1..512                |
+| One compact schema       | 65,536 UTF-8 bytes    |
+| Complete capability JSON | 1,048,576 UTF-8 bytes |
+
+The omission warning contains only a fixed stable code and aggregate counts.
+It must not contain IDs, schemas, descriptions, or other target data.
+
+The active prompt catalogue is an immutable process-owned slot in Core's
+existing process registry. Advance that registry's internal version when
+introducing the slot. A successful public `configure()` atomically publishes a
+frozen catalogue, including an empty one, with a monotonically increasing,
+positive safe-integer `catalogueRevision`. A failed configure leaves the
+previous catalogue and revision unchanged. A newer public configuration
+replaces the older one. Disposing the active configuration publishes an empty
+catalogue at a new revision; disposing an older configuration is a no-op and
+must never resurrect it.
+
+The internal `configure({ prompts: [] })` used during configuration assembly is
+private and nonpublishing. A Runtime Bridge created after publication includes
+the current initial manifest and subscribes to later replacements. WebSocket
+connections receive a complete replacement `runtime.hello` with the same
+`peerId`; Go treats it as an atomic capability replacement and increments a
+private manifest revision. HTTP returns the current manifest on every GET and
+revalidates it for every POST. Configuration replacement closes old bridge
+resources before opening new ones, and disposal unsubscribes.
+
+Catalogue objects, prompt callbacks, requests, and results are memory-only.
+
+### Input validation and limits
+
+`payload.input` is always a JSON object. Nested arrays, objects, scalar-valid
+strings, finite numbers including `-0`, booleans, and `null` are accepted.
+Reject `undefined`, array holes, functions, symbols, bigint, nonfinite numbers,
+cycles, accessors, foreign prototypes, lone surrogates, and duplicate raw JSON
+keys.
+
+The schemas above validate the decoded recursive JSON value. The shared bounded
+wire validator separately checks raw JSON for duplicate keys before decoding
+and checks object prototypes/accessors at programmatic Core entry points,
+because decoded Zod validation cannot prove either raw-wire property.
+
+Both Go before dispatch and Core immediately before inspection enforce the same
+limits:
+
+| Measurement                   | Limit               |
+| ----------------------------- | ------------------- |
+| Compact command request JSON  | 262,144 UTF-8 bytes |
+| Container depth               | 32                  |
+| Value nodes                   | 10,000              |
+| Object keys                   | 5,000               |
+| One key                       | 256 UTF-8 bytes     |
+| One string value              | 65,536 UTF-8 bytes  |
+| Decoded JSON value accounting | 131,072 bytes       |
+
+Equality fits. The root object has depth one; entering an object or array adds
+one. Node count includes the root and every property value or array element,
+but not keys. Key count includes every property after duplicate rejection.
+Decoded value accounting is deterministic:
+
+- `null` costs 4, `true` costs 4, `false` costs 5, and a number costs 8;
+- a string costs its Unicode-scalar UTF-8 bytes;
+- an array costs 2 plus commas plus child weights; and
+- an object costs 2 plus commas, key UTF-8 bytes, colons, and child weights.
+
+The only inspection options are `provider`, `modelId`, and `tokenBudget`.
+Sampling options, tools, model objects, adapters, and execution settings are
+not accepted.
+
+Call `Prompt.inspect()` exactly once. Its existing resolver performs input
+parse, refinements, transformations, and coercion. Do not preflight with a
+second `safeParse()`. The resolver exposes failed input parsing internally as
+a structured `PromptInputValidationError`, retaining the public validation
+message. The bridge catches that error; the one normalized value from the
+failed/successful parse is never echoed.
+
+### Validation result
+
+Expected user-input failures are successful command results:
+
+```ts
+const PromptPreviewValidationIssueSchema = z
+  .object({
+    code: z.string().min(1).max(64),
+    path: z
+      .array(
+        z.union([
+          z.string().max(256),
+          z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        ]),
+      )
+      .max(32),
+    message: z.string().min(1).max(1024),
+  })
+  .strict();
+
+const PromptPreviewValidationResultSchema = z
+  .object({
+    status: z.literal("validation-error"),
+    targetId: z.string().min(1).max(512),
+    catalogueRevision: PromptPreviewCatalogueRevisionSchema,
+    issues: z.array(PromptPreviewValidationIssueSchema).max(128),
+    omittedIssueCount: z.number().int().nonnegative(),
+  })
+  .strict();
+```
+
+Preserve issue order, return the first 128 issues, and report the exact omitted
+count. Return no input values, normalized values, schema, stack, or cause.
+A throwing refinement is an inspection failure, not a validation result.
+
+### Ready result and provenance
+
+The ready projection contains only the inspect result's system, prompt,
+token-total, context-decision, token-budget, and tool-name fields:
+
+```ts
+const PromptPreviewSegmentSchema = z
+  .object({
+    kind: z.enum(["static", "dynamic", "unknown"]),
+    startUtf16: z.number().int().nonnegative(),
+    endUtf16: z.number().int().nonnegative(),
+    source: z.string().min(1).max(512).optional(),
+    observedAt: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional(),
+    sourceVersion: z.string().min(1).max(256).optional(),
+  })
+  .strict();
+
+const PromptPreviewPartSchema = z
+  .object({
+    source: z.string().min(1).max(512),
+    text: z.string(),
+    tokens: z.number().int().nonnegative(),
+    skipped: z.boolean(),
+    segments: z.array(PromptPreviewSegmentSchema),
+    staticTokens: z.number().int().nonnegative().optional(),
+    dynamicTokens: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+const PromptPreviewDroppedContextSchema = z
+  .object({
+    source: z.string().min(1).max(512),
+    text: z.string(),
+    tokens: z.number().int().nonnegative(),
+    priority: z.number().finite(),
+    segments: z.array(PromptPreviewSegmentSchema),
+  })
+  .strict();
+
+const PromptPreviewExcludedContextSchema = z
+  .object({
+    source: z.string().min(1).max(512),
+    reason: z.string().max(1024),
+  })
+  .strict();
+
+const PromptPreviewReadyResultSchema = z
+  .object({
+    status: z.literal("ready"),
+    targetId: z.string().min(1).max(512),
+    catalogueRevision: PromptPreviewCatalogueRevisionSchema,
+    inspection: z
+      .object({
+        system: z
+          .object({
+            text: z.string(),
+            tokens: z.number().int().nonnegative(),
+            coverage: z.enum(["complete", "partial"]),
+            parts: z.array(PromptPreviewPartSchema).max(1024),
+          })
+          .strict(),
+        prompt: z
+          .object({
+            text: z.string(),
+            tokens: z.number().int().nonnegative(),
+            segments: z.array(PromptPreviewSegmentSchema),
+            staticTokens: z.number().int().nonnegative().optional(),
+            dynamicTokens: z.number().int().nonnegative().optional(),
+          })
+          .strict()
+          .optional(),
+        totalTokens: z.number().int().nonnegative(),
+        droppedContexts: z.array(PromptPreviewDroppedContextSchema).max(1024),
+        excludedContexts: z.array(PromptPreviewExcludedContextSchema).max(1024),
+        tokenBudget: z.number().int().nonnegative().optional(),
+        tools: z.array(z.string().min(1).max(512)).max(1024).optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const PromptPreviewResultSchema = z.discriminatedUnion("status", [
+  PromptPreviewReadyResultSchema,
+  PromptPreviewValidationResultSchema,
+]);
+
+const PromptPreviewResultEnvelopeSchema = z
+  .object({
+    type: z.literal("command.result"),
+    commandId: z.string().min(1).max(128),
+    result: PromptPreviewResultSchema,
+  })
+  .strict();
+```
+
+Run IDs, trace IDs, approval data, input schema, runtime ports, stacks, causes,
+and inputs are never projected. Go rejects those fields even when empty.
+
+Segment coordinates are zero-based, half-open UTF-16 offsets relative to their
+containing text. Preserve resolver order. Valid nonempty resolver segments
+must exactly reconstruct the containing text, with static/dynamic kinds and
+only segment-owned `source`, `observedAt`, and `sourceVersion` metadata. If
+segments are absent, malformed, overlapping, or do not concatenate exactly,
+emit one `unknown` segment spanning the whole nonempty text; empty text uses an
+empty segment array.
+
+`system.coverage` is `complete` only when joining every non-skipped, nonempty
+part text with `\n\n` exactly equals `system.text`. It is `partial` otherwise,
+including when provider adaptation changes the final system text.
+
+Ready results are all-or-nothing and are never truncated:
+
+| Measurement                                | Limit                 |
+| ------------------------------------------ | --------------------- |
+| Aggregate UTF-8 bytes of all string fields | 1,048,576             |
+| Provenance segments                        | 10,000                |
+| Compact result JSON before its envelope    | 2,097,152 UTF-8 bytes |
+
+Repeated strings count every time. Equality fits. Overflow returns
+`result_limit_exceeded`.
+
+### Errors, cancellation, and retirement
+
+Validation failures use the result union above. Every other failure uses:
+
+```ts
+const PromptPreviewErrorCodeSchema = z.enum([
+  "invalid_request",
+  "target_unavailable",
+  "catalogue_changed",
+  "target_retired",
+  "input_limit_exceeded",
+  "inspection_timeout",
+  "inspection_failed",
+  "result_limit_exceeded",
+  "internal_error",
+]);
+
+const PromptPreviewErrorSchema = z
+  .object({
+    code: PromptPreviewErrorCodeSchema,
+    message: z.string().min(1).max(1024),
+    details: z
+      .object({
+        targetId: z.string().min(1).max(512).optional(),
+        expectedCatalogueRevision:
+          PromptPreviewCatalogueRevisionSchema.optional(),
+        actualCatalogueRevision:
+          PromptPreviewCatalogueRevisionSchema.optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const PromptPreviewErrorEnvelopeSchema = z
+  .object({
+    type: z.literal("command.error"),
+    commandId: z.string().min(1).max(128),
+    error: PromptPreviewErrorSchema,
+  })
+  .strict();
+```
+
+Never include a stack, cause, error object, input, normalized value, output,
+provenance, schema, source key, or arbitrary details. For
+`inspection_failed`, a scalar-valid `Error.message` may be UTF-8 safely
+truncated to 1024 bytes for the local control-plane response only. A non-Error
+uses exactly `Prompt inspection failed.` Neither form may enter logs or events.
+Legacy generic result/error envelopes remain valid for legacy commands only.
+
+`deadlineMs` is required and capped at 30 seconds. Local uses 15 seconds unless
+the caller supplies a shorter deadline; the earliest request context or
+deadline wins. Core races inspection against deadline and catalogue
+retirement. Go stops waiting on request cancellation, deadline, disconnect, or
+target invalidation. Because `ResolveCallOptions` has no abort signal,
+application callbacks may finish after retirement; late outcomes are discarded
+and never sent, logged, or cached.
+
+WebSocket cancellation is:
+
+```ts
+const PromptPreviewCancelSchema = z
+  .object({
+    type: z.literal("command.cancel"),
+    commandId: z.string().min(1).max(128),
+    reason: z.enum(["cancelled", "deadline-exceeded", "target-retired"]),
+  })
+  .strict();
+```
+
+HTTP cancellation uses the request context. Cancellation retires response
+ownership.
+
+Execution captures the exact `{ catalogueRevision, target }`. Any catalogue
+replacement or disposal retires it, even if the new catalogue contains the
+same definition ID. Return `target_retired` only when the transport still owns
+a reply; otherwise discard. A newer same-ID target requires a fresh request.
+
+### Execution and side-effect boundary
+
+Only an explicit Preview dispatch may call `Prompt.inspect()`. Opening the
+panel or command, editing inputs, saving source, discovery, capability refresh,
+and rendering must not dispatch.
+
+Inspection may execute trusted application code through input
+refinements/transforms, sanitizers, prompt callbacks, context predicates and
+system callbacks, contributors, retrieval, memory, and canonical memo
+read/write. These callbacks may perform side effects or I/O. The Phase 16 UI
+must state this clearly at the explicit confirmation boundary.
+
+Inspection must not perform provider generation, tool invocation, adapter or
+Core observability, or ordinary Run creation; it creates no run ID or trace ID.
+Inputs and outcomes never enter Project Index, LSP, bridge, Local, or Devtools
+caches or persistent storage.
+
+### Go normalization and deterministic selection
+
+Go uses typed exact-preview structs after decoding; it does not pass raw JSON
+through dispatch. Extend its dispatch request with:
+
+```go
+type DispatchRequest struct {
+	// Existing fields remain.
+	Environment       string
+	CatalogueRevision uint64
+}
+```
+
+Preview dispatch requires target ID, catalogue revision, payload, and deadline.
+Legacy store dispatch keeps its existing optional behavior.
+
+Normalize at most one valid preview capability per peer. A duplicate or
+invalid preview capability invalidates the whole preview group while retaining
+a valid store capability. Unknown fields, `null`, foreign commands, duplicate
+targets, or invalid bounds invalidate the group. Sort peers by `peerId` and
+targets by code-point order.
+
+Selection is deterministic:
+
+1. validate the request;
+2. snapshot live peers sorted by `peerId`;
+3. apply an explicit `peerId`, if supplied;
+4. apply an explicit exact environment enum, if supplied;
+5. retain preview-capable peers;
+6. retain peers advertising the target;
+7. retain peers at the requested catalogue revision;
+8. return the most specific zero-match error;
+9. return ambiguity when more than one peer remains; otherwise
+10. dispatch to the sole peer.
+
+The stable Local result codes and exact messages are:
+
+| Code                      | Message                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `invalid_request`         | `The exact-preview request is invalid.`                                       |
+| `no_peer`                 | `No live runtime peer is available.`                                          |
+| `environment_unavailable` | `No live runtime peer matches the selected environment.`                      |
+| `capability_unavailable`  | `No live runtime peer supports exact prompt preview.`                         |
+| `target_unavailable`      | `No live runtime peer advertises this prompt target.`                         |
+| `catalogue_changed`       | `The runtime prompt catalogue changed. Refresh and try again.`                |
+| `ambiguous_peer`          | `Multiple runtime peers can inspect this prompt. Select one and retry.`       |
+| `peer_disconnected`       | `The selected runtime peer disconnected.`                                     |
+| `target_disappeared`      | `The prompt target changed while preview was running. Refresh and try again.` |
+| `deadline_exceeded`       | `Exact preview timed out.`                                                    |
+| `cancelled`               | `Exact preview was cancelled.`                                                |
+| `invalid_response`        | `The runtime returned an invalid exact-preview response.`                     |
+| `command_failed`          | `Exact preview failed in the application runtime.`                            |
+| `endpoint_not_allowed`    | `The selected HTTP runtime endpoint is not allowed.`                          |
+
+The zero-match precedence is `invalid_request`, `no_peer`,
+`environment_unavailable`, `capability_unavailable`, `target_unavailable`,
+`catalogue_changed`; ambiguity follows those filters.
+
+An ambiguous selection returns only sorted
+`PeerChoice { PeerID, RuntimeName, Environment }` records. It exposes no
+endpoint, labels, capabilities, targets, or schemas. Existing `store.read`
+implicit selection remains the lexicographically first capable peer and must
+not inherit the preview ambiguity rule.
+
+Repeated `runtime.hello` atomically replaces capabilities for the same live
+connection and advances a private manifest revision. Immediately before send
+and before accepting a terminal response, revalidate connection identity,
+manifest revision, target, and catalogue revision. Manifest or target loss,
+reconnect, and out-of-order replacement become `target_disappeared`;
+disconnect becomes `peer_disconnected`. Late responses never affect newer
+requests.
+
+HTTP and WebSocket decode command-aware envelopes, match `commandId`, and
+reject foreign or `null` fields, target/revision mismatches, invalid UTF-16
+coordinates or coverage, bound violations, and any run/trace fields. HTTP
+retains loopback-only policy, never follows a redirect to a non-loopback
+endpoint, and never logs response bodies.
+
+### Privacy and telemetry
+
+Never log, cache, persist, publish, or attach to events any input, normalized
+value, output text, parts, segments, schemas, validation paths or messages,
+runtime error messages, source keys, provenance, or `targetId`.
+
+Go may retain only these ephemeral dispatch measurements:
+
+- command name and command ID;
+- peer ID, environment, and transport;
+- stable terminal category/code;
+- duration in milliseconds;
+- request and result byte counts; and
+- advertised target count.
+
+Preview failure events keep `Event.Error` nil and carry only the stable terminal
+code. Core emits no success or validation logs. Catalogue-bound warnings use
+only fixed stable codes and aggregate counts.

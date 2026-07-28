@@ -1,4 +1,5 @@
 import type { SemanticBackendParityFixture } from "./semantic-backend-parity-fixtures";
+import type { PromptTextSourceKind } from "@use-crux/core/project-index";
 import {
   promptTextRef,
   sourceRange,
@@ -62,7 +63,11 @@ const ref = (
   role: "system" | "prompt",
   authoredSource: string,
   lifecycle: "static" | "dynamic",
-  options: { readonly symbol?: string; readonly occurrence?: number } = {},
+  options: {
+    readonly symbol?: string;
+    readonly occurrence?: number;
+    readonly sourceKind?: PromptTextSourceKind;
+  } = {},
 ) =>
   promptTextRef({
     definitionId,
@@ -143,7 +148,9 @@ export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
         "static",
         { symbol: "inlineNested" },
       ),
-      ref("prompt:nested-prompt", "prompt", "md`Inline`", "static"),
+      ref("prompt:nested-prompt", "prompt", "md`Inline`", "static", {
+        sourceKind: "anonymous-fragment",
+      }),
       ref("prompt:concise", "prompt", "md`Concise`", "dynamic"),
       ref("prompt:function", "prompt", "md`Function`", "dynamic"),
       ref("prompt:method", "prompt", "md`Method`", "dynamic"),

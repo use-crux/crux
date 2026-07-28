@@ -54,6 +54,10 @@ packages/local/internal/lsp/prompttext/
   diagnostics.go
   actions.go
   navigation.go
+  view/
+    types.go
+    provider.go
+    transform.go
 
 packages/vscode/src/prompt-text/
   contracts.ts
@@ -67,6 +71,22 @@ packages/vscode/src/prompt-text/
     range.ts
     metadata.ts
     types.ts
+
+packages/core/src/runtime-bridge/prompt-preview/
+  protocol.ts
+  limits.ts
+  catalogue.ts
+  execute.ts
+  projection.ts
+
+packages/core/src/runtime/
+  prompt-catalogue.ts
+
+packages/local/internal/runtimebridge/preview/
+  types.go
+  validate.go
+  selection.go
+  result.go
 ```
 
 The server package composes the focused PromptText controller through explicit
@@ -214,7 +234,85 @@ Focused tests cover:
   `changes`, resolve handler, resource operations, or annotations;
 - exact action titles/order, no JSON-serialization action, and race tests
   proving clears and version guards cannot be overtaken;
+- exact comma-join wrapping over unchanged authored expression bytes, one
+  evaluation, and every negative `joinableWithComma` case;
+- Rust-owned optional line-isolation proof ABI, strict Go validation/copying,
+  and rejection of absent, null, malformed, or expected-text-mismatched proof;
+- line-isolation edits at logical/template start, middle, and end with empty
+  and multi-byte gaps, tabs/spaces indentation, LF, CRLF, and side-specific
+  mixed EOLs;
+- counterfactual rejection for nonlinear mappings, escaped line boundaries,
+  other target-line interpolations, changed common indent/outer blanks,
+  changed Markdown signature, or changed non-target placement/provenance;
+- exact sequence action titles/order, separate one-edit versioned actions, and
+  no JSON-serialization action regression;
+- finalized-template byte accounting for the optional proof at exact and
+  one-byte-under bounds, with whole-template prefix truncation;
+- one transformed PromptText view selection per request, mandatory open
+  `DocumentRevision`, stable-ID range transforms, and no raw
+  Publisher/publication mixing;
+- exact/saved-fallback/edit-revert selection; shift-at-boundary and overlap
+  invalidation; cross-document destination transforms; save/close/reconnect
+  retirement; and final view/transform/document stamp rechecks;
+- backtick ABI/golden parity and navigation claims for literal/quasi regions,
+  with tag and interpolation syntax explicitly left to TypeScript;
+- owner/named-fragment definition and reference matrices, shared ambiguity,
+  exact declaration ordering/deduplication, and self-jump suppression;
+- compiler-owned `promptText.sourceKind` for field/callback owners, local/
+  imported/aliased/default/star-exported/re-exported and whole-field named
+  fragments, and nested anonymous fragments across prompt/system and
+  static/dynamic reachability, including outgoing nested joins, unused, shared,
+  cyclic, ambiguous, unresolved, and unreachable cases;
+- strict source-kind schema/Go normalization, contradictory legacy-marker
+  fixtures, stable-signature invalidation, JavaScript/native byte parity, and
+  worker/Store/SQLite/snapshot/delta/OWN/ATTACHED retention;
+- Markdown/plaintext PromptText hover goldens, finding→definition→PromptText
+  ordering, smallest-range precedence, exact evidence labels, owner caps, and
+  shared UTF-16 output limits;
+- strict `promptTextRefactor` semantic metadata and JavaScript/native parity
+  across accepted bindings/fields plus every shadowed, aliased, computed,
+  indirect, ambiguous, or lookalike rejection;
+- Rust quoted/backtick multiline fixed-point proof across UTF-16/UTF-8,
+  canonical control/backtick/`${` encoding, LF/CRLF/Unicode, and all
+  normalization failures;
+- independent refactor candidate/byte/output limits, complete-only
+  consumption, flat V1 limit fields, and Rust/Go/worker/OWN/ATTACHED goldens;
+- diagnostic-free `refactor.rewrite` capability/range routing, no import edits,
+  exactly one current versioned edit, and stale/cancelled final rejection;
 - ATTACHED and OWN end-to-end behavior;
+- recursively strict exact-preview capabilities, requests, results, validation
+  results, errors, cancellation, and unchanged legacy `store.read` behavior;
+- exact canonical definition-ID target projection, code-point ordering,
+  collision/invalid/oversize omission, input descriptor modes, and whole
+  capability bounds;
+- active prompt-catalogue publication, monotonic revisions, atomic
+  replacement, failed-configuration preservation, active/old disposal,
+  current HTTP manifests, repeated WebSocket hello replacement, and target
+  retirement;
+- prompt-only target coverage, with contexts, ownerless fragments,
+  message-mode prompts, and arbitrary callbacks absent;
+- every JSON request/depth/node/key/string/value limit, duplicate-key and
+  surrogate rejection, finite `-0` and nested `null`, equality-at-limit cases,
+  and identical Go/Core validation;
+- exactly-once canonical input parsing and inspection, ordered validation
+  issue projection, transformation/coercion coverage, and no preflight parse;
+- exact ready-result projection and UTF-16 segment reconstruction/fallback,
+  system coverage, ordering, Unicode, aggregate string/segment/result bounds,
+  and all-or-nothing overflow;
+- explicit-dispatch-only execution, trusted callback side-effect boundary,
+  canonical memo behavior, and proof of zero provider generation, tool
+  invocation, ordinary Runs, observability records, run IDs, or trace IDs;
+- timeout, request cancellation, disconnect, catalogue replacement/disposal,
+  target retirement, late-result discard, and WebSocket cancel behavior;
+- deterministic Go peer/environment/capability/target/revision filtering,
+  exact zero-match precedence, ambiguity choices, repeated-manifest
+  revalidation, out-of-order rejection, and unchanged store selection;
+- strict HTTP/WebSocket terminal decoding, loopback and redirect controls,
+  response bounds, command/target/revision matching, and no response-body
+  logging; and
+- privacy tests proving input, output, schemas, validation details, runtime
+  messages, provenance, source keys, and target IDs never enter logs, events,
+  persistence, caches, Project Index, LSP, or Devtools state;
 - byte-for-byte cache/store non-mutation; and
 - final Go tests under the race detector.
 
@@ -232,6 +330,9 @@ Saved semantic evidence requires:
   begin changing saved semantic output;
 - Phase 11 to advance `ProjectIndexSnapshotCacheEpoch` when the Go snapshot
   begins retaining the evidence;
+- Phase 14's already-planned semantic v37 and snapshot epoch 50 to jointly own
+  multiline-refactor metadata and compiler-owned PromptText source
+  classification, without a second bump in the unreleased worktree;
 - JavaScript/native semantic parity fixtures; and
 - migration tests proving old snapshots cannot hide missing evidence.
 

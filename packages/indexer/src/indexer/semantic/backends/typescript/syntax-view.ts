@@ -79,6 +79,11 @@ export function createTypeScriptSemanticSyntaxView(
       if (ts.isShorthandPropertyAssignment(node)) return node.name;
       return undefined;
     },
+    isComputedProperty(node) {
+      return (
+        ts.isPropertyAssignment(node) && ts.isComputedPropertyName(node.name)
+      );
+    },
     arrayElements(node) {
       return ts.isArrayLiteralExpression(node) ? [...node.elements] : [];
     },
@@ -125,6 +130,10 @@ export function createTypeScriptSemanticSyntaxView(
       return ts.isNumericLiteral(node) ? node.text : undefined;
     },
     unwrapExpression,
+    unwrapParentheses(node) {
+      while (ts.isParenthesizedExpression(node)) node = node.expression;
+      return node;
+    },
     variableDeclarationName(node) {
       return ts.isVariableDeclaration(node) ? node.name : undefined;
     },

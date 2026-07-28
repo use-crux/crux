@@ -49,16 +49,19 @@ type PromptTextAnalysisStatus struct {
 
 // PromptTextLimits centralizes transient projection and output bounds.
 type PromptTextLimits struct {
-	MaxSourceBytes    uint32 `json:"maxSourceBytes"`
-	MaxTemplates      uint32 `json:"maxTemplates"`
-	MaxTemplateBytes  uint32 `json:"maxTemplateBytes"`
-	MaxTraversalNodes uint32 `json:"maxTraversalNodes"`
-	MaxOutputBytes    uint32 `json:"maxOutputBytes"`
-	MaxFragments      uint32 `json:"maxFragments"`
-	MaxFragmentJoins  uint32 `json:"maxFragmentJoins"`
-	MaxFragmentBytes  uint32 `json:"maxFragmentBytes"`
-	MaxFragmentDepth  uint32 `json:"maxFragmentDepth"`
-	MaxPreviewBytes   uint32 `json:"maxPreviewBytes"`
+	MaxSourceBytes               uint32 `json:"maxSourceBytes"`
+	MaxTemplates                 uint32 `json:"maxTemplates"`
+	MaxTemplateBytes             uint32 `json:"maxTemplateBytes"`
+	MaxTraversalNodes            uint32 `json:"maxTraversalNodes"`
+	MaxOutputBytes               uint32 `json:"maxOutputBytes"`
+	MaxStringRefactors           uint32 `json:"maxStringRefactors"`
+	MaxStringRefactorBytes       uint32 `json:"maxStringRefactorBytes"`
+	MaxStringRefactorOutputBytes uint32 `json:"maxStringRefactorOutputBytes"`
+	MaxFragments                 uint32 `json:"maxFragments"`
+	MaxFragmentJoins             uint32 `json:"maxFragmentJoins"`
+	MaxFragmentBytes             uint32 `json:"maxFragmentBytes"`
+	MaxFragmentDepth             uint32 `json:"maxFragmentDepth"`
+	MaxPreviewBytes              uint32 `json:"maxPreviewBytes"`
 }
 
 // PromptTextFragment is one bounded, semantically proven fragment input.
@@ -114,6 +117,30 @@ type PromptTextWorkerRequest struct {
 	Query  PromptTextQuery `json:"query"`
 }
 
+// PromptTextRefactorProofLevel identifies compiler-owned proof strength.
+type PromptTextRefactorProofLevel string
+
+const (
+	PromptTextRefactorProofSyntaxExact PromptTextRefactorProofLevel = "syntax-exact"
+)
+
+// PromptTextRefactorProof is one exact ordinary-string conversion proof.
+type PromptTextRefactorProof struct {
+	Kind         string                       `json:"kind"`
+	CandidateID  uint32                       `json:"candidateId"`
+	Range        PromptTextRange              `json:"range"`
+	ExpectedText string                       `json:"expectedText"`
+	TemplateText string                       `json:"templateText"`
+	Proof        PromptTextRefactorProofLevel `json:"proof"`
+}
+
+// PromptTextRefactorAnalysis has limits and completeness independent from
+// tagged-template analysis.
+type PromptTextRefactorAnalysis struct {
+	Status PromptTextAnalysisStatus  `json:"status"`
+	Proofs []PromptTextRefactorProof `json:"proofs"`
+}
+
 // PromptTextQueryResponse is one normalized result for an exact revision.
 type PromptTextQueryResponse struct {
 	ProtocolVersion uint16                     `json:"protocolVersion"`
@@ -121,4 +148,5 @@ type PromptTextQueryResponse struct {
 	Revision        PromptTextDocumentRevision `json:"revision"`
 	Status          PromptTextAnalysisStatus   `json:"status"`
 	Templates       []PromptTextTemplate       `json:"templates"`
+	Refactors       PromptTextRefactorAnalysis `json:"refactors"`
 }

@@ -8,7 +8,11 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  * source/config hashes or structured dependency identities.
  */
 export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v79";
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v37";
+/**
+ * Semantic v38 owns bounded media streaming plus PromptText diagnostic/refactor
+ * evidence and compiler-owned source classification.
+ */
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v38";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

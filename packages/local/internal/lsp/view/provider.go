@@ -26,3 +26,17 @@ func (p *SavedProvider) BestAvailableView(request ViewRequest) ViewSelection {
 	}
 	return selectSavedPublication(request, p.store.PublicationSnapshot(request.ScopeID))
 }
+
+// Current reports whether stamp still identifies the Store's complete saved
+// publication. It compares the canonical stamp instead of generation alone.
+func (p *SavedProvider) Current(stamp ViewStamp) bool {
+	if p == nil || p.store == nil || stamp.Origin != ViewOriginSaved ||
+		stamp.OverlayRevision != 0 {
+		return false
+	}
+	publication := p.store.PublicationSnapshot(stamp.ScopeID)
+	return publication.Generation == stamp.BaseGeneration &&
+		publication.GenerationKnown == stamp.BaseGenerationKnown &&
+		publication.Revision == stamp.Revision &&
+		savedEvidence(publication.Indexing) == stamp.Evidence
+}

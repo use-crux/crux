@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	promptview "github.com/use-crux/crux/packages/local/internal/lsp/prompttext/view"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 )
@@ -42,7 +43,7 @@ func canonicalSourceRefRange(
 		sourceRef.Snippet == nil || sourceRef.Snippet.Truncated ||
 		!sameFile(root, sourceRef.Source.File, file) ||
 		!sameFile(root, sourceRef.Snippet.Range.File, file) ||
-		!staticMarkdownMetadata(sourceRef.Metadata) {
+		!staticMarkdownSourceRef(sourceRef) {
 		return protocol.Range{}, false
 	}
 	sourceRange, start, end, ok := exactSourceRange(sourceRef.Snippet.Range, text)
@@ -52,15 +53,38 @@ func canonicalSourceRefRange(
 	return sourceRange, true
 }
 
-func staticMarkdownMetadata(metadata map[string]any) bool {
-	promptText, ok := metadata["promptText"].(map[string]any)
+func staticMarkdownSourceRef(sourceRef api.ProjectSourceRef) bool {
+	_, ok := staticMarkdownSourceKind(sourceRef)
+	return ok
+}
+
+func staticMarkdownSourceKind(
+	sourceRef api.ProjectSourceRef,
+) (promptview.PromptTextSourceKind, bool) {
+	promptText, ok := sourceRef.Metadata["promptText"].(map[string]any)
 	if !ok {
-		return false
+		return "", false
 	}
+	tag, tagOK := promptText["tag"].(string)
 	language, languageOK := promptText["language"].(string)
 	lifecycle, lifecycleOK := promptText["lifecycle"].(string)
-	return languageOK && lifecycleOK &&
-		language == "markdown" && lifecycle == "static"
+	sourceKind, sourceKindOK := promptText["sourceKind"].(string)
+	if !tagOK || !languageOK || !lifecycleOK || !sourceKindOK ||
+		tag != "md" || language != "markdown" || lifecycle != "static" ||
+		sourceRef.Role != sourceRef.Property ||
+		(sourceRef.Role != "prompt" && sourceRef.Role != "system") {
+		return "", false
+	}
+	kind := promptview.PromptTextSourceKind(sourceKind)
+	switch kind {
+	case promptview.PromptTextSourceNamedFragment:
+		return kind, sourceRef.Symbol != ""
+	case promptview.PromptTextSourceOwner,
+		promptview.PromptTextSourceAnonymousFragment:
+		return kind, sourceRef.Symbol == ""
+	default:
+		return "", false
+	}
 }
 
 func sameFile(root, left, right string) bool {
