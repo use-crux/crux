@@ -88,6 +88,11 @@ Guide: [Adapter outcomes](/docs/guides/observability/adapter-outcomes). Privacy 
 
 All first-party generation adapters accept canonical `Message.content` values as either strings or readonly `ContentPart[]`. Each adapter uses one provider-local content part table for managed calls, public codecs, headless handles, transport mode, and rich tool-result encoding. Model calls validate and normalize media sources before provider I/O; malformed media throws `InvalidMediaSourceError`, and valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError`.
 
+Start with the [Media and multimodal guide](/docs/guides/media) to choose
+between ordinary media messages and specialized image, transcription, speech,
+or streaming operations. This reference owns adapter-specific support; the
+guide owns application workflow.
+
 | Capability               | `@use-crux/ai`            | `@use-crux/anthropic`   | `@use-crux/openai` Chat       | `@use-crux/google`      |
 | ------------------------ | ------------------------- | ----------------------- | ----------------------------- | ----------------------- |
 | Image input, data or URL | yes                       | yes                     | yes, byte data as data URLs   | yes                     |

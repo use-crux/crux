@@ -1,0 +1,136 @@
+---
+title: OpenAI media operations
+description: OpenAI media input, image generation, transcription, speech generation, native options, results, and finite streams.
+---
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+```
+
+Start with the [Media guides](/docs/guides/media) for application workflows.
+This page documents OpenAI-specific endpoint behavior.
+
+## Media in chat
+
+OpenAI chat maps:
+
+- image parts to native `image_url` parts;
+- supported WAV/MP3 data to `input_audio`;
+- supported file data and provider-file assets to OpenAI file parts.
+
+Video is unsupported. Tool messages remain text-only; media returned by a tool
+is sent as correlated user media on the next turn.
+
+## `adapter.generateImage(options)`
+
+Runs one native Images API generation or edit. Text-only prompts use
+`images.generate`; references or a mask use `images.edit`.
+
+Portable fields include `prompt`, `n`, `size`, cancellation, timeout, routing,
+and Safety. OpenAI rejects portable `aspectRatio` and `seed` before I/O.
+
+`extra` accepts:
+
+| Field                | Type                                          |
+| -------------------- | --------------------------------------------- |
+| `background`         | `"transparent" \| "opaque" \| "auto" \| null` |
+| `input_fidelity`     | `"high" \| "low" \| null`                     |
+| `moderation`         | `"low" \| "auto" \| null`                     |
+| `output_compression` | `number \| null`                              |
+| `output_format`      | `"png" \| "jpeg" \| "webp" \| null`           |
+| `quality`            | native quality union                          |
+| `user`               | `string`                                      |
+
+The adapter requests base64 output, validates every returned image, and creates
+provider-ordered assets. `result.raw` is the exact `ImagesResponse`.
+`providerMetadata` contains payload-free response facts such as creation time,
+background, quality, and size. Completed DALL·E 3 revised prompts remain
+available on `result.raw.data`; Crux does not synthesize them elsewhere.
+
+## `adapter.transcribe(options)`
+
+Runs native audio transcription or translation.
+
+OpenAI supports requested segment/word timing and diarization only on compatible
+model/response combinations. Unsupported detail fails before I/O. Remote HTTPS
+audio is downloaded before the multipart request; provider-file assets are not
+accepted by this endpoint.
+
+Translation is explicit:
+
+```ts
+await openai.transcribe({
+  model: "whisper-1",
+  audio,
+  task: { type: "translate", targetLanguage: "en" },
+  extra: {
+    translation: { temperature: 0.2 },
+  },
+});
+```
+
+`extra.transcription` and `extra.translation` are mutually exclusive endpoint
+namespaces. `result.raw` is the exact transcription or translation response.
+Safe provider metadata may include native usage.
+
+## `adapter.generateSpeech(options)`
+
+Runs one native Speech API request and buffers the completed response body.
+
+Supported portable output formats are `mp3`, `opus`, `aac`, `flac`, `wav`, and
+raw `pcm`. OpenAI does not expose the portable `language` control.
+`instructions` is rejected for models that do not support native delivery
+instructions. Valid speed is provider-bounded.
+
+`voice` uses the installed OpenAI SDK's native voice type, including supported
+custom voice references. `result.raw` is the exact SDK `Response`;
+`result.audio` contains the decoded body and selected media type.
+
+## `adapter.streamImage(options)`
+
+Starts one finite, eager Images API stream. Initial model support is:
+
+- `gpt-image-1`;
+- `gpt-image-1-mini`;
+- `gpt-image-1.5`;
+- `gpt-image-2`;
+- `gpt-image-2-2026-04-21`;
+- `chatgpt-image-latest`.
+
+Streaming is generation-only and single-output. Omitting `n` means one;
+`n !== 1`, references, masks, unsupported portable controls, and DALL·E models
+fail before SDK I/O. `extra.partial_images` accepts `0` through `3`.
+
+Native partial images become complete `image-preview` replacements at
+`outputIndex: 0`. The native partial index becomes `sequence`. The final asset
+is shared with `completion.image`.
+
+`completion.raw` is the exact `ImageGenCompletedEvent`, including usage. That
+event has no `revised_prompt`; Crux does not invent one.
+
+## `adapter.streamSpeech(options)`
+
+Starts one finite native Speech API response-body stream. Initial model support:
+
+- `tts-1`;
+- `tts-1-hd`;
+- `gpt-4o-mini-tts`;
+- `gpt-4o-mini-tts-2025-12-15`.
+
+Crux fixes native `stream_format: "audio"` and publishes ordered
+`audio-delta` bytes. `outputFormat` selects MP3, Opus, AAC, FLAC, WAV, or raw
+PCM. The final audio asset is assembled from retained chunks.
+`completion.raw` is the exact SDK `Response`.
+
+## Shared stream behavior
+
+Both streams use Core replay, cancellation, timeout, routing, Safety, and
+ownership laws. The first public preview or live delta commits routing.
+Enforcing output-media Safety guards complete previews and holds incomplete
+deltas until final validation. Crux never persists events or completion media.
+
+See [Streaming generated media](/docs/guides/media/streaming) and the exact
+[Core media-streaming contract](/docs/reference/crux-core/media-streaming).

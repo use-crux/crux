@@ -1,0 +1,202 @@
+---
+title: Media inputs
+description: Send images, audio, video, PDFs, and files through ordinary Crux messages without giving up type safety or ownership.
+---
+
+Use ordinary `generate()` or `stream()` when media is evidence for a
+language-model answer. Media input does not require a separate description API.
+
+## Build mixed content
+
+A canonical message contains either a string or an ordered array of content
+parts:
+
+```ts
+import type { ContentPart } from "@use-crux/core";
+
+const content: readonly ContentPart[] = [
+  { type: "text", text: "Compare these sources and explain any conflict." },
+  {
+    type: "image",
+    source: chartBytes,
+    mediaType: "image/png",
+  },
+  {
+    type: "file",
+    source: new URL("https://example.com/report.pdf"),
+    mediaType: "application/pdf",
+    filename: "report.pdf",
+  },
+];
+```
+
+Ordering is meaningful. Put instructions and media in the order the provider
+should receive them. Adapters preserve supported native order rather than
+flattening everything into text.
+
+The closed model-visible content union contains:
+
+| Part    | Required field | Typical uses                                  |
+| ------- | -------------- | --------------------------------------------- |
+| `text`  | `text`         | Instructions, questions, captions             |
+| `image` | `source`       | Screenshots, photos, charts, reference images |
+| `audio` | `source`       | Recordings, music, environmental audio        |
+| `video` | `source`       | Clips for supported multimodal models         |
+| `file`  | `source`       | PDFs and other provider-supported documents   |
+
+Assistant output may additionally contain reasoning and tool-call parts.
+`result.content` is authoritative; `result.text` is only its text projection.
+
+## Choose a media source
+
+`MediaSource` accepts:
+
+- a usable `Asset`;
+- an HTTPS or data URL string;
+- a `URL`;
+- a `Uint8Array` or `ArrayBuffer`;
+- a `Blob`.
+
+Prefer bytes or a `Blob` when your application already owns the payload.
+Prefer HTTPS URLs when the provider supports remote fetch and the URL is safe to
+share. Data URLs are convenient for small inputs but duplicate the payload in
+memory.
+
+An `AssetRef` is deliberately not a `MediaSource`:
+
+```ts
+const stored = await assetStore.put(upload);
+const asset = await assetStore.get(stored.ref);
+
+const part: ContentPart = {
+  type: "image",
+  source: asset,
+};
+```
+
+The store that issued the reference owns hydration and authorization. Crux
+does not guess which store to use.
+
+## Declare the MIME type
+
+Set `mediaType` when the source does not describe it reliably or when the
+provider requires one:
+
+```ts
+const audio: ContentPart = {
+  type: "audio",
+  source: recordingBytes,
+  mediaType: "audio/wav",
+};
+```
+
+Crux validates and normalizes media before provider I/O. It does not infer a
+format by decoding arbitrary payloads. URL-backed Google media, for example,
+requires a MIME type because the SDK needs it for `fileData`.
+
+Use an IANA media type such as `image/png`, `audio/mpeg`, `video/mp4`, or
+`application/pdf`. Parameters are preserved where they carry format
+information, such as raw PCM rate and channel details.
+
+## Send media with a prompt
+
+```ts
+import OpenAI from "openai";
+import { z } from "zod";
+import { prompt } from "@use-crux/core";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const inspectInvoice = prompt({
+  input: z.object({ invoice: z.instanceof(Uint8Array) }),
+  messages: ({ input }) => [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Extract the invoice number and total." },
+        {
+          type: "file",
+          source: input.invoice,
+          mediaType: "application/pdf",
+          filename: "invoice.pdf",
+        },
+      ],
+    },
+  ],
+});
+
+const result = await openai.generate(inspectInvoice, {
+  model: "gpt-4o",
+  input: { invoice: invoiceBytes },
+});
+```
+
+The same input works with `stream()`. Live deltas remain canonical text/tool
+events. `completion` carries the exact final ordered assistant content,
+including any returned media the adapter can decode.
+
+## Provider options belong on the part
+
+When a provider has a content-specific control, keep it next to that part:
+
+```ts
+const image: ContentPart = {
+  type: "image",
+  source: chartBytes,
+  mediaType: "image/png",
+  providerOptions: {
+    openai: { detail: "high" },
+  },
+};
+```
+
+This escape hatch is provider-owned. Portable code should not inspect or
+reinterpret it. The owning adapter validates what it can and passes native
+validation errors through when a custom model identifier is unknown to Crux.
+
+## Keep framework boundaries native
+
+AI SDK `ModelMessage` and `useChat` attachments should stay native at the route
+boundary:
+
+```ts
+import { convertToModelMessages } from "ai";
+import { createUIMessageStreamResponse } from "@use-crux/ai";
+
+export async function POST(request: Request) {
+  const { messages } = await request.json();
+  const result = await ai.stream(chatPrompt, {
+    model,
+    messages: await convertToModelMessages(messages),
+  });
+
+  return createUIMessageStreamResponse(result);
+}
+```
+
+Convex Agent likewise owns thread files, reloads, continuation, and autosave.
+Crux does not copy framework messages or insert hidden storage writes.
+
+## Guard media before it leaves
+
+Input-media guardrails receive the original source identity and a stable
+origin. They can allow, warn, block, or strip optional media parts. A required
+source—such as transcription audio—cannot be stripped into an invalid
+operation.
+
+See [Media safety](/docs/guides/media/safety) for lifecycle examples and
+[Multimodal content](/docs/reference/crux-core/multimodal) for the exact type
+and projection contracts.
+
+## Common failures
+
+- **`InvalidMediaSourceError`**: malformed URL, empty bytes, invalid data URL,
+  or unsupported source shape.
+- **`UnsupportedCapabilityError`**: the source is valid but the selected
+  provider/model cannot accept that modality or source representation.
+- **Provider validation error**: the adapter cannot prove a custom model is
+  unsupported, so the native provider rejects it.
+
+Never solve a capability error by converting sensitive media to a public URL
+unless that is already an acceptable application boundary.

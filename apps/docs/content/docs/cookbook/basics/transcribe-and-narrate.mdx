@@ -1,0 +1,102 @@
+---
+title: Transcribe and narrate
+description: Build an audio-to-text-to-audio pipeline with honest transcript detail, separate Safety boundaries, and explicit persistence.
+---
+
+This recipe transcribes a recording, creates a short narration script, and
+generates speech. Each stage has its own result and failure boundary.
+
+## 1. Bind the adapter
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+const assets = inMemoryAssetStore();
+```
+
+## 2. Transcribe measured detail
+
+```ts
+const transcript = await openai.transcribe({
+  model: "gpt-4o-mini-transcribe",
+  audio: recording,
+  language: "en",
+  timestamps: "segment",
+  timeout: {
+    totalMs: 60_000,
+    stepMs: 45_000,
+  },
+});
+
+console.log(transcript.text);
+console.log(transcript.segments);
+```
+
+Request timing only when the selected endpoint measures it. Empty detail stays
+empty; Crux never estimates intervals. If speaker labels are required, select a
+model that supports diarization and request it explicitly.
+
+## 3. Derive the narration script
+
+Use an ordinary prompt for language work:
+
+```ts
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
+
+const narrationScript = prompt({
+  input: z.object({ transcript: z.string() }),
+  prompt: ({ input }) =>
+    `Write a concise spoken summary of this transcript:\n\n${input.transcript}`,
+});
+
+const script = await openai.generate(narrationScript, {
+  model: "gpt-4o-mini",
+  input: { transcript: transcript.text },
+});
+```
+
+This is intentionally a separate model operation. Its text Safety, constraints,
+cost, retry, and trace evidence do not get hidden inside transcription.
+
+## 4. Generate speech
+
+```ts
+const narration = await openai.generateSpeech({
+  model: "gpt-4o-mini-tts",
+  text: script.text,
+  voice: "alloy",
+  instructions: "Clear, neutral, and suitable for a short briefing.",
+  outputFormat: "mp3",
+});
+```
+
+Speech input and output have their own guardrail boundaries. Apply a policy to
+the script or audio when the product requires it; do not assume transcription
+policy automatically governs a later synthesis call.
+
+## 5. Persist the final audio
+
+```ts
+const storedNarration = await assets.put(narration.audio);
+```
+
+Persisting the source recording, transcript, and generated narration are three
+independent application decisions. Crux does not retain one merely because the
+next stage consumes it.
+
+If storage fails, retry this `put()` with the existing audio. Do not re-run
+transcription, script generation, or speech synthesis.
+
+## Stream delivery when necessary
+
+Use `streamSpeech()` when your consumer understands the provider's native audio
+framing and progressive delivery improves latency. Persist
+`completion.audio`, not provisional chunks.
+
+See [Speech generation](/docs/guides/media/speech-generation),
+[Transcription](/docs/guides/media/transcription), and
+[Storage and delivery](/docs/guides/media/storage-and-delivery).

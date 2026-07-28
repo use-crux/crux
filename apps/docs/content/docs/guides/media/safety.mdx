@@ -1,0 +1,180 @@
+---
+title: Media safety
+description: Guard media inputs, generated previews, incomplete deltas, final assets, and transcripts without leaking payloads.
+---
+
+Media uses the same canonical Safety model as text, but its enforcement units
+are different. A complete image can be evaluated honestly; an incomplete image
+or audio byte sequence usually cannot.
+
+## Attach media guardrails
+
+```ts
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+const pngOnly = guardrail({
+  id: "png-only",
+  on: boundary.output.media(),
+  run: ({ subject }) =>
+    subject.part.mediaType === "image/png"
+      ? { action: "allow" }
+      : { action: "block", reason: "Only PNG output is allowed." },
+});
+
+const picture = await openai.generateImage({
+  model: "gpt-image-1",
+  prompt: "A quiet canal at sunrise",
+  guardrails: [pngOnly],
+});
+```
+
+Media callbacks receive canonical part metadata, the original source identity,
+and a stable operation origin. Narrow `part.type` and `origin.kind` before
+reading modality- or operation-specific fields.
+
+## Know the boundaries
+
+| Operation                             | Input boundaries                                  | Output boundaries                       |
+| ------------------------------------- | ------------------------------------------------- | --------------------------------------- |
+| Ordinary `generate()` / `stream()`    | text, instructions, media, tools                  | text, object, media, tool calls/results |
+| `generateImage()` / `streamImage()`   | prompt text, typed instructions, references, mask | previews and final images               |
+| `transcribe()`                        | required audio and optional prompt                | transcript text                         |
+| `generateSpeech()` / `streamSpeech()` | speech text and instructions                      | final audio                             |
+
+Image and speech operations expose `guardrails` and `safety`. Transcription
+also exposes output-text `constraints`, evaluated once without provider
+regeneration.
+
+The exact stable matrix lives in
+[Safety for content primitives](/docs/reference/crux-core/safety-content-primitives).
+
+## Choose an action
+
+Media policies return:
+
+- `allow` — publish or retain the occurrence;
+- `warn` — retain it and record a decision;
+- `block` — fail the operation;
+- `strip` — remove an optional canonical part.
+
+Media does not support `rewrite`: replacing bytes would require a trustworthy
+new media value and a new policy decision. Use a separate transformation
+operation when media must change.
+
+An enforced strip cannot create an invalid result:
+
+- an optional input image may be removed;
+- one generated image may be removed when siblings remain;
+- stripping the final generated image blocks;
+- stripping required transcription audio blocks;
+- stripping required speech audio blocks;
+- retaining an image-edit mask without any reference image blocks.
+
+Report mode records what would happen but does not mutate the input or result.
+
+## Understand streaming release
+
+Complete image previews are separate media occurrences. Crux evaluates each one
+before it appears in `fullStream`.
+
+Image and audio deltas are incomplete native bytes. When an output-media policy
+enforces, Crux holds them until native completion and final-media validation:
+
+```text
+provider delta → held by Crux → final asset → guardrail → publish or discard
+```
+
+If the final asset passes, the stream publishes the guarded final occurrence.
+If it blocks, held bytes are discarded and never become public events.
+Report-only policy may leave genuine deltas live because it does not alter the
+application-facing result.
+
+Held or stripped provisional media does not commit a route. A visible preview
+or live delta does. See
+[Streaming generated media](/docs/guides/media/streaming#routing-and-retries).
+
+## Classify media with a model
+
+Use a media classifier guardrail when a decision requires structured model
+judgment:
+
+```ts
+const generatedMediaPolicy = guardrail({
+  id: "generated-media-policy",
+  on: boundary.output.media(),
+  run: guardrail.media({
+    model: classifierModel,
+    schema: classificationSchema,
+    decide: ({ category, confidence }) =>
+      category === "unsafe" && confidence >= 0.8
+        ? { action: "block", reason: "Unsafe generated media." }
+        : { action: "allow" },
+  }),
+});
+```
+
+The classifier is an explicit child model call with its own disclosure,
+failure, and observability behavior. Read
+[Media classifier guardrails](/docs/guides/safety/media-classifier) before
+using one in enforcement.
+
+## Tune rollout safely
+
+Use per-call tuning to shadow or disable an attached policy:
+
+```ts
+await openai.generateImage({
+  model: "gpt-image-1",
+  prompt,
+  guardrails: [generatedMediaPolicy],
+  safety: {
+    tune: {
+      "generated-media-policy": { mode: "report" },
+    },
+  },
+});
+```
+
+Tuning changes only policy enablement and mode. It does not widen the boundary
+or turn an incomplete delta into a safe evaluation unit.
+
+## Treat native results separately
+
+Canonical Safety covers normalized inputs and application-facing results. It
+does not rewrite:
+
+- `result.raw`;
+- provider metadata;
+- provider warnings;
+- provider-native events.
+
+Those surfaces may contain information rejected by a canonical guardrail. Do
+not render or log them as though they passed Safety. Retain them only where the
+provider integration genuinely requires them.
+
+## Observe without retaining payloads
+
+Safety records contain policy, action, boundary, modality, occurrence index,
+origin, and release/discard state. They do not contain media bytes, base64/data
+URLs, filenames, bearer refs, signed URLs, provider file IDs, thumbnails, or
+playback data.
+
+Catalog links authored media operations to attached policies. Runs shows
+preview/final provenance and whether provisional bytes were held, released, or
+discarded. See
+[Storage and delivery](/docs/guides/media/storage-and-delivery#inspect-media-work).
+
+## Test policy behavior
+
+Cover at least:
+
+- allowed input and output;
+- report-mode warn/block/strip decisions;
+- enforced optional strip;
+- required-media strip escalation;
+- held stream deltas released after a safe final asset;
+- held deltas discarded after a blocked final asset;
+- raw/native values never treated as guarded output.
+
+Use Safety signal assertions or the decision-report matcher in Evals when the
+policy is part of a product requirement.

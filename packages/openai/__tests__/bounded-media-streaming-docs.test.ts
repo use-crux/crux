@@ -48,8 +48,50 @@ async function openAIImageStreamExample(apiKey: string) {
   return { picture, storedPicture, previews, finalImages, imageChunks };
 }
 
+/**
+ * Compile the completed OpenAI media-operation examples used across the Media
+ * guides. The fixture proves the documented methods, portable options, and
+ * result projections remain public without performing SDK I/O.
+ */
+async function openAICompletedMediaExample(
+  apiKey: string,
+  meetingAudio: Uint8Array,
+) {
+  const openai = createOpenAI(new OpenAI({ apiKey }));
+  const assets = inMemoryAssetStore();
+
+  const picture = await openai.generateImage({
+    model: "gpt-image-1",
+    prompt: "A restrained editorial illustration of a quiet canal",
+    size: "1024x1024",
+    n: 2,
+    timeout: { totalMs: 60_000, stepMs: 45_000 },
+    extra: { output_format: "png" },
+  });
+  const storedPicture = await assets.put(picture.image);
+
+  const transcript = await openai.transcribe({
+    model: "gpt-4o-mini-transcribe",
+    audio: meetingAudio,
+    language: "en",
+    timestamps: "segment",
+  });
+
+  const narration = await openai.generateSpeech({
+    model: "gpt-4o-mini-tts",
+    text: transcript.text,
+    voice: "alloy",
+    instructions: "Warm, concise, and unhurried.",
+    outputFormat: "mp3",
+  });
+  const storedNarration = await assets.put(narration.audio);
+
+  return { picture, storedPicture, transcript, narration, storedNarration };
+}
+
 describe("OpenAI bounded-media documentation example", () => {
   it("stays a checked public-API program without making provider calls", () => {
     expect(typeof openAIImageStreamExample).toBe("function");
+    expect(typeof openAICompletedMediaExample).toBe("function");
   });
 });

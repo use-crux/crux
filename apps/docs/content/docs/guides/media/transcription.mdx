@@ -1,0 +1,176 @@
+---
+title: Transcription
+description: Convert audio into honest text, timing, speaker, language, and translation facts without inventing unsupported measurements.
+---
+
+Use `transcribe()` when your code needs a transcript-shaped result rather than
+a general language-model answer about audio.
+
+## Transcribe audio
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const transcript = await openai.transcribe({
+  model: "gpt-4o-mini-transcribe",
+  audio: meetingAudio,
+  language: "en",
+  timestamps: "segment",
+});
+
+console.log(transcript.text);
+console.log(transcript.segments);
+```
+
+The result contains:
+
+| Field                      | Meaning                                           |
+| -------------------------- | ------------------------------------------------- |
+| `text`                     | Guarded top-level transcript                      |
+| `segments`                 | Measured segment intervals, or an empty array     |
+| `words`                    | Measured word intervals, or an empty array        |
+| `language`                 | Provider-detected language when available         |
+| `durationInSeconds`        | Provider-measured duration when available         |
+| `warnings`                 | Honest notes about requested or composed behavior |
+| `execution`                | Native or composed call facts                     |
+| `raw` / `providerMetadata` | Provider-owned terminal information               |
+
+Intervals use `startSecond` and `endSecond`; `speaker` is present only when the
+provider measured or returned it. Crux never estimates missing timestamps or
+speaker labels.
+
+## Request only the detail you need
+
+```ts
+const detailed = await openai.transcribe({
+  model: "gpt-4o-transcribe-diarize",
+  audio: interview,
+  timestamps: "segment",
+  diarization: true,
+});
+```
+
+`timestamps` accepts:
+
+- `"none"`;
+- `"segment"`;
+- `"word"`;
+- `"segment-and-word"`.
+
+Unsupported requested detail fails before provider I/O. If no detail was
+requested, unavailable timing stays empty and does not become synthetic data.
+Some provider/model combinations return a warning when a requested native
+detail is unavailable.
+
+## Transcribe or translate
+
+The default task is transcription in the source language:
+
+```ts
+const translated = await openai.transcribe({
+  model: "whisper-1",
+  audio: recording,
+  task: { type: "translate", targetLanguage: "en" },
+  extra: {
+    translation: { temperature: 0.2 },
+  },
+});
+```
+
+Translation is a distinct task with provider-specific endpoint support. Typed
+`extra` namespaces prevent transcription-only options from accidentally
+reaching a translation endpoint and vice versa.
+
+## Understand Google composition
+
+Google transcription is an honest text-generation composition over audio, not
+a native measured transcription endpoint. It:
+
+- returns guarded transcript text;
+- reports composed execution;
+- returns no measured word or segment timing;
+- returns no diarization;
+- rejects timing, diarization, and translation requests instead of fabricating
+  them.
+
+Use it when text-only transcription is sufficient. Use a native transcription
+provider when measured intervals or speakers are requirements.
+
+## Apply input and output policy
+
+Transcription supports:
+
+- input-media guardrails over the original audio source;
+- output-text guardrails over the validated transcript;
+- output-text constraints evaluated once after guarding.
+
+```ts
+const transcript = await openai.transcribe({
+  model: "gpt-4o-mini-transcribe",
+  audio: recording,
+  guardrails: [approvedRecording, redactTranscript],
+  constraints: [mustContainCaseNumber],
+});
+```
+
+Input audio is required, so enforced `strip` blocks. A rewritten transcript
+clears its segment and word arrays so stale unguarded text cannot survive in
+detail fields. An asserting constraint may fail the operation, but
+transcription does not call the provider again to repair a semantic failure.
+
+Provider-native `raw`, metadata, and warnings are outside canonical Safety and
+may repeat content that was blocked or rewritten. See
+[Media safety](/docs/guides/media/safety).
+
+## Source handling
+
+Audio accepts the normal `MediaSource` forms. The OpenAI adapter materializes
+remote HTTPS audio before the native multipart request. Provider-file assets
+are rejected where the endpoint requires actual audio bytes.
+
+Use a clear MIME type when the source does not carry one. Never expose a private
+recording through a public URL merely to satisfy a provider transport.
+
+## Cancellation and timeouts
+
+`abortSignal` cancels the whole logical operation. `timeout.totalMs` bounds the
+public operation, while `timeout.stepMs` bounds one native request or composed
+child call. Routing may retry or fall back within those budgets.
+
+Transcription is completed-only. `streamSpeech()` streams generated speech,
+not speech-to-text. Streaming transcription is not currently part of the Crux
+contract.
+
+## Ingest and retrieve transcripts
+
+Use an application-bound transcription operation to derive searchable text:
+
+```ts
+import { fileSource } from "@use-crux/ingest";
+
+const source = fileSource(storedAudio, {
+  namespace: "meetings",
+  sourceId: "weekly-sync",
+  media: {
+    transcribe: ({ audio, abortSignal }) =>
+      openai.transcribe({
+        model: "gpt-4o-mini-transcribe",
+        audio,
+        abortSignal,
+      }),
+  },
+});
+```
+
+Ingestion turns the transcript into ordinary attributed text. Retrieval returns
+source facts and does not hydrate or expose the original recording.
+
+## Provider reference
+
+See [OpenAI media operations](/docs/reference/adapters/openai-media) for native
+endpoint, timing, diarization, and translation details. See
+[Google media operations](/docs/reference/adapters/google-media) for composed
+execution and its deliberately unsupported measurements.

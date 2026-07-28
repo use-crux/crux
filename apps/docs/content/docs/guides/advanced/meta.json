@@ -1,10 +1,9 @@
 {
   "title": "Advanced",
-  "description": "Type system, multimodal content, custom adapters, headless environments, extensions, error categories, and removed APIs.",
+  "description": "Type system, custom adapters, headless environments, extensions, error categories, and removed APIs.",
   "pages": [
+    "index",
     "type-system",
-    "multimodal",
-    "bounded-media-streaming",
     "building-adapters",
     "headless",
     "writing-indexer-extension",

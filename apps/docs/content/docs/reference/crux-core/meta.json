@@ -9,6 +9,8 @@
     "tools",
     "tool-middleware",
     "multimodal",
+    "media-operations",
+    "media-streaming",
     "workspace",
     "workspace-snapshots",
     "retrieval",

@@ -1,6 +1,6 @@
 ---
-title: Multimodal Content
-description: Canonical message media, ordered assistant output, specialized operations, and safe projection.
+title: Multimodal content
+description: Canonical message media, source types, ordered assistant output, text projection, and related media-operation references.
 ---
 
 ```ts
@@ -13,37 +13,61 @@ import {
 import type { ContentPart, MediaSource, MessageContent } from "@use-crux/core";
 ```
 
-## Types
+For task-oriented examples, start with
+[Media inputs](/docs/guides/media/inputs). Specialized completed and streaming
+operations have separate [media-operation](/docs/reference/crux-core/media-operations)
+and [media-streaming](/docs/reference/crux-core/media-streaming) references.
 
-`MessageContent` is the content type used by canonical generation messages:
+## `MessageContent`
+
+Canonical generation messages use:
 
 ```ts
 type MessageContent = string | readonly ContentPart[];
 ```
 
-`MediaSource` is an `Asset`, HTTPS/data URL string, `URL`, `Uint8Array`, `ArrayBuffer`, or `Blob`. `AssetRef` is not model input; hydrate it with `assetStore.get(ref)` first.
+`ContentPart` is a closed model-visible union:
 
-`ContentPart` is a closed model-visible content union:
+| Part    | Required fields | Optional fields                            |
+| ------- | --------------- | ------------------------------------------ |
+| `text`  | `text`          | `providerOptions`                          |
+| `image` | `source`        | `mediaType`, `providerOptions`             |
+| `audio` | `source`        | `mediaType`, `providerOptions`             |
+| `video` | `source`        | `mediaType`, `providerOptions`             |
+| `file`  | `source`        | `mediaType`, `filename`, `providerOptions` |
 
-| Part    | Required fields | Notes                                                              |
-| ------- | --------------- | ------------------------------------------------------------------ |
-| `text`  | `text`          | Plain visible text.                                                |
-| `image` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
-| `audio` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
-| `video` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
-| `file`  | `source`        | Optional `mediaType` and `filename`; source accepts `MediaSource`. |
+Assistant content may additionally contain ordered `ReasoningPart` and
+`ToolCallPart` values. System, user, and tool messages cannot. On a generation
+result, `content` is authoritative and `text` is its text-part projection.
 
-Every model-visible part may carry `providerOptions`. Assistant content may additionally contain ordered `ReasoningPart` and `ToolCallPart` values. System, user, and tool messages cannot. `GenerateResult.content` is authoritative; `text` is its text-part projection.
+## `MediaSource`
 
-## Parts
+`MediaSource` accepts:
+
+- `Asset`;
+- HTTPS or data URL `string`;
+- `URL`;
+- `Uint8Array`;
+- `ArrayBuffer`;
+- `Blob`.
+
+`AssetRef` is intentionally excluded. Hydrate a reference through its owning
+`AssetStore` before passing the returned `StoredAsset` to a model.
+
+Model calls normalize and validate sources before provider I/O. They do not
+download arbitrary sources for capability discovery or persist media.
+
+## Construct parts
 
 ### `textPart(text)`
 
-Create a `text` part.
+Create a canonical text part:
 
 ```ts
 const part = textPart("Summarize this image.");
 ```
+
+Media parts are plain typed objects:
 
 ```ts
 const image: ContentPart = {
@@ -64,21 +88,16 @@ const audio: ContentPart = {
   source: wavBytes,
   mediaType: "audio/wav",
 };
-
-const video: ContentPart = {
-  type: "video",
-  source: videoBlob,
-  mediaType: "video/mp4",
-};
 ```
 
-Model calls normalize and validate media before provider I/O. They do not persist media.
+## Project text
 
-## Text Projection
+Projection helpers are for model-facing semantic text. They are not logging
+redactors.
 
 ### `contentText(content)`
 
-Project a `MessageContent` value into bounded text.
+Project a `MessageContent` value into bounded text:
 
 ```ts
 const projected = contentText([
@@ -87,117 +106,44 @@ const projected = contentText([
 ]);
 ```
 
-Text parts are emitted verbatim. Other parts become bounded semantic descriptors. This projection may include a locator or filename and is intended for model-facing text, not logs.
+Text parts are emitted verbatim. Other parts become semantic descriptors that
+may include a locator or filename.
 
 ### `messageText(message)`
 
-Project a canonical message by reading `message.content`.
+Project `message.content`:
 
 ```ts
 const projected = messageText(message);
 ```
 
-Use this where a widened `Message.content` must become semantic text: guardrails,
-compaction, memory capture, cache query text, or custom provider fallbacks. It is
-not a logging redactor: URL and filename descriptors can retain sensitive
-locators. Crux observability applies its stricter media sanitizer before records
-are emitted.
+Use this where a widened message must become semantic text, such as guardrails,
+compaction, memory capture, cache query text, or a custom provider fallback.
+Observability applies a stricter sanitizer.
 
 ### `hasMediaParts(content)`
 
-Return `true` when a content array contains any non-text part.
-
-## Media Errors
-
-Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before provider I/O.
-
-## Specialized operations
-
-`generateImage()`, `transcribe()`, and `generateSpeech()` are separate bounded operations for callers that require a guaranteed image, transcript, or audio result. They share cancellation, timeout, warning, execution, provider-metadata, and raw-result conventions, but they are not a universal executor and do not stream or persist.
-
-Each successful result carries `_meta.traceId` and `_meta.spanId` for its exact
-outer `media.generate_image`, `media.transcribe`, or `media.generate_speech`
-operation. A composed child generation shares the trace but owns a different
-span. Provider validators construct ID-free payloads, and `raw` is never
-rewritten. See [Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
-
-Adapters omit unsupported operations structurally. Portable options are validated before I/O; provider-native options belong in the operation's typed `extra` record. Returned media is immediately usable and may be persisted explicitly with `assetStore.put(asset)`.
-
-Completed operations accept boundary-targeted Safety directly. Image and speech
-calls expose `guardrails` and `safety`; transcription additionally exposes
-one-shot output-text `constraints`. Image references/masks and transcription
-audio are guarded before provider normalization. Generated images and speech
-audio are guarded before canonical results return. `result.safety` contains the
-canonical audit when an entry was recorded, while `raw`, provider metadata, and
-warnings stay provider-owned and unguarded. See
-[Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
-for the exact matrix and strip/escalation rules.
-
-## Bounded media streams
-
-`streamImage()` and `streamSpeech()` are genuine finite provider operations,
-not text `stream()` and not completed assets divided into artificial chunks.
-They execute eagerly and return:
+Return `true` when a content array contains a non-text part:
 
 ```ts
-interface StreamingOperationResult<TEvent, TResult> {
-  readonly runId: string;
-  readonly _meta: { readonly traceId: string; readonly spanId: string };
-  readonly fullStream: AsyncIterable<TEvent>;
-  readonly completion: Promise<TResult>;
-  cancel(reason?: unknown): void;
+if (hasMediaParts(message.content)) {
+  // apply media-aware handling
 }
 ```
 
-`completion` is the same canonical result family as the completed operation:
-`GenerateImageResult` or `GenerateSpeechResult`. Provider `raw`, metadata, and
-warnings retain their provider-specific terminal types. Final `image`/`audio`
-event assets are the same objects exposed by `completion`.
+## Errors
 
-### Image events
-
-| Event           | Fields                                             | Meaning                                                                 |
-| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `start`         | —                                                  | Core-owned logical start.                                               |
-| `image-preview` | `image`, `outputIndex`, `sequence`                 | Complete provisional replacement for one output.                       |
-| `image-delta`   | `data`, `mediaType`, `outputIndex`, `sequence`     | Append-only bytes that may not be independently renderable.             |
-| `image`         | `image`, `outputIndex`                             | Final validated asset at its original provider output index.            |
-| `finish`        | —                                                  | Successful logical completion; failures throw instead of emitting this. |
-
-Providers expose only framing they genuinely receive. OpenAI currently emits
-complete preview replacements for one output; Google emits append-only image
-deltas and may assemble multiple densely indexed outputs.
-
-### Speech events
-
-| Event         | Fields                        | Meaning                                                                 |
-| ------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `start`       | —                             | Core-owned logical start.                                               |
-| `audio-delta` | `data`, `mediaType`, `sequence` | Append-only provider audio bytes.                                       |
-| `audio`       | `audio`                       | Final validated asset shared with `completion.audio`.                   |
-| `finish`      | —                             | Successful logical completion; failures throw instead of emitting this. |
-
-Each `fullStream` iterator starts at the same retained `start` event and
-replays the same event objects. Returning from one iterator detaches only that
-reader. `cancel(reason)` or `abortSignal` stops the logical operation; all
-current and later readers plus `completion` fail with the same normalized error
-identity.
-
-Complete previews pass output-media Safety before publication. Incomplete
-deltas are not independently judged: enforcing output-media policies hold them
-until the final asset passes, while report mode may publish them live. A
-visible preview or live delta commits routing. Held or stripped provisional
-media does not, so retry/fallback remains possible until the first public
-provider event. After commitment, provider failure is terminal.
-
-Replay is process-local and bounded by the operation lifetime. Crux does not
-cache or persist stream events, chunks, or final media; store the completed
-asset explicitly after success.
+Malformed media throws `InvalidMediaSourceError`. Valid media that the selected
+adapter or known model cannot send throws `UnsupportedCapabilityError` before
+provider I/O. Unknown custom models reach the provider's native validation.
 
 ## Privacy
 
-Observability uses a stricter descriptor projection than `contentText()`. At every capture level it excludes bytes, base64/data URLs, bearer refs, provider file IDs, filenames, signed URL details, and native media payloads. Local text/transcript capture defaults on and production export defaults off; neither mode enables raw media.
+Observability never uses `contentText()` as its media redactor. At every capture
+level it excludes bytes, base64/data URLs, bearer refs, provider file IDs,
+filenames, hashes, signed URL details, and native media payloads.
 
-## Convex Mirror
+## Convex mirror
 
-`@use-crux/convex` re-exports `ContentPart`, `MessageContent`, `textPart`, `contentText`, `messageText`, and `hasMediaParts` from its root.
+`@use-crux/convex` re-exports `ContentPart`, `MessageContent`, `textPart`,
+`contentText`, `messageText`, and `hasMediaParts` from its root.

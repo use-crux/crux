@@ -338,7 +338,7 @@ The README stays short on purpose. Full guides and the complete API reference li
 - [Agents](https://cruxjs.dev/docs/guides/agents), [Flows](https://cruxjs.dev/docs/guides/flows), and [Workspaces](https://cruxjs.dev/docs/guides/workspaces)
 - [Durable Execution](https://cruxjs.dev/docs/guides/durable-execution) (the Runtime Engine)
 - [Evals](https://cruxjs.dev/docs/guides/evals) and [Observability](https://cruxjs.dev/docs/guides/observability)
-- [Multimodal messages](https://cruxjs.dev/docs/guides/advanced/multimodal), [tool approvals](https://cruxjs.dev/docs/guides/tools/approvals), and [headless calls](https://cruxjs.dev/docs/guides/advanced/headless)
+- [Media and multimodal](https://cruxjs.dev/docs/guides/media), [tool approvals](https://cruxjs.dev/docs/guides/tools/approvals), and [headless calls](https://cruxjs.dev/docs/guides/advanced/headless)
 - [Full `@use-crux/core` API reference](https://cruxjs.dev/docs/reference/crux-core)
 
 ## TypeScript compatibility

@@ -1,0 +1,121 @@
+---
+title: Safe image generation
+description: Generate, guard, persist, and deliver an image while keeping model, Safety, and storage failures separate.
+---
+
+This recipe produces one image, evaluates canonical output policy, stores the
+approved asset, and returns an application URL rather than raw media or a
+bearer reference.
+
+## 1. Bind the adapter and store
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+const assets = inMemoryAssetStore();
+```
+
+Use a durable `AssetStore` adapter in production. The in-memory store keeps the
+example focused on lifecycle boundaries.
+
+## 2. Define output policy
+
+```ts
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+const imageTypes = guardrail({
+  id: "generated-image-types",
+  on: boundary.output.media(),
+  run: ({ subject }) =>
+    subject.part.mediaType === "image/png"
+      ? { action: "allow" }
+      : { action: "block", reason: "Only PNG images may be published." },
+});
+```
+
+For semantic classification, replace the local MIME check with an explicit
+[media classifier guardrail](/docs/guides/safety/media-classifier).
+
+## 3. Generate and persist
+
+```ts
+async function createIllustration(prompt: string) {
+  const result = await openai.generateImage({
+    model: "gpt-image-1",
+    prompt,
+    n: 1,
+    extra: { output_format: "png" },
+    guardrails: [imageTypes],
+    timeout: {
+      totalMs: 60_000,
+      stepMs: 45_000,
+    },
+  });
+
+  // This is a storage retry boundary, not a model retry boundary.
+  const stored = await assets.put(result.image);
+
+  return {
+    ref: stored.ref,
+    mediaType: stored.mediaType,
+    traceId: result._meta.traceId,
+  };
+}
+```
+
+If `generateImage()` fails, apply your model-routing or product fallback. If
+`assets.put()` fails, retry the same asset rather than generating another
+image.
+
+## 4. Deliver through your application
+
+Treat `stored.ref` as a bearer reference. Do not return it directly to an
+untrusted client. Resolve it behind your authorization boundary:
+
+```ts
+async function GET(
+  _request: Request,
+  context: { params: Promise<{ imageId: string }> },
+) {
+  const { imageId } = await context.params;
+  const ref = await lookupAuthorizedImageRef(imageId);
+  const asset = await assets.get(ref);
+
+  if (asset.type !== "data") {
+    return new Response("Stored image is not locally materialized.", {
+      status: 409,
+    });
+  }
+
+  return new Response(new Blob([asset.data], { type: asset.mediaType }), {
+    headers: {
+      "content-type": asset.mediaType,
+      "cache-control": "private, max-age=300",
+    },
+  });
+}
+```
+
+`lookupAuthorizedImageRef()` is application code: it authenticates the caller
+and maps an application identifier to the store-owned ref.
+
+## 5. Inspect without retaining the image
+
+Catalog shows the authored image operation and its output policy. Runs shows
+the logical operation, physical attempts, route, MIME type, image count,
+duration, terminal state, and Safety outcome.
+
+Neither view stores the prompt, image bytes, data URL, bearer ref, provider file
+ID, filename, hash, thumbnail, or delivery URL.
+
+## Add progressive previews
+
+Replace `generateImage()` with `streamImage()` only if intermediate images
+improve the experience. Complete previews replace earlier previews for the same
+output; incomplete deltas require provider-aware accumulation.
+
+Read [Streaming generated media](/docs/guides/media/streaming) before exposing
+progress, especially when output-media enforcement holds provisional bytes.

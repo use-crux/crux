@@ -1,0 +1,185 @@
+---
+title: Media streaming
+description: Exact bounded image and speech stream result, event, replay, cancellation, routing, Safety, and terminal contracts.
+---
+
+```ts
+import type {
+  ImageStreamEvent,
+  SpeechStreamEvent,
+  StreamImageOptions,
+  StreamImageResult,
+  StreamSpeechOptions,
+  StreamSpeechResult,
+} from "@use-crux/core";
+```
+
+`streamImage()` and `streamSpeech()` are genuine finite provider operations.
+For consumption patterns, see
+[Streaming generated media](/docs/guides/media/streaming).
+
+## `StreamingOperationResult`
+
+```ts
+interface StreamingOperationResult<TEvent, TResult> {
+  readonly runId: string;
+  readonly _meta: {
+    readonly traceId: string;
+    readonly spanId: string;
+  };
+  readonly fullStream: AsyncIterable<TEvent>;
+  readonly completion: Promise<TResult>;
+  cancel(reason?: unknown): void;
+}
+```
+
+Execution starts eagerly after support, input validation, and input-Safety
+preflight. `completion` is a generated-image or generated-speech result with
+provider-specific terminal `raw`, metadata, and warning types.
+
+Each iterator replays the same retained event objects from `start`. Returning
+from one iterator detaches that reader. `cancel()` or `abortSignal` stops the
+logical operation and fails current readers, later readers, and `completion`
+with the same normalized error identity.
+
+## `StreamImageOptions`
+
+`StreamImageOptions` is the corresponding `GenerateImageOptions` shape:
+
+```ts
+type StreamImageOptions<TModel, TExtra, TPrompt> = GenerateImageOptions<
+  TModel,
+  TExtra,
+  TPrompt
+>;
+```
+
+Providers narrow models and `extra`. OpenAI currently requires one output for
+streaming; provider reference pages document exact gates.
+
+## `ImageStreamEvent`
+
+```ts
+type ImageStreamEvent =
+  | { type: "start" }
+  | {
+      type: "image-preview";
+      image: Asset;
+      outputIndex: number;
+      sequence: number;
+    }
+  | {
+      type: "image-delta";
+      data: Uint8Array;
+      mediaType: string;
+      outputIndex: number;
+      sequence: number;
+    }
+  | {
+      type: "image";
+      image: Asset;
+      outputIndex: number;
+    }
+  | { type: "finish" };
+```
+
+An `image-preview` is a complete provisional replacement for one output. An
+`image-delta` is append-only and may not decode independently. Providers expose
+only framing they genuinely receive.
+
+Final event assets share object identity with `completion.images`. Output
+indexes remain stable across provisional and final events.
+
+## `StreamImageResult`
+
+```ts
+type StreamImageResult<TRaw, TMetadata, TWarning> = StreamingOperationResult<
+  ImageStreamEvent,
+  GenerateImageResult<TRaw, TMetadata, TWarning>
+>;
+```
+
+## `StreamSpeechOptions`
+
+`StreamSpeechOptions` is the corresponding `GenerateSpeechOptions` shape:
+
+```ts
+type StreamSpeechOptions<TModel, TVoice, TExtra> = GenerateSpeechOptions<
+  TModel,
+  TVoice,
+  TExtra
+>;
+```
+
+## `SpeechStreamEvent`
+
+```ts
+type SpeechStreamEvent =
+  | { type: "start" }
+  | {
+      type: "audio-delta";
+      data: Uint8Array;
+      mediaType: string;
+      sequence: number;
+    }
+  | {
+      type: "audio";
+      audio: DataAsset;
+    }
+  | { type: "finish" };
+```
+
+Audio deltas are append-only and may not be independently playable. Their MIME
+type must remain consistent. Final audio shares object identity with
+`completion.audio`.
+
+## `StreamSpeechResult`
+
+```ts
+type StreamSpeechResult<TRaw, TMetadata, TWarning> = StreamingOperationResult<
+  SpeechStreamEvent,
+  GenerateSpeechResult<TRaw, TMetadata, TWarning>
+>;
+```
+
+## Successful and failed termination
+
+A successful stream publishes its final media event, then `finish`, and
+resolves `completion`. A terminal failure:
+
+- throws from every reader;
+- rejects `completion`;
+- never emits `finish`;
+- never publishes final media after failed native validation.
+
+Provider references define their exact successful terminal envelope.
+
+## Safety
+
+Complete previews pass output-media Safety before publication. Incomplete
+deltas are not independently judged. Enforcing output-media policy retains them
+until final validation; report mode may publish them live.
+
+Held or stripped provisional media does not commit routing. A publicly visible
+preview or delta does.
+
+## Routing
+
+Routing may retry or fall back before the first public provider event. After a
+preview or live delta commits the route, later provider failure is terminal.
+Crux does not splice progress from different physical attempts into one public
+stream.
+
+## Ownership and privacy
+
+Replay is process-local and lasts only for the operation lifetime. Crux does
+not persist chunks or completion media. Observability records scalar counts,
+bytes, MIME types, timing, route, terminal state, and Safety provenance without
+retaining payloads or locators.
+
+## See also
+
+- [Media operations reference](/docs/reference/crux-core/media-operations)
+- [Media safety guide](/docs/guides/media/safety)
+- [OpenAI media operations](/docs/reference/adapters/openai-media)
+- [Google media operations](/docs/reference/adapters/google-media)

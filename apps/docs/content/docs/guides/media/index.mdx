@@ -1,0 +1,201 @@
+---
+title: Media and multimodal
+description: Choose the right Crux operation for media input, image generation, transcription, speech, streaming, Safety, and storage.
+---
+
+Crux uses one media model throughout the SDK: pass usable media directly to a
+model, receive usable media from specialized operations, and persist it only
+when your application needs reuse.
+
+## Choose the operation
+
+Start from the result you need:
+
+| Goal                                                       | Operation                                           | Start here                                                |
+| ---------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| Ask a model about an image, recording, video, PDF, or file | `generate()` or `stream()` with media content parts | [Media inputs](/docs/guides/media/inputs)                 |
+| Produce or edit images                                     | `generateImage()`                                   | [Image generation](/docs/guides/media/image-generation)   |
+| Show progressive generated images                          | `streamImage()`                                     | [Streaming generated media](/docs/guides/media/streaming) |
+| Turn text into audio                                       | `generateSpeech()`                                  | [Speech generation](/docs/guides/media/speech-generation) |
+| Deliver speech bytes progressively                         | `streamSpeech()`                                    | [Streaming generated media](/docs/guides/media/streaming) |
+| Turn audio into measured text                              | `transcribe()`                                      | [Transcription](/docs/guides/media/transcription)         |
+
+Use ordinary `generate()` when media is context for a language-model answer.
+Use a specialized operation when your code requires a guaranteed image,
+transcript, or audio result.
+
+## Understand media
+
+```ts
+import OpenAI from "openai";
+import { prompt } from "@use-crux/core";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const inspect = prompt({
+  messages: () => [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "What is in this image?" },
+        { type: "image", source: imageBytes, mediaType: "image/png" },
+      ],
+    },
+  ],
+});
+
+const answer = await openai.generate(inspect, { model: "gpt-4o" });
+```
+
+Image, audio, video, and file parts accept an `Asset`, HTTPS or data URL,
+`Blob`, `ArrayBuffer`, or byte array. An `AssetRef` is a storage reference, not
+model input; hydrate it with its owning `AssetStore` first.
+
+## Generate a specialized result
+
+All specialized operations are methods on a client-bound adapter:
+
+```ts
+const picture = await openai.generateImage({
+  model: "gpt-image-1",
+  prompt: "A restrained editorial illustration of a quiet canal",
+});
+
+const transcript = await openai.transcribe({
+  model: "gpt-4o-mini-transcribe",
+  audio: meetingAudio,
+  timestamps: "segment",
+});
+
+const narration = await openai.generateSpeech({
+  model: "gpt-4o-mini-tts",
+  text: transcript.text,
+  voice: "alloy",
+});
+```
+
+These operations share cancellation, whole-operation and per-attempt timeouts,
+routing, warnings, execution facts, typed provider-native `extra`, Safety, and
+trace correlation. They do not share provider-specific controls or pretend
+that every provider measures the same facts.
+
+## Work with the result
+
+Generated media is immediately usable. Storage is explicit:
+
+```ts
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const assets = inMemoryAssetStore();
+const stored = await assets.put(picture.image);
+const reusable = await assets.get(stored.ref);
+```
+
+If storage fails, retry `put()` without regenerating the media. Model operations
+never accept an `AssetStore`, persist implicitly, or turn provider files into
+application-owned assets behind your back.
+
+## Provider support
+
+This matrix describes adapter structure, not a runtime capability-discovery
+API. Known unsupported operations are absent from an adapter or fail before
+provider I/O. Provider reference pages own current model allowlists.
+
+{/* prettier-ignore */}
+| Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |
+| --- | --- | --- | --- | --- | --- |
+| Image input | native | native | native | model-owned | AI SDK-owned |
+| Audio input | audio models | native | unsupported | model-owned | AI SDK-owned |
+| Video input | unsupported | native | unsupported | model-owned | AI SDK-owned |
+| PDF/document input | native | native | native | model-owned | AI SDK-owned |
+| Mixed assistant media | model-owned | model-owned | limited native file/tool output | model-owned | AI SDK-owned |
+| `generateImage` | native | Imagen/Gemini native | absent | native | exact Crux AI re-export |
+| `transcribe` | native | honest composition, no word timing/diarization | absent | native | exact Crux AI re-export |
+| `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |
+| `streamImage` | native | native | absent | absent | absent |
+| `streamSpeech` | native | native | absent | absent | absent |
+
+See [OpenAI media operations](/docs/reference/adapters/openai-media) and
+[Google media operations](/docs/reference/adapters/google-media) for exact
+endpoint behavior, typed native options, and model restrictions.
+
+## Safety and production behavior
+
+Media crosses the same explicit boundaries as text:
+
+- input media can be allowed, warned on, blocked, or stripped;
+- complete generated previews are checked before publication;
+- incomplete deltas are held when output-media enforcement is active;
+- required speech, transcription audio, or a final remaining image cannot be
+  stripped into an invalid result;
+- provider-native `raw` values remain outside canonical Safety guarantees.
+
+Start with [Media safety](/docs/guides/media/safety), then use the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives)
+when you need the exact boundary contract.
+
+Catalog shows authored media operations and their Safety relations. Runs shows
+one logical operation plus its physical attempts, progress counts, bytes, MIME
+types, timing, route commitment, and terminal state. Neither view retains raw
+media. See [Storage and delivery](/docs/guides/media/storage-and-delivery) for
+the full lifecycle.
+
+## Media elsewhere in Crux
+
+- [Ingestion](/docs/reference/ingest) can derive text from image, audio, video,
+  and visual-PDF sources through application-bound media operations.
+- [Multimodal search](/docs/guides/retrieval/multimodal-search) embeds media for
+  cross-modal retrieval without treating it as a generative model call.
+- Eval inputs may contain canonical media parts, while reuse remains bounded by
+  provable media identity.
+- AI SDK and Convex keep ownership of their native attachment and file
+  lifecycles at framework boundaries.
+
+## Errors
+
+Malformed media throws `InvalidMediaSourceError`. A valid source combined with
+a known unsupported adapter, model, modality, or option throws
+`UnsupportedCapabilityError` before provider I/O. Empty or malformed native
+output fails result validation. Error reports contain safe paths and reason
+tags, never the original media payload.
+
+## Continue
+
+<Cards>
+  <Card
+    title="Media inputs"
+    description="Send images, audio, video, PDFs, and files in ordinary model messages."
+    href="/docs/guides/media/inputs"
+  />
+  <Card
+    title="Image generation"
+    description="Generate and edit images with portable controls and typed provider options."
+    href="/docs/guides/media/image-generation"
+  />
+  <Card
+    title="Speech generation"
+    description="Generate single- or multi-speaker audio and preserve its native format."
+    href="/docs/guides/media/speech-generation"
+  />
+  <Card
+    title="Transcription"
+    description="Request honest timing, speaker, language, and translation facts."
+    href="/docs/guides/media/transcription"
+  />
+  <Card
+    title="Streaming generated media"
+    description="Consume image and speech progress with replay, cancellation, routing, and Safety."
+    href="/docs/guides/media/streaming"
+  />
+  <Card
+    title="Media safety"
+    description="Guard input, previews, deltas, and final media without exposing payloads."
+    href="/docs/guides/media/safety"
+  />
+  <Card
+    title="Storage and delivery"
+    description="Persist, serve, inspect, and observe media without accidental retention."
+    href="/docs/guides/media/storage-and-delivery"
+  />
+</Cards>

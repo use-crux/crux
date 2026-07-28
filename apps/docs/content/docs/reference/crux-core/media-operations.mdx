@@ -1,0 +1,195 @@
+---
+title: Media operations
+description: Exact portable options and result contracts for image generation, transcription, and speech generation.
+---
+
+```ts
+import type {
+  GenerateImageOptions,
+  GenerateImageResult,
+  GenerateSpeechOptions,
+  GenerateSpeechResult,
+  TranscribeOptions,
+  TranscriptionResult,
+} from "@use-crux/core";
+```
+
+Provider adapters expose these operations as client-bound methods. Unsupported
+operations are structurally absent where possible. Provider references own
+their model allowlists and typed native `extra` options.
+
+## Shared completed-operation behavior
+
+Completed media operations share:
+
+- `abortSignal` for logical cancellation;
+- `timeout.totalMs` for the whole operation;
+- `timeout.stepMs` for one provider attempt or composed child call;
+- `guardrails` and per-call `safety` tuning;
+- routing inputs and optional routing receipt;
+- `warnings`, `execution`, `raw`, and optional `providerMetadata`;
+- `_meta.traceId` and `_meta.spanId` for the exact outer media span.
+
+`execution` is either one or more native calls, or composed child-operation
+facts. Provider validators produce ID-free payloads; Core adds correlation.
+
+Canonical Safety never rewrites `raw`, metadata, or warnings.
+
+## `GenerateImageOptions`
+
+```ts
+type GenerateImageOptions<TModel, TExtra, TPrompt> = {
+  model: TModel;
+  prompt: TPrompt;
+  input?: unknown;
+  n?: number;
+  seed?: number;
+  size?: `${number}x${number}`;
+  aspectRatio?: `${number}:${number}`;
+  abortSignal?: AbortSignal;
+  timeout?: { totalMs?: number; stepMs?: number };
+  guardrails?: readonly Guardrail[];
+  safety?: SafetyTuneOptions;
+  extra?: TExtra;
+};
+```
+
+`size` and `aspectRatio` are mutually exclusive. `n` must be a positive
+integer. `input` is present only when `prompt` is a typed Crux prompt and is
+inferred from its merged input.
+
+`prompt` accepts:
+
+- direct text;
+- a typed Crux prompt;
+- `{ text, images? }`;
+- `{ text, images, mask }`.
+
+Reference images use a non-empty tuple. A mask requires at least one retained
+reference after input Safety.
+
+## `GenerateImageResult`
+
+```ts
+type GenerateImageResult<TRaw, TMetadata, TWarning> = {
+  image: Asset;
+  images: readonly [Asset, ...Asset[]];
+  raw: TRaw;
+  providerMetadata?: TMetadata;
+  warnings: readonly TWarning[];
+  execution: OperationExecution;
+  routing?: RoutingReceipt;
+  safety?: SafetyAudit;
+  _meta: OperationResultMeta;
+};
+```
+
+`images` preserves provider order. `image` is its first retained member.
+Enforced output strips remove selected siblings immutably and reset `image`;
+stripping the final member blocks.
+
+## `TranscribeOptions`
+
+```ts
+type TranscribeOptions<TModel, TExtra> = {
+  model: TModel;
+  audio: MediaSource;
+  language?: string;
+  task?:
+    | "transcribe"
+    | {
+        type: "translate";
+        targetLanguage: string;
+      };
+  timestamps?: "none" | "segment" | "word" | "segment-and-word";
+  diarization?: boolean;
+  prompt?: string;
+  guardrails?: readonly Guardrail[];
+  constraints?: readonly Constraint<BoundaryDef<"model.output.text", string>>[];
+  safety?: SafetyTuneOptions;
+  abortSignal?: AbortSignal;
+  timeout?: { totalMs?: number; stepMs?: number };
+  extra?: TExtra;
+};
+```
+
+Requested unsupported timing, diarization, or translation fails before provider
+I/O. Input audio is required. Output constraints run once and never trigger a
+provider regeneration.
+
+## `TranscriptionResult`
+
+```ts
+interface TranscriptInterval {
+  readonly text: string;
+  readonly startSecond: number;
+  readonly endSecond: number;
+  readonly speaker?: string;
+}
+
+type TranscriptionResult<TRaw, TMetadata, TWarning> = {
+  text: string;
+  segments: readonly TranscriptInterval[];
+  words: readonly TranscriptInterval[];
+  language?: string;
+  durationInSeconds?: number;
+  raw: TRaw;
+  providerMetadata?: TMetadata;
+  warnings: readonly TWarning[];
+  execution: OperationExecution;
+  routing?: RoutingReceipt;
+  safety?: SafetyAudit;
+  _meta: OperationResultMeta;
+};
+```
+
+Unknown timing and speaker data stays absent or empty. A transcript rewrite
+clears segments and words so stale text cannot remain in detailed fields.
+
+## `GenerateSpeechOptions`
+
+```ts
+type GenerateSpeechOptions<TModel, TVoice, TExtra> = {
+  model: TModel;
+  text: string;
+  voice?: TVoice;
+  outputFormat?: string;
+  instructions?: string;
+  speed?: number;
+  language?: string;
+  abortSignal?: AbortSignal;
+  timeout?: { totalMs?: number; stepMs?: number };
+  guardrails?: readonly Guardrail[];
+  safety?: SafetyTuneOptions;
+  extra?: TExtra;
+};
+```
+
+`voice` is adapter-typed and may be a string or native structured selection.
+Unsupported portable controls fail before I/O.
+
+## `GenerateSpeechResult`
+
+```ts
+type GenerateSpeechResult<TRaw, TMetadata, TWarning> = {
+  audio: DataAsset;
+  raw: TRaw;
+  providerMetadata?: TMetadata;
+  warnings: readonly TWarning[];
+  execution: OperationExecution;
+  routing?: RoutingReceipt;
+  safety?: SafetyAudit;
+  _meta: OperationResultMeta;
+};
+```
+
+Audio is required. Enforced output-media strip therefore blocks instead of
+returning an empty success.
+
+## See also
+
+- [Image generation guide](/docs/guides/media/image-generation)
+- [Speech generation guide](/docs/guides/media/speech-generation)
+- [Transcription guide](/docs/guides/media/transcription)
+- [Media streaming reference](/docs/reference/crux-core/media-streaming)
+- [Operation result correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results)

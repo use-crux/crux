@@ -1,0 +1,169 @@
+---
+title: Image generation
+description: Generate and edit images with portable Crux options, provider-native controls, Safety, routing, and explicit storage.
+---
+
+Use `generateImage()` when your code needs a guaranteed image result. Use
+ordinary multimodal `generate()` when you want a model to discuss an image or
+return interleaved language-model content.
+
+## Generate an image
+
+```ts
+import OpenAI from "openai";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const result = await openai.generateImage({
+  model: "gpt-image-1",
+  prompt: "A restrained editorial illustration of a quiet canal",
+  size: "1024x1024",
+  n: 2,
+  timeout: {
+    totalMs: 60_000,
+    stepMs: 45_000,
+  },
+});
+
+result.image; // first retained image
+result.images; // all retained images in provider order
+```
+
+The result contains immediately usable `Asset` objects. `image` is always the
+first retained member of the non-empty `images` tuple.
+
+## Portable options
+
+| Option                  | Meaning                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `model`                 | Direct model identifier or supported routing expression                       |
+| `prompt`                | Text, a typed Crux prompt, or text plus reference images/mask                 |
+| `n`                     | Positive number of requested images                                           |
+| `size`                  | Provider-supported `${width}x${height}` value                                 |
+| `aspectRatio`           | Provider-supported `${width}:${height}` value; mutually exclusive with `size` |
+| `seed`                  | Deterministic provider seed when supported                                    |
+| `abortSignal`           | Cooperative cancellation for the whole logical operation                      |
+| `timeout`               | Total and per-attempt budgets                                                 |
+| `guardrails` / `safety` | Canonical input/output media policy                                           |
+| `extra`                 | Typed provider-native controls                                                |
+
+Crux validates portable option combinations before I/O. A provider may support
+only part of the portable surface; the adapter reports a capability error
+instead of silently dropping a requested behavior.
+
+## Edit with references and a mask
+
+```ts
+const edited = await openai.generateImage({
+  model: "gpt-image-1",
+  prompt: {
+    text: "Replace the sky with a soft evening gradient.",
+    images: [sourceImage],
+    mask: editMask,
+  },
+  extra: {
+    input_fidelity: "high",
+    output_format: "png",
+  },
+});
+```
+
+Reference order is stable. A mask requires at least one retained reference
+image. If enforcing Safety strips the final reference while retaining the mask,
+the operation blocks before provider I/O rather than sending an invalid edit.
+
+Typed prompts can also produce image prompt text and infer their `input`:
+
+```ts
+const result = await openai.generateImage({
+  model: "gpt-image-1",
+  prompt: campaignIllustration,
+  input: { subject: "A canal house", mood: "quiet" },
+});
+```
+
+## Use provider-native controls deliberately
+
+`extra` is the only place for options that have no portable Crux meaning.
+OpenAI owns controls such as output format, quality, compression, background,
+moderation, and input fidelity. Google owns separate option unions for Imagen
+generation, Imagen editing, and Gemini image generation.
+
+Provider-native fields are strongly typed by the selected adapter, but they are
+not made portable. Keep them close to the provider boundary and cover important
+choices with adapter-specific tests.
+
+## Choose completed or streaming
+
+Prefer completed generation when:
+
+- no useful intermediate image exists;
+- the UI can wait for the final asset;
+- output Safety must evaluate before anything is shown;
+- you want the simplest retry and storage behavior.
+
+Use [`streamImage()`](/docs/guides/media/streaming) when genuine provider
+previews or image deltas improve the experience. A stream still resolves to the
+same canonical generated-image result family.
+
+## Apply Safety
+
+Image guardrails may inspect:
+
+- direct prompt text;
+- resolved typed-prompt instructions;
+- reference images and the edit mask;
+- each complete provisional preview;
+- final generated images.
+
+Enforced output `strip` removes the selected image, preserves siblings, and
+resets `result.image` to the first remaining image. Stripping the last image
+blocks because a successful image result cannot be empty. Provider-native
+`raw`, metadata, and warnings are preserved and remain outside canonical
+Safety guarantees.
+
+See [Media safety](/docs/guides/media/safety) for patterns and the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives)
+for the exact contract.
+
+## Route and cancel
+
+Image generation participates in completed-operation routing. A route may retry
+or fall back according to the routing policy and timeout budgets. Cancellation
+stops the logical operation, including its active provider attempt.
+
+For streams, a visible preview or delta commits the route. See
+[Streaming generated media](/docs/guides/media/streaming#routing-and-retries).
+
+## Persist explicitly
+
+```ts
+const stored = await assetStore.put(result.image);
+```
+
+Generation does not persist media. If `put()` fails, retain the result and retry
+storage rather than repeating a paid generation call. See
+[Storage and delivery](/docs/guides/media/storage-and-delivery).
+
+## Provider behavior
+
+OpenAI uses native image generation/editing endpoints. Google supports
+Imagen/Gemini-native completed image generation, with provider-specific model
+and edit rules. Anthropic does not expose `generateImage()`.
+
+Use the [OpenAI](/docs/reference/adapters/openai-media) and
+[Google](/docs/reference/adapters/google-media) media references for current
+model restrictions, exact `extra` fields, terminal `raw` types, and metadata.
+
+## Handle errors
+
+- Invalid prompt images or masks fail as `InvalidMediaSourceError`.
+- Impossible portable combinations fail before I/O.
+- Known unsupported model/option pairs fail as `UnsupportedCapabilityError`.
+- Empty or malformed provider output fails result validation.
+- Provider transport and policy failures propagate through the normal Crux
+  operation error path.
+
+Warnings remain attached to successful results; do not treat them as generated
+image content.

@@ -30,8 +30,10 @@ import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/google";
 ```
 
 <Callout type="info">
-  For usage examples and provider comparison, see the [Execution
-  guide](/docs/guides/prompts/execution).
+  For media workflows, start with [Media and multimodal](/docs/guides/media),
+  then use [Streaming generated media](/docs/guides/media/streaming) for
+  `streamImage()` and `streamSpeech()`. For text usage and provider comparison,
+  see the [Execution guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createGoogle(client, opts?)`
@@ -76,6 +78,9 @@ interface GoogleCachedContentCachePort {
 | ---------------------------- | ------------------------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via Google GenAI with Zod validation (structured) or text generation |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                             |
+| `.generateImage(options)`    | Generate/edit completed Imagen or Gemini-native images                                |
+| `.transcribe(options)`       | Run one honest composed audio-to-text generation                                      |
+| `.generateSpeech(options)`   | Generate completed single- or two-speaker audio                                       |
 | `.streamImage(options)`      | Stream current finite Interactions image deltas                                       |
 | `.streamSpeech(options)`     | Stream finite Generate Content raw-PCM speech bytes                                   |
 | `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with Google params                                     |
@@ -202,48 +207,12 @@ before terminal Safety and describes only one attempt, so exposing it would
 bypass guardrail holds, structured occurrence gating, commit gates, and
 validation retry.
 
-### `adapter.streamImage(options)`
+## Media operations
 
-Start one stateless finite `v1beta` Interactions request. Initial model support
-is exactly:
-
-- `gemini-2.5-flash-image`
-- `gemini-3-pro-image`
-- `gemini-3.1-flash-image`
-
-Crux fixes `stream: true`, `store: false`, and
-`response_format: { type: "image" }`. It exposes no continuation/session API
-and sends no `previous_interaction_id`, background execution, tools, or
-webhook. The adapter binds only the current SDK 2.x
-`interaction.created`/`step.delta`/`interaction.completed` schema.
-
-Each native image step index receives a dense `outputIndex` on first sight.
-Its ordered `image-delta` bytes and assembled final `image` keep that identity;
-individual deltas may not be renderable. `completion.raw` is the exact
-`InteractionCompletedEvent` envelope, while payload-free provider metadata is
-derived from its interaction resource.
-
-### `adapter.streamSpeech(options)`
-
-Start finite `models.generateContentStream()` TTS. Initial support is exactly
-`gemini-3.1-flash-tts-preview`; completed-only 2.5 TTS and unknown model ids
-fail before provider I/O.
-
-Each `audio-delta` contains decoded native bytes with the exact first
-`audio/*` MIME string. Later chunks must declare the same MIME. Google emits
-headerless 24 kHz, mono, 16-bit raw PCM; Crux assembles the final `Blob`
-without adding a WAV header. Successful completion requires
-`candidates[0].finishReason === "STOP"`. `completion.raw` is that exact final
-`GenerateContentResponse`; a missing/different reason or a response after it
-fails without publishing final `audio` or `finish`.
-
-Both bounded streams share Core's replay, cancellation, timeout, Safety, and
-routing laws. Every `fullStream` reader replays the same canonical events.
-`cancel(reason)` or `abortSignal` stops the logical operation. Enforcing
-output-media Safety retains incomplete deltas until final validation; report
-mode may publish them live. The first live delta commits routing, so later
-provider failure is terminal. Crux never persists chunks or completion media;
-persist the final asset explicitly.
+Completed and streaming image, transcription, and speech behavior is documented
+separately in [Google media operations](/docs/reference/adapters/google-media).
+That page owns native endpoints, typed `extra` namespaces, model gates,
+terminal `raw` types, stream framing, and composed-transcription limits.
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

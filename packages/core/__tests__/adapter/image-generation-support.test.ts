@@ -25,7 +25,7 @@ describe("image generation support projection", () => {
     const guide = await readFile(
       resolve(
         process.cwd(),
-        "../../apps/docs/content/docs/guides/advanced/multimodal.mdx",
+        "../../apps/docs/content/docs/guides/media/index.mdx",
       ),
       "utf8",
     );
