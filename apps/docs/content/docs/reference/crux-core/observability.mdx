@@ -675,6 +675,13 @@ config({
   observability: {
     recordInputs: false,
     recordOutputs: false,
+    redactPatterns: [
+      /\bACME-\d{6}\b/,
+      {
+        pattern: /\bCUSTOMER-\d+\b/,
+        replacement: "[customer-id]",
+      },
+    ],
     capture: {
       default: "evidence",
       overrides: {
@@ -688,15 +695,56 @@ config({
 });
 ```
 
+```ts
+type CruxObservabilityRedactionPattern =
+  | RegExp
+  | {
+      readonly pattern: RegExp;
+      readonly replacement?: string;
+    };
+```
+
+`redactPatterns` rewrites string values in artifact previews and URIs, nested
+record attributes, and run/span error messages. Bare expressions replace every
+non-empty match with `[REDACTED]`. Object-form replacements are literal:
+JavaScript replacement tokens such as `$&`, `$1`, `$<name>`, and `$$` are not
+expanded. Rules run in declaration order.
+
 `capture.default` accepts `"full"`, `"safe"`, `"evidence"`, or `"off"`.
 Per-artifact overrides use canonical artifact kinds. The Safety family includes
 `guardrail.report`, `constraint.report`, `score.report`, `approval.request`,
 `validation.feedback`, `memory.write`, `tool.args`, and
-`tool.result`.
+`tool.result`. `full` retains arbitrary previews. `safe` also retains the
+preview and is a producer-side assertion that its artifact contract is already
+safe by default; the capture layer does not classify or sanitize arbitrary
+text. Use `evidence` or `off` for user-authored payloads that are not safe to
+retain.
 
 When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, `safety`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 
-The emit path also strips payload-shaped attributes, converts JSON-hostile values, and drops invalid optional metrics before fan-out, so subscribers, the diagnostics channel, plugins, and transports all consume the same sanitized JSON-safe record. A failure inside a configured `redactRecord` hook drops the record (fail-closed) instead of emitting it unredacted. The shared helper `toSafeJsonValue()` truncates long strings (default 8000 characters) and redacts sensitive object keys.
+The privacy gate applies patterns before capture derives evidence hashes, sizes,
+or reference previews. The existing `redactRecord` hook then receives the
+post-capture, pre-sanitization record. After JSON-safe sanitization, Crux runs
+the patterns again before validation and final fan-out, covering strings
+created or changed by sanitization and the custom hook.
+
+When declarative patterns change a record, the validated graph record includes
+privacy-safe `privacy.redaction` evidence with `applied: true` and a
+canonical, non-empty union of `artifact.preview`, `artifact.uri`,
+`attributes`, and `error.message`. It includes no rules, matches, values,
+replacements, nested paths, hashes, or counts. Custom `redactRecord` changes
+alone do not claim this evidence. Local projects the same evidence into Run
+Detail; the OTel mapper does not add a new semantic-convention attribute for
+it.
+
+The emit path also strips payload-shaped attributes, converts JSON-hostile values, and drops invalid optional metrics before fan-out, so subscribers, the diagnostics channel, plugins, and transports all consume the same sanitized JSON-safe record. A failure inside pattern redaction or a configured `redactRecord` hook drops the record (fail-closed) instead of emitting it unredacted or failing application code. The shared helper `toSafeJsonValue()` truncates long strings (default 8000 characters) and redacts sensitive object keys.
+
+Pattern redaction intentionally excludes structural graph IDs, names,
+definition and source references, deployment identity, relation endpoints, and
+all object keys. Do not place raw personal data in structural IDs or keys. Use
+`redactRecord` when an application deliberately needs to rewrite or drop one
+of those fields. Patterns are trusted application configuration; avoid
+expressions susceptible to catastrophic backtracking.
 
 ### Eval coverage map
 

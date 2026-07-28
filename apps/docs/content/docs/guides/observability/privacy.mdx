@@ -16,6 +16,13 @@ export default config({
   observability: {
     recordInputs: "off", // 'inline' | 'reference' | 'off'
     recordOutputs: "reference",
+    redactPatterns: [
+      /\bACME-\d{6}\b/,
+      {
+        pattern: /\bCUSTOMER-\d+\b/,
+        replacement: "[customer-id]",
+      },
+    ],
     redactPaths: ["customer.email", "credentials.session"],
     redactRecord: (record) => {
       // return a replacement record, or null to drop fail-closed
@@ -49,11 +56,44 @@ snapshot is available; they never fall back to an empty configured policy.
 - **`reference`**: keep identity/size pointers without full bodies where supported
 - **`off`**: omit payload-shaped content
 
-Every consumer sees records only after the shared sanitization pass, and a failure inside your `redactRecord` hook drops the record entirely (fail-closed): a broken redaction never leaks an unredacted payload. The emit-path sanitization steps and the `toSafeJsonValue()` truncation defaults are documented in the [Observability reference](/docs/reference/crux-core/observability#capture-policy).
+`redactPatterns` is deployment-wide observability policy. It rewrites matching
+strings in captured artifact previews and URIs, nested attribute values, and
+run/span error messages. Bare expressions use `[REDACTED]`; object-form
+replacements are literal, so JavaScript replacement tokens such as `$&` and
+`$1` are not expanded. This changes telemetry only—the application, model,
+provider, and tool still receive the original values.
 
-Use `redactRecord` for graph-record-specific transformations. Use
-`redactPaths` for the stable, portable policy that must also apply outside the
-live graph transport.
+Patterns are trusted application configuration. Avoid expressions susceptible
+to catastrophic backtracking, because JavaScript cannot place a general
+complexity bound on regular-expression matching.
+
+Every consumer sees records only after the shared privacy and sanitization
+passes. A failure inside pattern redaction or your `redactRecord` hook drops
+the telemetry record entirely (fail-closed): broken redaction never leaks an
+unredacted payload or fails the application operation. The emit-path ordering
+and `toSafeJsonValue()` truncation defaults are documented in the
+[Observability reference](/docs/reference/crux-core/observability#capture-policy).
+
+Use `redactPatterns` for deployment-wide observability string rewriting. Use
+`redactRecord` for advanced graph-record transformations or to drop a record.
+Use `redactPaths` for the stable, portable persisted-data policy shared by
+Eval, feedback, Review, sidecars, and generated Runtime hosts.
+
+## Visibility in Devtools
+
+Devtools exposes privacy-safe status without exposing the policy or captured
+values. Catalog's project-level **Observability privacy** card says whether
+the effective config loaded by Local contains declarative patterns. Runs shows
+**Redacted** only when declarative patterns actually changed captured
+telemetry, and names only the affected broad surfaces.
+
+Crux does not expose rules, matches, values, replacements, nested paths, or
+counts. A Runs badge proves a configured pattern changed the named telemetry
+surface; it is not proof that no sensitive data remains. A custom
+`redactRecord` change alone does not produce declarative-pattern evidence.
+Catalog policy is project-level and never creates Safety guardrail definitions
+or per-definition relations. Deployed environments may use different
+effective config from the Local project view.
 
 ## DefinitionRef source
 

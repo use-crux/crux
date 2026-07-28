@@ -332,6 +332,7 @@ export function RunDetailShell({
           status={status}
           items={stripItems}
           diagnosticsCount={diagnosticsCount}
+          redaction={runDetail?.redaction}
           reliability={
             run
               ? {

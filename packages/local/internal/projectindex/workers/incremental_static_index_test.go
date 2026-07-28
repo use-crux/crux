@@ -62,6 +62,13 @@ done
 	if len(result.Report.StaticParsedFiles) != 1 || result.Report.StaticParsedFiles[0] != sourceFile {
 		t.Fatalf("static parsed files = %v, want %s", result.Report.StaticParsedFiles, sourceFile)
 	}
+	if result.Patches[0].Project.Observability == nil ||
+		!result.Patches[0].Project.Observability.RedactPatternsConfigured {
+		t.Fatalf(
+			"incremental patch observability = %+v, want previous project policy",
+			result.Patches[0].Project.Observability,
+		)
+	}
 }
 
 type incrementalStaticCompiler struct {
@@ -125,7 +132,13 @@ func (c *incrementalStaticCompiler) StaticIndexCompileStream(_ context.Context, 
 func incrementalPreviousIndex(root string, sourceFile string) store.IndexData {
 	return store.IndexData{
 		SchemaVersion: 1,
-		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		Project: &store.ProjectIdentity{
+			Root: root,
+			Name: "project",
+			Observability: &store.ProjectObservability{
+				RedactPatternsConfigured: true,
+			},
+		},
 		Definitions: []store.ProjectDefinition{{
 			ID:       "prompt:writer",
 			Kind:     "prompt",

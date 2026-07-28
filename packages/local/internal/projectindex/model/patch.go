@@ -121,6 +121,12 @@ func ApplyPatch(state PatchState, patch IndexPatch) PatchState {
 	if patch.SchemaVersion != 0 {
 		next.Index.SchemaVersion = patch.SchemaVersion
 	}
+	if patch.Phase != PhaseAST &&
+		patch.Phase != PhaseCache &&
+		patch.Project.Observability == nil &&
+		next.Index.Project != nil {
+		patch.Project.Observability = next.Index.Project.Observability
+	}
 	next.Index.Project = &patch.Project
 	if patch.FinishedAt != "" {
 		next.Index.IndexedAt = patch.FinishedAt

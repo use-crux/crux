@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -26,6 +27,27 @@ func (p projectIndexPipeline) reindexProjectIncrementalWithOptions(
 	previous := s.store.GetIndex()
 	if options.hasWatchRun() {
 		s.watchStatus.Start(options.Watch, files, deletedFiles)
+	}
+	if containsProjectConfigChange(
+		root,
+		configPath,
+		previous,
+		files,
+		deletedFiles,
+	) {
+		s.watchStatus.FullFallback(
+			options.Watch,
+			files,
+			deletedFiles,
+			"config-changed",
+		)
+		return p.reindexProjectWithOptions(
+			ctx,
+			root,
+			configPath,
+			projectName,
+			options,
+		)
 	}
 	if !ok {
 		s.watchStatus.FullFallback(options.Watch, files, deletedFiles, "missing-incremental-worker")
@@ -114,4 +136,53 @@ func (p projectIndexPipeline) reindexProjectIncrementalWithOptions(
 	s.watchStatus.IncrementalResult(options.Watch, result, len(result.Patches), watchSemanticStatusForMode(semanticMode))
 
 	return s.completeSemanticAndLint(ctx, run)
+}
+
+func containsProjectConfigChange(
+	root string,
+	configPath string,
+	previous store.IndexData,
+	files []string,
+	deletedFiles []string,
+) bool {
+	candidates := []string{configPath}
+	if previous.Project != nil {
+		candidates = append(candidates, previous.Project.ConfigFile)
+	}
+	for _, changed := range append(
+		append([]string(nil), files...),
+		deletedFiles...,
+	) {
+		if isCruxConfigFile(changed) {
+			return true
+		}
+		for _, candidate := range candidates {
+			if candidate != "" &&
+				projectPath(root, changed) == projectPath(root, candidate) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isCruxConfigFile(path string) bool {
+	switch filepath.Base(path) {
+	case "crux.config.cjs",
+		"crux.config.cts",
+		"crux.config.js",
+		"crux.config.mjs",
+		"crux.config.mts",
+		"crux.config.ts":
+		return true
+	default:
+		return false
+	}
+}
+
+func projectPath(root string, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(root, path))
 }

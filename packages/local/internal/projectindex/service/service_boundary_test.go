@@ -261,6 +261,59 @@ func TestServiceRecordsIncrementalFallbackReasonInWatchStatus(t *testing.T) {
 	}
 }
 
+func TestServiceConfigWatchRefreshesEffectiveObservabilityPolicy(t *testing.T) {
+	indexer := &watchFallbackIndexer{}
+	service := New(Options{Store: store.NewStore(), Indexer: indexer})
+	service.ApplyIndexPatch(
+		context.Background(),
+		projectindex.PatchFromSnapshot(
+			boundaryPreviousIndex(),
+			projectindex.PhaseAST,
+			"ok",
+		),
+	)
+
+	assertConfigured := func(runID uint64, configured bool) {
+		t.Helper()
+		indexer.redactPatternsConfigured = configured
+		indexer.calledFull = false
+		indexer.calledIncrement = false
+		index, err := service.ReindexProjectIncrementalWithOptions(
+			context.Background(),
+			"/repo",
+			"crux.config.ts",
+			"project",
+			[]string{"/repo/crux.config.ts"},
+			nil,
+			ProjectReindexOptions{
+				Semantic: ProjectSemanticDisabled,
+				Watch:    ProjectWatchRunOptions{RunID: runID},
+			},
+		)
+		if err != nil {
+			t.Fatalf("config-aware watch reindex: %v", err)
+		}
+		if indexer.calledIncrement || !indexer.calledFull {
+			t.Fatalf(
+				"config watch calls full=%v incremental=%v, want full only",
+				indexer.calledFull,
+				indexer.calledIncrement,
+			)
+		}
+		if index.Project == nil || index.Project.Observability == nil ||
+			index.Project.Observability.RedactPatternsConfigured != configured {
+			t.Fatalf(
+				"project observability = %+v, want configured %v",
+				index.Project,
+				configured,
+			)
+		}
+	}
+
+	assertConfigured(51, false)
+	assertConfigured(52, true)
+}
+
 func TestServiceReturnsWatchIncrementalBeforeBackgroundLint(t *testing.T) {
 	indexer := &watchBackgroundLintIndexer{
 		lintStarted: make(chan struct{}),

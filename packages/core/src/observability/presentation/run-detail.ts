@@ -8,6 +8,7 @@ import type {
   CruxEdgeType,
   CruxGraphNodeRef,
   CruxMetrics,
+  CruxObservabilityRedactionEvidence,
   CruxRecordId,
   CruxRunId,
   CruxSpanEventId,
@@ -109,6 +110,8 @@ export interface CruxRunDetailArtifact {
   uri: string;
   preview?: unknown;
   attributes?: CruxAttributes | null;
+  /** Privacy-safe evidence that declarative patterns changed this artifact. */
+  redaction?: CruxObservabilityRedactionEvidence;
 }
 
 /** Event summary attached to a run-detail node or detail. */
@@ -186,6 +189,8 @@ export interface CruxRunDetailSource {
 export interface CruxRunDetailDetail extends CruxSpanSummaryView {
   /** Canonical definition references emitted by this exact span. */
   definitionRefs?: DefinitionRef[];
+  /** Union of redacted telemetry surfaces owned by this folded detail. */
+  redaction?: CruxObservabilityRedactionEvidence;
   id: string;
   kind: CruxPresentationNodeKind;
   role?: string;
@@ -214,6 +219,8 @@ export interface CruxRunDetailDetail extends CruxSpanSummaryView {
 export interface CruxRunDetailNode extends CruxSpanSummaryView {
   /** Canonical definition references emitted by this exact span. */
   definitionRefs?: DefinitionRef[];
+  /** Union of redacted telemetry surfaces owned locally by this node. */
+  redaction?: CruxObservabilityRedactionEvidence;
   id: string;
   virtual: boolean;
   parentId: string;
@@ -276,6 +283,8 @@ export interface CruxRunDetailSpanPlacement {
 export interface CruxRunDetail {
   schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION;
   run: CruxRunSummaryView;
+  /** Union of redacted telemetry surfaces across this operation family. */
+  redaction?: CruxObservabilityRedactionEvidence;
   root: CruxRunDetailNode;
   rows: CruxRunDetailRow[];
   spanIndex: Record<string, CruxRunDetailSpanPlacement>;

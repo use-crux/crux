@@ -1418,6 +1418,11 @@ export function findNode(
 ): ObservabilityRunDetailNode | null {
   if (!id) return null;
   if (node.id === id || node.spanId === id) return node;
+  for (const detail of node.details ?? []) {
+    if (detail.id === id || detail.spanId === id) {
+      return detailAsLeafNode(detail, node);
+    }
+  }
   for (const child of node.children ?? []) {
     const found = findNode(child, id);
     if (found) return found;

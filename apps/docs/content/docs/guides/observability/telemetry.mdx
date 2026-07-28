@@ -170,7 +170,7 @@ events, deliberately configured destinations.
 | `baggageAttributeAllowlist` | `readonly string[]`               | unset              | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
 
 Payload capture is configured centrally with
-`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`config({ observability: { recordInputs, recordOutputs, redactPatterns, redactRecord } })`.
 `recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`
 capture modes, so devtools, subscribers, diagnostics-channel listeners, and
 OTel all observe the same redacted or full graph records. The same central emit
@@ -178,6 +178,13 @@ path strips payload-shaped attributes, converts JSON-hostile values, and strips
 invalid optional metrics before records reach those consumers. `redactRecord`
 can replace a graph record or return `null`; hook failures drop the record
 fail-closed.
+
+Successful declarative pattern application adds only privacy-safe graph
+evidence: `applied: true` plus affected broad telemetry surfaces. Local uses it
+for Runs badges and labels. The OTel subscriber receives the same already
+redacted graph record, but the OTel mapper does not export the evidence as a
+new semantic-convention attribute. Rules, matched values, replacements, paths,
+hashes, and counts are never included.
 
 OTel message content is disabled by default, even when local graph capture is
 inline. Set `captureMessageContent: true` or

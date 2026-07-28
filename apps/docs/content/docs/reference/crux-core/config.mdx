@@ -326,6 +326,7 @@ the scoped devtools ingest endpoint. When `observability.transport` is set, that
 | `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                                                               |
 | `observability.feedbackDestination`           | `CruxFeedbackDestination`    | transport capability                 | Single durable destination used by `feedback()`; overrides a capable transport.                      |
 | `observability.redactPaths`                   | `readonly string[]`          | `[]`                                 | Dot paths shared by feedback, Eval evidence, Review, sidecars, and generated Runtime hosts.          |
+| `observability.redactPatterns`                | `readonly CruxObservabilityRedactionPattern[]` | `[]`                    | Deployment-wide patterns removed from captured observability payload values.                         |
 | `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued.                                      |
 | `observability.delivery.maxQueuedRecords`     | `number`                     | `2048`                               | Maximum retained queued plus in-flight records before oldest queued records are dropped and counted. |
 | `observability.delivery.retryDelayMs`         | `number`                     | `100`                                | Base retry delay after a failed transport send.                                                      |
@@ -337,6 +338,13 @@ export default config({
     serverUrl: process.env.CRUX_OBSERVABILITY_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
     redactPaths: ["customer.email", "credentials.session"],
+    redactPatterns: [
+      /\bACME-\d{6}\b/,
+      {
+        pattern: /\bCUSTOMER-\d+\b/,
+        replacement: "[customer-id]",
+      },
+    ],
     delivery: {
       maxPendingDeliveries: 250,
       retryDelayMs: 100,
@@ -347,6 +355,13 @@ export default config({
 ```
 
 See [Observability](/docs/reference/crux-core/observability).
+
+Local's config-aware Project Index publishes only whether
+`observability.redactPatterns` is non-empty. Devtools shows that effective
+project-level state in Catalog and shows successful application separately in
+Runs. It never publishes pattern sources, flags, replacements, rule counts,
+or a description of `redactRecord`; a deployed environment may load different
+effective config.
 
 ## `plugins`
 

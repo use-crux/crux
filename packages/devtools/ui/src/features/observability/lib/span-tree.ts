@@ -22,6 +22,10 @@ export interface SpanNode {
   cost?: number;
   tokens?: number;
   model?: string;
+  /** Explicit evidence owned by this row (including folded details). */
+  redactionLocal?: boolean;
+  /** Whether any child subtree contains explicit redaction evidence. */
+  redactionDescendant?: boolean;
   children: SpanNode[];
   depth: number;
   trace?: Trace;

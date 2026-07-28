@@ -34,6 +34,7 @@ import type {
 } from "@/types";
 import type { SpanNode } from "@/features/observability/lib/span-tree";
 import { orderRunDetailChildren } from "@/features/observability/lib/run-detail-order";
+import { hasLocalRedaction } from "@/features/run-detail/lib/redaction-evidence";
 import { observabilityService } from "../services/observability";
 import {
   observabilityEventIds,
@@ -162,6 +163,9 @@ export function nodeFromRunDetail(
     !isGeneration && node.model && rawLabel === node.model
       ? node.name || node.primitive || rawLabel
       : rawLabel;
+  const children = orderRunDetailChildren(node.children).map((child) =>
+    nodeFromRunDetail(child, depth + 1),
+  );
   return {
     id: node.id,
     seq,
@@ -173,9 +177,11 @@ export function nodeFromRunDetail(
     durationMs: node.timing?.durationMs ?? node.durationMs,
     startedAt: timeMs(node.timing?.startedAt ?? node.startedAt),
     model: isGeneration ? node.model || undefined : undefined,
-    children: orderRunDetailChildren(node.children).map((child) =>
-      nodeFromRunDetail(child, depth + 1),
+    redactionLocal: hasLocalRedaction(node),
+    redactionDescendant: children.some(
+      (child) => child.redactionLocal || child.redactionDescendant,
     ),
+    children,
     depth,
     composition: comp
       ? {

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { observe, resetObservabilityRuntime } from "@use-crux/core/observability";
-import { inMemoryRecordStore, workspace } from "@use-crux/core";
+import {
+  observe,
+  resetObservabilityRuntime,
+  subscribeObservability,
+  type CruxGraphRecord,
+} from "@use-crux/core/observability";
+import { config, inMemoryRecordStore, workspace } from "@use-crux/core";
 import { withTelemetry } from "../src";
 import { extractCruxPropagationCarrier, injectCruxPropagationCarrier } from "../src/propagation";
 import type { TraceSpan } from "../src/types";
@@ -88,6 +93,60 @@ describe("workspace OTel privacy", () => {
     expect(spans.find((span) => span.name === "chat generate")?.attributes).toMatchObject({
       "crux.safeLabel": "safe label",
     });
+  });
+
+  it("tolerates graph redaction evidence without exporting a new mapping", async () => {
+    const spans: TraceSpan[] = [];
+    const graphRecords: CruxGraphRecord[] = [];
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch);
+      },
+    }).install({});
+    const runtime = config({
+      observability: {
+        redactPatterns: [/ACME-\d+/],
+      },
+    });
+    const unsubscribe = subscribeObservability((record) => {
+      graphRecords.push(record);
+    });
+
+    try {
+      await observe.run(
+        { name: "OTel evidence", rootPrimitive: "custom.operation" },
+        async () => {
+          await observe.span(
+            { name: "redacted span", primitive: "custom.operation" },
+            async () => {
+              observe.artifact({
+                kind: "output",
+                contentType: "text/plain",
+                encoding: "text",
+                preview: "order ACME-100001",
+              });
+            },
+          );
+        },
+      );
+      await observe.flush();
+
+      const artifact = graphRecords.find(
+        (record) => record.type === "artifact" && record.kind === "output",
+      );
+      expect(artifact?.privacy?.redaction).toEqual({
+        applied: true,
+        surfaces: ["artifact.preview"],
+      });
+      expect(JSON.stringify(spans)).not.toContain("ACME-100001");
+      expect(JSON.stringify(spans)).not.toMatch(
+        /privacy|redaction|artifact\.preview|surfaces/,
+      );
+    } finally {
+      unsubscribe();
+      runtime.dispose();
+      await installed.dispose?.();
+    }
   });
 
   it("maps every workspace operation to operation and path hash attributes", async () => {

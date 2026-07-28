@@ -15,6 +15,8 @@ import {
 import { ReliabilityGlyph } from "@/shared/components/ReliabilityGlyph";
 import { DeliveryHealthBadge } from "@/shared/components/DeliveryHealthBadge";
 import { StatStrip, StatusPill, type StatItem } from "./atoms";
+import type { CruxObservabilityRedactionEvidence } from "@use-crux/core/observability";
+import { RedactionBadge } from "./RedactionEvidence";
 
 /** Failure stepper — `‹ ⚠ n/N ›` that walks the shared selection through the
  *  run's failing spans. Mirrors the keyboard `e` / `⇧E` stepper; works across
@@ -47,6 +49,7 @@ export interface RunContextStripProps {
   status: string;
   items: readonly StatItem[];
   diagnosticsCount: number;
+  redaction?: CruxObservabilityRedactionEvidence;
   errorStepper?: ErrorStepper;
   reliability?: RunReliabilityDetail;
 }
@@ -55,6 +58,7 @@ export function RunContextStrip({
   status,
   items,
   diagnosticsCount,
+  redaction,
   errorStepper,
   reliability,
 }: RunContextStripProps) {
@@ -75,6 +79,7 @@ export function RunContextStrip({
     >
       <div className="flex items-center gap-3.5 px-6 py-2.5">
         <StatusPill status={status} />
+        <RedactionBadge evidence={redaction} />
         {reliability?.deliveryHealth && (
           <DeliveryHealthBadge status={reliability.deliveryHealth} />
         )}

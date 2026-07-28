@@ -37,6 +37,61 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	}
 }
 
+func TestLoadConfigPreservesObservabilityPolicyTriState(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		field     string
+		wantKnown bool
+		want      bool
+	}{
+		{
+			name:      "configured",
+			field:     `,"redactPatternsConfigured":true`,
+			wantKnown: true,
+			want:      true,
+		},
+		{
+			name:      "known off",
+			field:     `,"redactPatternsConfigured":false`,
+			wantKnown: true,
+		},
+		{name: "unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reader := &recordingReader{
+				responses: []json.RawMessage{
+					json.RawMessage(
+						`{"root":"/repo","extensions":[]` +
+							test.field +
+							`}`,
+					),
+				},
+			}
+
+			config, err := LoadConfig(
+				context.Background(),
+				reader,
+				"/repo",
+				"/repo/crux.config.ts",
+			)
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if gotKnown := config.RedactPatternsConfigured != nil; gotKnown != test.wantKnown {
+				t.Fatalf("known = %v, want %v", gotKnown, test.wantKnown)
+			}
+			if test.wantKnown &&
+				*config.RedactPatternsConfigured != test.want {
+				t.Fatalf(
+					"configured = %v, want %v",
+					*config.RedactPatternsConfigured,
+					test.want,
+				)
+			}
+		})
+	}
+}
+
 func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	root := t.TempDir()
 	srcDir := filepath.Join(root, "src")

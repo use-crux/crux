@@ -808,9 +808,15 @@ type ProjectSourceRef struct {
 
 // ProjectIdentity identifies the workspace that produced a Project Index.
 type ProjectIdentity struct {
-	Root       string `json:"root"`
-	Name       string `json:"name,omitempty"`
-	ConfigFile string `json:"configFile,omitempty"`
+	Root          string                `json:"root"`
+	Name          string                `json:"name,omitempty"`
+	ConfigFile    string                `json:"configFile,omitempty"`
+	Observability *ProjectObservability `json:"observability,omitempty"`
+}
+
+// ProjectObservability is the privacy-safe effective observability policy.
+type ProjectObservability struct {
+	RedactPatternsConfigured bool `json:"redactPatternsConfigured"`
 }
 
 type IndexLintConfig struct {

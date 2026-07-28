@@ -58,6 +58,35 @@ func TestRunFinalizesAnalyzerAndEvidenceFacts(t *testing.T) {
 	}
 }
 
+func TestRunFinishesPatchWithPlanOwnedObservabilityPolicy(t *testing.T) {
+	root, sourceFile := writeSource(t)
+	compiler := &recordingCompiler{root: root, sourceFile: sourceFile}
+	plan := testPlan(root, sourceFile)
+	configured := true
+	plan.RedactPatternsConfigured = &configured
+
+	result, err := Run(context.Background(), Request{
+		Root:         root,
+		ProjectName:  "static-run",
+		Plan:         plan,
+		Compiler:     compiler,
+		PatchOptions: testPatchOptions(root),
+		Evidence: func(context.Context, []json.RawMessage) ([]json.RawMessage, error) {
+			return []json.RawMessage{json.RawMessage(`{"evidence":true}`)}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if result.Patch.Project.Observability == nil ||
+		!result.Patch.Project.Observability.RedactPatternsConfigured {
+		t.Fatalf(
+			"patch observability = %+v, want redactPatternsConfigured true",
+			result.Patch.Project.Observability,
+		)
+	}
+}
+
 func TestRunEvidenceErrorRequiresNodeWithoutFinalize(t *testing.T) {
 	root, sourceFile := writeSource(t)
 	compiler := &recordingCompiler{root: root, sourceFile: sourceFile}

@@ -1234,7 +1234,18 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 		if err != nil {
 			return RunDetail{}, err
 		}
-		memberDetail := ProjectRunDetail(graph, DefaultProjectionOptions())
+		redaction, err := s.loadRedactionProjection(ctx, graph.Run.RunID)
+		if err != nil {
+			return RunDetail{}, fmt.Errorf(
+				"load redaction projection for run %q: %w",
+				member.runID,
+				err,
+			)
+		}
+		memberDetail := ProjectRunDetail(
+			graph,
+			DefaultProjectionOptions().withRedactionProjection(redaction),
+		)
 		definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
 		if err != nil {
 			return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", member.runID, err)
@@ -1292,7 +1303,9 @@ func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
 	detail.Run.SuspendedChildCount = 0
 	detail.Run.FailedChildCount = 0
 	metrics := map[string]float64{}
+	var familyRedaction *ObservabilityRedactionEvidence
 	for _, member := range members {
+		familyRedaction = mergeRedactionEvidence(familyRedaction, member.Redaction)
 		detail.Counts.Primary += member.Counts.Primary
 		detail.Counts.Detail += member.Counts.Detail
 		detail.Counts.Metadata += member.Counts.Metadata
@@ -1319,6 +1332,8 @@ func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
 	}
 	normalizeUsageTotals(metrics)
 	detail.Run.Metrics = metricsRawOrNil(metrics)
+	detail.Redaction = familyRedaction
+	detail.Root.Redaction = familyRedaction
 	detail.Run.Status = rootStatus
 	detail.Run.RootRunID = detail.Run.OperationID
 	detail.Run.RootPresent = rootStatus != "incomplete" || detail.Run.Name != "Incomplete operation"

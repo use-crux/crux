@@ -43,6 +43,13 @@ export interface ProjectIdentity {
   root: string;
   name?: string;
   configFile?: string;
+  /** Whether the config-aware index saw a Runtime Engine for this project. */
+  runtimeConfigured?: boolean;
+  /** Privacy-safe effective observability policy, when config inspection succeeded. */
+  observability?: {
+    /** Whether at least one declarative telemetry-redaction pattern is configured. */
+    readonly redactPatternsConfigured: boolean;
+  };
 }
 
 export interface SourceRange {

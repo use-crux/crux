@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,7 +20,15 @@ func TestHTTPAndWebSocketIndexSnapshotsShareSessionMetadata(t *testing.T) {
 
 	root := t.TempDir()
 	s := store.NewStore()
-	s.SetIndex([]store.PromptMeta{{ID: "prompt:writer"}}, nil, nil)
+	s.SetIndexData(store.IndexData{
+		Prompts: []store.PromptMeta{{ID: "prompt:writer"}},
+		Project: &store.ProjectIdentity{
+			Root: root,
+			Observability: &store.ProjectObservability{
+				RedactPatternsConfigured: true,
+			},
+		},
+	})
 	handler := NewHTTPServer(s, ServerOptions{
 		InspectDir:    t.TempDir(),
 		ProjectRoot:   root,
@@ -58,6 +68,103 @@ func TestHTTPAndWebSocketIndexSnapshotsShareSessionMetadata(t *testing.T) {
 	}
 	if !jsonEqual(rest["prompts"], websocket["prompts"]) {
 		t.Fatalf("REST and WebSocket prompt snapshots differ: REST=%#v WebSocket=%#v", rest["prompts"], websocket["prompts"])
+	}
+	if !jsonEqual(rest["project"], websocket["project"]) {
+		t.Fatalf("REST and WebSocket project snapshots differ: REST=%#v WebSocket=%#v", rest["project"], websocket["project"])
+	}
+	project := rest["project"].(map[string]any)
+	observability := project["observability"].(map[string]any)
+	if configured, ok := observability["redactPatternsConfigured"].(bool); !ok || !configured {
+		t.Fatalf("REST observability = %#v, want configured true", observability)
+	}
+}
+
+func TestProjectObservabilityTriStateSurvivesStoreAPIAndJSON(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name           string
+		policy         *store.ProjectObservability
+		wantKnown      bool
+		wantConfigured bool
+	}{
+		{
+			name: "configured",
+			policy: &store.ProjectObservability{
+				RedactPatternsConfigured: true,
+			},
+			wantKnown:      true,
+			wantConfigured: true,
+		},
+		{
+			name: "known off",
+			policy: &store.ProjectObservability{
+				RedactPatternsConfigured: false,
+			},
+			wantKnown: true,
+		},
+		{name: "unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := store.NewStore()
+			state.SetIndexData(store.IndexData{
+				Project: &store.ProjectIdentity{
+					Root:          "/repo",
+					Observability: test.policy,
+				},
+			})
+			service := devtools.NewService(
+				state,
+				inspect.NewService(state, inspect.Dir(t.TempDir())),
+			)
+			defer service.Shutdown()
+			hub := &WSHub{
+				devtools:    service,
+				projectRoot: "/repo",
+			}
+
+			snapshot, err := hub.ProjectIndex(context.Background())
+			if err != nil {
+				t.Fatalf("ProjectIndex: %v", err)
+			}
+			if snapshot.Project == nil {
+				t.Fatal("ProjectIndex project = nil")
+			}
+			if gotKnown := snapshot.Project.Observability != nil; gotKnown != test.wantKnown {
+				t.Fatalf("known = %v, want %v", gotKnown, test.wantKnown)
+			}
+			if test.wantKnown &&
+				snapshot.Project.Observability.RedactPatternsConfigured != test.wantConfigured {
+				t.Fatalf(
+					"configured = %v, want %v",
+					snapshot.Project.Observability.RedactPatternsConfigured,
+					test.wantConfigured,
+				)
+			}
+
+			serialized, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatalf("marshal API snapshot: %v", err)
+			}
+			hasOuter := bytes.Contains(serialized, []byte(`"observability"`))
+			if hasOuter != test.wantKnown {
+				t.Fatalf(
+					"serialized = %s, observability presence %v want %v",
+					serialized,
+					hasOuter,
+					test.wantKnown,
+				)
+			}
+			if test.wantKnown && !bytes.Contains(
+				serialized,
+				[]byte(fmt.Sprintf(
+					`"redactPatternsConfigured":%t`,
+					test.wantConfigured,
+				)),
+			) {
+				t.Fatalf("serialized = %s, want exact configured boolean", serialized)
+			}
+		})
 	}
 }
 

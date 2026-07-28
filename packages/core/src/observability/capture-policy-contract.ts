@@ -11,6 +11,28 @@ export type CruxObservabilityCaptureMode = 'inline' | 'reference' | 'off'
 /** Capture level used by the stable-beta safety artifact capture ladder. */
 export type CruxObservabilityCaptureLevel = 'full' | 'safe' | 'evidence' | 'off'
 
+/**
+ * A deployment-wide pattern removed from captured observability payloads.
+ *
+ * A bare expression replaces every match with `[REDACTED]`. Use the object
+ * form to provide a literal replacement. Pattern matching never changes the
+ * value used by the application, model, or tool.
+ */
+export type CruxObservabilityRedactionPattern =
+  | RegExp
+  | {
+      /** Expression matched against captured observability strings. */
+      readonly pattern: RegExp
+      /**
+       * Literal replacement inserted for every match.
+       *
+       * JavaScript replacement tokens such as `$&` and `$1` are not expanded.
+       *
+       * @default '[REDACTED]'
+       */
+      readonly replacement?: string
+    }
+
 /** Canonical artifacts whose payloads are governed by the Safety capture ladder. */
 export type CruxSafetyArtifactKind = Extract<
   CruxCanonicalArtifactKind,
@@ -49,9 +71,12 @@ export interface CruxObservabilityCapturePolicy {
   /**
    * Stable-beta capture ladder for safety-sensitive artifacts.
    *
-   * `full` keeps payload previews, `safe` keeps only already-safe previews,
-   * `evidence` keeps size/hash evidence without content previews, and `off`
-   * removes payload previews and evidence metadata.
+   * `full` keeps arbitrary payload previews. `safe` also retains the preview
+   * and is a producer-side assertion that its artifact contract is already
+   * safe by default; the capture layer does not classify or sanitize arbitrary
+   * text. `evidence` keeps size/hash evidence without content previews, and
+   * `off` removes payload previews and evidence metadata. Use `evidence` or
+   * `off` for user-authored payloads that are not safe to retain.
    *
    * @default 'safe' for Safety artifacts; existing recordInputs/recordOutputs
    * defaults continue to apply to input/output families.
@@ -74,6 +99,15 @@ export interface CruxObservabilityCapturePolicy {
    * @default true
    */
   readonly recordOutputs?: boolean | CruxObservabilityCaptureMode
+  /**
+   * Deployment-wide patterns removed from captured observability payloads.
+   *
+   * Rules run in declaration order at the shared observability privacy gate.
+   * They do not modify application or provider data.
+   *
+   * @default []
+   */
+  readonly redactPatterns?: readonly CruxObservabilityRedactionPattern[]
   /**
    * Last-mile record redaction hook.
    *

@@ -1079,6 +1079,36 @@ export interface CruxErrorSummary {
 }
 
 /**
+ * Broad telemetry surfaces that can be changed by declarative observability
+ * redaction patterns.
+ *
+ * The constant is the canonical order used by runtime evidence. It
+ * intentionally excludes rule details, nested paths, values, replacements,
+ * hashes, and counts.
+ */
+export const CRUX_OBSERVABILITY_REDACTION_SURFACES = [
+  'artifact.preview',
+  'artifact.uri',
+  'attributes',
+  'error.message',
+] as const
+
+/** A broad telemetry surface affected by declarative pattern redaction. */
+export type CruxObservabilityRedactionSurface =
+  (typeof CRUX_OBSERVABILITY_REDACTION_SURFACES)[number]
+
+/**
+ * Privacy-safe evidence that declarative patterns changed this telemetry
+ * record. It never describes the rule or matched value.
+ */
+export interface CruxObservabilityRedactionEvidence {
+  /** Confirms that at least one configured pattern changed captured telemetry. */
+  readonly applied: true
+  /** Deduplicated affected surfaces in canonical constant order. */
+  readonly surfaces: readonly CruxObservabilityRedactionSurface[]
+}
+
+/**
  * Base identity carried by every newly written observability graph record.
  *
  * Writers and readers use the current version. Older records cannot be given
@@ -1100,6 +1130,10 @@ interface CruxRecordBase {
   traceId?: CruxTraceId;
   /** Immutable deployment identity captured when the logical run starts. */
   deployment?: CruxDeploymentIdentity;
+  /** Runtime-owned, privacy-safe declarative-redaction evidence. */
+  privacy?: {
+    readonly redaction: CruxObservabilityRedactionEvidence
+  }
 }
 
 export interface CruxRunStartRecord extends CruxRecordBase {

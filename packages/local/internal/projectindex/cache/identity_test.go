@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 49 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want tool Safety boundary epoch 49", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 50 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want observability policy epoch 50", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -32,6 +32,8 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"runtime-rich Eval timeout policy facts",
 		"Epoch 49",
 		"provider-visible tool Safety boundary metadata",
+		"Epoch 50",
+		"privacy-safe effective observability policy",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -42,26 +44,26 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-49", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-50", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
 	}
 }
 
-func TestProjectIndexFactStoreMissesPreToolSafetyBoundarySnapshotEpoch(t *testing.T) {
+func TestProjectIndexFactStoreMissesPreObservabilityPolicySnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-48", "index.db")
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-49", "index.db")
 	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(oldPath, []byte("pre-tool-safety-boundary snapshot"), 0o600); err != nil {
+	if err := os.WriteFile(oldPath, []byte("pre-observability-policy snapshot"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	currentPath := projectIndexFactStoreDBFile(root)
 	if currentPath == oldPath {
-		t.Fatalf("current snapshot path reused epoch-48 snapshot %q", currentPath)
+		t.Fatalf("current snapshot path reused epoch-49 snapshot %q", currentPath)
 	}
 	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
 		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)

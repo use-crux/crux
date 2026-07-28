@@ -44,6 +44,7 @@ import { Btn } from "../v2/primitives";
 import { MemoryView } from "@/features/memory/components/MemoryView";
 import { PlansView } from "@/features/plans/components/PlansView";
 import { WorkspacesView } from "@/features/workspaces/components/WorkspacesView";
+import { ObservabilityPrivacyCard } from "./ObservabilityPrivacyCard";
 
 export function IndexView({
   promptId,
@@ -163,13 +164,18 @@ export function IndexView({
         fallback={<SkeletonSplit sidebarRows={14} />}
       >
         <IndexIndexProvider index={indexModel}>
-          <IndexBrowser
-            selected={effectiveSelected}
-            onSelect={setSelected}
-            graphOpen={graphOpen}
-            onGraphClose={() => setGraphOpen(false)}
-            onOpenEval={(evalId) => navigate({ view: "evals", evalId })}
-          />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ObservabilityPrivacyCard
+              observability={projectIndex.project?.observability}
+            />
+            <IndexBrowser
+              selected={effectiveSelected}
+              onSelect={setSelected}
+              graphOpen={graphOpen}
+              onGraphClose={() => setGraphOpen(false)}
+              onOpenEval={(evalId) => navigate({ view: "evals", evalId })}
+            />
+          </div>
         </IndexIndexProvider>
       </SectionBoundary>
     </DevtoolsShell>

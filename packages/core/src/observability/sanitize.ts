@@ -1,9 +1,12 @@
 import type { CruxGraphRecord } from './contract'
 
-const MAX_PREVIEW_STRING_LENGTH = 64_000
-const MAX_PREVIEW_ARRAY_LENGTH = 200
-const MAX_PREVIEW_OBJECT_KEYS = 200
-const MAX_PREVIEW_DEPTH = 8
+/** Shared bounds for sanitization and pre-sanitization privacy traversal. */
+export const OBSERVABILITY_SANITIZE_LIMITS = Object.freeze({
+  stringLength: 64_000,
+  arrayLength: 200,
+  objectKeys: 200,
+  depth: 8,
+})
 
 /**
  * Converts arbitrary observability payload values into JSON-safe data.
@@ -15,8 +18,8 @@ const MAX_PREVIEW_DEPTH = 8
  */
 export function toJsonSafe(value: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    if (typeof value === 'string' && value.length > MAX_PREVIEW_STRING_LENGTH) {
-      return `${value.slice(0, MAX_PREVIEW_STRING_LENGTH)}...[truncated ${value.length - MAX_PREVIEW_STRING_LENGTH} chars]`
+    if (typeof value === 'string' && value.length > OBSERVABILITY_SANITIZE_LIMITS.stringLength) {
+      return `${value.slice(0, OBSERVABILITY_SANITIZE_LIMITS.stringLength)}...[truncated ${value.length - OBSERVABILITY_SANITIZE_LIMITS.stringLength} chars]`
     }
     if (typeof value === 'number' && !Number.isFinite(value)) return String(value)
     return value
@@ -26,7 +29,7 @@ export function toJsonSafe(value: unknown, seen = new WeakSet<object>(), depth =
   if (typeof value === 'function') return `[Function${value.name ? `: ${value.name}` : ''}]`
   if (typeof value === 'symbol') return String(value)
 
-  if (depth >= MAX_PREVIEW_DEPTH) return '[MaxDepth]'
+  if (depth >= OBSERVABILITY_SANITIZE_LIMITS.depth) return '[MaxDepth]'
 
   if (value instanceof Date) return value.toISOString()
 
@@ -35,20 +38,22 @@ export function toJsonSafe(value: unknown, seen = new WeakSet<object>(), depth =
     seen.add(value)
     try {
       if (Array.isArray(value)) {
-        const items = value.slice(0, MAX_PREVIEW_ARRAY_LENGTH).map((item) => toJsonSafe(item, seen, depth + 1))
-        if (value.length > MAX_PREVIEW_ARRAY_LENGTH) {
-          items.push(`...[truncated ${value.length - MAX_PREVIEW_ARRAY_LENGTH} items]`)
+        const items = value
+          .slice(0, OBSERVABILITY_SANITIZE_LIMITS.arrayLength)
+          .map((item) => toJsonSafe(item, seen, depth + 1))
+        if (value.length > OBSERVABILITY_SANITIZE_LIMITS.arrayLength) {
+          items.push(`...[truncated ${value.length - OBSERVABILITY_SANITIZE_LIMITS.arrayLength} items]`)
         }
         return items
       }
 
       const output: Record<string, unknown> = {}
       const entries = Object.entries(value as Record<string, unknown>)
-      for (const [key, entryValue] of entries.slice(0, MAX_PREVIEW_OBJECT_KEYS)) {
+      for (const [key, entryValue] of entries.slice(0, OBSERVABILITY_SANITIZE_LIMITS.objectKeys)) {
         output[key] = toJsonSafe(entryValue, seen, depth + 1)
       }
-      if (entries.length > MAX_PREVIEW_OBJECT_KEYS) {
-        output.__crux_truncated_keys = entries.length - MAX_PREVIEW_OBJECT_KEYS
+      if (entries.length > OBSERVABILITY_SANITIZE_LIMITS.objectKeys) {
+        output.__crux_truncated_keys = entries.length - OBSERVABILITY_SANITIZE_LIMITS.objectKeys
       }
       return output
     } finally {

@@ -305,20 +305,21 @@ type presentationDetail struct {
 }
 
 type RunDetail struct {
-	SchemaVersion        int                           `json:"schemaVersion"`
-	Run                  RunSummary                    `json:"run"`
-	Root                 RunDetailNode                 `json:"root"`
-	Rows                 []RunDetailRow                `json:"rows"`
-	SpanIndex            map[string]RunDetailPlacement `json:"spanIndex"`
-	Facets               map[string]map[string]int     `json:"facets"`
-	Diagnostics          []RunDetailDiagnostic         `json:"diagnostics"`
-	Counts               RunDetailCounts               `json:"counts"`
-	DefinitionRefs       []DefinitionRef               `json:"definitionRefs"`
-	Manifest             *RunManifestResolution        `json:"manifest,omitempty"`
-	CurrentCatalog       *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
-	CurrentProjectHealth *CurrentProjectHealth         `json:"currentProjectHealth,omitempty"`
-	Debug                *Graph                        `json:"debug,omitempty"`
-	MemberRuns           []OperationRunDetail          `json:"memberRuns"`
+	SchemaVersion        int                             `json:"schemaVersion"`
+	Run                  RunSummary                      `json:"run"`
+	Redaction            *ObservabilityRedactionEvidence `json:"redaction,omitempty"`
+	Root                 RunDetailNode                   `json:"root"`
+	Rows                 []RunDetailRow                  `json:"rows"`
+	SpanIndex            map[string]RunDetailPlacement   `json:"spanIndex"`
+	Facets               map[string]map[string]int       `json:"facets"`
+	Diagnostics          []RunDetailDiagnostic           `json:"diagnostics"`
+	Counts               RunDetailCounts                 `json:"counts"`
+	DefinitionRefs       []DefinitionRef                 `json:"definitionRefs"`
+	Manifest             *RunManifestResolution          `json:"manifest,omitempty"`
+	CurrentCatalog       *CurrentCatalogComparison       `json:"currentCatalog,omitempty"`
+	CurrentProjectHealth *CurrentProjectHealth           `json:"currentProjectHealth,omitempty"`
+	Debug                *Graph                          `json:"debug,omitempty"`
+	MemberRuns           []OperationRunDetail            `json:"memberRuns"`
 }
 
 type OperationRunDetail struct {
@@ -338,49 +339,51 @@ type RunDetailCounts struct {
 
 type RunDetailNode struct {
 	SpanSummary
-	DefinitionRefs []DefinitionRef        `json:"definitionRefs,omitempty"`
-	ID             string                 `json:"id"`
-	Virtual        bool                   `json:"virtual"`
-	ParentID       string                 `json:"parentId"`
-	Path           []string               `json:"path"`
-	Kind           string                 `json:"kind"`
-	Display        RunDetailDisplay       `json:"display"`
-	Timing         RunDetailTiming        `json:"timing"`
-	MetricBuckets  RunDetailMetricBuckets `json:"metricBuckets"`
-	Source         RunDetailSource        `json:"source"`
-	Details        []RunDetailDetail      `json:"details"`
-	Artifacts      []ArtifactSummary      `json:"artifacts"`
-	Events         []SpanEventSummary     `json:"events"`
-	Relations      []EdgeSummary          `json:"relations"`
-	Diagnostics    []RunDetailDiagnostic  `json:"diagnostics"`
-	Flow           map[string]any         `json:"flow,omitempty"`
-	Step           map[string]any         `json:"step,omitempty"`
-	Composition    map[string]any         `json:"composition,omitempty"`
-	Transition     map[string]any         `json:"transition,omitempty"`
-	Request        *RunDetailRequest      `json:"request,omitempty"`
-	DecisionReport *TurnDecisionReport    `json:"decisionReport,omitempty"`
-	Inspection     RunDetailInspection    `json:"inspection,omitempty"`
-	Children       []RunDetailNode        `json:"children"`
+	DefinitionRefs []DefinitionRef                 `json:"definitionRefs,omitempty"`
+	Redaction      *ObservabilityRedactionEvidence `json:"redaction,omitempty"`
+	ID             string                          `json:"id"`
+	Virtual        bool                            `json:"virtual"`
+	ParentID       string                          `json:"parentId"`
+	Path           []string                        `json:"path"`
+	Kind           string                          `json:"kind"`
+	Display        RunDetailDisplay                `json:"display"`
+	Timing         RunDetailTiming                 `json:"timing"`
+	MetricBuckets  RunDetailMetricBuckets          `json:"metricBuckets"`
+	Source         RunDetailSource                 `json:"source"`
+	Details        []RunDetailDetail               `json:"details"`
+	Artifacts      []ArtifactSummary               `json:"artifacts"`
+	Events         []SpanEventSummary              `json:"events"`
+	Relations      []EdgeSummary                   `json:"relations"`
+	Diagnostics    []RunDetailDiagnostic           `json:"diagnostics"`
+	Flow           map[string]any                  `json:"flow,omitempty"`
+	Step           map[string]any                  `json:"step,omitempty"`
+	Composition    map[string]any                  `json:"composition,omitempty"`
+	Transition     map[string]any                  `json:"transition,omitempty"`
+	Request        *RunDetailRequest               `json:"request,omitempty"`
+	DecisionReport *TurnDecisionReport             `json:"decisionReport,omitempty"`
+	Inspection     RunDetailInspection             `json:"inspection,omitempty"`
+	Children       []RunDetailNode                 `json:"children"`
 }
 
 type RunDetailDetail struct {
 	SpanSummary
-	DefinitionRefs []DefinitionRef       `json:"definitionRefs,omitempty"`
-	ID             string                `json:"id"`
-	Kind           string                `json:"kind"`
-	Role           string                `json:"role,omitempty"`
-	Label          string                `json:"label"`
-	Display        string                `json:"display"`
-	Timing         RunDetailTiming       `json:"timing"`
-	Summary        string                `json:"summary,omitempty"`
-	Events         []SpanEventSummary    `json:"events"`
-	Artifacts      []ArtifactSummary     `json:"artifacts"`
-	Relations      []EdgeSummary         `json:"relations"`
-	Diagnostics    []RunDetailDiagnostic `json:"diagnostics"`
-	Source         RunDetailSource       `json:"source"`
-	Request        *RunDetailRequest     `json:"request,omitempty"`
-	DecisionReport *TurnDecisionReport   `json:"decisionReport,omitempty"`
-	Inspection     RunDetailInspection   `json:"inspection,omitempty"`
+	DefinitionRefs []DefinitionRef                 `json:"definitionRefs,omitempty"`
+	Redaction      *ObservabilityRedactionEvidence `json:"redaction,omitempty"`
+	ID             string                          `json:"id"`
+	Kind           string                          `json:"kind"`
+	Role           string                          `json:"role,omitempty"`
+	Label          string                          `json:"label"`
+	Display        string                          `json:"display"`
+	Timing         RunDetailTiming                 `json:"timing"`
+	Summary        string                          `json:"summary,omitempty"`
+	Events         []SpanEventSummary              `json:"events"`
+	Artifacts      []ArtifactSummary               `json:"artifacts"`
+	Relations      []EdgeSummary                   `json:"relations"`
+	Diagnostics    []RunDetailDiagnostic           `json:"diagnostics"`
+	Source         RunDetailSource                 `json:"source"`
+	Request        *RunDetailRequest               `json:"request,omitempty"`
+	DecisionReport *TurnDecisionReport             `json:"decisionReport,omitempty"`
+	Inspection     RunDetailInspection             `json:"inspection,omitempty"`
 }
 
 type RunDetailRequest struct {
@@ -629,19 +632,20 @@ type SpanEventSummary struct {
 }
 
 type ArtifactSummary struct {
-	ArtifactID  string          `json:"artifactId"`
-	RunID       string          `json:"runId"`
-	TraceID     string          `json:"traceId"`
-	SpanID      string          `json:"spanId"`
-	Kind        string          `json:"kind"`
-	CreatedAt   string          `json:"createdAt"`
-	ContentType string          `json:"contentType"`
-	Encoding    string          `json:"encoding"`
-	SizeBytes   int64           `json:"sizeBytes"`
-	Hash        string          `json:"hash"`
-	URI         string          `json:"uri"`
-	Preview     json.RawMessage `json:"preview,omitempty"`
-	Attributes  json.RawMessage `json:"attributes,omitempty"`
+	ArtifactID  string                          `json:"artifactId"`
+	RunID       string                          `json:"runId"`
+	TraceID     string                          `json:"traceId"`
+	SpanID      string                          `json:"spanId"`
+	Kind        string                          `json:"kind"`
+	CreatedAt   string                          `json:"createdAt"`
+	ContentType string                          `json:"contentType"`
+	Encoding    string                          `json:"encoding"`
+	SizeBytes   int64                           `json:"sizeBytes"`
+	Hash        string                          `json:"hash"`
+	URI         string                          `json:"uri"`
+	Preview     json.RawMessage                 `json:"preview,omitempty"`
+	Attributes  json.RawMessage                 `json:"attributes,omitempty"`
+	Redaction   *ObservabilityRedactionEvidence `json:"redaction,omitempty"`
 }
 
 type EdgeSummary struct {

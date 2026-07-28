@@ -59,14 +59,15 @@ func (w *Bundle) indexProjectIncrementalFromStaticIndex(
 		return projectindex.ProjectIndexIncrementalResult{}, fmt.Errorf("marshal previous lint config: %w", err)
 	}
 	plan := planner.BuildIncremental(planner.IncrementalPlanInput{
-		Root:              root,
-		ProjectName:       projectName,
-		ConfigFile:        incrementalConfigFile(configPath, previous),
-		RuntimeConfigured: incrementalRuntimeConfigured(previous),
-		Files:             closureFiles,
-		PrimaryFiles:      affectedFiles,
-		SourceGraph:       sourceGraph,
-		LintConfig:        lintConfig,
+		Root:                     root,
+		ProjectName:              projectName,
+		ConfigFile:               incrementalConfigFile(configPath, previous),
+		RuntimeConfigured:        incrementalRuntimeConfigured(previous),
+		RedactPatternsConfigured: incrementalRedactPatternsConfigured(previous),
+		Files:                    closureFiles,
+		PrimaryFiles:             affectedFiles,
+		SourceGraph:              sourceGraph,
+		LintConfig:               lintConfig,
 	})
 	invalidates, err := json.Marshal(projectindex.IndexPatchInvalidation{Files: affectedFiles})
 	if err != nil {
@@ -235,6 +236,14 @@ func incrementalRuntimeConfigured(previous store.IndexData) *bool {
 		return nil
 	}
 	return previous.Project.RuntimeConfigured
+}
+
+func incrementalRedactPatternsConfigured(previous store.IndexData) *bool {
+	if previous.Project == nil || previous.Project.Observability == nil {
+		return nil
+	}
+	configured := previous.Project.Observability.RedactPatternsConfigured
+	return &configured
 }
 
 func incrementalCanonicalFile(root string, file string) string {
