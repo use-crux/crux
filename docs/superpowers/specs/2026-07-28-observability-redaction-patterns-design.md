@@ -263,8 +263,10 @@ pnpm --filter @use-crux/core test -- \
 pnpm --filter @use-crux/core typecheck
 ```
 
-Then run repository test and typecheck targets. No Project Index output changes,
-so no Project Index cache epoch changes are required.
+Then run repository test and typecheck targets. Project Index now carries
+privacy-safe observability policy state, so the Go snapshot cache epoch is
+bumped from 49 to 50 to invalidate snapshots without
+`redactPatternsConfigured`.
 
 The tracer test observes both a subscriber and transport to prove the shared
 gate runs before fan-out; Devtools and OTel consume that same record path.

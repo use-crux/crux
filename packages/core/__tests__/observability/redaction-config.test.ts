@@ -17,7 +17,7 @@ describe('observability redaction config', () => {
     resetHooks()
   })
 
-  it('rejects default and custom replacements changed by the complete rule set', () => {
+  it('rejects patterns that match default or custom replacement values', () => {
     expect(() =>
       config({
         observability: {

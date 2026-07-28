@@ -10,7 +10,7 @@ import {
   type CruxObservabilityCaptureConfig,
 } from '../../src/observability'
 import { byteLength, hashString } from '../../src/observability/capture-policy-utils'
-import { resetHooks } from '../../src/runtime/runtime'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
 
 const rawPreview = 'order ACME-928471'
 const redactedPreview = 'order [REDACTED]'
@@ -124,6 +124,62 @@ describe('observability redaction capture composition', () => {
     } finally {
       runtime.dispose()
     }
+  })
+
+  it('fails closed without throwing when advanced hooks contain invalid patterns', () => {
+    updateHooks({
+      observabilityCapture: {
+        redactPatterns: [{ pattern: 'invalid' }] as never,
+      },
+    })
+    const artifact = {
+      kind: 'output',
+      contentType: 'text/plain',
+      encoding: 'text',
+      preview: rawPreview,
+      uri: 'ACME-100001',
+      attributes: { identifier: 'ACME-100002' },
+      sizeBytes: 16,
+      hash: 'unsafe',
+    } as const
+
+    for (const result of [
+      applyObservabilityCapturePolicy('output', artifact),
+      applyConfiguredObservabilityCapturePolicy(artifact),
+    ]) {
+      expect(result).toEqual({
+        kind: 'custom.redaction-failure',
+        contentType: 'application/octet-stream',
+        encoding: 'reference',
+      })
+    }
+  })
+
+  it('does not reread hostile artifact fields while failing closed', () => {
+    const artifact = {
+      kind: 'output',
+      contentType: 'text/plain',
+      encoding: 'text',
+    } as Record<string, unknown>
+    Object.defineProperty(artifact, 'preview', {
+      enumerable: true,
+      get() {
+        throw new Error('hostile preview getter was read')
+      },
+    })
+    updateHooks({
+      observabilityCapture: {
+        redactPatterns: [/ACME-\d+/],
+      },
+    })
+
+    expect(
+      applyConfiguredObservabilityCapturePolicy(artifact as never),
+    ).toEqual({
+      kind: 'custom.redaction-failure',
+      contentType: 'application/octet-stream',
+      encoding: 'reference',
+    })
   })
 
   it('keeps off empty and preserves artifact-kind override precedence', async () => {

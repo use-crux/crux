@@ -28,7 +28,18 @@ func applyRunDetailRedaction(
 	graph Graph,
 	spanIndex map[string]RunDetailPlacement,
 ) *ObservabilityRedactionEvidence {
-	projected := collectRedactionProjectionEvidence(graph.Records)
+	return applyRunDetailRedactionProjection(
+		root,
+		collectRedactionProjectionEvidence(graph.Records),
+		spanIndex,
+	)
+}
+
+func applyRunDetailRedactionProjection(
+	root *RunDetailNode,
+	projected redactionProjectionEvidence,
+	spanIndex map[string]RunDetailPlacement,
+) *ObservabilityRedactionEvidence {
 	attachArtifactRedaction(root, projected.artifacts)
 	applyOwnedRedaction(root, projected.bySpan)
 
@@ -48,44 +59,61 @@ func applyRunDetailRedaction(
 }
 
 func collectRedactionProjectionEvidence(records []StoredRecord) redactionProjectionEvidence {
-	projected := redactionProjectionEvidence{
-		bySpan:    make(map[string]*ObservabilityRedactionEvidence),
-		artifacts: make(map[string]*ObservabilityRedactionEvidence),
-		edges:     make(map[string]redactionEdgeEvidence),
-	}
+	projected := newRedactionProjectionEvidence()
 	for _, stored := range records {
 		var record Record
 		if err := json.Unmarshal([]byte(stored.PayloadJSON), &record); err != nil ||
 			record.Privacy == nil {
 			continue
 		}
-		redaction := &record.Privacy.Redaction
 		var coordinates redactionRecordCoordinates
 		if err := json.Unmarshal([]byte(stored.PayloadJSON), &coordinates); err != nil {
 			continue
 		}
-		switch record.Type {
-		case RecordRunStart, RecordRunSuspend, RecordRunResume, RecordRunEnd:
-			projected.run = mergeRedactionEvidence(projected.run, redaction)
-		case RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent:
-			projected.bySpan[coordinates.SpanID] = mergeRedactionEvidence(
-				projected.bySpan[coordinates.SpanID],
-				redaction,
-			)
-		case RecordArtifact:
-			projected.artifacts[coordinates.ArtifactID] = mergeRedactionEvidence(
-				projected.artifacts[coordinates.ArtifactID],
-				redaction,
-			)
-		case RecordEdge:
-			previous := projected.edges[coordinates.EdgeID]
-			projected.edges[coordinates.EdgeID] = redactionEdgeEvidence{
-				from:      coordinates.From,
-				redaction: mergeRedactionEvidence(previous.redaction, redaction),
-			}
-		}
+		addRedactionProjectionEvidence(
+			&projected,
+			record.Type,
+			coordinates,
+			&record.Privacy.Redaction,
+		)
 	}
 	return projected
+}
+
+func newRedactionProjectionEvidence() redactionProjectionEvidence {
+	return redactionProjectionEvidence{
+		bySpan:    make(map[string]*ObservabilityRedactionEvidence),
+		artifacts: make(map[string]*ObservabilityRedactionEvidence),
+		edges:     make(map[string]redactionEdgeEvidence),
+	}
+}
+
+func addRedactionProjectionEvidence(
+	projected *redactionProjectionEvidence,
+	recordType RecordType,
+	coordinates redactionRecordCoordinates,
+	redaction *ObservabilityRedactionEvidence,
+) {
+	switch recordType {
+	case RecordRunStart, RecordRunSuspend, RecordRunResume, RecordRunEnd:
+		projected.run = mergeRedactionEvidence(projected.run, redaction)
+	case RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent:
+		projected.bySpan[coordinates.SpanID] = mergeRedactionEvidence(
+			projected.bySpan[coordinates.SpanID],
+			redaction,
+		)
+	case RecordArtifact:
+		projected.artifacts[coordinates.ArtifactID] = mergeRedactionEvidence(
+			projected.artifacts[coordinates.ArtifactID],
+			redaction,
+		)
+	case RecordEdge:
+		previous := projected.edges[coordinates.EdgeID]
+		projected.edges[coordinates.EdgeID] = redactionEdgeEvidence{
+			from:      coordinates.From,
+			redaction: mergeRedactionEvidence(previous.redaction, redaction),
+		}
+	}
 }
 
 func attachArtifactRedaction(

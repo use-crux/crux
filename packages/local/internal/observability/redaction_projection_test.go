@@ -129,13 +129,8 @@ func redactionStoredRecord(id string, recordType RecordType, fields, surfaces st
 
 func findRedactionNode(t *testing.T, node *RunDetailNode, spanID string) *RunDetailNode {
 	t.Helper()
-	if node.SpanID == spanID {
-		return node
-	}
-	for i := range node.Children {
-		if found := findRedactionNodeMaybe(&node.Children[i], spanID); found != nil {
-			return found
-		}
+	if found := findRedactionNodeMaybe(node, spanID); found != nil {
+		return found
 	}
 	t.Fatalf("node for span %q not found", spanID)
 	return nil
@@ -155,15 +150,8 @@ func findRedactionNodeMaybe(node *RunDetailNode, spanID string) *RunDetailNode {
 
 func findRedactionDetail(t *testing.T, node *RunDetailNode, spanID string) *RunDetailDetail {
 	t.Helper()
-	for i := range node.Details {
-		if node.Details[i].SpanID == spanID {
-			return &node.Details[i]
-		}
-	}
-	for i := range node.Children {
-		if found := findRedactionDetailMaybe(&node.Children[i], spanID); found != nil {
-			return found
-		}
+	if found := findRedactionDetailMaybe(node, spanID); found != nil {
+		return found
 	}
 	t.Fatalf("detail for span %q not found", spanID)
 	return nil

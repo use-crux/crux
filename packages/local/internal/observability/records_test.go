@@ -192,6 +192,33 @@ func TestRecordUnmarshalNormalizesKnownRedactionSurfaces(t *testing.T) {
 	}
 }
 
+func TestRecordUnmarshalDropsPrivacyWithOnlyUnknownRedactionSurfaces(t *testing.T) {
+	raw := []byte(`{
+		"schemaVersion": 4,
+		"recordId": "rec_privacy_unknown_only",
+		"type": "run:start",
+		"operationId": "run_privacy_unknown_only",
+		"runId": "run_privacy_unknown_only",
+		"privacy": {
+			"redaction": {
+				"applied": true,
+				"surfaces": ["future.surface"]
+			}
+		}
+	}`)
+
+	var record Record
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatalf("unmarshal record with future-only privacy evidence: %v", err)
+	}
+	if record.Privacy != nil {
+		t.Fatalf("privacy = %#v, want nil after all surfaces were rejected", record.Privacy)
+	}
+	if !strings.Contains(string(record.Payload), `"future.surface"`) {
+		t.Fatalf("raw payload lost forward-compatible surface: %s", record.Payload)
+	}
+}
+
 func TestRoutingStableBetaPrimitiveTaxonomy(t *testing.T) {
 	for _, primitive := range []string{
 		"routing.router",

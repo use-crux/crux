@@ -7,7 +7,8 @@ import (
 
 // ProjectionOptions carries explicit inputs for deterministic read-model derivation.
 type ProjectionOptions struct {
-	Now time.Time
+	Now                 time.Time
+	redactionProjection *redactionProjectionEvidence
 }
 
 // DefaultProjectionOptions returns production projection inputs.
@@ -19,6 +20,13 @@ func (opts ProjectionOptions) normalized() ProjectionOptions {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
+	return opts
+}
+
+func (opts ProjectionOptions) withRedactionProjection(
+	projection redactionProjectionEvidence,
+) ProjectionOptions {
+	opts.redactionProjection = &projection
 	return opts
 }
 
@@ -62,7 +70,16 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	spanIndex := make(map[string]RunDetailPlacement)
 	root := buildRunDetailRoot(presentation, presentationGraph, eventsBySpan, artifactsBySpan, edgesBySpan, canonicalParents, spanIndex, opts.Now)
 	applySemanticDetailOwnership(&root, graph, spanIndex)
-	redaction := applyRunDetailRedaction(&root, graph, spanIndex)
+	var redaction *ObservabilityRedactionEvidence
+	if opts.redactionProjection == nil {
+		redaction = applyRunDetailRedaction(&root, graph, spanIndex)
+	} else {
+		redaction = applyRunDetailRedactionProjection(
+			&root,
+			*opts.redactionProjection,
+			spanIndex,
+		)
+	}
 	applyRunDetailRollups(&root)
 	applyRunDetailStatusRollups(&root)
 	toolRequestsByCallID := buildToolRequestIndex(graph.Artifacts)

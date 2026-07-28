@@ -51,6 +51,7 @@ import {
   shortModelId,
   tokensPerSecond,
 } from "../lib/span-detail-inspection";
+import { localRedactionEvidence } from "../lib/redaction-evidence";
 
 type Relation = ObservabilityRunDetailNode["relations"][number];
 type Diagnostic = ObservabilityRunDetailNode["diagnostics"][number];
@@ -234,6 +235,7 @@ export function SpanInspector({
   const relations = node.relations ?? [];
   const diagnostics = node.diagnostics ?? [];
   const attrs = attributeRows(node);
+  const redaction = localRedactionEvidence(node);
 
   const scoreReport = asScoreReport(
     findArtifact(node, "score.report")?.preview,
@@ -270,7 +272,7 @@ export function SpanInspector({
             {node.primitive || node.kind}
           </span>
           <div className="flex-1" />
-          <RedactionBadge evidence={node.redaction} />
+          <RedactionBadge evidence={redaction} />
           <StatusPill status={node.status} />
         </div>
         <div
@@ -287,9 +289,9 @@ export function SpanInspector({
         </div>
       </div>
 
-      {node.redaction && (
+      {redaction && (
         <div className="border-b border-(--devtools-border) px-4 py-3">
-          <AffectedTelemetry evidence={node.redaction} />
+          <AffectedTelemetry evidence={redaction} />
           <RedactedArtifactRows
             artifacts={[
               ...(node.artifacts ?? []),

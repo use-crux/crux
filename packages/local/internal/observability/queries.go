@@ -1230,11 +1230,22 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	memberDetails := make([]RunDetail, 0, len(memberRefs))
 	memberProjections := make([]OperationRunDetail, 0, len(memberRefs))
 	for _, member := range memberRefs {
-		graph, err := s.graph(ctx, member.runID, true)
+		graph, err := s.graph(ctx, member.runID, false)
 		if err != nil {
 			return RunDetail{}, err
 		}
-		memberDetail := ProjectRunDetail(graph, DefaultProjectionOptions())
+		redaction, err := s.loadRedactionProjection(ctx, graph.Run.RunID)
+		if err != nil {
+			return RunDetail{}, fmt.Errorf(
+				"load redaction projection for run %q: %w",
+				member.runID,
+				err,
+			)
+		}
+		memberDetail := ProjectRunDetail(
+			graph,
+			DefaultProjectionOptions().withRedactionProjection(redaction),
+		)
 		definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
 		if err != nil {
 			return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", member.runID, err)

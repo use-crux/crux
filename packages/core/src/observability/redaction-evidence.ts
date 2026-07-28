@@ -11,6 +11,12 @@ type ArtifactMarkerSurface = Extract<
   'artifact.preview' | 'artifact.uri' | 'attributes'
 >
 
+const ARTIFACT_MARKER_SURFACES = [
+  'artifact.preview',
+  'artifact.uri',
+  'attributes',
+] as const satisfies readonly ArtifactMarkerSurface[]
+
 interface MarkerEvidence {
   readonly surfaces: readonly ArtifactMarkerSurface[]
   readonly values: Readonly<Partial<Record<ArtifactMarkerSurface, unknown>>>
@@ -151,7 +157,7 @@ export function attachObservabilityRedactionEvidence(
 function isArtifactMarkerSurface(
   surface: CruxObservabilityRedactionSurface,
 ): surface is ArtifactMarkerSurface {
-  return surface !== 'error.message'
+  return (ARTIFACT_MARKER_SURFACES as readonly string[]).includes(surface)
 }
 
 function artifactValueForSurface(

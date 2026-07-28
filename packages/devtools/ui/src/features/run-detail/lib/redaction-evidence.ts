@@ -33,12 +33,29 @@ export function hasRedactionEvidence(
   return evidence?.applied === true && formatRedactionSurfaces(evidence).length > 0;
 }
 
+/** Merges evidence owned by a node and its directly folded details. */
+export function localRedactionEvidence(
+  node: ObservabilityRunDetailNode,
+): CruxObservabilityRedactionEvidence | undefined {
+  const present = new Set<CruxObservabilityRedactionSurface>();
+  for (const evidence of [
+    node.redaction,
+    ...(node.details ?? []).map((detail) => detail.redaction),
+  ]) {
+    if (!evidence?.applied) continue;
+    for (const surface of evidence.surfaces) present.add(surface);
+  }
+  const surfaces = CRUX_OBSERVABILITY_REDACTION_SURFACES.filter((surface) =>
+    present.has(surface),
+  );
+  return surfaces.length > 0
+    ? { applied: true, surfaces }
+    : undefined;
+}
+
 /** Returns whether this tree row owns explicit evidence, including folded details. */
 export function hasLocalRedaction(node: ObservabilityRunDetailNode): boolean {
-  return (
-    hasRedactionEvidence(node.redaction) ||
-    (node.details ?? []).some((detail) => hasRedactionEvidence(detail.redaction))
-  );
+  return hasRedactionEvidence(localRedactionEvidence(node));
 }
 
 export interface RedactionTreeState {

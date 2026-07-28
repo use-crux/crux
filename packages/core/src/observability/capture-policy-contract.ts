@@ -71,9 +71,12 @@ export interface CruxObservabilityCapturePolicy {
   /**
    * Stable-beta capture ladder for safety-sensitive artifacts.
    *
-   * `full` keeps payload previews, `safe` keeps only already-safe previews,
-   * `evidence` keeps size/hash evidence without content previews, and `off`
-   * removes payload previews and evidence metadata.
+   * `full` keeps arbitrary payload previews. `safe` also retains the preview
+   * and is a producer-side assertion that its artifact contract is already
+   * safe by default; the capture layer does not classify or sanitize arbitrary
+   * text. `evidence` keeps size/hash evidence without content previews, and
+   * `off` removes payload previews and evidence metadata. Use `evidence` or
+   * `off` for user-authored payloads that are not safe to retain.
    *
    * @default 'safe' for Safety artifacts; existing recordInputs/recordOutputs
    * defaults continue to apply to input/output families.

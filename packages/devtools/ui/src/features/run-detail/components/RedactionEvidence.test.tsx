@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ObservabilityRunDetailNode } from "@/types";
 import {
   AffectedTelemetry,
   RedactionBadge,
@@ -7,10 +8,32 @@ import {
   RedactedArtifactRows,
 } from "./RedactionEvidence";
 
+type RunDetailArtifact = ObservabilityRunDetailNode["artifacts"][number];
+
 const evidence = {
   applied: true,
   surfaces: ["artifact.preview", "error.message"],
 } as const;
+
+const baseArtifact = {
+  artifactId: "artifact" as RunDetailArtifact["artifactId"],
+  runId: "run" as RunDetailArtifact["runId"],
+  traceId: "",
+  spanId: "",
+  kind: "output",
+  createdAt: "2026-07-28T00:00:00.000Z",
+  contentType: "text/plain",
+  encoding: "text",
+  sizeBytes: 0,
+  hash: "",
+  uri: "",
+} satisfies RunDetailArtifact;
+
+function artifact(
+  overrides: Partial<RunDetailArtifact>,
+): RunDetailArtifact {
+  return { ...baseArtifact, ...overrides };
+}
 
 describe("RedactionEvidence", () => {
   it("renders the binding badge and privacy-safe tooltip", () => {
@@ -40,24 +63,25 @@ describe("RedactionEvidence", () => {
     expect(html).toContain(
       "Configured patterns changed captured telemetry here.",
     );
-    expect(html).not.toMatch(/\\d/);
+    const text = html.replaceAll(/<[^>]*>/g, "");
+    expect(text).not.toMatch(/\d/);
   });
 
   it("renders evidence beside only affected artifacts", () => {
     const html = renderToStaticMarkup(
       <RedactedArtifactRows
         artifacts={[
-          {
-            artifactId: "affected",
+          artifact({
+            artifactId: "affected" as RunDetailArtifact["artifactId"],
             kind: "output",
             redaction: evidence,
-          },
-          {
-            artifactId: "old",
+          }),
+          artifact({
+            artifactId: "old" as RunDetailArtifact["artifactId"],
             kind: "input",
             preview: "[REDACTED]",
-          },
-        ] as never}
+          }),
+        ]}
       />,
     );
 

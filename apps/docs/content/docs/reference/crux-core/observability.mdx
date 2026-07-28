@@ -714,7 +714,11 @@ expanded. Rules run in declaration order.
 Per-artifact overrides use canonical artifact kinds. The Safety family includes
 `guardrail.report`, `constraint.report`, `score.report`, `approval.request`,
 `validation.feedback`, `memory.write`, `tool.args`, and
-`tool.result`.
+`tool.result`. `full` retains arbitrary previews. `safe` also retains the
+preview and is a producer-side assertion that its artifact contract is already
+safe by default; the capture layer does not classify or sanitize arbitrary
+text. Use `evidence` or `off` for user-authored payloads that are not safe to
+retain.
 
 When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, `safety`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 

@@ -66,34 +66,42 @@ export function applyObservabilityCapturePolicy(
   direction: CruxObservabilityArtifactDirection,
   artifact: ArtifactOptions,
 ): ArtifactOptions {
-  const policy = getHooks().observabilityCapture
-  const modes = resolveCaptureModes(policy)
-  const patterns = normalizeObservabilityRedactionPatterns(
-    policy?.redactPatterns,
-  )
-  const redacted = redactObservabilityArtifactDetailed(artifact, patterns)
-  const captured = applyCaptureLevelToArtifact(
-    captureLevelForDirection(modes, direction),
-    redacted.value,
-  )
-  return markArtifactRedactionEvidence(captured, redacted.surfaces)
+  try {
+    const policy = getHooks().observabilityCapture
+    const modes = resolveCaptureModes(policy)
+    const patterns = normalizeObservabilityRedactionPatterns(
+      policy?.redactPatterns,
+    )
+    const redacted = redactObservabilityArtifactDetailed(artifact, patterns)
+    const captured = applyCaptureLevelToArtifact(
+      captureLevelForDirection(modes, direction),
+      redacted.value,
+    )
+    return markArtifactRedactionEvidence(captured, redacted.surfaces)
+  } catch {
+    return failClosedArtifact(artifact)
+  }
 }
 
 /** Apply capture policy for known input/output artifact families. */
 export function applyConfiguredObservabilityCapturePolicy(
   artifact: ArtifactOptions,
 ): ArtifactOptions {
-  const policy = getHooks().observabilityCapture
-  const modes = resolveCaptureModes(policy)
-  const level = captureLevelForArtifact(modes, artifact.kind)
-  const patterns = normalizeObservabilityRedactionPatterns(
-    policy?.redactPatterns,
-  )
-  const redacted = redactObservabilityArtifactDetailed(artifact, patterns)
-  const captured = level
-    ? applyCaptureLevelToArtifact(level, redacted.value)
-    : redacted.value
-  return markArtifactRedactionEvidence(captured, redacted.surfaces)
+  try {
+    const policy = getHooks().observabilityCapture
+    const modes = resolveCaptureModes(policy)
+    const level = captureLevelForArtifact(modes, artifact.kind)
+    const patterns = normalizeObservabilityRedactionPatterns(
+      policy?.redactPatterns,
+    )
+    const redacted = redactObservabilityArtifactDetailed(artifact, patterns)
+    const captured = level
+      ? applyCaptureLevelToArtifact(level, redacted.value)
+      : redacted.value
+    return markArtifactRedactionEvidence(captured, redacted.surfaces)
+  } catch {
+    return failClosedArtifact(artifact)
+  }
 }
 
 /**
@@ -137,5 +145,14 @@ export function applyObservabilityCapturePolicyToRecord(
       : { ok: false }
   } catch (error) {
     return { ok: false, error }
+  }
+}
+
+/** Return a content-free artifact without rereading a potentially hostile input. */
+function failClosedArtifact(_artifact: ArtifactOptions): ArtifactOptions {
+  return {
+    kind: 'custom.redaction-failure',
+    contentType: 'application/octet-stream',
+    encoding: 'reference',
   }
 }

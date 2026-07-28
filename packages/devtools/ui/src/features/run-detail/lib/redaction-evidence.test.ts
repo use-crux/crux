@@ -3,6 +3,7 @@ import type { ObservabilityRunDetailNode } from "@/types";
 import {
   formatRedactionSurfaces,
   hasLocalRedaction,
+  localRedactionEvidence,
   redactionTreeState,
 } from "./redaction-evidence";
 
@@ -11,6 +12,9 @@ function node(
   options: {
     redaction?: ObservabilityRunDetailNode["redaction"];
     children?: ObservabilityRunDetailNode[];
+    details?: Array<
+      Pick<ObservabilityRunDetailNode["details"][number], "redaction">
+    >;
     preview?: unknown;
   } = {},
 ): ObservabilityRunDetailNode {
@@ -22,7 +26,7 @@ function node(
     artifacts: options.preview === undefined
       ? []
       : [{ artifactId: `${id}:artifact`, preview: options.preview }],
-    details: [],
+    details: options.details ?? [],
     children: options.children ?? [],
   } as unknown as ObservabilityRunDetailNode;
 }
@@ -73,5 +77,25 @@ describe("run-detail redaction evidence", () => {
       local: false,
       descendant: true,
     });
+  });
+
+  it("merges direct detail evidence into the selected node evidence", () => {
+    const selected = node("selected", {
+      redaction: { applied: true, surfaces: ["attributes"] },
+      details: [
+        {
+          redaction: {
+            applied: true,
+            surfaces: ["artifact.preview", "error.message"],
+          },
+        },
+      ],
+    });
+
+    expect(localRedactionEvidence(selected)).toEqual({
+      applied: true,
+      surfaces: ["artifact.preview", "attributes", "error.message"],
+    });
+    expect(hasLocalRedaction(selected)).toBe(true);
   });
 });

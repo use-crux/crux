@@ -137,7 +137,8 @@ describe('observability redaction hooks', () => {
   })
 
   it('snapshots mutable advanced-hook patterns for each emission', async () => {
-    const patterns = [/FIRST-\d+/]
+    const first = /FIRST-\d+/
+    const patterns = [first]
     updateHooks({
       observabilityCapture: {
         redactPatterns: patterns,
@@ -150,8 +151,7 @@ describe('observability redaction hooks', () => {
 
     expect(outputPreview(firstRecords)).toBe('[REDACTED]')
     expect(outputPreview(secondRecords)).toBe('[REDACTED]')
-    expect(outputPreview(firstRecords)).toBe('[REDACTED]')
-    expect(patterns[0].lastIndex).toBe(0)
+    expect(first.lastIndex).toBe(0)
   })
 
   it('keeps hook null and throw fail-closed', async () => {

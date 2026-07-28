@@ -18,6 +18,10 @@ import {
 import { sanitizeMediaPreview } from './media-preview'
 
 type ArtifactOptions = ObserveArtifactOptions
+type ArtifactRecord = Extract<
+  CruxGraphRecord,
+  { readonly type: 'artifact' }
+>
 
 export interface ResolvedCaptureModes {
   readonly input: CruxObservabilityCaptureMode
@@ -68,42 +72,26 @@ export function applyCaptureLevelToRecord(
   if (record.type !== 'artifact') return record
   const level = captureLevelForArtifact(modes, record.kind)
   if (!level) return record
-
-  if (level === 'off') {
-    const {
-      preview: _preview,
-      sizeBytes: _sizeBytes,
-      hash: _hash,
-      uri: _uri,
-      ...offRest
-    } = record
-    return {
-      ...offRest,
-      encoding: 'reference',
-    }
-  }
-
-  if (record.preview === undefined) return record
-
-  if (level === 'full' || level === 'safe') {
-    return {
-      ...record,
-      preview: sanitizePreviewForCapture(level, record.preview),
-    }
-  }
-
-  const { preview: _preview, ...rest } = record
-  const serialized = serializePreview(record.preview)
-  return {
-    ...rest,
-    encoding: 'reference',
-    sizeBytes: record.sizeBytes ?? byteLength(serialized),
-    hash: record.hash ?? hashString(serialized),
-  }
+  return applyCaptureLevel(level, record)
 }
 
 /** Apply one capture level to public artifact options. */
 export function applyCaptureLevelToArtifact(
+  level: CruxObservabilityCaptureLevel,
+  artifact: ArtifactOptions,
+): ArtifactOptions {
+  return applyCaptureLevel(level, artifact)
+}
+
+function applyCaptureLevel(
+  level: CruxObservabilityCaptureLevel,
+  artifact: ArtifactRecord,
+): ArtifactRecord
+function applyCaptureLevel(
+  level: CruxObservabilityCaptureLevel,
+  artifact: ArtifactOptions,
+): ArtifactOptions
+function applyCaptureLevel(
   level: CruxObservabilityCaptureLevel,
   artifact: ArtifactOptions,
 ): ArtifactOptions {
@@ -126,7 +114,7 @@ export function applyCaptureLevelToArtifact(
   if (level === 'full' || level === 'safe') {
     return {
       ...artifact,
-      preview: sanitizePreviewForCapture(level, artifact.preview),
+      preview: artifact.preview,
     }
   }
 
@@ -253,11 +241,4 @@ function modeForDirection(
 
 function shouldStripPayloadAttributes(modes: ResolvedCaptureModes): boolean {
   return modes.input !== 'inline' || modes.output !== 'inline'
-}
-
-function sanitizePreviewForCapture(
-  _level: Extract<CruxObservabilityCaptureLevel, 'full' | 'safe'>,
-  value: unknown,
-): unknown {
-  return value
 }
