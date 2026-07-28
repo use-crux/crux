@@ -4,6 +4,7 @@ import {
   CRUX_CANONICAL_EDGE_TYPES,
   CRUX_GENERATION_METRIC_KEYS,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  CRUX_OBSERVABILITY_REDACTION_SURFACES,
   CRUX_PRIMITIVE_FAMILIES,
   CRUX_PRIMITIVE_FAMILY_BY_NAME,
   CRUX_PRIMITIVE_NAMES,
@@ -211,6 +212,20 @@ export const CruxErrorSummarySchema = z.object({
   statusCode: z.number().int().optional(),
 });
 
+export const CruxObservabilityRedactionSurfaceSchema = z.enum(
+  CRUX_OBSERVABILITY_REDACTION_SURFACES,
+)
+
+export const CruxObservabilityRedactionEvidenceSchema = z
+  .object({
+    applied: z.literal(true),
+    surfaces: z
+      .array(CruxObservabilityRedactionSurfaceSchema)
+      .min(1)
+      .readonly(),
+  })
+  .readonly()
+
 const CruxRecordBaseSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
   recordId: CruxRecordIdSchema,
@@ -222,6 +237,12 @@ const CruxRecordBaseSchema = z.object({
   userId: z.string().optional(),
   traceId: CruxTraceIdSchema.optional(),
   deployment: CruxDeploymentIdentitySchema.readonly().optional(),
+  privacy: z
+    .object({
+      redaction: CruxObservabilityRedactionEvidenceSchema,
+    })
+    .readonly()
+    .optional(),
 });
 
 export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({

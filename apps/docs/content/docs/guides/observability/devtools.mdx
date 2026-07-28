@@ -37,6 +37,13 @@ retrieval, tools, safety decisions, cost, errors, and artifacts. Run detail
 links source definitions when the exact deployment manifest is available and
 labels historical or unresolved joins honestly.
 
+When declarative observability patterns actually change captured telemetry,
+Runs shows a **Redacted** badge at the run and affected node, detail, and
+artifact levels. The inspector names only the affected broad surfaces:
+**Artifact preview**, **Artifact URI**, **Attributes**, and **Error message**.
+A badge proves that a configured pattern changed the named telemetry surface;
+it does not prove that the record contains no other sensitive data.
+
 ## Evals
 
 The Evals page lists the single default Eval export discovered from every
@@ -104,6 +111,31 @@ Force a source rebuild only when needed:
 ```bash
 crux index reindex
 ```
+
+## Observability privacy
+
+Catalog and Runs answer different privacy questions:
+
+- The project-level **Observability privacy** card in Catalog reports whether
+  the effective Local config has declarative pattern redaction configured.
+  It is project policy, not a Safety guardrail, definition, or Catalog
+  relation.
+- Runs reports whether declarative patterns actually changed captured
+  telemetry for one operation family.
+
+Catalog reflects the effective config loaded by Local on this machine. A
+differently configured deployed environment may not have the same policy. If
+Local could not load a config-aware result, Catalog shows **Status
+unavailable** instead of treating the policy as disabled.
+
+Crux intentionally withholds pattern rules, matches, values, replacements,
+nested paths, and counts from both views. Runtime evidence reveals only that
+some rule matched a broad surface, never which rule or value. The policy
+changes observability telemetry only; reversible model-boundary
+pseudonymization remains separate work.
+
+See [Privacy and redaction](/docs/guides/observability/privacy) for capture
+scope, ordering, and fail-closed behavior.
 
 ## Local files and privacy
 

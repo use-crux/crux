@@ -5,6 +5,7 @@ import {
   type IndexDeltaMessage,
 } from "../indexDelta";
 import type { IndexLintFinding } from "@/types";
+import type { ProjectIdentity } from "@/types";
 
 describe("index delta application", () => {
   it("preserves snapshot session metadata during normalization", () => {
@@ -18,6 +19,76 @@ describe("index delta application", () => {
       projectRoot: "/repo",
       serverVersion: "0.6.0",
       generation: 12,
+    });
+  });
+
+  it.each([
+    ["configured", { redactPatternsConfigured: true }, true],
+    ["known off", { redactPatternsConfigured: false }, false],
+  ] as const)(
+    "normalizes %s project observability policy",
+    (_name, observability, configured) => {
+      const index = normalizeProjectIndexData({
+        project: { root: "/repo", observability },
+      });
+
+      expect(index.project?.observability).toEqual({
+        redactPatternsConfigured: configured,
+      });
+    },
+  );
+
+  it("preserves existing project identity fields while normalizing observability", () => {
+    const index = normalizeProjectIndexData({
+      project: {
+        root: "/repo",
+        name: "example",
+        configFile: "/repo/crux.config.ts",
+        runtimeConfigured: true,
+        observability: { redactPatternsConfigured: true },
+      },
+    });
+
+    expect(index.project).toEqual({
+      root: "/repo",
+      name: "example",
+      configFile: "/repo/crux.config.ts",
+      runtimeConfigured: true,
+      observability: { redactPatternsConfigured: true },
+    });
+  });
+
+  it.each([undefined, null, "unavailable", 0])(
+    "keeps malformed or absent observability %p unknown",
+    (observability) => {
+      const index = normalizeProjectIndexData({
+        project: {
+          root: "/repo",
+          observability,
+        } as unknown as ProjectIdentity,
+      });
+
+      expect(index.project).not.toHaveProperty("observability");
+    },
+  );
+
+  it("retains project observability during source-only deltas", () => {
+    const current = normalizeProjectIndexData({
+      project: {
+        root: "/repo",
+        observability: { redactPatternsConfigured: true },
+      },
+    });
+
+    const next = applyIndexDelta(current, {
+      type: "index:delta",
+      generation: 2,
+      file: "/repo/src/writer.ts",
+      definitions: {},
+    });
+
+    expect(next?.project?.observability).toEqual({
+      redactPatternsConfigured: true,
     });
   });
 

@@ -7,6 +7,49 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
+func TestApplyPatchRetainsASTObservabilityPolicyAcrossLaterPhases(t *testing.T) {
+	configured := &store.ProjectObservability{
+		RedactPatternsConfigured: true,
+	}
+	state := ApplyPatch(EmptyPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project: store.ProjectIdentity{
+			Root:          "/repo",
+			Observability: configured,
+		},
+		Status: "ok",
+	})
+
+	state = ApplyPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseSemantic,
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		Status:        "ok",
+	})
+	if state.Index.Project == nil ||
+		state.Index.Project.Observability != configured {
+		t.Fatalf(
+			"semantic project observability = %+v, want AST policy",
+			state.Index.Project,
+		)
+	}
+
+	state = ApplyPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		Status:        "degraded",
+	})
+	if state.Index.Project == nil ||
+		state.Index.Project.Observability != nil {
+		t.Fatalf(
+			"config-failed AST observability = %+v, want unknown",
+			state.Index.Project,
+		)
+	}
+}
+
 func TestApplyIndexPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 	state := ApplyPatch(EmptyPatchState(), IndexPatch{
 		SchemaVersion: 1,

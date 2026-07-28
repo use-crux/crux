@@ -62,6 +62,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	spanIndex := make(map[string]RunDetailPlacement)
 	root := buildRunDetailRoot(presentation, presentationGraph, eventsBySpan, artifactsBySpan, edgesBySpan, canonicalParents, spanIndex, opts.Now)
 	applySemanticDetailOwnership(&root, graph, spanIndex)
+	redaction := applyRunDetailRedaction(&root, graph, spanIndex)
 	applyRunDetailRollups(&root)
 	applyRunDetailStatusRollups(&root)
 	toolRequestsByCallID := buildToolRequestIndex(graph.Artifacts)
@@ -81,6 +82,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	return RunDetail{
 		SchemaVersion: SchemaVersion,
 		Run:           presentationGraph.Run,
+		Redaction:     redaction,
 		Root:          root,
 		Rows:          rows,
 		SpanIndex:     spanIndex,

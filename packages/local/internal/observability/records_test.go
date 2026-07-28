@@ -2,6 +2,8 @@ package observability
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -110,6 +112,83 @@ func TestValidateRecordRejectsInvalidSemantics(t *testing.T) {
 	}`)
 	if err := ValidateRecord(edge); err == nil {
 		t.Fatal("expected un-namespaced custom edge type to fail")
+	}
+}
+
+func TestRecordUnmarshalPreservesUnknownPrivacyFieldInRawPayload(t *testing.T) {
+	raw := []byte(`{
+		"schemaVersion": 4,
+		"recordId": "rec_privacy_forward_compat",
+		"type": "run:start",
+		"operationId": "run_privacy_forward_compat",
+		"runId": "run_privacy_forward_compat",
+		"segmentId": "seg_privacy_forward_compat",
+		"segmentSeq": 1,
+		"name": "privacy forward compatibility",
+		"rootPrimitive": "custom.operation",
+		"startedAt": "2026-07-28T00:00:00.000Z",
+		"status": "running",
+		"privacy": {
+			"redaction": {
+				"applied": true,
+				"surfaces": ["attributes"]
+			}
+		}
+	}`)
+
+	var record Record
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatalf("unmarshal record with optional privacy evidence: %v", err)
+	}
+	if !json.Valid(record.Payload) {
+		t.Fatalf("raw payload is not valid JSON: %s", record.Payload)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(record.Payload, &payload); err != nil {
+		t.Fatalf("decode preserved payload: %v", err)
+	}
+	if _, ok := payload["privacy"]; !ok {
+		t.Fatalf("privacy field was not preserved in raw payload: %s", record.Payload)
+	}
+}
+
+func TestRecordUnmarshalNormalizesKnownRedactionSurfaces(t *testing.T) {
+	raw := []byte(`{
+		"schemaVersion": 4,
+		"recordId": "rec_privacy_normalized",
+		"type": "run:start",
+		"operationId": "run_privacy_normalized",
+		"runId": "run_privacy_normalized",
+		"privacy": {
+			"redaction": {
+				"applied": true,
+				"surfaces": [
+					"error.message",
+					"future.surface",
+					"artifact.preview",
+					"error.message"
+				]
+			}
+		}
+	}`)
+
+	var record Record
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatalf("unmarshal record with version-skewed privacy evidence: %v", err)
+	}
+	if record.Privacy == nil {
+		t.Fatal("normalized privacy evidence is absent")
+	}
+	got := record.Privacy.Redaction.Surfaces
+	want := []ObservabilityRedactionSurface{
+		RedactionSurfaceArtifactPreview,
+		RedactionSurfaceErrorMessage,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized surfaces = %#v, want %#v", got, want)
+	}
+	if !strings.Contains(string(record.Payload), `"future.surface"`) {
+		t.Fatalf("raw payload lost forward-compatible surface: %s", record.Payload)
 	}
 }
 

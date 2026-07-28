@@ -31,6 +31,7 @@ import {
   nodesOnFailurePath,
 } from "@/features/run-detail/lib/triage";
 import { TriageMinimap } from "./TriageMinimap";
+import { RedactionDot } from "./RedactionEvidence";
 
 // Past this many spans the structure scroll gets a status minimap for
 // orientation (design `dx-workbench` — "appears past ~80 visible rows").
@@ -345,6 +346,15 @@ function SpanRow({
         >
           {node.label}
         </span>
+
+        {(node.redactionLocal ||
+          (isCollapsed && node.redactionDescendant)) && (
+          <span className="ml-1.5 flex shrink-0 items-center">
+            <RedactionDot
+              descendant={!node.redactionLocal && node.redactionDescendant}
+            />
+          </span>
+        )}
 
         {/* Swarm handoff path badge */}
         {node.kind === "composition" &&
@@ -766,6 +776,15 @@ function WaterfallRow({
         <span className="text-(--devtools-fg) truncate min-w-0 flex-1 text-[10px]">
           {node.label}
         </span>
+
+        {(node.redactionLocal ||
+          (isCollapsed && node.redactionDescendant)) && (
+          <span className="ml-1 flex shrink-0 items-center">
+            <RedactionDot
+              descendant={!node.redactionLocal && node.redactionDescendant}
+            />
+          </span>
+        )}
 
         {/* Turn explanation warning — selecting the span opens Explain */}
         {warning && (

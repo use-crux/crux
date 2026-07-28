@@ -3,6 +3,7 @@ import type {
   IndexLintFinding,
   IndexSourceFile,
   ProjectDefinition,
+  ProjectIdentity,
   ProjectIndexData,
 } from "@/types";
 
@@ -36,7 +37,7 @@ export function normalizeProjectIndexData(
     prompts: index.prompts ?? [],
     contexts: index.contexts ?? [],
     tools: index.tools ?? [],
-    project: index.project,
+    project: normalizeProjectIdentity(index.project),
     indexedAt: index.indexedAt,
     indexing: index.indexing,
     definitions: index.definitions ?? [],
@@ -45,6 +46,37 @@ export function normalizeProjectIndexData(
     lintFindings: index.lintFindings ?? [],
     sources: index.sources ?? [],
   };
+}
+
+function normalizeProjectIdentity(
+  project: ProjectIdentity | undefined,
+): ProjectIdentity | undefined {
+  if (!isRecord(project) || typeof project.root !== "string") return undefined;
+  const observability = isRecord(project.observability)
+    ? project.observability
+    : undefined;
+  return {
+    root: project.root,
+    ...(typeof project.name === "string" ? { name: project.name } : {}),
+    ...(typeof project.configFile === "string"
+      ? { configFile: project.configFile }
+      : {}),
+    ...(typeof project.runtimeConfigured === "boolean"
+      ? { runtimeConfigured: project.runtimeConfigured }
+      : {}),
+    ...(typeof observability?.redactPatternsConfigured === "boolean"
+      ? {
+          observability: {
+            redactPatternsConfigured:
+              observability.redactPatternsConfigured,
+          },
+        }
+      : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 /** Applies one per-file Project Index delta to an existing cached snapshot. */

@@ -11,14 +11,15 @@ import (
 // Static Index run. The caller owns graph safety checks; this builder only
 // constructs the compiler plan without walking the whole project.
 type IncrementalPlanInput struct {
-	Root              string
-	ProjectName       string
-	ConfigFile        string
-	RuntimeConfigured *bool
-	Files             []string
-	PrimaryFiles      []string
-	SourceGraph       json.RawMessage
-	LintConfig        json.RawMessage
+	Root                     string
+	ProjectName              string
+	ConfigFile               string
+	RuntimeConfigured        *bool
+	RedactPatternsConfigured *bool
+	Files                    []string
+	PrimaryFiles             []string
+	SourceGraph              json.RawMessage
+	LintConfig               json.RawMessage
 }
 
 // BuildIncremental constructs a Static Index plan for a graph-proven
@@ -35,6 +36,7 @@ func BuildIncremental(input IncrementalPlanInput) projectindex.ProjectStaticSynt
 		ProjectName:              input.ProjectName,
 		ConfigFile:               input.ConfigFile,
 		RuntimeConfigured:        input.RuntimeConfigured,
+		RedactPatternsConfigured: input.RedactPatternsConfigured,
 		Files:                    files,
 		PrimaryFiles:             primaryFiles,
 		FilesToParse:             files,

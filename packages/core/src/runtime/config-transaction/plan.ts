@@ -3,6 +3,8 @@ import type { CruxConfig } from "../config-types";
 import type { CruxPlugin } from "../plugin";
 import type { CruxHooks } from "../runtime";
 import { withDevtools } from "../../observability";
+import type { CruxObservabilityCapturePolicy } from "../../observability/capture-policy";
+import { normalizeObservabilityRedactionPatterns } from "../../observability/redaction-patterns";
 import {
   CruxDeploymentIdentitySchema,
   type CruxDeploymentIdentity,
@@ -162,12 +164,13 @@ function planPlugins(
 
 function observabilityCapturePolicy(
   observability: CruxConfig["observability"],
-): NonNullable<CruxConfig["observability"]> | undefined {
+): CruxObservabilityCapturePolicy | undefined {
   if (!observability) return undefined;
   if (
     observability.capture === undefined &&
     observability.recordInputs === undefined &&
     observability.recordOutputs === undefined &&
+    observability.redactPatterns === undefined &&
     observability.redactRecord === undefined
   ) {
     return undefined;
@@ -181,6 +184,13 @@ function observabilityCapturePolicy(
       : {}),
     ...(observability.recordOutputs !== undefined
       ? { recordOutputs: observability.recordOutputs }
+      : {}),
+    ...(observability.redactPatterns !== undefined
+      ? {
+          redactPatterns: normalizeObservabilityRedactionPatterns(
+            observability.redactPatterns,
+          ),
+        }
       : {}),
     ...(observability.redactRecord !== undefined
       ? { redactRecord: observability.redactRecord }

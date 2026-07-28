@@ -991,6 +991,16 @@ export interface ProjectIdentity {
   configFile?: string;
   /** Whether the last config-aware index saw a Runtime Engine configured for this project. */
   runtimeConfigured?: boolean;
+  /**
+   * Privacy-safe effective observability policy known at index time.
+   *
+   * Presence means the config-aware index completed. Pattern sources,
+   * replacements, flags, and rule counts are never serialized.
+   */
+  observability?: {
+    /** True when at least one observability redaction pattern is configured. */
+    readonly redactPatternsConfigured: boolean
+  }
 }
 
 export interface ProjectDefinition {
@@ -1182,6 +1192,11 @@ export const ProjectIdentitySchema = z.object({
   name: z.string().optional(),
   configFile: z.string().optional(),
   runtimeConfigured: z.boolean().optional(),
+  observability: z
+    .object({
+      redactPatternsConfigured: z.boolean(),
+    })
+    .optional(),
 }) satisfies z.ZodType<ProjectIdentity>;
 
 export const ProjectDefinitionKindSchema = z.enum([

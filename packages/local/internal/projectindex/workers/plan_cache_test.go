@@ -48,8 +48,10 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		"cacheKey":       cacheKey,
 	})
 
+	configured := true
 	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root: root,
+		Root:                     root,
+		RedactPatternsConfigured: &configured,
 	})
 	if err != nil {
 		t.Fatalf("planner.Build error = %v", err)
@@ -62,6 +64,13 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 	}
 	if len(plan.FilesToParse) != 0 {
 		t.Fatalf("files to parse = %v, want none for full warm cache hit", plan.FilesToParse)
+	}
+	if plan.RedactPatternsConfigured == nil ||
+		!*plan.RedactPatternsConfigured {
+		t.Fatalf(
+			"warm plan redaction policy = %v, want freshly configured true",
+			plan.RedactPatternsConfigured,
+		)
 	}
 	if len(plan.CacheEntries) != 1 ||
 		plan.CacheEntries[0].File != sourceFile ||

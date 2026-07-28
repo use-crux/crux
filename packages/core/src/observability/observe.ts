@@ -30,6 +30,14 @@ import {
 } from "./ids";
 import { normalizeObservedError, observedErrorSummary } from "./errors";
 import { applyObservabilityCapturePolicyToRecord } from "./capture-policy";
+import { redactSanitizedObservabilityRecordDetailed } from "./redaction-record";
+import {
+  attachObservabilityRedactionEvidence,
+  attachResolvedArtifactRedactionMarker,
+  canonicalizeObservabilityRedactionSurfaces,
+  resolveArtifactRedactionMarker,
+} from "./redaction-evidence";
+import { normalizeObservabilityRedactionPatterns } from "./redaction-patterns";
 import { sanitizeRecord } from "./sanitize";
 import {
   applyCruxCorrelators,
@@ -488,9 +496,30 @@ function emit(
     return;
   }
 
+  let sanitized: unknown;
+  try {
+    const patterns = normalizeObservabilityRedactionPatterns(
+      getHooks().observabilityCapture?.redactPatterns,
+    );
+    const finalRedaction = redactSanitizedObservabilityRecordDetailed(
+      sanitizeRecord(privacy.record),
+      patterns,
+    );
+    sanitized = attachObservabilityRedactionEvidence(
+      finalRedaction.value,
+      canonicalizeObservabilityRedactionSurfaces([
+        ...privacy.redactionSurfaces,
+        ...finalRedaction.surfaces,
+      ]),
+    );
+  } catch (error) {
+    recordRedactedRecord(error);
+    return;
+  }
+
   let validated: ReturnType<typeof validateRecordForEmission>;
   try {
-    validated = validateRecordForEmission(sanitizeRecord(privacy.record));
+    validated = validateRecordForEmission(sanitized);
   } catch (error) {
     recordInvalidRecord([
       "Record validation threw unexpectedly",
@@ -1655,10 +1684,11 @@ export const observe = {
       return undefined;
     }
 
+    const marker = resolveArtifactRedactionMarker(options);
     const artifactId = options.artifactId ?? createCruxArtifactId();
     emitObserved(() => {
       const spanId = context.spanStack[context.spanStack.length - 1];
-      return {
+      return attachResolvedArtifactRedactionMarker({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "artifact",
@@ -1679,7 +1709,7 @@ export const observe = {
         ...(options.preview !== undefined ? { preview: options.preview } : {}),
         ...(options.uri ? { uri: options.uri } : {}),
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      };
+      }, marker);
     }, context.correlators ?? null);
     return artifactId;
   },

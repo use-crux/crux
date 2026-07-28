@@ -1230,7 +1230,7 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	memberDetails := make([]RunDetail, 0, len(memberRefs))
 	memberProjections := make([]OperationRunDetail, 0, len(memberRefs))
 	for _, member := range memberRefs {
-		graph, err := s.graph(ctx, member.runID, false)
+		graph, err := s.graph(ctx, member.runID, true)
 		if err != nil {
 			return RunDetail{}, err
 		}
@@ -1292,7 +1292,9 @@ func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
 	detail.Run.SuspendedChildCount = 0
 	detail.Run.FailedChildCount = 0
 	metrics := map[string]float64{}
+	var familyRedaction *ObservabilityRedactionEvidence
 	for _, member := range members {
+		familyRedaction = mergeRedactionEvidence(familyRedaction, member.Redaction)
 		detail.Counts.Primary += member.Counts.Primary
 		detail.Counts.Detail += member.Counts.Detail
 		detail.Counts.Metadata += member.Counts.Metadata
@@ -1319,6 +1321,8 @@ func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
 	}
 	normalizeUsageTotals(metrics)
 	detail.Run.Metrics = metricsRawOrNil(metrics)
+	detail.Redaction = familyRedaction
+	detail.Root.Redaction = familyRedaction
 	detail.Run.Status = rootStatus
 	detail.Run.RootRunID = detail.Run.OperationID
 	detail.Run.RootPresent = rootStatus != "incomplete" || detail.Run.Name != "Incomplete operation"

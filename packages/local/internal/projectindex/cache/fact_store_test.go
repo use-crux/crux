@@ -74,11 +74,17 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	patch := IndexPatch{
 		SchemaVersion: 1,
 		Phase:         PhaseAST,
-		Project:       store.ProjectIdentity{Root: root, Name: "project"},
-		StartedAt:     "2026-06-18T10:00:00Z",
-		FinishedAt:    "2026-06-18T10:00:01Z",
-		Status:        "ok",
-		Invalidates:   &IndexPatchInvalidation{All: true},
+		Project: store.ProjectIdentity{
+			Root: root,
+			Name: "project",
+			Observability: &store.ProjectObservability{
+				RedactPatternsConfigured: true,
+			},
+		},
+		StartedAt:   "2026-06-18T10:00:00Z",
+		FinishedAt:  "2026-06-18T10:00:01Z",
+		Status:      "ok",
+		Invalidates: &IndexPatchInvalidation{All: true},
 		Facts: IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{
 				testDefinition("prompt:writer", "src/writer.ts"),
@@ -125,6 +131,29 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	}
 	if projected.Project == nil || projected.Project.Root != root || projected.Project.Name != "project" {
 		t.Fatalf("project = %+v, want committed project identity", projected.Project)
+	}
+	if projected.Project.Observability == nil ||
+		!projected.Project.Observability.RedactPatternsConfigured {
+		t.Fatalf(
+			"project observability = %+v, want configured policy after projection",
+			projected.Project.Observability,
+		)
+	}
+	restarted, ok, err := NewSQLiteIndexFactStore().LoadSnapshot(
+		ctx,
+		root,
+		"project",
+		time.Now(),
+	)
+	if err != nil || !ok {
+		t.Fatalf("LoadSnapshot after restart = ok %v, error %v", ok, err)
+	}
+	if restarted.Project == nil || restarted.Project.Observability == nil ||
+		!restarted.Project.Observability.RedactPatternsConfigured {
+		t.Fatalf(
+			"restarted project observability = %+v, want configured policy",
+			restarted.Project,
+		)
 	}
 	if projected.IndexedAt != "2026-06-18T10:00:01Z" {
 		t.Fatalf("IndexedAt = %q, want patch finishedAt", projected.IndexedAt)

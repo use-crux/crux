@@ -11,7 +11,8 @@ package cache
 // lint suppression evidence, the direct named-export evidence installed by
 // Epoch 46, Epoch 47 prompt-text source-ref metadata, and Epoch 48 runtime-rich
 // Eval timeout policy facts while adding canonical provider-visible tool Safety
-// boundary metadata across restart boundaries in Epoch 49.
+// boundary metadata across restart boundaries in Epoch 49. Epoch 50 adds the
+// privacy-safe effective observability policy to Project Identity snapshots.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 49
+const ProjectIndexSnapshotCacheEpoch = 50

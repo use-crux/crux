@@ -608,10 +608,16 @@ type ProjectIndexShard struct {
 
 // ProjectIdentity identifies the workspace that produced a Project Index.
 type ProjectIdentity struct {
-	Root              string `json:"root"`
-	Name              string `json:"name,omitempty"`
-	ConfigFile        string `json:"configFile,omitempty"`
-	RuntimeConfigured *bool  `json:"runtimeConfigured,omitempty"`
+	Root              string                `json:"root"`
+	Name              string                `json:"name,omitempty"`
+	ConfigFile        string                `json:"configFile,omitempty"`
+	RuntimeConfigured *bool                 `json:"runtimeConfigured,omitempty"`
+	Observability     *ProjectObservability `json:"observability,omitempty"`
+}
+
+// ProjectObservability is the privacy-safe effective observability policy.
+type ProjectObservability struct {
+	RedactPatternsConfigured bool `json:"redactPatternsConfigured"`
 }
 
 type IndexIndexingPhaseStatus struct {

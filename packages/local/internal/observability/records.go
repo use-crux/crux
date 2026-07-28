@@ -89,6 +89,7 @@ type Record struct {
 	SegmentSeq        int                 `json:"segmentSeq,omitempty"`
 	TraceID           string              `json:"traceId,omitempty"`
 	Deployment        *DeploymentIdentity `json:"deployment,omitempty"`
+	Privacy           *RecordPrivacy      `json:"privacy,omitempty"`
 	Payload           json.RawMessage     `json:"-"`
 	deploymentPresent bool
 }
@@ -98,6 +99,10 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	var decoded wire
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
+	}
+	if decoded.Privacy != nil &&
+		(!decoded.Privacy.Redaction.Applied || len(decoded.Privacy.Redaction.Surfaces) == 0) {
+		decoded.Privacy = nil
 	}
 	*r = Record(decoded)
 	var fields map[string]json.RawMessage

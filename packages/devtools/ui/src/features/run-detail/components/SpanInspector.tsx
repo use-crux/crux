@@ -31,6 +31,11 @@ import {
 } from "../lib/definition-ref-links";
 import { routingFacts, governanceFacts } from "./GenerationDecisions";
 import { RunInsightFacts, TurnInspectorFacts } from "./explain/InspectorFacts";
+import {
+  AffectedTelemetry,
+  RedactedArtifactRows,
+  RedactionBadge,
+} from "./RedactionEvidence";
 import { collectTurnReports } from "@/features/run-detail/lib/explain/rollup";
 import {
   findArtifact,
@@ -265,6 +270,7 @@ export function SpanInspector({
             {node.primitive || node.kind}
           </span>
           <div className="flex-1" />
+          <RedactionBadge evidence={node.redaction} />
           <StatusPill status={node.status} />
         </div>
         <div
@@ -280,6 +286,18 @@ export function SpanInspector({
             .join(" · ")}
         </div>
       </div>
+
+      {node.redaction && (
+        <div className="border-b border-(--devtools-border) px-4 py-3">
+          <AffectedTelemetry evidence={node.redaction} />
+          <RedactedArtifactRows
+            artifacts={[
+              ...(node.artifacts ?? []),
+              ...(node.details ?? []).flatMap((detail) => detail.artifacts ?? []),
+            ]}
+          />
+        </div>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--devtools-border) px-4 py-3">

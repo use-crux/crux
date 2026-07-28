@@ -207,8 +207,9 @@ func boundaryPreviousIndex() store.IndexData {
 }
 
 type watchFallbackIndexer struct {
-	calledFull      bool
-	calledIncrement bool
+	calledFull               bool
+	calledIncrement          bool
+	redactPatternsConfigured bool
 }
 
 func (i *watchFallbackIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
@@ -216,8 +217,15 @@ func (i *watchFallbackIndexer) IndexProjectAstPatch(context.Context, string, str
 	return projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         projectindex.PhaseAST,
-		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-		Status:        "ok",
+		Project: store.ProjectIdentity{
+			Root:       "/repo",
+			Name:       "project",
+			ConfigFile: "crux.config.ts",
+			Observability: &store.ProjectObservability{
+				RedactPatternsConfigured: i.redactPatternsConfigured,
+			},
+		},
+		Status: "ok",
 		Facts: projectindex.IndexPatchFacts{
 			Sources: []store.IndexSourceFile{{
 				File:          "/repo/src/writer.ts",

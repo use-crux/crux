@@ -15,6 +15,7 @@ import {
   fmtTokens,
 } from "@/features/run-detail/lib/span-detail-inspection";
 import type { RunLens } from "@/features/run-detail/types";
+import type { CruxObservabilityRedactionEvidence } from "@use-crux/core/observability";
 import {
   KindTag,
   StatStrip,
@@ -22,6 +23,7 @@ import {
   LensSwitch,
   type RunNodeKind,
 } from "./atoms";
+import { RedactionBadge } from "./RedactionEvidence";
 
 export interface RunHeaderProps {
   traceId: string;
@@ -38,6 +40,7 @@ export interface RunHeaderProps {
   cost?: number;
   cacheRead?: number;
   diagnosticsCount: number;
+  redaction?: CruxObservabilityRedactionEvidence;
   lens: RunLens;
   onSelectLens: (lens: RunLens) => void;
   onCompare: () => void;
@@ -60,6 +63,7 @@ export function RunHeader({
   cost,
   cacheRead,
   diagnosticsCount,
+  redaction,
   lens,
   onSelectLens,
   onCompare,
@@ -87,6 +91,7 @@ export function RunHeader({
           {name}
         </h1>
         <StatusPill status={status} />
+        <RedactionBadge evidence={redaction} />
         {(provider || model) && (
           <span
             className="font-mono text-[12px]"

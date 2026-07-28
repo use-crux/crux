@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 const (
@@ -100,6 +101,11 @@ func finishPatch(
 ) {
 	if plan.RuntimeConfigured != nil {
 		patch.Project.RuntimeConfigured = plan.RuntimeConfigured
+	}
+	if plan.RedactPatternsConfigured != nil {
+		patch.Project.Observability = &store.ProjectObservability{
+			RedactPatternsConfigured: *plan.RedactPatternsConfigured,
+		}
 	}
 	if sourceInput.SemanticSourceProfile != nil {
 		patch.SemanticSourceProfile = sourceprofile.RequestProfile(sourceInput.SemanticSourceProfile, plan.Files)

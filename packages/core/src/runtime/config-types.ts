@@ -176,6 +176,15 @@ export interface CruxObservabilityConfig {
    */
   readonly recordOutputs?: CruxObservabilityCapturePolicy["recordOutputs"];
   /**
+   * Deployment-wide patterns removed from captured observability payloads.
+   *
+   * Rules run in declaration order at the shared observability privacy gate.
+   * They do not modify application or provider data.
+   *
+   * @default []
+   */
+  readonly redactPatterns?: CruxObservabilityCapturePolicy["redactPatterns"];
+  /**
    * Last-mile redaction hook for canonical graph records.
    *
    * Runs after capture modes and before sanitization. Return `null` to drop a

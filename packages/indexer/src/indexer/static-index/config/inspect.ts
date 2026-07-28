@@ -38,6 +38,11 @@ export interface ProjectStaticIndexConfig {
   readonly lint?: CruxLintConfig
   /** Whether the project config loaded successfully and declared a Runtime Engine. */
   readonly runtimeConfigured?: boolean
+  /**
+   * Whether effective config contains at least one declarative observability
+   * redaction pattern. Rule details and counts never cross this boundary.
+   */
+  readonly redactPatternsConfigured?: boolean
   /** Config-load diagnostics, kept small and JSON-safe for host reporting. */
   readonly diagnostics: readonly IndexDiagnostic[]
 }
@@ -64,6 +69,13 @@ export async function inspectProjectStaticIndexConfig(
     })),
     ...(result.loaded.lint ? { lint: result.loaded.lint } : {}),
     ...(result.loaded.importFailed ? {} : { runtimeConfigured: Boolean(result.loaded.crux?.config.runtime) }),
+    ...(result.loaded.importFailed
+      ? {}
+      : {
+          redactPatternsConfigured:
+            (result.loaded.crux?.config.observability?.redactPatterns?.length ??
+              0) > 0,
+        }),
     diagnostics: result.diagnostics,
   }
 }
