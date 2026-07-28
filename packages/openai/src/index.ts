@@ -28,6 +28,12 @@ export type {
 } from "./native";
 export type { OpenAIGenerateImage, OpenAIImageExtra } from "./image-generation";
 export type {
+  OpenAIImageStreamExtra,
+  OpenAIImageStreamMetadata,
+  OpenAIStreamImage,
+  OpenAIStreamImageResult,
+} from "./image-streaming";
+export type {
   OpenAITranscribe,
   OpenAITranscriptionExtra,
   OpenAITranscriptionMetadata,
@@ -38,6 +44,11 @@ export type {
   OpenAISpeechExtra,
   OpenAISpeechVoice,
 } from "./speech";
+export type {
+  OpenAISpeechStreamExtra,
+  OpenAIStreamSpeech,
+  OpenAIStreamSpeechResult,
+} from "./speech-streaming";
 export { createGenerateObjectFn, createGenerateTextFn } from "./helpers";
 export { embedding } from "./embedding";
 export { fromMessages, openAITranscript, toMessages } from "./message-codec";

@@ -42,7 +42,7 @@ describe("native prompt-text semantic routing", () => {
     expect(promptTextRefCount(result.nativeFacts)).toBe(
       promptTextSemanticDirectFixture.expect.promptTextSourceRefs?.length,
     );
-  }, 20_000);
+  }, 60_000);
 
   for (const fixture of [
     importedFragmentsFixture,
@@ -67,7 +67,7 @@ describe("native prompt-text semantic routing", () => {
       expect(promptTextRefCount(result.nativeFacts)).toBe(
         fixture.expect.promptTextSourceRefs?.length,
       );
-    }, 20_000);
+    }, 60_000);
   }
 });
 

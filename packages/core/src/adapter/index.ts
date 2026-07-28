@@ -159,6 +159,19 @@ export {
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "./completed-operation";
+export type { StreamingOperationResult } from "./streaming-operation";
+export { defineStreamingOperation } from "./streaming-operation";
+export { bindStreamingOperation } from "./streaming-operation";
+export type {
+  BindStreamingOperationOptions,
+  BoundStreamingOperation,
+  StreamingOperationCall,
+  StreamingOperationConformanceCase,
+  StreamingOperationContext,
+  StreamingOperationDefinition,
+  StreamingOperationOpenContext,
+  StreamingOperationSource,
+} from "./streaming-operation";
 export type {
   BindCompletedOperationOptions,
   BoundCompletedOperation,
@@ -187,6 +200,8 @@ export type {
   ProviderOwnership,
   ProviderCompletedOperationFactories,
   ProviderCompletedOperationFactory,
+  ProviderStreamingOperationFactories,
+  ProviderStreamingOperationFactory,
   ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,

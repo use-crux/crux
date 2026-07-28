@@ -12,6 +12,11 @@ import {
   type DefinedCompletedOperations,
   type ProviderCompletedOperationFactory,
 } from "./completed-operations";
+import {
+  bindProviderStreamingOperations,
+  type DefinedStreamingOperations,
+  type ProviderStreamingOperationFactories,
+} from "./streaming-operations";
 import type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
@@ -71,6 +76,8 @@ export function defineProviderRuntime<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 >(
   spec: SingleTurnProviderRuntimeSpec<
     TClient,
@@ -83,7 +90,8 @@ export function defineProviderRuntime<
     TExtensions,
     TImage,
     TTranscription,
-    TSpeech
+    TSpeech,
+    TStreaming
   >,
 ): DefinedSingleTurnProviderRuntime<
   TClient,
@@ -92,7 +100,8 @@ export function defineProviderRuntime<
   TExtra,
   TDeps,
   TExtensions,
-  DefinedCompletedOperations<TImage, TTranscription, TSpeech>
+  DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+    DefinedStreamingOperations<TStreaming>
 >;
 
 /**
@@ -119,6 +128,8 @@ export function defineProviderRuntime<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 >(
   spec: LoopOwnedProviderRuntimeSpec<
     TClient,
@@ -128,7 +139,8 @@ export function defineProviderRuntime<
     TExtensions,
     TImage,
     TTranscription,
-    TSpeech
+    TSpeech,
+    TStreaming
   >,
 ): DefinedProviderRuntime<
   TClient,
@@ -138,7 +150,8 @@ export function defineProviderRuntime<
   Record<string, unknown>,
   Record<string, never>,
   LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> &
-    DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
+    DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+    DefinedStreamingOperations<TStreaming>,
   TExtensions,
   "loop-owned"
 >;
@@ -181,6 +194,11 @@ export function defineProviderRuntime(
               client,
               singleTurnSpec,
             ),
+            ...bindProviderStreamingOperations(
+              runtimeId,
+              client,
+              singleTurnSpec.streaming,
+            ),
           }),
         singleTurnSpec.extend,
       ),
@@ -204,7 +222,8 @@ type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
   object,
   ProviderCompletedOperationFactory<unknown> | undefined,
   ProviderCompletedOperationFactory<unknown> | undefined,
-  ProviderCompletedOperationFactory<unknown> | undefined
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderStreamingOperationFactories<unknown> | undefined
 >;
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
@@ -215,7 +234,8 @@ type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
   object,
   ProviderCompletedOperationFactory<unknown> | undefined,
   ProviderCompletedOperationFactory<unknown> | undefined,
-  ProviderCompletedOperationFactory<unknown> | undefined
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderStreamingOperationFactories<unknown> | undefined
 >;
 
 interface RuntimeSpecShape {

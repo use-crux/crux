@@ -7,6 +7,7 @@
 import { defineProviderRuntime } from "./define";
 import type { ProviderRuntimeDepsArg } from "./runtime-types";
 import type { ProviderCompletedOperationFactory } from "./completed-operations";
+import type { ProviderStreamingOperationFactories } from "./streaming-operations";
 import type {
   DefinedSingleTurnProviderBundle,
   SingleTurnProviderBundleSpec,
@@ -63,6 +64,8 @@ export function defineSingleTurnProviderBundle<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 >(
   spec: SingleTurnProviderBundleSpec<
     TClient,
@@ -77,7 +80,8 @@ export function defineSingleTurnProviderBundle<
     TExtensions,
     TImage,
     TTranscription,
-    TSpeech
+    TSpeech,
+    TStreaming
   >,
 ): DefinedSingleTurnProviderBundle<
   TClient,
@@ -90,7 +94,8 @@ export function defineSingleTurnProviderBundle<
   TExtensions,
   TImage,
   TTranscription,
-  TSpeech
+  TSpeech,
+  TStreaming
 > {
   const runtime = defineProviderRuntime<
     TClient,
@@ -103,7 +108,8 @@ export function defineSingleTurnProviderBundle<
     TExtensions,
     TImage,
     TTranscription,
-    TSpeech
+    TSpeech,
+    TStreaming
   >({
     id: spec.id,
     ownership: "single-turn",
@@ -117,6 +123,7 @@ export function defineSingleTurnProviderBundle<
       ? {}
       : { transcription: spec.transcription }),
     ...(spec.speech === undefined ? {} : { speech: spec.speech }),
+    ...(spec.streaming === undefined ? {} : { streaming: spec.streaming }),
   });
 
   return Object.freeze({

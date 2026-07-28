@@ -72,6 +72,8 @@ var defaultCallNames = []string{
 	"split",
 	"storage",
 	"stream",
+	"streamImage",
+	"streamSpeech",
 	"swarm",
 	"task",
 	"textSource",
@@ -147,6 +149,8 @@ var defaultCallInterestNames = []string{
 	"split",
 	"storage",
 	"stream",
+	"streamImage",
+	"streamSpeech",
 	"swarm",
 	"task",
 	"textSource",
@@ -237,7 +241,7 @@ func defaultHost() json.RawMessage {
 		extractors = append(extractors, map[string]any{
 			"extension": map[string]string{
 				"name":    "@use-crux/indexer/crux-core-media",
-				"version": "1",
+				"version": "4",
 			},
 			"name": family,
 			"mode": "native-covered",

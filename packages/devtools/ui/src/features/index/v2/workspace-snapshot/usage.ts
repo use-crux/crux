@@ -2,7 +2,7 @@ import type { IndexIndex } from "../adapt";
 import type {
   WorkspaceSnapshotEffect,
   WorkspaceSnapshotOperation,
-} from "@/features/workspace-snapshot/contract";
+} from "@/shared/lib/workspace-snapshot";
 
 export type WorkspaceSnapshotUsageOperation = WorkspaceSnapshotOperation;
 

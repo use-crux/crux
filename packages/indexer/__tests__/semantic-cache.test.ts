@@ -46,8 +46,8 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the Workspace snapshot relation semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v34");
+  it("uses the bounded media streaming semantic epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v35");
   });
 
   it("does not reuse a valid cache artifact from the pre-prompt-text v33 namespace", async () => {

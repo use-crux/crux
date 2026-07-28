@@ -7,11 +7,12 @@
  */
 
 import { formatMediaAttribution } from "../lib/media-run-attribution";
+import { BoundedMediaStreamCard } from "./BoundedMediaStreamCard";
+import { MediaRunAttemptTimeline } from "./MediaRunAttemptTimeline";
 import type {
   MediaCatalogJoin,
   MediaLineageEdge,
   MediaLineageNode,
-  MediaRunAttempt,
   MediaRunView,
 } from "../lib/media-run-projection";
 
@@ -50,9 +51,13 @@ export function MediaRunPanel({
         </p>
       </header>
 
+      {view.boundedStream ? (
+        <BoundedMediaStreamCard stream={view.boundedStream} />
+      ) : null}
+
       <DescriptorList title="Inputs" descriptors={view.inputs} />
       <DescriptorList title="Outputs" descriptors={view.outputs} />
-      <AttemptTimeline attempts={view.attempts} />
+      <MediaRunAttemptTimeline attempts={view.attempts} />
 
       <div aria-label="Transcript timeline" className="grid gap-1">
         <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Transcript</h4>
@@ -87,86 +92,6 @@ export function MediaRunPanel({
       />
     </section>
   );
-}
-
-function AttemptTimeline({
-  attempts,
-}: {
-  readonly attempts: readonly MediaRunAttempt[];
-}) {
-  if (attempts.length === 0) {
-    return (
-      <div aria-label="Attempt timeline" className="grid gap-1">
-        <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Attempts</h4>
-        <p role="status" className="text-xs text-(--devtools-fg-muted)">
-          No attempts recorded.
-        </p>
-      </div>
-    );
-  }
-
-  const byId = new Map(attempts.map((attempt) => [attempt.spanId, attempt]));
-
-  return (
-    <div aria-label="Attempt timeline" className="grid gap-1">
-      <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Attempts</h4>
-      <ol className="grid gap-1 text-xs">
-        {attempts.map((attempt) => {
-          const depth = attemptDepth(attempt, byId);
-          const parent = attempt.parentSpanId
-            ? byId.get(attempt.parentSpanId)
-            : undefined;
-          const paddingLeft = depth * 12;
-          return (
-            <li
-              key={attempt.spanId}
-              data-depth={depth}
-              className={
-                depth > 0
-                  ? `border-l border-(--devtools-border) ${depth >= 2 ? "depth-2" : "depth-1"}`
-                  : "depth-0"
-              }
-              style={depth > 0 ? { paddingLeft } : undefined}
-            >
-              <span>
-                {depth > 0 ? "↳ " : ""}
-                {attempt.primitive}
-                {parent ? ` (child of ${parent.primitive})` : ""}
-              </span>
-              <span className="text-(--devtools-fg-muted)">
-                {" · "}
-                {[
-                  attempt.provider,
-                  attempt.model,
-                  attempt.status,
-                  attempt.durationMs !== undefined
-                    ? `${attempt.durationMs}ms`
-                    : undefined,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
-function attemptDepth(
-  attempt: MediaRunAttempt,
-  byId: ReadonlyMap<string, MediaRunAttempt>,
-): number {
-  let depth = 0;
-  let parentId = attempt.parentSpanId ?? undefined;
-  const seen = new Set<string>();
-  while (parentId && byId.has(parentId) && !seen.has(parentId)) {
-    seen.add(parentId);
-    depth += 1;
-    parentId = byId.get(parentId)?.parentSpanId ?? undefined;
-  }
-  return depth;
 }
 
 function LineageSection({
@@ -243,8 +168,9 @@ function CatalogJoinStatus({
   if (join.status === "unavailable") {
     return (
       <p role="status" className="text-xs text-(--devtools-fg-muted)">
-        Catalog source join unavailable — no authored definition identity was
-        recorded for this run.
+        {join.reason === "ambiguous-runtime-join"
+          ? "Catalog source join unavailable — conflicting authored definition identities were recorded."
+          : "Catalog source join unavailable — no authored definition identity was recorded for this run."}
       </p>
     );
   }

@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 50 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want observability policy epoch 50", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 51 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want bounded media stream epoch 51", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -34,6 +34,8 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"provider-visible tool Safety boundary metadata",
 		"Epoch 50",
 		"privacy-safe effective observability policy",
+		"Epoch 51",
+		"bounded media stream operation facts",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -44,10 +46,29 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-50", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-51", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
+	}
+}
+
+func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {
+	root := t.TempDir()
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-50", "index.db")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("pre-bounded-media-stream snapshot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	currentPath := projectIndexFactStoreDBFile(root)
+	if currentPath == oldPath {
+		t.Fatalf("current snapshot path reused epoch-50 snapshot %q", currentPath)
+	}
+	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
+		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)
 	}
 }
 

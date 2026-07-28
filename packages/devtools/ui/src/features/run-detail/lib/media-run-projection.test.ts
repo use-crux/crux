@@ -6,67 +6,64 @@ import {
 
 describe("media run projection", () => {
   it("projects native image summary, descriptors, and lineage", () => {
-    const view = projectMediaRunView(
-      [
-        {
-          type: "span:start",
-          spanId: "span_media",
-          primitive: "media.generate_image",
-          name: "generate_image gpt-image-1",
-          attributes: {
-            provider: "openai",
-            model: "gpt-image-1",
-            executionKind: "native",
-            calls: 1,
+    const view = projectMediaRunView([
+      {
+        type: "span:start",
+        spanId: "span_media",
+        primitive: "media.generate_image",
+        name: "generate_image gpt-image-1",
+        attributes: {
+          provider: "openai",
+          model: "gpt-image-1",
+          executionKind: "native",
+          calls: 1,
+        },
+      },
+      {
+        type: "artifact",
+        kind: "input",
+        artifactId: "art_in",
+        spanId: "span_media",
+        preview: {
+          image: {
+            kind: "image",
+            mediaType: "image/png",
+            sizeBytes: 12,
+            sourceCategory: "bytes",
+            digestPrefix: "abcdef123456",
           },
         },
-        {
-          type: "artifact",
-          kind: "input",
-          artifactId: "art_in",
-          spanId: "span_media",
-          preview: {
-            image: {
+      },
+      {
+        type: "artifact",
+        kind: "output",
+        artifactId: "art_out",
+        spanId: "span_media",
+        preview: {
+          images: [
+            {
               kind: "image",
               mediaType: "image/png",
-              sizeBytes: 12,
+              sizeBytes: 24,
               sourceCategory: "bytes",
-              digestPrefix: "abcdef123456",
             },
-          },
+          ],
         },
-        {
-          type: "artifact",
-          kind: "output",
-          artifactId: "art_out",
-          spanId: "span_media",
-          preview: {
-            images: [
-              {
-                kind: "image",
-                mediaType: "image/png",
-                sizeBytes: 24,
-                sourceCategory: "bytes",
-              },
-            ],
-          },
-        },
-        {
-          type: "edge",
-          edgeType: "derived.from",
-          from: { kind: "artifact", id: "art_out" },
-          to: { kind: "artifact", id: "art_in" },
-        },
-        {
-          type: "span:end",
-          spanId: "span_media",
-          status: "ok",
-          durationMs: 42,
-          attributes: { executionKind: "native", calls: 1, status: "ok" },
-        },
-      ],
-      { catalogJoinId: "media.operation:cover" },
-    );
+      },
+      {
+        type: "edge",
+        edgeType: "derived.from",
+        from: { kind: "artifact", id: "art_out" },
+        to: { kind: "artifact", id: "art_in" },
+      },
+      {
+        type: "span:end",
+        spanId: "span_media",
+        status: "ok",
+        durationMs: 42,
+        attributes: { executionKind: "native", calls: 1, status: "ok" },
+      },
+    ]);
 
     expect(view?.summary).toMatchObject({
       primitive: "media.generate_image",
@@ -87,11 +84,6 @@ describe("media run projection", () => {
     expect(view?.lineage.edges).toEqual([
       expect.objectContaining({ type: "derived.from" }),
     ]);
-    expect(view?.catalogJoin).toEqual({
-      status: "joined",
-      definitionId: "media.operation:cover",
-      label: "Catalog media operation",
-    });
     expect(assertNoRetainedMediaSecrets(view)).toEqual([]);
   });
 
@@ -257,176 +249,165 @@ describe("media run projection", () => {
   });
 
   it("projects complete safe lineage with page/time attribution and edge types", () => {
-    const view = projectMediaRunView(
-      [
-        {
-          type: "span:start",
-          spanId: "span_media",
-          primitive: "media.describe",
-          name: "describe gpt-4o",
-          attributes: {
-            provider: "openai",
-            model: "gpt-4o",
-            executionKind: "native",
-            calls: 1,
+    const view = projectMediaRunView([
+      {
+        type: "span:start",
+        spanId: "span_media",
+        primitive: "media.describe",
+        name: "describe gpt-4o",
+        attributes: {
+          provider: "openai",
+          model: "gpt-4o",
+          executionKind: "native",
+          calls: 1,
+        },
+      },
+      {
+        type: "artifact",
+        kind: "input",
+        artifactId: "art_in",
+        spanId: "span_media",
+        preview: {
+          file: {
+            kind: "file",
+            mediaType: "application/pdf",
+            pageCount: 4,
+            sourceCategory: "bytes",
           },
         },
-        {
-          type: "artifact",
-          kind: "input",
-          artifactId: "art_in",
-          spanId: "span_media",
-          preview: {
-            file: {
-              kind: "file",
-              mediaType: "application/pdf",
-              pageCount: 4,
-              sourceCategory: "bytes",
-            },
-          },
+      },
+      {
+        type: "artifact",
+        kind: "output",
+        artifactId: "art_out",
+        spanId: "span_media",
+        preview: {
+          text: "page summary",
+          pageNumber: 2,
         },
-        {
-          type: "artifact",
-          kind: "output",
-          artifactId: "art_out",
-          spanId: "span_media",
-          preview: {
-            text: "page summary",
-            pageNumber: 2,
-          },
+      },
+      {
+        type: "edge",
+        edgeType: "consumed",
+        from: { kind: "span", id: "span_media" },
+        to: { kind: "artifact", id: "art_in" },
+      },
+      {
+        type: "edge",
+        edgeType: "produced",
+        from: { kind: "span", id: "span_media" },
+        to: { kind: "artifact", id: "art_out" },
+      },
+      {
+        type: "edge",
+        edgeType: "derived.from",
+        from: { kind: "artifact", id: "art_out" },
+        to: { kind: "artifact", id: "art_in" },
+        attributes: {
+          location: { type: "page", pageNumber: 2 },
         },
-        {
-          type: "edge",
-          edgeType: "consumed",
-          from: { kind: "span", id: "span_media" },
-          to: { kind: "artifact", id: "art_in" },
-        },
-        {
-          type: "edge",
-          edgeType: "produced",
-          from: { kind: "span", id: "span_media" },
-          to: { kind: "artifact", id: "art_out" },
-        },
-        {
-          type: "edge",
-          edgeType: "derived.from",
-          from: { kind: "artifact", id: "art_out" },
-          to: { kind: "artifact", id: "art_in" },
-          attributes: {
-            location: { type: "page", pageNumber: 2 },
-          },
-        },
-        {
-          type: "span:start",
-          spanId: "span_ingest",
-          parentSpanId: "span_media",
-          primitive: "ingest.parse",
-          name: "ingest.parse",
-        },
-        {
-          type: "edge",
-          edgeType: "called",
-          from: { kind: "span", id: "span_media" },
-          to: { kind: "span", id: "span_ingest" },
-        },
-        {
-          type: "span:end",
-          spanId: "span_ingest",
-          status: "ok",
-          durationMs: 3,
-        },
-        {
-          type: "span:start",
-          spanId: "span_index",
-          parentSpanId: "span_media",
-          primitive: "indexing.pipeline",
-          name: "indexing.pipeline",
-        },
-        {
-          type: "edge",
-          edgeType: "called",
-          from: { kind: "span", id: "span_ingest" },
-          to: { kind: "span", id: "span_index" },
-        },
-        {
-          type: "span:end",
-          spanId: "span_index",
-          status: "ok",
-          durationMs: 4,
-        },
-        {
-          type: "span:start",
-          spanId: "span_retrieve",
-          parentSpanId: "span_media",
-          primitive: "retrieval.query",
-          name: "docs.retrieve",
-        },
-        {
-          type: "artifact",
+      },
+      {
+        type: "span:start",
+        spanId: "span_ingest",
+        parentSpanId: "span_media",
+        primitive: "ingest.parse",
+        name: "ingest.parse",
+      },
+      {
+        type: "edge",
+        edgeType: "called",
+        from: { kind: "span", id: "span_media" },
+        to: { kind: "span", id: "span_ingest" },
+      },
+      {
+        type: "span:end",
+        spanId: "span_ingest",
+        status: "ok",
+        durationMs: 3,
+      },
+      {
+        type: "span:start",
+        spanId: "span_index",
+        parentSpanId: "span_media",
+        primitive: "indexing.pipeline",
+        name: "indexing.pipeline",
+      },
+      {
+        type: "edge",
+        edgeType: "called",
+        from: { kind: "span", id: "span_ingest" },
+        to: { kind: "span", id: "span_index" },
+      },
+      {
+        type: "span:end",
+        spanId: "span_index",
+        status: "ok",
+        durationMs: 4,
+      },
+      {
+        type: "span:start",
+        spanId: "span_retrieve",
+        parentSpanId: "span_media",
+        primitive: "retrieval.query",
+        name: "docs.retrieve",
+      },
+      {
+        type: "artifact",
+        kind: "retrieval.hits",
+        artifactId: "art_hits",
+        spanId: "span_retrieve",
+        preview: {
           kind: "retrieval.hits",
-          artifactId: "art_hits",
-          spanId: "span_retrieve",
-          preview: {
-            kind: "retrieval.hits",
-            query: "policy",
-            returned: 1,
-            hits: [
-              {
-                rank: 1,
-                source: {
-                  id: "doc-1",
-                  url: "https://example.com/SECRET_URL.pdf",
-                  path: "/private/SECRET.pdf",
-                  assetRef: { uri: "asset://SECRET" },
-                  mediaType: "application/pdf",
-                  location: {
-                    type: "time",
-                    unit: "seconds",
-                    start: 1.5,
-                    end: 3,
-                  },
+          query: "policy",
+          returned: 1,
+          hits: [
+            {
+              rank: 1,
+              source: {
+                id: "doc-1",
+                url: "https://example.com/SECRET_URL.pdf",
+                path: "/private/SECRET.pdf",
+                assetRef: { uri: "asset://SECRET" },
+                mediaType: "application/pdf",
+                location: {
+                  type: "time",
+                  unit: "seconds",
+                  start: 1.5,
+                  end: 3,
                 },
-                chunkId: "c1",
-                preview: "chunk text",
               },
-            ],
-          },
+              chunkId: "c1",
+              preview: "chunk text",
+            },
+          ],
         },
-        {
-          type: "edge",
-          edgeType: "retrieval.returned",
-          from: { kind: "span", id: "span_retrieve" },
-          to: { kind: "artifact", id: "art_hits" },
-        },
-        {
-          type: "span:end",
-          spanId: "span_retrieve",
-          status: "ok",
-          durationMs: 6,
-        },
-        {
-          type: "span:end",
-          spanId: "span_media",
-          status: "ok",
-          durationMs: 20,
-          attributes: { executionKind: "native", calls: 1 },
-        },
-      ],
-      { catalogJoinId: "media.operation:describe-pdf" },
-    );
+      },
+      {
+        type: "edge",
+        edgeType: "retrieval.returned",
+        from: { kind: "span", id: "span_retrieve" },
+        to: { kind: "artifact", id: "art_hits" },
+      },
+      {
+        type: "span:end",
+        spanId: "span_retrieve",
+        status: "ok",
+        durationMs: 6,
+      },
+      {
+        type: "span:end",
+        spanId: "span_media",
+        status: "ok",
+        durationMs: 20,
+        attributes: { executionKind: "native", calls: 1 },
+      },
+    ]);
 
     expect(
       [...new Set(view?.lineage.nodes.map((node) => node.kind) ?? [])].sort(),
     ).toEqual(
-      [
-        "catalog",
-        "index",
-        "ingest",
-        "input",
-        "operation",
-        "output",
-        "retrieval",
-      ].sort(),
+      ["index", "ingest", "input", "operation", "output", "retrieval"].sort(),
     );
 
     const inputNode = view?.lineage.nodes.find((node) => node.kind === "input");
@@ -483,11 +464,6 @@ describe("media run projection", () => {
       ),
     ).toBe(true);
 
-    expect(view?.catalogJoin).toEqual({
-      status: "joined",
-      definitionId: "media.operation:describe-pdf",
-      label: "Catalog media operation",
-    });
     // Privacy: no locators, filenames, raw refs, or media ids rendered into the model.
     expect(assertNoRetainedMediaSecrets(view)).toEqual([]);
     const serialized = JSON.stringify(view);
@@ -630,48 +606,5 @@ describe("media run projection", () => {
     expect(other?.summary.primitive).toBe("media.transcribe");
     expect(other?.attempts.map((a) => a.spanId)).toEqual(["span_transcribe"]);
     expect(other?.lineage.nodes.some((n) => n.id === "span_index")).toBe(false);
-  });
-
-  it("joins Catalog only from exact recorded definition identity", () => {
-    const joined = projectMediaRunView([
-      {
-        type: "span:start",
-        spanId: "span_media",
-        primitive: "media.generate_image",
-        name: "generate_image gpt-image-1",
-        attributes: {
-          provider: "openai",
-          model: "gpt-image-1",
-          definitionId: "media.operation:cover",
-          definitionName: "cover",
-        },
-      },
-      { type: "span:end", spanId: "span_media", status: "ok", durationMs: 1 },
-    ]);
-    expect(joined?.catalogJoin).toEqual({
-      status: "joined",
-      definitionId: "media.operation:cover",
-      label: "cover",
-    });
-    expect(
-      joined?.lineage.nodes.some(
-        (node) => node.kind === "catalog" && node.label === "catalog",
-      ),
-    ).toBe(true);
-
-    // operation name alone is not a Catalog definition identity.
-    const byOperationOnly = projectMediaRunView([
-      {
-        type: "span:start",
-        spanId: "span_media",
-        primitive: "media.generate_image",
-        attributes: { operation: "generateImage", provider: "openai" },
-      },
-      { type: "span:end", spanId: "span_media", status: "ok" },
-    ]);
-    expect(byOperationOnly?.catalogJoin).toEqual({
-      status: "unavailable",
-      reason: "missing-runtime-join",
-    });
   });
 });

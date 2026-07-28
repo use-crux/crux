@@ -103,6 +103,14 @@ describe("Google speech", () => {
     });
     expect([...(result.audio.data as Uint8Array)]).toEqual([1, 2, 3]);
     expect(result.execution).toEqual({ kind: "native", calls: 1 });
+    expect(Object.keys(result).sort()).toEqual([
+      "_meta",
+      "audio",
+      "execution",
+      "raw",
+      "warnings",
+    ]);
+    expect(result).not.toHaveProperty("providerMetadata");
     expectTypeOf(google.generateSpeech).toBeFunction();
   });
 

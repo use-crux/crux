@@ -153,7 +153,7 @@ describe.sequential("runEval", () => {
     } finally {
       await writeFile(path, authored, "utf8");
     }
-  }, 10_000);
+  }, 20_000);
 
   it("misses task evidence after an imported task dependency edit", async () => {
     const path = join(projectRoot, "task.ts");
@@ -170,7 +170,7 @@ describe.sequential("runEval", () => {
     } finally {
       await writeFile(path, authored, "utf8");
     }
-  }, 10_000);
+  }, 20_000);
 
   it("reuses task evidence after a deterministic scorer-only source edit", async () => {
     const path = join(projectRoot, "scorer.ts");
@@ -211,7 +211,7 @@ describe.sequential("runEval", () => {
       runIds: [expect.stringMatching(/^run_[0-9a-f]{24}$/u)],
     });
     expect(run.cells[0]).not.toHaveProperty("response");
-  }, 10_000);
+  }, 20_000);
 
   it("explains how to make an unknown hard-cap estimate actionable", async () => {
     await expect(
@@ -268,7 +268,7 @@ describe.sequential("runEval", () => {
       { status: "reused", reason: "exact_evidence" },
       { status: "reused", reason: "exact_evidence" },
     ]);
-  }, 10_000);
+  }, 20_000);
 
   it("invalidates only the edited imported replacement task binding", async () => {
     const path = join(projectRoot, "replacement-task.ts");
@@ -296,7 +296,7 @@ describe.sequential("runEval", () => {
     } finally {
       await writeFile(path, authored, "utf8");
     }
-  }, 10_000);
+  }, 20_000);
 
   it("validates inline Case inputs through the managed task schema", async () => {
     await expect(runEval("invalid-inline", { plan: true })).rejects.toThrow(

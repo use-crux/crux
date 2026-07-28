@@ -7,10 +7,15 @@ import {
   defineProviderRuntime,
   type NativeAssistantTurn,
   type NativeResponseMetadata,
+  type ProviderStreamingOperationFactories,
 } from "../../src/adapter";
 import type { Message } from "../../src/generation/messages";
 import { permissiveCapabilities } from "./structured-output/capability-fixtures";
-import type { GenerationSettings, TokenUsage, TraceMeta } from "../../src/generation/types";
+import type {
+  GenerationSettings,
+  TokenUsage,
+  TraceMeta,
+} from "../../src/generation/types";
 
 const RUNTIME_USAGE = {
   inputTokens: 10,
@@ -68,9 +73,7 @@ export interface RuntimeClient {
 /** Create one raw response consumed by the scripted single-turn runtime. */
 export function runtimeResponse(
   text: string,
-  overrides: Partial<
-    Omit<RuntimeRawResponse, "id" | "model" | "text">
-  > = {},
+  overrides: Partial<Omit<RuntimeRawResponse, "id" | "model" | "text">> = {},
 ): RuntimeRawResponse {
   return {
     id: `runtime_${Math.random().toString(36).slice(2)}`,
@@ -97,8 +100,15 @@ export function createRuntimeClient(
 }
 
 /** Create the single-turn branch used by provider-runtime parity tests. */
-export function createSingleTurnTestRuntime(
+export function createSingleTurnTestRuntime<
+  const TStreaming extends
+    | ProviderStreamingOperationFactories<RuntimeClient>
+    | undefined = undefined,
+>(
   id = "provider-runtime-single-turn",
+  options: Readonly<{
+    streaming?: TStreaming;
+  }> = {},
 ) {
   return defineProviderRuntime({
     id,
@@ -194,6 +204,9 @@ export function createSingleTurnTestRuntime(
         },
       },
     },
+    ...(options.streaming === undefined
+      ? {}
+      : { streaming: options.streaming }),
   });
 }
 

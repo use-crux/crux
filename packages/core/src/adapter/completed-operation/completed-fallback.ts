@@ -1,15 +1,9 @@
-import type {
-  FallbackModel,
-  FallbackOptions,
-} from "../../generation/fallback";
+import type { FallbackModel, FallbackOptions } from "../../generation/fallback";
 import { shouldAttemptFallback } from "../../generation/fallback";
 import { withBudget } from "../../generation/timeout";
 import { observe } from "../../observability";
 import { isPolicyTerminal } from "../../safety/errors";
-import type {
-  CompletedRoutingOptions,
-  CompletedRoutingState,
-} from "./routing";
+import type { CompletedRoutingOptions, CompletedRoutingState } from "./routing";
 
 type CompletedModelResolver<TResult> = (
   model: unknown,
@@ -46,6 +40,7 @@ export async function resolveCompletedFallback<TResult>(
         { budget: "step", limitMs: model.options.timeout?.attempt },
       );
       if (await fallbackWhen(result, model.options.when)) {
+        if (options.canReplace?.() === false) return result;
         const cause = Object.assign(
           new Error("fallback when(result) matched"),
           { name: "InvalidResponseError" },
@@ -56,10 +51,18 @@ export async function resolveCompletedFallback<TResult>(
       }
       return result;
     } catch (error) {
-      if (isPolicyTerminal(error)) throw error;
+      if (
+        isPolicyTerminal(error) ||
+        options.shouldStop?.(error) ||
+        options.canReplace?.() === false
+      )
+        throw error;
       causes.push(error);
       if (index === model.models.length - 1) break;
-      if (!(error instanceof Error) || !completedShouldFallback(error, model.options))
+      if (
+        !(error instanceof Error) ||
+        !completedShouldFallback(error, model.options)
+      )
         throw error;
       await notifyNextFallback(model, index, error);
     }

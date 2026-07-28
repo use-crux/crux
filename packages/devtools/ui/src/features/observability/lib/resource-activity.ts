@@ -9,7 +9,7 @@ import type {
   WorkspaceOperationEvent,
 } from "@/types";
 import { workspaceSnapshotEventFromResourceActivity } from "./workspace-snapshot-activity";
-import { workspaceSnapshotOperation } from "@/features/workspace-snapshot/contract";
+import { workspaceSnapshotOperation } from "@/shared/lib/workspace-snapshot";
 
 function attrs(
   activity: ObservabilityResourceActivity,

@@ -1,21 +1,28 @@
-import type { GuardrailAudit, GuardrailContext } from '../guardrail/types'
-import type { MediaGroupDependency } from '../media/groups'
-import { visitMedia, type MediaVisitGroup, type MediaVisitItem, type MediaVisitResult } from '../media/visit'
-import type { GuardrailBinding } from '../registry'
+import type { GuardrailAudit, GuardrailContext } from "../guardrail/types";
+import type { MediaGroupDependency } from "../media/groups";
+import {
+  visitMedia,
+  type MediaVisitGroup,
+  type MediaVisitItem,
+  type MediaVisitResult,
+} from "../media/visit";
+import type { GuardrailBinding } from "../registry";
 
 interface GuardInputOperationMediaOptions {
-  readonly bindings: readonly GuardrailBinding[]
-  readonly items: readonly MediaVisitItem[]
-  readonly groups: readonly MediaVisitGroup[]
-  readonly dependencies?: readonly MediaGroupDependency[]
-  readonly context: GuardrailContext
-  readonly appendAudit: (audit: GuardrailAudit) => void
+  readonly bindings: readonly GuardrailBinding[];
+  readonly items: readonly MediaVisitItem[];
+  readonly groups: readonly MediaVisitGroup[];
+  readonly dependencies?: readonly MediaGroupDependency[];
+  readonly context: GuardrailContext;
+  readonly appendAudit: (audit: GuardrailAudit) => void;
 }
 
 /** Guard canonical completed-operation input media without message projection. */
-export function guardInputOperationMedia(options: GuardInputOperationMediaOptions): Promise<MediaVisitResult> {
+export function guardInputOperationMedia(
+  options: GuardInputOperationMediaOptions,
+): Promise<MediaVisitResult> {
   return visitMedia({
-    phase: 'input',
+    phase: "input",
     bindings: options.bindings,
     items: options.items,
     groups: options.groups,
@@ -23,11 +30,14 @@ export function guardInputOperationMedia(options: GuardInputOperationMediaOption
     context: ({ subject }) => ({
       ...options.context,
       origin: {
-        source: 'user',
-        kind: 'operation',
-        partIndex: subject.origin.partIndex,
+        source: "user",
+        kind: "operation",
+        partIndex:
+          "partIndex" in subject.origin
+            ? subject.origin.partIndex
+            : subject.origin.outputIndex,
       },
     }),
     appendAudit: options.appendAudit,
-  })
+  });
 }

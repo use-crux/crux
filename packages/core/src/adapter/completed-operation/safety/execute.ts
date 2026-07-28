@@ -18,9 +18,14 @@ import {
   guardTranscriptionInput,
   guardTranscriptionOutput,
 } from "./transcription";
-import { completedOperationBindingApplicability } from "./applicability";
 import type { CompletedOperationSafetyOptions } from "./options";
 import type { Guardrail } from "../../../safety/guardrail/types";
+import { freezeSafetyAudit, hasSafetyAudit } from "../../../safety/audit";
+import {
+  isSafetyMediaOperation,
+  mediaOperationBindingApplicability,
+  type SafetyMediaOperation,
+} from "./applicability";
 
 /** Build one completed-operation Safety session before provider preflight. */
 export function createCompletedOperationSafety(
@@ -37,6 +42,27 @@ export function createCompletedOperationSafety(
     CompletedOperationSafetyOptions,
 ): Safety | undefined {
   if (!isSafetyCompletedOperation(options.operation)) return undefined;
+  return createMediaOperationSafety({
+    ...options,
+    operation: options.operation,
+  });
+}
+
+/** Build one media-operation Safety session before provider preflight. */
+export function createMediaOperationSafety(
+  options: Readonly<{
+    operation: string;
+    model: unknown;
+    promptId?: string;
+    systemPrompt?: string;
+    resolved?: {
+      readonly guardrails?: readonly Guardrail[];
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    };
+  }> &
+    CompletedOperationSafetyOptions,
+): Safety | undefined {
+  if (!isSafetyMediaOperation(options.operation)) return undefined;
   const safety = createSafetyWithBindingApplicability(
     {
       call: {
@@ -49,7 +75,7 @@ export function createCompletedOperationSafety(
       systemPrompt: options.systemPrompt,
       safety: options.safety,
     },
-    completedOperationBindingApplicability(options.operation),
+    mediaOperationBindingApplicability(options.operation),
   );
   return safety.enabled ? safety : undefined;
 }
@@ -61,15 +87,37 @@ export async function guardCompletedOperationInput<TInput>(
   safety: Safety | undefined,
 ): Promise<TInput> {
   if (!safety || !isSafetyCompletedOperation(operation)) return input;
+  return guardMediaOperationInput(operation, input, safety);
+}
 
+/** Apply the shared input projection for completed and streaming media. */
+export async function guardMediaOperationInput<TInput>(
+  operation: SafetyMediaOperation,
+  input: TInput,
+  safety: Safety | undefined,
+): Promise<TInput> {
+  if (!safety) return input;
   switch (operation) {
     case "generateImage":
+    case "streamImage":
       return guardGeneratedImageInput(input, safety);
     case "generateSpeech":
+    case "streamSpeech":
       return guardGeneratedSpeechInput(input, safety);
     case "transcribe":
       return guardTranscriptionInput(input, safety);
   }
+}
+
+/** Attach the immutable audit collected before terminal output guarding. */
+export function attachOperationSafetyAudit<
+  TResult extends CompletedOperationProviderPayload,
+>(result: TResult, safety: Safety | undefined): TResult {
+  if (!safety || !hasSafetyAudit(safety.audit)) return result;
+  return Object.freeze({
+    ...result,
+    safety: freezeSafetyAudit(safety.audit),
+  });
 }
 
 /** Apply the Core-owned output projection for one completed operation. */
@@ -91,7 +139,9 @@ export async function guardCompletedOperationOutput<
   );
 }
 
-async function guardKnownOutput<TResult extends CompletedOperationProviderPayload>(
+async function guardKnownOutput<
+  TResult extends CompletedOperationProviderPayload,
+>(
   operation: SafetyCompletedOperation,
   result: TResult,
   safety: Safety,

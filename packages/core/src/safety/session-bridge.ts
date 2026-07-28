@@ -7,7 +7,6 @@ import type {
   StepTransformer,
 } from "../adapter/executor-types";
 import type { AssistantContentPart } from "../types/content";
-import type { MediaPartSubject } from "./boundary";
 import type { MediaGroupDependency } from "./media/groups";
 import type { MediaVisitGroup, MediaVisitItem } from "./media/visit";
 import type { MediaOutputResult } from "./output/media";
@@ -34,10 +33,7 @@ import type {
 } from "./session-feedback-guard";
 import type { ToolExposureGuards } from "../adapter/tool/exposure/types";
 import type { ManagedMemoryWriteGuard } from "../memory/managed-write-guard";
-
-export const outputMediaGuard: unique symbol = Symbol(
-  "crux.safety.outputMediaGuard",
-);
+import type { SafetySessionMedia } from "./session-media";
 export const inputOperationMediaGuard: unique symbol = Symbol(
   "crux.safety.inputOperationMediaGuard",
 );
@@ -110,7 +106,7 @@ type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
   readonly systemIngress?: ResolvedSystemIngressDelivery;
 };
 
-export interface SafetySession extends Safety {
+export interface SafetySession extends Safety, SafetySessionMedia {
   [memoryWriteGuard]: ManagedMemoryWriteGuard;
   [toolDefinitionGuard]: ToolExposureGuards["root"];
   [toolDescriptionGuard]: ToolExposureGuards["descriptions"];
@@ -163,13 +159,6 @@ export interface SafetySession extends Safety {
     items: readonly MediaVisitItem[],
     groups: readonly MediaVisitGroup[],
     dependencies?: readonly MediaGroupDependency[],
-  ): Promise<MediaOutputResult>;
-  [outputMediaGuard](
-    subjects: readonly MediaPartSubject[],
-    options?: {
-      readonly minimumRetained?: number;
-      readonly model?: string;
-    },
   ): Promise<MediaOutputResult>;
   [outputOperationTextGuard](text: string, model?: string): Promise<string>;
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>;
@@ -473,19 +462,6 @@ export function guardSafetySessionInputOperationMedia(
     groups,
     dependencies,
   );
-}
-
-/** @internal Guard canonical output media for Core-owned adapter projections. */
-export function guardSafetySessionOutputMedia(
-  safety: Safety,
-  subjects: readonly MediaPartSubject[],
-  options?: {
-    readonly minimumRetained?: number;
-    /** Selected provider model for routed completed-operation output. */
-    readonly model?: string;
-  },
-): Promise<MediaOutputResult> {
-  return (safety as SafetySession)[outputMediaGuard](subjects, options);
 }
 
 /** @internal Guard canonical completed-operation output text. */

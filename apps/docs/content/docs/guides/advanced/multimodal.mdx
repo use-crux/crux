@@ -91,6 +91,13 @@ guaranteed image, transcript, or audio result shapes.
 
 Unsupported operations are absent from an adapter's type and runtime object. Anthropic, for example, exports none of the three specialized operations. Google transcription is a text-only composition: it returns no word timing or diarization and rejects timing requests instead of inventing measurements.
 
+## Stream bounded image and speech generation
+
+Use `streamImage()` or `streamSpeech()` only when progressive media improves
+the experience. See [Bounded media streaming](/docs/guides/advanced/bounded-media-streaming)
+for complete examples, event framing, Safety release rules, replay,
+cancellation, routing commitment, and storage ownership.
+
 ## Persist only when you want reuse
 
 ```ts
@@ -130,14 +137,37 @@ media merely to create task identity.
 
 ## Inspect authored and executed media work
 
-Project Index and Catalog show authored `generateImage`, `transcribe`, `generateSpeech`, and ingest operations, including safe modality/options facts and deterministic lints. JavaScript/Oxc and JavaScript/TypeScript-Go produce the same facts.
+Both `streamImage` and `streamSpeech` are visible in the authored Catalog and
+the executed Runs view.
 
-Observability and Runs show actual `media.generate_image`, `media.transcribe`, `media.generate_speech`, and `media.describe` attempts, execution mode, latency, safe reports, and `derived.from` lineage. Local text/transcript capture defaults on; production export defaults off. Neither setting permits bytes, base64/data URLs, `AssetRef`, provider file IDs, filenames, signed URL credentials, thumbnails, or playback.
+Project Index and Catalog show authored `generateImage`, `streamImage`,
+`transcribe`, `generateSpeech`, `streamSpeech`, and ingest operations,
+including safe modality/options facts, native/unknown support, source
+navigation, Safety relations, and deterministic lints. `streamImage` is an
+image-output operation; `streamSpeech` has text input and audio output. The
+bounded-stream badge stays distinct from text `stream()`. JavaScript/Oxc,
+JavaScript/TypeScript, and native TypeScript-Go produce the same facts.
+
+Observability and Runs show actual `media.generate_image`,
+`media.transcribe`, `media.generate_speech`, and `media.describe` work. A
+bounded stream has one logical operation summary and a separate **Physical
+attempts** timeline. The summary shows route commitment, preview/delta/final
+counts, byte totals, validated media types, time to first public event, total
+duration, terminal/cancel/timeout state, and preview/final Safety provenance.
+An exact authored media identity links back to Catalog; otherwise Runs says the
+join is unavailable instead of matching by provider, model, or name.
+
+These views retain scalar facts only. Local capture and production export never
+put prompts, bytes, base64/data URLs, `AssetRef`, provider file IDs, filenames,
+hashes, signed URLs, native events, thumbnails, or playback into the bounded
+stream presentation. Enforcing Safety may report that deltas were held and
+released or discarded, but held bytes never enter the read model.
 
 ## Tested adapter matrix
 
 This table is generated from private conformance fixtures. It is documentation, not a runtime capability API; the owning adapter still validates the selected model before I/O.
 
+{/* prettier-ignore */}
 | Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |
 | --- | --- | --- | --- | --- | --- |
 | Image input | native | native | native | model-owned | AI SDK-owned |
@@ -148,6 +178,8 @@ This table is generated from private conformance fixtures. It is documentation, 
 | `generateImage` | native | Imagen/Gemini native | absent | native | exact Crux AI re-export |
 | `transcribe` | native | honest composition, no word timing/diarization | absent | native | exact Crux AI re-export |
 | `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |
+| `streamImage` | native | native | absent | absent | absent |
+| `streamSpeech` | native | native | absent | absent | absent |
 
 ## Errors and remediation
 

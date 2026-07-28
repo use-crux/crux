@@ -21,6 +21,10 @@ import type {
   ProviderCompletedOperationFactory,
 } from "./completed-operations";
 import type {
+  DefinedStreamingOperations,
+  ProviderStreamingOperationFactories,
+} from "./streaming-operations";
+import type {
   DefinedSingleTurnProviderRuntime,
   ProviderRuntimeDepsArg,
   SingleTurnProviderRuntime,
@@ -71,6 +75,8 @@ export interface SingleTurnProviderBundleSpec<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 > extends ProviderCompletedOperationFactories<
   TClient,
   TImage,
@@ -108,11 +114,14 @@ export interface SingleTurnProviderBundleSpec<
     TCreateArgs,
     THelperArgs
   >;
+  /** Genuine bounded media streams. Omit unsupported operations. */
+  readonly streaming?: TStreaming;
   /** Provider-specific capabilities to expose next to generation. */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
     SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra> &
-      DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
+      DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+      DefinedStreamingOperations<TStreaming>,
     TExtensions
   >;
 }
@@ -140,6 +149,8 @@ export interface DefinedSingleTurnProviderBundle<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 > {
   /** Stable provider id used in metadata, observability, and provider matching. */
   readonly id: string;
@@ -153,7 +164,8 @@ export interface DefinedSingleTurnProviderBundle<
     TExtra,
     TDeps,
     TExtensions,
-    DefinedCompletedOperations<TImage, TTranscription, TSpeech>
+    DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+      DefinedStreamingOperations<TStreaming>
   >;
   /** Bind the compiled runtime to a provider client and public dependency args. */
   create(
@@ -161,6 +173,7 @@ export interface DefinedSingleTurnProviderBundle<
     ...args: [...TCreateArgs]
   ): SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra> &
     DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+    DefinedStreamingOperations<TStreaming> &
     TExtensions;
   /** Create lightweight framework-agnostic generation helpers. */
   helpers(...args: [...THelperArgs]): NativeChatHelpers<TClient>;

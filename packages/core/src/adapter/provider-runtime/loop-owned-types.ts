@@ -16,6 +16,10 @@ import type {
   ProviderCompletedOperationFactories,
   ProviderCompletedOperationFactory,
 } from "./completed-operations";
+import type {
+  DefinedStreamingOperations,
+  ProviderStreamingOperationFactories,
+} from "./streaming-operations";
 
 /** Context passed when binding a loop-owned runtime to a concrete client. */
 export interface LoopOwnedRuntimeBindContext {
@@ -76,6 +80,8 @@ export interface LoopOwnedProviderRuntimeSpec<
     | undefined = undefined,
   TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
     undefined,
+  TStreaming extends ProviderStreamingOperationFactories<TClient> | undefined =
+    undefined,
 > extends ProviderCompletedOperationFactories<
   TClient,
   TImage,
@@ -99,11 +105,14 @@ export interface LoopOwnedProviderRuntimeSpec<
     TRawResponse,
     TRawStream
   >;
+  /** Genuine bounded media streams. Omit unsupported operations. */
+  readonly streaming?: TStreaming;
   /** Provider-specific capabilities to expose next to generation. */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
     LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> &
-      DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
+      DefinedCompletedOperations<TImage, TTranscription, TSpeech> &
+      DefinedStreamingOperations<TStreaming>,
     TExtensions
   >;
   /** Disallow mixing provider runtime dialects. */

@@ -5,7 +5,6 @@ import { guardInput as guardSafetyInput } from "./input/runner";
 import { guardInputOperationMedia } from "./input/operation-media";
 import { guardInputOperationText } from "./input/operation-text";
 import { guardOutputTextParts as guardCompletionTextParts } from "./output-text-parts";
-import { guardOutputMedia as guardSafetyOutputMedia } from "./output/media";
 import { guardOutputOperationText } from "./output/operation-text";
 import { runOneShotConstraints } from "./output/one-shot";
 import {
@@ -38,7 +37,6 @@ import {
   languageStepTransform,
   languageTerminalFinalize,
   oneShotOutputConstraints,
-  outputMediaGuard,
   outputOperationTextGuard,
   streamCompletionGuard,
   modelIngressGuard,
@@ -54,6 +52,7 @@ import {
   type SafetySession,
   type StructuredSafetyContext,
 } from "./session-bridge";
+import { createSafetySessionMedia } from "./session-media";
 import { createStructuredSafetyStream } from "./stream/structured-engine";
 import { failClosedOnRejection } from "./stream/fail-closed";
 import { guardModelIngress } from "./input/model-ingress";
@@ -205,6 +204,13 @@ export function createSafetySessionMethods(
   };
   return {
     enabled: state.enabled,
+    ...createSafetySessionMedia({
+      bindings: outputBindings(),
+      defaultModel: state.options.model,
+      messages: state.messages.get,
+      context: state.guardContext,
+      appendAudit: state.appendGuardrailAudit,
+    }),
     // An enforce `assert` is the only Safety-owned commit gate today: it holds
     // every streamed byte until resolved and fails the attempt closed on failure.
     [streamCommitPlan]: {
@@ -345,20 +351,6 @@ export function createSafetySessionMethods(
         groups,
         dependencies,
         context: state.guardContext("input", state.messages.get()),
-        appendAudit: state.appendGuardrailAudit,
-      }),
-
-    [outputMediaGuard]: (subjects, mediaOptions) =>
-      guardSafetyOutputMedia({
-        bindings: outputBindings().filter(
-          (binding) => binding.boundary.id === "model.output.media",
-        ),
-        subjects,
-        minimumRetained: mediaOptions?.minimumRetained ?? 0,
-        context: {
-          ...state.guardContext("output", state.messages.get()),
-          model: mediaOptions?.model ?? state.options.model,
-        },
         appendAudit: state.appendGuardrailAudit,
       }),
 

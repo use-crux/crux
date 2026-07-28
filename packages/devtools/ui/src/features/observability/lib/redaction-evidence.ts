@@ -15,7 +15,7 @@ const surfaceLabels = {
 export const REDACTION_EVIDENCE_TOOLTIP =
   "Configured patterns changed captured telemetry here.";
 
-/** Formats only the closed, privacy-safe redaction surface vocabulary. */
+/** Formats only the canonical, privacy-safe redaction surface vocabulary. */
 export function formatRedactionSurfaces(
   evidence: CruxObservabilityRedactionEvidence | undefined,
 ): string[] {

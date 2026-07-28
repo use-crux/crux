@@ -9,21 +9,39 @@ import {
 describe('authored media native static parity', () => {
   itWithRustOxc('matches specialized literal media operations', async () => {
     const result = await extractNativeAndFallback({
-      callNames: ['generateImage', 'transcribe', 'generateSpeech'],
+      callNames: [
+        'generateImage',
+        'streamImage',
+        'transcribe',
+        'generateSpeech',
+        'streamSpeech',
+      ],
       source: [
+        `import { streamImage } from '@use-crux/openai'`,
+        `import { streamSpeech } from '@use-crux/google'`,
         `export const cover = generateImage({ model: 'image-1', prompt: 'private', n: 2, size: '1024x1024', seed: 7 })`,
+        `export const preview = streamImage({ model: 'image-1', prompt: 'private stream', n: 1 })`,
         `export const transcript = transcribe({ model: 'whisper-1', audio: 'https://private.example/audio.mp3', task: { type: 'translate', targetLanguage: 'SECRET_LANGUAGE' }, timestamps: 'segment', diarization: true })`,
         `export const speech = generateSpeech({ model: 'tts-1', text: 'private', voice: 'alloy' })`,
+        `export const audio = streamSpeech({ model: 'tts-stream', text: 'private stream speech', voice: 'Kore' })`,
       ].join('\n'),
     })
 
-    expect(nativeFactCount(result.record, 'media.operation')).toBe(3)
+    expect(nativeFactCount(result.record, 'media.operation')).toBe(5)
     expectNativeExtractionParity(result.nativeOut, result.fallbackOut)
     expect(
       result.nativeOut.definitions.find(
         (definition) => definition.name === 'transcript',
       )?.metadata?.facts,
     ).toMatchObject({ authoredOptions: { task: 'translate' } })
+    expect(
+      result.nativeOut.definitions
+        .filter((definition) => ['preview', 'audio'].includes(definition.name))
+        .map((definition) => definition.metadata?.facts),
+    ).toEqual([
+      expect.objectContaining({ adapter: 'openai', execution: 'native' }),
+      expect.objectContaining({ adapter: 'google', execution: 'native' }),
+    ])
     expect(JSON.stringify(result.nativeOut)).not.toMatch(
       /private|secret\.example|SECRET_LANGUAGE/,
     )

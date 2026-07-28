@@ -294,10 +294,21 @@ Static facts preserve stable `policyId`, boundary targets such as
 `model.input.text`, `model.input.media`, `model.instructions`, or
 `model.output.text`, ordered boundary tuples, built-in strategy helper kinds and statically visible configuration
 such as `guardrail.media({ action: 'strip' })`, and safe tool-policy match
-metadata. Completed media operations retain `guardrail.applies_to` /
+metadata. Authored media operations retain `guardrail.applies_to` /
 `constraint.applies_to` relations and a source reference for authored `safety`
 options so Catalog can present both sides of the attachment without evaluating
 runtime configuration.
+
+Authored media operations include completed `generateImage`, `transcribe`, and
+`generateSpeech`, text `stream`, and bounded `streamImage` and `streamSpeech`.
+The two bounded operations stay first-class rather than collapsing into text
+streaming: `streamImage` has image output, while `streamSpeech` has text input
+and audio output. Facts include only allowlisted authored options, modalities,
+safe source references, Safety/policy relations, and structural adapter support.
+OpenAI and Google bound calls report native support; adapters without a genuine
+matching stream remain absent. Direct imports, aliases, and bound adapter calls
+produce the same facts across Rust/Oxc, JavaScript/TypeScript, and native
+TypeScript-Go backends.
 Option-bearing input helpers such as
 `boundary.input.text({ from: "retrieval" })` produce the same canonical boundary
 fact as their optionless form. Source filters are runtime guardrail configuration

@@ -129,12 +129,13 @@ describe("output media safety boundary indexing", () => {
   );
 
   itWithRustOxc(
-    "indexes completed-operation policy and safety option references",
+    "indexes completed and streaming policy and safety option references",
     async () => {
       const { fallbackOut, nativeOut, typescriptOut } =
         await extractNativeAndFallback({
           source: [
             "import { transcribe } from '@use-crux/ai'",
+            "import { streamImage } from '@use-crux/openai'",
             "import { boundary, constraint, guardrail } from '@use-crux/core/safety'",
             "",
             "const mediaPolicy = guardrail({",
@@ -156,8 +157,14 @@ describe("output media safety boundary indexing", () => {
             "  constraints: [transcriptCheck],",
             "  safety: safetyOptions,",
             "})",
+            "export const preview = streamImage({",
+            "  model: 'gpt-image-1',",
+            "  prompt: 'private prompt',",
+            "  guardrails: [mediaPolicy],",
+            "  safety: safetyOptions,",
+            "})",
           ].join("\n"),
-          callNames: ["constraint", "guardrail", "transcribe"],
+          callNames: ["constraint", "guardrail", "streamImage", "transcribe"],
         });
 
       expect(nativeOut.relations).toEqual(
@@ -172,6 +179,11 @@ describe("output media safety boundary indexing", () => {
             from: "constraint:transcript-check",
             to: "media.operation:transcript",
           }),
+          expect.objectContaining({
+            type: "guardrail.applies_to",
+            from: "guardrail:media-policy",
+            to: "media.operation:preview",
+          }),
         ]),
       );
       for (const output of [nativeOut, fallbackOut, typescriptOut]) {
@@ -179,6 +191,16 @@ describe("output media safety boundary indexing", () => {
           (item) => item.id === "media.operation:transcript",
         );
         expect(operation?.sourceRefs).toContainEqual(
+          expect.objectContaining({
+            role: "config",
+            property: "safety",
+            symbol: "safetyOptions",
+          }),
+        );
+        const stream = output.definitions.find(
+          (item) => item.id === "media.operation:preview",
+        );
+        expect(stream?.sourceRefs).toContainEqual(
           expect.objectContaining({
             role: "config",
             property: "safety",

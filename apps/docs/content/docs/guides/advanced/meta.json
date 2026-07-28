@@ -4,6 +4,7 @@
   "pages": [
     "type-system",
     "multimodal",
+    "bounded-media-streaming",
     "building-adapters",
     "headless",
     "writing-indexer-extension",

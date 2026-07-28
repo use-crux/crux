@@ -23,11 +23,7 @@ export {
   classifyError,
   shouldAttemptFallback,
 } from "./fallback";
-export type {
-  FallbackModel,
-  FallbackOptions,
-  ErrorCategory,
-} from "./fallback";
+export type { FallbackModel, FallbackOptions, ErrorCategory } from "./fallback";
 
 // Step/agent retry
 export { executeWithRetry, isNonRetryableCruxPolicyError } from "./retry";
@@ -82,6 +78,12 @@ export type {
   ImagePromptContent,
   NativeGeneratedImage,
 } from "./image-contracts";
+export type {
+  ImageStreamEvent,
+  StreamImage,
+  StreamImageOptions,
+  StreamImageResult,
+} from "./image-stream-contracts";
 export type {
   GenerateImageResultFields,
   NoImageGeneratedError,

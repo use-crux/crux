@@ -45,7 +45,7 @@ export type GoogleGenerateSpeech = GenerateSpeech<
   GenerateContentResponse
 >;
 
-type GoogleSpeechInput = GenerateSpeechOptions<
+export type GoogleSpeechInput = GenerateSpeechOptions<
   string,
   GoogleSpeechVoice,
   GoogleSpeechExtra
@@ -81,18 +81,7 @@ export function createGoogleSpeechOperation(client: GoogleGenAI) {
     support: () => "supported" as const,
     invoke: (options, { signal, call }) =>
       call("generation.speech", () =>
-        client.models.generateContent({
-          model: options.model,
-          contents: [{ role: "user", parts: [{ text: options.text }] }],
-          config: {
-            ...options.extra,
-            abortSignal: signal,
-            responseModalities: ["AUDIO"],
-            ...(speechConfig(options) === undefined
-              ? {}
-              : { speechConfig: speechConfig(options) }),
-          },
-        }),
+        client.models.generateContent(googleSpeechRequest(options, signal)),
       ),
     validate(raw) {
       const part = raw.candidates
@@ -117,6 +106,25 @@ export function createGoogleSpeechOperation(client: GoogleGenAI) {
     report: () => ({ kind: "audio" }),
     conformance: [],
   });
+}
+
+/** Build one audio-only Generate Content request shared by completed and streaming TTS. */
+export function googleSpeechRequest(
+  options: GoogleSpeechInput,
+  signal: AbortSignal,
+) {
+  return {
+    model: options.model,
+    contents: [{ role: "user" as const, parts: [{ text: options.text }] }],
+    config: {
+      ...options.extra,
+      abortSignal: signal,
+      responseModalities: ["AUDIO"],
+      ...(speechConfig(options) === undefined
+        ? {}
+        : { speechConfig: speechConfig(options) }),
+    },
+  };
 }
 
 function speechConfig(options: GoogleSpeechInput) {
@@ -151,7 +159,7 @@ function isMultiSpeaker(voice: GoogleSpeechVoice): voice is Readonly<{
   return typeof voice === "object" && "speakerVoiceConfigs" in voice;
 }
 
-function googleSpeechIssue(options: GoogleSpeechInput) {
+export function googleSpeechIssue(options: GoogleSpeechInput) {
   if (KNOWN_NON_SPEECH_MODELS.has(options.model))
     return issue("speech.model", "model");
   if (options.outputFormat !== undefined)

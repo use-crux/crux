@@ -189,6 +189,7 @@ export const DefinitionRefRoleSchema = z.enum([
   "invoked-composition-branch",
   "invoked-recipe-step",
   "invoked-scorer",
+  "invoked-media-operation",
 ]) satisfies z.ZodType<DefinitionRefRole>;
 
 export const SanitizedSourceRefSchema = z.object({

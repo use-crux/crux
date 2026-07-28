@@ -25,6 +25,7 @@ import {
   semanticMediaOperationFacts,
   semanticMediaOutputIsDiscarded,
 } from "./media-fact-values";
+import { semanticMediaPolicyEvidence } from "./media-policy-evidence";
 import {
   semanticSourceForNode,
   semanticVariableNameForNode,
@@ -91,6 +92,9 @@ export function semanticMediaFacts(
         status: "active",
         metadata: { facts, indexPresentation: { standalone: true } },
       });
+      const policyEvidence = semanticMediaPolicyEvidence(id, config, view);
+      sourceRefs.push(...policyEvidence.sourceRefs);
+      relations.push(...policyEvidence.relations);
       if (
         argument &&
         !view.syntax.isKind(

@@ -4,17 +4,18 @@ description: Google GenAI SDK adapter, factory pattern with provider caching plu
 ---
 
 Google message content supports native image, audio, video, and documents.
-Specialized exports include Imagen/Gemini-native `generateImage()`, native
-Gemini `generateSpeech()` (including two-speaker configuration), and composed
+Specialized exports include Imagen/Gemini-native `generateImage()`, finite
+Interactions `streamImage()`, native Gemini `generateSpeech()` (including
+two-speaker configuration), finite TTS `streamSpeech()`, and composed
 `transcribe()`. Composed transcription returns text with no word timing or
 diarization and rejects those requests before I/O. Endpoint-specific options
 stay separated in typed `extra` records.
-All three operations use the portable completed-operation Safety contract;
-canonical audits are returned in `result.safety`, while provider-native `raw`
-values remain unguarded. See the
+All five specialized media operations use the portable media-operation Safety contracts;
+canonical audits are returned in `result.safety`, while
+provider-native `raw` values remain unguarded. See the
 [content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
-Peer dependency: `@google/genai` (`^1.0.0 || ^2.0.0`)
+Peer dependency: `@google/genai` (`^2.0.0`)
 
 ```ts
 import {
@@ -75,6 +76,8 @@ interface GoogleCachedContentCachePort {
 | ---------------------------- | ------------------------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via Google GenAI with Zod validation (structured) or text generation |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                             |
+| `.streamImage(options)`      | Stream current finite Interactions image deltas                                       |
+| `.streamSpeech(options)`     | Stream finite Generate Content raw-PCM speech bytes                                   |
 | `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with Google params                                     |
 | `.retrievalModel(config)`    | Bind Google generation to core retrieval recipe steps                                 |
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                                 |
@@ -198,6 +201,49 @@ There is deliberately no `raw` on a managed stream: a provider stream resolves
 before terminal Safety and describes only one attempt, so exposing it would
 bypass guardrail holds, structured occurrence gating, commit gates, and
 validation retry.
+
+### `adapter.streamImage(options)`
+
+Start one stateless finite `v1beta` Interactions request. Initial model support
+is exactly:
+
+- `gemini-2.5-flash-image`
+- `gemini-3-pro-image`
+- `gemini-3.1-flash-image`
+
+Crux fixes `stream: true`, `store: false`, and
+`response_format: { type: "image" }`. It exposes no continuation/session API
+and sends no `previous_interaction_id`, background execution, tools, or
+webhook. The adapter binds only the current SDK 2.x
+`interaction.created`/`step.delta`/`interaction.completed` schema.
+
+Each native image step index receives a dense `outputIndex` on first sight.
+Its ordered `image-delta` bytes and assembled final `image` keep that identity;
+individual deltas may not be renderable. `completion.raw` is the exact
+`InteractionCompletedEvent` envelope, while payload-free provider metadata is
+derived from its interaction resource.
+
+### `adapter.streamSpeech(options)`
+
+Start finite `models.generateContentStream()` TTS. Initial support is exactly
+`gemini-3.1-flash-tts-preview`; completed-only 2.5 TTS and unknown model ids
+fail before provider I/O.
+
+Each `audio-delta` contains decoded native bytes with the exact first
+`audio/*` MIME string. Later chunks must declare the same MIME. Google emits
+headerless 24 kHz, mono, 16-bit raw PCM; Crux assembles the final `Blob`
+without adding a WAV header. Successful completion requires
+`candidates[0].finishReason === "STOP"`. `completion.raw` is that exact final
+`GenerateContentResponse`; a missing/different reason or a response after it
+fails without publishing final `audio` or `finish`.
+
+Both bounded streams share Core's replay, cancellation, timeout, Safety, and
+routing laws. Every `fullStream` reader replays the same canonical events.
+`cancel(reason)` or `abortSignal` stops the logical operation. Enforcing
+output-media Safety retains incomplete deltas until final validation; report
+mode may publish them live. The first live delta commits routing, so later
+provider failure is terminal. Crux never persists chunks or completion media;
+persist the final asset explicitly.
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 
@@ -336,21 +382,21 @@ model ids conservatively default to text-only and require explicit sizing.
 Google's SDK returns token counts per embedded input when available, and the
 Crux helper aggregates them into embedding usage metadata automatically.
 
-| Field                      | Type          | Description                                               |
-| -------------------------- | ------------- | --------------------------------------------------------- |
-| `client`                   | `GoogleGenAI` | Google GenAI client instance                              |
-| `config.name`              | `string?`     | Stable embedding identifier; Gemini Embedding 2 defaults to the model id. |
-| `config.model`             | `string`      | Google embedding model                                    |
-| `config.modalities`        | `EmbeddingModality[]?` | Explicit native modalities; overrides known-model defaults. |
-| `config.dimensions`        | `number?`     | Output dimensions; Gemini Embedding 2 defaults to `3072`. |
-| `config.maxInputTokens`    | `number?`     | Text token ceiling; Gemini Embedding 2 defaults to `8192`. |
-| `config.batch.maxSize`     | `number?`     | Top-level Crux batch size. Defaults to `100`.             |
-| `config.batch.concurrency` | `number?`     | Top-level Crux batch concurrency. Defaults to `1`.        |
-| `config.tasks`             | `{ query?: string; document?: string }?` | Role-specific task types for models that support them. |
-| `config.title`             | `string?`     | Document title. Only applies to retrieval-document tasks. |
-| `config.mimeType`          | `string?`     | Optional input MIME type                                  |
-| `config.autoTruncate`      | `boolean?`    | Vertex-only truncation behavior                           |
-| `config.version`           | `string?`     | Extra vector-semantic revision for cache invalidation     |
+| Field                      | Type                                     | Description                                                               |
+| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
+| `client`                   | `GoogleGenAI`                            | Google GenAI client instance                                              |
+| `config.name`              | `string?`                                | Stable embedding identifier; Gemini Embedding 2 defaults to the model id. |
+| `config.model`             | `string`                                 | Google embedding model                                                    |
+| `config.modalities`        | `EmbeddingModality[]?`                   | Explicit native modalities; overrides known-model defaults.               |
+| `config.dimensions`        | `number?`                                | Output dimensions; Gemini Embedding 2 defaults to `3072`.                 |
+| `config.maxInputTokens`    | `number?`                                | Text token ceiling; Gemini Embedding 2 defaults to `8192`.                |
+| `config.batch.maxSize`     | `number?`                                | Top-level Crux batch size. Defaults to `100`.                             |
+| `config.batch.concurrency` | `number?`                                | Top-level Crux batch concurrency. Defaults to `1`.                        |
+| `config.tasks`             | `{ query?: string; document?: string }?` | Role-specific task types for models that support them.                    |
+| `config.title`             | `string?`                                | Document title. Only applies to retrieval-document tasks.                 |
+| `config.mimeType`          | `string?`                                | Optional input MIME type                                                  |
+| `config.autoTruncate`      | `boolean?`                               | Vertex-only truncation behavior                                           |
+| `config.version`           | `string?`                                | Extra vector-semantic revision for cache invalidation                     |
 
 The helper fingerprint includes model, both role task types, title, MIME type,
 and auto-truncation behavior, then appends `version` when supplied. Operational

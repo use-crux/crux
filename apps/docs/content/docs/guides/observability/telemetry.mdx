@@ -121,6 +121,7 @@ Every instrumented Crux event produces a span:
 | Event                     | Span Name                         | Key Attributes                                                                                        |
 | ------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `generate()` / `stream()` | `chat {model}`                    | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, token usage, cost            |
+| `streamImage()` / `streamSpeech()` | media primitive logical + attempt spans | `crux.operation`, `crux.streamingRole`, route/commit, counts, bytes, MIME facts, first-event/duration, terminal |
 | Cost tracking             | `crux.cost.{report\|warn\|limit}` | `crux.cost`, `crux.cost.total`, `crux.cost.source`, `crux.cost.threshold`                             |
 | Tool execution            | `execute_tool {name}`             | `gen_ai.operation.name`, `crux.tool.name`, `crux.tool.call_id`, model-output sizes, estimated savings |
 | `flow().run()`            | `crux.flow`                       | `crux.flow.id`, `crux.flow.name`                                                                      |
@@ -136,6 +137,11 @@ Every instrumented Crux event produces a span:
 | Delegation                | `crux.delegate`                   | `crux.delegate.id`                                                                                    |
 
 Tool spans include privacy-safe `toModelOutput()` metadata only. OTel records the output shape and byte-size difference; it does not record raw tool results, model-facing tool content, queries, files, or metadata.
+
+Bounded media streams keep one logical span and child physical-attempt spans.
+They export progressive counts and timing, not progressive content. Prompts,
+media bytes/base64, URLs, filenames, hashes, refs, held Safety payloads, and
+provider-native events are dropped before OTel mapping.
 
 Generate/stream spans follow Crux's pinned `genai-dev-2026-06` GenAI semantic convention table. Attributes like `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.client.operation.duration`, and `gen_ai.server.time_to_first_token` work with dashboards and alerting rules while keeping semconv churn isolated to one versioned table.
 

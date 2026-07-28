@@ -6,7 +6,9 @@ const GENERIC_LABEL = "Catalog media operation";
 
 describe("resolveMediaCatalogJoin label privacy", () => {
   it("never derives a rendered label from definitionId suffix or secret tokens", () => {
-    const join = resolveMediaCatalogJoin({ definitionId: SECRET_ID });
+    const join = resolveMediaCatalogJoin(undefined, {
+      definitionRefs: [invokedRef(SECRET_ID)],
+    });
 
     expect(join).toEqual({
       status: "joined",
@@ -20,10 +22,14 @@ describe("resolveMediaCatalogJoin label privacy", () => {
 
   it("uses a safe display name when recorded separately", () => {
     expect(
-      resolveMediaCatalogJoin({
-        definitionId: SECRET_ID,
-        definitionName: "Cover art",
-      }),
+      resolveMediaCatalogJoin(
+        {
+          definitionName: "Cover art",
+        },
+        {
+          definitionRefs: [invokedRef(SECRET_ID)],
+        },
+      ),
     ).toEqual({
       status: "joined",
       definitionId: SECRET_ID,
@@ -39,8 +45,19 @@ describe("resolveMediaCatalogJoin label privacy", () => {
       "data:image/png;base64,SECRET",
     ]) {
       expect(
-        resolveMediaCatalogJoin({ definitionId: SECRET_ID, definitionName }),
+        resolveMediaCatalogJoin(
+          { definitionName },
+          { definitionRefs: [invokedRef(SECRET_ID)] },
+        ),
       ).toMatchObject({ label: GENERIC_LABEL });
     }
   });
 });
+
+function invokedRef(id: string) {
+  return {
+    id,
+    kind: "media.operation",
+    role: "invoked-media-operation",
+  } as const;
+}

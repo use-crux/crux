@@ -1,7 +1,4 @@
-import {
-  classifyError,
-  isFallback,
-} from "../../generation/fallback";
+import { classifyError, isFallback } from "../../generation/fallback";
 import { withAbortSignal, withBudget } from "../../generation/timeout";
 import { isCascade } from "../../routing/cascade";
 import { isRetry, type RetryOptions } from "../../routing/retry";
@@ -16,6 +13,10 @@ export interface CompletedRoutingOptions {
   readonly route?: string;
   readonly signal: AbortSignal;
   readonly stepMs?: number;
+  /** Whether a failed or rejected child may still be replaced. */
+  readonly canReplace?: () => boolean;
+  /** Additional operation-specific terminal error classifier. */
+  readonly shouldStop?: (error: unknown) => boolean;
 }
 
 export interface CompletedRoutingState {
@@ -43,7 +44,12 @@ export async function resolveCompletedModel<TResult>(
       try {
         return await resolveCompletedModel(model.model, options, state, invoke);
       } catch (error) {
-        if (isPolicyTerminal(error)) throw error;
+        if (
+          isPolicyTerminal(error) ||
+          options.shouldStop?.(error) ||
+          options.canReplace?.() === false
+        )
+          throw error;
         lastError = error;
         if (
           attempt === model.options.attempts - 1 ||

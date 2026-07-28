@@ -52,7 +52,7 @@ definition handle:
 interface DefinitionRef {
   id: string; // matches store.ProjectDefinition.ID exactly
   kind: ProjectDefinitionKind;
-  role: DefinitionRefRole; // e.g. resolved-prompt, invoked-agent, invoked-tool
+  role: DefinitionRefRole; // e.g. resolved-prompt, invoked-agent, invoked-media-operation
   source?: { file: string; line: number; column?: number }; // repo-relative only
 }
 ```
@@ -106,7 +106,14 @@ Per-kind coverage facts:
 - Other structural children inherit evidence from an indexed parent and are labelled _not independently observed_.
 - Knowledge bases and tool policies have canonical contributor refs on their owner spans (`runtimeIdentity: definition-ref`).
 - Injectables and storage ports do not expose canonical runtime ids (`runtimeIdentity: none`); Catalog shows truthful zero-runtime / non-independent evidence for them.
-- Deferred work, media operations, and ingest sources emit real runtime primitives, but those records do not carry the authored definition id; Catalog labels them runtime-observed but unjoined.
+- Deferred work, media operations, and ingest sources emit real runtime
+  primitives, but their normal records do not observe the compiler-local
+  authored id; Catalog labels them runtime-observed but unjoined. A caller that
+  genuinely holds an exact authored media identity may attach
+  a DefinitionRef with `kind: "media.operation"` and
+  `role: "invoked-media-operation"` for Run Detail navigation, but Crux never
+  synthesizes it from operation/provider/model/name. A missing or different
+  role remains unavailable; conflicting valid refs remain ambiguous.
 - Scorers remain Eval-primary; an authored `judge({ id })` also attaches a scorer ref to its live `scoring.judge` span.
 - File-loaded skills without a registry composite id do not invent a join key; registry-loaded skills do emit `DefinitionRef`.
 - Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) require an authored `id` so runtime and index share `composition.<kind>:<id>`.
@@ -134,6 +141,43 @@ This field is current authored context, not a runtime record or historical
 claim. It does not add a span, alter stored observability evidence, or affect
 the run status. Consumers should label it **Current project health** or
 **Current Index context** and keep active and suppressed counts separate.
+
+## Bounded media stream records
+
+`streamImage()` and `streamSpeech()` reuse `media.generate_image` and
+`media.generate_speech`. The `operation` attribute distinguishes the bounded
+stream from the completed call. `streamingRole` distinguishes ownership: one
+`streamingRole: "logical"` span owns the
+public operation and same-primitive `streamingRole: "attempt"` children own
+physical provider attempts. Read models must not render the logical root as an
+attempt.
+
+| Attribute        | Logical | Attempt | Meaning                                      |
+| ---------------- | ------- | ------- | -------------------------------------------- |
+| `operation`      | yes     | yes     | `streamImage` or `streamSpeech`              |
+| `route`          | optional| —       | Selected routing expression/route            |
+| `attempt`        | —       | yes     | One-based physical attempt number            |
+| `attemptCount`   | yes     | —       | Total physical attempts                      |
+| `committed`      | yes     | yes     | Whether public provider media committed route|
+| `previewCount`   | yes     | yes     | Published/observed complete previews         |
+| `deltaCount`     | yes     | yes     | Progressive byte-event count                 |
+| `finalCount`     | yes     | yes     | Final asset-event count                      |
+| `byteCount`      | yes     | yes     | Aggregate media bytes                        |
+| `mediaTypes`     | yes     | yes     | Declared MIME facts                          |
+| `firstEventMs`   | optional| optional| Time to first provider candidate/public event|
+| `durationMs`     | yes     | yes     | Logical or attempt duration                  |
+| `terminal`       | yes     | yes     | `ok`, `error`, `cancelled`, or `timeout`     |
+
+The logical report can additionally carry calls and safe final media-report
+counts. Output-media `guardrail.report` artifacts use operation origins with
+`operationPhase: "preview" | "final"`, `outputIndex`, and preview `sequence`
+where applicable. They never contain the image/audio bytes.
+
+All consumers receive only sanitized scalar facts. Prompts, bytes, base64,
+URLs, filenames, hashes, refs, native events, provider envelopes, and held
+media do not become span attributes or the bounded-stream Runs presentation.
+Local and `@use-crux/otel` consume this same sanitized record stream; OTel keeps
+the existing media primitive mapping and exports safe `crux.*` attributes.
 
 ## Error evidence
 

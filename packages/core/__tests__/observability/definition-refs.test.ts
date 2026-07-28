@@ -96,7 +96,22 @@ describe("DefinitionRef wire contract", () => {
       "invoked-composition-branch",
       "invoked-recipe-step",
       "invoked-scorer",
+      "invoked-media-operation",
     ]);
+  });
+
+  it("accepts an exact authored media-operation identity without guessing one", () => {
+    expect(
+      DefinitionRefSchema.parse({
+        id: "media.operation:hero-image",
+        kind: "media.operation",
+        role: "invoked-media-operation",
+      }),
+    ).toEqual({
+      id: "media.operation:hero-image",
+      kind: "media.operation",
+      role: "invoked-media-operation",
+    });
   });
 
   it("parses a single valid ref with a sanitized source", () => {

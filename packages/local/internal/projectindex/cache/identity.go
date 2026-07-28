@@ -13,6 +13,7 @@ package cache
 // Eval timeout policy facts while adding canonical provider-visible tool Safety
 // boundary metadata across restart boundaries in Epoch 49. Epoch 50 adds the
 // privacy-safe effective observability policy to Project Identity snapshots.
+// Epoch 51 adds bounded media stream operation facts.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 50
+const ProjectIndexSnapshotCacheEpoch = 51

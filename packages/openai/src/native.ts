@@ -34,8 +34,10 @@ import {
 } from "./stream";
 import type { OpenAIChatRequest, OpenAIExtra } from "./types";
 import { createOpenAIImageOperation } from "./image-generation";
+import { createOpenAIImageStreamingOperation } from "./image-streaming";
 import { createOpenAITranscriptionOperation } from "./transcription";
 import { createOpenAISpeechOperation } from "./speech";
+import { createOpenAISpeechStreamingOperation } from "./speech-streaming";
 import { materializeOpenAIToolSource } from "./mcp-materializer";
 
 /** Configuration for `openai.retrievalModel()`. */
@@ -84,6 +86,10 @@ const openAI = defineSingleTurnProviderBundle({
   image: createOpenAIImageOperation,
   transcription: createOpenAITranscriptionOperation,
   speech: createOpenAISpeechOperation,
+  streaming: {
+    image: createOpenAIImageStreamingOperation,
+    speech: createOpenAISpeechStreamingOperation,
+  },
   extend: ({ client }) => createOpenAIRuntimeExtensions(client),
 });
 

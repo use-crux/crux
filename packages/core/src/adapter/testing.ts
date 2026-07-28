@@ -19,6 +19,7 @@
 
 export { adapterSpecConformance } from "./testing/native";
 export { assertCanonicalResult } from "./testing/canonical-result";
+export { boundedMediaStreamingConformance } from "./testing/bounded-media-streaming";
 export { completedMediaConformance } from "./testing/completed-media";
 export {
   assertDirectMediaTranscriptIdentity,
@@ -45,6 +46,12 @@ export {
   transcriptCodecConformance,
   transcriptRoundTripConformance,
 } from "./testing/transcript";
+export type {
+  BoundedImageStreamingConformanceCase,
+  BoundedMediaStreamingConformanceCase,
+  BoundedMediaStreamingConformanceViolation,
+  BoundedSpeechStreamingConformanceCase,
+} from "./testing/bounded-media-streaming";
 export type {
   CompletedMediaConformanceCase,
   CompletedMediaConformanceViolation,

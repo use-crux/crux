@@ -49,6 +49,46 @@ describe('decisionLocationLabel', () => {
     ).toBe('generateSpeech · output · audio · part 0 · audio')
   })
 
+  it('renders bounded stream coordinates without inventing part indexes', () => {
+    expect(
+      decisionLocationLabel({
+        origin: {
+          kind: 'operation',
+          operation: 'streamImage',
+          phase: 'preview',
+          field: 'images',
+          outputIndex: 2,
+          sequence: 4,
+        },
+        partType: 'image',
+      }),
+    ).toBe('streamImage · preview · images · output 2 · sequence 4 · image')
+    expect(
+      decisionLocationLabel({
+        origin: {
+          kind: 'operation',
+          operation: 'streamImage',
+          phase: 'final',
+          field: 'images',
+          outputIndex: 1,
+        },
+        partType: 'image',
+      }),
+    ).toBe('streamImage · final · images · output 1 · image')
+    expect(
+      decisionLocationLabel({
+        origin: {
+          kind: 'operation',
+          operation: 'streamSpeech',
+          phase: 'final',
+          field: 'audio',
+          outputIndex: 0,
+        },
+        partType: 'audio',
+      }),
+    ).toBe('streamSpeech · final · audio · output 0 · audio')
+  })
+
   it('renders flattened operation reports and strip escalation', () => {
     expect(
       presentationRows(

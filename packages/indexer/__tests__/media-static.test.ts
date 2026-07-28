@@ -174,8 +174,10 @@ describe('authored media static indexing', () => {
       'generate',
       'stream',
       'generateImage',
+      'streamImage',
       'transcribe',
       'generateSpeech',
+      'streamSpeech',
       'describe',
     ])
     expect(mediaAuthoredOptionFields).toEqual([
@@ -208,8 +210,10 @@ describe('authored media static indexing', () => {
       ['generate', 1],
       ['stream', 1],
       ['generateImage', 0],
+      ['streamImage', 0],
       ['transcribe', 0],
       ['generateSpeech', 0],
+      ['streamSpeech', 0],
       ['describe', 0],
     ])
     expect(authoredMediaPrimitiveManifest.nativeProjection).toEqual({

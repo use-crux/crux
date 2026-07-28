@@ -8,7 +8,7 @@ Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux pro
 pnpm add @use-crux/google @use-crux/core @google/genai
 ```
 
-`@google/genai` (`^1.0.0 || ^2.0.0`) is a peer dependency.
+`@google/genai` (`^2.0.0`) is a peer dependency.
 
 ## Usage
 
@@ -39,7 +39,7 @@ result.usage; // accumulated usage when every provider step reported it
 result.finalStep; // text, usage, finish reason, response id, and actual model for the final step
 ```
 
-The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `generate()` returns the canonical Crux envelope with accumulated `text`, optional `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `raw`, and retained `_meta`; `usage` is present only when every provider-call step reported usage. `stream()` returns `{ textStream, raw, completion }`, where `completion` resolves to the same envelope fields without `raw`/`_meta`. `createGenerateObjectFn(client)` is provider-native: pass `model` in each prompt-or-messages call. It uses Google structured JSON output and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
+The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `generate()` returns the canonical Crux envelope with accumulated `text`, optional `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `raw`, and retained `_meta`; `usage` is present only when every provider-call step reported usage. `stream()` returns the Core-owned logical stream `{ runId, _meta, textStream, fullStream, partialOutputStream, completion, cancel }`; it never exposes the physical provider stream. `createGenerateObjectFn(client)` is provider-native: pass `model` in each prompt-or-messages call. It uses Google structured JSON output and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 Provider-level caching via Google's CachedContent API activates automatically for a leading run of system blocks with `providerCache: true`. A single `GoogleCachedContentLifecycle` owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy; it returns a request-ready config patch that both `generate()` and `stream()` merge. The adapter sends the cacheable prefix as `cachedContent` and keeps the uncached remainder as `systemInstruction`.
 
@@ -77,7 +77,15 @@ See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core
 
 Normal messages support native image, audio, video, and document parts. The
 package exports native Imagen/Gemini `generateImage()` and native Gemini
-`generateSpeech()` operations, including two-speaker voice configuration.
+`generateSpeech()` operations, including two-speaker voice configuration. It
+also exposes genuine bounded `streamImage()` and `streamSpeech()` operations.
+Image streaming uses one stateless current-schema Interactions request for
+`gemini-2.5-flash-image`, `gemini-3-pro-image`, or
+`gemini-3.1-flash-image`; speech streaming uses finite
+`generateContentStream()` with `gemini-3.1-flash-tts-preview` and preserves
+Google's headerless raw-PCM bytes. Both return replayable canonical events plus
+the same final Crux image/speech result shape, support cancellation and Safety,
+and never persist media implicitly.
 `transcribe()` is an honest one-call composition: it returns text with empty
 timing arrays and rejects word timing or diarization before I/O. Returned media
 is persisted only through an explicit application `assetStore.put()` call.

@@ -43,6 +43,25 @@ A still-running run stays `unknown`; a process that never connected stays `unkno
 
 Catalog **View N runs** opens Runs pre-filtered to one definition id. See [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence).
 
+## Bounded media streams
+
+An executed `streamImage()` or `streamSpeech()` appears as one logical bounded
+operation with a separate **Physical attempts** timeline. The logical summary
+owns route and commitment state, attempt count, preview/delta/final counts,
+byte totals, validated media types, time to first public event, total duration,
+and terminal `ok`, `error`, `cancelled`, or `timeout` state. A pre-commit
+fallback therefore shows several physical attempts beneath one logical
+success; a post-commit provider failure remains one failed logical operation.
+Each physical attempt row owns its preview/delta/final counts, byte total, and
+validated media types, so fallback history is not confused with the logical
+aggregate.
+
+Safety rows identify preview/final provenance and whether enforcing policy held
+provisional deltas before releasing or discarding them. The read model never
+contains the held bytes. There are no thumbnails, playback controls, prompts,
+base64, URLs, filenames, hashes, refs, or provider-native events in this
+presentation.
+
 ## Current project health
 
 When a run contains `DefinitionRef` identities, Run Detail correlates them at

@@ -22,21 +22,37 @@ describe('semantic authored-media evidence', () => {
       file,
       [
         `import { generate, generateImage as image } from '@use-crux/ai'`,
-        `import { prompt, router } from '@use-crux/core'`,
-        `import { createOpenAI } from '@use-crux/openai'`,
+        `import { streamImage as unsupportedStreamImage } from '@use-crux/ai'`,
+        `import { guardrail, prompt, router } from '@use-crux/core'`,
+        `import { createAnthropic } from '@use-crux/anthropic'`,
+        `import { createOpenAI as makeOpenAI } from '@use-crux/openai'`,
+        `import { createGoogle as makeGoogle } from '@use-crux/google'`,
         `import type { ImageModel, LanguageModel } from 'ai'`,
         `import type OpenAI from 'openai'`,
         `declare const client: OpenAI`,
         `declare const imageModel: ImageModel`,
         `declare const languageModel: LanguageModel`,
-        `const openai = createOpenAI(client)`,
+        `declare const anthropicClient: Parameters<typeof createAnthropic>[0]`,
+        `declare const googleClient: Parameters<typeof makeGoogle>[0]`,
+        `const anthropic = createAnthropic(anthropicClient)`,
+        `const openai = makeOpenAI(client)`,
+        `const google = makeGoogle(googleClient)`,
         `const render = image`,
         `const generateImage = (input: unknown) => input`,
         `export const fake = generateImage({ prompt: 'not crux' })`,
         `const visionPrompt = prompt({ id: 'vision-prompt' })`,
+        `const mediaPolicy = guardrail({ id: 'media-policy', evaluate: () => ({ action: 'allow' as const }) })`,
+        `const streamSafety = { mode: 'enforce' as const }`,
         `const route = router({ id: 'vision-route', classify: () => 'vision' as const, routes: { vision: languageModel, default: languageModel } })`,
         `const options = { model: imageModel, n: 2, size: '1024x1024' as const }`,
         `export const cover = render(options)`,
+        `export const imageStream = openai.streamImage({ model: 'gpt-image-1', prompt: 'private stream prompt', n: 1, guardrails: [mediaPolicy], safety: streamSafety })`,
+        `export const speechStream = google.streamSpeech({ model: 'gemini-3.1-flash-tts-preview', text: 'private stream speech', voice: 'Kore' })`,
+        `const unrelated = { streamImage: (value: unknown) => value, streamSpeech: (value: unknown) => value }`,
+        `export const fakeImageStream = unrelated.streamImage({ prompt: 'not crux' })`,
+        `export const fakeSpeechStream = unrelated.streamSpeech({ text: 'not crux' })`,
+        `export const absentDirectStream = unsupportedStreamImage({ model: 'unsupported', prompt: 'not supported' })`,
+        `export const absentBoundStream = anthropic.streamSpeech({ model: 'unsupported', text: 'not supported' })`,
         `export const unsafe = openai.generate(visionPrompt, { model: 'gpt-4o', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'provider-file', provider: 'google', fileId: 'private-file-id' } }] }] })`,
         `export const routed = generate(visionPrompt, { model: route, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'asset-ref', ref: { uri: 'private-ref' } } }] }] })`,
         `export const unknown = generate(visionPrompt, { model: route, messages: dynamicMessages })`,
@@ -58,6 +74,12 @@ describe('semantic authored-media evidence', () => {
     )
     const routed = facts.definitions?.find(
       (definition) => definition.id === 'media.operation:routed',
+    )
+    const imageStream = facts.definitions?.find(
+      (definition) => definition.id === 'media.operation:imageStream',
+    )
+    const speechStream = facts.definitions?.find(
+      (definition) => definition.id === 'media.operation:speechStream',
     )
 
     expect(cover?.metadata?.facts).toEqual({
@@ -81,6 +103,25 @@ describe('semantic authored-media evidence', () => {
       inputModalities: ['image'],
       adapter: 'ai-sdk',
     })
+    expect(imageStream?.metadata?.facts).toEqual({
+      kind: 'media.operation',
+      operation: 'streamImage',
+      outputModalities: ['image'],
+      adapter: 'openai',
+      model: 'gpt-image-1',
+      execution: 'native',
+      authoredOptions: { n: 1 },
+    })
+    expect(speechStream?.metadata?.facts).toEqual({
+      kind: 'media.operation',
+      operation: 'streamSpeech',
+      inputModalities: ['text'],
+      outputModalities: ['audio'],
+      adapter: 'google',
+      model: 'gemini-3.1-flash-tts-preview',
+      execution: 'native',
+      authoredOptions: { voice: 'Kore' },
+    })
     expect(
       facts.definitions?.some(
         (definition) => definition.id === 'media.operation:unknown',
@@ -91,8 +132,33 @@ describe('semantic authored-media evidence', () => {
         (definition) => definition.id === 'media.operation:fake',
       ),
     ).toBe(false)
+    expect(
+      facts.definitions?.some((definition) =>
+        definition.id.includes('fakeImageStream'),
+      ),
+    ).toBe(false)
+    expect(
+      facts.definitions?.some((definition) =>
+        definition.id.includes('fakeSpeechStream'),
+      ),
+    ).toBe(false)
+    expect(
+      facts.definitions?.some((definition) =>
+        definition.id.includes('absentDirectStream'),
+      ),
+    ).toBe(false)
+    expect(
+      facts.definitions?.some((definition) =>
+        definition.id.includes('absentBoundStream'),
+      ),
+    ).toBe(false)
     expect(facts.relations).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:media-policy',
+          to: 'media.operation:imageStream',
+        }),
         expect.objectContaining({
           type: 'media.uses_prompt',
           from: 'media.operation:unsafe',
@@ -112,6 +178,10 @@ describe('semantic authored-media evidence', () => {
     )
     expect(facts.sourceRefs).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          definitionId: 'media.operation:imageStream',
+          ref: expect.objectContaining({ role: 'config', property: 'safety' }),
+        }),
         expect.objectContaining({
           definitionId: 'media.operation:cover',
           ref: expect.objectContaining({ role: 'config', property: 'options' }),
@@ -134,7 +204,7 @@ async function fixtureRoot(): Promise<string> {
   const scope = join(root, 'node_modules/@use-crux')
   await mkdir(scope, { recursive: true })
   await Promise.all(
-    ['ai', 'core', 'openai'].map((name) =>
+    ['ai', 'anthropic', 'core', 'openai', 'google'].map((name) =>
       symlink(join(process.cwd(), `../${name}`), join(scope, name), 'dir'),
     ),
   )

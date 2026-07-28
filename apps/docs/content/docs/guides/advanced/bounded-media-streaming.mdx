@@ -1,0 +1,140 @@
+---
+title: Bounded media streaming
+description: Stream generated image and speech output with replay, cancellation, routing, and Safety.
+---
+
+Prefer completed `generateImage()` and `generateSpeech()` operations unless
+progressive media improves the experience. Both `streamImage` and `streamSpeech`
+start eagerly and expose one replayable canonical history plus the same final
+result shape as their completed counterparts.
+
+## Stream images
+
+OpenAI image previews are complete provisional replacements. Keep only the
+latest preview for each output:
+
+```ts
+import OpenAI from "openai";
+import type { Asset } from "@use-crux/core";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+import { createOpenAI } from "@use-crux/openai";
+
+const openai = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+const previews = new Map<number, Asset>();
+const finalImages = new Map<number, Asset>();
+const imageChunks = new Map<number, Uint8Array[]>();
+const assets = inMemoryAssetStore();
+const controller = new AbortController();
+
+const result = await openai.streamImage({
+  model: "gpt-image-2",
+  prompt: "A quiet canal at sunrise",
+  abortSignal: controller.signal,
+  extra: { partial_images: 2 },
+});
+
+for await (const event of result.fullStream) {
+  switch (event.type) {
+    case "start":
+    case "finish":
+      break;
+    case "image-preview":
+      previews.set(event.outputIndex, event.image);
+      break;
+    case "image-delta": {
+      const chunks = imageChunks.get(event.outputIndex) ?? [];
+      chunks.push(event.data);
+      imageChunks.set(event.outputIndex, chunks);
+      break;
+    }
+    case "image":
+      finalImages.set(event.outputIndex, event.image);
+      break;
+  }
+}
+
+const picture = await result.completion;
+const storedPicture = await assets.put(picture.image);
+```
+
+Google image events use append-only `image-delta` bytes instead. Append them by
+`outputIndex` and zero-based `sequence`; a delta may not be independently
+renderable. The final `image` events contain assembled assets and share object
+identity with `completion.images`.
+
+## Stream speech
+
+Speech deltas are also append-only:
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+import { createGoogle } from "@use-crux/google";
+
+const google = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
+const audioChunks: Uint8Array[] = [];
+const assets = inMemoryAssetStore();
+const controller = new AbortController();
+let audioMediaType: string | undefined;
+
+const result = await google.streamSpeech({
+  model: "gemini-3.1-flash-tts-preview",
+  text: "Welcome aboard",
+  voice: "Kore",
+  abortSignal: controller.signal,
+});
+
+for await (const event of result.fullStream) {
+  switch (event.type) {
+    case "start":
+    case "finish":
+      break;
+    case "audio-delta":
+      audioChunks.push(event.data);
+      audioMediaType ??= event.mediaType;
+      break;
+    case "audio":
+      audioMediaType = event.audio.mediaType;
+      break;
+  }
+}
+
+const narration = await result.completion;
+const storedNarration = await assets.put(narration.audio);
+```
+
+Provider bytes are framing-specific. In particular, Google TTS emits headerless
+raw PCM; Crux preserves its native MIME parameters and does not synthesize a
+WAV header.
+
+## Safety, replay, routing, and ownership
+
+Complete image previews are separate media occurrences, so output-media
+guardrails evaluate each preview before it appears. Incomplete image and audio
+deltas cannot be judged honestly on their own. When an output-media policy
+enforces, Crux retains those provisional bytes and publishes only guarded final
+assets after successful native completion. Report-only policies may leave
+deltas live.
+
+Each `fullStream` iterator replays the same in-memory events from `start`.
+Returning from one iterator detaches that reader without stopping eager
+execution. Call `result.cancel(reason)` or abort the call signal to stop the
+whole logical operation; all readers and `completion` then fail with the same
+error identity.
+
+Routing may retry or fall back only before the first canonical provider event
+is published. A visible preview or live delta commits the selected route, so a
+later provider failure is terminal. Held or Safety-stripped provisional media
+does not commit a route.
+
+Streaming does not change storage ownership. Crux retains replay data only for
+the lifetime of the operation and never writes media. Persist
+`(await result.completion).image` or `.audio` explicitly after success. See
+[Multimodal](/docs/guides/advanced/multimodal) for explicit storage and reuse.
+
+Transcription streaming remains deferred to
+[#284](https://github.com/use-crux/crux/issues/284), and public provider-native
+events remain deferred to
+[#285](https://github.com/use-crux/crux/issues/285).
