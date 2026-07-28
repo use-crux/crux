@@ -214,8 +214,9 @@ grow either into a larger mixed-concern module.
 Use these boundaries:
 
 - `capture-policy-contract.ts`: public types and JSDoc.
-- `redaction-patterns.ts`: compilation, bounded traversal, record-surface
-  selection, and evidence invalidation.
+- `redaction-patterns.ts`: validation, compilation, and string matching.
+- `redaction-record.ts`: bounded record traversal, surface selection, and
+  evidence invalidation.
 - `capture-levels.ts`: capture resolution and level transformations moved from
   `capture-policy.ts`.
 - `capture-policy.ts`: small public orchestrator and exports.
