@@ -65,7 +65,7 @@ func TestValidateDispatchRequestBytesAtEquality(t *testing.T) {
 	if err := ValidateDispatch(targetID, "node", 1, payload, 1_000); err != nil {
 		t.Fatalf("exact request rejected: %v", err)
 	}
-	if err := ValidateDispatch(targetID+"x", "node", 1, payload, 1_000); !IsFailure(err, "invalid_request") {
+	if err := ValidateDispatch(targetID+"x", "node", 1, payload, 1_000); !IsFailure(err, "input_limit_exceeded") {
 		t.Fatalf("overflow request error = %v", err)
 	}
 }

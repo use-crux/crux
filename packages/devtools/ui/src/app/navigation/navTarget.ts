@@ -44,7 +44,9 @@ export function navTarget(view: DevtoolsViewId): NavState {
  * targets. Returns `null` for views
  * with no owning sidebar item.
  */
-export function sidebarIdForView(view: NavState["view"]): DevtoolsViewId | null {
+export function sidebarIdForView(
+  view: NavState["view"],
+): DevtoolsViewId | null {
   switch (view) {
     case "overview":
       return "overview";
@@ -64,6 +66,8 @@ export function sidebarIdForView(view: NavState["view"]): DevtoolsViewId | null 
     case "baselines":
       return "baselines";
     case "library-index":
+    case "prompt-preview":
+    case "prompt-latest-run":
       return "library-index";
     case "library-memory":
       return "library-memory";

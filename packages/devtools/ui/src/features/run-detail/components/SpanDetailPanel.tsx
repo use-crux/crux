@@ -17,7 +17,6 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Streamdown } from "streamdown";
 import { JsonTree } from "@/shared/components/JsonTree";
 import { Chip, Eyebrow, Kpi, type ChipTone } from "@/devtools/shell/primitives";
 import { Icon } from "@/devtools/shell/Icon";
@@ -37,6 +36,7 @@ import {
 import { OutputModeToggle, OutputTextView } from "./SpanDetailOutputRenderers";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { useObservabilitySpanEvents } from "@/features/observability/hooks/useObservabilityGraph";
+import { RunDetailUserPrompt } from "../prompt-text/user-prompt";
 import type {
   ObservabilityRunDetail,
   ObservabilityRunDetailNode,
@@ -205,7 +205,9 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
                   border: "1px solid var(--devtools-border)",
                 }}
               >
-                <div style={{ color: "var(--devtools-danger)" }}>{item.label}</div>
+                <div style={{ color: "var(--devtools-danger)" }}>
+                  {item.label}
+                </div>
                 <div
                   className="mt-1 break-words"
                   style={{ color: "var(--devtools-fg-muted)" }}
@@ -315,7 +317,10 @@ function OutputTab({
 
       {!spanError && trace?.error && isRoot && (
         <CardShell label="Error">
-          <div className="px-3.5 py-3" style={{ color: "var(--devtools-danger)" }}>
+          <div
+            className="px-3.5 py-3"
+            style={{ color: "var(--devtools-danger)" }}
+          >
             <div className="font-mono text-[12.5px] font-semibold">
               {trace.error.message}
             </div>
@@ -572,7 +577,9 @@ function OutputGrounding({ node }: { node: ObservabilityRunDetailNode }) {
             >
               <span
                 style={{
-                  color: isGrounded ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
+                  color: isGrounded
+                    ? "var(--devtools-crux)"
+                    : "var(--devtools-fg-faint)",
                   width: 26,
                 }}
               >
@@ -619,6 +626,7 @@ function ContextTab({
   // of truth — each context.resolve detail carries its text + priority).
   const contexts = useMemo(() => gatherResolvedContexts(node), [node]);
   const messages = useMemo(() => resolveMessages(node), [node]);
+  const promptText = node.request?.userPrompt;
 
   // Tool inventory comes from trace.inspect (legacy) when present, or we
   // derive it from tool.call descendants.
@@ -655,6 +663,7 @@ function ContextTab({
     messages.messages.length === 0 &&
     !messages.system &&
     !messages.prompt &&
+    !promptText &&
     !userInput
   ) {
     return (
@@ -811,29 +820,16 @@ function ContextTab({
         <CardShell label="System">
           <div
             className="px-3.5 py-3 whitespace-pre-wrap text-[12.5px] leading-[1.55]"
-            style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
+            style={{
+              color: "var(--devtools-fg)",
+              fontFamily: "var(--devtools-serif)",
+            }}
           >
             {messages.system}
           </div>
         </CardShell>
       )}
-      {messages.prompt && (
-        <div className="flex flex-col gap-2">
-          <Eyebrow>User · prompt</Eyebrow>
-          <div
-            className="rounded-[10px] px-4 py-3 text-[14px] leading-[1.6]"
-            style={{
-              background: "var(--devtools-bg-muted)",
-              border: "1px solid var(--devtools-border)",
-              fontFamily: "var(--devtools-serif)",
-            }}
-          >
-            <div className="devtools-prose">
-              <Streamdown>{messages.prompt}</Streamdown>
-            </div>
-          </div>
-        </div>
-      )}
+      <RunDetailUserPrompt node={node} plainText={messages.prompt} />
       {(() => {
         // The Context tab shows the *input* thread (system/user/prior turns).
         // Assistant output content-parts (reasoning/tool-calls) belong in the
@@ -1196,7 +1192,10 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
         <PartRow tone="crux" label="assistant" icon="spark">
           <div
             className="whitespace-pre-wrap text-[13px] leading-[1.6]"
-            style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
+            style={{
+              color: "var(--devtools-fg)",
+              fontFamily: "var(--devtools-serif)",
+            }}
           >
             {part.text || (
               <span style={{ color: "var(--devtools-fg-faint)" }}>(empty)</span>
@@ -1299,7 +1298,10 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
             typeof result === "string" ? (
               <div
                 className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
-                style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
+                style={{
+                  color: "var(--devtools-fg)",
+                  fontFamily: "var(--devtools-serif)",
+                }}
               >
                 {result}
               </div>
@@ -1378,7 +1380,10 @@ function PartRow({
   children: ReactNode;
 }) {
   return (
-    <div className="px-3.5 py-3" style={{ background: "var(--devtools-bg-elev)" }}>
+    <div
+      className="px-3.5 py-3"
+      style={{ background: "var(--devtools-bg-elev)" }}
+    >
       <div className="mb-1.5 flex items-center gap-2">
         <Chip tone={tone}>{label}</Chip>
         <span className="ml-auto">{right}</span>
@@ -1404,7 +1409,10 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
   // Content can be a string or an array of content parts (multimodal /
   // tool-call-bearing). Render either case clearly.
   return (
-    <div className="px-3.5 py-3" style={{ background: "var(--devtools-bg-elev)" }}>
+    <div
+      className="px-3.5 py-3"
+      style={{ background: "var(--devtools-bg-elev)" }}
+    >
       <div className="mb-1 flex items-center gap-2">
         <Chip tone={tone}>{role}</Chip>
         {typeof msg.name === "string" && (
@@ -1420,7 +1428,10 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
         <div
           className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
           style={{
-            fontFamily: role === "tool" ? "var(--devtools-mono)" : "var(--devtools-serif)",
+            fontFamily:
+              role === "tool"
+                ? "var(--devtools-mono)"
+                : "var(--devtools-serif)",
           }}
         >
           {content || (
@@ -1462,7 +1473,10 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
           <JsonTree data={content as unknown} />
         </div>
       ) : (
-        <span className="text-[12px]" style={{ color: "var(--devtools-fg-faint)" }}>
+        <span
+          className="text-[12px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           (empty)
         </span>
       )}
@@ -1552,7 +1566,9 @@ function ToolCallBox({
     >
       <span>{label}</span>
       <span className="flex items-center gap-2 normal-case">
-        {note && <span style={{ color: "var(--devtools-fg-faint)" }}>{note}</span>}
+        {note && (
+          <span style={{ color: "var(--devtools-fg-faint)" }}>{note}</span>
+        )}
         {right}
       </span>
     </div>
@@ -1576,8 +1592,12 @@ function ToolCallBox({
               onClick={() => setMode(m)}
               className="px-2.5 py-[3px]"
               style={{
-                background: mode === m ? "var(--devtools-crux-soft)" : "transparent",
-                color: mode === m ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
+                background:
+                  mode === m ? "var(--devtools-crux-soft)" : "transparent",
+                color:
+                  mode === m
+                    ? "var(--devtools-crux)"
+                    : "var(--devtools-fg-faint)",
                 fontWeight: mode === m ? 600 : 450,
               }}
             >
@@ -2020,7 +2040,8 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
               <div
                 key={side}
                 style={{
-                  borderRight: k === 0 ? "1px solid var(--devtools-border)" : "none",
+                  borderRight:
+                    k === 0 ? "1px solid var(--devtools-border)" : "none",
                 }}
               >
                 <div
@@ -2168,7 +2189,10 @@ function MemoryRecalledRow({
     >
       <span
         className="h-fit rounded-[3px] px-1.5 py-px font-mono text-[9px] uppercase"
-        style={{ color: "var(--devtools-iris)", background: "var(--devtools-iris-soft)" }}
+        style={{
+          color: "var(--devtools-iris)",
+          background: "var(--devtools-iris-soft)",
+        }}
       >
         {block}
       </span>
@@ -2247,7 +2271,10 @@ function SnapshotSide({ value }: { value: unknown }) {
     <span
       className="font-mono text-[10.5px]"
       style={{
-        color: value == null ? "var(--devtools-fg-faint)" : "var(--devtools-fg-muted)",
+        color:
+          value == null
+            ? "var(--devtools-fg-faint)"
+            : "var(--devtools-fg-muted)",
       }}
     >
       {value == null ? "—" : compactValue(value)}
@@ -2518,7 +2545,10 @@ function AgentPill({ name, dim }: { name: string; dim?: boolean }) {
               border: "1px solid var(--devtools-border)",
               color: "var(--devtools-fg-muted)",
             }
-          : { background: "var(--devtools-iris-soft)", color: "var(--devtools-iris)" }
+          : {
+              background: "var(--devtools-iris-soft)",
+              color: "var(--devtools-iris)",
+            }
       }
     >
       {name}
@@ -2545,7 +2575,9 @@ function PayloadGrid({
           key={c.label}
           style={{
             borderRight:
-              i < cells.length - 1 ? "1px solid var(--devtools-border)" : "none",
+              i < cells.length - 1
+                ? "1px solid var(--devtools-border)"
+                : "none",
           }}
         >
           <div
@@ -2655,7 +2687,10 @@ function HandoffTab({
           <div className="flex-1">
             <div className="text-[13px] font-semibold">
               <span className="font-mono">{fromAgent}</span> called{" "}
-              <span className="font-mono" style={{ color: "var(--devtools-iris)" }}>
+              <span
+                className="font-mono"
+                style={{ color: "var(--devtools-iris)" }}
+              >
                 {toAgent}
               </span>{" "}
               as a tool
@@ -2699,13 +2734,17 @@ function HandoffTab({
               key={k}
               className="flex-1 rounded-[8px] px-2.5 py-2"
               style={{
-                background: on ? "var(--devtools-crux-soft)" : "var(--devtools-bg-elev)",
+                background: on
+                  ? "var(--devtools-crux-soft)"
+                  : "var(--devtools-bg-elev)",
                 border: `1px solid ${on ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
               }}
             >
               <div
                 className="font-mono text-[10.5px] font-semibold"
-                style={{ color: on ? "var(--devtools-crux)" : "var(--devtools-fg)" }}
+                style={{
+                  color: on ? "var(--devtools-crux)" : "var(--devtools-fg)",
+                }}
               >
                 {k}
               </div>
@@ -3490,8 +3529,14 @@ function ScoresTab({
           ok: { fg: "var(--devtools-ok)", bg: "var(--devtools-ok-soft)" },
           crux: { fg: "var(--devtools-crux)", bg: "var(--devtools-crux-soft)" },
           warn: { fg: "var(--devtools-warn)", bg: "var(--devtools-warn-soft)" },
-          danger: { fg: "var(--devtools-danger)", bg: "var(--devtools-danger-soft)" },
-          muted: { fg: "var(--devtools-fg-muted)", bg: "var(--devtools-bg-muted)" },
+          danger: {
+            fg: "var(--devtools-danger)",
+            bg: "var(--devtools-danger-soft)",
+          },
+          muted: {
+            fg: "var(--devtools-fg-muted)",
+            bg: "var(--devtools-bg-muted)",
+          },
           iris: { fg: "var(--devtools-iris)", bg: "var(--devtools-iris-soft)" },
         }[tone];
         return (
@@ -3666,7 +3711,10 @@ function ChildrenTab({
             <span className="flex min-w-0 items-center gap-2 truncate font-mono text-[12px]">
               <span style={{ color: accent }}>{c.primitive}</span>
               <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
-              <span className="truncate" style={{ color: "var(--devtools-fg)" }}>
+              <span
+                className="truncate"
+                style={{ color: "var(--devtools-fg)" }}
+              >
                 {c.display?.label ?? c.name}
               </span>
             </span>
@@ -4040,7 +4088,9 @@ function TabStrip({
             onClick={() => onSelect(id)}
             className="-mb-px flex items-center gap-1.5 px-2.5 py-2"
             style={{
-              color: isActive ? "var(--devtools-fg)" : "var(--devtools-fg-muted)",
+              color: isActive
+                ? "var(--devtools-fg)"
+                : "var(--devtools-fg-muted)",
               borderBottom: isActive
                 ? "2px solid var(--devtools-crux)"
                 : "2px solid transparent",
@@ -4053,7 +4103,9 @@ function TabStrip({
               <span
                 className="rounded-[3px] px-[5px] py-px font-mono text-[10px]"
                 style={{
-                  color: isActive ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
+                  color: isActive
+                    ? "var(--devtools-crux)"
+                    : "var(--devtools-fg-faint)",
                   background: isActive
                     ? "var(--devtools-crux-soft)"
                     : "var(--devtools-bg-muted)",

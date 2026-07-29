@@ -67,7 +67,12 @@ const summarize = prompt({
 
 ## `md` and `PromptText`
 
-`md` builds an opaque, immutable `PromptText` value with native tagged-template syntax. The name describes the Markdown-oriented authoring convention; Crux does not parse, validate, or render Markdown. Resolution lowers the value to provider-neutral plain text before adapters, caches, and RPC boundaries.
+`md` builds an opaque, immutable `PromptText` value with native tagged-template
+syntax. Runtime composition does not parse or render Markdown: resolution
+lowers the value to provider-neutral plain text before adapters, caches, and
+RPC boundaries. Crux editor tooling may classify the authored literal islands
+as CommonMark for presentation, navigation, previews, and diagnostics without
+changing runtime bytes.
 
 The root package exports exactly the `md` value and nominal `PromptText` type for this feature:
 
@@ -221,6 +226,8 @@ metadata: {
     tag: "md";
     language: "markdown";
     lifecycle: "static" | "dynamic";
+    sourceKind: "owner" | "named-fragment" | "anonymous-fragment";
+    fragmentJoins?: PromptTextFragmentJoinEvidence[];
   }
 }
 ```
@@ -228,7 +235,9 @@ metadata: {
 `lifecycle: "static"` identifies directly authored prompt text;
 `lifecycle: "dynamic"` identifies prompt text returned by a callback. This is
 authoring evidence for source-aware tools. It does not render Markdown or mark
-the content trusted, sanitized, or safe.
+the content trusted, sanitized, or safe. `sourceKind` is compiler-owned
+classification; consumers do not infer fragment identity from names or other
+metadata.
 
 Crux follows supported imports, aliases, and re-exports back to the canonical
 `md` export from `@use-crux/core`; local lookalike tags do not receive this
@@ -237,6 +246,33 @@ metadata. If an active `tsconfig.paths` mapping can intercept the exact
 and omits the evidence instead of accepting an ambiguous package identity.
 Runtime prompt construction and resolution are unaffected; only Project Index
 and editor features that depend on this source evidence lose the attribution.
+
+### Exact runtime preview registration
+
+The root package exports `configure`, `ConfigureOptions`, and `PromptRegistry`.
+`configure()` publishes one process-owned, revisioned catalogue for explicit
+exact preview and returns its lifecycle owner:
+
+```ts
+import { configure } from "@use-crux/core";
+
+const registry = configure({ prompts: [answer] });
+
+// Dispose during application shutdown or replacement.
+registry.dispose();
+```
+
+An active `crux dev` Runtime Bridge can advertise these Prompt definitions to
+the local Devtools exact-preview workflow. Only explicit Preview or Retry
+dispatch invokes `Prompt.inspect()`. Inspection does not generate with a
+provider, invoke tools, create an ordinary Run, or create observability
+records. Prompt callbacks are trusted application code, however, and may
+perform their own side effects or I/O. Inputs, rendered content, provenance,
+validation details, and results remain private in-memory request data.
+
+`config()` remains project and runtime policy; it is not a prompt catalogue.
+Contexts are not exact-preview targets until Crux provides a public
+`Context.inspect()` contract.
 
 ### Errors
 
@@ -256,7 +292,14 @@ Interpolation errors include the zero-based interpolation index and nested array
 
 Resolution keeps the existing safety order: schema validation, configured sanitization, automatic escaping and security diagnostics, callback evaluation and `md` construction, then model-ingress safety.
 
-V1 does not include Markdown parsing/rendering, a prompt DSL or compiler transform, standalone prompt files, asynchronous interpolation, message/multimodal construction, editor runtime behavior, semantic section tags, `md.use`, or context-placement placeholders. Context authority and placement remain declared by `use: []`.
+Runtime V1 does not include Markdown rendering, a prompt DSL or compiler
+transform, standalone prompt files, asynchronous interpolation,
+message/multimodal construction, semantic section tags, `md.use`, or
+context-placement placeholders. Editor support is an additive source view; it
+does not change PromptText resolution. It also does not rewrite file encodings,
+normalize Unicode, repair invalid bytes, or infer semantic meaning from
+Markdown sections. Context authority and placement remain declared by
+`use: []`.
 
 ## Tool Model Output
 

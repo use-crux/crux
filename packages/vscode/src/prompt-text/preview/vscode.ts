@@ -1,21 +1,21 @@
-import * as vscode from 'vscode'
-import type { LanguageClient } from 'vscode-languageclient/node'
-import { registerPromptTextCommands } from '../commands.js'
-import { PromptTextDocumentRevisions } from '../document-revisions.js'
-import { isPromptTextSourceDocument } from '../documents.js'
-import { PromptTextPreviewController } from './controller.js'
-import { PromptTextPreviewLanguageTransitions } from './language-transition.js'
-import { promptTextPreviewMetadataCommand } from './metadata.js'
+import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
+import { PromptTextDocumentRevisions } from "../document-revisions.js";
+import { isPromptTextSourceDocument } from "../documents.js";
+import { registerVSCodePromptTextCommands } from "./command-vscode.js";
+import { PromptTextPreviewController } from "./controller.js";
+import { PromptTextPreviewLanguageTransitions } from "./language-transition.js";
+import { promptTextPreviewMetadataCommand } from "./metadata.js";
 import {
   PromptTextPreviewDocumentProvider,
   type PromptTextPreviewDocument,
-} from './provider.js'
+} from "./provider.js";
 import type {
   PromptTextPreviewControllerPorts,
   PromptTextPreviewSource,
   PromptTextPreviewStaticParams,
-} from './types.js'
-import { PromptTextPreviewDocumentUpdates } from './updates.js'
+} from "./types.js";
+import { PromptTextPreviewDocumentUpdates } from "./updates.js";
 import {
   activePreviewTarget,
   chooseTemplate,
@@ -25,37 +25,37 @@ import {
   previewCodeLenses,
   promptTextPreviewScheme,
   sourceSnapshot,
-} from './vscode-source.js'
-import { parsePromptTextPreviewStaticResult } from './wire.js'
+} from "./vscode-source.js";
+import { parsePromptTextPreviewStaticResult } from "./wire.js";
 
-const previewMethod = 'crux/promptText/previewStatic'
+const previewMethod = "crux/promptText/previewStatic";
 
 /** Static-preview lifetime that survives language-client replacement. */
 export interface PromptTextPreviews extends vscode.Disposable {
   /** Attach a started client, reset connection-local epochs, and repull. */
-  connect(client: LanguageClient): void
+  connect(client: LanguageClient): void;
   /** Cancel work and clear bytes before retiring the current client. */
-  disconnect(): void
+  disconnect(): void;
   /** Repull all retained targets whose sources remain open. */
-  refresh(): void
+  refresh(): void;
 }
 
 /** Register the client-owned virtual-document surface for this extension host. */
 export function activatePromptTextPreviews(): PromptTextPreviews {
-  return new VSCodePromptTextPreviews()
+  return new VSCodePromptTextPreviews();
 }
 
 class VSCodePromptTextPreviews implements PromptTextPreviews {
-  #revisions = new PromptTextDocumentRevisions()
-  readonly #contentChanges = new vscode.EventEmitter<vscode.Uri>()
-  readonly #codeLensChanges = new vscode.EventEmitter<void>()
-  readonly #updates = new PromptTextPreviewDocumentUpdates()
-  readonly #provider: PromptTextPreviewDocumentProvider
-  readonly #controller: PromptTextPreviewController
-  readonly #subscriptions: readonly vscode.Disposable[]
-  #client: LanguageClient | undefined
-  readonly #languageTransitions = new PromptTextPreviewLanguageTransitions()
-  #disposed = false
+  #revisions = new PromptTextDocumentRevisions();
+  readonly #contentChanges = new vscode.EventEmitter<vscode.Uri>();
+  readonly #codeLensChanges = new vscode.EventEmitter<void>();
+  readonly #updates = new PromptTextPreviewDocumentUpdates();
+  readonly #provider: PromptTextPreviewDocumentProvider;
+  readonly #controller: PromptTextPreviewController;
+  readonly #subscriptions: readonly vscode.Disposable[];
+  #client: LanguageClient | undefined;
+  readonly #languageTransitions = new PromptTextPreviewLanguageTransitions();
+  #disposed = false;
 
   constructor() {
     this.#provider = new PromptTextPreviewDocumentProvider({
@@ -67,17 +67,17 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
       setMarkdownLanguage: (document) => this.#setMarkdownLanguage(document),
       refreshDocument: (document) => this.#refreshDocument(document),
       showDocument: async (document) => {
-        const source = findDocument(document.uri)
-        if (source === undefined) throw new Error('preview document closed')
+        const source = findDocument(document.uri);
+        if (source === undefined) throw new Error("preview document closed");
         await vscode.window.showTextDocument(source, {
           viewColumn: vscode.ViewColumn.Beside,
           preserveFocus: false,
           preview: false,
-        })
+        });
       },
       contentChanged: (uri) => this.#contentChanges.fire(vscode.Uri.parse(uri)),
       codeLensesChanged: () => this.#codeLensChanges.fire(),
-    })
+    });
     const ports: PromptTextPreviewControllerPorts = {
       currentSource: (uri) => this.#source(uri),
       request: (params, signal) => this.#request(params, signal),
@@ -87,18 +87,18 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
       clear: (slot, reason) => this.#provider.clear(slot, reason),
       refreshing: (slot) => this.#provider.refreshing(slot),
       showInformation: (message) => {
-        void vscode.window.showInformationMessage(message)
+        void vscode.window.showInformationMessage(message);
       },
-    }
-    this.#controller = new PromptTextPreviewController(ports)
-    this.#resetRevisions()
+    };
+    this.#controller = new PromptTextPreviewController(ports);
+    this.#resetRevisions();
     this.#subscriptions = [
       vscode.workspace.registerTextDocumentContentProvider(
         promptTextPreviewScheme,
         {
           onDidChange: this.#contentChanges.event,
           provideTextDocumentContent: (uri) =>
-            this.#provider.provideTextDocumentContent(uri.toString()) ?? '',
+            this.#provider.provideTextDocumentContent(uri.toString()) ?? "",
         },
       ),
       vscode.languages.registerCodeLensProvider(
@@ -113,15 +113,12 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
         promptTextPreviewMetadataCommand,
         () => {},
       ),
-      ...registerPromptTextCommands({
-        registerCommand: (command, handler) =>
-          vscode.commands.registerCommand(command, handler),
+      ...registerVSCodePromptTextCommands({
+        client: () => this.#client,
         activeTarget: () => this.#activeTarget(),
-        preview: (source, position) =>
+        currentSource: (uri) => this.#source(uri),
+        previewStatic: ({ source, position }) =>
           this.#controller.preview(source, position),
-        showInformation: (message) => {
-          void vscode.window.showInformationMessage(message)
-        },
       }),
       vscode.workspace.onDidOpenTextDocument((document) =>
         this.#opened(document),
@@ -132,105 +129,105 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
       ),
       vscode.workspace.onDidRenameFiles((event) => {
         for (const file of event.files) {
-          this.#controller.sourceRenamed(file.oldUri.toString())
+          this.#controller.sourceRenamed(file.oldUri.toString());
         }
       }),
-    ]
+    ];
   }
 
   connect(client: LanguageClient): void {
-    if (this.#disposed) return
-    this.#client = client
-    this.#resetRevisions()
-    void this.#controller.refresh()
+    if (this.#disposed) return;
+    this.#client = client;
+    this.#resetRevisions();
+    void this.#controller.refresh();
   }
 
   disconnect(): void {
-    this.#client = undefined
-    this.#controller.disconnected()
+    this.#client = undefined;
+    this.#controller.disconnected();
   }
 
   refresh(): void {
-    void this.#controller.refresh()
+    void this.#controller.refresh();
   }
 
   dispose(): void {
-    if (this.#disposed) return
-    this.#disposed = true
-    this.#client = undefined
-    this.#controller.dispose()
-    this.#provider.dispose()
-    for (const subscription of this.#subscriptions) subscription.dispose()
-    this.#contentChanges.dispose()
-    this.#codeLensChanges.dispose()
-    this.#updates.clear()
-    this.#languageTransitions.clear()
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#client = undefined;
+    this.#controller.dispose();
+    this.#provider.dispose();
+    for (const subscription of this.#subscriptions) subscription.dispose();
+    this.#contentChanges.dispose();
+    this.#codeLensChanges.dispose();
+    this.#updates.clear();
+    this.#languageTransitions.clear();
   }
 
   #activeTarget() {
-    return activePreviewTarget(this.#revisions)
+    return activePreviewTarget(this.#revisions);
   }
 
   #resetRevisions(): void {
-    this.#revisions = new PromptTextDocumentRevisions()
+    this.#revisions = new PromptTextDocumentRevisions();
     for (const document of vscode.workspace.textDocuments) {
       if (isPromptTextSourceDocument(document)) {
-        this.#revisions.open(document.uri.toString())
+        this.#revisions.open(document.uri.toString());
       }
     }
   }
 
   #source(uri: string): PromptTextPreviewSource | undefined {
-    const document = findDocument(uri)
+    const document = findDocument(uri);
     return document === undefined || !isPromptTextSourceDocument(document)
       ? undefined
-      : sourceSnapshot(this.#revisions, document)
+      : sourceSnapshot(this.#revisions, document);
   }
 
   async #request(params: PromptTextPreviewStaticParams, signal: AbortSignal) {
-    const client = this.#client
-    if (client === undefined || signal.aborted) return undefined
-    const cancellation = new vscode.CancellationTokenSource()
-    const cancel = () => cancellation.cancel()
-    signal.addEventListener('abort', cancel, { once: true })
+    const client = this.#client;
+    if (client === undefined || signal.aborted) return undefined;
+    const cancellation = new vscode.CancellationTokenSource();
+    const cancel = () => cancellation.cancel();
+    signal.addEventListener("abort", cancel, { once: true });
     try {
       const value = await client.sendRequest<unknown>(
         previewMethod,
         params,
         cancellation.token,
-      )
-      return parsePromptTextPreviewStaticResult(value)
+      );
+      return parsePromptTextPreviewStaticResult(value);
     } finally {
-      signal.removeEventListener('abort', cancel)
-      cancellation.dispose()
+      signal.removeEventListener("abort", cancel);
+      cancellation.dispose();
     }
   }
 
   #opened(document: vscode.TextDocument): void {
-    const uri = document.uri.toString()
+    const uri = document.uri.toString();
     if (document.uri.scheme === promptTextPreviewScheme) {
-      this.#languageTransitions.opened(uri)
-      return
+      this.#languageTransitions.opened(uri);
+      return;
     }
-    if (!isPromptTextSourceDocument(document)) return
-    this.#revisions.open(uri)
-    const source = sourceSnapshot(this.#revisions, document)
-    if (source !== undefined) void this.#controller.sourceOpened(source)
+    if (!isPromptTextSourceDocument(document)) return;
+    this.#revisions.open(uri);
+    const source = sourceSnapshot(this.#revisions, document);
+    if (source !== undefined) void this.#controller.sourceOpened(source);
   }
 
   #changed(event: vscode.TextDocumentChangeEvent): void {
-    const uri = event.document.uri.toString()
+    const uri = event.document.uri.toString();
     if (event.document.uri.scheme === promptTextPreviewScheme) {
-      this.#updates.changed(previewDocument(event.document))
-      return
+      this.#updates.changed(previewDocument(event.document));
+      return;
     }
-    if (!isPromptTextSourceDocument(event.document)) return
-    const source = sourceSnapshot(this.#revisions, event.document)
-    if (source === undefined) return
+    if (!isPromptTextSourceDocument(event.document)) return;
+    const source = sourceSnapshot(this.#revisions, event.document);
+    if (source === undefined) return;
     const delta = event.contentChanges.reduce(
       (sum, change) => sum + change.text.length - change.rangeLength,
       0,
-    )
+    );
     this.#controller.sourceChanged(
       source,
       source.documentLength - delta,
@@ -239,34 +236,34 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
         rangeLength: change.rangeLength,
         text: change.text,
       })),
-    )
+    );
   }
 
   #closed(document: vscode.TextDocument): void {
-    const uri = document.uri.toString()
+    const uri = document.uri.toString();
     if (document.uri.scheme === promptTextPreviewScheme) {
-      if (this.#languageTransitions.closed(uri) === 'ignore') return
-      const slotId = this.#provider.slotId(uri)
-      this.#provider.disposeSlot(uri)
-      if (slotId !== undefined) this.#controller.resourceClosed(slotId)
-      return
+      if (this.#languageTransitions.closed(uri) === "ignore") return;
+      const slotId = this.#provider.slotId(uri);
+      this.#provider.disposeSlot(uri);
+      if (slotId !== undefined) this.#controller.resourceClosed(slotId);
+      return;
     }
-    if (!isPromptTextSourceDocument(document)) return
-    this.#revisions.close(uri)
-    this.#controller.sourceClosed(uri)
+    if (!isPromptTextSourceDocument(document)) return;
+    this.#revisions.close(uri);
+    this.#controller.sourceClosed(uri);
   }
 
   async #setMarkdownLanguage(
     document: PromptTextPreviewDocument,
   ): Promise<PromptTextPreviewDocument> {
-    const source = findDocument(document.uri)
-    if (source === undefined) throw new Error('preview document closed')
-    this.#languageTransitions.begin(document.uri)
+    const source = findDocument(document.uri);
+    if (source === undefined) throw new Error("preview document closed");
+    this.#languageTransitions.begin(document.uri);
     try {
       const changed = await vscode.languages.setTextDocumentLanguage(
         source,
-        'markdown',
-      )
+        "markdown",
+      );
       if (
         !this.#languageTransitions.complete(
           document.uri,
@@ -274,11 +271,11 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
           changed.languageId,
         )
       ) {
-        throw new Error('unexpected preview language transition')
+        throw new Error("unexpected preview language transition");
       }
-      return previewDocument(changed)
+      return previewDocument(changed);
     } finally {
-      this.#languageTransitions.finish(document.uri)
+      this.#languageTransitions.finish(document.uri);
     }
   }
 
@@ -286,7 +283,7 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
     document: PromptTextPreviewDocument,
   ): Promise<PromptTextPreviewDocument> {
     return this.#updates.refresh(document, () => {
-      this.#contentChanges.fire(vscode.Uri.parse(document.uri))
-    })
+      this.#contentChanges.fire(vscode.Uri.parse(document.uri));
+    });
   }
 }

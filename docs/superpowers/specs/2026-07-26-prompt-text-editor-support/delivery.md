@@ -87,6 +87,75 @@ packages/local/internal/runtimebridge/preview/
   validate.go
   selection.go
   result.go
+
+packages/devtools/ui/src/features/prompt-preview/
+  types.ts
+  service.ts
+  hooks.ts
+  states.tsx
+  input/
+    raw.tsx
+    form.tsx
+    schema.ts
+  result/
+    inspection.tsx
+    provenance.tsx
+    validation.tsx
+
+packages/devtools/ui/src/pages/
+  PromptPreviewPage.tsx
+
+packages/local/internal/devtools/promptpreview/
+  types.go
+  discovery.go
+  dispatch.go
+  routes.go
+  csrf.go
+
+packages/local/internal/lsp/protocol/
+  prompt_text_preview_exact.go
+
+packages/local/internal/lsp/server/
+  prompt_text_preview_exact.go
+
+packages/vscode/src/prompt-text/exact/
+  contracts.ts
+  command.ts
+  vscode.ts
+
+packages/local/internal/devtools/promptlatest/
+  types.go
+  service.go
+  owner.go
+  runs.go
+  availability.go
+  routes.go
+
+packages/local/internal/lsp/prompttext/
+  owner_at.go
+  latest_run_link.go
+
+packages/local/internal/lsp/protocol/
+  prompt_text_latest_run.go
+
+packages/local/internal/lsp/server/
+  prompt_text_latest_run.go
+  workspace_prompt_text_latest_run.go
+
+packages/devtools/ui/src/features/prompt-latest-run/
+  types.ts
+  wire.ts
+  service.ts
+  resolver.tsx
+  empty-state.tsx
+
+packages/devtools/ui/src/pages/
+  PromptLatestRunPage.tsx
+
+packages/vscode/src/prompt-text/
+  latest-link.ts
+  latest.ts
+  latest-vscode.ts
 ```
 
 The server package composes the focused PromptText controller through explicit
@@ -323,12 +392,75 @@ Focused tests cover:
   negative token budget as `invalid_response`;
 - privacy tests proving input, output, schemas, validation details, runtime
   messages, provenance, source keys, and target IDs never enter logs, events,
-  persistence, caches, Project Index, LSP, or Devtools state;
+  persistence, caches, Project Index, LSP, or general Devtools state; exact
+  browser data may exist only in the explicitly opened page's ephemeral
+  component state;
+- canonical Prompt-preview route encoding/decoding, current owner resolution,
+  exactly-one path-component decode for encoded separators/percent/query/
+  fragment/Unicode/double encoding, identity-preserving moves, and deleted/
+  renamed/non-Prompt rejection;
+- browser-safe discovery as at most 32 exact peer/environment/catalogue tuples,
+  complete projection byte limits, deterministic ordering, Local-only
+  projection revisions, and no private catalogue/endpoint/label leakage;
+- explicit browser dispatch tuple, strict facade response stripping, stable
+  closed browser error vocabulary preserving Local normalization, frozen
+  facade-originated limit/internal failures, stable HTTP mapping, 300 KiB
+  raw-body and 2,101,248-byte response bounds;
+- actual-command-ID Runtime Bridge prepare/encode validation, typed canonical
+  request overflow before send, 413 mapping, and separation from malformed
+  `invalid_request`;
+- discovery custom-header read protection, dispatch same-origin/custom-header
+  CSRF policy, no-store/no-referrer/no-redirect headers, loopback-only runtime
+  dispatch, and concrete-path/body log prohibition;
+- one-choice auto-selection, multi-choice explicit selection, manifest/
+  disconnect/revision refresh, focus/visibility/five-second discovery, and no
+  automatic redispatch;
+- raw JSON as sole input authority, strict duplicate/surrogate/trailing/
+  non-object/Phase-15-limit rejection, recursively UTF-16-sorted exact
+  custom two-space canonical form writes with ECMAScript scalar serialization,
+  integer-index key cases, invalid-text preservation, and tab synchronization;
+- all accepted safe-schema constructs, each rejected keyword/constraint,
+  depth/control/enum/array caps, and whole-form fallback without partial
+  rendering;
+- zero dispatch on open/discovery/edit/select/save/history/render, exactly one
+  per Preview or Retry click, frozen active controls, cancel/unmount/
+  disconnect/late-result behavior, and fresh empty back/forward sessions;
+- exact confirmation copy and proof that callback side effects are disclosed
+  while provider/tool/ordinary-Run claims remain absent;
+- strict current-stamped `previewExactLink` resolution through
+  `EvidenceSemantic + RequireCurrent`, owner-only cursor/range claims, every
+  fragment/context/stale/ambiguous/tag/interpolation rejection, canonical URL
+  construction in Local, and VS Code loopback/configured-port validation; and
+- latest operation selection from one SQLite snapshot using
+  `first_seen_at DESC, operation_id DESC`, including equal timestamps and
+  commits immediately before/after the snapshot boundary;
+- coherent current-Prompt revalidation across move/delete/rename/kind changes,
+  duplicate definitions, three-attempt publication-generation churn, and no
+  historical-owner bypass;
+- strict latest-Run GET wire validation, no-body detection without reading,
+  exact statuses/messages/bounds, once-only route encoding, Origin/header/CORS/
+  cache/referrer policy, and concrete-path/privacy prohibitions;
+- browser reconstruction and byte-equality validation of canonical Run Detail
+  and Catalog paths, rejecting absolute, queried, fragmented, alternatively
+  encoded, normalized, request-owner-mismatched, or destination-mismatched
+  responses;
+- private exact-preview availability with no peer projection, command,
+  inspection, logging, or Run creation;
+- resolver history replacement, empty-state fresh pulls after focus/history/
+  reconnect/invalidation, one in-flight request, abort/late-result rejection,
+  and no automatic navigation when a Run appears;
+- distinct current-stamped `openLatestRunLink` owner/cursor/stale matrices,
+  Local-authored resolver URLs, VS Code loopback/configured-port validation,
+  and zero retained owner/URL/Run state; and
 - byte-for-byte cache/store non-mutation; and
 - final Go tests under the race detector.
 
 The decoration spike includes a documented manual theme matrix where rendered
 legibility cannot be asserted reliably through extension APIs.
+
+The final shared fixture, stress matrix, privacy anchors, and measured
+performance budgets are retained in the
+[release evidence appendix](2026-07-26-prompt-text-editor-support-release-evidence.md).
 
 ## Cache and release impact
 
@@ -357,6 +489,19 @@ identity. They require no cache epoch. Phase 15 creates no changeset; Phase 18
 adds these public npm-facing additions to the existing relevant release-theme
 changeset, normally as a `minor` entry for `@use-crux/core` plus any directly
 affected published packages, rather than creating a duplicate.
+
+Phase 16's browser facade, Devtools workflow, owner-link request, and VS Code
+command likewise change no Static Parse, Semantic Facts, Project Index
+snapshot, Eval, or protocol cache epoch. Phase 16 creates no changeset. Phase
+18 adds directly affected published packages to that same relevant release
+theme rather than creating a second file.
+
+Phase 17's transient Local route, internal Project Index publication
+generation, LSP owner link, Devtools resolver/empty state, and VS Code command
+change no Static Parse, Semantic Facts, Project Index snapshot, Eval, or judge
+epoch. Phase 17 creates no changeset. Phase 18 updates the existing
+`.changeset/quick-diagnostics-edit.md` release theme with the additive
+latest-Run behavior and directly affected published packages.
 
 ## Documentation
 

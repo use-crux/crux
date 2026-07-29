@@ -37,7 +37,8 @@ type Store struct {
 	mu sync.RWMutex
 
 	// Index
-	index IndexData
+	index           IndexData
+	indexGeneration uint64
 
 	// Runtime flows — managed manually for index cleanup on eviction.
 	runtimeFlowList  []*RuntimeFlowRunData
@@ -110,6 +111,7 @@ type memoryInstance struct {
 func NewStore() *Store {
 	return &Store{
 		// Index
+		indexGeneration: 1,
 		index: IndexData{
 			SchemaVersion: 1,
 			Prompts:       []PromptMeta{},

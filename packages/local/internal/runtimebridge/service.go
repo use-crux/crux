@@ -46,11 +46,12 @@ func IsLoopbackEndpoint(endpoint string) bool {
 type Sender func(context.Context, []byte) error
 
 type Service struct {
-	mu         sync.Mutex
-	peers      map[string]*peerState
-	subs       map[chan Event]struct{}
-	httpClient *http.Client
-	logger     *slog.Logger
+	mu                        sync.Mutex
+	peers                     map[string]*peerState
+	subs                      map[chan Event]struct{}
+	httpClient                *http.Client
+	logger                    *slog.Logger
+	previewProjectionRevision uint64
 }
 
 type peerState struct {
@@ -82,10 +83,11 @@ func NewService(client *http.Client, options ...Option) *Service {
 		client = http.DefaultClient
 	}
 	service := &Service{
-		peers:      map[string]*peerState{},
-		subs:       map[chan Event]struct{}{},
-		httpClient: client,
-		logger:     slog.Default(),
+		peers:                     map[string]*peerState{},
+		subs:                      map[chan Event]struct{}{},
+		httpClient:                client,
+		logger:                    slog.Default(),
+		previewProjectionRevision: 1,
 	}
 	for _, option := range options {
 		option(service)

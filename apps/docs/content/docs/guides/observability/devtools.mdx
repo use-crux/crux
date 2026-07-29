@@ -53,6 +53,15 @@ one exact `media.operation` DefinitionRef with
 `role: "invoked-media-operation"`; missing, conflicting, or differently scoped
 references stay unavailable instead of guessing.
 
+For ordinary captured generations built from `PromptText`, Run Detail keeps the
+exact resolved user-prompt text and highlights authored/static regions versus
+interpolated/dynamic regions. Provenance labels are shown when the segment
+supplied one, alongside static, dynamic, and total token attribution. This is
+still the normal captured input artifact—not a second telemetry channel.
+Ordinary string prompts use the existing plain-text card. Missing, malformed,
+disabled, truncated, or redacted provenance also fails closed to plain text
+when captured prompt text remains available.
+
 ## Evals
 
 The Evals page lists the single default Eval export discovered from every
@@ -115,6 +124,13 @@ Runtime evidence enriches this authored view without becoming source truth.
 Historical manifest joins are resolved only against the exact project and
 manifest identity.
 
+For canonical `md` sources, Catalog definition detail presents the
+compiler-owned Markdown classification, owner/named-fragment/anonymous-fragment
+identity, static/direct or dynamic/callback lifecycle, named-fragment joins,
+available string-to-`md` refactors, and hard PromptText diagnostics. Diagnostic
+cards retain their code, severity, location, and structured cause. These hard
+compiler diagnostics remain separate from lint findings.
+
 Force a source rebuild only when needed:
 
 ```bash
@@ -145,6 +161,24 @@ pseudonymization remains separate work.
 
 See [Privacy and redaction](/docs/guides/observability/privacy) for capture
 scope, ordering, and fail-closed behavior.
+
+## PromptText evidence modes
+
+PromptText has three deliberately different inspection modes:
+
+- **Static preview** analyzes the current editor buffer without executing
+  application code. Runtime-only values remain `⟪unknown⟫`.
+- **Exact preview** explicitly invokes `Prompt.inspect()` in a selected
+  connected application runtime. Devtools presents assembled system parts,
+  user-prompt provenance, token totals and budget, dropped/excluded contexts,
+  and validation issues. Opening the page does not dispatch inspection.
+- **Captured Run evidence** is historical observability from an ordinary
+  generation. It exists only when input capture policy retained the messages
+  artifact and may be truncated, redacted, or absent.
+
+Exact preview creates neither an ordinary Run nor an observability record, so
+it cannot substitute for captured production evidence. Conversely, a captured
+Run is not recomputed against the current application runtime.
 
 ## Local files and privacy
 

@@ -37,6 +37,7 @@ func (s *Service) RegisterPeerConnection(peer Peer, send Sender) (Peer, string) 
 		connectionID:     connectionID,
 		manifestRevision: 1, pending: map[string]*pendingCommand{},
 	}
+	s.bumpPreviewProjectionRevisionLocked()
 	s.mu.Unlock()
 	s.retirePeerState(replaced, true)
 	s.Logger().Info("runtime bridge peer registered", "peerId", peer.PeerID, "transport", peer.Transport, "runtimeName", peer.RuntimeName, "endpointUrl", peer.EndpointURL)
@@ -44,6 +45,7 @@ func (s *Service) RegisterPeerConnection(peer Peer, send Sender) (Peer, string) 
 	s.publish(Event{
 		Type: "runtime_bridge:event", Action: "peer.connected",
 		PeerID: peer.PeerID, Peer: &publicPeer, Timestamp: time.Now().UTC(),
+		PreviewProjectionRevision: s.PromptPreviewProjectionRevision(),
 	})
 	return publicPeer, connectionID
 }
@@ -61,6 +63,7 @@ func (s *Service) UnregisterPeerConnection(peerID, connectionID string) {
 	}
 	if ok {
 		delete(s.peers, peerID)
+		s.bumpPreviewProjectionRevisionLocked()
 	}
 	s.mu.Unlock()
 	if ok {
@@ -68,6 +71,7 @@ func (s *Service) UnregisterPeerConnection(peerID, connectionID string) {
 		s.publish(Event{
 			Type: "runtime_bridge:event", Action: "peer.disconnected",
 			PeerID: peerID, Timestamp: time.Now().UTC(),
+			PreviewProjectionRevision: s.PromptPreviewProjectionRevision(),
 		})
 	}
 }

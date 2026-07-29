@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 845,
+    "files": 860,
     "definitions": 142,
     "relations": 6,
     "diagnostics": 28,
-    "dependencies": 1644,
-    "canonicalBytes": 295157
+    "dependencies": 1679,
+    "canonicalBytes": 299023
   },
   "files": [
     {
@@ -1301,13 +1301,22 @@
       "dependencies": 1
     },
     {
-      "file": "packages/convex/src/bridge.ts",
-      "sha256": "39944e6ebc3e85b837d8628fd6355083c2f99ee32b9721573c619f048b6bcd33",
-      "bytes": 113,
+      "file": "packages/convex/src/bridge-command.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/src/bridge.ts",
+      "sha256": "ae2ca45cc468c5b889f6f0480a0eef3bbbdb454aabc6a7be1e5e18e09b1e8e25",
+      "bytes": 160,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/convex/src/component/memory.ts",
@@ -2118,6 +2127,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/prompt-preview-configure-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/core/__type_tests__/prompt-text.test-d.ts",
@@ -3462,12 +3480,12 @@
     },
     {
       "file": "packages/core/src/resolver/pass.ts",
-      "sha256": "acd0627a97b83510f4a58f32f002031e20de52544d474d7912c5603bc7ddaa5f",
-      "bytes": 1115,
+      "sha256": "a47ab43c0d2783101fe80296592f4b88e332f9f634750e34d9f7c1b58561a076",
+      "bytes": 1240,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 20
+      "dependencies": 22
     },
     {
       "file": "packages/core/src/resolver/ports.ts",
@@ -3660,12 +3678,12 @@
     },
     {
       "file": "packages/core/src/runtime/configure.ts",
-      "sha256": "5391f2a7e449078fa2813f7a365cab45f1a09c96346019adbb60fd552bdcf359",
-      "bytes": 124,
+      "sha256": "4d86f0bb4522c2c24976dd79d7b902c3c0b7b2389b91ce9287db73044cf2022f",
+      "bytes": 194,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/runtime/engine/kernel-scheduled-work.ts",
@@ -3804,12 +3822,12 @@
     },
     {
       "file": "packages/core/src/runtime/process-registry.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "1623d374a88b5a6335cd6e2372d04f998d8af13a18684fa7a52b6f7e6ad6a755",
+      "bytes": 128,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/runtime/public.ts",
@@ -4586,6 +4604,24 @@
       "dependencies": 0
     },
     {
+      "file": "packages/devtools/ui/src/features/run-detail/prompt-text/model.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/prompt-text/user-prompt.tsx",
+      "sha256": "0076311ad0af118f4d0f3b23a48960d1c1902e92b99620ab002a63b5f876272a",
+      "bytes": 142,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/devtools/ui/src/shared/hooks/useLibraryApi.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -4596,6 +4632,15 @@
     },
     {
       "file": "packages/devtools/ui/src/shared/hooks/usePrefetch.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/shared/services/project-index/evidence.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,

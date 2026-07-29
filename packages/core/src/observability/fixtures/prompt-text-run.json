@@ -1,0 +1,126 @@
+{
+  "records": [
+    {
+      "schemaVersion": 4,
+      "recordId": "rec_prompt_text_1",
+      "type": "run:start",
+      "runId": "run_prompt_text",
+      "operationId": "run_prompt_text",
+      "traceId": "717fdb1fcbfe458fa459a9d011c37f19",
+      "segmentId": "seg_prompt_text",
+      "segmentSeq": 1,
+      "name": "PromptText writer",
+      "rootPrimitive": "generation.call",
+      "startedAt": "2026-07-29T20:00:00.000Z",
+      "status": "running"
+    },
+    {
+      "schemaVersion": 4,
+      "recordId": "rec_prompt_text_2",
+      "type": "span",
+      "runId": "run_prompt_text",
+      "operationId": "run_prompt_text",
+      "traceId": "717fdb1fcbfe458fa459a9d011c37f19",
+      "segmentId": "seg_prompt_text",
+      "segmentSeq": 2,
+      "spanId": "a17e0c0ffee00001",
+      "parentSpanId": null,
+      "family": "generation",
+      "primitive": "generation.call",
+      "name": "PromptText writer",
+      "startedAt": "2026-07-29T20:00:00.010Z",
+      "endedAt": "2026-07-29T20:00:00.900Z",
+      "durationMs": 890,
+      "status": "ok",
+      "promptId": "writer"
+    },
+    {
+      "schemaVersion": 4,
+      "recordId": "rec_prompt_text_3",
+      "type": "artifact",
+      "runId": "run_prompt_text",
+      "operationId": "run_prompt_text",
+      "traceId": "717fdb1fcbfe458fa459a9d011c37f19",
+      "segmentId": "seg_prompt_text",
+      "segmentSeq": 3,
+      "artifactId": "artifact_prompt_text_messages",
+      "spanId": "a17e0c0ffee00001",
+      "kind": "messages",
+      "createdAt": "2026-07-29T20:00:00.020Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "preview": {
+        "input": {
+          "name": "Ada"
+        },
+        "userPrompt": {
+          "kind": "prompt-text",
+          "text": "Hello Ada\nNested 値\n{\n  \"ready\": true\n}",
+          "segments": [
+            {
+              "text": "Hello ",
+              "dynamic": false
+            },
+            {
+              "text": "Ada",
+              "dynamic": true
+            },
+            {
+              "text": "\nNested ",
+              "dynamic": false
+            },
+            {
+              "text": "値",
+              "dynamic": true
+            },
+            {
+              "text": "\n",
+              "dynamic": false
+            },
+            {
+              "text": "{\n  \"ready\": true\n}",
+              "dynamic": true
+            }
+          ],
+          "tokens": 10,
+          "staticTokens": 5,
+          "dynamicTokens": 7
+        }
+      }
+    },
+    {
+      "schemaVersion": 4,
+      "recordId": "rec_prompt_text_4",
+      "type": "edge",
+      "runId": "run_prompt_text",
+      "operationId": "run_prompt_text",
+      "traceId": "717fdb1fcbfe458fa459a9d011c37f19",
+      "segmentId": "seg_prompt_text",
+      "segmentSeq": 4,
+      "edgeId": "edge_prompt_text_messages",
+      "edgeType": "consumed",
+      "from": {
+        "kind": "artifact",
+        "id": "artifact_prompt_text_messages"
+      },
+      "to": {
+        "kind": "span",
+        "id": "a17e0c0ffee00001"
+      },
+      "createdAt": "2026-07-29T20:00:00.021Z"
+    },
+    {
+      "schemaVersion": 4,
+      "recordId": "rec_prompt_text_5",
+      "type": "run:end",
+      "runId": "run_prompt_text",
+      "operationId": "run_prompt_text",
+      "traceId": "717fdb1fcbfe458fa459a9d011c37f19",
+      "segmentId": "seg_prompt_text",
+      "segmentSeq": 5,
+      "endedAt": "2026-07-29T20:00:01.000Z",
+      "durationMs": 1000,
+      "status": "ok"
+    }
+  ]
+}

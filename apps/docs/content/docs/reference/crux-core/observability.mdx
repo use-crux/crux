@@ -781,6 +781,16 @@ alone do not claim this evidence. Local projects the same evidence into Run
 Detail; the OTel mapper does not add a new semantic-convention attribute for
 it.
 
+When an ordinary generation resolves a `PromptText` user prompt, its existing
+`messages` input preview can include `userPrompt`: exact resolved text, ordered
+authored/dynamic segments, and static/dynamic/total token attribution.
+Concatenating the retained segment text must reproduce the exact resolved
+prompt. String prompts do not receive invented provenance. The record passes
+through the same input capture level, size limits, JSON-safe normalization,
+pattern redaction, and last-mile `redactRecord` hook as the rest of the
+messages preview; disabling or redacting input capture does not leave a
+separate PromptText copy.
+
 The emit path also strips payload-shaped attributes, converts JSON-hostile values, and drops invalid optional metrics before fan-out, so subscribers, the diagnostics channel, plugins, and transports all consume the same sanitized JSON-safe record. A failure inside pattern redaction or a configured `redactRecord` hook drops the record (fail-closed) instead of emitting it unredacted or failing application code. The shared helper `toSafeJsonValue()` truncates long strings (default 8000 characters) and redacts sensitive object keys.
 
 Pattern redaction intentionally excludes structural graph IDs, names,

@@ -107,20 +107,24 @@ type DispatchRequest struct {
 }
 
 type DispatchResponse struct {
-	PeerID   string          `json:"peerId"`
-	Result   json.RawMessage `json:"result,omitempty"`
-	Error    *CommandError   `json:"error,omitempty"`
-	RunIDs   []string        `json:"runIds,omitempty"`
-	TraceIDs []string        `json:"traceIds,omitempty"`
+	PeerID            string          `json:"peerId"`
+	Result            json.RawMessage `json:"result,omitempty"`
+	Error             *CommandError   `json:"error,omitempty"`
+	RunIDs            []string        `json:"runIds,omitempty"`
+	TraceIDs          []string        `json:"traceIds,omitempty"`
+	RuntimeName       string          `json:"-"`
+	PeerEnvironment   string          `json:"-"`
+	CatalogueRevision uint64          `json:"-"`
 }
 
 type Event struct {
-	Type      string        `json:"type"`
-	Action    string        `json:"action"`
-	PeerID    string        `json:"peerId,omitempty"`
-	CommandID string        `json:"commandId,omitempty"`
-	Timestamp time.Time     `json:"timestamp"`
-	Peer      *Peer         `json:"peer,omitempty"`
-	Error     *CommandError `json:"error,omitempty"`
-	Code      string        `json:"code,omitempty"`
+	Type                      string        `json:"type"`
+	Action                    string        `json:"action"`
+	PeerID                    string        `json:"peerId,omitempty"`
+	CommandID                 string        `json:"commandId,omitempty"`
+	Timestamp                 time.Time     `json:"timestamp"`
+	Peer                      *Peer         `json:"peer,omitempty"`
+	Error                     *CommandError `json:"error,omitempty"`
+	Code                      string        `json:"code,omitempty"`
+	PreviewProjectionRevision uint64        `json:"-"`
 }

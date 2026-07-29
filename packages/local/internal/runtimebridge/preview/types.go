@@ -96,6 +96,7 @@ func NewFailure(code string) *Failure {
 
 var failureMessages = map[string]string{
 	"invalid_request":         "The exact-preview request is invalid.",
+	"input_limit_exceeded":    "Exact-preview input exceeded its safe limit.",
 	"no_peer":                 "No live runtime peer is available.",
 	"environment_unavailable": "No live runtime peer matches the selected environment.",
 	"capability_unavailable":  "No live runtime peer supports exact prompt preview.",

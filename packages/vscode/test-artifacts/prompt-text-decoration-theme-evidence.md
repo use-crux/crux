@@ -1,7 +1,7 @@
 # PromptText mapped-decoration evidence
 
-Date: 2026-07-26  
-Host: VS Code 1.90.2 on Linux  
+Date: 2026-07-26
+Host: VS Code 1.90.2 on Linux
 Fixture: CRLF TypeScript template with Unicode, all seven roles, and an
 interpolation barrier
 

@@ -1,0 +1,3779 @@
+{
+  "version": "crux-prompt-text-editor-conformance-v1",
+  "query": {
+    "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+    "languageId": "typescript",
+    "sourceHash": "c57ce3b1aa620c2edadb5b7ed113298f1ed29ab806bdd2a77248a0318183d727",
+    "limits": {
+      "maxSourceBytes": 2097152,
+      "maxTemplates": 256,
+      "maxTemplateBytes": 262144,
+      "maxTraversalNodes": 100000,
+      "maxOutputBytes": 1048576,
+      "maxStringRefactors": 128,
+      "maxStringRefactorBytes": 262144,
+      "maxStringRefactorOutputBytes": 262144,
+      "maxFragments": 256,
+      "maxFragmentJoins": 256,
+      "maxFragmentBytes": 65536,
+      "maxFragmentDepth": 16,
+      "maxPreviewBytes": 1048576
+    }
+  },
+  "analysis": {
+    "protocolVersion": 1,
+    "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+    "revision": {
+      "openEpoch": 1,
+      "version": 1,
+      "sourceHash": "c57ce3b1aa620c2edadb5b7ed113298f1ed29ab806bdd2a77248a0318183d727"
+    },
+    "status": {
+      "kind": "complete"
+    },
+    "templates": [
+      {
+        "candidateId": 0,
+        "range": {
+          "start": {
+            "line": 7,
+            "character": 22
+          },
+          "end": {
+            "line": 11,
+            "character": 1
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 7,
+            "character": 22
+          },
+          "end": {
+            "line": 7,
+            "character": 24
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 7,
+            "character": 24
+          },
+          "end": {
+            "line": 11,
+            "character": 1
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 7,
+              "character": 24
+            },
+            "end": {
+              "line": 7,
+              "character": 25
+            }
+          },
+          {
+            "start": {
+              "line": 11,
+              "character": 0
+            },
+            "end": {
+              "line": 11,
+              "character": 1
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 7,
+                "character": 25
+              },
+              "end": {
+                "line": 11,
+                "character": 0
+              }
+            },
+            "projectionLength": 70
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 13
+            },
+            "sourceRange": {
+              "start": {
+                "line": 8,
+                "character": 2
+              },
+              "end": {
+                "line": 10,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 13,
+              "end": 70
+            },
+            "sourceRange": {
+              "start": {
+                "line": 10,
+                "character": 2
+              },
+              "end": {
+                "line": 10,
+                "character": 59
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "heading",
+            "label": "Fragment",
+            "level": 2,
+            "range": {
+              "start": {
+                "line": 8,
+                "character": 2
+              },
+              "end": {
+                "line": 9,
+                "character": 0
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 8,
+                "character": 5
+              },
+              "end": {
+                "line": 8,
+                "character": 13
+              }
+            }
+          },
+          {
+            "index": 1,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 10,
+                "character": 2
+              },
+              "end": {
+                "line": 10,
+                "character": 59
+              }
+            }
+          }
+        ],
+        "spans": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "emphasis",
+            "range": {
+              "start": {
+                "line": 10,
+                "character": 11
+              },
+              "end": {
+                "line": 10,
+                "character": 21
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 10,
+                "character": 12
+              },
+              "end": {
+                "line": 10,
+                "character": 20
+              }
+            }
+          }
+        ],
+        "links": [
+          {
+            "destination": "./guide.md#start",
+            "destinationRange": {
+              "start": {
+                "line": 10,
+                "character": 41
+              },
+              "end": {
+                "line": 10,
+                "character": 57
+              }
+            },
+            "index": 0,
+            "island": 0,
+            "kind": "inline",
+            "range": {
+              "start": {
+                "line": 10,
+                "character": 27
+              },
+              "end": {
+                "line": 10,
+                "character": 58
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 10,
+                "character": 28
+              },
+              "end": {
+                "line": 10,
+                "character": 39
+              }
+            },
+            "title": null
+          }
+        ],
+        "nesting": [
+          {
+            "parent": {
+              "index": 1,
+              "kind": "block"
+            },
+            "child": {
+              "index": 0,
+              "kind": "span"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 1,
+              "kind": "block"
+            },
+            "child": {
+              "index": 0,
+              "kind": "link"
+            },
+            "ordinal": 1
+          }
+        ],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "## Fragment\n\nFragment _emphasis_ with [local guide](./guide.md#start).",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 8,
+                  "character": 2
+                },
+                "end": {
+                  "line": 8,
+                  "character": 13
+                }
+              },
+              "text": "## Fragment"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 8,
+                  "character": 13
+                },
+                "end": {
+                  "line": 9,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 9,
+                  "character": 0
+                },
+                "end": {
+                  "line": 10,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 10,
+                  "character": 2
+                },
+                "end": {
+                  "line": 10,
+                  "character": 59
+                }
+              },
+              "text": "Fragment _emphasis_ with [local guide](./guide.md#start)."
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 1,
+        "range": {
+          "start": {
+            "line": 15,
+            "character": 10
+          },
+          "end": {
+            "line": 43,
+            "character": 3
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 15,
+            "character": 10
+          },
+          "end": {
+            "line": 15,
+            "character": 12
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 15,
+            "character": 12
+          },
+          "end": {
+            "line": 43,
+            "character": 3
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 15,
+              "character": 12
+            },
+            "end": {
+              "line": 15,
+              "character": 13
+            }
+          },
+          {
+            "start": {
+              "line": 43,
+              "character": 2
+            },
+            "end": {
+              "line": 43,
+              "character": 3
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 15,
+                "character": 13
+              },
+              "end": {
+                "line": 18,
+                "character": 20
+              }
+            },
+            "projectionLength": 37
+          },
+          {
+            "index": 1,
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 27
+              },
+              "end": {
+                "line": 29,
+                "character": 21
+              }
+            },
+            "projectionLength": 119
+          },
+          {
+            "index": 2,
+            "range": {
+              "start": {
+                "line": 29,
+                "character": 30
+              },
+              "end": {
+                "line": 32,
+                "character": 4
+              }
+            },
+            "projectionLength": 18
+          },
+          {
+            "index": 3,
+            "range": {
+              "start": {
+                "line": 32,
+                "character": 13
+              },
+              "end": {
+                "line": 34,
+                "character": 20
+              }
+            },
+            "projectionLength": 18
+          },
+          {
+            "index": 4,
+            "range": {
+              "start": {
+                "line": 37,
+                "character": 5
+              },
+              "end": {
+                "line": 38,
+                "character": 18
+              }
+            },
+            "projectionLength": 15
+          },
+          {
+            "index": 5,
+            "range": {
+              "start": {
+                "line": 38,
+                "character": 39
+              },
+              "end": {
+                "line": 40,
+                "character": 4
+              }
+            },
+            "projectionLength": 2
+          },
+          {
+            "index": 6,
+            "range": {
+              "start": {
+                "line": 40,
+                "character": 20
+              },
+              "end": {
+                "line": 43,
+                "character": 2
+              }
+            },
+            "projectionLength": 17
+          }
+        ],
+        "interpolationBarriers": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 20
+              },
+              "end": {
+                "line": 18,
+                "character": 27
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 18,
+                "character": 22
+              },
+              "end": {
+                "line": 18,
+                "character": 26
+              }
+            },
+            "lineIsolationEdit": {
+              "range": {
+                "start": {
+                  "line": 18,
+                  "character": 19
+                },
+                "end": {
+                  "line": 18,
+                  "character": 27
+                }
+              },
+              "expectedText": " ${user}",
+              "newText": "\n    ${user}\n    "
+            }
+          },
+          {
+            "index": 1,
+            "range": {
+              "start": {
+                "line": 29,
+                "character": 21
+              },
+              "end": {
+                "line": 29,
+                "character": 30
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 29,
+                "character": 23
+              },
+              "end": {
+                "line": 29,
+                "character": 29
+              }
+            },
+            "lineIsolationEdit": {
+              "range": {
+                "start": {
+                  "line": 29,
+                  "character": 20
+                },
+                "end": {
+                  "line": 29,
+                  "character": 30
+                }
+              },
+              "expectedText": " ${values}",
+              "newText": "\n    ${values}"
+            }
+          },
+          {
+            "index": 2,
+            "range": {
+              "start": {
+                "line": 32,
+                "character": 4
+              },
+              "end": {
+                "line": 32,
+                "character": 13
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 32,
+                "character": 6
+              },
+              "end": {
+                "line": 32,
+                "character": 12
+              }
+            }
+          },
+          {
+            "index": 3,
+            "range": {
+              "start": {
+                "line": 34,
+                "character": 20
+              },
+              "end": {
+                "line": 37,
+                "character": 5
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 36,
+                "character": 6
+              },
+              "end": {
+                "line": 36,
+                "character": 13
+              }
+            },
+            "lineIsolationEdit": {
+              "range": {
+                "start": {
+                  "line": 34,
+                  "character": 19
+                },
+                "end": {
+                  "line": 37,
+                  "character": 5
+                }
+              },
+              "expectedText": " ${\n      // @ts-expect-error The fixture intentionally proves this diagnostic.\n      invalid\n    }",
+              "newText": "\n    ${\n      // @ts-expect-error The fixture intentionally proves this diagnostic.\n      invalid\n    }"
+            }
+          },
+          {
+            "index": 4,
+            "range": {
+              "start": {
+                "line": 38,
+                "character": 18
+              },
+              "end": {
+                "line": 38,
+                "character": 39
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 38,
+                "character": 20
+              },
+              "end": {
+                "line": 38,
+                "character": 38
+              }
+            },
+            "lineIsolationEdit": {
+              "range": {
+                "start": {
+                  "line": 38,
+                  "character": 17
+                },
+                "end": {
+                  "line": 38,
+                  "character": 39
+                }
+              },
+              "expectedText": " ${md.json(undefined)}",
+              "newText": "\n    ${md.json(undefined)}"
+            }
+          },
+          {
+            "index": 5,
+            "range": {
+              "start": {
+                "line": 40,
+                "character": 4
+              },
+              "end": {
+                "line": 40,
+                "character": 20
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 40,
+                "character": 6
+              },
+              "end": {
+                "line": 40,
+                "character": 19
+              }
+            }
+          }
+        ],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 21
+            },
+            "sourceRange": {
+              "start": {
+                "line": 16,
+                "character": 4
+              },
+              "end": {
+                "line": 18,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 21,
+              "end": 37
+            },
+            "sourceRange": {
+              "start": {
+                "line": 18,
+                "character": 4
+              },
+              "end": {
+                "line": 18,
+                "character": 20
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 0,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 18,
+                "character": 27
+              },
+              "end": {
+                "line": 19,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 2,
+              "end": 4
+            },
+            "sourceRange": {
+              "start": {
+                "line": 19,
+                "character": 4
+              },
+              "end": {
+                "line": 20,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 4,
+              "end": 56
+            },
+            "sourceRange": {
+              "start": {
+                "line": 20,
+                "character": 4
+              },
+              "end": {
+                "line": 21,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 56,
+              "end": 65
+            },
+            "sourceRange": {
+              "start": {
+                "line": 21,
+                "character": 4
+              },
+              "end": {
+                "line": 21,
+                "character": 13
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 65,
+              "end": 66
+            },
+            "sourceRange": {
+              "start": {
+                "line": 21,
+                "character": 13
+              },
+              "end": {
+                "line": 21,
+                "character": 15
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 66,
+              "end": 77
+            },
+            "sourceRange": {
+              "start": {
+                "line": 21,
+                "character": 15
+              },
+              "end": {
+                "line": 21,
+                "character": 26
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 77,
+              "end": 78
+            },
+            "sourceRange": {
+              "start": {
+                "line": 21,
+                "character": 26
+              },
+              "end": {
+                "line": 21,
+                "character": 28
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 78,
+              "end": 80
+            },
+            "sourceRange": {
+              "start": {
+                "line": 21,
+                "character": 28
+              },
+              "end": {
+                "line": 23,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 80,
+              "end": 81
+            },
+            "sourceRange": {
+              "start": {
+                "line": 23,
+                "character": 4
+              },
+              "end": {
+                "line": 23,
+                "character": 6
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 81,
+              "end": 82
+            },
+            "sourceRange": {
+              "start": {
+                "line": 23,
+                "character": 6
+              },
+              "end": {
+                "line": 23,
+                "character": 8
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 82,
+              "end": 83
+            },
+            "sourceRange": {
+              "start": {
+                "line": 23,
+                "character": 8
+              },
+              "end": {
+                "line": 23,
+                "character": 10
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 83,
+              "end": 86
+            },
+            "sourceRange": {
+              "start": {
+                "line": 23,
+                "character": 10
+              },
+              "end": {
+                "line": 24,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 86,
+              "end": 92
+            },
+            "sourceRange": {
+              "start": {
+                "line": 24,
+                "character": 4
+              },
+              "end": {
+                "line": 25,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 92,
+              "end": 93
+            },
+            "sourceRange": {
+              "start": {
+                "line": 25,
+                "character": 4
+              },
+              "end": {
+                "line": 25,
+                "character": 6
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 93,
+              "end": 94
+            },
+            "sourceRange": {
+              "start": {
+                "line": 25,
+                "character": 6
+              },
+              "end": {
+                "line": 25,
+                "character": 8
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 94,
+              "end": 95
+            },
+            "sourceRange": {
+              "start": {
+                "line": 25,
+                "character": 8
+              },
+              "end": {
+                "line": 25,
+                "character": 10
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 95,
+              "end": 97
+            },
+            "sourceRange": {
+              "start": {
+                "line": 25,
+                "character": 10
+              },
+              "end": {
+                "line": 27,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 97,
+              "end": 102
+            },
+            "sourceRange": {
+              "start": {
+                "line": 27,
+                "character": 4
+              },
+              "end": {
+                "line": 29,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 1,
+            "projectionRange": {
+              "start": 102,
+              "end": 119
+            },
+            "sourceRange": {
+              "start": {
+                "line": 29,
+                "character": 4
+              },
+              "end": {
+                "line": 29,
+                "character": 21
+              }
+            }
+          },
+          {
+            "island": 2,
+            "projectionRange": {
+              "start": 0,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 29,
+                "character": 30
+              },
+              "end": {
+                "line": 31,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 2,
+            "projectionRange": {
+              "start": 2,
+              "end": 18
+            },
+            "sourceRange": {
+              "start": {
+                "line": 31,
+                "character": 4
+              },
+              "end": {
+                "line": 32,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 3,
+            "projectionRange": {
+              "start": 0,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 32,
+                "character": 13
+              },
+              "end": {
+                "line": 34,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 3,
+            "projectionRange": {
+              "start": 2,
+              "end": 18
+            },
+            "sourceRange": {
+              "start": {
+                "line": 34,
+                "character": 4
+              },
+              "end": {
+                "line": 34,
+                "character": 20
+              }
+            }
+          },
+          {
+            "island": 4,
+            "projectionRange": {
+              "start": 0,
+              "end": 1
+            },
+            "sourceRange": {
+              "start": {
+                "line": 37,
+                "character": 5
+              },
+              "end": {
+                "line": 38,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 4,
+            "projectionRange": {
+              "start": 1,
+              "end": 15
+            },
+            "sourceRange": {
+              "start": {
+                "line": 38,
+                "character": 4
+              },
+              "end": {
+                "line": 38,
+                "character": 18
+              }
+            }
+          },
+          {
+            "island": 5,
+            "projectionRange": {
+              "start": 0,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 38,
+                "character": 39
+              },
+              "end": {
+                "line": 40,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 6,
+            "projectionRange": {
+              "start": 0,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 40,
+                "character": 20
+              },
+              "end": {
+                "line": 42,
+                "character": 0
+              }
+            }
+          },
+          {
+            "island": 6,
+            "projectionRange": {
+              "start": 2,
+              "end": 17
+            },
+            "sourceRange": {
+              "start": {
+                "line": 42,
+                "character": 4
+              },
+              "end": {
+                "line": 42,
+                "character": 19
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "heading",
+            "label": "Héllo team 😀",
+            "level": 1,
+            "range": {
+              "start": {
+                "line": 16,
+                "character": 4
+              },
+              "end": {
+                "line": 17,
+                "character": 0
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 16,
+                "character": 6
+              },
+              "end": {
+                "line": 16,
+                "character": 23
+              }
+            }
+          },
+          {
+            "index": 1,
+            "island": 0,
+            "kind": "blockquote",
+            "markerRanges": [
+              {
+                "start": {
+                  "line": 18,
+                  "character": 4
+                },
+                "end": {
+                  "line": 18,
+                  "character": 5
+                }
+              }
+            ],
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 4
+              },
+              "end": {
+                "line": 18,
+                "character": 20
+              }
+            }
+          },
+          {
+            "index": 2,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 6
+              },
+              "end": {
+                "line": 18,
+                "character": 20
+              }
+            }
+          },
+          {
+            "index": 3,
+            "island": 1,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 27
+              },
+              "end": {
+                "line": 19,
+                "character": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "island": 1,
+            "kind": "blockquote",
+            "markerRanges": [
+              {
+                "start": {
+                  "line": 19,
+                  "character": 4
+                },
+                "end": {
+                  "line": 19,
+                  "character": 5
+                }
+              },
+              {
+                "start": {
+                  "line": 20,
+                  "character": 4
+                },
+                "end": {
+                  "line": 20,
+                  "character": 5
+                }
+              },
+              {
+                "start": {
+                  "line": 21,
+                  "character": 4
+                },
+                "end": {
+                  "line": 21,
+                  "character": 5
+                }
+              }
+            ],
+            "range": {
+              "start": {
+                "line": 19,
+                "character": 4
+              },
+              "end": {
+                "line": 22,
+                "character": 0
+              }
+            }
+          },
+          {
+            "index": 5,
+            "island": 1,
+            "kind": "list",
+            "ordered": true,
+            "range": {
+              "start": {
+                "line": 20,
+                "character": 6
+              },
+              "end": {
+                "line": 22,
+                "character": 0
+              }
+            },
+            "start": 1
+          },
+          {
+            "index": 6,
+            "island": 1,
+            "kind": "list-item",
+            "markerRange": {
+              "start": {
+                "line": 20,
+                "character": 6
+              },
+              "end": {
+                "line": 20,
+                "character": 8
+              }
+            },
+            "range": {
+              "start": {
+                "line": 20,
+                "character": 6
+              },
+              "end": {
+                "line": 21,
+                "character": 0
+              }
+            }
+          },
+          {
+            "index": 7,
+            "island": 1,
+            "kind": "list-item",
+            "markerRange": {
+              "start": {
+                "line": 21,
+                "character": 6
+              },
+              "end": {
+                "line": 21,
+                "character": 8
+              }
+            },
+            "range": {
+              "start": {
+                "line": 21,
+                "character": 6
+              },
+              "end": {
+                "line": 22,
+                "character": 0
+              }
+            }
+          },
+          {
+            "contentRange": {
+              "start": {
+                "line": 24,
+                "character": 4
+              },
+              "end": {
+                "line": 25,
+                "character": 0
+              }
+            },
+            "fenced": true,
+            "index": 8,
+            "info": "ts",
+            "island": 1,
+            "kind": "code-block",
+            "range": {
+              "start": {
+                "line": 23,
+                "character": 4
+              },
+              "end": {
+                "line": 25,
+                "character": 10
+              }
+            }
+          },
+          {
+            "index": 9,
+            "island": 1,
+            "kind": "thematic-break",
+            "range": {
+              "start": {
+                "line": 27,
+                "character": 4
+              },
+              "end": {
+                "line": 28,
+                "character": 0
+              }
+            }
+          },
+          {
+            "index": 10,
+            "island": 1,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 29,
+                "character": 4
+              },
+              "end": {
+                "line": 29,
+                "character": 21
+              }
+            }
+          },
+          {
+            "index": 11,
+            "island": 2,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 31,
+                "character": 4
+              },
+              "end": {
+                "line": 32,
+                "character": 0
+              }
+            }
+          },
+          {
+            "index": 12,
+            "island": 3,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 34,
+                "character": 4
+              },
+              "end": {
+                "line": 34,
+                "character": 20
+              }
+            }
+          },
+          {
+            "index": 13,
+            "island": 4,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 38,
+                "character": 4
+              },
+              "end": {
+                "line": 38,
+                "character": 18
+              }
+            }
+          },
+          {
+            "index": 14,
+            "island": 6,
+            "kind": "heading",
+            "label": "Combining é",
+            "level": 2,
+            "range": {
+              "start": {
+                "line": 42,
+                "character": 4
+              },
+              "end": {
+                "line": 42,
+                "character": 19
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 42,
+                "character": 7
+              },
+              "end": {
+                "line": 42,
+                "character": 19
+              }
+            }
+          }
+        ],
+        "spans": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "strong",
+            "range": {
+              "start": {
+                "line": 16,
+                "character": 12
+              },
+              "end": {
+                "line": 16,
+                "character": 20
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 16,
+                "character": 14
+              },
+              "end": {
+                "line": 16,
+                "character": 18
+              }
+            }
+          },
+          {
+            "index": 1,
+            "island": 0,
+            "kind": "emphasis",
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 9
+              },
+              "end": {
+                "line": 18,
+                "character": 18
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 18,
+                "character": 10
+              },
+              "end": {
+                "line": 18,
+                "character": 17
+              }
+            }
+          },
+          {
+            "index": 2,
+            "island": 1,
+            "kind": "inline-code",
+            "range": {
+              "start": {
+                "line": 21,
+                "character": 13
+              },
+              "end": {
+                "line": 21,
+                "character": 28
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 21,
+                "character": 15
+              },
+              "end": {
+                "line": 21,
+                "character": 26
+              }
+            }
+          }
+        ],
+        "links": [
+          {
+            "destination": "https://example.com/docs",
+            "destinationRange": {
+              "start": {
+                "line": 20,
+                "character": 22
+              },
+              "end": {
+                "line": 20,
+                "character": 46
+              }
+            },
+            "index": 0,
+            "island": 1,
+            "kind": "inline",
+            "range": {
+              "start": {
+                "line": 20,
+                "character": 14
+              },
+              "end": {
+                "line": 20,
+                "character": 55
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 20,
+                "character": 15
+              },
+              "end": {
+                "line": 20,
+                "character": 20
+              }
+            },
+            "title": "Guide"
+          }
+        ],
+        "nesting": [
+          {
+            "parent": {
+              "index": 0,
+              "kind": "block"
+            },
+            "child": {
+              "index": 0,
+              "kind": "span"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 1,
+              "kind": "block"
+            },
+            "child": {
+              "index": 2,
+              "kind": "block"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 2,
+              "kind": "block"
+            },
+            "child": {
+              "index": 1,
+              "kind": "span"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 4,
+              "kind": "block"
+            },
+            "child": {
+              "index": 5,
+              "kind": "block"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 5,
+              "kind": "block"
+            },
+            "child": {
+              "index": 6,
+              "kind": "block"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 6,
+              "kind": "block"
+            },
+            "child": {
+              "index": 0,
+              "kind": "link"
+            },
+            "ordinal": 0
+          },
+          {
+            "parent": {
+              "index": 5,
+              "kind": "block"
+            },
+            "child": {
+              "index": 7,
+              "kind": "block"
+            },
+            "ordinal": 1
+          },
+          {
+            "parent": {
+              "index": 7,
+              "kind": "block"
+            },
+            "child": {
+              "index": 2,
+              "kind": "span"
+            },
+            "ordinal": 0
+          }
+        ],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "# Héllo **team** 😀\n\n\u003e 👋 *Welcome*, ⟪unknown⟫.\n\u003e\n\u003e 1. Read [guide](https://example.com/docs \"Guide\")\n\u003e 2. Use `inline code`\n\n```ts\nrun()\n```\n\n---\n\nInline sequence: ⟪unknown⟫\n\nBlock sequence:\n⟪unknown⟫\n\nInvalid scalar: ⟪unknown⟫\nMissing JSON: ⟪unknown⟫\n\n## Fragment\n\nFragment _emphasis_ with [local guide](./guide.md#start).\n\n## Combining é",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 16,
+                  "character": 4
+                },
+                "end": {
+                  "line": 16,
+                  "character": 23
+                }
+              },
+              "text": "# Héllo **team** 😀"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 16,
+                  "character": 23
+                },
+                "end": {
+                  "line": 17,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 17,
+                  "character": 0
+                },
+                "end": {
+                  "line": 18,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 18,
+                  "character": 4
+                },
+                "end": {
+                  "line": 18,
+                  "character": 20
+                }
+              },
+              "text": "\u003e 👋 *Welcome*, "
+            },
+            {
+              "interpolation": 0,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 18,
+                  "character": 27
+                },
+                "end": {
+                  "line": 18,
+                  "character": 28
+                }
+              },
+              "text": "."
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 18,
+                  "character": 28
+                },
+                "end": {
+                  "line": 19,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 19,
+                  "character": 4
+                },
+                "end": {
+                  "line": 19,
+                  "character": 5
+                }
+              },
+              "text": "\u003e"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 19,
+                  "character": 5
+                },
+                "end": {
+                  "line": 20,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 20,
+                  "character": 4
+                },
+                "end": {
+                  "line": 20,
+                  "character": 55
+                }
+              },
+              "text": "\u003e 1. Read [guide](https://example.com/docs \"Guide\")"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 20,
+                  "character": 55
+                },
+                "end": {
+                  "line": 21,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 21,
+                  "character": 4
+                },
+                "end": {
+                  "line": 21,
+                  "character": 28
+                }
+              },
+              "text": "\u003e 2. Use `inline code`"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 21,
+                  "character": 28
+                },
+                "end": {
+                  "line": 22,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 22,
+                  "character": 0
+                },
+                "end": {
+                  "line": 23,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 23,
+                  "character": 4
+                },
+                "end": {
+                  "line": 23,
+                  "character": 12
+                }
+              },
+              "text": "```ts"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 23,
+                  "character": 12
+                },
+                "end": {
+                  "line": 24,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 24,
+                  "character": 4
+                },
+                "end": {
+                  "line": 24,
+                  "character": 9
+                }
+              },
+              "text": "run()"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 24,
+                  "character": 9
+                },
+                "end": {
+                  "line": 25,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 25,
+                  "character": 4
+                },
+                "end": {
+                  "line": 25,
+                  "character": 10
+                }
+              },
+              "text": "```"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 25,
+                  "character": 10
+                },
+                "end": {
+                  "line": 26,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 26,
+                  "character": 0
+                },
+                "end": {
+                  "line": 27,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 27,
+                  "character": 4
+                },
+                "end": {
+                  "line": 27,
+                  "character": 7
+                }
+              },
+              "text": "---"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 27,
+                  "character": 7
+                },
+                "end": {
+                  "line": 28,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 28,
+                  "character": 0
+                },
+                "end": {
+                  "line": 29,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 29,
+                  "character": 4
+                },
+                "end": {
+                  "line": 29,
+                  "character": 21
+                }
+              },
+              "text": "Inline sequence: "
+            },
+            {
+              "interpolation": 1,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 29,
+                  "character": 30
+                },
+                "end": {
+                  "line": 30,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 30,
+                  "character": 0
+                },
+                "end": {
+                  "line": 31,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 31,
+                  "character": 4
+                },
+                "end": {
+                  "line": 31,
+                  "character": 19
+                }
+              },
+              "text": "Block sequence:"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 31,
+                  "character": 19
+                },
+                "end": {
+                  "line": 32,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "interpolation": 2,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 32,
+                  "character": 13
+                },
+                "end": {
+                  "line": 33,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 33,
+                  "character": 0
+                },
+                "end": {
+                  "line": 34,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 34,
+                  "character": 4
+                },
+                "end": {
+                  "line": 34,
+                  "character": 20
+                }
+              },
+              "text": "Invalid scalar: "
+            },
+            {
+              "interpolation": 3,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 37,
+                  "character": 5
+                },
+                "end": {
+                  "line": 38,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 38,
+                  "character": 4
+                },
+                "end": {
+                  "line": 38,
+                  "character": 18
+                }
+              },
+              "text": "Missing JSON: "
+            },
+            {
+              "interpolation": 4,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 38,
+                  "character": 39
+                },
+                "end": {
+                  "line": 39,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 39,
+                  "character": 0
+                },
+                "end": {
+                  "line": 40,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "fragmentId": "document:0",
+              "kind": "fragment",
+              "sourceHash": "c57ce3b1aa620c2edadb5b7ed113298f1ed29ab806bdd2a77248a0318183d727",
+              "text": "## Fragment\n\nFragment _emphasis_ with [local guide](./guide.md#start)."
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 40,
+                  "character": 20
+                },
+                "end": {
+                  "line": 41,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 41,
+                  "character": 0
+                },
+                "end": {
+                  "line": 42,
+                  "character": 0
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 42,
+                  "character": 4
+                },
+                "end": {
+                  "line": 42,
+                  "character": 19
+                }
+              },
+              "text": "## Combining é"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 2,
+        "range": {
+          "start": {
+            "line": 48,
+            "character": 10
+          },
+          "end": {
+            "line": 50,
+            "character": 3
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 48,
+            "character": 10
+          },
+          "end": {
+            "line": 48,
+            "character": 18
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 48,
+            "character": 18
+          },
+          "end": {
+            "line": 50,
+            "character": 3
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 48,
+              "character": 18
+            },
+            "end": {
+              "line": 48,
+              "character": 19
+            }
+          },
+          {
+            "start": {
+              "line": 50,
+              "character": 2
+            },
+            "end": {
+              "line": 50,
+              "character": 3
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 48,
+                "character": 19
+              },
+              "end": {
+                "line": 50,
+                "character": 2
+              }
+            },
+            "projectionLength": 11
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 11
+            },
+            "sourceRange": {
+              "start": {
+                "line": 49,
+                "character": 0
+              },
+              "end": {
+                "line": 49,
+                "character": 11
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 49,
+                "character": 0
+              },
+              "end": {
+                "line": 49,
+                "character": 11
+              }
+            }
+          }
+        ],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "Alias owner",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 49,
+                  "character": 0
+                },
+                "end": {
+                  "line": 49,
+                  "character": 11
+                }
+              },
+              "text": "Alias owner"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 3,
+        "range": {
+          "start": {
+            "line": 55,
+            "character": 10
+          },
+          "end": {
+            "line": 55,
+            "character": 34
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 55,
+            "character": 10
+          },
+          "end": {
+            "line": 55,
+            "character": 17
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 55,
+            "character": 17
+          },
+          "end": {
+            "line": 55,
+            "character": 34
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 55,
+              "character": 17
+            },
+            "end": {
+              "line": 55,
+              "character": 18
+            }
+          },
+          {
+            "start": {
+              "line": 55,
+              "character": 33
+            },
+            "end": {
+              "line": 55,
+              "character": 34
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 55,
+                "character": 18
+              },
+              "end": {
+                "line": 55,
+                "character": 33
+              }
+            },
+            "projectionLength": 15
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 15
+            },
+            "sourceRange": {
+              "start": {
+                "line": 55,
+                "character": 18
+              },
+              "end": {
+                "line": 55,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 55,
+                "character": 18
+              },
+              "end": {
+                "line": 55,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "Namespace owner",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 55,
+                  "character": 18
+                },
+                "end": {
+                  "line": 55,
+                  "character": 33
+                }
+              },
+              "text": "Namespace owner"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 4,
+        "range": {
+          "start": {
+            "line": 58,
+            "character": 35
+          },
+          "end": {
+            "line": 60,
+            "character": 1
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 58,
+            "character": 35
+          },
+          "end": {
+            "line": 58,
+            "character": 37
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 58,
+            "character": 37
+          },
+          "end": {
+            "line": 60,
+            "character": 1
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 58,
+              "character": 37
+            },
+            "end": {
+              "line": 58,
+              "character": 38
+            }
+          },
+          {
+            "start": {
+              "line": 60,
+              "character": 0
+            },
+            "end": {
+              "line": 60,
+              "character": 1
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 58,
+                "character": 38
+              },
+              "end": {
+                "line": 60,
+                "character": 0
+              }
+            },
+            "projectionLength": 19
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 1
+            },
+            "sourceRange": {
+              "start": {
+                "line": 59,
+                "character": 0
+              },
+              "end": {
+                "line": 59,
+                "character": 2
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 1,
+              "end": 2
+            },
+            "sourceRange": {
+              "start": {
+                "line": 59,
+                "character": 2
+              },
+              "end": {
+                "line": 59,
+                "character": 4
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 2,
+              "end": 19
+            },
+            "sourceRange": {
+              "start": {
+                "line": 59,
+                "character": 4
+              },
+              "end": {
+                "line": 59,
+                "character": 21
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 59,
+                "character": 0
+              },
+              "end": {
+                "line": 59,
+                "character": 21
+              }
+            }
+          }
+        ],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "**open [label](\u003cbad",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 59,
+                  "character": 0
+                },
+                "end": {
+                  "line": 59,
+                  "character": 21
+                }
+              },
+              "text": "**open [label](\u003cbad"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 5,
+        "range": {
+          "start": {
+            "line": 61,
+            "character": 39
+          },
+          "end": {
+            "line": 63,
+            "character": 1
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 61,
+            "character": 39
+          },
+          "end": {
+            "line": 61,
+            "character": 41
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 61,
+            "character": 41
+          },
+          "end": {
+            "line": 63,
+            "character": 1
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 61,
+              "character": 41
+            },
+            "end": {
+              "line": 61,
+              "character": 42
+            }
+          },
+          {
+            "start": {
+              "line": 63,
+              "character": 0
+            },
+            "end": {
+              "line": 63,
+              "character": 1
+            }
+          }
+        ],
+        "status": {
+          "kind": "unsupported"
+        },
+        "literalIslands": [],
+        "interpolationBarriers": [],
+        "mappings": [],
+        "blocks": [],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "unavailable"
+          },
+          "evidence": null,
+          "text": "",
+          "segments": [],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 6,
+        "range": {
+          "start": {
+            "line": 64,
+            "character": 30
+          },
+          "end": {
+            "line": 66,
+            "character": 1
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 64,
+            "character": 30
+          },
+          "end": {
+            "line": 64,
+            "character": 32
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 64,
+            "character": 32
+          },
+          "end": {
+            "line": 66,
+            "character": 1
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 64,
+              "character": 32
+            },
+            "end": {
+              "line": 64,
+              "character": 33
+            }
+          },
+          {
+            "start": {
+              "line": 66,
+              "character": 0
+            },
+            "end": {
+              "line": 66,
+              "character": 1
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 64,
+                "character": 33
+              },
+              "end": {
+                "line": 66,
+                "character": 0
+              }
+            },
+            "projectionLength": 13
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 5
+            },
+            "sourceRange": {
+              "start": {
+                "line": 65,
+                "character": 0
+              },
+              "end": {
+                "line": 65,
+                "character": 5
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 5,
+              "end": 6
+            },
+            "sourceRange": {
+              "start": {
+                "line": 65,
+                "character": 5
+              },
+              "end": {
+                "line": 65,
+                "character": 7
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 6,
+              "end": 7
+            },
+            "sourceRange": {
+              "start": {
+                "line": 65,
+                "character": 7
+              },
+              "end": {
+                "line": 65,
+                "character": 9
+              }
+            }
+          },
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 7,
+              "end": 13
+            },
+            "sourceRange": {
+              "start": {
+                "line": 65,
+                "character": 9
+              },
+              "end": {
+                "line": 65,
+                "character": 15
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "paragraph",
+            "range": {
+              "start": {
+                "line": 65,
+                "character": 0
+              },
+              "end": {
+                "line": 65,
+                "character": 15
+              }
+            }
+          }
+        ],
+        "spans": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "soft-break",
+            "range": {
+              "start": {
+                "line": 65,
+                "character": 5
+              },
+              "end": {
+                "line": 65,
+                "character": 9
+              }
+            }
+          }
+        ],
+        "links": [],
+        "nesting": [
+          {
+            "parent": {
+              "index": 0,
+              "kind": "block"
+            },
+            "child": {
+              "index": 0,
+              "kind": "span"
+            },
+            "ordinal": 0
+          }
+        ],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "first\r\nsecond",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 65,
+                  "character": 0
+                },
+                "end": {
+                  "line": 65,
+                  "character": 7
+                }
+              },
+              "text": "first\r"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 65,
+                  "character": 7
+                },
+                "end": {
+                  "line": 65,
+                  "character": 9
+                }
+              },
+              "text": "\n"
+            },
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 65,
+                  "character": 9
+                },
+                "end": {
+                  "line": 65,
+                  "character": 15
+                }
+              },
+              "text": "second"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 7,
+        "range": {
+          "start": {
+            "line": 69,
+            "character": 2
+          },
+          "end": {
+            "line": 69,
+            "character": 25
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 69,
+            "character": 2
+          },
+          "end": {
+            "line": 69,
+            "character": 4
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 69,
+            "character": 4
+          },
+          "end": {
+            "line": 69,
+            "character": 25
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 69,
+              "character": 4
+            },
+            "end": {
+              "line": 69,
+              "character": 5
+            }
+          },
+          {
+            "start": {
+              "line": 69,
+              "character": 24
+            },
+            "end": {
+              "line": 69,
+              "character": 25
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 69,
+                "character": 5
+              },
+              "end": {
+                "line": 69,
+                "character": 5
+              }
+            },
+            "projectionLength": 0
+          },
+          {
+            "index": 1,
+            "range": {
+              "start": {
+                "line": 69,
+                "character": 24
+              },
+              "end": {
+                "line": 69,
+                "character": 24
+              }
+            },
+            "projectionLength": 0
+          }
+        ],
+        "interpolationBarriers": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 69,
+                "character": 5
+              },
+              "end": {
+                "line": 69,
+                "character": 24
+              }
+            },
+            "expressionRange": {
+              "start": {
+                "line": 69,
+                "character": 7
+              },
+              "end": {
+                "line": 69,
+                "character": 23
+              }
+            }
+          }
+        ],
+        "mappings": [],
+        "blocks": [],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "⟪unknown⟫",
+          "segments": [
+            {
+              "interpolation": 0,
+              "interpolationPath": [],
+              "kind": "placeholder",
+              "text": "⟪unknown⟫"
+            }
+          ],
+          "truncation": null
+        }
+      },
+      {
+        "candidateId": 8,
+        "range": {
+          "start": {
+            "line": 70,
+            "character": 32
+          },
+          "end": {
+            "line": 70,
+            "character": 56
+          }
+        },
+        "tagRange": {
+          "start": {
+            "line": 70,
+            "character": 32
+          },
+          "end": {
+            "line": 70,
+            "character": 39
+          }
+        },
+        "templateRange": {
+          "start": {
+            "line": 70,
+            "character": 39
+          },
+          "end": {
+            "line": 70,
+            "character": 56
+          }
+        },
+        "backtickRanges": [
+          {
+            "start": {
+              "line": 70,
+              "character": 39
+            },
+            "end": {
+              "line": 70,
+              "character": 40
+            }
+          },
+          {
+            "start": {
+              "line": 70,
+              "character": 55
+            },
+            "end": {
+              "line": 70,
+              "character": 56
+            }
+          }
+        ],
+        "status": {
+          "kind": "complete"
+        },
+        "literalIslands": [
+          {
+            "index": 0,
+            "range": {
+              "start": {
+                "line": 70,
+                "character": 40
+              },
+              "end": {
+                "line": 70,
+                "character": 55
+              }
+            },
+            "projectionLength": 15
+          }
+        ],
+        "interpolationBarriers": [],
+        "mappings": [
+          {
+            "island": 0,
+            "projectionRange": {
+              "start": 0,
+              "end": 15
+            },
+            "sourceRange": {
+              "start": {
+                "line": 70,
+                "character": 40
+              },
+              "end": {
+                "line": 70,
+                "character": 55
+              }
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "index": 0,
+            "island": 0,
+            "kind": "heading",
+            "label": "Not canonical",
+            "level": 1,
+            "range": {
+              "start": {
+                "line": 70,
+                "character": 40
+              },
+              "end": {
+                "line": 70,
+                "character": 55
+              }
+            },
+            "textRange": {
+              "start": {
+                "line": 70,
+                "character": 42
+              },
+              "end": {
+                "line": 70,
+                "character": 55
+              }
+            }
+          }
+        ],
+        "spans": [],
+        "links": [],
+        "nesting": [],
+        "preview": {
+          "status": {
+            "kind": "complete"
+          },
+          "evidence": "syntax-exact",
+          "text": "# Not canonical",
+          "segments": [
+            {
+              "kind": "authored-literal",
+              "range": {
+                "start": {
+                  "line": 70,
+                  "character": 40
+                },
+                "end": {
+                  "line": 70,
+                  "character": 55
+                }
+              },
+              "text": "# Not canonical"
+            }
+          ],
+          "truncation": null
+        }
+      }
+    ],
+    "refactors": {
+      "status": {
+        "kind": "complete"
+      },
+      "proofs": []
+    }
+  },
+  "semantic": {
+    "definitionId": "prompt:editor-conformance",
+    "sourceRef": {
+      "id": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:16:11",
+      "role": "prompt",
+      "property": "prompt",
+      "source": {
+        "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+        "line": 16,
+        "column": 11
+      },
+      "snippet": {
+        "source": "md`\n    # Héllo **team** 😀\n\n    \u003e 👋 *Welcome*, ${user}.\n    \u003e\n    \u003e 1. Read [guide](https://example.com/docs \"Guide\")\n    \u003e 2. Use \\`inline code\\`\n\n    \\`\\`\\`ts\n    run()\n    \\`\\`\\`\n\n    ---\n\n    Inline sequence: ${values}\n\n    Block sequence:\n    ${values}\n\n    Invalid scalar: ${\n      // @ts-expect-error The fixture intentionally proves this diagnostic.\n      invalid\n    }\n    Missing JSON: ${md.json(undefined)}\n\n    ${namedFragment}\n\n    ## Combining é\n  `",
+        "language": "typescript",
+        "range": {
+          "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+          "startLine": 16,
+          "startColumn": 11,
+          "endLine": 44,
+          "endColumn": 4
+        },
+        "truncated": false
+      },
+      "fidelity": "resolved",
+      "metadata": {
+        "promptText": {
+          "tag": "md",
+          "language": "markdown",
+          "lifecycle": "static",
+          "sourceKind": "owner",
+          "fragmentJoins": [
+            {
+              "kind": "named-fragment",
+              "ownerSourceRefId": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:16:11",
+              "ownerTemplateRange": {
+                "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+                "startLine": 16,
+                "startColumn": 11,
+                "endLine": 44,
+                "endColumn": 4
+              },
+              "interpolationIndex": 5,
+              "expressionRange": {
+                "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+                "startLine": 41,
+                "startColumn": 7,
+                "endLine": 41,
+                "endColumn": 20
+              },
+              "targetSourceRefId": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:8:23",
+              "targetTemplateRange": {
+                "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+                "startLine": 8,
+                "startColumn": 23,
+                "endLine": 12,
+                "endColumn": 2
+              },
+              "proof": "semantic-exact"
+            }
+          ]
+        }
+      }
+    },
+    "diagnostics": [
+      {
+        "id": "prompt-text:fe1ac7323afc59ce02b95abe58f70a2e25576579a8f2567e44c9f27ee5351c82",
+        "severity": "error",
+        "code": "CRUX_PROMPT_TEXT_INLINE_SEQUENCE",
+        "message": "PromptText interpolation 1 is a sequence in inline position. Move it to its own line or join supported scalar values explicitly.",
+        "source": {
+          "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+          "line": 30,
+          "column": 24
+        },
+        "relatedDefinitionIds": ["prompt:editor-conformance"],
+        "evidence": {
+          "kind": "prompt-text",
+          "sourceRefId": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:16:11",
+          "interpolationIndex": 1,
+          "proof": "semantic-exact",
+          "cause": {
+            "kind": "inline-sequence",
+            "joinableWithComma": true
+          }
+        }
+      },
+      {
+        "id": "prompt-text:e0ab4deceaa3f272bed53d2d4b7e364bea97f147a7ae0716b7ad01eccf628951",
+        "severity": "error",
+        "code": "CRUX_PROMPT_TEXT_INVALID_INTERPOLATION",
+        "message": "PromptText interpolation 3 is always invalid (boolean). Use a string, finite number, PromptText fragment, false, null, undefined, or a supported sequence.",
+        "source": {
+          "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+          "line": 37,
+          "column": 7
+        },
+        "relatedDefinitionIds": ["prompt:editor-conformance"],
+        "evidence": {
+          "kind": "prompt-text",
+          "sourceRefId": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:16:11",
+          "interpolationIndex": 3,
+          "proof": "semantic-exact",
+          "cause": {
+            "kind": "invalid-interpolation",
+            "runtimeKinds": ["boolean"],
+            "mdJsonApplicable": true
+          }
+        }
+      },
+      {
+        "id": "prompt-text:1014ddd7838c4413d8df181fb1c060f37c9f48bdf5de8dc951c1a400a05e9ddc",
+        "severity": "error",
+        "code": "CRUX_PROMPT_TEXT_JSON_SERIALIZATION",
+        "message": "md.json() cannot produce text because JSON.stringify() is proven to return undefined for this value.",
+        "source": {
+          "file": "/repo/src/prompt-text-editor-conformance-v1.ts",
+          "line": 39,
+          "column": 21
+        },
+        "relatedDefinitionIds": ["prompt:editor-conformance"],
+        "evidence": {
+          "kind": "prompt-text",
+          "sourceRefId": "prompt:editor-conformance:source:prompt:prompt:prompt-text:src-index.ts-9265a9d5eb6ee869:16:11",
+          "interpolationIndex": 4,
+          "proof": "semantic-exact",
+          "cause": {
+            "kind": "json-serialization",
+            "reason": "undefined-result"
+          }
+        }
+      }
+    ]
+  },
+  "views": {
+    "decorations": [
+      {
+        "role": "heading",
+        "range": {
+          "start": {
+            "line": 16,
+            "character": 6
+          },
+          "end": {
+            "line": 16,
+            "character": 23
+          }
+        }
+      },
+      {
+        "role": "strong",
+        "range": {
+          "start": {
+            "line": 16,
+            "character": 14
+          },
+          "end": {
+            "line": 16,
+            "character": 18
+          }
+        }
+      },
+      {
+        "role": "blockquote",
+        "range": {
+          "start": {
+            "line": 18,
+            "character": 4
+          },
+          "end": {
+            "line": 18,
+            "character": 5
+          }
+        }
+      },
+      {
+        "role": "emphasis",
+        "range": {
+          "start": {
+            "line": 18,
+            "character": 10
+          },
+          "end": {
+            "line": 18,
+            "character": 17
+          }
+        }
+      },
+      {
+        "role": "blockquote",
+        "range": {
+          "start": {
+            "line": 19,
+            "character": 4
+          },
+          "end": {
+            "line": 19,
+            "character": 5
+          }
+        }
+      },
+      {
+        "role": "blockquote",
+        "range": {
+          "start": {
+            "line": 20,
+            "character": 4
+          },
+          "end": {
+            "line": 20,
+            "character": 5
+          }
+        }
+      },
+      {
+        "role": "list",
+        "range": {
+          "start": {
+            "line": 20,
+            "character": 6
+          },
+          "end": {
+            "line": 20,
+            "character": 8
+          }
+        }
+      },
+      {
+        "role": "link",
+        "range": {
+          "start": {
+            "line": 20,
+            "character": 15
+          },
+          "end": {
+            "line": 20,
+            "character": 20
+          }
+        }
+      },
+      {
+        "role": "blockquote",
+        "range": {
+          "start": {
+            "line": 21,
+            "character": 4
+          },
+          "end": {
+            "line": 21,
+            "character": 5
+          }
+        }
+      },
+      {
+        "role": "list",
+        "range": {
+          "start": {
+            "line": 21,
+            "character": 6
+          },
+          "end": {
+            "line": 21,
+            "character": 8
+          }
+        }
+      },
+      {
+        "role": "code",
+        "range": {
+          "start": {
+            "line": 21,
+            "character": 15
+          },
+          "end": {
+            "line": 21,
+            "character": 26
+          }
+        }
+      },
+      {
+        "role": "code",
+        "range": {
+          "start": {
+            "line": 24,
+            "character": 4
+          },
+          "end": {
+            "line": 25,
+            "character": 0
+          }
+        }
+      },
+      {
+        "role": "heading",
+        "range": {
+          "start": {
+            "line": 42,
+            "character": 7
+          },
+          "end": {
+            "line": 42,
+            "character": 19
+          }
+        }
+      }
+    ],
+    "folding": [
+      {
+        "startLine": 8,
+        "endLine": 10
+      },
+      {
+        "startLine": 16,
+        "endLine": 17
+      },
+      {
+        "startLine": 19,
+        "endLine": 21
+      },
+      {
+        "startLine": 20,
+        "endLine": 21
+      },
+      {
+        "startLine": 23,
+        "endLine": 24
+      }
+    ],
+    "symbols": [
+      {
+        "name": "Héllo team 😀",
+        "kind": 15,
+        "range": {
+          "start": {
+            "line": 16,
+            "character": 4
+          },
+          "end": {
+            "line": 17,
+            "character": 0
+          }
+        },
+        "selectionRange": {
+          "start": {
+            "line": 16,
+            "character": 6
+          },
+          "end": {
+            "line": 16,
+            "character": 23
+          }
+        }
+      },
+      {
+        "name": "Combining é",
+        "kind": 15,
+        "range": {
+          "start": {
+            "line": 42,
+            "character": 4
+          },
+          "end": {
+            "line": 42,
+            "character": 19
+          }
+        },
+        "selectionRange": {
+          "start": {
+            "line": 42,
+            "character": 7
+          },
+          "end": {
+            "line": 42,
+            "character": 19
+          }
+        }
+      }
+    ],
+    "links": [
+      {
+        "range": {
+          "start": {
+            "line": 20,
+            "character": 15
+          },
+          "end": {
+            "line": 20,
+            "character": 20
+          }
+        },
+        "target": "https://example.com/docs"
+      }
+    ],
+    "previewText": "# Héllo **team** 😀\n\n\u003e 👋 *Welcome*, ⟪unknown⟫.\n\u003e\n\u003e 1. Read [guide](https://example.com/docs \"Guide\")\n\u003e 2. Use `inline code`\n\n```ts\nrun()\n```\n\n---\n\nInline sequence: ⟪unknown⟫\n\nBlock sequence:\n⟪unknown⟫\n\nInvalid scalar: ⟪unknown⟫\nMissing JSON: ⟪unknown⟫\n\n## Fragment\n\nFragment _emphasis_ with [local guide](./guide.md#start).\n\n## Combining é",
+    "previewEvidence": "syntax-exact"
+  }
+}

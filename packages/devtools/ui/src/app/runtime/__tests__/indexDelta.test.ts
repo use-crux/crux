@@ -4,8 +4,8 @@ import {
   normalizeProjectIndexData,
   type IndexDeltaMessage,
 } from "../indexDelta";
-import type { IndexLintFinding } from "@/types";
-import type { ProjectIdentity } from "@/types";
+import type { IndexLintFinding, ProjectIdentity } from "@/types";
+import { diagnostic, lintFinding, sourceRow } from "./indexDelta/fixtures";
 
 describe("index delta application", () => {
   it("preserves snapshot session metadata during normalization", () => {
@@ -277,24 +277,78 @@ describe("index delta application", () => {
 
     expect(next?.lintFindings).toEqual(findings);
   });
+
+  it("preserves current file diagnostics when the delta omits diagnostics", () => {
+    const file = "/repo/src/writer.ts";
+    const diagnostics = [diagnostic("diagnostic:writer", file)];
+    const current = normalizeProjectIndexData({ diagnostics });
+
+    const next = applyIndexDelta(current, deltaFor(file));
+
+    expect(next?.diagnostics).toEqual(diagnostics);
+  });
+
+  it("clears current file diagnostics when the delta supplies an empty replacement", () => {
+    const file = "/repo/src/writer.ts";
+    const other = diagnostic("diagnostic:other", "/repo/src/other.ts");
+    const current = normalizeProjectIndexData({
+      diagnostics: [diagnostic("diagnostic:writer", file), other],
+    });
+
+    const next = applyIndexDelta(current, {
+      ...deltaFor(file),
+      diagnostics: [],
+    });
+
+    expect(next?.diagnostics).toEqual([other]);
+  });
+
+  it("preserves the current source row when the delta omits sourceRow", () => {
+    const file = "/repo/src/writer.ts";
+    const sources = [sourceRow(file, "prompt:writer")];
+    const current = normalizeProjectIndexData({ sources });
+
+    const next = applyIndexDelta(current, deltaFor(file));
+
+    expect(next?.sources).toEqual(sources);
+  });
+
+  it("removes the current source row when the delta supplies null", () => {
+    const file = "/repo/src/writer.ts";
+    const other = sourceRow("/repo/src/other.ts", "prompt:other");
+    const current = normalizeProjectIndexData({
+      sources: [sourceRow(file, "prompt:writer"), other],
+    });
+
+    const next = applyIndexDelta(current, {
+      ...deltaFor(file),
+      sourceRow: null,
+    });
+
+    expect(next?.sources).toEqual([other]);
+  });
+
+  it("replaces the current source row when the delta supplies a row", () => {
+    const file = "/repo/src/writer.ts";
+    const replacement = sourceRow(file, "prompt:writer:new");
+    const current = normalizeProjectIndexData({
+      sources: [sourceRow(file, "prompt:writer")],
+    });
+
+    const next = applyIndexDelta(current, {
+      ...deltaFor(file),
+      sourceRow: replacement,
+    });
+
+    expect(next?.sources).toEqual([replacement]);
+  });
 });
 
-function lintFinding(id: string, file?: string): IndexLintFinding {
+function deltaFor(file: string): IndexDeltaMessage {
   return {
-    id,
-    severity: "info",
-    ruleId: "prompt.missing_input_schema",
-    category: "contracts",
-    maturity: "stable",
-    confidence: "high",
-    profiles: ["recommended"],
-    title: "Prompt has no input schema",
-    message: "The prompt has no input schema.",
-    rationale: "Prompt inputs should be inspectable.",
-    source: file ? { file, line: 1 } : undefined,
-    relatedDefinitionIds: [],
-    evidence: [],
-    fixes: [],
-    docsUrl: "https://cruxjs.dev/docs/lints/prompt-missing-input-schema",
+    type: "index:delta",
+    generation: 6,
+    file,
+    definitions: {},
   };
 }

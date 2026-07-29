@@ -101,6 +101,7 @@ export function useDevtools(): void {
           queryClient.setQueryData(qk.index(), normalizeProjectIndexData(cat));
           void queryClient.invalidateQueries({ queryKey: qk.indexWatch() });
           void queryClient.invalidateQueries({ queryKey: qk.evals.all });
+          window.dispatchEvent(new CustomEvent("crux:project-index-changed"));
         }
         if (type === "index:delta") {
           const delta = msg as unknown as IndexDeltaMessage;
@@ -111,6 +112,7 @@ export function useDevtools(): void {
             (current) => applyIndexDelta(current, delta),
           );
           void queryClient.invalidateQueries({ queryKey: qk.indexWatch() });
+          window.dispatchEvent(new CustomEvent("crux:project-index-changed"));
         }
         // Inspect emits `{ _tag: 'InspectEvent', kind, refId, ... }`.
         // We re-invalidate the matching query cache prefix so the cached
@@ -124,6 +126,16 @@ export function useDevtools(): void {
           // new bridge state. Prefix-invalidate so any open memory list /
           // detail Query refetches; React Query dedupes the network calls.
           void queryClient.invalidateQueries({ queryKey: qk.memory.all });
+        }
+        if (type === "prompt-preview.changed") {
+          window.dispatchEvent(
+            new CustomEvent("crux:prompt-preview-changed", {
+              detail: {
+                projectionRevision: (msg as { projectionRevision?: unknown })
+                  .projectionRevision,
+              },
+            }),
+          );
         }
         const tag = (msg as { _tag?: string })._tag;
         if (tag === "InspectEvent") {

@@ -77,8 +77,11 @@ func DecodeDispatch(commandID, targetID, environment string, revision uint64, pa
 		TargetID: targetID, CatalogueRevision: revision,
 		Payload: payload, DeadlineMS: effectiveDeadline(deadlineMS),
 	})
-	if err != nil || len(encoded) > MaxRequestBytes {
+	if err != nil {
 		return Payload{}, NewFailure("invalid_request")
+	}
+	if len(encoded) > MaxRequestBytes {
+		return Payload{}, NewFailure("input_limit_exceeded")
 	}
 	return decoded, nil
 }

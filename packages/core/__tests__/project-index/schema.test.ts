@@ -252,6 +252,58 @@ describe("Project Index schemas", () => {
     ]) {
       expect(() => ProjectSourceRefSchema.parse(invalid)).toThrow();
     }
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        metadata: {
+          promptText: {
+            ...sourceRef.metadata.promptText,
+            privateCompilerState: true,
+          },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      ProjectSourceRefSchema.parse({
+        ...sourceRef,
+        metadata: {
+          promptText: {
+            ...sourceRef.metadata.promptText,
+            fragmentJoins: [
+              {
+                kind: "named-fragment",
+                ownerSourceRefId: sourceRef.id,
+                ownerTemplateRange: {
+                  file: "src/support.ts",
+                  startLine: 1,
+                  startColumn: 1,
+                  endLine: 1,
+                  endColumn: 10,
+                },
+                interpolationIndex: 0,
+                expressionRange: {
+                  file: "src/support.ts",
+                  startLine: 1,
+                  startColumn: 5,
+                  endLine: 1,
+                  endColumn: 8,
+                },
+                targetSourceRefId: "fragment",
+                targetTemplateRange: {
+                  file: "src/support.ts",
+                  startLine: 2,
+                  startColumn: 1,
+                  endLine: 2,
+                  endColumn: 10,
+                },
+                proof: "semantic-exact",
+                privateCompilerState: true,
+              },
+            ],
+          },
+        },
+      }),
+    ).toThrow();
   });
 
   it("strictly validates insertion-ready prompt-text refactor evidence", () => {

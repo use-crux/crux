@@ -64,6 +64,13 @@ no related findings returns zero counts and an empty list.
 
 Observability and Eval run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; the web devtools runs table groups by root `sessionId` and displays those token, cost, and graph-count rollups directly. Single-run detail endpoints remain exact, while focused streaming spans read `token.chunk` text through the lazy span-events endpoint instead of loading every chunk into the run-detail graph. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
+For retained PromptText input evidence, the observability service persists the
+normal messages artifact and reconstructs one strict Run Detail `userPrompt`
+record after restart. Its segments must reproduce the captured text exactly;
+invalid provenance is omitted, allowing Devtools to use the captured plain
+prompt instead. No extra database payload, preview cache, or provider request
+is created.
+
 ## `crux lsp`
 
 Run Crux lint diagnostics and suppression actions in editors over the Language
@@ -71,6 +78,24 @@ Server Protocol. The server uses stdio and either attaches to a matching
 `crux dev` process or indexes the workspace itself. See the dedicated
 [`crux lsp` reference](/docs/reference/lsp) for editor setup, settings, and
 handover behavior.
+
+When the VS Code PromptText commands are used with an attached `crux dev`,
+Local also owns two transient browser routes:
+
+- exact preview discovers a currently published `configure({ prompts })`
+  target and dispatches `Prompt.inspect()` only after explicit confirmation;
+- latest Run resolves the current Prompt owner and newest captured operation
+  at click time, or shows the Prompt's Catalog empty state.
+
+Both routes are loopback-only Devtools facades with no-store responses,
+custom-header protection, strict bounded schemas, and cancellation on
+navigation. Exact-preview inputs and results are not written to observability,
+cache, Project Index, URLs, browser storage, logs, or WebSocket broadcasts.
+The exact-preview page renders system composition, user-prompt provenance,
+token totals/budget, dropped and excluded contexts, and validation issues as
+structured Devtools content; raw JSON is secondary disclosure only.
+See [PromptText editor support](/docs/reference/lsp#prompttext-editor-support)
+for the complete user workflow and limitations.
 
 ## `crux traces`
 

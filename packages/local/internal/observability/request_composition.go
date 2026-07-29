@@ -104,6 +104,7 @@ func exactRequestForSpan(span SpanSummary, index requestProjectionIndex) *RunDet
 	request := &RunDetailRequest{
 		Mode:          "exact",
 		Messages:      requestMessagesFromArtifact(messages),
+		UserPrompt:    requestUserPromptFromMessages(messages),
 		Contributions: requestContributionsForGeneration(messages, contributionArtifacts, budgetArtifact),
 		Budget:        requestBudgetFromArtifact(budgetArtifact),
 	}
@@ -153,6 +154,7 @@ func isRequestMessagesArtifact(artifact ArtifactSummary) bool {
 		"input",
 		"system",
 		"prompt",
+		"userPrompt",
 		"messages",
 		"systemBlocks",
 		"toolNames",
@@ -292,13 +294,17 @@ func spanDescendsFrom(spanID string, ancestorSpanID string, spansByID map[string
 
 func requestMessagesFromArtifact(artifact ArtifactSummary) *RunDetailRequestMessages {
 	fields := jsonObjectFields(artifact.Preview)
+	prompt := cloneRaw(fields["prompt"])
+	if len(prompt) == 0 && decodePromptTextUserPrompt(fields["userPrompt"]) == nil {
+		prompt = promptTextPlainFallback(fields["userPrompt"])
+	}
 	return &RunDetailRequestMessages{
 		ArtifactID:        artifact.ArtifactID,
 		Source:            jsonRawString(fields["source"]),
 		Phase:             jsonRawString(fields["phase"]),
 		Input:             cloneRaw(fields["input"]),
 		System:            cloneRaw(fields["system"]),
-		Prompt:            cloneRaw(fields["prompt"]),
+		Prompt:            prompt,
 		Messages:          cloneRaw(fields["messages"]),
 		AllMessages:       cloneRaw(fields["allMessages"]),
 		InputMessages:     cloneRaw(fields["inputMessages"]),
@@ -307,6 +313,10 @@ func requestMessagesFromArtifact(artifact ArtifactSummary) *RunDetailRequestMess
 		ExistingResponses: cloneRaw(fields["existingResponses"]),
 		Search:            cloneRaw(fields["search"]),
 	}
+}
+
+func requestUserPromptFromMessages(artifact ArtifactSummary) *RunDetailPromptTextUserPrompt {
+	return decodePromptTextUserPrompt(jsonObjectFields(artifact.Preview)["userPrompt"])
 }
 
 func requestBasePromptFromMessages(artifact ArtifactSummary, span SpanSummary) *RunDetailRequestBasePrompt {
@@ -940,6 +950,11 @@ func cloneRequest(request *RunDetailRequest) *RunDetailRequest {
 		basePrompt := *request.BasePrompt
 		basePrompt.Segments = cloneRaw(request.BasePrompt.Segments)
 		copy.BasePrompt = &basePrompt
+	}
+	if request.UserPrompt != nil {
+		userPrompt := *request.UserPrompt
+		userPrompt.Segments = append([]RunDetailPromptTextSegment(nil), request.UserPrompt.Segments...)
+		copy.UserPrompt = &userPrompt
 	}
 	if request.Messages != nil {
 		messages := *request.Messages

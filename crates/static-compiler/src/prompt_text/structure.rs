@@ -4,7 +4,7 @@ use crux_indexer_protocol::prompt_text::{
     PromptTextBlock, PromptTextLink, PromptTextNesting, PromptTextNodeRef, PromptTextRange,
     PromptTextSpan, PromptTextTemplate,
 };
-use crux_indexer_syntax_oxc::prompt_text::{ProjectedTextIsland, map_projected_range};
+use crux_indexer_syntax_oxc::prompt_text::{ProjectedRangeMapper, ProjectedTextIsland};
 use pulldown_cmark::HeadingLevel;
 
 #[derive(Debug)]
@@ -15,8 +15,8 @@ struct Frame {
 
 /// Writes normalized records while keeping indices and nesting deterministic.
 pub(crate) struct StructureWriter<'a> {
-    source: &'a str,
     island: &'a ProjectedTextIsland,
+    mapper: ProjectedRangeMapper<'a, 'a>,
     template: &'a mut PromptTextTemplate,
     stack: Vec<Frame>,
 }
@@ -28,8 +28,8 @@ impl<'a> StructureWriter<'a> {
         template: &'a mut PromptTextTemplate,
     ) -> Self {
         Self {
-            source,
             island,
+            mapper: ProjectedRangeMapper::new(source, island),
             template,
             stack: Vec::new(),
         }
@@ -40,7 +40,7 @@ impl<'a> StructureWriter<'a> {
     }
 
     pub(crate) fn map(&self, range: Range<usize>) -> Option<PromptTextRange> {
-        map_projected_range(self.source, self.island, range)
+        self.mapper.map(range)
     }
 
     pub(crate) fn begin(&mut self, node: Option<PromptTextNodeRef>) {

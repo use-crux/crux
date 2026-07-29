@@ -71,6 +71,7 @@ import {
 } from "./system-ingress-provenance";
 import { resolveSystemContent } from "./system-content";
 import { inspectPromptText, resolvePromptText } from "./prompt-content";
+import { attachPromptTextObservation } from "./prompt-text-observation";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
 import type {
   PromptResolutionPass,
@@ -306,6 +307,7 @@ export async function runPromptPass(
     ...(config.output ? { schema: config.output } : {}),
     settings,
   };
+  attachPromptTextObservation(resolved, promptInfo);
   if (systemIngressBlocks.length > 0) {
     if (foldedSystem) {
       attachSystemIngressCarrier(resolved, {

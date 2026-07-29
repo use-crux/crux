@@ -28,7 +28,9 @@
       { "command": "crux.openDocs", "title": "Crux: Open Rule Documentation" },
       { "command": "crux.openDevtools", "title": "Crux: Open Devtools" },
       { "command": "crux.restartServer", "title": "Crux: Restart Language Server" },
-      { "command": "crux.promptText.previewStatic", "title": "Crux: Preview PromptText Statically" }
+      { "command": "crux.promptText.previewStatic", "title": "Crux: Preview PromptText Statically" },
+      { "command": "crux.promptText.previewExact", "title": "Crux: Preview PromptText in Application Runtime" },
+      { "command": "crux.promptText.openLatestRun", "title": "Crux: Open Latest PromptText Run" }
     ],
     "configuration": {
       "title": "Crux",

@@ -1340,16 +1340,18 @@ export const ProjectSourceRefRoleSchema = z.enum([
   "helper",
 ]);
 
-export const PromptTextFragmentJoinEvidenceSchema = z.object({
-  kind: z.literal("named-fragment"),
-  ownerSourceRefId: z.string(),
-  ownerTemplateRange: SourceRangeSchema,
-  interpolationIndex: z.number().int().nonnegative(),
-  expressionRange: SourceRangeSchema,
-  targetSourceRefId: z.string(),
-  targetTemplateRange: SourceRangeSchema,
-  proof: z.literal("semantic-exact"),
-}) satisfies z.ZodType<PromptTextFragmentJoinEvidence>;
+export const PromptTextFragmentJoinEvidenceSchema = z
+  .object({
+    kind: z.literal("named-fragment"),
+    ownerSourceRefId: z.string(),
+    ownerTemplateRange: SourceRangeSchema,
+    interpolationIndex: z.number().int().nonnegative(),
+    expressionRange: SourceRangeSchema,
+    targetSourceRefId: z.string(),
+    targetTemplateRange: SourceRangeSchema,
+    proof: z.literal("semantic-exact"),
+  })
+  .strict() satisfies z.ZodType<PromptTextFragmentJoinEvidence>;
 
 /** Strict runtime schema for compiler-owned PromptText source classification. */
 export const PromptTextSourceKindSchema = z.enum([
@@ -1432,6 +1434,7 @@ export const ProjectSourceRefSchema = z
               .array(PromptTextFragmentJoinEvidenceSchema)
               .optional(),
           })
+          .strict()
           .optional(),
         promptTextRefactor: PromptTextRefactorEvidenceSchema.optional(),
         extensions: z.record(z.string(), z.unknown()).optional(),
@@ -1465,7 +1468,8 @@ export const ProjectSourceRefSchema = z
       context.addIssue({
         code: "custom",
         path: ["metadata", "promptText"],
-        message: "PromptText metadata requires a resolved prompt/system source ref",
+        message:
+          "PromptText metadata requires a resolved prompt/system source ref",
       });
     }
     if (

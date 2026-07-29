@@ -194,13 +194,15 @@ type refactorViewProvider struct {
 	current       bool
 	selects       int
 	currentChecks int
+	lastRequest   promptview.Request
 }
 
 func (p *refactorViewProvider) Select(
-	context.Context,
-	promptview.Request,
+	_ context.Context,
+	request promptview.Request,
 ) promptview.Selection {
 	p.selects++
+	p.lastRequest = request
 	return p.selection
 }
 

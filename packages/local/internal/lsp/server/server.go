@@ -210,6 +210,10 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return s.promptTextDecorations(ctx, request.ID, request.Params)
 	case protocol.MethodPromptTextPreviewStatic:
 		return s.promptTextPreviewStatic(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextPreviewExactLink:
+		return s.promptTextPreviewExactLink(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextOpenLatestRunLink:
+		return s.promptTextOpenLatestRunLink(ctx, request.ID, request.Params)
 	case protocol.MethodWorkspaceSymbol:
 		return s.workspaceSymbol(ctx, request.Params)
 	case protocol.MethodDidOpen:
@@ -259,6 +263,8 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodCompletion ||
 		request.Method == protocol.MethodPromptTextDecorations ||
 		request.Method == protocol.MethodPromptTextPreviewStatic ||
+		request.Method == protocol.MethodPromptTextPreviewExactLink ||
+		request.Method == protocol.MethodPromptTextOpenLatestRunLink ||
 		request.Method == protocol.MethodCodeAction ||
 		request.Method == protocol.MethodWorkspaceSymbol ||
 		request.Method == protocol.MethodExecuteCommand

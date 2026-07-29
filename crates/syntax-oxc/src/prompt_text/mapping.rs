@@ -78,6 +78,40 @@ pub(crate) fn protocol_mappings(
         .collect()
 }
 
+/// Reuses one source line index and one island mapping table across ranges.
+///
+/// Markdown and preview projections commonly map several records from the
+/// same literal island. Constructing this mapper once keeps those lookups
+/// logarithmic in the mapping count and avoids rescanning the document for
+/// every range.
+pub struct ProjectedRangeMapper<'source, 'island> {
+    source: SourceMap<'source>,
+    island: &'island ProjectedTextIsland,
+}
+
+impl<'source, 'island> ProjectedRangeMapper<'source, 'island> {
+    /// Creates a mapper for ranges within one projected literal island.
+    pub fn new(source: &'source str, island: &'island ProjectedTextIsland) -> Self {
+        Self {
+            source: SourceMap::new(source),
+            island,
+        }
+    }
+
+    /// Maps one parser byte range back to its exact UTF-16 source range.
+    pub fn map(&self, range: Range<usize>) -> Option<PromptTextRange> {
+        if range.end > self.island.text.len()
+            || !self.island.text.is_char_boundary(range.start)
+            || !self.island.text.is_char_boundary(range.end)
+        {
+            return None;
+        }
+        let start = map_start(self.island, range.start)?;
+        let end = map_end(self.island, range.end)?;
+        (start <= end).then(|| self.source.bytes(start..end))
+    }
+}
+
 /// Maps a parser byte range within one projected island back to UTF-16 source.
 ///
 /// Linear mappings permit endpoints inside retained authored text. Nonlinear
@@ -89,25 +123,21 @@ pub fn map_projected_range(
     island: &ProjectedTextIsland,
     range: Range<usize>,
 ) -> Option<PromptTextRange> {
-    if range.end > island.text.len()
-        || !island.text.is_char_boundary(range.start)
-        || !island.text.is_char_boundary(range.end)
-    {
-        return None;
-    }
-    let start = map_start(island, range.start)?;
-    let end = map_end(island, range.end)?;
-    (start <= end).then(|| SourceMap::new(source).bytes(start..end))
+    ProjectedRangeMapper::new(source, island).map(range)
 }
 
 fn map_start(island: &ProjectedTextIsland, offset: usize) -> Option<usize> {
     if offset == island.text.len() {
         return island.mappings.last().map(|mapping| mapping.source.end);
     }
-    let mapping = island
+    let index = island
         .mappings
-        .iter()
-        .find(|mapping| mapping.projection.start <= offset && offset < mapping.projection.end)?;
+        .partition_point(|mapping| mapping.projection.start <= offset)
+        .checked_sub(1)?;
+    let mapping = &island.mappings[index];
+    if offset >= mapping.projection.end {
+        return None;
+    }
     map_offset(mapping, offset)
 }
 
@@ -115,10 +145,14 @@ fn map_end(island: &ProjectedTextIsland, offset: usize) -> Option<usize> {
     if offset == 0 {
         return island.mappings.first().map(|mapping| mapping.source.start);
     }
-    let mapping =
-        island.mappings.iter().rev().find(|mapping| {
-            mapping.projection.start < offset && offset <= mapping.projection.end
-        })?;
+    let index = island
+        .mappings
+        .partition_point(|mapping| mapping.projection.start < offset)
+        .checked_sub(1)?;
+    let mapping = &island.mappings[index];
+    if offset > mapping.projection.end {
+        return None;
+    }
     map_offset(mapping, offset)
 }
 

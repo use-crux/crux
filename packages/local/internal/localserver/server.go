@@ -103,6 +103,7 @@ func New(options Options) http.Handler {
 		mux.HandleFunc("/ws/ui", options.Hub.HandleUpgrade)
 	}
 	registerRuntimeBridgeRoutes(mux, runtimeBridge, originAllowed)
+	registerPromptPreviewRoutes(mux, options.Devtools, runtimeBridge)
 	registerResourceRoutes(mux, resourceInspection)
 	registerObservabilityRoutesWithReview(mux, options.Observability, inspectEvents(options.Inspect), options.Devtools, options.Review)
 	registerFeedbackRoutes(mux, options.Review, options.Observability)
@@ -127,7 +128,13 @@ func New(options Options) http.Handler {
 		mux.Handle("/", options.UI)
 	}
 
-	return requestLoggerMiddleware(corsMiddleware(mux, originAllowed), logger)
+	handler := wrapPromptLatestRunRoute(
+		mux,
+		options.Devtools,
+		options.Observability,
+		runtimeBridge,
+	)
+	return requestLoggerMiddleware(corsMiddleware(handler, originAllowed), logger)
 }
 
 func inspectEvents(service *inspect.Service) *inspect.EventBus {

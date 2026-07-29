@@ -9,6 +9,10 @@ import (
 
 func corsMiddleware(next http.Handler, originAllowed func(*http.Request) bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isPrivateDevtoolsRoute(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		origin := r.Header.Get("Origin")
 		if origin != "" {
 			if !originAllowed(r) {
@@ -32,6 +36,18 @@ func corsMiddleware(next http.Handler, originAllowed func(*http.Request) bool) h
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isPrivateDevtoolsRoute(path string) bool {
+	for _, route := range []string{
+		"/api/devtools/prompt-preview",
+		"/api/devtools/prompt-latest-run",
+	} {
+		if path == route || strings.HasPrefix(path, route+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func allowSameOriginOrLoopback(r *http.Request) bool {

@@ -1,6 +1,6 @@
 use crux_indexer_protocol::prompt_text::PromptTextPreviewSegment;
 use crux_indexer_syntax_oxc::prompt_text::{
-    ProjectedPromptTextTemplate, ProjectedTextIsland, map_projected_range,
+    ProjectedPromptTextTemplate, ProjectedRangeMapper, ProjectedTextIsland,
 };
 
 pub(super) enum Part {
@@ -30,21 +30,22 @@ pub(super) fn lines(source: &str, projected: &ProjectedPromptTextTemplate) -> Ve
 }
 
 fn append_island(source: &str, island: &ProjectedTextIsland, lines: &mut Vec<Line>) {
+    let mapper = ProjectedRangeMapper::new(source, island);
     let mut start = 0;
     for (newline, _) in island.text.match_indices('\n') {
         append_literal(
-            source,
+            &mapper,
             island,
             start..newline,
             lines.last_mut().expect("line exists"),
         );
         lines.last_mut().expect("line exists").newline =
-            literal(source, island, newline..newline + 1);
+            literal(&mapper, island, newline..newline + 1);
         lines.push(Line::default());
         start = newline + 1;
     }
     append_literal(
-        source,
+        &mapper,
         island,
         start..island.text.len(),
         lines.last_mut().expect("line exists"),
@@ -52,18 +53,18 @@ fn append_island(source: &str, island: &ProjectedTextIsland, lines: &mut Vec<Lin
 }
 
 fn append_literal(
-    source: &str,
+    mapper: &ProjectedRangeMapper<'_, '_>,
     island: &ProjectedTextIsland,
     range: std::ops::Range<usize>,
     line: &mut Line,
 ) {
-    if let Some(segment) = literal(source, island, range) {
+    if let Some(segment) = literal(mapper, island, range) {
         line.parts.push(Part::Literal(segment));
     }
 }
 
 fn literal(
-    source: &str,
+    mapper: &ProjectedRangeMapper<'_, '_>,
     island: &ProjectedTextIsland,
     range: std::ops::Range<usize>,
 ) -> Option<PromptTextPreviewSegment> {
@@ -72,6 +73,6 @@ fn literal(
     }
     Some(PromptTextPreviewSegment::AuthoredLiteral {
         text: island.text[range.clone()].to_owned(),
-        range: map_projected_range(source, island, range)?,
+        range: mapper.map(range)?,
     })
 }

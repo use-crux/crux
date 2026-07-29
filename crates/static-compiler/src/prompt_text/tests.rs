@@ -7,10 +7,12 @@ use crux_indexer_protocol::prompt_text::{
 use super::analyze;
 
 mod barrier_cases;
+mod conformance_fixture;
 mod folding_cases;
 mod heading_label_cases;
 mod layout_cases;
 mod link_cases;
+mod performance_cases;
 mod preview_cases;
 mod refactor_cases;
 mod structure_cases;

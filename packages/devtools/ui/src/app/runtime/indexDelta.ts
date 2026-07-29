@@ -6,6 +6,7 @@ import type {
   ProjectIdentity,
   ProjectIndexData,
 } from "@/types";
+import { assertPromptTextProjectIndexEvidence } from "@/shared/services/project-index/evidence";
 
 /** A generation-stamped, per-anchor replacement from the local index hub. */
 export interface IndexDeltaMessage {
@@ -29,6 +30,7 @@ export interface IndexDeltaMessage {
 export function normalizeProjectIndexData(
   index: Partial<ProjectIndexData>,
 ): ProjectIndexData {
+  assertPromptTextProjectIndexEvidence(index);
   return {
     projectRoot: index.projectRoot,
     serverVersion: index.serverVersion,
@@ -85,22 +87,36 @@ export function applyIndexDelta(
   delta: IndexDeltaMessage,
 ): ProjectIndexData | undefined {
   if (!current) return undefined;
+  assertPromptTextProjectIndexEvidence({
+    definitions: [
+      ...(delta.definitions.added ?? []),
+      ...(delta.definitions.changed ?? []),
+    ],
+    diagnostics: delta.diagnostics,
+  });
   return {
     ...current,
     definitions: applyDefinitionDelta(current.definitions, delta.definitions),
-    diagnostics: [
-      ...current.diagnostics.filter(
-        (diagnostic) => (diagnostic.source?.file ?? "") !== delta.file,
-      ),
-      ...(delta.diagnostics ?? []),
-    ],
-    lintFindings: applyLintDelta(
-      current.lintFindings,
+    diagnostics: applyDiagnosticDelta(
+      current.diagnostics,
       delta.file,
-      delta.lints,
+      delta.diagnostics,
     ),
+    lintFindings: applyLintDelta(current.lintFindings, delta.file, delta.lints),
     sources: applySourceDelta(current.sources, delta.file, delta.sourceRow),
   };
+}
+
+function applyDiagnosticDelta(
+  current: readonly IndexDiagnostic[],
+  file: string,
+  diagnostics: IndexDeltaMessage["diagnostics"],
+): IndexDiagnostic[] {
+  if (diagnostics === undefined) return [...current];
+  return [
+    ...current.filter((diagnostic) => (diagnostic.source?.file ?? "") !== file),
+    ...diagnostics,
+  ];
 }
 
 function applyLintDelta(
@@ -145,9 +161,9 @@ function applySourceDelta(
   file: string,
   sourceRow: IndexDeltaMessage["sourceRow"],
 ): IndexSourceFile[] {
-  if (!sourceRow) return current.filter((source) => source.file !== file);
+  if (sourceRow === undefined) return [...current];
   const next = current.filter((source) => source.file !== file);
-  next.push(sourceRow);
+  if (sourceRow !== null) next.push(sourceRow);
   next.sort((left, right) =>
     left.file < right.file ? -1 : left.file > right.file ? 1 : 0,
   );

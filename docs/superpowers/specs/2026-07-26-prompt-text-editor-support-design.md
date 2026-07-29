@@ -210,6 +210,33 @@ Go emits and measures those canonical bytes; Core independently measures the
 same canonical re-encoding. Raw transport size remains a separate defensive
 bound.
 
+Devtools uses the canonical route
+`/library/index/prompt/{definitionId}/preview`. Its opaque definition ID is
+resolved against the current Project Index owner on every visit; moves that
+preserve identity remain valid, while deleted, renamed, non-Prompt, ambiguous,
+or stale owners fail closed without guessing or redirecting.
+
+The browser never receives the private Runtime Bridge catalogue and never calls
+its generic command endpoint. A Devtools-only Local facade projects at most 32
+bounded exact `(peer, environment, catalogue revision)` choices for the route's
+one current Prompt owner, and dispatch requires one explicit tuple. A
+Local-only projection revision plus narrow invalidation, focus refresh, and
+visible five-second polling keep choices current without automatic replay.
+
+Raw JSON is always present and is the sole input authority. A schema form is
+advisory and exists only for the complete closed safe subset frozen in
+Contracts; unsupported or oversized schema constructs fall back wholesale to
+raw JSON. Drafts, selections, validation, results, and errors remain
+session-memory-only and do not enter navigation history or browser storage.
+
+VS Code asks LSP for `crux/promptText/previewExactLink` using the current
+document stamp and cursor. The server requires current semantic owner evidence
+and complete transient syntax, then constructs the canonical loopback Local
+URL. Named/anonymous fragments, contexts, ownerless templates, tags,
+interpolations, stale views, and ambiguity never become executable links. The
+extension validates the loopback host and configured port and never constructs
+the URL itself.
+
 Opening UI, editing input, saving, discovery, or rendering never executes code.
 Only the explicit Preview dispatch invokes inspection. Inspection is quiet
 with respect to provider generation, tool invocation, ordinary Runs, and Crux
@@ -222,6 +249,19 @@ session. Neither static nor exact data enters logs, traces, metrics, errors,
 caches, snapshots, persistence, or broadcasts. Exact execution data also
 remains out of Project Index and LSP. There is no fallback workspace
 evaluation.
+
+Latest-Run navigation uses a distinct current-stamped LSP owner link. It opens
+a transient Devtools resolver, and Local selects the owning Prompt's captured
+operation at click time from one SQLite snapshot, ordered by
+`operations.first_seen_at DESC, operations.operation_id DESC`. The extension
+retains no owner, URL, or Run result.
+
+Local validates the current canonical Prompt before and after Run selection.
+The resolver replaces itself with Run Detail when found or the owner's Catalog
+Runs tab when empty. The empty state exposes only an advisory exact-preview
+availability bit; its action opens the existing Phase 16 route and never
+dispatches inspection. Back/forward, reconnect, refresh, and a newly appearing
+Run always pull again rather than replaying a cached selection.
 
 ## Architecture
 

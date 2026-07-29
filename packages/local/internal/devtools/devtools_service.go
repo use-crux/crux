@@ -190,6 +190,12 @@ func (s *Service) ProjectIndexSnapshot() store.IndexData {
 	return s.indexReadModel()
 }
 
+// CaptureProjectIndex atomically returns the current raw Project Index and its
+// process-local publication generation for coherent internal revalidation.
+func (s *Service) CaptureProjectIndex() store.ProjectIndexCapture {
+	return s.store.CaptureProjectIndex()
+}
+
 func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWatchStatus, error) {
 	return s.indexService.WatchStatus(), nil
 }

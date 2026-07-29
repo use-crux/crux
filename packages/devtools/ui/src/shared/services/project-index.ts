@@ -1,5 +1,6 @@
 import type { ProjectIndexData } from "@/types";
 import { fetchJson } from "./http";
+import { assertPromptTextProjectIndexEvidence } from "./project-index/evidence";
 
 /** Fetch and normalize the shared Project Index snapshot. */
 export async function fetchProjectIndex(
@@ -9,6 +10,7 @@ export async function fetchProjectIndex(
     "/api/index",
     signal,
   );
+  assertPromptTextProjectIndexEvidence(payload ?? {});
   return {
     projectRoot: payload?.projectRoot,
     serverVersion: payload?.serverVersion,

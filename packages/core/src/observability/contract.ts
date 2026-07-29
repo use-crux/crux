@@ -342,6 +342,21 @@ export interface CruxContextTextSegmentPreview {
   sourceVersion?: string;
 }
 
+/**
+ * Exact resolved user PromptText retained by an ordinary captured generation.
+ *
+ * Segment text must reconstruct `text` exactly. The record lives only inside
+ * the policy-controlled input artifact and is absent for ordinary strings.
+ */
+export interface CruxPromptTextUserPromptPreview {
+  readonly kind: "prompt-text";
+  readonly text: string;
+  readonly segments: readonly Readonly<CruxContextTextSegmentPreview>[];
+  readonly tokens: number;
+  readonly staticTokens: number;
+  readonly dynamicTokens: number;
+}
+
 export interface CruxContextContributionPreview {
   kind: "context.contribution";
   state: CruxContextContributionState;

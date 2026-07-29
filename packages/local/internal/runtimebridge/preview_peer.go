@@ -28,6 +28,7 @@ func (s *Service) replacePeerManifest(peerID, connectionID string, replacement P
 		state.preview = nil
 	}
 	state.manifestRevision++
+	s.bumpPreviewProjectionRevisionLocked()
 	var retired []struct {
 		commandID string
 		pending   *pendingCommand
@@ -51,6 +52,11 @@ func (s *Service) replacePeerManifest(peerID, connectionID string, replacement P
 			s.sendPreviewCancel(state, command.commandID, "target-retired")
 		}
 	}
+	s.publish(Event{
+		Type: "runtime_bridge:event", Action: "peer.manifest_replaced",
+		PeerID: peerID, Timestamp: time.Now().UTC(),
+		PreviewProjectionRevision: s.PromptPreviewProjectionRevision(),
+	})
 	return nil
 }
 

@@ -17,7 +17,7 @@ mod tests;
 mod value;
 
 pub use candidates::project;
-pub use mapping::map_projected_range;
+pub use mapping::{ProjectedRangeMapper, map_projected_range};
 pub use projection::{
     ProjectedInterpolation, ProjectedPromptText, ProjectedPromptTextTemplate, ProjectedTextIsland,
 };

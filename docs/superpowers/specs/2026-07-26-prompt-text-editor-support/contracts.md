@@ -4040,3 +4040,821 @@ Go may retain only these ephemeral dispatch measurements:
 Preview failure events keep `Event.Error` nil and carry only the stable terminal
 code. Core emits no success or validation logs. Catalogue-bound warnings use
 only fixed stable codes and aggregate counts.
+
+## Browser exact-preview workflow
+
+Phase 16 introduces a browser-safe Local facade and a semantic-owner link
+request. It does not expose Runtime Bridge peer state or permit Devtools to
+call the generic command endpoint.
+
+### Canonical Devtools route
+
+Add this navigation state:
+
+```ts
+type PromptPreviewNavState = {
+  readonly view: "prompt-preview";
+  readonly definitionId: string;
+};
+```
+
+Its canonical path is:
+
+```text
+/library/index/prompt/{encodeURIComponent(definitionId)}/preview
+```
+
+Generate the path with exactly one `encodeURIComponent` call. Parse exactly
+five path components after the leading slash and percent-decode the definition
+component exactly once as a URI path component. Never use query/form decoding;
+`+` remains `+`. Reject malformed escapes and every wrong segment count. A
+double-encoded value remains encoded after the one decode and is looked up
+literally; never decode twice.
+
+`definitionId` is the current canonical Project Index Prompt definition ID and
+is opaque. The view belongs to the `library-index` sidebar and breadcrumb.
+
+- A source move that preserves the canonical definition ID keeps the URL
+  valid and resolves the current owner.
+- A deleted or renamed ID never redirects, guesses, suffix-matches, or selects
+  another Prompt. Render:
+  `This Prompt is no longer present in the current Project Index. Return to Catalog.`
+- A current non-Prompt definition at that ID is unavailable.
+- Runtime target absence changes runtime availability, not Catalog identity.
+- The route's already-public definition ID is the only target identity retained
+  by navigation.
+
+### Browser-safe Local discovery
+
+Do not add preview metadata to `GET /api/runtime/bridge/peers`. Devtools must
+not call `/api/runtime/bridge/commands`.
+
+Add:
+
+```text
+GET /api/devtools/prompt-preview/{definitionId}
+```
+
+The strict response is:
+
+```ts
+type BridgePeerEnvironment =
+  | "node"
+  | "convex"
+  | "serverless"
+  | "browser"
+  | "unknown";
+
+interface PromptPreviewRuntimeChoice {
+  readonly peerId: string;
+  readonly runtimeName: string;
+  readonly environment: BridgePeerEnvironment;
+  readonly catalogueRevision: number;
+  readonly target: {
+    readonly name: string;
+    readonly description?: string;
+    readonly input:
+      | { readonly mode: "none" }
+      | { readonly mode: "raw" }
+      | {
+          readonly mode: "schema";
+          readonly schema: StrictJsonObject;
+        };
+  };
+}
+
+type PromptPreviewDiscovery =
+  | {
+      readonly status: "ready";
+      readonly projectionRevision: number;
+      readonly owner: {
+        readonly definitionId: string;
+        readonly kind: "prompt";
+        readonly name: string;
+        readonly description?: string;
+      };
+      readonly choices: readonly PromptPreviewRuntimeChoice[];
+    }
+  | {
+      readonly status: "unavailable";
+      readonly projectionRevision: number;
+      readonly reason:
+        | "owner-not-found"
+        | "owner-not-prompt"
+        | "no-peer"
+        | "capability-unavailable"
+        | "target-unavailable"
+        | "projection-limit-exceeded";
+      readonly message: string;
+    };
+```
+
+All objects reject unknown fields recursively. Apply these bounds:
+
+- `projectionRevision` and `catalogueRevision` are positive safe integers;
+- definition IDs and target names are scalar-valid strings of 1..512 UTF-16
+  code units;
+- peer IDs are scalar-valid strings of 1..128 UTF-16 code units;
+- runtime names are scalar-valid strings of 1..256 UTF-16 code units;
+- descriptions are scalar-valid strings of 1..4096 UTF-16 code units;
+- a ready discovery has 1..32 choices; and
+- its complete compact JSON is at most 2,097,152 UTF-8 bytes.
+
+Choices are one row per live `(peerId, environment, catalogueRevision)`
+advertising the exact definition ID. Sort by code-point `peerId`, then
+environment, then numeric revision. Never merge peers or revisions. More than
+32 matching choices or an oversized complete projection returns
+`projection-limit-exceeded`; never return a prefix.
+
+Reuse Phase 15 target/schema validation. Never project endpoints, labels,
+unrelated capabilities or targets, source paths, transport internals, manifest
+revisions, callbacks, or a whole catalogue.
+
+`projectionRevision` is a Local-only monotonic safe integer. Increment it for
+peer registration, disconnect, reconnect, and complete manifest replacement.
+It contains no target identity and is never a catalogue revision.
+
+Frozen unavailable messages are:
+
+```text
+owner-not-found: This Prompt is no longer present in the current Project Index.
+owner-not-prompt: Exact preview is available only for canonical Prompt definitions.
+no-peer: No live runtime peer is available.
+capability-unavailable: No live runtime peer supports exact prompt preview.
+target-unavailable: No live runtime peer advertises this Prompt.
+projection-limit-exceeded: Exact-preview runtime discovery exceeded its safe display limit.
+```
+
+### Browser-safe dispatch
+
+Add:
+
+```text
+POST /api/devtools/prompt-preview
+```
+
+The strict request is:
+
+```ts
+interface PromptPreviewBrowserRequest {
+  readonly version: 1;
+  readonly definitionId: string;
+  readonly peerId: string;
+  readonly environment: BridgePeerEnvironment;
+  readonly catalogueRevision: number;
+  readonly payload: {
+    readonly input: StrictJsonObject;
+    readonly options?: {
+      readonly provider?: string;
+      readonly modelId?: string;
+      readonly tokenBudget?: number;
+    };
+  };
+  readonly deadlineMs?: number;
+}
+```
+
+Apply Phase 15 string, input, option, duplicate-key, and semantic request
+limits. `deadlineMs`, when present, is an integer in 1..15,000; Local supplies
+15,000 when omitted. The browser cannot request a longer deadline.
+
+Local converts the request to the existing typed `DispatchRequest` and
+requires the exact peer, environment, target, and catalogue revision. Browser
+dispatch never uses implicit peer selection.
+
+The strict response is:
+
+```ts
+type PromptPreviewBrowserResponse =
+  | {
+      readonly status: "ready";
+      readonly peer: {
+        readonly peerId: string;
+        readonly runtimeName: string;
+        readonly environment: BridgePeerEnvironment;
+      };
+      readonly catalogueRevision: number;
+      readonly inspection: PromptPreviewReadyResult["inspection"];
+    }
+  | {
+      readonly status: "validation-error";
+      readonly catalogueRevision: number;
+      readonly issues: readonly PromptPreviewValidationIssue[];
+      readonly omittedIssueCount: number;
+    }
+  | {
+      readonly status: "error";
+      readonly code: PromptPreviewBrowserErrorCode;
+      readonly message: string;
+      readonly choices?: readonly PeerChoice[];
+    };
+
+type PromptPreviewBrowserErrorCode =
+  | "invalid_request"
+  | "input_limit_exceeded"
+  | "no_peer"
+  | "environment_unavailable"
+  | "capability_unavailable"
+  | "target_unavailable"
+  | "catalogue_changed"
+  | "ambiguous_peer"
+  | "peer_disconnected"
+  | "target_disappeared"
+  | "deadline_exceeded"
+  | "cancelled"
+  | "invalid_response"
+  | "command_failed"
+  | "endpoint_not_allowed"
+  | "response_limit_exceeded"
+  | "internal_error";
+```
+
+The facade strips Runtime Bridge envelopes, command IDs, target IDs, runtime
+error text, stacks, causes, run/trace fields, and arbitrary details.
+`choices` is allowed only for `ambiguous_peer` and retains the Phase 15 safe
+`PeerChoice` projection.
+
+Runtime target retirement remains Phase 15 Local
+`target_disappeared`; the browser adds no `target_retired` compatibility path.
+Runtime failures already normalized to `command_failed` stay normalized.
+
+The facade alone may originate these additional stable failures:
+
+```text
+input_limit_exceeded: Exact-preview input exceeded its safe limit.
+response_limit_exceeded: Exact-preview response exceeded its safe limit.
+internal_error: Exact preview is temporarily unavailable.
+```
+
+Raw body overflow, decoded input limits, and canonical semantic request
+overflow use `input_limit_exceeded`. Complete facade response overflow uses
+`response_limit_exceeded`. Unexpected facade failures use `internal_error`.
+These errors contain no choices or details.
+
+Canonical semantic request overflow is classified only after Runtime Bridge
+generates the actual command ID. Add a narrow internal prepare/encode step:
+generate the command ID exactly once, build and canonically encode the complete
+Phase 15 `command.request`, and return a typed `input_limit_exceeded` cause
+before any send when it exceeds 262,144 bytes. Do not size with a placeholder
+ID and do not collapse this typed cause to `invalid_request`. The browser
+facade maps it to 413; malformed requests remain `invalid_request`/400.
+
+### Runtime selection and refresh
+
+- Auto-select only when discovery returns exactly one choice.
+- With two or more, selection begins empty and Preview remains disabled until
+  the user selects one exact choice.
+- Display runtime name, environment, peer ID, and catalogue revision. Never
+  collapse equal runtime names.
+- A `prompt-preview.changed` Devtools WebSocket invalidation carries only
+  `{ type, projectionRevision }`.
+- Refetch discovery on mount, browser focus or visibility return, and every
+  five seconds while visible. Allow at most one discovery request in flight.
+- A revision, target, or disconnect error refreshes discovery but never
+  redispatches.
+- If the selected tuple disappears, clear selection and result.
+- A same-ID target at a newer catalogue revision requires a new Preview click.
+
+### Raw input authority and schema forms
+
+Raw JSON is always available and is the sole authoritative input
+representation.
+
+- Initial raw text is exactly `{}`.
+- Reject duplicate keys, trailing tokens, lone surrogates, nonfinite values,
+  non-object roots, and every Phase 15 limit violation before enabling Preview.
+- Form edits recursively sort object keys by lexicographic UTF-16 code-unit
+  order, preserve array order, and replace raw text with a custom pretty
+  canonical serialization using two ASCII spaces per nesting level and no
+  trailing newline. Do not pass the sorted object to native `JSON.stringify`,
+  because it reorders integer-index keys numerically. The custom writer reuses
+  ECMAScript `JSON.stringify` scalar number and string escaping semantics:
+  `-0` becomes `0`; `<`, `>`, and `&` are not HTML-escaped; and U+2028/U+2029
+  remain literal.
+- Raw edits update the form only after strict successful parsing.
+- Invalid raw text disables the form and Preview without repairing or replacing
+  it.
+- Switching form/raw tabs never loses raw text.
+- Browser schema validation is advisory; runtime validation is authoritative.
+
+Render a form only when the complete schema is in this closed subset:
+
+- root and nested objects use `type: "object"`, `properties`, unique
+  `required`, and `additionalProperties: false`;
+- scalars are `string`, `boolean`, `number`, `integer`, or one of those plus
+  `null`;
+- scalar `enum` has at most 100 values;
+- arrays have exactly one supported `items` schema and optional nonnegative
+  `minItems`/`maxItems`, with `maxItems <= 100`;
+- supported annotations are `title`, `description`, and `default`;
+- supported numeric constraints are `minimum` and `maximum`;
+- supported string constraints are `minLength` and `maxLength`;
+- maximum form depth is 8; and
+- maximum form control count is 128.
+
+Any `$ref`, `$defs`, composition or conditional keyword, tuple `items`, open or
+schema-valued additional properties, pattern/format/content keyword,
+unsupported constraint, or subset overflow disables the whole form. Raw JSON
+remains available; never partially render a misleading form.
+
+### Browser lifecycle and confirmation
+
+- Opening, discovery, typing, tab changes, runtime selection, source save,
+  history navigation, and rendering cause zero dispatches.
+- Preview and Retry are the only execution boundaries. Retry is a new explicit
+  confirmation click.
+- Freeze input and runtime selection while one request is active.
+- Cancel aborts the browser request. HTTP request-context cancellation retires
+  response ownership and triggers Phase 15 Runtime Bridge cancellation where
+  applicable.
+- Navigation, unmount, and disconnect abort and discard late outcomes.
+- `catalogue_changed`, `target_disappeared`, and `peer_disconnected` refresh
+  discovery and require a new click.
+- Back/forward history stores only `{ view, definitionId }`. Drafts, runtime
+  choices, validation, results, and errors never enter the URL, history state,
+  query caches, React persistence, session/local storage, or service workers.
+- Returning through history starts an empty session.
+- There is no automatic retry or replay.
+
+Render this exact copy beside Preview:
+
+```text
+Preview runs canonical inspection in the selected application runtime. Trusted refinements, transforms, prompt and context callbacks, retrieval, memory, and memo callbacks may perform side effects or I/O. It does not invoke a model provider or tool and creates no ordinary Run.
+```
+
+### VS Code to Local owner link
+
+Add the strict LSP request:
+
+```text
+crux/promptText/previewExactLink
+```
+
+```ts
+interface PromptTextPreviewExactLinkParams {
+  readonly uri: string;
+  readonly openEpoch: number;
+  readonly version: number;
+  readonly sourceHash: string;
+  readonly position: Utf16Position;
+}
+
+type PromptTextPreviewExactLinkResult =
+  | {
+      readonly kind: "ready";
+      readonly url: string;
+    }
+  | {
+      readonly kind: "static-only";
+      readonly reason:
+        | "context-owner"
+        | "named-fragment"
+        | "anonymous-fragment"
+        | "ownerless";
+      readonly message: string;
+    }
+  | {
+      readonly kind: "unavailable";
+      readonly reason:
+        | "document-not-open"
+        | "revision-mismatch"
+        | "analysis-unavailable"
+        | "template-not-found"
+        | "template-ambiguous"
+        | "template-unsupported"
+        | "owner-unavailable";
+      readonly message: string;
+    };
+```
+
+The stamp constraints match the other PromptText requests:
+
+- URI is nonempty;
+- `openEpoch` is a positive safe integer;
+- version is an integer in `0..2^31-1`;
+- source hash is 64 lowercase hexadecimal characters; and
+- position is a valid zero-based UTF-16 position.
+
+Resolution requires:
+
+- the exact current open `DocumentRevision`;
+- one `EvidenceSemantic + RequireCurrent` transformed view, never saved
+  fallback;
+- complete current transient analysis;
+- exact tagged-template range matching;
+- cursor in a PromptText backtick or literal quasi, never tag or interpolation
+  syntax;
+- exactly one compiler-classified `sourceKind: "owner"` source ref; and
+- exactly one current definition with `kind: "prompt"`.
+
+Named and anonymous fragments never execute even if a join finds an owner.
+Context owners remain static-only. Ambiguous, stale, ownerless, deleted, and
+non-Prompt owners fail closed.
+
+The server constructs the canonical loopback Local URL. VS Code only accepts a
+loopback HTTP URL whose port equals its configured Local port, then opens it
+externally. It never constructs or amends the definition URL.
+
+Frozen static-only messages are:
+
+```text
+context-owner: Contexts are static-preview-only until canonical context inspection is available.
+named-fragment: This PromptText is a named fragment. Open its canonical Prompt owner or use static preview.
+anonymous-fragment: Anonymous PromptText fragments are static-preview-only.
+ownerless: This PromptText has no current canonical Prompt owner. Use static preview.
+```
+
+### HTTP status, CSRF, privacy, and bounds
+
+All request and response objects reject unknown fields recursively and reject
+duplicate raw keys.
+
+Discovery uses:
+
+- `200` for `ready` and expected `unavailable`;
+- `400` for malformed path or encoding; and
+- `405` for a wrong method.
+
+Dispatch maps:
+
+| HTTP | Stable result codes                                                                 |
+| ---- | ----------------------------------------------------------------------------------- |
+| 200  | `ready`, `validation-error`                                                         |
+| 400  | `invalid_request`                                                                   |
+| 403  | `endpoint_not_allowed`, CSRF failure                                                |
+| 404  | `target_unavailable`                                                                |
+| 408  | `deadline_exceeded`                                                                 |
+| 409  | `catalogue_changed`, `ambiguous_peer`, `target_disappeared`, `cancelled`            |
+| 413  | `input_limit_exceeded`                                                              |
+| 500  | `internal_error`                                                                    |
+| 502  | `invalid_response`, `command_failed`, `response_limit_exceeded`                     |
+| 503  | `no_peer`, `environment_unavailable`, `capability_unavailable`, `peer_disconnected` |
+
+Use stable Phase 15 Local messages for inherited codes and the frozen facade
+messages above for facade-originated codes. Never relay runtime error messages.
+
+Discovery requires:
+
+- `X-Crux-Devtools-Request: prompt-preview-v1`;
+- rejection of a foreign `Origin` when one is present; and
+- rejection of cross-origin preflight.
+
+The custom header makes cross-origin browser reads non-simple. Keep it out of
+permissive cross-loopback CORS allowlists. A same-origin GET may omit
+`Origin`.
+
+Dispatch requires:
+
+- exact `Content-Type: application/json`;
+- an `Origin` whose host and port exactly match Local;
+- `X-Crux-Devtools-Request: prompt-preview-v1`; and
+- no permissive cross-loopback CORS allowance or accepted cross-origin
+  preflight for this route.
+
+Reject absent or foreign Origin. Both routes use `Cache-Control: no-store`,
+`Referrer-Policy: no-referrer`, and no redirects.
+
+The raw browser request-body cap is 300 KiB. The semantic Phase 15 canonical
+request bound remains 262,144 bytes. The complete browser response, including
+the facade envelope, is capped at 2,101,248 bytes. Runtime HTTP endpoints
+remain loopback-only and may not follow non-loopback redirects.
+
+Exact-preview inputs, projected schemas, validation details, output,
+provenance, runtime messages, runtime-capability/request/result copies of
+target identity, and response bodies are prohibited from general request logs,
+Runtime Bridge events, traces, metrics, caches, persistence, Project Index,
+and LSP. The pre-existing canonical Project Index `definitionId` remains
+permitted in Project Index identity, route navigation, and the LSP-returned
+Local URL. Route templates may be logged; concrete paths may not.
+
+Allowed ephemeral measurements remain only command,
+peer/environment/transport, stable code, duration, request/result byte counts,
+and advertised target count.
+
+## Latest-Run click-time routing
+
+Phase 17 adds one transient resolver between the editor and existing Devtools
+Run/Catalog surfaces. It is additive to Phases 15 and 16. It introduces no
+compatibility alias, dual protocol, webview, cached extension Run state,
+automatic Run creation, or exact-preview dispatch.
+
+### Resolver route and Local wire
+
+The VS Code owner link opens:
+
+```text
+/library/index/prompt/{encodeURIComponent(definitionId)}/latest-run
+```
+
+with:
+
+```ts
+interface PromptLatestRunNavState {
+  readonly view: "prompt-latest-run";
+  readonly definitionId: string;
+}
+```
+
+The resolver performs exactly one pull on mount:
+
+```text
+GET /api/devtools/prompt-latest-run/{definitionId}
+X-Crux-Devtools-Request: prompt-latest-run-v1
+```
+
+It accepts no request body, query, or fragment. Reject a nonzero
+`Content-Length` or any `Transfer-Encoding` as `400 invalid_request`, detected
+without reading the body. Generate the route with exactly one
+`encodeURIComponent` call. Parse the exact route shape and percent-decode the
+definition component exactly once as a path component. `+` remains `+`. Reject
+malformed escapes, extra segments, query, fragment, raw or decoded path
+separators, and control characters. A double-encoded value remains encoded
+after the single decode.
+
+The recursively strict result is:
+
+```ts
+type PromptLatestRunResult =
+  | {
+      readonly status: "found";
+      readonly definitionId: string;
+      readonly observabilityRevision: number;
+      readonly operationId: string;
+      readonly path: string;
+    }
+  | {
+      readonly status: "empty";
+      readonly definitionId: string;
+      readonly observabilityRevision: number;
+      readonly path: string;
+      readonly exactPreview:
+        | { readonly status: "available" }
+        | { readonly status: "unavailable" };
+    }
+  | {
+      readonly status: "unavailable";
+      readonly reason: "owner-not-found" | "owner-not-prompt";
+      readonly message: string;
+    };
+
+interface PromptLatestRunError {
+  readonly status: "error";
+  readonly code:
+    | "invalid_request"
+    | "forbidden"
+    | "method_not_allowed"
+    | "temporarily_unavailable";
+  readonly message: string;
+}
+```
+
+`definitionId` and `operationId` are scalar-valid strings of 1..512 UTF-16
+code units. `observabilityRevision` is an integer in
+`0..Number.MAX_SAFE_INTEGER`. A complete compact response is at most 16,384
+UTF-8 bytes and is never truncated. The raw request target is at most 8,192
+bytes. The handler never reads a request body.
+
+Canonical destinations are:
+
+```text
+found: /runs/{encodeURIComponent(operationId)}
+empty: /library/index/{encodeURIComponent(definitionId)}/runs
+```
+
+The browser decoder must first require `found.definitionId` or
+`empty.definitionId` to equal the resolver page's requested definition ID.
+Then reconstruct the applicable canonical path from the validated
+`operationId` or that request-bound definition ID and require byte-for-byte
+equality with `path`. Reject absolute URLs, credentials, query, fragment,
+alternative encoding, path normalization, an echoed definition mismatch, or a
+destination ID mismatch. Never navigate directly from an otherwise
+unconstrained server string.
+
+Run Detail identity is the captured operation ID. Existing Run Detail
+navigation may retain the legacy field name `traceId`, but its value here is
+the `operationId`.
+
+HTTP mapping is:
+
+| HTTP | Result                             |
+| ---- | ---------------------------------- |
+| 200  | `found`, `empty`, or `unavailable` |
+| 400  | `invalid_request`                  |
+| 403  | `forbidden`                        |
+| 405  | `method_not_allowed`               |
+| 503  | `temporarily_unavailable`          |
+
+Security matches Phase 16 discovery: require the exact custom header, reject
+foreign or multiple `Origin` values, permit absent `Origin` only for
+same-origin GET semantics, and provide no cross-origin preflight or CORS
+allowance. Respond with `Cache-Control: no-store`,
+`Referrer-Policy: no-referrer`, and no redirect. Concrete paths must not be
+logged.
+
+Frozen messages are:
+
+```text
+owner-not-found: This Prompt is no longer present in the current Project Index.
+owner-not-prompt: Latest Run is available only for canonical Prompt definitions.
+invalid_request: The latest-Run request is invalid.
+forbidden: The latest-Run request is not allowed.
+method_not_allowed: This latest-Run method is not allowed.
+temporarily_unavailable: Latest Run is temporarily unavailable. Retry.
+```
+
+Only definition ID, operation ID, observability revision, destination path,
+and the availability bit may cross the facade. Run payloads, timestamps,
+status, inputs, outputs, source, peer/environment/catalogue data, runtime
+labels, endpoints, target copies, and errors must not be returned, logged,
+cached, persisted, or measured.
+
+### Authoritative latest ordering
+
+The authority is the existing revisioned captured-operation Runs read model,
+backed by `operations` and `run_definition_activity`. Never use Catalog's
+cached `lastRun`, browser or extension state, WebSocket rows,
+`RunSummary.StartedAt`, `EndedAt`, `LastActivityAt`, row revision, or trace ID.
+
+An operation is a candidate when any member `runs.run_id` has a
+`run_definition_activity.definition_id` exactly equal to the canonical
+definition ID. Select it with:
+
+```sql
+ORDER BY operations.first_seen_at DESC, operations.operation_id DESC
+LIMIT 1
+```
+
+Both fields use SQLite `BINARY` ordering. Equal `first_seen_at` values select
+the lexicographically greatest `operation_id`. This is the existing Runs-page
+ordering and cursor tie-breaker; Phase 17 defines no second ordering.
+
+Read `observability_revision` and the candidate in one SQLite read
+transaction. That snapshot is the Run-selection linearization point. A
+committed operation visible before it participates; one committed after it
+does not. A later click resolves again.
+
+### Current-owner revalidation
+
+One Local service operation owns owner validation, Run selection, and empty
+availability. Add an internal-only monotonic Project Index read-model
+generation, advanced for every published current snapshot change. It is never
+serialized, cached, persisted, or added to Project Index output.
+
+For each attempt:
+
+1. Atomically capture `{generation, definition}` from the current Project
+   Index.
+2. Return `owner-not-found` or `owner-not-prompt` when applicable.
+3. Open the observability SQLite read transaction and read its revision plus
+   the latest operation.
+4. If empty, snapshot the private Runtime Bridge availability bit.
+5. Re-capture current owner generation and classification.
+6. Publish only if generation is unchanged and the owner remains that exact
+   Prompt ID.
+
+Retry from step 1 at most three total attempts after generation changes, then
+return `temporarily_unavailable`. Never publish an intermediate Run or
+availability result.
+
+A move preserving the canonical ID remains valid after any required retry.
+Deletion or rename yields `owner-not-found`; historical Runs do not bypass
+current ownership. The same ID becoming non-Prompt yields `owner-not-prompt`.
+An ambiguous or duplicate current definition is treated as not found.
+
+### Resolver and Catalog empty state
+
+The transient resolver replaces, rather than pushes, its history entry with
+the returned canonical destination and retains no result.
+
+The no-Run destination is the existing Catalog owner route/tab:
+
+```ts
+{ view: "library-index", promptId: definitionId, tab: "runs" }
+```
+
+```text
+/library/index/{encodeURIComponent(definitionId)}/runs
+```
+
+No empty-state payload enters history state, navigation state, URL queries,
+general Devtools state, or a query cache. The page pulls the same Local
+endpoint on mount, browser focus/visibility return, Local reconnect, and
+relevant observability or Project Index invalidation. Permit at most one
+request in flight and reject late results by generation.
+
+When a Run appears while this page is open, render `Open latest Run`; its click
+performs a fresh Local pull. Never navigate automatically with a previously
+returned operation ID.
+
+Frozen empty-state copy is:
+
+```text
+Title: No captured Runs yet
+Body: No captured Run references this Prompt yet.
+Latest action: Open latest Run
+Exact action: Preview exact PromptText
+Unavailable help: Connect a compatible application runtime to preview exact PromptText.
+```
+
+The exact action navigates to the Phase 16 route. Mounting, refreshing,
+reconnecting, history traversal, and availability rendering dispatch no exact
+preview and create no Run. Back/forward reconstructs only owner identity and
+pulls again. Abort resolver/empty requests on navigation or unmount; discard
+late outcomes. Reconnect retries only the read.
+
+### Exact-preview availability
+
+Use a private Runtime Bridge predicate:
+
+```go
+HasPromptPreviewTarget(definitionID string) bool
+```
+
+It is true only when the current validated bridge snapshot contains at least
+one live preview-capable peer advertising the exact target ID. It exposes no
+peer, environment, runtime name, transport, revision, capability, target,
+schema, endpoint, or reason.
+
+Local evaluates it only after proving that the Run result is empty. The
+browser receives only `available` or `unavailable`. The bit is advisory:
+clicking the action opens Phase 16, whose discovery revalidates current owner
+and runtime state. Availability never dispatches a command, invokes
+`Prompt.inspect()`, or creates observability.
+
+### Editor owner link
+
+Use a distinct strict LSP method:
+
+```text
+crux/promptText/openLatestRunLink
+```
+
+Do not extend `previewExactLink`.
+
+```ts
+interface PromptTextOpenLatestRunLinkParams {
+  readonly uri: string;
+  readonly openEpoch: number;
+  readonly version: number;
+  readonly sourceHash: string;
+  readonly position: Utf16Position;
+}
+
+type PromptTextOpenLatestRunLinkResult =
+  | { readonly kind: "ready"; readonly url: string }
+  | {
+      readonly kind: "unavailable";
+      readonly reason:
+        | "document-not-open"
+        | "revision-mismatch"
+        | "analysis-unavailable"
+        | "template-not-found"
+        | "template-ambiguous"
+        | "template-unsupported"
+        | "context-owner"
+        | "named-fragment"
+        | "anonymous-fragment"
+        | "ownerless"
+        | "owner-unavailable";
+      readonly message: string;
+    };
+```
+
+Bounds and recursive strictness exactly match Phase 16. Resolution shares a
+private owner-at-cursor primitive with `previewExactLink` while retaining a
+separate wire projection. It requires the exact current open revision,
+`EvidenceSemantic + RequireCurrent`, complete transient analysis, one exact
+template, cursor within a backtick or literal quasi, exactly one
+`sourceKind: "owner"` source ref, and exactly one current `kind: "prompt"`
+definition. Tags, interpolations, contexts, named or anonymous fragments,
+ownerless or ambiguous templates, deleted/non-Prompt owners, saved fallback,
+and stale stamps fail closed.
+
+Immediately before returning, recheck document revision, source epoch,
+manager/session identity, and the complete view stamp. Additional frozen
+messages are:
+
+```text
+context-owner: This PromptText belongs to a Context, not a canonical Prompt owner.
+named-fragment: This PromptText is a named fragment. Open its canonical Prompt owner.
+anonymous-fragment: Anonymous PromptText fragments have no canonical Prompt owner.
+ownerless: This PromptText has no current canonical Prompt owner.
+```
+
+Other reasons reuse Phase 16's frozen unavailable messages.
+
+`ready.url` is the server-authored absolute loopback resolver URL. VS Code
+accepts only HTTP loopback at the exact configured port, with no credentials,
+query, or fragment and the canonical resolver shape.
+
+The command is:
+
+```text
+crux.promptText.openLatestRun
+Crux: Open Latest PromptText Run
+```
+
+It captures the active source stamp and primary cursor, sends the distinct
+request, then rechecks client identity and the entire source stamp before
+opening. It retains no Run ID, URL, owner ID, availability, or request result.
+Disconnect, restart, or source edit silently retires late responses.

@@ -12,6 +12,7 @@
 
 import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
+import { readPromptTextObservation } from '../resolver/prompt-text-observation'
 import type { OrchestrationSpec } from './orchestrate-types'
 import { normalizeBudgetMs, type TimeoutOptions } from './timeout'
 import type { GenerationPerformanceTracker } from './performance-metrics'
@@ -67,12 +68,13 @@ export function generationInputPreview(
 ): Record<string, unknown> {
   const prepared = spec.preparedArgs
   const toolNames = requestToolNames(prepared.tools) ?? requestToolNames(spec.resolved?.tools)
+  const userPrompt = readPromptTextObservation(spec.resolved)
   return {
     input: spec.input,
     messages: prepared.messages,
     system: prepared.system,
     systemBlocks: prepared.systemBlocks,
-    prompt: spec.resolved?.prompt,
+    ...(userPrompt ? { userPrompt } : { prompt: spec.resolved?.prompt }),
     ...(toolNames ? { toolNames } : {}),
   }
 }
