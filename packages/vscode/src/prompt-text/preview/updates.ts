@@ -1,7 +1,10 @@
 import type { PromptTextPreviewDocument } from './provider.js'
 import { findDocument, previewDocument } from './vscode-source.js'
 
-const documentRefreshTimeoutMs = 2_000
+// VS Code may serialize content-provider work behind other extension-host
+// activity. Keep the waiter bounded without mistaking a loaded host for an
+// editor EOL transformation.
+const documentRefreshTimeoutMs = 15_000
 
 /**
  * Waits for VS Code to materialize one content-provider invalidation.
