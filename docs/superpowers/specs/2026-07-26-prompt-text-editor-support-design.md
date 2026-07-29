@@ -197,6 +197,19 @@ reconnects are explicit protocol state. Local selects a runtime deterministicall
 from the requested peer/environment, exact target, and catalogue revision and
 fails on ambiguity instead of choosing map iteration order.
 
+The catalogue authority is the existing `configure({ prompts, contexts? })`,
+exported additively from the `@use-crux/core` root with its option and registry
+types. `config()` remains the separate project/runtime-policy entry point and
+does not accept prompts; the published `@use-crux/core/runtime` subpath remains
+the Runtime Engine surface. No Devtools helper owns a second catalogue.
+
+The semantic request-size bound uses
+`prompt-preview-request-json-v1`: a shared JCS-compatible canonical JSON
+encoding with UTF-16 key ordering and ECMAScript number/string serialization.
+Go emits and measures those canonical bytes; Core independently measures the
+same canonical re-encoding. Raw transport size remains a separate defensive
+bound.
+
 Opening UI, editing input, saving, discovery, or rendering never executes code.
 Only the explicit Preview dispatch invokes inspection. Inspection is quiet
 with respect to provider generation, tool invocation, ordinary Runs, and Crux

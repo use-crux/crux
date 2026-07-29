@@ -69,6 +69,35 @@ describe('config lifecycle', () => {
       crux.dispose()
     }
   })
+
+  it('closes the previous bridge before opening its replacement', () => {
+    const sockets: Array<{ close: ReturnType<typeof vi.fn> }> = []
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        readonly readyState = 1
+        readonly close = vi.fn()
+        send(): void {}
+        constructor() {
+          sockets.push(this)
+        }
+      },
+    )
+    const first = config({
+      devtools: { bridge: { connectUrl: 'ws://localhost/first' } },
+    })
+    const second = config({
+      devtools: { bridge: { connectUrl: 'ws://localhost/second' } },
+    })
+
+    try {
+      expect(sockets).toHaveLength(2)
+      expect(sockets[0]!.close).toHaveBeenCalledTimes(1)
+    } finally {
+      second.dispose()
+      first.dispose()
+    }
+  })
 })
 
 function lifecyclePlugin(name: string, events: string[]): CruxPlugin {

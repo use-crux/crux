@@ -11,3 +11,6 @@
 export * from './protocol'
 export * from './client'
 export * from './commands'
+export * from './prompt-preview/protocol'
+export * from './prompt-preview/result-protocol'
+export { assertNoDuplicateJsonKeys } from './prompt-preview/validate'

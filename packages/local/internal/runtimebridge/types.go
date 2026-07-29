@@ -3,6 +3,8 @@ package runtimebridge
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/runtimebridge/preview"
 )
 
 type Transport string
@@ -13,15 +15,22 @@ const (
 )
 
 type Capability struct {
-	Command   string          `json:"command"`
-	Targets   []Target        `json:"targets,omitempty"`
-	Resources []StoreResource `json:"resources,omitempty"`
+	Command           string           `json:"command"`
+	CatalogueRevision uint64           `json:"catalogueRevision,omitempty"`
+	Targets           []preview.Target `json:"targets,omitempty"`
+	Resources         []StoreResource  `json:"resources,omitempty"`
+	raw               json.RawMessage
 }
 
-type Target struct {
-	DefinitionID string `json:"definitionId"`
-	Kind         string `json:"kind"`
-	Name         string `json:"name,omitempty"`
+func (capability *Capability) UnmarshalJSON(data []byte) error {
+	type wire Capability
+	var decoded wire
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*capability = Capability(decoded)
+	capability.raw = append(json.RawMessage(nil), data...)
+	return nil
 }
 
 type StoreResource struct {
@@ -53,12 +62,13 @@ type RuntimeHeartbeat struct {
 }
 
 type CommandRequest struct {
-	Type       string          `json:"type"`
-	CommandID  string          `json:"commandId"`
-	Command    string          `json:"command"`
-	TargetID   string          `json:"targetId,omitempty"`
-	Payload    json.RawMessage `json:"payload,omitempty"`
-	DeadlineMS int             `json:"deadlineMs,omitempty"`
+	Type              string          `json:"type"`
+	CommandID         string          `json:"commandId"`
+	Command           string          `json:"command"`
+	TargetID          string          `json:"targetId,omitempty"`
+	CatalogueRevision uint64          `json:"catalogueRevision,omitempty"`
+	Payload           json.RawMessage `json:"payload,omitempty"`
+	DeadlineMS        int             `json:"deadlineMs,omitempty"`
 }
 
 type CommandResult struct {
@@ -87,11 +97,13 @@ type CommandEnvelope struct {
 }
 
 type DispatchRequest struct {
-	PeerID     string          `json:"peerId,omitempty"`
-	Command    string          `json:"command"`
-	TargetID   string          `json:"targetId,omitempty"`
-	Payload    json.RawMessage `json:"payload,omitempty"`
-	DeadlineMS int             `json:"deadlineMs,omitempty"`
+	PeerID            string          `json:"peerId,omitempty"`
+	Environment       string          `json:"environment,omitempty"`
+	Command           string          `json:"command"`
+	TargetID          string          `json:"targetId,omitempty"`
+	CatalogueRevision uint64          `json:"catalogueRevision,omitempty"`
+	Payload           json.RawMessage `json:"payload,omitempty"`
+	DeadlineMS        int             `json:"deadlineMs,omitempty"`
 }
 
 type DispatchResponse struct {
@@ -110,4 +122,5 @@ type Event struct {
 	Timestamp time.Time     `json:"timestamp"`
 	Peer      *Peer         `json:"peer,omitempty"`
 	Error     *CommandError `json:"error,omitempty"`
+	Code      string        `json:"code,omitempty"`
 }

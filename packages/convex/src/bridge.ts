@@ -11,20 +11,24 @@
 import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
 import type { Crux } from '@use-crux/core'
-import { normalizeObservedError } from '@use-crux/core/observability'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ComponentApi } from './component/_generated/component'
-import { assertConvexCtxPort, createDefaultConvexStorage } from './profile-store'
 import {
-  BridgeCommandErrorSchema,
-  BridgeCommandRequestSchema,
+  assertConvexCtxPort,
+  createDefaultConvexStorage,
+} from './profile-store'
+import {
   BridgeCommandResultSchema,
+  PromptPreviewResultEnvelopeSchema,
   RuntimeBridgeManifestSchema,
   executeRuntimeBridgeCommand,
   getRuntimeBridgeManifest,
-  type BridgeCommandError,
   type RuntimeBridgeManifest,
 } from '@use-crux/core/runtime-bridge'
+import {
+  parseBridgeCommandRequest,
+  toBridgeCommandError,
+} from './bridge-command'
 
 export interface CruxConvexBridgeHttpRouter {
   route(
@@ -68,13 +72,19 @@ export interface CruxConvexBridgeSetupOptions {
   url?: string
 }
 
-export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: CruxConvexBridgeSetupOptions = {}): void {
+export function setup(
+  http: CruxConvexBridgeHttpRouter,
+  crux: Crux,
+  options: CruxConvexBridgeSetupOptions = {},
+): void {
   const path = normalizePath(options.path ?? '/crux/bridge')
 
   http.route({
     path,
     method: 'GET',
-    handler: httpActionGeneric(async (_ctx, request) => jsonResponse(convexBridgeManifest(crux, options, request.url))),
+    handler: httpActionGeneric(async (_ctx, request) =>
+      jsonResponse(convexBridgeManifest(crux, options, request.url)),
+    ),
   })
 
   http.route({
@@ -85,17 +95,24 @@ export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: Cru
       if (!parsed.ok) return jsonResponse(parsed.error, 400)
       const command = parsed.command
       try {
-        const records = await resolveBridgeRecords(ctx, crux, options)
+        const records =
+          command.command === 'store.read'
+            ? await resolveBridgeRecords(ctx, crux, options)
+            : undefined
         const result = await executeRuntimeBridgeCommand(
           { devtools: crux.config.devtools, records },
           command,
+          { signal: request.signal },
         )
+        const envelope = {
+          type: 'command.result' as const,
+          commandId: command.commandId,
+          result,
+        }
         return jsonResponse(
-          BridgeCommandResultSchema.parse({
-            type: 'command.result',
-            commandId: command.commandId,
-            result,
-          }),
+          command.command === 'prompt.previewExact'
+            ? PromptPreviewResultEnvelopeSchema.parse(envelope)
+            : BridgeCommandResultSchema.parse(envelope),
         )
       } catch (error) {
         return jsonResponse(toBridgeCommandError(command.commandId, error), 500)
@@ -106,40 +123,10 @@ export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: Cru
   http.route({
     path,
     method: 'OPTIONS',
-    handler: httpActionGeneric(async () => new Response(null, { status: 204, headers: bridgeHeaders() })),
+    handler: httpActionGeneric(
+      async () => new Response(null, { status: 204, headers: bridgeHeaders() }),
+    ),
   })
-}
-
-async function parseBridgeCommandRequest(
-  request: Request,
-): Promise<
-  { ok: true; command: ReturnType<typeof BridgeCommandRequestSchema.parse> } | { ok: false; error: BridgeCommandError }
-> {
-  let body: unknown
-  try {
-    const text = await request.text()
-    body = text ? JSON.parse(text) : undefined
-  } catch (error) {
-    return {
-      ok: false,
-      error: toBridgeCommandError('invalid_request', {
-        code: 'invalid_json',
-        message: `Request body must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-    }
-  }
-
-  try {
-    return { ok: true, command: BridgeCommandRequestSchema.parse(body) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: toBridgeCommandError('invalid_request', {
-        code: 'invalid_command',
-        message: error instanceof Error ? error.message : String(error),
-      }),
-    }
-  }
 }
 
 async function resolveBridgeRecords(
@@ -150,13 +137,10 @@ async function resolveBridgeRecords(
   if (options.storage) return (await options.storage(ctx)).records
   if (options.component) {
     assertConvexCtxPort(ctx)
-    return createDefaultConvexStorage(ctx, { component: options.component }).records
+    return createDefaultConvexStorage(ctx, { component: options.component })
+      .records
   }
   return crux.config.persistence?.records
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function convexBridgeManifest(
@@ -190,7 +174,12 @@ function convexBridgeManifest(
     },
   )
   if (!manifest || (!options.storage && !options.component)) return manifest
-  if (manifest.capabilities.some((capability) => capability.command === 'store.read')) return manifest
+  if (
+    manifest.capabilities.some(
+      (capability) => capability.command === 'store.read',
+    )
+  )
+    return manifest
 
   return RuntimeBridgeManifestSchema.parse({
     ...manifest,
@@ -208,30 +197,6 @@ function convexBridgeManifest(
         ],
       },
     ],
-  })
-}
-
-function toBridgeCommandError(commandId: string, error: unknown): BridgeCommandError {
-  const explicit = isRecord(error) ? error : undefined
-  const explicitCode = typeof explicit?.code === 'string' ? explicit.code : undefined
-  const explicitMessage = typeof explicit?.message === 'string' ? explicit.message : undefined
-  const errorKind = explicitCode ?? 'runtime_error'
-  const phase = 'runtime_bridge.command'
-  return BridgeCommandErrorSchema.parse({
-    type: 'command.error',
-    commandId,
-    error: {
-      code: errorKind,
-      message: explicitMessage ?? (error instanceof Error ? error.message : String(error)),
-      details: {
-        ...normalizeObservedError(error, {
-          phase,
-          errorKind,
-        }),
-        phase,
-        errorKind,
-      },
-    },
   })
 }
 

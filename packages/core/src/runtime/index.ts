@@ -37,7 +37,8 @@ export type {
   CruxPersistenceConfig,
   CruxRuntimeConfig,
 } from "./config";
-export type { PromptRegistry } from "./configure";
+export { configure } from "./configure";
+export type { ConfigureOptions, PromptRegistry } from "./configure";
 
 // ─────────────────────────────────────────────────────────────────
 // Global hooks store

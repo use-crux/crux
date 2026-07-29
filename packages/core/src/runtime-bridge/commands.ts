@@ -14,6 +14,12 @@ import {
   type InspectableReadableStore,
 } from './resources'
 import { normalizeObservedError } from '../observability/errors'
+import { activePromptCatalogue } from '../runtime/prompt-catalogue'
+import { promptPreviewCapability } from './prompt-preview/catalogue'
+import {
+  executePromptPreview,
+  PromptPreviewCommandError,
+} from './prompt-preview/execute'
 import type {
   BridgeCapability,
   BridgeCommandRequest,
@@ -25,17 +31,40 @@ import type {
 export async function executeRuntimeBridgeCommand(
   input: RuntimeBridgeManifestInput,
   command: BridgeCommandRequest,
+  options: RuntimeBridgeCommandExecutionOptions = {},
 ): Promise<unknown> {
-  return await executeStoreRead(input, command.payload)
+  switch (command.command) {
+    case 'store.read':
+      return await executeStoreRead(input, command.payload)
+    case 'prompt.previewExact':
+      return await executePromptPreview(command, options)
+  }
+}
+
+/** Transport-owned cancellation available only to exact-preview execution. */
+export interface RuntimeBridgeCommandExecutionOptions {
+  readonly signal?: AbortSignal
 }
 
 /** Derive bridge capabilities from configured and auto-registered resources. */
-export function deriveBridgeCapabilities(input: RuntimeBridgeManifestInput): BridgeCapability[] {
+export function deriveBridgeCapabilities(
+  input: RuntimeBridgeManifestInput,
+): BridgeCapability[] {
+  const capabilities: BridgeCapability[] = []
   const resources = deriveStoreResources(input)
-  return resources.length > 0 ? [{ command: 'store.read', resources }] : []
+  if (resources.length > 0) {
+    capabilities.push({ command: 'store.read', resources })
+  }
+  const catalogue = activePromptCatalogue()
+  const preview = promptPreviewCapability(catalogue.revision, catalogue.entries)
+  if (preview) capabilities.push(preview)
+  return capabilities
 }
 
-async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: StoreReadCommandPayload): Promise<unknown> {
+async function executeStoreRead(
+  input: RuntimeBridgeManifestInput,
+  payload: StoreReadCommandPayload,
+): Promise<unknown> {
   const explicitResource = getInspectableResource(payload.resource)
   if (explicitResource?.read) {
     if (payload.operation === 'get') {
@@ -59,23 +88,35 @@ async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: Stor
 
   const store = explicitResource?.store ?? readableStore(input.records)
   if (!isReadableRecordStore(store)) {
-    throw new BridgeCommandExecutionError('store_unavailable', 'No readable RecordStore is configured.')
+    throw new BridgeCommandExecutionError(
+      'store_unavailable',
+      'No readable RecordStore is configured.',
+    )
   }
 
   const resolved = explicitResource ?? inferStoreResource(payload.resource)
   if (!resolved) {
-    throw new BridgeCommandExecutionError('unsupported_resource', `Unsupported store resource "${payload.resource}".`)
+    throw new BridgeCommandExecutionError(
+      'unsupported_resource',
+      `Unsupported store resource "${payload.resource}".`,
+    )
   }
   if (payload.operation === 'get') {
     const key = payload.key ?? resolved.defaultKey
     if (!key) {
-      throw new BridgeCommandExecutionError('missing_key', `Resource "${payload.resource}" requires a key.`)
+      throw new BridgeCommandExecutionError(
+        'missing_key',
+        `Resource "${payload.resource}" requires a key.`,
+      )
     }
     return { value: await store.get(key) }
   }
   const prefix = payload.prefix ?? resolved.defaultPrefix
   if (prefix === undefined) {
-    throw new BridgeCommandExecutionError('missing_prefix', `Resource "${payload.resource}" requires a list prefix.`)
+    throw new BridgeCommandExecutionError(
+      'missing_prefix',
+      `Resource "${payload.resource}" requires a list prefix.`,
+    )
   }
   return await store.list(prefix, {
     limit: Math.min(payload.limit ?? 100, 500),
@@ -84,7 +125,9 @@ async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: Stor
   })
 }
 
-function deriveStoreResources(input: RuntimeBridgeManifestInput): BridgeStoreResource[] {
+function deriveStoreResources(
+  input: RuntimeBridgeManifestInput,
+): BridgeStoreResource[] {
   const resources = new Map<string, BridgeStoreResource>()
   if (input.records) {
     resources.set('crux.store', {
@@ -103,12 +146,16 @@ function deriveStoreResources(input: RuntimeBridgeManifestInput): BridgeStoreRes
       metadata: resource.metadata,
     })
   }
-  return [...resources.values()].sort((a, b) => a.resource.localeCompare(b.resource))
+  return [...resources.values()].sort((a, b) =>
+    a.resource.localeCompare(b.resource),
+  )
 }
 
 function inferStoreResource(
   resource: string,
-): Pick<InspectableResource, 'resource' | 'defaultKey' | 'defaultPrefix'> | undefined {
+):
+  | Pick<InspectableResource, 'resource' | 'defaultKey' | 'defaultPrefix'>
+  | undefined {
   if (resource === 'crux.store') return { resource }
   if (resource.startsWith('blackboard:')) {
     return { resource, defaultKey: resource, defaultPrefix: resource }
@@ -123,7 +170,9 @@ function readableStore(value: unknown): InspectableReadableStore | undefined {
   return isReadableRecordStore(value) ? value : undefined
 }
 
-function isReadableRecordStore(value: unknown): value is InspectableReadableStore {
+function isReadableRecordStore(
+  value: unknown,
+): value is InspectableReadableStore {
   return (
     !!value &&
     typeof value === 'object' &&
@@ -144,11 +193,19 @@ class BridgeCommandExecutionError extends Error {
 
 /** Convert a thrown bridge command error into a stable command error code. */
 export function bridgeErrorCode(error: unknown): string {
-  return error instanceof BridgeCommandExecutionError ? error.code : 'runtime_error'
+  if (error instanceof PromptPreviewCommandError) {
+    return error.previewError.code
+  }
+  return error instanceof BridgeCommandExecutionError
+    ? error.code
+    : 'runtime_error'
 }
 
 /** Convert a thrown bridge command error into structured diagnostic details. */
 export function bridgeErrorDetails(error: unknown): Record<string, unknown> {
+  if (error instanceof PromptPreviewCommandError) {
+    return error.previewError.details ?? {}
+  }
   const errorKind = bridgeErrorCode(error)
   const phase = 'runtime_bridge.command'
   return {
@@ -163,6 +220,9 @@ export function bridgeErrorDetails(error: unknown): Record<string, unknown> {
 
 /** Convert a thrown bridge command error into a user-facing message. */
 export function bridgeErrorMessage(error: unknown): string {
+  if (error instanceof PromptPreviewCommandError) {
+    return error.previewError.message
+  }
   if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
   return 'Unknown bridge error'

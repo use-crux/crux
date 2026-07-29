@@ -28,7 +28,7 @@
 
 import type { PromptRegistry } from "./configure";
 import type { CruxConfig } from "./config-types";
-import { configure } from "./configure";
+import { configureUnpublished } from "./configure";
 import { createRuntimeConfigTransaction } from "./config-transaction";
 import type { CruxFlowRuntimeControls } from "./api/flows";
 import { getCruxProcessRegistry } from "./process-registry";
@@ -111,7 +111,7 @@ export function config(config: CruxConfig): Crux {
   runtimeRegistry.activeInstallation = undefined;
   const installation = transaction.apply();
   runtimeRegistry.activeInstallation = installation;
-  const registry = configure(transaction.configureOptions);
+  const registry = configureUnpublished(transaction.configureOptions);
   const bridgeConnection = installation.connectBridge(registry);
   const crux = installation.createCrux(registry, bridgeConnection);
 

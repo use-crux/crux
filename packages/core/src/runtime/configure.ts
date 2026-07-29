@@ -11,9 +11,9 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { AnyPrompt } from '../prompt/prompt-types'
-import type { Context } from '../prompt/context-types'
+import type { z } from "zod";
+import type { AnyPrompt } from "../prompt/prompt-types";
+import type { Context } from "../prompt/context-types";
 import {
   type ContextInput,
   type PromptInput,
@@ -21,7 +21,8 @@ import {
   collectContexts,
   extractContexts,
   extractPrompts,
-} from './configure-registry'
+} from "./configure-registry";
+import { publishConfiguredPromptCatalogue } from "../runtime-bridge/prompt-preview/catalogue";
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -31,20 +32,20 @@ export interface ConfigureOptions {
   /**
    * Prompts to register. Accepts a tree from `createPrompts()` or a flat array.
    */
-  prompts: PromptInput
+  prompts: PromptInput;
 
   /**
    * Contexts to register. Accepts a tree from `createContexts()` or a flat array.
    * Optional — contexts referenced via prompts' `use` arrays are auto-collected.
    */
-  contexts?: ContextInput
+  contexts?: ContextInput;
 
   /**
    * Auto-escape top-level string input fields before they reach system/prompt functions.
    * Enabled by default. Set to `false` to disable (e.g., when using `safe` tag exclusively).
    * @default true
    */
-  autoEscape?: boolean
+  autoEscape?: boolean;
 
   /**
    * Log `console.warn()` when input fields contain suspicious patterns
@@ -52,47 +53,47 @@ export interface ConfigureOptions {
    * Defaults to `true` in development (NODE_ENV !== 'production'), `false` in production.
    * Set explicitly to override the default.
    */
-  securityWarnings?: boolean
+  securityWarnings?: boolean;
 }
 
 export interface PromptRegistry {
   /** All registered prompts (flat). */
-  readonly prompts: readonly AnyPrompt[]
+  readonly prompts: readonly AnyPrompt[];
   /** All registered contexts (flat, includes auto-collected from prompts). */
-  readonly contexts: readonly Context<z.ZodType>[]
+  readonly contexts: readonly Context<z.ZodType>[];
 
   /** Get a prompt by id. Throws if not found. */
-  get(id: string): AnyPrompt
+  get(id: string): AnyPrompt;
   /** Find a prompt by id. Returns `undefined` if not found. */
-  find(id: string): AnyPrompt | undefined
+  find(id: string): AnyPrompt | undefined;
   /** List all registered prompts. */
-  list(): AnyPrompt[]
+  list(): AnyPrompt[];
   /** Get all prompts matching a specific tag. */
-  byTag(tag: string): AnyPrompt[]
+  byTag(tag: string): AnyPrompt[];
   /** Get all prompts matching *all* specified tags (intersection). */
-  byTags(tags: string[]): AnyPrompt[]
+  byTags(tags: string[]): AnyPrompt[];
   /** Get all unique tags across all registered prompts. */
-  tags(): string[]
+  tags(): string[];
 
   /** Tear down registry-local resources. Global config teardown is owned by `config()`. */
-  dispose(): void
+  dispose(): void;
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Module-level security flags
 // ─────────────────────────────────────────────────────────────────
 
-let _autoEscape = true
-let _securityWarnings = false
+let _autoEscape = true;
+let _securityWarnings = false;
 
 /** Whether auto-escape is currently enabled. */
 export function isAutoEscapeEnabled(): boolean {
-  return _autoEscape
+  return _autoEscape;
 }
 
 /** Whether security warnings are currently enabled. */
 export function isSecurityWarningsEnabled(): boolean {
-  return _securityWarnings
+  return _securityWarnings;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -100,15 +101,20 @@ export function isSecurityWarningsEnabled(): boolean {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Configure the prompt system.
+ * Create and publish the active process prompt registry.
  *
  * Accepts prompt/context trees or flat arrays. Returns a frozen registry object
- * with methods for looking up prompts by id or tag.
+ * with methods for looking up prompts by id or tag. This explicit lifecycle
+ * also owns the exact-preview catalogue; use {@link config} separately for
+ * project and runtime policy.
  *
  * @example
  * ```ts
- * import { createPrompts, createContexts } from '@use-crux/core'
- * import { configure } from './configure'
+ * import {
+ *   configure,
+ *   createPrompts,
+ *   createContexts,
+ * } from '@use-crux/core'
  *
  * const prompts = createPrompts({
  *   editor: { edit: draftEdit, seo: seoEdit },
@@ -130,66 +136,93 @@ export function isSecurityWarningsEnabled(): boolean {
  * ```
  */
 export function configure(options: ConfigureOptions): PromptRegistry {
+  return configureRegistry(options, true);
+}
+
+/**
+ * Build the private registry used while `config()` assembles runtime policy.
+ *
+ * This intentionally does not publish an empty exact-preview catalogue over a
+ * separately configured public prompt registry.
+ *
+ * @internal
+ */
+export function configureUnpublished(
+  options: ConfigureOptions,
+): PromptRegistry {
+  return configureRegistry(options, false);
+}
+
+function configureRegistry(
+  options: ConfigureOptions,
+  publishCatalogue: boolean,
+): PromptRegistry {
   // Extract flat lists
-  const prompts = extractPrompts(options.prompts)
-  const explicitContexts = extractContexts(options.contexts)
-  const contexts = collectContexts(prompts, explicitContexts)
+  const prompts = extractPrompts(options.prompts);
+  const explicitContexts = extractContexts(options.contexts);
+  const contexts = collectContexts(prompts, explicitContexts);
 
   // Validate: all prompts must have an id, no duplicates
-  const byId = new Map<string, AnyPrompt>()
+  const byId = new Map<string, AnyPrompt>();
   for (const p of prompts) {
     if (!p.id) {
-      throw new Error('configure: all prompts must have an id')
+      throw new Error("configure: all prompts must have an id");
     }
     if (byId.has(p.id)) {
-      throw new Error(`configure: duplicate prompt id "${p.id}"`)
+      throw new Error(`configure: duplicate prompt id "${p.id}"`);
     }
-    byId.set(p.id, p)
+    byId.set(p.id, p);
   }
 
   // Build tag index
-  const tagIndex = buildTagIndex(prompts)
+  const tagIndex = buildTagIndex(prompts);
 
   // Apply registry-owned policy flags.
-  _autoEscape = options.autoEscape !== false // default: true
+  _autoEscape = options.autoEscape !== false; // default: true
   _securityWarnings =
     options.securityWarnings ??
-    (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')
+    (typeof process !== "undefined" && process.env?.NODE_ENV !== "production");
+  const retireCatalogue = publishCatalogue
+    ? publishConfiguredPromptCatalogue(prompts)
+    : undefined;
+  let disposed = false;
 
   return Object.freeze({
     prompts: Object.freeze([...prompts]),
     contexts: Object.freeze([...contexts]),
 
     get(id: string) {
-      const p = byId.get(id)
-      if (!p) throw new Error(`configure: prompt "${id}" not found`)
-      return p
+      const p = byId.get(id);
+      if (!p) throw new Error(`configure: prompt "${id}" not found`);
+      return p;
     },
 
     find(id: string) {
-      return byId.get(id)
+      return byId.get(id);
     },
 
     list() {
-      return [...prompts]
+      return [...prompts];
     },
 
     byTag(tag: string) {
-      return tagIndex.get(tag) ?? []
+      return tagIndex.get(tag) ?? [];
     },
 
     byTags(tags: string[]) {
-      const sets = tags.map((t) => new Set(tagIndex.get(t) ?? []))
-      if (sets.length === 0) return []
-      return [...sets[0]].filter((p) => sets.every((s) => s.has(p)))
+      const sets = tags.map((t) => new Set(tagIndex.get(t) ?? []));
+      if (sets.length === 0) return [];
+      return [...sets[0]].filter((p) => sets.every((s) => s.has(p)));
     },
 
     tags() {
-      return [...tagIndex.keys()]
+      return [...tagIndex.keys()];
     },
 
     dispose() {
-      // Registry construction has no global runtime resources to release.
+      if (disposed) return;
+      disposed = true;
+      retireCatalogue?.();
     },
-  })
+  });
 }

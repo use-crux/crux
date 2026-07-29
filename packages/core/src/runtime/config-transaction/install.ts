@@ -1,4 +1,5 @@
 import type { PromptRegistry } from '../configure'
+import type { RuntimeBridgeConnection } from '../../runtime-bridge'
 import type { CruxHooks } from '../runtime'
 import { defaultRuntimeConfigCruxFactory } from './crux'
 import type { RequiredPorts } from './ports'
@@ -73,10 +74,14 @@ export function installRuntimeConfigPlan(
     ports.tokenizer.setTokenizer(plan.tokenizer)
   }
 
+  let bridge: RuntimeBridgeConnection | undefined
+  let registry: PromptRegistry | undefined
   let restored = false
   const restore = () => {
     if (restored) return
     restored = true
+    bridge?.dispose()
+    registry?.dispose()
     ports.hooks.restoreLayer(layerToken)
     void plugins?.dispose()
     restoreObservability?.()
@@ -85,21 +90,20 @@ export function installRuntimeConfigPlan(
   return {
     hooks: Object.freeze({ ...hooks }),
     restore,
-    connectBridge(registry: PromptRegistry) {
-      void registry
-      return ports.bridge.connect(plan.bridgeOptions, {
+    connectBridge(promptRegistry: PromptRegistry) {
+      void promptRegistry
+      bridge = ports.bridge.connect(plan.bridgeOptions, {
         logger: typeof console !== 'undefined' ? console : undefined,
       })
+      return bridge
     },
-    createCrux(registry, bridge) {
+    createCrux(promptRegistry, connectedBridge) {
+      registry = promptRegistry
+      bridge = connectedBridge
       const cruxFactory = ports.crux ?? defaultRuntimeConfigCruxFactory
       return cruxFactory.create(plan.config, {
-        ...registry,
-        dispose() {
-          bridge?.dispose()
-          registry.dispose()
-          restore()
-        },
+        ...promptRegistry,
+        dispose: restore,
       })
     },
   }
@@ -112,7 +116,9 @@ function observabilityPolicyOptions(
     ...(plan.feedbackDestination !== undefined
       ? { feedbackDestination: plan.feedbackDestination }
       : {}),
-    ...(plan.redactPaths !== undefined ? { redactPaths: plan.redactPaths } : {}),
+    ...(plan.redactPaths !== undefined
+      ? { redactPaths: plan.redactPaths }
+      : {}),
   }
 }
 

@@ -1,0 +1,38 @@
+{
+  "version": "prompt-preview-request-json-v1",
+  "value": {
+    "type": "command.request",
+    "commandId": "cmd-<&",
+    "command": "prompt.previewExact",
+    "targetId": "prompt:golden",
+    "catalogueRevision": 7,
+    "payload": {
+      "options": {
+        "tokenBudget": 0,
+        "provider": "<provider>&",
+        "modelId": "model>\u2028\u2029"
+      },
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "": "bmp",
+        "😀": "supplementary",
+        "nested": {
+          "z": null,
+          "a": [
+            "first",
+            {
+              "y": false,
+              "x": true
+            }
+          ]
+        },
+        "numbers": [-0, 1e-7, 1e-6, 1e20, 1e21],
+        "escaped": "\"\\\b\t\n\f\r\u0000<>&\u2028\u2029"
+      }
+    },
+    "deadlineMs": 15000
+  },
+  "canonical": "{\"catalogueRevision\":7,\"command\":\"prompt.previewExact\",\"commandId\":\"cmd-<&\",\"deadlineMs\":15000,\"payload\":{\"input\":{\"10\":\"ten\",\"2\":\"two\",\"escaped\":\"\\\"\\\\\\b\\t\\n\\f\\r\\u0000<>&\u2028\u2029\",\"nested\":{\"a\":[\"first\",{\"x\":true,\"y\":false}],\"z\":null},\"numbers\":[0,1e-7,0.000001,100000000000000000000,1e+21],\"😀\":\"supplementary\",\"\":\"bmp\"},\"options\":{\"modelId\":\"model>\u2028\u2029\",\"provider\":\"<provider>&\",\"tokenBudget\":0}},\"targetId\":\"prompt:golden\",\"type\":\"command.request\"}",
+  "byteCount": 456
+}

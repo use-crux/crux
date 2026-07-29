@@ -59,6 +59,10 @@ import {
   type ToolApprovalMap,
 } from "../tools/approval-policy";
 import { safeParseSchema } from "./schema";
+import {
+  PromptInputValidationError,
+  promptInputValidationIssues,
+} from "./input-validation-error";
 import { createSkillToolSurface } from "./skills";
 import { buildSystemMessage } from "./system-message";
 import {
@@ -115,7 +119,8 @@ export async function runPromptPass(
           promptInputPreview(config.id, input, mergedSchema, "failed"),
         );
       }
-      throw new Error(
+      throw new PromptInputValidationError(
+        promptInputValidationIssues(parseResult.error?.issues),
         `Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`,
       );
     }

@@ -3573,6 +3573,21 @@ replaces the older one. Disposing the active configuration publishes an empty
 catalogue at a new revision; disposing an older configuration is a no-op and
 must never resurrect it.
 
+The existing `configure(options: ConfigureOptions): PromptRegistry` becomes an
+additive public API from the `@use-crux/core` root. Export `ConfigureOptions`
+and `PromptRegistry` there as well. Route the export through
+`src/runtime/index.ts` and then `src/index.ts`; do not export it from the
+published `@use-crux/core/runtime` subpath, whose contract is the Runtime
+Engine. `configure()` is the explicit process prompt-registry lifecycle and
+exact-preview catalogue authority.
+
+`config()` remains the project/runtime-policy entry point. It does not accept
+prompts, and its private empty registry remains nonpublishing.
+`withDevtools()` and `enableDevtools()` never become another catalogue
+authority. Public JSDoc must distinguish these two responsibilities. A
+public-boundary test imports `configure`, `ConfigureOptions`, and
+`PromptRegistry` from `@use-crux/core` without a source-relative import.
+
 The internal `configure({ prompts: [] })` used during configuration assembly is
 private and nonpublishing. A Runtime Bridge created after publication includes
 the current initial manifest and subscribes to later replacements. WebSocket
@@ -3596,6 +3611,9 @@ The schemas above validate the decoded recursive JSON value. The shared bounded
 wire validator separately checks raw JSON for duplicate keys before decoding
 and checks object prototypes/accessors at programmatic Core entry points,
 because decoded Zod validation cannot prove either raw-wire property.
+Every array at every nesting depth must have exactly `Array.prototype` before
+the validator reads descriptors or serializes it. Inherited `toJSON` or other
+foreign-prototype behavior must never execute.
 
 Both Go before dispatch and Core immediately before inspection enforce the same
 limits:
@@ -3609,6 +3627,45 @@ limits:
 | One key                       | 256 UTF-8 bytes     |
 | One string value              | 65,536 UTF-8 bytes  |
 | Decoded JSON value accounting | 131,072 bytes       |
+
+The 262,144-byte semantic request bound uses the versioned canonical encoding
+`prompt-preview-request-json-v1`. It is RFC 8785/JCS-compatible canonical JSON
+over the already validated complete `command.request`:
+
+- measure the canonical re-encoding, not caller whitespace, original escape
+  spelling, or transport framing;
+- sort object keys recursively by lexicographic UTF-16 code-unit order;
+- preserve array order;
+- decode numbers as IEEE-754 binary64 and use ECMAScript
+  `JSON.stringify`/`NumberToString` formatting: `-0` becomes `0`, output is the
+  shortest round-trippable representation, decimal/exponent thresholds match
+  JavaScript, and exponent notation includes `e+N` where JavaScript does;
+- reject nonfinite numbers;
+- escape quotes, backslashes, and U+0000–U+001F using JavaScript JSON short
+  escapes where defined and lowercase `\u00xx` otherwise;
+- do not HTML-escape `<`, `>`, or `&`;
+- encode U+2028 and U+2029 as literal UTF-8;
+- reject lone surrogates;
+- omit absent optional fields and retain `null` only where the schema permits
+  it; and
+- require the complete canonical UTF-8 bytes to be at most 262,144; equality
+  fits.
+
+Reject duplicate raw keys before decoding or canonicalization; canonicalization
+must never erase their evidence. Programmatic Core calls validate prototypes
+and accessors before canonicalizing. Go uses this encoder for both measurement
+and the emitted Runtime Bridge request bytes; `encoding/json.Marshal` is not
+authoritative for the semantic bound. Core canonicalizes the decoded strict
+request with the same algorithm immediately before inspection. Separate raw
+transport/body limits remain defensive only and do not redefine this bound.
+
+A shared `prompt-preview-request-json-v1` fixture is consumed by TypeScript and
+Go and pins the semantic value, exact canonical UTF-8 text, and byte count. It
+covers `<`, `>`, `&`, U+2028/U+2029, quotes, backslashes, every short control
+escape, U+0000, `-0`, `1e-7`, `1e-6`, `1e20`, `1e21`, numeric-looking keys
+`"2"`/`"10"`, BMP versus supplementary-plane keys that distinguish UTF-8 from
+UTF-16 sorting, nested objects, arrays, and `null`. Both implementations assert
+exact bytes, equality acceptance, and one-byte overflow rejection.
 
 Equality fits. The root object has depth one; entering an object or array adds
 one. Node count includes the root and every property value or array element,

@@ -282,6 +282,9 @@ Focused tests cover:
 - ATTACHED and OWN end-to-end behavior;
 - recursively strict exact-preview capabilities, requests, results, validation
   results, errors, cancellation, and unchanged legacy `store.read` behavior;
+- package-public root `configure`/`ConfigureOptions`/`PromptRegistry` imports,
+  distinct `config()` policy ownership, and absence from the Runtime Engine
+  subpath;
 - exact canonical definition-ID target projection, code-point ordering,
   collision/invalid/oversize omission, input descriptor modes, and whole
   capability bounds;
@@ -294,6 +297,12 @@ Focused tests cover:
 - every JSON request/depth/node/key/string/value limit, duplicate-key and
   surrogate rejection, finite `-0` and nested `null`, equality-at-limit cases,
   and identical Go/Core validation;
+- shared `prompt-preview-request-json-v1` TypeScript/Go golden bytes for
+  UTF-16 key ordering, ECMAScript number formatting and escaping, exact
+  equality/overflow behavior, and canonical Go emission rather than default
+  HTML-escaped `encoding/json` output;
+- nested foreign-prototype arrays rejected before descriptor/serialization
+  access, with inherited `toJSON` proven uncalled;
 - exactly-once canonical input parsing and inspection, ordered validation
   issue projection, transformation/coercion coverage, and no preflight parse;
 - exact ready-result projection and UTF-16 segment reconstruction/fallback,
@@ -310,6 +319,8 @@ Focused tests cover:
 - strict HTTP/WebSocket terminal decoding, loopback and redirect controls,
   response bounds, command/target/revision matching, and no response-body
   logging; and
+- ready-result validation accepting omitted/zero token budget and rejecting
+  negative token budget as `invalid_response`;
 - privacy tests proving input, output, schemas, validation details, runtime
   messages, provenance, source keys, and target IDs never enter logs, events,
   persistence, caches, Project Index, LSP, or Devtools state;
@@ -339,6 +350,13 @@ Saved semantic evidence requires:
 Implementation changes public Project Index data and `crux lsp` behavior.
 Inspect pending changesets first and extend the relevant release theme rather
 than creating a duplicate.
+
+Phase 15's root `configure()` export and exact-preview Runtime Bridge behavior
+do not change Static Parse, Semantic Facts, or Project Index snapshot cache
+identity. They require no cache epoch. Phase 15 creates no changeset; Phase 18
+adds these public npm-facing additions to the existing relevant release-theme
+changeset, normally as a `minor` entry for `@use-crux/core` plus any directly
+affected published packages, rather than creating a duplicate.
 
 ## Documentation
 
