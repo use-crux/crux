@@ -272,7 +272,7 @@ interface ProjectSourceRef {
 Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
 
 `metadata.promptText` marks compiler-proven
-[`md` prompt text](/docs/reference/crux-core/prompts#md-and-prompttext).
+[`md` PromptText](/docs/reference/crux-core/prompt-text).
 `static` means the value is authored directly and `dynamic` means it is returned
 by a callback. The metadata is source authoring evidence, not Markdown
 rendering, sanitization, trust, or a runtime security boundary.

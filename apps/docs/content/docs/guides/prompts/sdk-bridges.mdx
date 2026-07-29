@@ -1,0 +1,183 @@
+---
+title: SDK Bridges
+description: Convert messages and supply lightweight generation functions to framework-neutral Core APIs.
+---
+
+Most applications should execute a Prompt through a full Crux adapter. Use the
+lower-level bridges on this page when migrating existing SDK messages or
+supplying generation to a framework-neutral Core utility.
+
+## Convert Messages
+
+Each adapter converts between its SDK format and Crux's canonical `Message`
+type:
+
+<Tabs items={['Vercel AI SDK', 'OpenAI SDK', 'Google GenAI', 'Anthropic SDK']}>
+<Tab value="Vercel AI SDK">
+
+```ts
+import { fromMessages, toMessages } from "@use-crux/ai";
+
+const messages = toMessages(coreMessages);
+const sdkMessages = fromMessages(messages);
+```
+
+</Tab>
+<Tab value="OpenAI SDK">
+
+```ts
+import { fromMessages, toMessages } from "@use-crux/openai";
+
+const messages = toMessages(chatMessages);
+const sdkMessages = fromMessages(messages);
+```
+
+</Tab>
+<Tab value="Google GenAI">
+
+```ts
+import { fromMessages, toMessages } from "@use-crux/google";
+
+const messages = toMessages(contents);
+const sdkMessages = fromMessages(messages);
+```
+
+</Tab>
+<Tab value="Anthropic SDK">
+
+```ts
+import { fromMessages, toMessages } from "@use-crux/anthropic";
+
+const messages = toMessages(anthropicMessages);
+const sdkMessages = fromMessages(messages);
+```
+
+</Tab>
+</Tabs>
+
+Use these helpers when integrating an existing chat UI or migrating from raw
+SDK calls. New Crux Prompt definitions normally use `system`, `prompt`, or
+`messages` and let the adapter handle conversion.
+
+## Supply Framework-Neutral Generation
+
+Core utilities such as `judge`, `extractKeyFacts`, and `summarizeMessages`
+accept `GenerateObjectFn` or `GenerateTextFn` instead of depending on one SDK.
+Each adapter provides compatible wrappers.
+
+<Tabs items={['Vercel AI SDK', 'OpenAI SDK', 'Google GenAI', 'Anthropic SDK']}>
+<Tab value="Vercel AI SDK">
+
+```ts
+import { generateObjectFn, generateTextFn } from "@use-crux/ai";
+import { judge } from "@use-crux/core/scoring";
+
+const evaluator = judge({
+  id: "helpfulness",
+  criteria: "Does the answer resolve the request?",
+  scale: { min: 1, max: 5 },
+  generate: generateObjectFn,
+  model,
+});
+
+const result = await summarizeMessages({
+  generate: generateTextFn,
+  model,
+  messages,
+});
+```
+
+</Tab>
+<Tab value="OpenAI SDK">
+
+```ts
+import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/openai";
+
+const generateObject = createGenerateObjectFn(client);
+const generateText = createGenerateTextFn(client, "gpt-4o");
+
+await generateObject({ model: "gpt-4o", prompt, schema });
+```
+
+</Tab>
+<Tab value="Google GenAI">
+
+```ts
+import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/google";
+
+const generateObject = createGenerateObjectFn(client);
+const generateText = createGenerateTextFn(client, "gemini-2.5-flash");
+
+await generateObject({ model: "gemini-2.5-flash", prompt, schema });
+```
+
+</Tab>
+<Tab value="Anthropic SDK">
+
+```ts
+import {
+  createGenerateObjectFn,
+  createGenerateTextFn,
+} from "@use-crux/anthropic";
+
+const generateObject = createGenerateObjectFn(client);
+const generateText = createGenerateTextFn(client, "claude-haiku-4-5-20251001");
+
+await generateObject({
+  model: "claude-sonnet-4-5-20250929",
+  prompt,
+  schema,
+});
+```
+
+</Tab>
+</Tabs>
+
+<Callout type="info">
+  These are lightweight provider-native wrappers. They do not run Prompt
+  resolution, validation retry, Safety, tools, memory capture, or
+  instrumentation. Use full adapter `generate()` for normal Prompt execution.
+</Callout>
+
+The Vercel AI SDK adapter exports pre-bound functions because the model is
+passed per call. OpenAI, Google, and Anthropic object factories bind the
+client; their text factories bind both client and model.
+
+## Bridge a Full Adapter
+
+When a Core API needs `GenerateObjectFn` but the operation should retain the
+full adapter runtime, bridge an existing adapter `generate()` function:
+
+```ts
+import { createGenerateObjectFnFromGenerate } from "@use-crux/core/compaction";
+import { generate } from "@use-crux/ai";
+
+const generateObject = createGenerateObjectFnFromGenerate(generate, {
+  promptId: "quality.judge",
+});
+```
+
+Managed generation results are finalized before `hooks.onGenerate` runs. The
+hook and caller see the same `generation.call` trace and span identity;
+provider response identity remains separate. See [Operation Result
+Correlation](/docs/reference/crux-core/operation-results).
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Prompt Execution"
+    description="Run complete Prompt definitions through each supported adapter."
+    href="/docs/guides/prompts/execution"
+  />
+  <Card
+    title="Prompt Reference"
+    description="Prompt resolution, output modes, adaptation, and inspection."
+    href="/docs/reference/crux-core/prompts"
+  />
+  <Card
+    title="Adapter Reference"
+    description="Exact adapter signatures and provider-specific settings."
+    href="/docs/reference/adapters"
+  />
+</Cards>

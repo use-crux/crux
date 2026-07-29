@@ -1,0 +1,161 @@
+---
+title: Structured Output
+description: Return provider-compatible, Zod-validated objects from a Prompt.
+---
+
+Add an `output` schema when downstream code needs typed data. Omit it when the
+model should return ordinary text.
+
+```ts twoslash title="classify-ticket.ts"
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
+
+export const classifyTicket = prompt({
+  id: "classify-ticket",
+  input: z.object({
+    subject: z.string(),
+    body: z.string(),
+  }),
+  output: z.object({
+    category: z.enum(["billing", "auth", "bug", "other"]),
+    urgency: z.enum(["low", "normal", "high"]),
+    summary: z.string(),
+  }),
+  system: "Classify support tickets for routing.",
+  prompt: ({ input }) => `${input.subject}\n\n${input.body}`,
+});
+```
+
+Every adapter selects its structured-generation path and validates the result
+against the Zod schema you authored:
+
+```ts
+const result = await generate(classifyTicket, {
+  model,
+  input: {
+    subject: "SSO stopped working",
+    body: "Our login fails after rotating certificates.",
+  },
+});
+
+result.object.category;
+result.object.urgency;
+```
+
+## One Schema, Two Jobs
+
+The same schema provides the TypeScript result type and the runtime validation
+contract. Crux derives a provider-compatible wire schema from it:
+
+```text
+authored Zod schema → provider wire schema → model
+        ↑                                      │
+        └──── validate decoded response ───────┘
+```
+
+Providers support different subsets of JSON Schema. Crux handles compatible
+lowering such as inlining references, removing rejected keywords, and applying
+provider object rules. You do not maintain a second provider-shaped schema.
+
+If a provider cannot express the requested structured output, the call fails
+before sending a network request instead of silently falling back to text.
+
+## Optional and Nullable Fields
+
+Some providers require every object property to appear in `required`. Crux can
+represent an optional-only field as required and nullable on the wire, then
+remove the property when the model returns the transport `null`:
+
+```ts
+output: z.object({
+  title: z.string(),
+  subtitle: z.string().optional(),
+});
+```
+
+| You wrote               | Provider wire shape        | Model returns | Application receives |
+| ----------------------- | -------------------------- | ------------- | -------------------- |
+| `z.string().optional()` | required, `string \| null` | `null`        | property absent      |
+| `z.string().optional()` | required, `string \| null` | `"Hi"`        | `"Hi"`               |
+| `z.string().nullable()` | required, `string \| null` | `null`        | `null`               |
+
+`.optional()` continues to mean “may be absent,” while `.nullable()` continues
+to mean “may be null.” A field that is both optional and nullable remains
+unchanged so an authored `null` is never confused with the transport sentinel.
+
+<Callout type="info">
+  The encoding must be reversible. Crux throws `CruxUnsupportedSchemaError`
+  before the request when it cannot prove that a returned `null` came from the
+  transport encoding rather than the authored schema.
+</Callout>
+
+Initially unsupported locations include optional properties inside recursive
+schemas, union branches, intersections, and tuples, plus a property literally
+named `"*"`, which collides with the array wildcard used by the decode
+manifest. Make the field required or give it an explicit nullable meaning.
+
+## Text Output
+
+Without `output`, adapters use text generation and expose text in their normal
+result shape:
+
+```ts
+const rewrite = prompt({
+  id: "rewrite",
+  input: z.object({
+    text: z.string(),
+    tone: z.enum(["clear", "friendly", "direct"]),
+  }),
+  system: "Rewrite without changing the meaning.",
+  prompt: ({ input }) => `Tone: ${input.tone}\n\n${input.text}`,
+});
+
+const result = await generate(rewrite, {
+  model,
+  input: {
+    text: "The deployment failed due to credentials.",
+    tone: "friendly",
+  },
+});
+
+result.text;
+```
+
+Use text output when free-form wording is the product. Use structured output
+when application logic needs stable fields, enums, or nested data.
+
+## Provider Behavior
+
+The Prompt definition remains provider-neutral. Each adapter owns the native
+request shape and result mapping:
+
+- Vercel AI SDK selects its text or object generation path.
+- OpenAI uses the supported structured response format and returns parsed data.
+- Google GenAI supplies the compatible response schema and validates the
+  generated value.
+- Anthropic uses its supported structured-generation strategy and validates the
+  result.
+
+See [Prompt execution](/docs/guides/prompts/execution) for complete adapter
+examples and the individual [adapter references](/docs/reference/adapters) for
+provider-specific settings and limitations.
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Prompt Execution"
+    description="Generate and stream text or structured results with every supported adapter."
+    href="/docs/guides/prompts/execution"
+  />
+  <Card
+    title="Prompts Reference"
+    description="Exact output types, resolution behavior, and provider adaptation."
+    href="/docs/reference/crux-core/prompts"
+  />
+  <Card
+    title="Evals"
+    description="Protect structured behavior with typed Cases, checks, and Baselines."
+    href="/docs/guides/evals"
+  />
+</Cards>

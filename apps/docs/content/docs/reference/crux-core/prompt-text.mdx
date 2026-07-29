@@ -1,0 +1,264 @@
+---
+title: PromptText
+description: md composition, interpolation, inspection, Project Index evidence, and runtime preview.
+---
+
+```ts
+import { md, type PromptText } from "@use-crux/core";
+```
+
+`md` builds an opaque, immutable `PromptText` value with native tagged-template
+syntax. Runtime composition does not parse or render Markdown. Resolution
+lowers the value to provider-neutral plain text before adapters, caches, and
+RPC boundaries.
+
+Crux editor tooling may classify authored literal islands as CommonMark for
+presentation, navigation, previews, and diagnostics without changing runtime
+bytes.
+
+## Authored Fields
+
+```ts twoslash title="prompt-text.ts"
+import { md, prompt, type PromptText } from "@use-crux/core";
+import { z } from "zod";
+
+const rules: PromptText = md`
+  ## Rules
+
+  - Be concise.
+`;
+
+const answer = prompt({
+  id: "answer",
+  input: z.object({ question: z.string() }),
+  system: rules,
+  prompt: ({ input }) => md`
+    ## Question
+
+    ${input.question}
+  `,
+});
+```
+
+`PromptText` is structurally distinct from `string` and cannot be coerced to
+text directly. Crux accepts it only in these authored fields:
+
+| Field            | Direct value                                    | Callback result                                            |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `prompt.system`  | Existing system union plus `PromptText`         | Existing sync/async system-result union plus `PromptText`  |
+| `prompt.prompt`  | `string \| PromptText`                          | Synchronous `string \| PromptText`                         |
+| `context.system` | Existing context-system union plus `PromptText` | Existing sync/async context-result union plus `PromptText` |
+
+Canonical `Message` and `MessageContent` do not accept `PromptText`. `messages`
+mode has no PromptText-specific lowering or runtime guard.
+
+A direct PromptText Context contribution is static for lifecycle, memo, and
+provider-cache classification, like a direct string. A callback returning
+PromptText remains dynamic.
+
+## Interpolation Values
+
+The recursive interpolation contract is:
+
+```ts
+type PromptTextValue =
+  | string
+  | number
+  | PromptText
+  | false
+  | null
+  | undefined
+  | readonly PromptTextValue[];
+```
+
+Numbers must be finite. `false`, `null`, and `undefined` omit content. Arrays
+are snapshotted recursively and are valid only in block position, where items
+are joined with one newline. Nested PromptText values retain their structural
+boundaries until resolution. Mutating an input array later cannot change an
+already-created fragment.
+
+General booleans, `true`, non-finite numbers, bigint, symbols, functions,
+Promises, and arbitrary objects are invalid. Use native `.join()` for an inline
+scalar list and [`md.json()`](#mdjsonvalue) for intentional object
+serialization. Asynchronous interpolation is unsupported; use an outer async
+`system` or `context.system` callback.
+
+## Whitespace and Position
+
+Each tagged template is normalized independently:
+
+1. Leading and trailing blank lines are removed.
+2. The common source-whitespace prefix is removed from nonblank lines.
+3. Relative indentation and intentional internal blank lines remain.
+
+An interpolation alone on its line is a block interpolation. Later lines of
+its value inherit the carrier line's indentation. An empty block removes its
+carrier without combining the blank-line runs around it; an equal-size tie
+keeps the earlier run exactly.
+
+```ts
+const evidence = md`
+  1. First
+  2. Second
+`;
+
+md`
+  - Evidence:
+    ${evidence}
+`;
+```
+
+The result is:
+
+```md
+- Evidence:
+  1. First
+  2. Second
+```
+
+Every other interpolation is inline. Inline scalar or fragment text is
+inserted verbatim, including multiline continuation lines. Inline arrays are
+rejected.
+
+Strings do not pass through this normalization. Existing direct strings and
+string-returning callbacks preserve their current bytes and inspection shape.
+
+## Conditions, Sequences, and Fragments
+
+Control flow stays in TypeScript:
+
+```ts
+const warning = input.warning && md`> Warning: ${input.warning}`;
+
+const details = md`
+  ## Details
+
+  ${warning}
+
+  ${input.events.map((event) => md`- ${event.summary}`)}
+`;
+```
+
+Extract a named fragment or helper before deeply nested inline tags become
+difficult to read. V1 does not add filters, loops, includes, macros, `md.join`,
+or a fragment registry.
+
+## `md.json(value)`
+
+`md.json(value)` snapshots `JSON.stringify(value, null, 2)` as PromptText. It
+adds no Markdown fence:
+
+````ts
+md`
+  ```json
+  ${md.json(input.account)}
+  ```
+`;
+````
+
+Native JSON treatment of unsupported object properties and array entries is
+preserved. A top-level value for which `JSON.stringify` returns `undefined`, a
+cycle, or bigint fails with a stable Crux error. `md.json()` is not a sanitizer,
+redactor, canonical key sorter, or security escape hatch.
+
+## Inspection
+
+`.resolve()` exposes plain `system` and `prompt` strings. `.inspect()` retains
+structural provenance when available:
+
+```ts
+const inspection = await answer.inspect({
+  input: { question: "How do I rotate credentials?" },
+});
+
+inspection.prompt?.text;
+inspection.prompt?.segments;
+inspection.prompt?.staticTokens;
+inspection.prompt?.dynamicTokens;
+inspection.system.parts[0]?.segments;
+```
+
+Segments distinguish authored literal text from interpolated scalars, JSON,
+nested fragments, and sequences. Concatenating their text reproduces the exact
+resolved value. Ordinary prompt strings keep the legacy `{ text, tokens }`
+shape without inferred segments.
+
+## Project Index Evidence
+
+Compiler-proven `md` regions appear as source refs with this metadata:
+
+```ts
+metadata: {
+  promptText: {
+    tag: "md";
+    language: "markdown";
+    lifecycle: "static" | "dynamic";
+    sourceKind: "owner" | "named-fragment" | "anonymous-fragment";
+    fragmentJoins?: PromptTextFragmentJoinEvidence[];
+  }
+}
+```
+
+This is source-authoring evidence. It does not render Markdown or mark content
+trusted, sanitized, or safe. Consumers do not infer fragment identity from
+names or generic metadata.
+
+Crux follows supported imports, aliases, and re-exports to the canonical `md`
+export. Local lookalike tags receive no evidence. If `tsconfig.paths` can
+intercept the exact package root, attribution fails closed. Runtime PromptText
+construction is unaffected.
+
+## Exact Runtime Preview Registration
+
+`configure()` publishes one process-owned, revisioned Prompt catalogue for
+explicit exact preview:
+
+```ts
+import { configure } from "@use-crux/core";
+
+const registry = configure({
+  prompts: [answer],
+});
+
+registry.dispose();
+```
+
+Only explicit Preview or Retry dispatch invokes `Prompt.inspect()`. Inspection
+does not generate with a provider, invoke tools, create an ordinary Run, or
+emit observability records. Authored callbacks are trusted application code and
+may perform their own side effects.
+
+Inputs, rendered content, provenance, validation details, and results remain
+private in-memory request data. `config()` remains project and runtime policy;
+it is not a Prompt catalogue. Contexts are not exact-preview targets.
+
+## Errors
+
+| Code                                     | Condition                            | Remedy                                                                |
+| ---------------------------------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| `CRUX_PROMPT_TEXT_INVALID_INTERPOLATION` | Unsupported interpolation value      | Select a scalar, fragment, or intentional `md.json()` value           |
+| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | Array interpolated inline            | Move it to a block line or join scalar values with native `.join()`   |
+| `CRUX_PROMPT_TEXT_JSON_SERIALIZATION`    | `md.json()` cannot produce JSON text | Remove cycles or bigint, or serialize explicitly before interpolation |
+
+Errors include the zero-based interpolation index and nested array path.
+Formatting does not stringify rejected values or expose secret content.
+
+## Security and Non-goals
+
+`md` composes text only. It does not mark content trusted, sanitize nested JSON,
+bypass schema validation or auto-escape, suppress diagnostics, or change
+`rawFields`. There is no `md.raw`, `md.trusted`, or `md.safe`.
+
+V1 does not add runtime Markdown rendering, a Prompt DSL or compiler transform,
+standalone Prompt files, asynchronous interpolation, message or multimodal
+construction, semantic section tags, `md.use`, or Context-placement
+placeholders. Editor support is an additive source view and never changes
+PromptText resolution.
+
+## Related
+
+- Guide: [PromptText](/docs/guides/prompts/prompt-text)
+- Guide: [VS Code & Cursor](/docs/developer-tools/vscode)
+- Reference: [Prompts](/docs/reference/crux-core/prompts)
+- Reference: [Contexts](/docs/reference/crux-core/contexts)
+- Reference: [Project Index](/docs/reference/crux-core/project-index)

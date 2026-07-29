@@ -5,6 +5,8 @@
     "index",
     "config",
     "prompts",
+    "prompt-resolution",
+    "prompt-text",
     "contexts",
     "tools",
     "tool-middleware",

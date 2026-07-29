@@ -1,0 +1,226 @@
+---
+title: Prompt Resolution
+description: use composition, input inference, message modes, output modes, and provider adaptation.
+---
+
+Prompt resolution turns one authored Prompt plus its `use` entries into the
+provider-neutral request an adapter executes.
+
+## Composition With `use`
+
+```ts
+const assistant = prompt({
+  id: "assistant",
+  use: [
+    brandContext,
+    userMemory,
+    docsGrounding,
+    threadBlackboard,
+    process.env.NODE_ENV === "development" && debugContext,
+  ],
+  input: z.object({
+    userId: z.string(),
+    question: z.string(),
+  }),
+  system: "Answer carefully.",
+  prompt: ({ input }) => input.question,
+});
+```
+
+| Entry                                                                      | Contribution                                                                                    |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [`context()`](/docs/reference/crux-core/contexts)                          | System text, input fields, tools, constraints, and guardrails                                   |
+| [`when()` / `match()`](/docs/reference/crux-core/contexts)                 | Conditional Context inclusion                                                                   |
+| [`memory()`](/docs/reference/crux-core/memory)                             | Memory Context, tools, and capture or flush lifecycle                                           |
+| [`blackboard()`](/docs/reference/crux-core/agent)                          | Shared-state Context and focused tools                                                          |
+| [`retriever()` / `retrievalRecipe()`](/docs/reference/crux-core/retrieval) | Retrieval Context, search or source tools, and trace metadata                                   |
+| [`grounding()`](/docs/reference/crux-core/retrieval)                       | Evidence injection, citation metadata, constraints, and optional tools                          |
+| [`skill()`](/docs/reference/crux-core/skill)                               | Skill index, loader tools, and loaded instructions                                              |
+| [`contributor()`](#custom-contributor-entries)                             | Custom Context, tools, constraints, guardrails, metadata, nested entries, and pipeline re-entry |
+| `false`, `null`, `undefined`                                               | Ignored, which is useful for static flags                                                       |
+
+Manual `.asContext()` and `.asTools()` helpers remain useful for frameworks
+that do not run Prompt resolution. Normal Prompts should place primitives in
+`use`.
+
+## Custom Contributor Entries
+
+Use `contributor()` to build a project-specific primitive that composes through
+`use`:
+
+```ts
+import { context, contributor, prompt } from "@use-crux/core";
+import { z } from "zod";
+
+const accountPlan = contributor({
+  id: "account-plan",
+  input: z.object({ accountId: z.string() }),
+  when: (input) => input.accountId.length > 0,
+  use: [docsContext],
+  async contribute({ input }) {
+    const plan = await loadAccountPlan(input.accountId);
+
+    return {
+      contexts: [
+        context({
+          id: "account-plan-context",
+          system: `Current account plan: ${plan.name}`,
+        }),
+      ],
+      metadata: {
+        accountPlan: plan.name,
+      },
+    };
+  },
+});
+
+const support = prompt({
+  id: "support",
+  use: [accountPlan],
+  input: z.object({
+    accountId: z.string(),
+    question: z.string(),
+  }),
+  prompt: ({ input }) => input.question,
+});
+```
+
+| Option       | Type                       | Description                                                                                               |
+| ------------ | -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `id`         | `string`                   | Required identity for observability, exclusions, and tool-collision errors                                |
+| `input`      | `ZodObject?`               | Fields merged into the Prompt input and typed in `contribute()`                                           |
+| `when`       | `(input) => boolean`       | Synchronous gate; excluded entries are visible in inspection and never call `contribute()`                |
+| `use`        | `readonly ContextEntry[]?` | Nested entries resolved before this contribution                                                          |
+| `contribute` | `(args) => Contribution`   | Async-capable contribution of Contexts, tools, constraints, guardrails, metadata, or nested `use` entries |
+
+Returned Contexts and `use` entries re-enter the same compiled pipeline. Tools
+use normal collision detection. Prefer a dedicated first-party primitive when
+one matches the lifecycle you need.
+
+## Input Inference
+
+The final input combines the Prompt schema with every composed input schema.
+Plain Contexts contribute required fields. Conditional Contexts contribute
+optional fields because their runtime branch is not statically known.
+
+```ts twoslash title="merged-input.ts"
+import { context, prompt, when } from "@use-crux/core";
+import { z } from "zod";
+
+const locale = context({
+  id: "locale",
+  input: z.object({ locale: z.string() }),
+  system: ({ input }) => `Locale: ${input.locale}`,
+});
+
+const brand = context({
+  id: "brand",
+  input: z.object({ brandVoice: z.string().optional() }),
+  system: ({ input }) => `Brand voice: ${input.brandVoice ?? "default"}`,
+});
+
+const reply = prompt({
+  id: "reply",
+  use: [locale, when(({ brandVoice }) => Boolean(brandVoice), brand)],
+  input: z.object({ question: z.string() }),
+  prompt: ({ input }) => input.question,
+});
+```
+
+Here, `question` and `locale` are required; `brandVoice` is optional.
+
+## System Composition Order
+
+Resolution composes:
+
+1. The Prompt's own system text.
+2. Active cached Contexts in `use` order.
+3. Active uncached Contexts in `use` order.
+4. Nested entries before their owning Context within the same cache tier.
+
+Priority controls token-budget dropping in the uncached tail, not normal
+ordering. The Prompt-owned text and cached prefix are always retained. If that
+stable prefix alone exceeds `tokenBudget`, inspection and the `prompt.budget`
+artifact report `prefixOverflow: true`.
+
+Excluded Contexts contribute nothing. Budget-dropped Contexts still contribute
+their tools.
+
+## Prompt and Message Modes
+
+Use `system` plus `prompt` for normal single-turn calls:
+
+```ts
+const rewrite = prompt({
+  input: z.object({ text: z.string() }),
+  system: "Rewrite without changing meaning.",
+  prompt: ({ input }) => input.text,
+});
+```
+
+Use `messages` when a full message list is the source of truth:
+
+```ts
+const reply = prompt({
+  input: z.object({ userMessage: z.string() }),
+  messages: ({ input }) => [
+    { role: "system", content: "You are concise." },
+    { role: "user", content: "Answer in one sentence." },
+    { role: "assistant", content: "Understood." },
+    { role: "user", content: input.userMessage },
+  ],
+});
+```
+
+Typed callers cannot combine `messages` with `system` or `prompt`. Composed
+system text is still resolved and adapters fold it into their native message
+format.
+
+## Text and Structured Output
+
+`output` selects the adapter execution path:
+
+| Prompt shape  | Adapter behavior                                            |
+| ------------- | ----------------------------------------------------------- |
+| No `output`   | Text generation; results expose adapter-specific text       |
+| With `output` | Structured generation; results expose validated object data |
+
+See the [Structured Output
+guide](/docs/guides/prompts/structured-output) for schema lowering and optional
+field behavior.
+
+## Provider Adaptation
+
+Use `adapt` for small provider or model-specific changes:
+
+```ts
+const extract = prompt({
+  output: z.object({ entities: z.array(z.string()) }),
+  system: "Extract named entities.",
+  prompt: ({ input }) => input.text,
+  adapt: {
+    openai: {
+      settings: { temperature: 0 },
+    },
+    anthropic: {
+      appendSystem: "\nReturn concise JSON only.",
+    },
+    "*": {
+      settings: { maxTokens: 800 },
+    },
+  },
+});
+```
+
+Resolution checks the exact provider, slash-prefixed model providers such as
+`openai/gpt-4o`, then `"*"`. In Prompt mode, system adaptations become
+uncached system blocks. In `messages` mode, the final adapted system text is
+folded into the message list and `resolved.system` remains absent.
+
+## Related
+
+- Guide: [Prompts](/docs/guides/prompts)
+- Guide: [Prompt execution](/docs/guides/prompts/execution)
+- Reference: [Prompts](/docs/reference/crux-core/prompts)
+- Reference: [Contexts](/docs/reference/crux-core/contexts)
+- Reference: [PromptText](/docs/reference/crux-core/prompt-text)
