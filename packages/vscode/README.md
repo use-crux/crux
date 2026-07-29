@@ -1,81 +1,146 @@
-# Crux for Visual Studio Code
+# Crux for VS Code and Cursor
 
-Crux adds Project Index diagnostics, semantic completion, navigation, hover,
-code actions, symbols, inlay hints, code lenses, and optional inline finding
-text to TypeScript and JavaScript workspaces. It starts `crux lsp`, attaches to
-a matching `crux dev` process when one is available, and otherwise indexes the
-workspace itself.
+Author Markdown-aware prompts directly in TypeScript without giving up native
+TypeScript completion, hover, rename, diagnostics, or navigation. Crux connects
+your editor to the Project Index and Devtools so authored definitions, static
+structure, exact runtime inspection, and captured Runs stay one workflow.
 
-The extension works in Visual Studio Code and compatible editors that install
-VSIX files. It remains fully inactive in an untrusted workspace; grant
+The extension supports Visual Studio Code 1.90+ and Cursor through its VS Code
+extension compatibility. It remains inactive in an untrusted workspace; grant
 workspace trust before binary discovery or language-server startup can occur.
 
-## Install the extension and CLI
+## What it adds
 
-Download the VSIX matching the CLI version from the
-[Crux GitHub Release](https://github.com/use-crux/crux/releases) you want to
-use. Install the CLI from npm, then install the downloaded VSIX:
+- PromptText Markdown highlighting and folding that stops at interpolation
+  boundaries while TypeScript continues to own each expression.
+- Safe, read-only static previews with placeholders for unknown values.
+- Explicit runtime-backed exact previews with schema-informed inputs in
+  Devtools—opening or editing a preview never executes a prompt.
+- One-click navigation to the latest captured Run, including PromptText
+  provenance and token attribution when capture policy permits it.
+- Hard composition diagnostics and conservative fixes for invalid
+  interpolations, inline sequences, and proven `md.json()` failures.
+- Project Index completion, definitions, references, symbols, hover, inlay
+  hints, code lenses, and Catalog evidence.
+
+## Install in VS Code or Cursor
+
+Install the Crux Local CLI, then let it fetch, verify, and install the VSIX from
+the matching GitHub Release:
 
 ```bash
 npm install -g @use-crux/local
-code --install-extension crux-vscode-<version>.vsix
+
+crux editor install vscode
+# or
+crux editor install cursor
 ```
 
-You can instead run **Extensions: Install from VSIX...** in the editor command
-palette. The extension and CLI use lockstep release versions. Stable releases
-are recommended; GitHub entries marked **Pre-release** are nightly builds from
-the source commit named in their notes.
+The command uses the running `crux --version`, downloads that exact release's
+VSIX and `SHA256SUMS`, verifies the extension, and invokes only the editor you
+selected. It never substitutes another version.
 
-For a project-local CLI, install `@use-crux/local` in the workspace:
+For a project-local CLI:
 
 ```bash
 npm install --save-dev @use-crux/local
+npx crux editor install vscode
 ```
 
-The extension discovers `node_modules/.bin/crux` on Linux and macOS and the
-corresponding `.cmd` shim on Windows; native `.exe` candidates are also
-supported. Discovery order is an explicit `crux.binaryPath`, trusted workspace
-candidates, then `PATH`. Every selected binary must successfully return
-`crux --version` before the server starts.
+Crux is not published to Visual Studio Marketplace or Open VSX yet. GitHub
+Release VSIX files do not update automatically.
 
-If npm is unsuitable, download the archive for your OS and architecture from
-the same release, verify it with `SHA256SUMS`, extract both executables, and set
-`crux.binaryPath` to the extracted `crux` or `crux.exe`. See the
-[`crux lsp` reference](https://cruxjs.dev/docs/reference/lsp#direct-download)
-for exact filenames and checksum commands.
+### Install a downloaded VSIX manually
 
-GitHub-installed VSIX files and direct-download binaries do not update
-automatically. Download and install both artifacts again when changing Crux
-versions.
+Download `crux-vscode-<version>.vsix` and `SHA256SUMS` from the
+[matching Crux GitHub Release](https://github.com/use-crux/crux/releases), or
+download a verified copy without launching an editor:
 
-## Semantic completion
+```bash
+crux editor install vscode --download-only ./artifacts
+```
 
-In supported first-party dependency slots, Crux completion offers compatible
-prompts, contexts, MCP servers, tools, agents, and routing definitions. It can
-reuse an existing binding or add a safe relative named import. Ambiguous or
-unsafe candidates are omitted without affecting the editor's normal
-TypeScript completion.
+Then install it with the appropriate CLI:
 
-Completion parses a bounded copy of the current unsaved document, but the
-Project Index remains save-based. Unsaved text never changes diagnostics,
-navigation, caches, or index generation, and it is never logged or persisted.
-The feature requires workspace trust and fails softly during cancellation,
-reindexing, reconnects, unsupported syntax, or worker unavailability.
+```bash
+code --install-extension ./crux-vscode-<version>.vsix --force
+cursor --install-extension ./crux-vscode-<version>.vsix --force
+```
 
-The [semantic completion reference](https://cruxjs.dev/docs/reference/lsp-completion)
-lists every supported slot, buffer limits, privacy behavior, and initial
-limitations.
+In either editor, you can instead open the command palette and run
+**Extensions: Install from VSIX...**.
 
-## Configuration
+### Upgrade or uninstall
 
-Use **Crux: Restart Language Server** after replacing a binary in place;
-changes to `crux.port` or `crux.binaryPath` restart automatically. Settings for
-lint filtering, hints, lenses, trace output, and inline presentation are listed
-in the [`crux lsp` reference](https://cruxjs.dev/docs/reference/lsp).
+Upgrade Local and reinstall the same version of the extension:
+
+```bash
+npm install -g @use-crux/local@latest
+crux editor install vscode
+# or: crux editor install cursor
+```
+
+Nightly users should install `@use-crux/local@nightly`; the installer selects
+that exact nightly prerelease. To uninstall:
+
+```bash
+code --uninstall-extension use-crux.crux-vscode
+cursor --uninstall-extension use-crux.crux-vscode
+```
+
+## Verify the installation
+
+1. Confirm `crux --version` reports the version you installed.
+2. Open a trusted workspace containing `crux.config.ts`, `.js`, or `.mjs`.
+3. Open **Output: Crux** and confirm the matching language server started.
+4. Save a TypeScript file containing a canonical Core `md` template. Markdown
+   roles should appear outside `${...}` while expressions retain normal
+   TypeScript behavior.
+5. Place the cursor in that template and run **Crux: Preview PromptText
+   Statically**. Start `crux dev` when you also want exact preview, Catalog, and
+   captured-Run workflows.
+
+## PromptText authoring
+
+Crux decorates only templates whose saved semantic evidence resolves to the
+canonical Core `md` identity. Aliases, namespace access, and resolvable local
+re-exports work; shadowed, unrelated, ambiguous, unresolved, and type-only
+bindings do not. Unsaved edits that make identity uncertain clear the
+decorations instead of leaving stale styling.
+
+All PromptText views derive from one bounded transient analysis for the current
+document version:
+
+- **Static preview** opens projected text beside the source. Unknown values are
+  placeholders, and the document contains only bytes you can copy.
+- **Exact preview** opens Devtools for an explicit runtime inspection. The
+  application runtime owns validation and invocation; it does not create a
+  model generation or ordinary Run.
+- **Latest Run** opens previously captured evidence for the canonical owning
+  definition, resolved when you click.
+
+PromptText highlighting is additive and theme-aware. It does not replace the
+editor's semantic-token provider, and interpolation expressions keep native
+TypeScript completion, hover, definition, rename, diagnostics, bracket
+matching, and selection.
+
+## Project Index features
+
+Crux also provides semantic completion and source-aware diagnostics,
+navigation, symbols, hover, hints, and lenses for supported Crux definitions.
+Most Project Index evidence is based on saved files. Completion is the narrow
+exception: it uses a bounded request-only copy of the current document and
+never writes unsaved text to Project Index caches or logs.
+
+The extension discovers a trusted workspace-local `crux` installation first,
+then `PATH`, unless `crux.binaryPath` is set. Use **Crux: Restart Language
+Server** after replacing a binary in place.
 
 ## Support
 
-- [Documentation](https://cruxjs.dev/docs/reference/lsp)
+- [VS Code and Cursor guide](https://cruxjs.dev/docs/developer-tools/vscode)
+- [Editor and LSP reference](https://cruxjs.dev/docs/reference/lsp)
+- [GitHub Releases](https://github.com/use-crux/crux/releases)
 - [Repository](https://github.com/use-crux/crux)
 - [Issues](https://github.com/use-crux/crux/issues)
 - [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)

@@ -11,7 +11,7 @@ on:
         type: boolean
         default: true
   schedule:
-    - cron: '17 3 * * *'
+    - cron: "17 3 * * *"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -30,6 +30,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
+      releaseVersion: ${{ steps.package-version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -53,6 +54,12 @@ jobs:
           version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release version
+        id: package-version
+        run: |
+          node -e "process.stdout.write('version=' + require('./packages/local/npm/local/package.json').version + '\n')" \
+            >> "$GITHUB_OUTPUT"
 
   build-embed-assets:
     name: Build Embed Assets
@@ -99,7 +106,7 @@ jobs:
           - target: linux-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-unknown-linux-gnu
-            apt_packages: ''
+            apt_packages: ""
           - target: linux-arm64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: aarch64-unknown-linux-gnu
@@ -107,11 +114,11 @@ jobs:
           - target: darwin-x64
             runner: macos-latest
             rust_target: x86_64-apple-darwin
-            apt_packages: ''
+            apt_packages: ""
           - target: darwin-arm64
             runner: macos-latest
             rust_target: aarch64-apple-darwin
-            apt_packages: ''
+            apt_packages: ""
           - target: win32-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-pc-windows-gnu
@@ -152,7 +159,7 @@ jobs:
       - name: Install llvm-mingw for Windows arm64
         if: matrix.target == 'win32-arm64'
         env:
-          LLVM_MINGW_VERSION: '20260616'
+          LLVM_MINGW_VERSION: "20260616"
         run: |
           mkdir -p .tmp/toolchains
           curl -fsSL \
@@ -170,7 +177,7 @@ jobs:
           echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR=$LLVM_MINGW_ROOT/bin/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build local binary bundle
-        run: make -C packages/local ${{ matrix.target }}
+        run: make -C packages/local ${{ matrix.target }} VERSION="${{ needs.changesets.outputs.releaseVersion }}"
 
       - name: Upload local binary bundle
         uses: actions/upload-artifact@v7
@@ -348,7 +355,7 @@ jobs:
           - target: linux-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-unknown-linux-gnu
-            apt_packages: ''
+            apt_packages: ""
           - target: linux-arm64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: aarch64-unknown-linux-gnu
@@ -356,11 +363,11 @@ jobs:
           - target: darwin-x64
             runner: macos-latest
             rust_target: x86_64-apple-darwin
-            apt_packages: ''
+            apt_packages: ""
           - target: darwin-arm64
             runner: macos-latest
             rust_target: aarch64-apple-darwin
-            apt_packages: ''
+            apt_packages: ""
           - target: win32-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-pc-windows-gnu
@@ -404,7 +411,7 @@ jobs:
       - name: Install llvm-mingw for Windows arm64
         if: matrix.target == 'win32-arm64'
         env:
-          LLVM_MINGW_VERSION: '20260616'
+          LLVM_MINGW_VERSION: "20260616"
         run: |
           mkdir -p .tmp/toolchains
           curl -fsSL \
@@ -422,7 +429,7 @@ jobs:
           echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR=$LLVM_MINGW_ROOT/bin/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build local binary bundle
-        run: make -C packages/local ${{ matrix.target }}
+        run: make -C packages/local ${{ matrix.target }} VERSION="${{ needs.nightly.outputs.version }}"
 
       - name: Upload local binary bundle
         uses: actions/upload-artifact@v7

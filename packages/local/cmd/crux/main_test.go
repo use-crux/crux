@@ -125,6 +125,17 @@ func TestRootCommandRegistersLSPCommandSurface(t *testing.T) {
 	}
 }
 
+func TestRootCommandRegistersExplicitEditorInstaller(t *testing.T) {
+	root := newRootCommand(&cli.Factory{})
+	install, _, err := root.Find([]string{"editor", "install"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if install == nil || install.Use != "install <vscode|cursor>" {
+		t.Fatalf("editor install command = %#v", install)
+	}
+}
+
 func TestRootCompletionCommandIsDiscoverable(t *testing.T) {
 	root := newRootCommand(&cli.Factory{})
 	// Cobra adds the completion command lazily; materialize it the same way

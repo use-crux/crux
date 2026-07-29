@@ -90,23 +90,30 @@ CLI are versioned in lockstep. Choose the latest stable release for normal use;
 entries marked **Pre-release** are nightly builds from the exact source commit
 named in their release notes.
 
-The recommended installation is the npm CLI plus the VSIX from the same
-release:
+The recommended installation lets the CLI select, download, checksum, and
+install the VSIX from its own exact release:
 
 ```bash
 npm install -g @use-crux/local
-code --install-extension crux-vscode-<version>.vsix
+crux editor install vscode
+# or
+crux editor install cursor
 ```
 
-In VS Code, Cursor, or another compatible editor, you can instead run
-**Extensions: Install from VSIX...** and select the downloaded file. A VSIX
-installed from GitHub does not update automatically; download and install the
-new VSIX when changing Crux versions.
+The editor target is required; Crux never installs into every detected editor.
+The installer verifies `crux-vscode-<version>.vsix` against that release's
+`SHA256SUMS` before invoking `code` or `cursor`. It never falls forward or
+backward to another release.
+
+Crux is not published to Visual Studio Marketplace or Open VSX yet. A VSIX
+installed from GitHub does not update automatically. Upgrade
+`@use-crux/local`, then run the editor installer again.
 
 For a project-local CLI, install the package in the workspace:
 
 ```bash
 npm install --save-dev @use-crux/local
+npx crux editor install vscode
 ```
 
 Without an explicit path, discovery checks repository build outputs, the
@@ -154,6 +161,19 @@ publisher-identity boundary. Extract the archive and keep `crux` (or
 `crux.exe`) beside `crux-static-index-worker` (or its `.exe`). Set
 `crux.binaryPath` to the extracted CLI. Direct-download binaries do not update
 automatically.
+
+To download only the verified VSIX with an installed CLI:
+
+```bash
+crux editor install vscode --download-only ./artifacts
+```
+
+Install that file with **Extensions: Install from VSIX...**, or run:
+
+```bash
+code --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+cursor --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+```
 
 For a repository build instead, run `pnpm install`, build the extension, and
 package it with `pnpm --filter crux-vscode package`.

@@ -104,6 +104,9 @@ pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 Stable GitHub Releases also contain the lockstep VSIX, six native archives,
 and `SHA256SUMS`. The workflow stages and validates the full matrix before npm
 publication, then reconciles only missing or byte-identical release assets.
+Released native binaries report that same lockstep version, allowing
+`crux editor install vscode|cursor` to fetch and verify the exact VSIX without
+consulting a marketplace or selecting a different release.
 Run the [editor release asset smoke checklist](./RELEASE_ASSET_SMOKE_CHECKLIST.md)
 against the resulting release.
 

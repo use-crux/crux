@@ -97,6 +97,34 @@ structured Devtools content; raw JSON is secondary disclosure only.
 See [PromptText editor support](/docs/reference/lsp#prompttext-editor-support)
 for the complete user workflow and limitations.
 
+## `crux editor install`
+
+Install the editor extension from the GitHub Release matching the running CLI:
+
+```bash
+crux editor install vscode
+crux editor install cursor
+crux editor install vscode --download-only ./artifacts
+```
+
+The explicit target is required. Normal mode downloads
+`crux-vscode-<version>.vsix` and `SHA256SUMS`, verifies the exact checksum, and
+then invokes `code` or `cursor` with `--install-extension ... --force`.
+`--download-only <directory>` writes the verified VSIX atomically without
+requiring or executing an editor. It refuses to replace a different existing
+file.
+
+The running `crux --version` is the only release selector. Development builds,
+missing releases, malformed or absent checksum entries, oversized downloads,
+checksum mismatches, missing editor CLIs, and failed editor installations all
+fail without selecting another version. Temporary installation files are
+removed after success, failure, or cancellation.
+
+GitHub Releases are currently the only extension distribution channel; the
+extension is not yet published to Visual Studio Marketplace or Open VSX. See
+[VS Code & Cursor](/docs/developer-tools/vscode) for installation, verification,
+upgrades, and the PromptText workflow.
+
 ## `crux traces`
 
 List recent traces or show trace detail.

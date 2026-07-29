@@ -170,6 +170,10 @@ test("nightly workflow rebuilds repairs from immutable source and skips npm", as
     nightly,
     /release:publish-staged -- --no-skip-existing --npm-tag nightly/,
   );
+  assert.match(
+    nightly,
+    /make -C packages\/local \$\{\{ matrix\.target \}\} VERSION="\$\{\{ needs\.nightly\.outputs\.version \}\}"/,
+  );
   assert.match(nightly, /release:assets:reconcile --[\s\S]*--prerelease/);
   assert.doesNotMatch(
     nightly,

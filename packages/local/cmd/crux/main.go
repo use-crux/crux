@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/commands"
+	"github.com/use-crux/crux/packages/local/internal/commands/editorcmd"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -63,6 +64,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewInspectCmd(f))
 	rootCmd.AddCommand(commands.NewRuntimeCmd(f))
 	rootCmd.AddCommand(commands.NewSetupCmd(f))
+	rootCmd.AddCommand(editorcmd.New(f))
 
 	return rootCmd
 }
@@ -118,6 +120,9 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	w("catalog", "Inspect and import Project Index catalog data")
 	w("inspect", "Show token breakdown for a prompt")
 	w("runtime", "Generate Runtime Engine artifacts")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Integrate"))
+	w("editor", "Install and manage editor integrations")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Server"))
 	w("dev", "Start the devtools server")

@@ -39,3 +39,12 @@ generation, tool calls, or Run creation. Latest Run resolves current ownership
 and SQLite ordering at click time, with no cached selection or automatic
 navigation. The embedded Devtools routes are bounded, no-store, cancellation
 aware, and keep preview inputs/results in memory only.
+
+Distribute the editor extension as a checksum-verified, lockstep GitHub Release
+asset for Visual Studio Code and Cursor. `crux editor install vscode|cursor`
+downloads the VSIX matching the running CLI version, verifies `SHA256SUMS`, and
+installs only into the explicitly selected editor; `--download-only` supports
+managed environments. Release builds now embed that same stable or nightly
+version in every native CLI, and release reconciliation shares the validated
+asset set so the VSIX, six native archives, and checksums cannot disappear
+after a successful staging pass.
