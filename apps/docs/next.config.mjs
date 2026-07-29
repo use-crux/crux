@@ -9,6 +9,8 @@ const config = {
   reactStrictMode: true,
   serverExternalPackages: ['typescript', 'twoslash'],
   experimental: {
+    // Keep the full reference build within the preview host's 8 GB limit.
+    cpus: 1,
     turbopackFileSystemCacheForDev: false,
   },
   turbopack: {
