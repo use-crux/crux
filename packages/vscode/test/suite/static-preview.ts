@@ -246,7 +246,7 @@ async function eventually(
   // The focused controller test proves the exact 150 ms debounce with fake
   // timers. This extension-host assertion also waits for VS Code to propagate
   // the virtual-document change, which can be slower on shared CI runners.
-  const deadline = Date.now() + 15_000
+  const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
     if (predicate()) return
     await new Promise((resolve) => setTimeout(resolve, 25))
