@@ -60,13 +60,18 @@ func (s *Insights) renderListRow(ins api.InspectInsightRecord, width int, select
 
 	meta := []string{}
 	if tag := firstString(ins.Tags); tag != "" {
-		meta = append(meta, tag)
+		category := shell.TextDim.Render(tag)
+		if selected {
+			category = shell.Violet.Render(tag)
+		}
+		meta = append(meta, category)
 	}
 	if ins.TargetID != "" {
-		meta = append(meta, ins.TargetID)
+		meta = append(meta, shell.TextDim.Render(ins.TargetID))
 	}
-	meta = append(meta, fmt.Sprintf("%d traces", len(ins.LinkedTraceIDs)))
-	line2 := "   " + shell.TextDim.Render(strings.Join(meta, " · "))
+	traceCount := len(ins.LinkedTraceIDs)
+	meta = append(meta, shell.TextDim.Render(fmt.Sprintf("%d %s", traceCount, kit.Pluralize(traceCount, "trace"))))
+	line2 := "   " + strings.Join(meta, shell.TextDim.Render(" · "))
 	if len(ins.Trend) > 0 && width >= 48 {
 		line2 += "  " + kit.Sparkline(ins.Trend, min(10, width/5), shell.SeverityColor(ins.Severity))
 	}

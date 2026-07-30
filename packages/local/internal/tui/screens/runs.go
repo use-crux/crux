@@ -273,8 +273,9 @@ func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 
 func (s *Runs) Breadcrumb() ([]string, string) {
 	path := []string{"runs"}
-	if selectedID := s.SelectedRunID(); selectedID != "" {
-		path = append(path, "run "+truncateRunsInline(selectedID, 8))
+	if selected, _, ok := s.runList.Selected(); ok {
+		name := firstNonEmpty(selected.Name, selected.RunID)
+		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(name), 36, "…"))
 	}
 	if cur := s.currentSpan(); cur != nil && s.focus == focusSpanDetail {
 		path = append(path, "span: "+sanitizeRunsInline(cur.Name))
@@ -282,7 +283,8 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	right := ""
 	listSnapshot := s.runsResource.Snapshot()
 	if listSnapshot.HasValue {
-		right = fmt.Sprintf("%d runs · last 1h", len(s.runSummaries()))
+		count := len(s.runSummaries())
+		right = fmt.Sprintf("%d %s · last 1h", count, kit.Pluralize(count, "run"))
 	}
 	return path, right
 }

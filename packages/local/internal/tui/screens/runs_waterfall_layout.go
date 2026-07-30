@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -13,7 +14,8 @@ func (s *Runs) waterfallHeader(width int) string {
 	}
 	summary := s.diagnosis.Summary
 	title := focusTitle("Run "+clipRunsInline(summary.RunID, 7), s.focus == focusWaterfall)
-	subParts := []string{sanitizeRunsInline(summary.Name), formatSpanDuration(summary.DurationMs), fmt.Sprintf("%d spans", len(s.diagnosis.Timeline))}
+	count := len(s.diagnosis.Timeline)
+	subParts := []string{sanitizeRunsInline(summary.Name), formatSpanDuration(summary.DurationMs), fmt.Sprintf("%d %s", count, kit.Pluralize(count, "span"))}
 	return shell.PaneHeader(width, title, strings.Join(subParts, " · "), "")
 }
 

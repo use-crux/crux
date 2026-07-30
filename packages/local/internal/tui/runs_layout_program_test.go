@@ -96,7 +96,7 @@ func TestRunsNarrowLayoutThroughRealProgram(t *testing.T) {
 		t.Fatalf("Runs body size = %+v, want 70x21 after Workbench chrome", driver.bodySize)
 	}
 	assertTerminalFrameGeometry(t, driver.snapshot, 70, 24)
-	if !strings.Contains(driver.snapshot, "run-doc") {
+	if !strings.Contains(driver.snapshot, "document scroll fixture") {
 		t.Fatalf("narrow layout hid selected run:\n%s", driver.snapshot)
 	}
 	for _, hidden := range []string{"hierarchy row", "RUN SUMMARY"} {

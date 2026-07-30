@@ -10,8 +10,12 @@ import (
 
 type overviewLoadedMsg resource.ResourceResult[api.InspectOverviewRecord]
 type insightsLoadedMsg resource.ResourceResult[[]api.InspectInsightRecord]
-type runsLoadedMsg resource.ResourceResult[[]api.InspectRunRecord]
 type activityLoadedMsg resource.ResourceResult[[]api.InspectActivityEvent]
+
+type runsLoadedMsg struct {
+	Result resource.ResourceResult[[]api.InspectRunRecord]
+	Names  map[string]string
+}
 
 func (m overviewLoadedMsg) ResourceOwner() resource.ResourceOwner {
 	return resource.ResourceResult[api.InspectOverviewRecord](m).Token.Owner
@@ -22,7 +26,7 @@ func (m insightsLoadedMsg) ResourceOwner() resource.ResourceOwner {
 }
 
 func (m runsLoadedMsg) ResourceOwner() resource.ResourceOwner {
-	return resource.ResourceResult[[]api.InspectRunRecord](m).Token.Owner
+	return m.Result.Token.Owner
 }
 
 func (m activityLoadedMsg) ResourceOwner() resource.ResourceOwner {
@@ -75,7 +79,21 @@ func (o *Overview) fetchRunsAtRevision(parent context.Context, client DataClient
 	ctx, token := o.runsResource.Begin(parent, overviewRunsOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return func() tea.Msg {
 		value, err := client.Runs(ctx)
-		return runsLoadedMsg(resource.ResourceResult[[]api.InspectRunRecord]{Token: token, Value: value, Err: err})
+		names := map[string]string{}
+		if err == nil {
+			page, pageErr := client.ObservabilityRunsPage(ctx)
+			if pageErr == nil {
+				for _, run := range page.Rows {
+					if run.RunID != "" && run.Name != "" {
+						names[run.RunID] = run.Name
+					}
+				}
+			}
+		}
+		return runsLoadedMsg{
+			Result: resource.ResourceResult[[]api.InspectRunRecord]{Token: token, Value: value, Err: err},
+			Names:  names,
+		}
 	}
 }
 

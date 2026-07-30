@@ -10,6 +10,13 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
+type favorableDirection int
+
+const (
+	favorableDown favorableDirection = -1
+	favorableUp   favorableDirection = 1
+)
+
 func (o *Overview) renderKPIStrip(width int) string {
 	summary := o.overviewSummary()
 	contentW := width - 3
@@ -19,36 +26,40 @@ func (o *Overview) renderKPIStrip(width int) string {
 	cellW := contentW / 4
 	rem := contentW - cellW*4
 
-	// KPI accent colors match the design's visual coding:
-	//   Open insights → teal (neutral trend; severity counts carry the
-	//     status info as colored sub-text)
-	//   Pass rate     → rose (going-down-is-bad)
-	//   Cost / latency → amber (going-up-is-bad)
+	openChange := float64(0)
+	if len(summary.OpenInsightsHistory) >= 2 {
+		openChange = float64(summary.OpenInsightsHistory[len(summary.OpenInsightsHistory)-1] - summary.OpenInsightsHistory[0])
+	}
+	passDelta := passRateDeltaSeries(summary)
+	passChange, _ := seriesDelta(passDelta)
+	costChange, _ := seriesDelta(summary.CostSpark)
+	latencyChange, _ := seriesDelta(summary.LatencySpark)
+
 	o1 := o.kpiCell(cellW, "Open insights",
 		fmt.Sprintf("%d", summary.InsightCount),
-		o.formatSeverityCounts(),
-		shell.ColorTextDim,
+		fmtDeltaCount(summary.OpenInsightsHistory),
+		deltaColor(openChange, favorableDown),
 		overviewSparkFromInts(summary.OpenInsightsHistory, summary.InsightCount),
 		shell.ColorTeal,
 	)
 	o2 := o.kpiCell(cellW, "Pass rate",
 		percent(summary.PassRate),
-		"",
-		shell.ColorRose,
+		fmtDeltaRate(passDelta),
+		deltaColor(passChange, favorableUp),
 		passRateSpark(summary),
 		shell.ColorRose,
 	)
 	o3 := o.kpiCell(cellW, "Cost / 100 runs",
 		dollars(summary.CostPer100Runs),
 		fmtDeltaCost(summary.CostSpark),
-		shell.ColorAmber,
+		deltaColor(costChange, favorableDown),
 		metricSpark(summary.CostSpark, summary.CostPer100Runs),
 		shell.ColorAmber,
 	)
 	o4 := o.kpiCell(cellW+rem, "p95 latency",
 		latency(summary.P95LatencyMs),
 		fmtDeltaLatency(summary.LatencySpark),
-		shell.ColorAmber,
+		deltaColor(latencyChange, favorableDown),
 		metricSpark(summary.LatencySpark, summary.P95LatencyMs),
 		shell.ColorAmber,
 	)
@@ -93,22 +104,12 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor col
 	return panelRect(cell, width, 5)
 }
 
-func (o *Overview) formatSeverityCounts() string {
-	c := o.overviewSummary().OpenInsightSeverityCounts
-	if len(c) == 0 {
-		return ""
+func deltaColor(change float64, favorable favorableDirection) color.Color {
+	if change == 0 {
+		return shell.ColorAmber
 	}
-	parts := make([]string, 0, 3)
-	if h := c["high"]; h > 0 {
-		parts = append(parts, fmt.Sprintf("%d high", h))
+	if (change > 0 && favorable == favorableUp) || (change < 0 && favorable == favorableDown) {
+		return shell.ColorGreen
 	}
-	// Accept both `medium` (canonical) and `med` (shorthand sometimes
-	// used by backend) so the chip never disappears due to naming drift.
-	if m := c["medium"] + c["med"]; m > 0 {
-		parts = append(parts, fmt.Sprintf("%d med", m))
-	}
-	if l := c["low"]; l > 0 {
-		parts = append(parts, fmt.Sprintf("%d low", l))
-	}
-	return strings.Join(parts, " · ")
+	return shell.ColorRose
 }

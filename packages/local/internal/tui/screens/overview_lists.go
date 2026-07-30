@@ -57,13 +57,12 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 	}
 
 	rows := o.insightList.Render(func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
-		// Row 1: bar + severity dot + ID + tag chip + title + target + age.
+		// Row: bar + severity dot + title + category + target + age + spark.
 		bar := "  "
 		if selected && o.focusedPanel == panelInsights {
 			bar = shell.SelectionBar(shell.SeverityColor(ins.Severity)) + " "
 		}
 		sev := kit.SeverityDot(ins.Severity)
-		id := shell.TextMuted.Render(padString3(truncate(ins.InsightID, 7), 7))
 		tag := ""
 		if len(ins.Tags) > 0 {
 			tag = shell.Teal.Render(padString3(truncate(ins.Tags[0], 12), 12))
@@ -80,13 +79,13 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		}
 		skW := lipgloss.Width(sk)
 
-		titleBudget := rowW - 8 - 7 - 13 - 13 - 5 - skW - 6
+		titleBudget := rowW - 2 - 2 - 13 - 13 - 5 - skW - 4
 		if titleBudget < 12 {
 			titleBudget = 12
 		}
-		title := shell.Text.Render(padString3(truncate(ins.Title, titleBudget), titleBudget))
+		title := shell.Text.Render(padString3(kit.TruncateWords(kit.SanitizeInline(ins.Title), titleBudget, "…"), titleBudget))
 
-		line1Parts := []string{bar, sev, " ", id, " ", tag, " ", title, " ", target, " ", ago}
+		line1Parts := []string{bar, sev, " ", title, " ", tag, " ", target, " ", ago}
 		if sk != "" {
 			line1Parts = append(line1Parts, "  ", sk)
 		}
@@ -123,17 +122,16 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 			prefix = shell.SelectionBar(shell.ColorTeal) + " "
 		}
 		dot := kit.StatusDot(r.Status)
-		id := shortID(inspectOperationID(r), 7)
-		target := truncate(r.TargetID, 14)
+		name := kit.SanitizeInline(firstNonEmpty(o.runNames[inspectOperationID(r)], r.TargetID, r.FlowID, r.RootPrimitive, inspectOperationID(r)))
+		name = kit.TruncateMiddle(name, 24, "…")
 		lat := durStr(r.DurationMs)
 		tok := formatTokensShort(r.TokenCount)
 		ago := relTimeUnix(r.StartedAt)
-		// Single-line row matching the design's run/<id> <target> <lat>·<tok> tok … <ago>
-		row := fmt.Sprintf("%s%s  %s  %s   %s · %s tok",
+		// Single-line row leads with the human name, falling back to stable ID.
+		row := fmt.Sprintf("%s%s  %s  %s · %s tok",
 			prefix,
 			dot,
-			shell.Text.Render(padString3("run/"+id, 16)),
-			shell.TextDim.Render(padString3(target, 14)),
+			shell.Text.Render(padString3(name, 24)),
 			shell.TextDim.Render(padString3(lat, 7)),
 			shell.TextDim.Render(padString3(tok, 6)),
 		)
@@ -197,5 +195,6 @@ func recentRunsMeta(runs []api.InspectRunRecord) string {
 			window = fmt.Sprintf("last %dd", int(d.Hours()/24)+1)
 		}
 	}
-	return fmt.Sprintf("%s · %d runs", window, len(runs))
+	count := len(runs)
+	return fmt.Sprintf("%s · %d %s", window, count, kit.Pluralize(count, "run"))
 }

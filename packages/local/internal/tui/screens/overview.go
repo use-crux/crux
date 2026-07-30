@@ -19,6 +19,7 @@ type Overview struct {
 	runsResource     *resource.Resource[[]api.InspectRunRecord]
 	activityResource *resource.Resource[[]api.InspectActivityEvent]
 	activityOverlay  []api.InspectActivityEvent
+	runNames         map[string]string
 
 	// Cross-pane cursor state. Overview is the workflow launchpad — j/k
 	// moves a cursor through the focused panel; h/l toggles the focused
@@ -139,7 +140,8 @@ func (o *Overview) Update(ctx context.Context, msg tea.Msg, client DataClient) t
 			o.insightList.SetItems(o.insightRows())
 		}
 	case runsLoadedMsg:
-		if o.runsResource.Apply(resource.ResourceResult[[]api.InspectRunRecord](m)) {
+		if o.runsResource.Apply(m.Result) {
+			o.runNames = m.Names
 			o.runList.SetItems(o.runRows())
 		}
 	case activityLoadedMsg:

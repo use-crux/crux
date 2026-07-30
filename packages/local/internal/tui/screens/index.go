@@ -179,7 +179,8 @@ func (s *Index) Breadcrumb() ([]string, string) {
 	if id := firstNonEmpty(s.unavailableDefinitionID, s.SelectedDefinitionID()); id != "" {
 		path = append(path, sanitizeIndexInline(id))
 	}
-	right := fmt.Sprintf("%d definitions", len(s.indexData().Definitions))
+	count := len(s.indexData().Definitions)
+	right := fmt.Sprintf("%d %s", count, kit.Pluralize(count, "definition"))
 	return path, right
 }
 

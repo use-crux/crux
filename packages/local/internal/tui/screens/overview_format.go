@@ -45,19 +45,31 @@ func durStr(p *float64) string {
 	return fmt.Sprintf("%.0fms", *p)
 }
 
-func fmtBaselineDelta(latest *float64, current *float64) string {
-	if latest == nil || current == nil {
+func fmtDeltaRate(series []float64) string {
+	change, ok := seriesDelta(series)
+	if !ok {
 		return ""
 	}
-	d := (*current - *latest) * 100
+	d := change * 100
 	if d == 0 {
-		return "= baseline"
+		return "no change"
 	}
 	sign := "+"
 	if d < 0 {
 		sign = ""
 	}
-	return fmt.Sprintf("%s%.1f pts vs baseline", sign, d)
+	return fmt.Sprintf("%s%.1f pts", sign, d)
+}
+
+func fmtDeltaCount(series []int) string {
+	if len(series) < 2 {
+		return ""
+	}
+	d := series[len(series)-1] - series[0]
+	if d == 0 {
+		return "no change"
+	}
+	return fmt.Sprintf("%+d", d)
 }
 
 func fmtDeltaCost(spark []float64) string {
@@ -93,6 +105,13 @@ func fmtDeltaLatency(spark []float64) string {
 	return fmt.Sprintf("%s%.0fms", sign, d)
 }
 
+func seriesDelta(series []float64) (float64, bool) {
+	if len(series) < 2 {
+		return 0, false
+	}
+	return series[len(series)-1] - series[0], true
+}
+
 func floatsFromInts(vs []int) []float64 {
 	out := make([]float64, len(vs))
 	for i, v := range vs {
@@ -114,6 +133,13 @@ func overviewSparkFromInts(vs []int, fallback int) []float64 {
 
 func passRateSpark(rec api.InspectOverviewRecord) []float64 {
 	return passRateHistory(rec)
+}
+
+func passRateDeltaSeries(rec api.InspectOverviewRecord) []float64 {
+	if len(rec.PassRateHistory) > 0 {
+		return rec.PassRateHistory
+	}
+	return rec.PassRateSpark
 }
 
 func passRateHistory(rec api.InspectOverviewRecord) []float64 {

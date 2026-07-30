@@ -103,16 +103,18 @@ func TestOverviewAcceptedRunsRefreshPreservesStableSelectionAndVisibility(t *tes
 		{TraceID: "run-a"}, {TraceID: "run-b"}, {TraceID: "run-c"},
 	}
 	_, token := overview.runsResource.Begin(testContext, overviewRunsOwner, 0)
-	overview.Update(testContext, runsLoadedMsg(resource.ResourceResult[[]api.InspectRunRecord]{
-		Token: token,
-		Value: refreshed,
-	}), nil)
+	overview.Update(testContext, runsLoadedMsg{
+		Result: resource.ResourceResult[[]api.InspectRunRecord]{
+			Token: token,
+			Value: refreshed,
+		},
+	}, nil)
 
 	if got := overview.SelectedRunID(); got != "keep-me" {
 		t.Fatalf("selected run after accepted refresh = %q, want stable ID keep-me", got)
 	}
 	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
-	if !strings.Contains(view, "keep-me") {
+	if !strings.Contains(view, "selected-target") {
 		t.Fatalf("accepted refresh did not keep selected run visible:\n%s", view)
 	}
 }

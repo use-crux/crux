@@ -60,7 +60,7 @@ func (w *Workbench) statusBadge() shell.StatusBadge {
 			count = 1
 		}
 		return shell.StatusBadge{
-			Full:    fmt.Sprintf("⚠ %d %s · ! details", count, plural(count, "issue", "issues")),
+			Full:    fmt.Sprintf("⚠ %d %s · ! details", count, kit.Pluralize(count, "issue")),
 			Compact: fmt.Sprintf("⚠%d !", count),
 			Warning: true,
 		}

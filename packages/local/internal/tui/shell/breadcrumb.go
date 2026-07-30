@@ -20,7 +20,7 @@ func Breadcrumb(width int, path []string, right string) string {
 	}
 	dim := lipgloss.NewStyle().Foreground(ColorTextDim)
 	muted := lipgloss.NewStyle().Foreground(ColorTextMuted)
-	emphasized := lipgloss.NewStyle().Foreground(ColorText)
+	active := lipgloss.NewStyle().Foreground(ColorTeal)
 
 	cleanPath := make([]string, 0, len(path))
 	for _, part := range path {
@@ -40,7 +40,7 @@ func Breadcrumb(width int, path []string, right string) string {
 			parts = append(parts, muted.Render(" / "))
 		}
 		if i == len(cleanPath)-1 {
-			parts = append(parts, emphasized.Render(p))
+			parts = append(parts, active.Render(p))
 		} else {
 			parts = append(parts, dim.Render(p))
 		}

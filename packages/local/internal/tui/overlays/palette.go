@@ -181,7 +181,8 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	)
 	count := ""
 	if len(p.filtered) > 0 {
-		count = fmt.Sprintf("%d results · %d / %d", len(p.filtered), p.cursor+1, len(p.filtered))
+		resultCount := len(p.filtered)
+		count = fmt.Sprintf("%d %s · %d / %d", resultCount, kit.Pluralize(resultCount, "result"), p.cursor+1, resultCount)
 	} else {
 		count = "no matches"
 	}

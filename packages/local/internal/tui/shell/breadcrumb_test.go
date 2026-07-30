@@ -41,6 +41,18 @@ func TestBreadcrumbDropsRightmostMetaSegmentsWhole(t *testing.T) {
 	}
 }
 
+func TestBreadcrumbAccentsOnlyActiveTail(t *testing.T) {
+	got := Breadcrumb(60, []string{"runs", "Refund answer"}, "")
+	tealRun := Teal.Render("runs")
+	tealTail := Teal.Render("Refund answer")
+	if strings.Contains(got, tealRun) {
+		t.Fatalf("breadcrumb accented parent segment:\n%q", got)
+	}
+	if !strings.Contains(got, tealTail) {
+		t.Fatalf("breadcrumb did not accent active tail:\n%q", got)
+	}
+}
+
 func TestFrameScreenKeepsSingleRuleBeforeLeadingPane(t *testing.T) {
 	width := 60
 	screen := horizontalBorderDim(width) + "\ncontent"
