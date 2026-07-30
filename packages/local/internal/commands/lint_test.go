@@ -2,12 +2,17 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/oneshot"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -78,6 +83,51 @@ func TestSelectLintFindingsRejectsUnknownProfile(t *testing.T) {
 	_, err := selectLintFindings(nil, lintSelectionOptions{profile: "surprise"})
 	if err == nil {
 		t.Fatal("expected unknown profile error")
+	}
+}
+
+func TestLintInputErrorsExitTwoBeforeIndexing(t *testing.T) {
+	original := runProjectIndexForCommand
+	defer func() { runProjectIndexForCommand = original }()
+	called := false
+	runProjectIndexForCommand = func(context.Context, oneshot.Options) (oneshot.Result, error) {
+		called = true
+		return oneshot.Result{}, nil
+	}
+
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "profile",
+			args: []string{"--profile", "bad"},
+			want: `crux lint: unknown lint profile "bad" (expected off, recommended, strict, or experimental)`,
+		},
+		{
+			name: "fail-on",
+			args: []string{"--fail-on", "bad"},
+			want: `crux lint: unknown --fail-on severity "bad" (expected error, warning, or info)`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called = false
+			var out, errOut bytes.Buffer
+			cmd := NewLintCmd(cli.NewFactoryWithStreams(output.NewTestIO(&out, &errOut, output.TestIOOptions{})))
+			cmd.SetArgs(test.args)
+			err := cmd.Execute()
+			var exit domain.ExitError
+			if !errors.As(err, &exit) || exit.Code != 2 {
+				t.Fatalf("error = %v, want exit code 2", err)
+			}
+			if called {
+				t.Fatal("Project Index worker ran before lint input validation")
+			}
+			if strings.TrimSpace(errOut.String()) != test.want {
+				t.Fatalf("stderr = %q, want %q", errOut.String(), test.want)
+			}
+		})
 	}
 }
 

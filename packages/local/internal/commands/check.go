@@ -64,6 +64,7 @@ func NewCheckCmd(f *cli.Factory) *cobra.Command {
 		Long:  "Compile the Project Index once without a running dev server, then report compiler diagnostics and authored-system findings.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts.json = f.JSONOutput(opts.json)
 			return runCheck(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
 		},
 	}

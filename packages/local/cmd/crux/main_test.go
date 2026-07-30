@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -50,6 +52,8 @@ func TestRootHelpNamesEvalAsCanonicalSurfaceAndRemovesQuality(t *testing.T) {
 		"Run Evals and inspect Eval runs and Baselines",
 		"flows",
 		"List runtime flow sessions",
+		"index",
+		"List every current Catalog definition",
 		"Run crux eval --help for the Eval workflow",
 	} {
 		if !strings.Contains(text, want) {
@@ -63,6 +67,46 @@ func TestRootHelpNamesEvalAsCanonicalSurfaceAndRemovesQuality(t *testing.T) {
 		strings.Contains(text, "Run prompt and flow evals") ||
 		strings.Contains(text, "List past eval runs") {
 		t.Fatalf("root help still advertises legacy evals wording:\n%s", text)
+	}
+}
+
+func TestRootJSONFlagIsPersistentAndRejectsUnsupportedCommandsClearly(t *testing.T) {
+	root := newRootCommand(&cli.Factory{})
+	for _, path := range [][]string{
+		{"traces"},
+		{"catalog", "show"},
+		{"runtime", "status"},
+		{"eval"},
+		{"eval", "list"},
+		{"eval", "show"},
+	} {
+		command, _, err := root.Find(path)
+		if err != nil {
+			t.Fatalf("find %v: %v", path, err)
+		}
+		if !commandSupportsJSON(command) {
+			t.Errorf("%s should support global JSON", command.CommandPath())
+		}
+	}
+	baseline, _, err := root.Find([]string{"eval", "baseline", "set"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandSupportsJSON(baseline) {
+		t.Error("eval baseline set should reject global JSON until it has JSON output")
+	}
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"--json", "dev"})
+	err = root.Execute()
+	var exit domain.ExitError
+	if !errors.As(err, &exit) || exit.Code != 2 {
+		t.Fatalf("unsupported JSON error = %v, want exit code 2", err)
+	}
+	if strings.TrimSpace(out.String()) != "crux dev has no JSON output yet" {
+		t.Fatalf("unsupported JSON output = %q", out.String())
 	}
 }
 

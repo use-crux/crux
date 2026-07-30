@@ -21,12 +21,20 @@ type Factory struct {
 	Port int
 	// NoColor disables colored output when true (set via --no-color flag).
 	NoColor bool
+	// JSON requests machine-readable output from commands that support it.
+	JSON bool
 
 	clientOnce sync.Once
 	client     *api.Client
 
 	ioOnce sync.Once
 	io     *output.IO
+}
+
+// JSONOutput combines the root persistent flag with a command-local
+// compatibility flag.
+func (f *Factory) JSONOutput(local bool) bool {
+	return f.JSON || local
 }
 
 // NewFactoryWithStreams builds a Factory whose command output is routed

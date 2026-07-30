@@ -40,7 +40,7 @@ func NewCatalogCmd(f *cli.Factory) *cobra.Command {
   crux catalog import .crux/project-index.manifest.json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runCatalogList(cmd.Context(), f, kind, jsonOutput)
+			return runCatalogList(cmd.Context(), f, kind, f.JSONOutput(jsonOutput))
 		},
 	}
 	catalog.Flags().StringVar(&kind, "kind", "", "Filter definitions by exact kind")
@@ -57,7 +57,7 @@ func NewCatalogCmd(f *cli.Factory) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store := manifeststore.New(projectroot.Dir())
-			return runCatalogImport(cmd.Context(), f.Streams(), store, args[0], jsonOutput)
+			return runCatalogImport(cmd.Context(), f.Streams(), store, args[0], f.JSONOutput(jsonOutput))
 		},
 	}
 	catalog.AddCommand(importCmd)

@@ -42,6 +42,7 @@ func NewManifestCmd(f *cli.Factory) *cobra.Command {
 		Short: "Build a content-addressed Project Index deployment manifest",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts.json = f.JSONOutput(opts.json)
 			return runManifest(cmd.Context(), f.Streams(), opts, compileDeploymentManifest)
 		},
 	}

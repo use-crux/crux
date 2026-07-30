@@ -45,6 +45,21 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 		t.Fatalf("stats = %#v", stats)
 	}
 
+	costEvents := service.CostEvents(ctx)
+	if len(costEvents) != 1 || costEvents[0].Kind != "report" {
+		t.Fatalf("cost events = %#v, want one observability-derived report", costEvents)
+	}
+	report := costEvents[0].Report
+	if total := report["total"].(map[string]any)["cost"]; total != 0.00042 {
+		t.Fatalf("cost report total = %v, want stats total %v", total, stats.TotalCost)
+	}
+	if byModel := report["byModel"].(map[string]any); byModel["gpt-4o"] == nil {
+		t.Fatalf("cost report byModel = %#v, want gpt-4o", byModel)
+	}
+	if byPrompt := report["byPrompt"].(map[string]any); byPrompt["support.reply"] == nil {
+		t.Fatalf("cost report byPrompt = %#v, want support.reply", byPrompt)
+	}
+
 	usage := service.PromptUsage(ctx)
 	if usage["support.reply"].Count != 1 || usage["support.reply"].TotalCost != 0.00042 {
 		t.Fatalf("prompt usage = %#v", usage)

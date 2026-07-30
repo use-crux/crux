@@ -35,16 +35,17 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 			ctx := cmd.Context()
 			c := f.Client()
 			io := f.Streams()
+			jsonOut := f.JSONOutput(jsonOutput)
 
 			if len(args) == 1 {
-				return showTraceDetail(io, ctx, c, args[0], jsonOutput)
+				return showTraceDetail(io, ctx, c, args[0], jsonOut)
 			}
 
 			if live {
-				return tailTraces(io, ctx, c, promptFilter, sessionFilter, jsonOutput)
+				return tailTraces(io, ctx, c, promptFilter, sessionFilter, jsonOut)
 			}
 
-			return listTraces(io, ctx, c, promptFilter, sessionFilter, jsonOutput)
+			return listTraces(io, ctx, c, promptFilter, sessionFilter, jsonOut)
 		},
 	}
 

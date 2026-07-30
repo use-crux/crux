@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -31,7 +32,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 			if len(args) == 1 {
 				filter = args[0]
 			}
-			return runIndexCompatibility(cmd.Context(), f, filter, jsonOutput)
+			return runIndexCompatibility(cmd.Context(), f, filter, f.JSONOutput(jsonOutput))
 		},
 	}
 
@@ -57,7 +58,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 			if err := c.PostJSON(cmd.Context(), "/api/project/index/reindex", req, &index); err != nil {
 				return err
 			}
-			if jsonOutput {
+			if f.JSONOutput(jsonOutput) {
 				return f.Streams().WriteJSON(index)
 			}
 			io := f.Streams()
@@ -97,6 +98,12 @@ func indexCompatibilityRoute(argument string) indexRoute {
 	if argument == "" {
 		return indexRoute{mode: "catalog-list", path: "/api/catalog"}
 	}
+	if kind, ok := indexCatalogKind(argument); ok {
+		return indexRoute{
+			mode: "catalog-kind",
+			path: "/api/catalog?" + url.Values{"kind": []string{kind}}.Encode(),
+		}
+	}
 	if isIndexCategory(argument) {
 		return indexRoute{mode: "legacy-category", path: "/api/index"}
 	}
@@ -107,16 +114,23 @@ func runIndexCompatibility(ctx context.Context, f *cli.Factory, filter string, j
 	route := indexCompatibilityRoute(filter)
 	switch route.mode {
 	case "catalog-list":
-		return runCatalogList(ctx, f, "", jsonOutput)
+		return runCatalogListWithHeader(ctx, f, "", jsonOutput, "index")
+	case "catalog-kind":
+		kind, _ := indexCatalogKind(filter)
+		return runCatalogListWithHeader(ctx, f, kind, jsonOutput, "index")
 	case "catalog-show":
-		var definition api.CatalogDefinitionV1
-		if err := f.Client().GetJSON(ctx, route.path, &definition); err != nil {
+		id, err := resolveCatalogDefinitionID(ctx, f.Client(), filter)
+		if err != nil {
 			return err
+		}
+		var definition api.CatalogDefinitionV1
+		if err := f.Client().GetJSON(ctx, catalogDefinitionPath(id), &definition); err != nil {
+			return catalogReadError(filter, err)
 		}
 		if jsonOutput {
 			return writeCatalogJSON(f, definition)
 		}
-		printCatalogDefinition(f.Streams(), definition)
+		printCatalogDefinitionWithHeader(f.Streams(), definition, "index show")
 		return nil
 	default:
 		return runLegacyIndexCategory(ctx, f, filter, jsonOutput)
@@ -148,10 +162,23 @@ func runLegacyIndexCategory(ctx context.Context, f *cli.Factory, filter string, 
 
 func isIndexCategory(value string) bool {
 	switch value {
-	case "prompts", "contexts", "tools", "definitions", "diagnostics":
+	case "definitions", "diagnostics":
 		return true
 	default:
 		return false
+	}
+}
+
+func indexCatalogKind(value string) (string, bool) {
+	switch value {
+	case "prompts":
+		return "prompt", true
+	case "contexts":
+		return "context", true
+	case "tools":
+		return "tool", true
+	default:
+		return "", false
 	}
 }
 

@@ -2,6 +2,7 @@ package evalcmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,26 @@ func TestEvalListStreamGolden(t *testing.T) {
 	}
 	if out.String() != string(want) {
 		t.Fatalf("eval list golden mismatch\n--- want\n%s\n--- got\n%s", want, out.String())
+	}
+}
+
+func TestEvalCoordinatorJSONIsOneDocumentWithEventsAndExitCode(t *testing.T) {
+	input := `{"type":"collect:done","evals":[{"id":"support","sourceKey":{"relativeFile":"evals/support.eval.ts"},"cases":[{}]}],"errors":[]}` + "\n" +
+		`{"type":"run:done","exitCode":0}` + "\n"
+	var out bytes.Buffer
+	exitCode, err := consumeJSONStreamWithConfirmation(&out, strings.NewReader(input), nil)
+	if err != nil || exitCode != 0 {
+		t.Fatalf("consumeJSONStreamWithConfirmation = (%d, %v)", exitCode, err)
+	}
+	var payload struct {
+		Events   []json.RawMessage `json:"events"`
+		ExitCode int               `json:"exitCode"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("JSON output is invalid: %v\n%s", err, out.String())
+	}
+	if payload.ExitCode != 0 || len(payload.Events) != 2 || !bytes.Contains(payload.Events[0], []byte(`"support"`)) {
+		t.Fatalf("JSON payload = %#v", payload)
 	}
 }
 

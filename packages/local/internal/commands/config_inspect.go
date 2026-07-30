@@ -74,7 +74,7 @@ side effects) so explicit overrides are reflected, not just defaults.`,
 			if err != nil {
 				return err
 			}
-			if opts.jsonOutput {
+			if f.JSONOutput(opts.jsonOutput) {
 				return writePrettyJSON(io.Out, config)
 			}
 			return printConfigInspect(io, config)

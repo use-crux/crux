@@ -74,6 +74,57 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 	}
 }
 
+func observabilityCostReport(ctx context.Context, obs *observability.Service) (store.CostEventData, bool) {
+	runs, err := observabilityReadModelRuns(ctx, obs)
+	if err != nil {
+		return store.CostEventData{}, false
+	}
+
+	total := 0.0
+	latest := int64(0)
+	byModel := map[string]any{}
+	byPrompt := map[string]any{}
+	for _, run := range runs {
+		switch normalizedStatus(run.Status) {
+		case "ok", "error", "running":
+		default:
+			continue
+		}
+		cost := floatMetric(rawMap(run.Metrics), "costUsd", "cost")
+		if cost == 0 {
+			continue
+		}
+		total += cost
+		latest = max(latest, parseUnixMillis(run.StartedAt))
+		addCostReportGroup(byModel, run.Model, cost)
+		addCostReportGroup(byPrompt, run.PromptID, cost)
+	}
+	if total == 0 {
+		return store.CostEventData{}, false
+	}
+	return store.CostEventData{
+		Kind:      "report",
+		Timestamp: latest,
+		Report: map[string]any{
+			"total":    map[string]any{"cost": total},
+			"byModel":  byModel,
+			"byPrompt": byPrompt,
+		},
+	}, true
+}
+
+func addCostReportGroup(group map[string]any, key string, cost float64) {
+	if key == "" {
+		return
+	}
+	entry, _ := group[key].(map[string]any)
+	if entry == nil {
+		entry = map[string]any{}
+		group[key] = entry
+	}
+	entry["cost"] = floatMetric(entry, "cost") + cost
+}
+
 func observabilityTimeseries(ctx context.Context, obs *observability.Service, buckets int) []store.TimeseriesBucket {
 	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil || len(runs) == 0 || buckets <= 0 {

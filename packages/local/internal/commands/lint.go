@@ -43,6 +43,11 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
   crux lint --fail-on warning
   crux lint --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.json = f.JSONOutput(opts.json)
+			if err := validateLintOptions(opts); err != nil {
+				fmt.Fprintf(f.Streams().Err, "crux lint: %v\n", err)
+				return domain.ExitError{Code: 2}
+			}
 			if opts.server {
 				var index api.IndexData
 				if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
@@ -63,6 +68,16 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.projectID, "project-id", "", "Optional project identity for display and cache scoping")
 	cmd.Flags().BoolVar(&opts.server, "server", false, "Read findings from the running devtools server instead of indexing once")
 	return cmd
+}
+
+func validateLintOptions(opts lintOptions) error {
+	if _, err := selectLintFindings(nil, lintSelectionOptions{profile: opts.profile}); err != nil {
+		return err
+	}
+	if _, err := lintGateFailures(nil, opts.failOn); err != nil {
+		return err
+	}
+	return nil
 }
 
 func runLint(ctx context.Context, io *output.IO, opts lintOptions, run projectIndexRunFunc) error {

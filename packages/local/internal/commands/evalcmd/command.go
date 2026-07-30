@@ -17,6 +17,7 @@ type runOptions struct {
 	fresh     bool
 	offline   bool
 	plan      bool
+	json      bool
 	maxCost   float64
 }
 
@@ -55,6 +56,7 @@ func registerRunFlags(cmd *cobra.Command, opts *runOptions) {
 	cmd.Flags().BoolVar(&opts.fresh, "fresh", false, "Bypass reusable task and managed-scorer evidence")
 	cmd.Flags().BoolVar(&opts.offline, "offline", false, "Require exact external evidence before all work")
 	cmd.Flags().BoolVar(&opts.plan, "plan", false, "Print admitted actions without execution or writes")
+	cmd.Flags().BoolVar(&opts.json, "json", false, "Output coordinator events as JSON")
 	cmd.Flags().Float64Var(&opts.maxCost, "max-cost", 0, "Maximum admitted external cost in USD")
 }
 
@@ -76,16 +78,18 @@ func newRunCmd(f *cli.Factory) *cobra.Command {
 
 func newListCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:          "list",
 		Short:        "List discovered Evals",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runCoordinator(f.Streams(), cwd, []string{"--list"})
+			return runCoordinator(f.Streams(), cwd, []string{"--list"}, f.JSONOutput(jsonOutput))
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for Eval discovery")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output coordinator events as JSON")
 	return cmd
 }
 
@@ -106,7 +110,7 @@ func newBaselineCmd(f *cli.Factory) *cobra.Command {
 			if acceptFailing {
 				workerArgs = append(workerArgs, "--accept-failing")
 			}
-			return runCoordinator(f.Streams(), cwd, workerArgs)
+			return runCoordinator(f.Streams(), cwd, workerArgs, false)
 		},
 	}
 	set.Flags().StringVar(&cwd, "cwd", "", "Working directory containing the Eval run")
@@ -122,6 +126,9 @@ func validateRunOptions(opts runOptions, maxCostSet bool) error {
 	}
 	if opts.watch && opts.plan {
 		return fmt.Errorf("--watch and --plan cannot be combined")
+	}
+	if opts.watch && opts.json {
+		return fmt.Errorf("eval --watch has no JSON output yet")
 	}
 	if len(opts.variants) > 1 {
 		return fmt.Errorf("--variant selects one blocking Variant; pass it at most once")

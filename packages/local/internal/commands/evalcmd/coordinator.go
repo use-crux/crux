@@ -121,7 +121,7 @@ type evalRunEvent struct {
 	} `json:"cells"`
 }
 
-func runCoordinator(streams *output.IO, cwd string, args []string) error {
+func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bool) error {
 	node, err := assets.FindNode()
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func runCoordinator(streams *output.IO, cwd string, args []string) error {
 		return err
 	}
 	go func() { _, _ = io.Copy(streams.Err, stderr) }()
-	exitCode, streamErr := consumeStreamWithConfirmation(streams.Out, stdout, func() error {
+	confirm := func() error {
 		confirmed, confirmErr := confirmUnknownCost(streams)
 		if confirmErr != nil {
 			return confirmErr
@@ -163,7 +163,14 @@ func runCoordinator(streams *output.IO, cwd string, args []string) error {
 		}
 		_, writeErr := fmt.Fprintln(stdin, answer)
 		return writeErr
-	})
+	}
+	var exitCode int
+	var streamErr error
+	if jsonOutput {
+		exitCode, streamErr = consumeJSONStreamWithConfirmation(streams.Out, stdout, confirm)
+	} else {
+		exitCode, streamErr = consumeStreamWithConfirmation(streams.Out, stdout, confirm)
+	}
 	_ = stdin.Close()
 	waitErr := child.Wait()
 	if streamErr != nil {
@@ -180,26 +187,11 @@ func consumeStream(out io.Writer, stream io.Reader) (int, error) {
 }
 
 func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func() error) (int, error) {
-	exitCode := 2
-	preExecutionFailed := false
 	unattestedGuidance := make(map[string]bool)
 	sourceGuidance := make(map[string]bool)
 	taskBindingGuidance := make(map[string]bool)
-	scanner := bufio.NewScanner(stream)
-	scanner.Buffer(make([]byte, 0, 1024*1024), evalCoordinatorMaxEventBytes)
-	for scanner.Scan() {
-		var event coordinatorEvent
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return 2, fmt.Errorf("invalid Eval coordinator event: %w", err)
-		}
+	return scanCoordinatorStream(stream, confirm, func(_ json.RawMessage, event coordinatorEvent) error {
 		switch event.Type {
-		case "cost:confirmation-required":
-			if confirm == nil {
-				return 2, fmt.Errorf("Eval coordinator requested unavailable cost confirmation")
-			}
-			if err := confirm(); err != nil {
-				return 2, err
-			}
 		case "collect:done":
 			for _, discovered := range event.Evals {
 				_, _ = fmt.Fprintf(out, "%s\t%d Cases\t%s\n", discovered.ID, len(discovered.Cases), discovered.SourceKey.RelativeFile)
@@ -207,7 +199,6 @@ func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func
 			for _, problem := range event.Errors {
 				_, _ = fmt.Fprintln(out, problem.Message)
 			}
-			preExecutionFailed = len(event.Errors) > 0
 		case "eval:plan":
 			renderEvalPlan(out, event.EvalID, event.Plan)
 			if planHasUnattestedModel(event.Plan) {
@@ -236,7 +227,6 @@ func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func
 				taskBindingGuidance[event.EvalID] = true
 			}
 		case "error":
-			preExecutionFailed = true
 			if event.Message != "" {
 				_, _ = fmt.Fprintln(out, event.Message)
 			}
@@ -247,10 +237,70 @@ func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func
 		case "baseline:done":
 			_, _ = fmt.Fprintf(out, "Baseline written to %s\n", event.Path)
 		case "run:done":
-			exitCode = event.ExitCode
 			if len(event.RunIDs) > 0 {
 				_, _ = fmt.Fprintf(out, "%d Eval run(s) saved\n", len(event.RunIDs))
 			}
+		}
+		return nil
+	})
+}
+
+func consumeJSONStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func() error) (int, error) {
+	events := []json.RawMessage{}
+	exitCode, err := scanCoordinatorStream(stream, confirm, func(raw json.RawMessage, _ coordinatorEvent) error {
+		events = append(events, append(json.RawMessage(nil), raw...))
+		return nil
+	})
+	if err != nil {
+		return exitCode, err
+	}
+	payload := struct {
+		Events   []json.RawMessage `json:"events"`
+		ExitCode int               `json:"exitCode"`
+	}{
+		Events:   events,
+		ExitCode: exitCode,
+	}
+	encoder := json.NewEncoder(out)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(payload); err != nil {
+		return exitCode, err
+	}
+	return exitCode, nil
+}
+
+func scanCoordinatorStream(
+	stream io.Reader,
+	confirm func() error,
+	handle func(json.RawMessage, coordinatorEvent) error,
+) (int, error) {
+	exitCode := 2
+	preExecutionFailed := false
+	scanner := bufio.NewScanner(stream)
+	scanner.Buffer(make([]byte, 0, 1024*1024), evalCoordinatorMaxEventBytes)
+	for scanner.Scan() {
+		raw := append(json.RawMessage(nil), scanner.Bytes()...)
+		var event coordinatorEvent
+		if err := json.Unmarshal(raw, &event); err != nil {
+			return 2, fmt.Errorf("invalid Eval coordinator event: %w", err)
+		}
+		switch event.Type {
+		case "cost:confirmation-required":
+			if confirm == nil {
+				return 2, fmt.Errorf("Eval coordinator requested unavailable cost confirmation")
+			}
+			if err := confirm(); err != nil {
+				return 2, err
+			}
+		case "collect:done":
+			preExecutionFailed = len(event.Errors) > 0
+		case "error":
+			preExecutionFailed = true
+		case "run:done":
+			exitCode = event.ExitCode
+		}
+		if err := handle(raw, event); err != nil {
+			return 2, err
 		}
 	}
 	if err := scanner.Err(); err != nil {

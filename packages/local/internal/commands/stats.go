@@ -24,9 +24,10 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			c := f.Client()
+			jsonOut := f.JSONOutput(jsonOutput)
 
 			if live {
-				return liveStats(ctx, c, f.Streams(), jsonOutput)
+				return liveStats(ctx, c, f.Streams(), jsonOut)
 			}
 
 			var stats api.Stats
@@ -34,7 +35,7 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 				return err
 			}
 
-			if jsonOutput {
+			if jsonOut {
 				return f.Streams().WriteJSON(stats)
 			}
 

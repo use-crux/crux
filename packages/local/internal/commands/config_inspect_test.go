@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -93,6 +95,30 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("JSON output contains ANSI styling: %q", out.String())
+	}
+}
+
+func TestConfigInspectDefaultRootStopsAtNearestPackageBoundary(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "crux.config.ts"), []byte("export default {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(workspace, "packages", "demo")
+	nested := filepath.Join(project, "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"name":"demo"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(nested)
+
+	root, err := resolveConfigInspectRoot("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != project {
+		t.Fatalf("default root = %q, want nearest package %q", root, project)
 	}
 }
 

@@ -27,12 +27,54 @@ func TestConfigFileFromMatchesCompilerConfigNamesAndOrdering(t *testing.T) {
 	}
 }
 
+func TestDirFromStopsAtNearestConfigOrPackageBoundary(t *testing.T) {
+	workspace := t.TempDir()
+	writeConfig(t, filepath.Join(workspace, "crux.config.ts"))
+	writeConfig(t, filepath.Join(workspace, "packages", "configured", "crux.config.js"))
+	writePackage(t, filepath.Join(workspace, "packages", "configured", "package.json"))
+	writePackage(t, filepath.Join(workspace, "packages", "plain", "package.json"))
+
+	tests := []struct {
+		name  string
+		start string
+		want  string
+	}{
+		{
+			name:  "near package beats workspace config",
+			start: filepath.Join(workspace, "packages", "plain", "src"),
+			want:  filepath.Join(workspace, "packages", "plain"),
+		},
+		{
+			name:  "config wins at same boundary",
+			start: filepath.Join(workspace, "packages", "configured", "src"),
+			want:  filepath.Join(workspace, "packages", "configured"),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := DirFrom(test.start); got != test.want {
+				t.Fatalf("DirFrom(%q) = %q, want %q", test.start, got, test.want)
+			}
+		})
+	}
+}
+
 func writeConfig(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte("export default {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writePackage(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"private":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -25,7 +26,7 @@ counts, dropped contexts).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			c := f.Client()
-			promptID := args[0]
+			promptID := normalizeInspectPromptID(args[0])
 
 			runs, err := c.ObservabilityRuns(ctx)
 			if err != nil {
@@ -53,7 +54,7 @@ counts, dropped contexts).`,
 				return fmt.Errorf("run %q not found", found.RunID)
 			}
 
-			if jsonOutput {
+			if f.JSONOutput(jsonOutput) {
 				return f.Streams().WriteJSON(detail)
 			}
 
@@ -64,6 +65,10 @@ counts, dropped contexts).`,
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	return cmd
+}
+
+func normalizeInspectPromptID(id string) string {
+	return strings.TrimPrefix(id, "prompt:")
 }
 
 // printInspect renders the token breakdown for a prompt under a branded header:

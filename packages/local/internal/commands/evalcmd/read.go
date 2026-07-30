@@ -15,6 +15,7 @@ import (
 
 func newShowCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:          "show <eval-run-id>",
 		Short:        "Inspect a saved Eval run",
@@ -29,10 +30,14 @@ func newShowCmd(f *cli.Factory) *cobra.Command {
 			if !found {
 				return fmt.Errorf("Eval run %q was not found under %s", args[0], root)
 			}
+			if f.JSONOutput(jsonOutput) {
+				return f.Streams().WriteJSON(raw)
+			}
 			return renderSavedRun(f.Streams().Out, raw)
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Project root containing the Eval run")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the saved Eval run as JSON")
 	return cmd
 }
 
