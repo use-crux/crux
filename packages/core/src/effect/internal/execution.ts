@@ -16,7 +16,10 @@ import type {
   EffectScopeRef,
 } from "../types";
 import { CruxEffectError } from "../errors";
-import { createImplicitRootBoundary } from "./boundary";
+import {
+  createImplicitRootBoundary,
+  currentEffectBoundary,
+} from "./boundary";
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
 import { createEffectOccurrence } from "./occurrence";
@@ -56,17 +59,35 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   args: readonly [] | readonly [input: TInput],
   options?: EffectRuntimeOptions<TInput, TOutput>,
 ): Promise<EffectExecutionResult<TOutput>> {
-  const boundary = createImplicitRootBoundary();
+  const explicitBoundary = currentEffectBoundary();
+  if (
+    explicitBoundary?.recovery === "required" &&
+    !options?.recover
+  ) {
+    throw new CruxEffectError({
+      code: "EFFECT_RECOVERY_REQUIRED",
+      message:
+        `Effect \`${definition.id}\` cannot run in required-recovery ` +
+        `boundary \`${explicitBoundary.ref.id}\`. Define recovery, move ` +
+        "the effect out of this boundary, or use " +
+        "`{ recovery: 'best-effort' }`.",
+    });
+  }
+  const boundary =
+    explicitBoundary?.ref ?? createImplicitRootBoundary();
+  const ownsBoundary = explicitBoundary === undefined;
   const occurrence = createEffectOccurrence(
     boundary,
     definition.id,
     definition.version,
   );
-  effectLedger.registerScope({
-    ref: boundary,
-    status: "open",
-    unitIds: [],
-  });
+  if (ownsBoundary) {
+    effectLedger.registerScope({
+      ref: boundary,
+      status: "open",
+      unitIds: [],
+    });
+  }
   const receipt = effectLedger.createReceipt({
     id: occurrence.receiptId,
     effectId: definition.id,
@@ -100,7 +121,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       completedAt: Date.now(),
       error: summarizeError(failure),
     });
-    closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitBoundary(boundary);
     throw failure;
   }
 
@@ -127,7 +148,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         completedAt: Date.now(),
         error: summarizeError(failure),
       });
-      closeImplicitBoundary(boundary);
+      if (ownsBoundary) closeImplicitBoundary(boundary);
       throw failure;
     }
   }
@@ -204,7 +225,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         : {}),
       completedAt: Date.now(),
     });
-    closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitBoundary(boundary);
     return Object.freeze({
       output,
       receipt: ref,
@@ -215,7 +236,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       completedAt: Date.now(),
       error: summarizeError(error),
     });
-    closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitBoundary(boundary);
     throw error;
   }
 }

@@ -13,6 +13,18 @@ import type {
 } from "./types";
 
 /**
+ * Internal recovery settlement retaining the raw handler error.
+ *
+ * @internal
+ */
+export interface EffectRecoveryAttempt {
+  /** Public unit result. */
+  readonly result: RecoveryUnitResult;
+  /** Raw handler error, when recovery failed. */
+  readonly error?: unknown;
+}
+
+/**
  * Recover the single recovery unit owned by a receipt.
  *
  * @param receipt - Receipt produced by a recoverable effect.
@@ -31,6 +43,18 @@ export async function recover(
   receipt: EffectReceiptRef,
   options?: RecoverOptions,
 ): Promise<RecoveryUnitResult> {
+  return (await recoverEffectReceiptAttempt(receipt, options)).result;
+}
+
+/**
+ * Recover one receipt while retaining a raw handler error for boundaries.
+ *
+ * @internal
+ */
+export async function recoverEffectReceiptAttempt(
+  receipt: EffectReceiptRef,
+  options?: RecoverOptions,
+): Promise<EffectRecoveryAttempt> {
   assertReceiptRef(receipt);
   const storedReceipt = effectLedger.getReceipt(receipt.id);
   if (
@@ -46,15 +70,17 @@ export async function recover(
     : undefined;
   if (!unit) {
     return Object.freeze({
-      unitId: unitId ?? `effect-unit:${storedReceipt.id}`,
-      effectIds: [storedReceipt.effectId],
-      ...(storedReceipt.resource === undefined
-        ? {}
-        : { resource: storedReceipt.resource }),
-      status:
-        storedReceipt.recovery === "irreversible"
-          ? "irreversible"
-          : "unavailable",
+      result: Object.freeze({
+        unitId: unitId ?? `effect-unit:${storedReceipt.id}`,
+        effectIds: [storedReceipt.effectId],
+        ...(storedReceipt.resource === undefined
+          ? {}
+          : { resource: storedReceipt.resource }),
+        status:
+          storedReceipt.recovery === "irreversible"
+            ? "irreversible"
+            : "unavailable",
+      }),
     });
   }
   if (unit.receiptIds.length !== 1) {
@@ -66,12 +92,24 @@ export async function recover(
     });
   }
   if (unit.status === "recovered") {
-    return unitResult(unit, storedReceipt.resource, "already_recovered");
+    return Object.freeze({
+      result: unitResult(
+        unit,
+        storedReceipt.resource,
+        "already_recovered",
+      ),
+    });
   }
 
   const envelope = effectLedger.getEnvelope(storedReceipt.id);
   if (!envelope) {
-    return unitResult(unit, storedReceipt.resource, "unavailable");
+    return Object.freeze({
+      result: unitResult(
+        unit,
+        storedReceipt.resource,
+        "unavailable",
+      ),
+    });
   }
 
   effectLedger.markUnit(unit.id, "recovering");
@@ -89,12 +127,21 @@ export async function recover(
     });
     effectLedger.markUnit(unit.id, "recovered");
     effectLedger.markReceiptRecovery(storedReceipt.id, "recovered");
-    return unitResult(unit, storedReceipt.resource, "recovered");
+    return Object.freeze({
+      result: unitResult(
+        unit,
+        storedReceipt.resource,
+        "recovered",
+      ),
+    });
   } catch (error) {
     effectLedger.markUnit(unit.id, "failed");
     return Object.freeze({
-      ...unitResult(unit, storedReceipt.resource, "failed"),
-      error: summarizeError(error),
+      result: Object.freeze({
+        ...unitResult(unit, storedReceipt.resource, "failed"),
+        error: summarizeError(error),
+      }),
+      error,
     });
   }
 }

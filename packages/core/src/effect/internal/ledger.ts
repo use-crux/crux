@@ -139,6 +139,8 @@ export interface EffectLedger {
   getUnit(unitId: string): RegisteredRecoveryUnit | undefined;
   /** Read one scope. */
   getScope(id: string): EffectScopeRecord | undefined;
+  /** Read receipts in execution order for one boundary. */
+  receiptsFor(boundaryId: string): readonly EffectReceipt[];
   /** Read ordered units for one boundary. */
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
 }
@@ -255,6 +257,12 @@ export const effectLedger: EffectLedger = {
 
   getScope(id) {
     return scopes.get(id);
+  },
+
+  receiptsFor(boundaryId) {
+    return [...receipts.values()].filter(
+      (receipt) => receipt.boundaryId === boundaryId,
+    );
   },
 
   unitsFor(boundaryId) {

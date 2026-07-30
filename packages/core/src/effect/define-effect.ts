@@ -17,6 +17,7 @@ import {
   executeEffectOccurrence,
   type EffectRuntimeOptions,
 } from "./internal/execution";
+import { trackEffectBoundaryOperation } from "./internal/boundary";
 import { recoverEffectReceiptForDefinition } from "./recover";
 
 interface RegistryDefinition {
@@ -104,11 +105,13 @@ export function effect(
       readonly effectId: string;
     };
   }> =>
-    executeEffectOccurrence(
-      { id, version },
-      typedExecutor,
-      args,
-      typedOptions,
+    trackEffectBoundaryOperation(
+      executeEffectOccurrence(
+        { id, version },
+        typedExecutor,
+        args,
+        typedOptions,
+      ),
     );
 
   const definition = async (...args: [input: unknown] | []) =>
