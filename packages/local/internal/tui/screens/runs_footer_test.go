@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -59,5 +60,23 @@ func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	if strings.Contains(out, "inspect raw") {
 		t.Fatalf("Runs footer advertised raw inspection for a span without a payload:\n%s", out)
+	}
+}
+
+func TestRunsFilterFooterAdvertisesApplyAndClear(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-filter", Name: "refund"})
+	runs.filteringRuns = true
+	runs.runQuery = "refund"
+
+	labels := strings.Join(keybindLabels(runs.Keybinds()), " · ")
+	for _, want := range []string{"esc apply", "^x clear"} {
+		if !strings.Contains(labels, want) {
+			t.Fatalf("filter footer omitted %q: %s", want, labels)
+		}
+	}
+	runs.Update(testContext, tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}, nil)
+	if runs.runQuery != "" {
+		t.Fatalf("^x left filter query %q, want cleared", runs.runQuery)
 	}
 }

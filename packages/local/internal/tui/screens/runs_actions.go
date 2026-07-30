@@ -62,6 +62,24 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 	default:
 		activateReason = "the detail pane has no open action"
 	}
+	pageDownKeys := []string{"pgdown"}
+	pageDownHelp := "pgdn"
+	pageUpKeys := []string{"pgup"}
+	pageUpHelp := "pgup"
+	firstKeys := []string{"home"}
+	firstHelp := "home"
+	lastKeys := []string{"end"}
+	lastHelp := "end"
+	if s.focus == focusSpanDetail {
+		pageDownKeys = append(pageDownKeys, "ctrl+d")
+		pageDownHelp = "pgdn/^d"
+		pageUpKeys = append(pageUpKeys, "ctrl+u")
+		pageUpHelp = "pgup/^u"
+		firstKeys = append(firstKeys, "g")
+		firstHelp = "home/g"
+		lastKeys = append(lastKeys, "G")
+		lastHelp = "end/G"
+	}
 	return []interaction.Action{
 		{
 			ID:      "runs.next",
@@ -75,7 +93,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:      "runs.page-down",
-			Binding: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next "+s.focusPageLabel())),
+			Binding: key.NewBinding(key.WithKeys(pageDownKeys...), key.WithHelp(pageDownHelp, "next "+s.focusPageLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgDown}, client)
 				return cmd
@@ -83,7 +101,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:      "runs.page-up",
-			Binding: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous "+s.focusPageLabel())),
+			Binding: key.NewBinding(key.WithKeys(pageUpKeys...), key.WithHelp(pageUpHelp, "previous "+s.focusPageLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgUp}, client)
 				return cmd
@@ -91,7 +109,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:      "runs.first",
-			Binding: key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first "+s.focusItemLabel())),
+			Binding: key.NewBinding(key.WithKeys(firstKeys...), key.WithHelp(firstHelp, "first "+s.focusItemLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyHome}, client)
 				return cmd
@@ -99,7 +117,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:      "runs.last",
-			Binding: key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last "+s.focusItemLabel())),
+			Binding: key.NewBinding(key.WithKeys(lastKeys...), key.WithHelp(lastHelp, "last "+s.focusItemLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyEnd}, client)
 				return cmd
@@ -167,9 +185,18 @@ func (s *Runs) filterActions(ctx context.Context, client DataClient) []interacti
 	return []interaction.Action{
 		{
 			ID:      "runs.filter.finish",
-			Binding: key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "finish filter")),
+			Binding: key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("esc", "apply")),
 			Run: func() tea.Cmd {
 				s.filteringRuns = false
+				return s.ensureFilteredRunSelection(ctx, client)
+			},
+		},
+		{
+			ID:             "runs.filter.clear",
+			Binding:        key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("^x", "clear")),
+			DisabledReason: disabledUnless(s.runQuery != "", "filter is empty"),
+			Run: func() tea.Cmd {
+				s.runQuery = ""
 				return s.ensureFilteredRunSelection(ctx, client)
 			},
 		},

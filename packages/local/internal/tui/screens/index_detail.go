@@ -15,6 +15,8 @@ type indexDefinitionDocument struct {
 	content              string
 	sourceLocationAnchor kit.DocumentAnchor
 	hasSourceLocation    bool
+	lintAnchor           kit.DocumentAnchor
+	hasLint              bool
 }
 
 func renderIndexDefinitionDocument(index api.IndexData, definition api.ProjectDefinition) string {
@@ -87,6 +89,10 @@ func buildIndexDefinitionDocument(index api.IndexData, definition api.ProjectDef
 	}
 
 	for _, finding := range activeLintFindingsForDefinition(index, definition.ID) {
+		if !document.hasLint {
+			document.lintAnchor = kit.DocumentAnchor{SourceLine: len(lines)}
+			document.hasLint = true
+		}
 		section("LINT")
 		field("rule", strings.TrimSpace(finding.RuleID+" · "+finding.Severity+" · "+finding.Title))
 		field("message", finding.Message)

@@ -153,3 +153,16 @@ func TestInsightsTabCycleOmitsUnimplementedCompare(t *testing.T) {
 		t.Fatalf("tab after cases = %q, want fix", i.tab)
 	}
 }
+
+func TestInsightsActiveTabHasNonColorMarker(t *testing.T) {
+	insights := NewInsights()
+	insights.applyInsights([]api.InspectInsightRecord{sampleInsight()})
+
+	if got := stripANSI(insights.renderTabs(80)); !strings.Contains(got, "▸ Diagnosis") {
+		t.Fatalf("active tab omitted non-color marker: %q", got)
+	}
+	insights.cycleTab(1)
+	if got := stripANSI(insights.renderTabs(80)); !strings.Contains(got, "▸ Traces") {
+		t.Fatalf("cycled active tab omitted non-color marker: %q", got)
+	}
+}

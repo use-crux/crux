@@ -111,11 +111,32 @@ func TestWorkspaceOpenBrowserCallsInjectedCapabilityOnce(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("browser calls before command execution = %d", calls)
 	}
-	if next := w.Update(cmd()); next != nil {
-		t.Fatal("browser failure returned a terminating or follow-up command")
-	}
+	_ = w.Update(cmd())
 	if calls != 1 {
 		t.Fatalf("browser calls = %d, want 1", calls)
+	}
+}
+
+func TestExplicitBrowserFailureTemporarilyPrecedesStartupBadge(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(100, 30)
+	w.SetStartupSnapshot(startup.Snapshot{Diagnostics: []startup.Diagnostic{{
+		ID: "setup", Code: "SETUP", Severity: "warning", Message: "setup issue",
+	}}})
+
+	expiry := w.handleBrowserResult(browserResultMsg{Status: "browser launch failed: launcher unavailable"})
+	view := ansi.Strip(w.View())
+	if !strings.Contains(view, "browser launch…") || strings.Contains(view, "⚠ 1 issue") {
+		t.Fatalf("explicit browser failure did not precede startup badge:\n%s", view)
+	}
+	if expiry == nil {
+		t.Fatal("browser status did not schedule transient expiry")
+	}
+
+	w.Update(browserStatusExpiredMsg{Status: w.browserStatus})
+	view = ansi.Strip(w.View())
+	if !strings.Contains(view, "⚠ 1 issue") || strings.Contains(view, "browser launch…") {
+		t.Fatalf("startup badge did not return after transient expiry:\n%s", view)
 	}
 }
 
@@ -164,7 +185,7 @@ func TestWorkspaceOpenBrowserFailureIsVisibleAndNonFatal(t *testing.T) {
 	w.Update(cmd())
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "browser launch failed") {
+	if !strings.Contains(view, "browser launch…") {
 		t.Fatalf("browser failure was not visible:\n%s", view)
 	}
 }
@@ -181,7 +202,7 @@ func TestWorkspaceOpenBrowserFailureIsSafeAndBoundedAtMinimumWidth(t *testing.T)
 	view := w.View()
 	plain := ansi.Strip(view)
 
-	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch failed") {
+	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch…") {
 		t.Fatalf("browser failure was not safely visible:\n%q", plain)
 	}
 	if width := lipgloss.Width(w.browserStatus); width > 256 {

@@ -49,6 +49,7 @@ type Runs struct {
 	runQuery       string
 	runStatusIndex int
 	expandedRows   map[string]bool
+	exportState    runExportState
 }
 
 type runsFocus int
@@ -194,6 +195,10 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 	case runDetailLoadedMsg:
 		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
+	case runExportedMsg:
+		s.exportState = runExportState{runID: m.runID, message: "exported " + sanitizeRunsInline(m.path)}
+	case runExportErrMsg:
+		s.exportState = runExportState{runID: s.SelectedRunID(), message: "export failed · " + sanitizeRunsInline(m.err)}
 	case tea.KeyPressMsg:
 		return s.updateKey(ctx, m, c)
 	case tea.MouseWheelMsg:
@@ -285,6 +290,9 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	if listSnapshot.HasValue {
 		count := len(s.runSummaries())
 		right = fmt.Sprintf("%d %s · last 1h", count, kit.Pluralize(count, "run"))
+	}
+	if exported := s.currentRunExportState(); exported != "" {
+		right = exported
 	}
 	return path, right
 }

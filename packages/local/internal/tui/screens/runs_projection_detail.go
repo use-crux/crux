@@ -48,7 +48,34 @@ func inspectSpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.In
 		}
 	}
 	visit(root)
+	markDuplicateSiblingSpans(spans)
 	return spans
+}
+
+// markDuplicateSiblingSpans derives presentation-only folding identity from
+// canonical observability fields. Repeated tool calls qualify only when they
+// share a parent, primitive, and stable tool name; ingest records do not carry
+// the legacy Inspect duplicate flags.
+func markDuplicateSiblingSpans(spans []api.InspectRunSpan) {
+	groups := make(map[string][]int)
+	for index, span := range spans {
+		toolName := span.Attributes["tool_name"]
+		if toolName == "" || (span.Primitive != api.SpanPrimitiveTool && span.Primitive != api.SpanPrimitiveToolCall) {
+			continue
+		}
+		key := span.ParentID + "\x00" + span.Primitive + "\x00" + toolName
+		groups[key] = append(groups[key], index)
+	}
+	for _, indexes := range groups {
+		if len(indexes) < 2 {
+			continue
+		}
+		groupID := spans[indexes[0]].ID
+		for _, index := range indexes {
+			spans[index].Duplicate = true
+			spans[index].DuplicateOfSpanID = groupID
+		}
+	}
 }
 
 func firstPositive(values ...float64) float64 {

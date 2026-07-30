@@ -183,6 +183,33 @@ func TestOverviewRunEventRefreshesStandaloneRunsAuthority(t *testing.T) {
 	}
 }
 
+func TestOverviewInsightsRefreshExcludesClosedRowsFromOpenQueue(t *testing.T) {
+	overview := NewOverview()
+	overview.Resize(Size{Width: 100, Height: 30})
+	_, token := overview.insightsResource.Begin(testContext, overviewInsightsOwner, 3)
+	overview.Update(testContext, insightsLoadedMsg(resource.ResourceResult[[]api.InspectInsightRecord]{
+		Token: token,
+		Value: []api.InspectInsightRecord{
+			{InsightID: "open", Title: "Open insight", Status: "open"},
+			{InsightID: "dismissed", Title: "Dismissed insight", Status: "dismissed"},
+			{InsightID: "resolved", Title: "Resolved insight", Status: "resolved"},
+		},
+	}), nil)
+
+	if got := len(overview.insightRows()); got != 1 {
+		t.Fatalf("open insight rows = %d, want 1", got)
+	}
+	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
+	if !strings.Contains(view, "1 open") || !strings.Contains(view, "Open insight") {
+		t.Fatalf("Overview open queue did not reflect refreshed status:\n%s", view)
+	}
+	for _, closed := range []string{"Dismissed insight", "Resolved insight"} {
+		if strings.Contains(view, closed) {
+			t.Fatalf("Overview open queue retained %q:\n%s", closed, view)
+		}
+	}
+}
+
 func TestOverviewNamedRefreshCarriesBridgeProjectionRevisionFloors(t *testing.T) {
 	overview, _ := fixtureOverview()
 	overview.Refresh(testContext, uitest.NewFixtureClient(), bridge.Invalidations{

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -113,5 +114,29 @@ func TestRunsExportPreservesCompleteObservabilityDetail(t *testing.T) {
 	}
 	if got.Debug == nil || len(got.Debug.Records) != 1 {
 		t.Fatalf("exported debug graph = %#v, want source debug graph", got.Debug)
+	}
+}
+
+func TestRunsExportCompletionSurfacesSavedPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	runs := NewRuns()
+	selectRunForTest(runs, "run-visible")
+	setRunDetailForTest(runs, api.ObservabilityRunDetail{
+		Run:  api.ObservabilityRunSummary{RunID: "run-visible"},
+		Root: api.ObservabilityRunDetailNode{ID: "root"},
+	})
+	runs.Resize(Size{Width: 160, Height: 40})
+
+	export := runs.exportRun()
+	if export == nil {
+		t.Fatal("loaded run did not enable export")
+	}
+	msg := export()
+	runs.Update(testContext, msg, nil)
+	exported := msg.(runExportedMsg)
+	_, right := runs.Breadcrumb()
+	if !strings.Contains(right, "exported "+exported.path) {
+		t.Fatalf("Runs breadcrumb toast = %q, want saved path %q", right, exported.path)
 	}
 }

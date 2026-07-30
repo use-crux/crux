@@ -91,7 +91,7 @@ func TestPTYDevWorkspaceOpenBrowserIsExplicitAndNonFatal(t *testing.T) {
 			}
 			waitForBrowserCalls(t, marker, 1, 5*time.Second)
 			if test.wantFailure {
-				session.waitFor(t, "browser launch failed", 5*time.Second)
+				session.waitFor(t, "browser launch…", 5*time.Second)
 				session.assertRunning(t)
 			}
 			if err := session.write([]byte("q")); err != nil {

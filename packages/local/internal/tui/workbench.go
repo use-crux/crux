@@ -188,6 +188,11 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return cmd
 	case browserResultMsg:
 		return w.handleBrowserResult(m)
+	case browserStatusExpiredMsg:
+		if w.browserStatus == m.Status {
+			w.browserStatus = ""
+		}
+		return nil
 	}
 	if cmd, handled := w.routeOwnedResourceResult(msg); handled {
 		return cmd

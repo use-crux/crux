@@ -65,10 +65,12 @@ func (s *Insights) renderTabs(width int) string {
 	parts := make([]string, 0, len(tabs))
 	for _, tab := range tabs {
 		style := insightsStyles.Dim
+		label := "  " + tab.label
 		if tab.id == s.tab {
 			style = insightsStyles.AccentHeader
+			label = "▸ " + tab.label
 		}
-		parts = append(parts, style.Render(tab.label))
+		parts = append(parts, style.Render(label))
 	}
 	return padRow(" "+strings.Join(parts, insightsStyles.Border.Render(" · ")), width)
 }

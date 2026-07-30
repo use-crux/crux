@@ -21,6 +21,9 @@ func (s *Runs) renderList(width, height int) string {
 	if s.runQuery != "" {
 		right = shell.TextMuted.Render("/" + sanitizeRunsInline(s.runQuery))
 	}
+	if export := s.currentRunExportState(); export != "" {
+		right = shell.TextMuted.Render(export)
+	}
 	header := shell.PaneHeader(width,
 		focusTitle("Runs", s.focus == focusRuns),
 		"Last 1h", right)

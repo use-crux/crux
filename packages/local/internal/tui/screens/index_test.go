@@ -17,10 +17,32 @@ func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
 
 	for _, binding := range bindings {
 		switch binding.Key {
-		case "j/↓", "k/↑", "pgdn/ctrl+d", "pgup/ctrl+u", "home", "end", "l/→/tab", "e":
+		case "j/↓", "k/↑", "pgdn/^d", "pgup/^u", "home", "end", "l/→/tab", "↵", "e":
 		default:
 			t.Errorf("Index advertised unhandled key %q (%s)", binding.Key, binding.Label)
 		}
+	}
+}
+
+func TestIndexEnterOnLintRowAnchorsDetailToLint(t *testing.T) {
+	index := NewIndex()
+	data := sampleIndex()
+	data.Definitions[0].Description = strings.Repeat("long authored description ", 30)
+	data.LintFindings = []api.IndexLintFinding{{
+		ID: "lint:writer", RuleID: "prompt.missing_eval", Title: "Missing Eval",
+		PrimaryDefinitionID: "prompt:writer.prompt",
+	}}
+	index.SetIndexForTest(data)
+	index.Resize(Size{Width: 100, Height: 18})
+
+	index.Update(testContext, tea.KeyPressMsg{Code: tea.KeyEnter}, nil)
+
+	if index.focus != indexFocusDetail {
+		t.Fatal("Enter on lint row did not focus detail")
+	}
+	view := stripANSI(index.View(Size{}))
+	if !strings.Contains(view, "LINT") || !strings.Contains(view, "prompt.missing_eval") {
+		t.Fatalf("Enter on lint row did not anchor visible detail to LINT:\n%s", view)
 	}
 }
 

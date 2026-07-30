@@ -104,35 +104,35 @@
       "schemaVersion": 4, "recordId": "demo_bad_tool_retry_2", "type": "span",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 5,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222225", "parentSpanId": "2222222222222221", "family": "tool", "primitive": "tool.call",
-      "name": "searchPolicies · retry 2", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:03.200Z", "endedAt": "2026-07-30T09:05:04.000Z", "durationMs": 800, "status": "ok",
+      "name": "searchPolicies", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:03.200Z", "endedAt": "2026-07-30T09:05:04.000Z", "durationMs": 800, "status": "ok",
       "definitionRefs": [{ "id": "tool:searchPolicies", "kind": "tool", "role": "invoked-tool", "source": { "file": "src/support.ts", "line": 27 } }]
     },
     {
       "schemaVersion": 4, "recordId": "demo_bad_tool_retry_3", "type": "span",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 6,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222226", "parentSpanId": "2222222222222221", "family": "tool", "primitive": "tool.call",
-      "name": "searchPolicies · retry 3", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:04.100Z", "endedAt": "2026-07-30T09:05:04.900Z", "durationMs": 800, "status": "ok",
+      "name": "searchPolicies", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:04.100Z", "endedAt": "2026-07-30T09:05:04.900Z", "durationMs": 800, "status": "ok",
       "definitionRefs": [{ "id": "tool:searchPolicies", "kind": "tool", "role": "invoked-tool", "source": { "file": "src/support.ts", "line": 27 } }]
     },
     {
       "schemaVersion": 4, "recordId": "demo_bad_tool_retry_4", "type": "span",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 7,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222227", "parentSpanId": "2222222222222221", "family": "tool", "primitive": "tool.call",
-      "name": "searchPolicies · retry 4", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:05.000Z", "endedAt": "2026-07-30T09:05:05.800Z", "durationMs": 800, "status": "ok",
+      "name": "searchPolicies", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:05.000Z", "endedAt": "2026-07-30T09:05:05.800Z", "durationMs": 800, "status": "ok",
       "definitionRefs": [{ "id": "tool:searchPolicies", "kind": "tool", "role": "invoked-tool", "source": { "file": "src/support.ts", "line": 27 } }]
     },
     {
       "schemaVersion": 4, "recordId": "demo_bad_tool_retry_5", "type": "span",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 8,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222228", "parentSpanId": "2222222222222221", "family": "tool", "primitive": "tool.call",
-      "name": "searchPolicies · retry 5", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:05.900Z", "endedAt": "2026-07-30T09:05:06.700Z", "durationMs": 800, "status": "ok",
+      "name": "searchPolicies", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:05.900Z", "endedAt": "2026-07-30T09:05:06.700Z", "durationMs": 800, "status": "ok",
       "definitionRefs": [{ "id": "tool:searchPolicies", "kind": "tool", "role": "invoked-tool", "source": { "file": "src/support.ts", "line": 27 } }]
     },
     {
       "schemaVersion": 4, "recordId": "demo_bad_tool_retry_6", "type": "span",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 9,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222229", "parentSpanId": "2222222222222221", "family": "tool", "primitive": "tool.call",
-      "name": "searchPolicies · retry 6", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:06.800Z", "endedAt": "2026-07-30T09:05:07.600Z", "durationMs": 800, "status": "ok",
+      "name": "searchPolicies", "toolName": "searchPolicies", "startedAt": "2026-07-30T09:05:06.800Z", "endedAt": "2026-07-30T09:05:07.600Z", "durationMs": 800, "status": "ok",
       "definitionRefs": [{ "id": "tool:searchPolicies", "kind": "tool", "role": "invoked-tool", "source": { "file": "src/support.ts", "line": 27 } }]
     },
     {

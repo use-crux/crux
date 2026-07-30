@@ -11,13 +11,38 @@ import (
 
 // Actions returns Index's executable focused-list and export actions.
 func (s *Index) Actions(_ context.Context, _ DataClient) []interaction.Action {
+	pageDownKeys := []string{"pgdown", "ctrl+d"}
+	pageUpKeys := []string{"pgup", "ctrl+u"}
+	firstKeys := []string{"home"}
+	lastKeys := []string{"end"}
+	firstHelp := "home"
+	lastHelp := "end"
+	if s.focus == indexFocusDetail {
+		firstKeys = append(firstKeys, "g")
+		lastKeys = append(lastKeys, "G")
+		firstHelp = "home/g"
+		lastHelp = "end/G"
+	}
 	return []interaction.Action{
 		s.indexNavigationAction("index.next", []string{"j", "down"}, "j/↓", "next "+s.focusItemLabel()),
 		s.indexNavigationAction("index.previous", []string{"k", "up"}, "k/↑", "previous "+s.focusItemLabel()),
-		s.indexNavigationAction("index.page-down", []string{"pgdown", "ctrl+d"}, "pgdn/ctrl+d", "next "+s.focusPageLabel()),
-		s.indexNavigationAction("index.page-up", []string{"pgup", "ctrl+u"}, "pgup/ctrl+u", "previous "+s.focusPageLabel()),
-		s.indexNavigationAction("index.first", []string{"home"}, "home", "first "+s.focusItemLabel()),
-		s.indexNavigationAction("index.last", []string{"end"}, "end", "last "+s.focusItemLabel()),
+		s.indexNavigationAction("index.page-down", pageDownKeys, "pgdn/^d", "next "+s.focusPageLabel()),
+		s.indexNavigationAction("index.page-up", pageUpKeys, "pgup/^u", "previous "+s.focusPageLabel()),
+		s.indexNavigationAction("index.first", firstKeys, firstHelp, "first "+s.focusItemLabel()),
+		s.indexNavigationAction("index.last", lastKeys, lastHelp, "last "+s.focusItemLabel()),
+		{
+			ID:             "index.activate",
+			Binding:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "open detail")),
+			DisabledReason: disabledUnless(s.focus == indexFocusDefinitions && s.SelectedDefinitionID() != "", "select a definition"),
+			Run: func() tea.Cmd {
+				document := s.syncDetail()
+				s.setFocus(indexFocusDetail)
+				if document.hasLint {
+					s.detail.RestoreAnchor(document.lintAnchor)
+				}
+				return nil
+			},
+		},
 		{
 			ID:             "index.previous-pane",
 			Binding:        key.NewBinding(key.WithKeys("h", "left", "shift+tab"), key.WithHelp("h/←/shift+tab", "previous pane")),

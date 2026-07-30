@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
@@ -17,6 +18,10 @@ import (
 type BrowserOpener func(context.Context, string) error
 
 type browserResultMsg struct {
+	Status string
+}
+
+type browserStatusExpiredMsg struct {
 	Status string
 }
 
@@ -50,10 +55,24 @@ func (w *Workbench) browserAction() interaction.Action {
 
 func (w *Workbench) handleBrowserResult(result browserResultMsg) tea.Cmd {
 	w.browserStatus = kit.Truncate(kit.SanitizeInline(result.Status), 256, "…")
-	return nil
+	status := w.browserStatus
+	return tea.Tick(4*time.Second, func(time.Time) tea.Msg {
+		return browserStatusExpiredMsg{Status: status}
+	})
 }
 
 func (w *Workbench) statusBadge() shell.StatusBadge {
+	if w.browserStatus != "" {
+		badge := shell.StatusBadge{Full: w.browserStatus}
+		if strings.HasPrefix(w.browserStatus, "browser launch failed") {
+			badge.Compact = kit.TruncateWords(w.browserStatus, 19, "…")
+			badge.Warning = true
+		}
+		return badge
+	}
+	if w.pendingPrefix == "g" {
+		return shell.StatusBadge{}
+	}
 	if w.startupDiagnostic != nil {
 		count := len(w.startupDiagnostic.Children)
 		if count == 0 {
@@ -64,14 +83,6 @@ func (w *Workbench) statusBadge() shell.StatusBadge {
 			Compact: fmt.Sprintf("⚠%d !", count),
 			Warning: true,
 		}
-	}
-	if w.browserStatus != "" {
-		badge := shell.StatusBadge{Full: w.browserStatus}
-		if strings.HasPrefix(w.browserStatus, "browser launch failed") {
-			badge.Compact = "browser launch failed"
-			badge.Warning = true
-		}
-		return badge
 	}
 	return shell.StatusBadge{}
 }

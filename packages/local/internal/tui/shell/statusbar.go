@@ -62,10 +62,10 @@ func StatusBar(width int, keybinds []Keybind, badge StatusBadge) string {
 	}
 	right := ""
 	if badge.Full != "" {
-		right = badgeStyle.Render(badge.Full)
+		right = badgeStyle.Render(badge.Full + " ")
 	}
 	if lipgloss.Width(right) > maxStatusBadgeWidth {
-		right = badgeStyle.Render(badge.Compact)
+		right = badgeStyle.Render(badge.Compact + " ")
 	}
 	if lipgloss.Width(right) > maxStatusBadgeWidth {
 		right = ""
@@ -75,7 +75,7 @@ func StatusBar(width int, keybinds []Keybind, badge StatusBadge) string {
 		hints = hints[:len(hints)-1]
 	}
 	if statusBarWidth(hints, right) > width && badge.Compact != "" {
-		right = badgeStyle.Render(badge.Compact)
+		right = badgeStyle.Render(badge.Compact + " ")
 	}
 	for len(hints) > 0 && statusBarWidth(hints, right) > width {
 		hints = hints[:len(hints)-1]

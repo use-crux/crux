@@ -65,3 +65,22 @@ func TestWorkbenchHelpAdvertisesOnlyExecutableActions(t *testing.T) {
 		t.Fatalf("help advertised action without a handler:\n%s", out)
 	}
 }
+
+func TestWorkbenchHelpListsJumpSuffixesAndInsightsActions(t *testing.T) {
+	client := newOverviewRunsProgramClient()
+	w := newTestWorkbench(client, client, "http://localhost:4400")
+	w.Resize(160, 40)
+	runWorkbenchCommands(w, w.gotoNav("insights"))
+
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
+	out := w.View()
+	for _, want := range []string{
+		"g o/i/r/p", "jump screens", "act · insights",
+		"next insight", "previous pane", "previous tab",
+		"dismiss", "mark fixed", "linked traces", "export insight",
+	} {
+		if !strings.Contains(strings.ToLower(out), strings.ToLower(want)) {
+			t.Fatalf("Insights help omitted %q:\n%s", want, out)
+		}
+	}
+}
