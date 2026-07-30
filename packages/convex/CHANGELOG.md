@@ -1,5 +1,30 @@
 # @use-crux/convex
 
+## 0.7.0
+
+### Patch Changes
+
+- 69564b7: Memory capture now follows the active execution lifecycle automatically.
+
+  Capture modes are now `inline | deferred`, with `deferred` as the default. Deferred capture uses the shared `config({ host })` retention binding; when retention is unavailable, Crux safely captures inline and emits one development warning instead of losing work. Retained failures remain observable through `memory.flush()`.
+
+  Adapters submit one completed turn and leave mode selection, deterministic tool-event fan-out, settlement, and block flushing to memory. Catalog exposes the effective configured mode, while Runs records one payload-free `memory.capture` lifecycle inside the owning generation Run with the actual inline, fallback, retained, or Eval-captured disposition.
+
+  Migrate `afterResponse` to `deferred`, replace `detached` with `deferred`, and remove memory-specific `capture.waitUntil` in favor of a shared host binding.
+
+- Updated dependencies [70a8520]
+- Updated dependencies [69564b7]
+- Updated dependencies [be06e40]
+- Updated dependencies [3140e0b]
+- Updated dependencies [d5d37bf]
+- Updated dependencies [42419b1]
+- Updated dependencies [0e52c7d]
+- Updated dependencies [2b50f9d]
+- Updated dependencies [f5c5da3]
+  - @use-crux/core@0.7.0
+  - @use-crux/ai@0.7.0
+  - @use-crux/react@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes

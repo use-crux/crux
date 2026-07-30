@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/mcp",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Portable Model Context Protocol tool sources for Crux.",
   "keywords": [
     "ai",

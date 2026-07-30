@@ -1,6 +1,6 @@
 {
   "name": "crux-vscode",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Crux",
   "description": "Markdown-aware PromptText authoring, previews, diagnostics, and Project Index intelligence for TypeScript",
   "publisher": "use-crux",
