@@ -6,6 +6,7 @@
 
 export { effect } from "./define-effect";
 export { recover } from "./recover";
+export { rollback } from "./rollback";
 export { rollbackOnError } from "./rollback-on-error";
 export {
   CruxEffectError,

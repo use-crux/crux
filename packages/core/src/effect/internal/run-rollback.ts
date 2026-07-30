@@ -43,7 +43,19 @@ export async function runRollback(
     effectLedger.unitsFor(scope.id),
   );
 
-  for (const step of plan) {
+  for (const [index, step] of plan.entries()) {
+    if (options?.signal?.aborted) {
+      units.push(
+        ...plan
+          .slice(index)
+          .map((pending) =>
+            pending.kind === "settle"
+              ? pending.result
+              : pending.cancelled,
+          ),
+      );
+      break;
+    }
     if (step.kind === "settle") {
       units.push(step.result);
       continue;

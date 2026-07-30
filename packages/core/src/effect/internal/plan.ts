@@ -21,6 +21,7 @@ export type RollbackPlanStep =
   | {
       readonly kind: "recover";
       readonly receipt: EffectReceiptRef;
+      readonly cancelled: RecoveryUnitResult;
     }
   | {
       readonly kind: "settle";
@@ -115,24 +116,34 @@ export function planRollback(
     const unit = receipt.recoveryUnitId
       ? unitsById.get(receipt.recoveryUnitId)
       : undefined;
+    if (unit?.status === "recovered") {
+      steps.push({
+        kind: "settle",
+        result: unitResult(
+          receipt,
+          unit.id,
+          "already_recovered",
+        ),
+      });
+      continue;
+    }
     if (unit) {
       steps.push({
         kind: "recover",
         receipt: receiptRef(receipt),
+        cancelled: unitResult(receipt, unit.id, "cancelled"),
       });
       continue;
     }
+    const unitId =
+      receipt.recoveryUnitId ?? `effect-unit:${receipt.id}`;
     steps.push({
       kind: "settle",
-      result: Object.freeze({
-        unitId:
-          receipt.recoveryUnitId ?? `effect-unit:${receipt.id}`,
-        effectIds: [receipt.effectId],
-        ...(receipt.resource === undefined
-          ? {}
-          : { resource: receipt.resource }),
-        status: expectedStatus(receipt),
-      }),
+      result: unitResult(
+        receipt,
+        unitId,
+        expectedStatus(receipt),
+      ),
     });
   }
 
@@ -191,5 +202,20 @@ function receiptRef(receipt: EffectReceipt): EffectReceiptRef {
     kind: "effect.receipt",
     id: receipt.id,
     effectId: receipt.effectId,
+  });
+}
+
+function unitResult(
+  receipt: EffectReceipt,
+  unitId: string,
+  status: RecoveryUnitResult["status"],
+): RecoveryUnitResult {
+  return Object.freeze({
+    unitId,
+    effectIds: [receipt.effectId],
+    ...(receipt.resource === undefined
+      ? {}
+      : { resource: receipt.resource }),
+    status,
   });
 }

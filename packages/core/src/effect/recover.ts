@@ -5,7 +5,10 @@
  */
 
 import { CruxEffectError } from "./errors";
-import { effectLedger } from "./internal/ledger";
+import {
+  effectLedger,
+  type RecoveryOperationResult,
+} from "./internal/ledger";
 import type {
   EffectReceiptRef,
   RecoverOptions,
@@ -17,12 +20,7 @@ import type {
  *
  * @internal
  */
-export interface EffectRecoveryAttempt {
-  /** Public unit result. */
-  readonly result: RecoveryUnitResult;
-  /** Raw handler error, when recovery failed. */
-  readonly error?: unknown;
-}
+export type EffectRecoveryAttempt = RecoveryOperationResult;
 
 /**
  * Recover the single recovery unit owned by a receipt.
@@ -100,6 +98,12 @@ export async function recoverEffectReceiptAttempt(
       ),
     });
   }
+  if (
+    unit.status === "recovering" &&
+    unit.recoveryOperation
+  ) {
+    return unit.recoveryOperation;
+  }
 
   const envelope = effectLedger.getEnvelope(storedReceipt.id);
   if (!envelope) {
@@ -112,38 +116,50 @@ export async function recoverEffectReceiptAttempt(
     });
   }
 
-  effectLedger.markUnit(unit.id, "recovering");
-  try {
-    await unit.execute({
-      envelope,
-      receipt: Object.freeze({
-        kind: "effect.receipt",
-        id: storedReceipt.id,
-        effectId: storedReceipt.effectId,
-      }),
-      resource: storedReceipt.resource,
-      idempotencyKey: unit.idempotencyKey,
-      options,
-    });
-    effectLedger.markUnit(unit.id, "recovered");
-    effectLedger.markReceiptRecovery(storedReceipt.id, "recovered");
-    return Object.freeze({
-      result: unitResult(
-        unit,
-        storedReceipt.resource,
-        "recovered",
-      ),
-    });
-  } catch (error) {
-    effectLedger.markUnit(unit.id, "failed");
-    return Object.freeze({
-      result: Object.freeze({
-        ...unitResult(unit, storedReceipt.resource, "failed"),
-        error: summarizeError(error),
-      }),
-      error,
-    });
-  }
+  const operation = Promise.resolve().then(
+    async (): Promise<EffectRecoveryAttempt> => {
+      try {
+        await unit.execute({
+          envelope,
+          receipt: Object.freeze({
+            kind: "effect.receipt",
+            id: storedReceipt.id,
+            effectId: storedReceipt.effectId,
+          }),
+          resource: storedReceipt.resource,
+          idempotencyKey: unit.idempotencyKey,
+          options,
+        });
+        effectLedger.markUnit(unit.id, "recovered");
+        effectLedger.markReceiptRecovery(
+          storedReceipt.id,
+          "recovered",
+        );
+        return Object.freeze({
+          result: unitResult(
+            unit,
+            storedReceipt.resource,
+            "recovered",
+          ),
+        });
+      } catch (error) {
+        effectLedger.markUnit(unit.id, "failed");
+        return Object.freeze({
+          result: Object.freeze({
+            ...unitResult(
+              unit,
+              storedReceipt.resource,
+              "failed",
+            ),
+            error: summarizeError(error),
+          }),
+          error,
+        });
+      }
+    },
+  );
+  effectLedger.markUnit(unit.id, "recovering", operation);
+  return operation;
 }
 
 /** Recover a receipt only when it belongs to one definition. @internal */

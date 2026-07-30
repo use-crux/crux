@@ -6,26 +6,29 @@
  */
 
 import type {
+  EffectOutcome,
   EffectReceipt,
   EffectScopeRecord,
+  RecoveryAvailability,
   RecoveryUnitLifecycle,
   RecoveryUnitRecord,
-} from "../receipt-types";
-import type {
-  EffectOutcome,
-  RecoveryAvailability,
 } from "../receipt-types";
 import type {
   EffectReceiptRef,
   EffectResource,
   RecoverOptions,
+  RecoveryUnitResult,
 } from "../types";
+
+/** Settlement shared by callers joining one in-flight recovery. */
+export interface RecoveryOperationResult {
+  readonly result: RecoveryUnitResult;
+  readonly error?: unknown;
+}
 
 /** Ephemeral recovery data retained only inside the in-memory ledger. */
 export interface StoredRecoveryEnvelope {
-  /** Envelope schema version. */
   readonly schemaVersion: 1;
-  /** Original receipt identifier. */
   readonly receiptId: string;
   /** Effect definition identifier. */
   readonly effectId: string;
@@ -53,7 +56,6 @@ export interface RecoveryHandlerInvocation {
   readonly resource?: EffectResource | readonly EffectResource[];
   /** Stable unit idempotency key. */
   readonly idempotencyKey: string;
-  /** Caller recovery options. */
   readonly options?: RecoverOptions;
 }
 
@@ -63,6 +65,7 @@ export interface RegisteredRecoveryUnit extends RecoveryUnitRecord {
   readonly execute: (
     invocation: RecoveryHandlerInvocation,
   ) => Promise<void>;
+  readonly recoveryOperation?: Promise<RecoveryOperationResult>;
 }
 
 /** Fields required to allocate a preparing receipt. */
@@ -81,7 +84,6 @@ export interface EffectReceiptInit {
   readonly runId?: string;
   /** Initial recovery availability. */
   readonly recovery: RecoveryAvailability;
-  /** Execution start time in epoch milliseconds. */
   readonly startedAt: number;
 }
 
@@ -125,7 +127,11 @@ export interface EffectLedger {
     unit: RegisteredRecoveryUnit,
   ): void;
   /** Update a recovery unit lifecycle. */
-  markUnit(unitId: string, status: RecoveryUnitLifecycle): void;
+  markUnit(
+    unitId: string,
+    status: RecoveryUnitLifecycle,
+    recoveryOperation?: Promise<RecoveryOperationResult>,
+  ): void;
   /** Fold a recovery availability update onto one receipt. */
   markReceiptRecovery(
     receiptId: string,
@@ -224,12 +230,15 @@ export const effectLedger: EffectLedger = {
     unitIdsByBoundary.set(boundaryId, [...ids, unit.id]);
   },
 
-  markUnit(unitId, status) {
+  markUnit(unitId, status, recoveryOperation) {
     const current = units.get(unitId);
     if (!current) {
       throw new TypeError(`Recovery unit \`${unitId}\` was not found.`);
     }
-    units.set(unitId, Object.freeze({ ...current, status }));
+    units.set(
+      unitId,
+      Object.freeze({ ...current, status, recoveryOperation }),
+    );
   },
 
   markReceiptRecovery(receiptId, recovery) {

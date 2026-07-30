@@ -1,7 +1,7 @@
 /** Compile-time contract for callable custom effect definitions. */
 
 import { expectTypeOf } from "vitest";
-import { effect, recover } from "../src/effect/index";
+import { effect, recover, rollback } from "../src/effect/index";
 import type {
   EffectReceiptRef,
   EffectDefinition,
@@ -141,9 +141,11 @@ expectTypeOf(recover(receiptRef)).toEqualTypeOf<
 // @ts-expect-error recover accepts receipt references, not scope references
 recover(scopeRef);
 
-declare const rollback: (
-  scope: EffectScopeRef,
-  options?: RollbackOptions,
-) => Promise<RollbackResult>;
+expectTypeOf(
+  rollback(scopeRef, {
+    reason: "Customer rejected the change",
+    conflict: "fail",
+  }),
+).toEqualTypeOf<Promise<RollbackResult>>();
 // @ts-expect-error rollback accepts scope references, not receipt references
 rollback(receiptRef);
