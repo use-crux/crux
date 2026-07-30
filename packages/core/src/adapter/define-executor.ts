@@ -38,6 +38,7 @@ import type {
   ExecutorStreamOptions,
   ExecutorStreamResult,
 } from "./executor-contracts";
+import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 
 export type {
   CruxExecutor,
@@ -284,6 +285,13 @@ export function loopRuntimeAdapter<
 
   return Object.freeze({
     executorId: port.id,
+    capacity: (model: TModel) => {
+      const info = port.describeModel(model);
+      return resolveModelCapacityProfile(
+        info.modelId,
+        port.capacity ? () => port.capacity!(info) : undefined,
+      );
+    },
     generate,
     stream: streamFn,
     parallel: compositions.parallel,

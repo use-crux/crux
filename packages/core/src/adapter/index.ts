@@ -37,6 +37,15 @@ export type { ResolvedPromptCodecOptions } from "./codec";
 
 // Adapter specification interface (core-driven loop)
 export type { AdapterSpec } from "./spec";
+export {
+  CONSERVATIVE_MODEL_CAPACITY,
+  resolveModelCapacityProfile,
+} from "../request/capacity/model-profile";
+export type {
+  ModelCapacityProfile,
+  ModelCapacityResolver,
+  ModelCountingConfidence,
+} from "../request/capacity/model-profile";
 
 // Normalized, provider-neutral outcome taxonomy (finish reason + errors)
 export {

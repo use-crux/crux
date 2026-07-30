@@ -41,6 +41,8 @@ export function coreStepDialect<
     media: providerMediaHooksFor(spec),
     client,
     materializeToolSource: spec.materializeToolSource,
+    capacity: spec.capacity,
+    countTokens: spec.countTokens,
     mapSettings: spec.mapSettings,
     mapError: spec.mapError,
     call: spec.call,
@@ -71,6 +73,9 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
   const dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream> = {
     kind: "sdk-loop",
     id: port.id,
+    ...(port.capacity
+      ? { capacity: (model) => port.capacity!(model) }
+      : {}),
     capabilities: port.capabilities,
     structuredOutput: port.structuredOutput,
     media: port.media,

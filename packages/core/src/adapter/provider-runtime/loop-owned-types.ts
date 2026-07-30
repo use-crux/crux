@@ -11,6 +11,7 @@ import type { StructuredOutputCapabilities } from "../structured-output";
 import type { ProviderRuntimeExtender } from "./extension-types";
 import type { LoopOwnedProviderRuntime } from "./runtime-types";
 import type { ProviderMediaHooks } from "../native-chat/media-hooks";
+import type { ModelCapacityProfile } from "../../request/capacity/model-profile";
 import type {
   DefinedCompletedOperations,
   ProviderCompletedOperationFactories,
@@ -44,6 +45,8 @@ export interface LoopOwnedRuntimeContract<
 > {
   /** Extract provider/model identity from an SDK model reference. */
   describeModel?: (model: TModel) => ModelInfo;
+  /** Resolve capacity facts from the extracted provider/model identity. */
+  capacity?: (model: ModelInfo) => ModelCapacityProfile | undefined;
   /** Map canonical generation settings to SDK-native option names. */
   settings?: (
     settings: GenerationSettings,

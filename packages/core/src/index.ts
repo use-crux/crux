@@ -918,6 +918,9 @@ export type {
 export { adapter } from "./adapter/define-adapter";
 export type {
   AdapterSpec,
+  ModelCapacityProfile,
+  ModelCapacityResolver,
+  ModelCountingConfidence,
   AdapterResponse,
   CallArgs,
   StreamHandle,
@@ -932,6 +935,10 @@ export type {
   StreamCompletion,
   StreamCompletionPayload,
   StreamResult,
+} from "./adapter/index";
+export {
+  CONSERVATIVE_MODEL_CAPACITY,
+  resolveModelCapacityProfile,
 } from "./adapter/index";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)

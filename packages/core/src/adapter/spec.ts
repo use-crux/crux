@@ -19,6 +19,7 @@ import type {
 import type { CruxProviderError } from "./normalized-outcome";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
+import type { ModelCapacityResolver } from "../request/capacity/model-profile";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -49,6 +50,34 @@ export interface AdapterSpec<
 
   /** Materialize an inert prompt tool source for one adapter invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /**
+   * Resolve capacity facts for a concrete provider model.
+   *
+   * Return `undefined` to use core's conservative fallback.
+   *
+   * @example
+   * ```ts
+   * capacity: (model) => model === "known-model" ? profile : undefined
+   * ```
+   */
+  readonly capacity?: ModelCapacityResolver;
+
+  /**
+   * Authoritatively count the complete canonical provider request.
+   *
+   * The planner calls this only when an exact count can change selection or
+   * fit. Implementations may perform provider I/O and must not dispatch a
+   * generation request.
+   *
+   * @param client - Bound provider client.
+   * @param args - Complete canonical request arguments.
+   * @returns Exact input-token count for the request.
+   */
+  countTokens?(
+    client: TClient,
+    args: CallArgs<TExtra>,
+  ): Promise<number>;
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
   call(

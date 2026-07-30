@@ -26,6 +26,7 @@ import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { AnyPrompt } from "../prompt/prompt-types";
 import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
 import type { GenerateResult } from "./result-accumulator";
+import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 
 /**
  * Model argument accepted by a loop-owning executor.
@@ -129,6 +130,13 @@ export interface CruxExecutor<
 > {
   /** Stable provider-runtime identifier. */
   readonly executorId: string;
+  /**
+   * Report capacity facts for a concrete SDK model reference without I/O.
+   *
+   * @param model - Concrete model understood by the SDK runtime.
+   * @returns Capacity facts used for whole-request budget derivation.
+   */
+  capacity(model: TModel): ModelCapacityProfile;
   /** Execute a prompt through the provider-owned language loop. */
   generate(
     prompt: AnyPrompt,

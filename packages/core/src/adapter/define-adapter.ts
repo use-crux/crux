@@ -26,6 +26,7 @@ import type { AnyToolSet } from "../types";
  */
 type AdapterResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 import type { AdapterSpec } from "./spec";
+import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
@@ -290,6 +291,8 @@ export function adapter<
 
     return Object.freeze({
       providerId: spec.providerId,
+      capacity: (model: string) =>
+        resolveModelCapacityProfile(model, spec.capacity),
       generate,
       stream: streamFn,
       ...(execution.prepare ? { prepare } : {}),

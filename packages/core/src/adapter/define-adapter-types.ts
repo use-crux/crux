@@ -29,6 +29,7 @@ import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { GenerateResult, StreamResult } from "./result-accumulator";
 import type { DeepPartial } from "./logical-stream";
 import type { CallHandle } from "./call-handle";
+import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
 export interface AdapterTransportInfo {
@@ -183,6 +184,22 @@ export interface CruxAdapter<
 > {
   /** Provider identifier from the spec. */
   readonly providerId: string;
+
+  /**
+   * Report capacity facts for a concrete provider model.
+   *
+   * Unknown models resolve to a conservative profile and this method never
+   * performs provider I/O.
+   *
+   * @param model - Concrete provider model identifier.
+   * @returns Capacity facts used for whole-request budget derivation.
+   *
+   * @example
+   * ```ts
+   * const profile = provider.capacity("known-model");
+   * ```
+   */
+  capacity(model: string): ModelCapacityProfile;
 
   /** Execute a prompt (non-streaming) with automatic tool loop. */
   generate<

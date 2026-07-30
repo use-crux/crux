@@ -624,6 +624,23 @@ model context window
 - counting safety margin
 ```
 
+Adapters report model capacity through a synchronous, side-effect-free
+`capacity(model)` hook:
+
+```ts
+interface ModelCapacityProfile {
+  contextWindow: number
+  defaultOutputReserve: number
+  countingConfidence: 'exact' | 'estimated' | 'conservative'
+}
+```
+
+A missing hook or an unresolved model uses Core's conservative profile: an
+8,192-token context window with a 2,048-token output reserve. An adapter may
+return a smaller or provider-specific conservative fallback for unknown model
+identifiers. Authoritative token counting is a separate optional asynchronous
+adapter port because it may require provider I/O; capacity lookup never does.
+
 When `maxTokens` is absent, the adapter/model profile supplies a safe,
 observable output reserve. There is no second response-headroom setting.
 

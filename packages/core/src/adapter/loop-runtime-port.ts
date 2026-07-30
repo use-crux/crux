@@ -27,6 +27,7 @@ import type { AdapterSpec } from "./spec";
 import type { ProviderMediaHooks } from "./native-chat/media-hooks";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
+import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -97,6 +98,9 @@ export interface LoopRuntimePort<
 > {
   /** Runtime identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
   readonly id: string;
+
+  /** Resolve capacity facts for an extracted provider/model identity. */
+  readonly capacity?: (model: ModelInfo) => ModelCapacityProfile | undefined;
 
   /** Explicit timing guarantees implemented by this loop-owning runtime. */
   readonly capabilities?: {
