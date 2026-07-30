@@ -59,5 +59,5 @@ func (s *Index) syncDetail() indexDefinitionDocument {
 }
 
 func (s *Index) definitionDocument(definition api.ProjectDefinition) indexDefinitionDocument {
-	return buildIndexDefinitionDocument(s.indexData(), definition)
+	return buildIndexDefinitionDocument(s.indexData(), definition, s.layout.detail.W)
 }

@@ -53,7 +53,7 @@ func (s *Insights) renderListRow(ins api.InspectInsightRecord, width int, select
 	}
 	dot := kit.SeverityDot(ins.Severity)
 	id := shell.TextMuted.Render(shortID(ins.InsightID, 8))
-	title := shell.Text.Render(kit.Truncate(ins.Title, max(0, width-24), "..."))
+	title := shell.Text.Render(kit.Truncate(ins.Title, max(0, width-24), "…"))
 	age := shell.TextMuted.Render(relTime(ins.UpdatedAt))
 	line1 := fmt.Sprintf("%s%s %s  %s", bar, dot, id, title)
 	pad := width - lipgloss.Width(line1) - lipgloss.Width(age) - 1

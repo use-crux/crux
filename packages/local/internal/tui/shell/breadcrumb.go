@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Breadcrumb renders the thin row above each screen body:
@@ -50,4 +51,25 @@ func Breadcrumb(width int, path []string, right string) string {
 	// uniform dark theme without an extra panel band at the top.
 	body := lipgloss.NewStyle().Width(width).Render(row)
 	return body + "\n" + horizontalBorder(width)
+}
+
+// FrameScreen joins the breadcrumb and active screen without stacking the
+// breadcrumb divider on top of a pane's own leading divider.
+func FrameScreen(width int, breadcrumb, screen string) string {
+	if startsWithHorizontalRule(screen, width) {
+		lines := strings.Split(breadcrumb, "\n")
+		if len(lines) > 1 {
+			breadcrumb = strings.Join(lines[:len(lines)-1], "\n")
+		}
+	}
+	return breadcrumb + "\n" + screen
+}
+
+func startsWithHorizontalRule(value string, width int) bool {
+	first, _, _ := strings.Cut(value, "\n")
+	plain := ansi.Strip(first)
+	if lipgloss.Width(plain) != width || !strings.ContainsRune(plain, '─') {
+		return false
+	}
+	return strings.Trim(plain, "─│") == ""
 }

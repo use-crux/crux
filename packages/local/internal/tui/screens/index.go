@@ -198,7 +198,7 @@ func (s *Index) View(_ Size) string {
 		return s.centerMessage("definition " + sanitizeIndexInline(s.unavailableDefinitionID) + " not in current index")
 	}
 	if len(snapshot.Value.Definitions) == 0 {
-		message := "no project definitions yet — open a file under your crux project to seed the index."
+		message := "No definitions yet — add a Crux definition, then run `crux dev`."
 		if snapshot.State == resource.ResourceDegraded {
 			message = "degraded project index"
 			if snapshot.Err != nil {

@@ -36,8 +36,11 @@ func renderDiagnosisOverview(diagnosis *RunDiagnosis, width int) string {
 	if len(failures) > 0 {
 		b.WriteString("\n" + diagnosisSection("FAILURE EVIDENCE"))
 		for _, item := range failures[:diagnosisRenderLimit(len(failures))] {
-			b.WriteString(kvRow("error", boundedDiagnosisText(item.Message, diagnosisTextLimit), width))
-			writeDiagnosisActivity(&b, diagnosis, item.NodeID, width)
+			label := "run"
+			if item.NodeID != "" {
+				label = diagnosisActivityName(diagnosis.Timeline, item.NodeID)
+			}
+			b.WriteString(kvRow(label, boundedDiagnosisText(item.Message, diagnosisTextLimit), width))
 		}
 		writeDiagnosisRemainder(&b, len(failures), width)
 	}

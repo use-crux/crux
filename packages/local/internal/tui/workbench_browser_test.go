@@ -23,8 +23,15 @@ func TestWorkbenchShowsTypedStartupDiagnostic(t *testing.T) {
 	}}})
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "RUNTIME_HOST_ONLY") || !strings.Contains(view, "Generate the configured") {
-		t.Fatalf("startup diagnostic was not visible in workbench:\n%s", view)
+	if !strings.Contains(view, "⚠ 1 issue · ! details") ||
+		strings.Contains(view, "RUNTIME_HOST_ONLY") ||
+		strings.Contains(view, "Generate the configured") {
+		t.Fatalf("startup diagnostic badge was not compact:\n%s", view)
+	}
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "!", Code: '!'}))
+	details := ansi.Strip(w.View())
+	if !strings.Contains(details, "RUNTIME_HOST_ONLY") || !strings.Contains(details, "Generate the configured") {
+		t.Fatalf("startup diagnostic details were not visible in the overlay:\n%s", details)
 	}
 }
 
@@ -42,7 +49,7 @@ func TestWorkbenchSummarizesAggregateStartupDiagnostic(t *testing.T) {
 	}}})
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "3 issues") || !strings.Contains(view, "Eval answer is not ready") {
+	if !strings.Contains(view, "⚠ 3 issues · ! details") || strings.Contains(view, "Eval answer is not ready") {
 		t.Fatalf("aggregate startup diagnostic was not summarized in workbench:\n%s", view)
 	}
 
@@ -157,7 +164,7 @@ func TestWorkspaceOpenBrowserFailureIsVisibleAndNonFatal(t *testing.T) {
 	w.Update(cmd())
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "browser launch failed: launcher unavailable") {
+	if !strings.Contains(view, "browser launch failed") {
 		t.Fatalf("browser failure was not visible:\n%s", view)
 	}
 }
@@ -174,7 +181,7 @@ func TestWorkspaceOpenBrowserFailureIsSafeAndBoundedAtMinimumWidth(t *testing.T)
 	view := w.View()
 	plain := ansi.Strip(view)
 
-	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch failed: launcher") {
+	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch failed") {
 		t.Fatalf("browser failure was not safely visible:\n%q", plain)
 	}
 	if width := lipgloss.Width(w.browserStatus); width > 256 {

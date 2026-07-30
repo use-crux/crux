@@ -85,39 +85,28 @@ func (i *Inspect) Update(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// View renders the modal. Caller composites this onto the workbench
-// base; this returns the block sized to (viewportWidth-12, viewportHeight-8).
+// View renders the content-sized modal. Caller composites it onto the
+// workbench base.
 func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	if !i.open {
 		return ""
 	}
-	w := viewportWidth - 12
-	if w > 120 {
-		w = 120
-	}
-	if w < 40 {
-		w = 40
-	}
-	h := viewportHeight - 8
-	if h > 40 {
-		h = 40
-	}
-	if h < 10 {
-		h = 10
-	}
-
-	header := " " + shell.TealBold.Render("◧ inspect · "+kit.SanitizeInline(i.title)) +
-		"  " + shell.TextMuted.Render(kit.SanitizeInline(i.subtitle))
-	header = padToWidth(header, w)
+	title := "◧ inspect · " + kit.SanitizeInline(i.title)
+	subtitle := kit.SanitizeInline(i.subtitle)
+	footerText := "j/k scroll  g/G top/bottom  ^d/^u page  esc close  line 1 / " + formatInt(len(i.lines))
+	longest := longestLineWidth(title+"  "+subtitle, footerText, kit.SanitizeMultiline(i.body))
+	size := contentModalSize(viewportWidth, viewportHeight, longest, len(i.lines), 6)
+	w := size.innerWidth
 
 	// Visible window into the body. Wrapping keeps long values reachable with
 	// vertical scrolling instead of permanently truncating their tails.
-	bodyRows := h - 4 // header + 2 rules + footer
-	if bodyRows < 1 {
-		bodyRows = 1
-	}
 	visible := wrapInspectBody(i.body, w-2)
 	i.lines = visible
+	size = contentModalSize(viewportWidth, viewportHeight, longest, len(visible), 6)
+	bodyRows := max(1, size.outerHeight-6)
+
+	header := " " + shell.TealBold.Render(title) + "  " + shell.TextMuted.Render(subtitle)
+	header = padToWidth(header, w)
 	start := i.scroll
 	if start > len(visible)-bodyRows {
 		start = len(visible) - bodyRows

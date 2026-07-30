@@ -23,19 +23,19 @@ func (w *Workbench) View() string {
 	root := kit.Rect{W: w.width, H: w.height}
 	regions := kit.SplitV(root, kit.Fill(), kit.Fixed(1))
 	bodyRect, statusRect := regions[0], regions[1]
-	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), w.statusText(statusRect.W))
+	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), w.statusBadge())
 	path, right := w.breadcrumbContent()
 	base := strings.Join(append(w.layoutBody(bodyRect, path, right), statusBar), "\n")
 
 	switch {
 	case w.palette.IsOpen():
-		return overlayOnto(base, w.palette.View(w.width, w.height), w.width, 1)
+		return overlayOnto(base, w.palette.View(w.width, w.height), w.width, w.height)
 	case w.help.IsOpen():
-		return overlayOnto(base, w.help.View(w.width, w.height), w.width, 0)
+		return overlayOnto(base, w.help.View(w.width, w.height), w.width, w.height)
 	case w.inspect.IsOpen():
-		return overlayOnto(base, w.inspect.View(w.width, w.height), w.width, 0)
+		return overlayOnto(base, w.inspect.View(w.width, w.height), w.width, w.height)
 	case w.definitionChooser.IsOpen():
-		return overlayOnto(base, w.definitionChooser.View(), w.width, 1)
+		return overlayOnto(base, w.definitionChooser.View(), w.width, w.height)
 	default:
 		return base
 	}
@@ -67,10 +67,11 @@ func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) 
 	breadcrumb := shell.Breadcrumb(r.W, path, right)
 	screenH := max(0, r.H-len(blockLines(breadcrumb)))
 	screenView := w.activeScreen().View(screens.Size{Width: r.W, Height: screenH})
-	return blockLines(kit.PadBlock(breadcrumb+"\n"+screenView, r.W, r.H))
+	framed := shell.FrameScreen(r.W, breadcrumb, screenView)
+	return blockLines(kit.PadBlock(framed, r.W, r.H))
 }
 
-func overlayOnto(base, overlay string, width, top int) string {
+func overlayOnto(base, overlay string, width, height int) string {
 	if overlay == "" {
 		return base
 	}
@@ -80,15 +81,14 @@ func overlayOnto(base, overlay string, width, top int) string {
 	for _, line := range overlayLines {
 		overlayWidth = max(overlayWidth, lipgloss.Width(line))
 	}
-	leftPad := 0
-	if overlayWidth < width {
-		leftPad = max(1, (width-overlayWidth)/2)
-	}
-	height := max(len(baseLines), top+len(overlayLines))
-	canvas := lipgloss.NewCanvas(width, height)
-	canvas.Compose(lipgloss.NewLayer(base))
-	canvas.Compose(lipgloss.NewLayer(overlay).X(leftPad).Y(top).Z(1))
-	return kit.PadBlock(canvas.Render(), width, height)
+	left := max(0, (width-overlayWidth)/2)
+	top := max(0, (height-len(overlayLines))/3)
+	canvasHeight := max(len(baseLines), height)
+	compositor := lipgloss.NewCompositor(
+		lipgloss.NewLayer(base),
+		lipgloss.NewLayer(overlay).X(left).Y(top).Z(1),
+	)
+	return kit.PadBlock(compositor.Render(), width, canvasHeight)
 }
 
 func blockLines(value string) []string {

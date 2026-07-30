@@ -44,7 +44,7 @@ func (s *Runs) renderList(width, height int) string {
 
 	runs := s.filteredRuns()
 	if len(runs) == 0 {
-		b.WriteString(" " + shell.TextMuted.Render("no runs yet"))
+		b.WriteString(padRow(" "+shell.TextMuted.Render("No runs yet — use your app with `crux dev` running, or run `crux eval`."), width))
 		b.WriteString("\n")
 		for i := 1; i < bodyRows; i++ {
 			b.WriteString(strings.Repeat(" ", width) + "\n")
@@ -73,21 +73,11 @@ func (s *Runs) renderRunRow(r api.ObservabilityRunSummary, width int, selected b
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
 	}
 	dot := kit.StatusDot(normalizeObservabilityStatus(r.Status))
-
-	idCol := shell.Text.Render(padRunsInline(clipRunsInline(r.RunID, 7), 7))
 	ago := shell.TextMuted.Render(relTimeUnix(parseObservabilityTime(r.StartedAt)))
-
-	// Line 1: bar + dot + id + target + age (right).
-	line1Core := fmt.Sprintf("%s %s %s", bar, dot, idCol)
-	if width >= 32 {
-		targetCol := shell.TextDim.Render(truncateRunsInline(firstNonEmpty(r.Name, r.RootPrimitive, r.RunID), 12))
-		line1Core += "  " + targetCol
-	}
-	pad := width - lipgloss.Width(line1Core) - lipgloss.Width(ago) - 2
-	if pad < 1 {
-		pad = 1
-	}
-	line1 := line1Core + strings.Repeat(" ", pad) + ago + " "
+	leading := fmt.Sprintf("%s %s ", bar, dot)
+	nameBudget := max(1, width-lipgloss.Width(leading)-lipgloss.Width(ago)-2)
+	name := kit.TruncateMiddle(sanitizeRunsInline(firstNonEmpty(r.Name, r.RunID)), nameBudget, "…")
+	line1 := kit.FitMiddle(width, leading, shell.Text.Render(name), ago+" ", "…")
 
 	// Line 2: indented duration and token count.
 	lat := durStr(durationPointer(r.DurationMs))
@@ -97,7 +87,7 @@ func (s *Runs) renderRunRow(r api.ObservabilityRunSummary, width int, selected b
 		tok = "— tok"
 	}
 	subParts := []string{lat, tok}
-	line2 := "    " + shell.TextMuted.Render(strings.Join(subParts, "  "))
+	line2 := "    " + shell.TextMuted.Render(strings.Join(subParts, " · "))
 
 	return padRow(line1, width), padRow(line2, width)
 }

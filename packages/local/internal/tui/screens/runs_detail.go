@@ -20,7 +20,11 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		header := s.spanDetailHeader(width, height)
 		if s.diagnosis == nil {
 			headerHeight := strings.Count(header, "\n") + 1
-			body := centerMsg(Size{Width: width, Height: max(0, height-headerHeight)}, "no span selected")
+			message := "No span selected — choose a run, then choose an activity."
+			if s.SelectedRunID() == "" {
+				message = "No run selected — use your app with `crux dev` running, or run `crux eval`."
+			}
+			body := centerMsg(Size{Width: width, Height: max(0, height-headerHeight)}, message)
 			return kit.PadBlock(header+"\n"+body, width, height)
 		}
 		lines := strings.Split(kit.PadBlock(header, width, min(strings.Count(header, "\n")+1, height)), "\n")

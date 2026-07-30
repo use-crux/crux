@@ -3,6 +3,9 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 )
 
 // TestWorkbenchViewHasNoTabStrip asserts the top tab strip is gone from
@@ -21,5 +24,28 @@ func TestWorkbenchViewHasNoTabStrip(t *testing.T) {
 		if strings.Contains(out, marker) {
 			t.Errorf("Workbench.View() still contains tab-strip marker %q", marker)
 		}
+	}
+}
+
+func TestOverlayCentersHorizontallyAndOneThirdVertically(t *testing.T) {
+	const width, height = 160, 45
+	overlay := strings.Join([]string{
+		"╭" + strings.Repeat("─", 38) + "╮",
+		"│" + strings.Repeat(" ", 38) + "│",
+		"╰" + strings.Repeat("─", 38) + "╯",
+	}, "\n")
+	frame := ansi.Strip(overlayOnto(kit.PadBlock("", width, height), overlay, width, height))
+	lines := strings.Split(frame, "\n")
+	wantTop := (height - 3) / 3
+	wantLeft := (width - 40) / 2
+	gotTop, gotLeft := -1, -1
+	for index, line := range lines {
+		if left := strings.Index(line, "╭"); left >= 0 {
+			gotTop, gotLeft = index, left
+			break
+		}
+	}
+	if gotTop != wantTop || gotLeft != wantLeft {
+		t.Fatalf("overlay origin = (%d,%d), want (%d,%d)", gotLeft, gotTop, wantLeft, wantTop)
 	}
 }

@@ -31,8 +31,8 @@ func TestInspectViewSafelyProjectsUntrustedMetadataAndMalformedPayload(t *testin
 		t.Fatalf("inspect view lost safely wrapped text:\n%s", plain)
 	}
 	for index, line := range strings.Split(plain, "\n") {
-		if width := lipgloss.Width(line); width > 60 {
-			t.Fatalf("inspect line %d width = %d, want at most 60: %q", index+1, width, line)
+		if width := lipgloss.Width(line); width > 66 {
+			t.Fatalf("inspect line %d width = %d, want at most viewport-4: %q", index+1, width, line)
 		}
 	}
 }
@@ -54,8 +54,8 @@ func TestInspectViewWrapsWideValidJSONByTerminalCells(t *testing.T) {
 		t.Fatalf("inspect view did not preserve wrapped text:\n%s", plain)
 	}
 	for index, line := range strings.Split(plain, "\n") {
-		if width := lipgloss.Width(line); width > 60 {
-			t.Fatalf("inspect line %d width = %d, want at most 60: %q", index+1, width, line)
+		if width := lipgloss.Width(line); width > 66 {
+			t.Fatalf("inspect line %d width = %d, want at most viewport-4: %q", index+1, width, line)
 		}
 	}
 }

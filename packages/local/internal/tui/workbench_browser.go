@@ -2,10 +2,13 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 // BrowserOpener launches the browser devtools URL. It is injected at the
@@ -50,12 +53,25 @@ func (w *Workbench) handleBrowserResult(result browserResultMsg) tea.Cmd {
 	return nil
 }
 
-func (w *Workbench) statusText(width int) string {
+func (w *Workbench) statusBadge() shell.StatusBadge {
+	if w.startupDiagnostic != nil {
+		count := len(w.startupDiagnostic.Children)
+		if count == 0 {
+			count = 1
+		}
+		return shell.StatusBadge{
+			Full:    fmt.Sprintf("⚠ %d %s · ! details", count, plural(count, "issue", "issues")),
+			Compact: fmt.Sprintf("⚠%d !", count),
+			Warning: true,
+		}
+	}
 	if w.browserStatus != "" {
-		return kit.Truncate(w.browserStatus, width, "…")
+		badge := shell.StatusBadge{Full: w.browserStatus}
+		if strings.HasPrefix(w.browserStatus, "browser launch failed") {
+			badge.Compact = "browser launch failed"
+			badge.Warning = true
+		}
+		return badge
 	}
-	if w.startupStatus != "" {
-		return kit.Truncate(w.startupStatus, width, "…")
-	}
-	return ".crux/evals"
+	return shell.StatusBadge{}
 }

@@ -54,6 +54,31 @@ func TestIndexFuzzResize(t *testing.T) {
 	})
 }
 
+func TestIndexDetailRendersProjectRelativePaths(t *testing.T) {
+	const projectRoot = "/workspace/customer-support"
+	column := 16
+	definition := api.ProjectDefinition{
+		ID:   "eval:model-backed",
+		Kind: "eval",
+		Name: "model-backed",
+		Source: &api.SourceLoc{
+			File:   projectRoot + "/evals/nested/model-backed.example.ts",
+			Line:   13,
+			Column: &column,
+		},
+	}
+	document := stripANSI(buildIndexDefinitionDocument(api.IndexData{
+		Project: &api.ProjectIdentity{Root: projectRoot},
+	}, definition, 52).content)
+
+	if strings.Contains(document, projectRoot) {
+		t.Fatalf("index detail leaked absolute project prefix:\n%s", document)
+	}
+	if !strings.Contains(document, "model-backed.example.ts:13:16") {
+		t.Fatalf("index detail lost filename and source coordinates:\n%s", document)
+	}
+}
+
 func fixtureIndex() *Index {
 	column := 7
 	endLine := 18

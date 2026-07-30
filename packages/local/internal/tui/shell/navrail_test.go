@@ -1,6 +1,9 @@
 package shell
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestNavRailDropsDeadConcepts asserts the nav rail no longer carries the
 // removed Suites and Compare screens — Evals are source-defined and Baseline
@@ -21,6 +24,15 @@ func TestNavRailKeysAreSequential(t *testing.T) {
 		want := string(rune('1' + i))
 		if DefaultNav[i].Key != want {
 			t.Errorf("DefaultNav[%d] (%s) key = %q, want %q", i, DefaultNav[i].ID, DefaultNav[i].Key, want)
+		}
+	}
+}
+
+func TestNavRailOmitsEmptyFooterBlocks(t *testing.T) {
+	view := NavRail(30, DefaultNav, "overview", NavRailFooter{TargetKind: "agent"})
+	for _, dead := range []string{"TARGET", "BASELINE", "(none)"} {
+		if strings.Contains(view, dead) {
+			t.Errorf("empty nav footer rendered %q:\n%s", dead, view)
 		}
 	}
 }

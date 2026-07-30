@@ -66,6 +66,17 @@ func TestInsightsLayoutSingleShowsOnePane(t *testing.T) {
 	}
 }
 
+func TestInsightsEmptyStateRendersAtEverySupportedWidth(t *testing.T) {
+	for _, width := range []int{60, 70, 100, 160} {
+		screen := NewInsights()
+		screen.loaded = true
+		view := stripANSI(screen.View(Size{Width: width, Height: 24}))
+		if !strings.Contains(view, "No insights yet") || !strings.Contains(view, "crux eval") {
+			t.Fatalf("width %d omitted actionable empty state:\n%s", width, view)
+		}
+	}
+}
+
 func fixtureInsights() (*Insights, time.Time) {
 	client := uitest.NewFixtureClient()
 	insights, _ := client.Insights(nil)

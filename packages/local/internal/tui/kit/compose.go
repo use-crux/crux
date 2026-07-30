@@ -70,16 +70,5 @@ func bounds(rects []Rect) (int, int) {
 }
 
 func fitLine(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	got := lipgloss.Width(s)
-	switch {
-	case got == w:
-		return s
-	case got < w:
-		return s + strings.Repeat(" ", w-got)
-	default:
-		return lipgloss.NewStyle().MaxWidth(w).Render(s)
-	}
+	return Fit(s, w, "…")
 }

@@ -79,8 +79,8 @@ func TestOverviewEmptySummaryIsDistinctFromReadyZeroMetrics(t *testing.T) {
 	overview.Resize(Size{Width: 100, Height: 30})
 
 	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
-	if !strings.Contains(view, "no overview summary") {
-		t.Fatalf("empty summary did not render its explicit state:\n%s", view)
+	if !strings.Contains(view, "No run metrics yet") || !strings.Contains(view, "crux eval") {
+		t.Fatalf("empty summary did not render its actionable state:\n%s", view)
 	}
 }
 

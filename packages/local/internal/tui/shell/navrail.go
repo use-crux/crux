@@ -110,34 +110,28 @@ func NavRail(height int, items []NavItem, active string, footer NavRailFooter) s
 	}
 
 	footerLines := make([]string, 0, 7)
-	footerLines = append(footerLines, navLine(" "))
-	footerLines = append(footerLines, navLine(" "+tag("TARGET")))
-	target := footer.TargetID
-	if target == "" {
-		target = TextMuted.Render("(none)")
+	if footer.TargetID != "" {
+		footerLines = append(footerLines, navLine(" "))
+		footerLines = append(footerLines, navLine(" "+tag("TARGET")))
+		footerLines = append(footerLines, navLine(" "+Text.Render(footer.TargetID)))
+		targetParts := make([]string, 0, 2)
+		if footer.TargetKind != "" {
+			targetParts = append(targetParts, footer.TargetKind)
+		}
+		if footer.TargetModel != "" {
+			targetParts = append(targetParts, footer.TargetModel)
+		}
+		if len(targetParts) > 0 {
+			footerLines = append(footerLines, navLine(" "+TextMuted.Render(strings.Join(targetParts, " · "))))
+		}
 	}
-	footerLines = append(footerLines, navLine(" "+Text.Render(target)))
-	targetParts := make([]string, 0, 2)
-	if footer.TargetKind != "" {
-		targetParts = append(targetParts, footer.TargetKind)
-	}
-	if footer.TargetModel != "" {
-		targetParts = append(targetParts, footer.TargetModel)
-	}
-	targetSub := strings.Join(targetParts, " · ")
-	if targetSub == "" {
-		targetSub = " "
-	}
-	footerLines = append(footerLines, navLine(" "+TextMuted.Render(targetSub)))
-	footerLines = append(footerLines, navLine(" "))
-	footerLines = append(footerLines, navLine(" "+tag("BASELINE")))
-	bl := footer.BaselineLabel
-	if bl == "" {
-		bl = TextMuted.Render("(none)")
-	}
-	footerLines = append(footerLines, navLine(" "+Text.Render(bl)))
-	if footer.BaselineRelative != "" {
-		footerLines = append(footerLines, navLine(" "+TextMuted.Render(footer.BaselineRelative)))
+	if footer.BaselineLabel != "" {
+		footerLines = append(footerLines, navLine(" "))
+		footerLines = append(footerLines, navLine(" "+tag("BASELINE")))
+		footerLines = append(footerLines, navLine(" "+Text.Render(footer.BaselineLabel)))
+		if footer.BaselineRelative != "" {
+			footerLines = append(footerLines, navLine(" "+TextMuted.Render(footer.BaselineRelative)))
+		}
 	}
 
 	spacerRows := height - len(lines) - len(footerLines)

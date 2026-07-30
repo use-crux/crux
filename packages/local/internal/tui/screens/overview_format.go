@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -190,11 +191,7 @@ func shortID(s string, n int) string {
 }
 
 func padRow(row string, width int) string {
-	w := lipgloss.Width(row)
-	if w >= width {
-		return row
-	}
-	return row + strings.Repeat(" ", width-w)
+	return kit.Fit(row, width, "…")
 }
 
 func horizontalRuleDim(width int) string {
@@ -234,11 +231,20 @@ func relTimeFrom(t time.Time) string {
 }
 
 func centerMsg(size Size, msg string) string {
-	pad := strings.Repeat("\n", size.Height/2)
-	return pad + shell.TextMuted.Render(centerStr(msg, size.Width))
+	if size.Width <= 0 || size.Height <= 0 {
+		return ""
+	}
+	message := kit.Fit(shell.TextMuted.Render(msg), size.Width, "…")
+	lines := make([]string, size.Height)
+	for index := range lines {
+		lines[index] = strings.Repeat(" ", size.Width)
+	}
+	lines[(size.Height-1)/2] = centerStr(strings.TrimRight(message, " "), size.Width)
+	return strings.Join(lines, "\n")
 }
 
 func centerStr(s string, width int) string {
+	s = strings.TrimRight(kit.Fit(s, width, "…"), " ")
 	w := lipgloss.Width(s)
 	if w >= width {
 		return s

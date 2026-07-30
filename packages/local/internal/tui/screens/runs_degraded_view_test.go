@@ -38,7 +38,7 @@ func TestRunsListRefreshFailureIsVisibleWithLastGoodRows(t *testing.T) {
 	}), client)
 
 	view := strings.ToLower(stripANSI(runs.View(Size{})))
-	for _, want := range []string{"degraded", "list down", "run-a"} {
+	for _, want := range []string{"degraded", "list down", "retained run"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("degraded Runs list omitted %q while retaining rows:\n%s", want, view)
 		}
@@ -149,7 +149,7 @@ func TestRunsListRefreshShowsStatusWithoutHidingQueryOrRows(t *testing.T) {
 	_ = runs.Refresh(testContext, client, bridge.Invalidations{bridge.RunsListResource: 1})
 
 	view := strings.ToLower(stripANSI(runs.View(Size{})))
-	for _, want := range []string{"refreshing", "/retained", "run-a"} {
+	for _, want := range []string{"refreshing", "/retained", "retained run"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("refreshing Runs list omitted %q:\n%s", want, view)
 		}

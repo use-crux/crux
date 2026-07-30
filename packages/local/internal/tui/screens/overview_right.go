@@ -35,7 +35,7 @@ func (o *Overview) renderPassRateChart(width, height int) string {
 	}
 	values := passRateHistory(o.overviewSummary())
 	if len(values) == 0 {
-		return header + "\n" + shell.TextMuted.Render(" no history yet — collect more runs to populate")
+		return header + "\n" + padRow(" "+shell.TextMuted.Render("No pass-rate history yet — run `crux eval`."), width)
 	}
 	// Values are 0-1; show as 0-100. Adapt the y-range to the data so the
 	// chart still renders when the backend hasn't seen real pass-rate
@@ -57,7 +57,7 @@ func (o *Overview) renderPassRateChart(width, height int) string {
 		}
 	}
 	if !hasNonZero {
-		return header + "\n" + shell.TextMuted.Render(" pass rate history is empty — collect more runs to populate")
+		return header + "\n" + padRow(" "+shell.TextMuted.Render("No pass-rate history yet — run `crux eval`."), width)
 	}
 	yMin, yMax := 80.0, 100.0
 	if dataMin < yMin {
@@ -130,7 +130,7 @@ func (o *Overview) renderActivityBlock(width, height int) string {
 	// feed is always populated in a live workbench; this hint is the
 	// first-30-seconds-of-`crux dev` state.
 	if len(filtered) == 0 {
-		hint := " " + shell.TextMuted.Render("idle · waiting for observability runs")
+		hint := " " + shell.TextMuted.Render("No activity yet — use your app with `crux dev` running, or run `crux eval`.")
 		rows = append(rows, padRow(hint, width))
 	}
 	start := o.activityScroll

@@ -75,7 +75,7 @@ func padPreservingBG(s string, width int) string {
 		if w == width {
 			return s
 		}
-		return lipgloss.NewStyle().MaxWidth(width).Render(s)
+		return Fit(s, width, "…")
 	}
 	pad := width - w
 	if bg := trailingBackground(s); bg != "" {

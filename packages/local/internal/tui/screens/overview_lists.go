@@ -48,7 +48,7 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		return header + "\n" + strings.Join(rows, "\n")
 	}
 	if len(insights) == 0 {
-		hint := " " + shell.TextMuted.Render("no insights yet — collect more runs or wait for the analyzer.")
+		hint := " " + shell.TextMuted.Render("No insights yet — run `crux eval`, or use your app with `crux dev` running.")
 		rows := []string{hint}
 		for len(rows) < bodyRows {
 			rows = append(rows, strings.Repeat(" ", width))
@@ -148,7 +148,7 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 		return padRow(row, rowW)
 	})
 	if len(runs) == 0 {
-		rows = append(rows, " "+shell.TextMuted.Render("no runs yet — start a flow or prompt to see traces here."))
+		rows = append(rows, padRow(" "+shell.TextMuted.Render("No runs yet — use your app with `crux dev` running, or run `crux eval`."), width))
 	}
 	for len(rows) < bodyRows {
 		rows = append(rows, strings.Repeat(" ", width))

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 )
 
 // PaneHeader renders the header strip at the top of a pane:
@@ -21,17 +22,13 @@ func PaneHeader(width int, title string, subtitle string, right string) string {
 	mainStyle := lipgloss.NewStyle().Foreground(ColorText)
 	muted := lipgloss.NewStyle().Foreground(ColorTextMuted)
 
-	left := " " + mainStyle.Render(title)
+	leading := mainStyle.Render(title)
+	middle := ""
 	if subtitle != "" {
-		left += "  " + muted.Render("· "+subtitle)
+		middle = "  " + muted.Render("· "+subtitle)
 	}
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
-	pad := width - leftW - rightW - 1
-	if pad < 1 {
-		pad = 1
-	}
-	row := left + strings.Repeat(" ", pad) + right + " "
+	innerWidth := max(0, width-2)
+	row := " " + kit.FitMiddle(innerWidth, leading, middle, right, muted.Render("…")) + " "
 	// Sandwich the title row with top + bottom dividers so every section
 	// header has a clear top boundary regardless of what sits above it
 	// in the composition (was: only a bottom rule, leaving stacked

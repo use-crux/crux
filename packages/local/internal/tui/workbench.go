@@ -109,19 +109,7 @@ func (w *Workbench) SetStartupSnapshot(snapshot startup.Snapshot) {
 	if len(snapshot.Diagnostics) > 0 {
 		diagnostic := snapshot.Diagnostics[0]
 		w.startupDiagnostic = &diagnostic
-		if len(diagnostic.Children) > 0 {
-			detail := diagnostic.Message
-			if detail == "" {
-				detail = diagnostic.Children[0].Message
-			}
-			w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
-			return
-		}
-		detail := diagnostic.Remediation
-		if detail == "" {
-			detail = diagnostic.Message
-		}
-		w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
+		w.startupStatus = ""
 		return
 	}
 	w.startupDiagnostic = nil
