@@ -28,6 +28,7 @@ export interface PromptTextPreviewProviderPorts {
   ): Promise<PromptTextPreviewDocument>
   refreshDocument(
     document: PromptTextPreviewDocument,
+    expectedText: string,
   ): Promise<PromptTextPreviewDocument>
   showDocument(document: PromptTextPreviewDocument): Promise<void>
   contentChanged(uri: string): void
@@ -129,7 +130,7 @@ export class PromptTextPreviewDocumentProvider {
       ready,
     }
     this.#signal(resource)
-    const updated = await this.ports.refreshDocument(document)
+    const updated = await this.ports.refreshDocument(document, ready.text)
     if (!this.#isCurrent(resource, publication)) return 'resource-disposed'
     if (updated.text !== ready.text) {
       const cleared = await this.#markUnavailable(
@@ -232,7 +233,7 @@ export class PromptTextPreviewDocumentProvider {
     let cleared = document
     while (cleared.text !== '') {
       if (!this.#isCurrent(resource, publication)) return undefined
-      cleared = await this.ports.refreshDocument(cleared)
+      cleared = await this.ports.refreshDocument(cleared, '')
     }
     return cleared
   }

@@ -1,10 +1,14 @@
 import type { PromptTextPreviewDocument } from './provider.js'
-import { findDocument, previewDocument } from './vscode-source.js'
 
 // VS Code may serialize content-provider work behind other extension-host
 // activity. Keep the waiter bounded without mistaking a loaded host for an
 // editor EOL transformation.
 const documentRefreshTimeoutMs = 15_000
+
+interface PromptTextPreviewDocumentWaiter {
+  readonly expectedText: string
+  readonly resolve: (document: PromptTextPreviewDocument) => void
+}
 
 /**
  * Waits for VS Code to materialize one content-provider invalidation.
@@ -13,16 +17,24 @@ const documentRefreshTimeoutMs = 15_000
  * change and timeout so closed or empty resources leave no retained cache.
  */
 export class PromptTextPreviewDocumentUpdates {
-  readonly #waiters = new Map<
-    string,
-    Set<(document: PromptTextPreviewDocument) => void>
-  >()
+  readonly #waiters = new Map<string, Set<PromptTextPreviewDocumentWaiter>>()
 
-  /** Resolve every waiter for the exact URI with VS Code's current bytes. */
+  constructor(
+    private readonly currentDocument: (
+      uri: string,
+    ) => PromptTextPreviewDocument | undefined,
+  ) {}
+
+  /** Resolve only publications whose expected bytes reached the exact URI. */
   changed(document: PromptTextPreviewDocument): void {
     const waiters = this.#waiters.get(document.uri)
-    this.#waiters.delete(document.uri)
-    for (const resolve of waiters ?? []) resolve(document)
+    if (waiters === undefined) return
+    for (const waiter of [...waiters]) {
+      if (waiter.expectedText !== document.text) continue
+      waiters.delete(waiter)
+      waiter.resolve(document)
+    }
+    if (waiters.size === 0) this.#waiters.delete(document.uri)
   }
 
   /**
@@ -31,25 +43,26 @@ export class PromptTextPreviewDocumentUpdates {
    */
   async refresh(
     document: PromptTextPreviewDocument,
+    expectedText: string,
     invalidate: () => void,
   ): Promise<PromptTextPreviewDocument> {
     const uri = document.uri
-    let settle: ((value: PromptTextPreviewDocument) => void) | undefined
+    let waiter: PromptTextPreviewDocumentWaiter | undefined
     const changed = new Promise<PromptTextPreviewDocument>((resolve) => {
-      settle = resolve
+      waiter = { expectedText, resolve }
       const waiters = this.#waiters.get(uri) ?? new Set()
-      waiters.add(resolve)
+      waiters.add(waiter)
       this.#waiters.set(uri, waiters)
     })
     invalidate()
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<PromptTextPreviewDocument>((resolve) => {
       timer = setTimeout(() => {
-        const current = findDocument(uri)
+        const current = this.currentDocument(uri)
         resolve(
           current === undefined
             ? { uri, languageId: '', eol: 'lf', text: '' }
-            : previewDocument(current),
+            : current,
         )
       }, documentRefreshTimeoutMs)
     })
@@ -58,7 +71,7 @@ export class PromptTextPreviewDocumentUpdates {
     } finally {
       if (timer !== undefined) clearTimeout(timer)
       const waiters = this.#waiters.get(uri)
-      if (settle !== undefined) waiters?.delete(settle)
+      if (waiter !== undefined) waiters?.delete(waiter)
       if (waiters?.size === 0) this.#waiters.delete(uri)
     }
   }
@@ -66,8 +79,8 @@ export class PromptTextPreviewDocumentUpdates {
   /** Resolve and release all waiters during extension deactivation. */
   clear(): void {
     for (const [uri, waiters] of this.#waiters) {
-      for (const resolve of waiters) {
-        resolve({ uri, languageId: '', eol: 'lf', text: '' })
+      for (const waiter of waiters) {
+        waiter.resolve({ uri, languageId: '', eol: 'lf', text: '' })
       }
     }
     this.#waiters.clear()

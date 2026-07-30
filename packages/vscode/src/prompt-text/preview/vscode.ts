@@ -49,7 +49,7 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
   #revisions = new PromptTextDocumentRevisions();
   readonly #contentChanges = new vscode.EventEmitter<vscode.Uri>();
   readonly #codeLensChanges = new vscode.EventEmitter<void>();
-  readonly #updates = new PromptTextPreviewDocumentUpdates();
+  readonly #updates: PromptTextPreviewDocumentUpdates;
   readonly #provider: PromptTextPreviewDocumentProvider;
   readonly #controller: PromptTextPreviewController;
   readonly #subscriptions: readonly vscode.Disposable[];
@@ -58,6 +58,10 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
   #disposed = false;
 
   constructor() {
+    this.#updates = new PromptTextPreviewDocumentUpdates((uri) => {
+      const document = findDocument(uri);
+      return document === undefined ? undefined : previewDocument(document);
+    });
     this.#provider = new PromptTextPreviewDocumentProvider({
       createUri: (identity) => createPreviewUri(identity).toString(),
       openDocument: async (uri) =>
@@ -65,7 +69,8 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
           await vscode.workspace.openTextDocument(vscode.Uri.parse(uri)),
         ),
       setMarkdownLanguage: (document) => this.#setMarkdownLanguage(document),
-      refreshDocument: (document) => this.#refreshDocument(document),
+      refreshDocument: (document, expectedText) =>
+        this.#refreshDocument(document, expectedText),
       showDocument: async (document) => {
         const source = findDocument(document.uri);
         if (source === undefined) throw new Error("preview document closed");
@@ -281,8 +286,9 @@ class VSCodePromptTextPreviews implements PromptTextPreviews {
 
   async #refreshDocument(
     document: PromptTextPreviewDocument,
+    expectedText: string,
   ): Promise<PromptTextPreviewDocument> {
-    return this.#updates.refresh(document, () => {
+    return this.#updates.refresh(document, expectedText, () => {
       this.#contentChanges.fire(vscode.Uri.parse(document.uri));
     });
   }
