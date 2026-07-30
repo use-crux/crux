@@ -1,0 +1,9 @@
+{
+  "name": "crux-flagship-demo",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@use-crux/core": "workspace:*",
+    "zod": "^4.4.3"
+  }
+}

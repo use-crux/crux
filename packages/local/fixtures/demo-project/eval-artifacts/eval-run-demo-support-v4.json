@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 4,
+  "runId": "eval-run-demo-support-v4",
+  "evalId": "demo.support-quality",
+  "sourceKey": {
+    "relativeFile": "evals/support.eval.ts",
+    "export": "default"
+  },
+  "startedAt": 1785403200000,
+  "endedAt": 1785403201450,
+  "definitionFingerprint": "demo-support-definition-v1",
+  "selection": {
+    "cases": ["refund-window"],
+    "variants": ["current"],
+    "trials": 1,
+    "caseTrials": { "refund-window": 1 }
+  },
+  "costControl": "not_required",
+  "blockingVariants": ["current"],
+  "cells": [
+    {
+      "caseId": "refund-window",
+      "variant": "current",
+      "trial": 0,
+      "status": "passed",
+      "task": { "status": "executed", "reason": "no_exact_evidence" },
+      "scorerContracts": [],
+      "scores": [],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "passed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "Can I refund my monthly plan after seven days?" },
+      "output": { "answer": "Yes, within 14 days.", "citations": ["policy-refunds"] },
+      "metrics": { "durationMs": 1450 },
+      "runIds": ["run_demo_support_good"],
+      "capturedSignals": ["modelCalls"]
+    }
+  ],
+  "variants": [
+    {
+      "name": "current",
+      "fingerprint": "demo-support-arm-v1",
+      "overrideKeys": [],
+      "blocking": true
+    }
+  ],
+  "aggregates": {
+    "current": {
+      "cells": 1,
+      "passed": 1,
+      "failed": 0,
+      "errored": 0,
+      "timedOut": 0,
+      "skipped": 0,
+      "passRate": 1,
+      "scores": {},
+      "trialConsistency": 1,
+      "latencyMs": 1450
+    }
+  },
+  "gates": { "passed": true, "blockingPassed": true, "results": [] },
+  "cost": {
+    "actualUsd": 0.012,
+    "reservedMaximumUsd": 0,
+    "unknownActionCount": 0,
+    "task": { "actualUsd": 0.012 },
+    "judge": {}
+  },
+  "provenance": {
+    "task": "opaque",
+    "host": "injected",
+    "evidenceStore": "none"
+  },
+  "status": "complete",
+  "passed": true
+}

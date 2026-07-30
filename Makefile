@@ -14,6 +14,7 @@ help:
 	@echo "  make cli           Alias for make local"
 	@echo "  make test          Run workspace tests"
 	@echo "  make typecheck     Run workspace typechecks"
+	@echo "  make tui-shots     Capture real Crux TUI screens (ANSI + images)"
 	@echo "  make clean         Remove common build outputs"
 
 .PHONY: install
@@ -64,6 +65,10 @@ test:
 .PHONY: typecheck
 typecheck:
 	$(PNPM) typecheck
+
+.PHONY: tui-shots
+tui-shots:
+	$(MAKE) -C packages/local tui-shots
 
 .PHONY: clean
 clean:

@@ -46,6 +46,7 @@ help:
 	@echo "  make test-go         Prepare embedded assets and run hermetic Go tests"
 	@echo "  make test-go-integration  Run Go tests with the current Rust/Oxc indexer worker"
 	@echo "  make test            Alias for test-go"
+	@echo "  make tui-shots       Capture real TUI screens (ANSI + images) via scripts/tui-shots.sh"
 	@echo "  make clean           Remove local runtime build outputs"
 
 .PHONY: build-local-workers
@@ -212,3 +213,9 @@ inspect-go:
 .PHONY: bench
 bench:
 	$(GO) test -run '^$$' -bench . -benchmem ./internal/observability ./internal/inspect ./internal/store
+
+# Visual capture loop for the real TUI binary (does not build assets).
+# Requires ./crux. Optional: vhs for PNG/GIF. See scripts/tui-shots.sh.
+.PHONY: tui-shots
+tui-shots:
+	@bash ./scripts/tui-shots.sh

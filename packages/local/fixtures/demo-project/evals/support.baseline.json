@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 3,
+  "baselineFingerprintEpoch": 5,
+  "baselineId": "baseline-demo-support-v1",
+  "evalId": "demo.support-quality",
+  "runId": "eval-run-demo-support-v4",
+  "selectedArm": "current",
+  "sourceKey": {
+    "relativeFile": "evals/support.eval.ts",
+    "export": "default"
+  },
+  "promotedAt": 1785403202000,
+  "promotedBy": "Crux flagship demo",
+  "toolVersion": "0.7.0",
+  "coverage": [
+    {
+      "caseId": "refund-window",
+      "inputFingerprint": "demo-input-refund-window-v1",
+      "callFingerprint": "demo-call-default-v1",
+      "expectedFingerprint": "demo-expected-policy-refunds-v1",
+      "trials": [0],
+      "outcomes": [{ "trial": 0, "status": "passed" }],
+      "metrics": {}
+    }
+  ],
+  "provenance": {
+    "definitionFingerprint": "demo-support-definition-v1",
+    "taskFingerprint": "demo-support-task-v1"
+  },
+  "snapshotFingerprint": "1bb111c136661e5af3b5c1cee52088035b857f296cf67072b56c87aeb45ee497"
+}
