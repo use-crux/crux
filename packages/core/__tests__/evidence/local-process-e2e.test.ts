@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -23,16 +23,18 @@ describe("Core to Local execution evidence", () => {
   beforeAll(async () => {
     fixtureRoot = await mkdtemp(join(tmpdir(), "crux-evidence-core-local-"));
     localBinary = join(fixtureRoot, "localserver.test");
-    await execFileAsync(
-      "go",
-      [
-        "test",
-        "-c",
-        "-o",
-        localBinary,
-        "./internal/localserver",
-      ],
-      { cwd: join(repositoryRoot, "packages/local") },
+    await withLocalCompileAssets(() =>
+      execFileAsync(
+        "go",
+        [
+          "test",
+          "-c",
+          "-o",
+          localBinary,
+          "./internal/localserver",
+        ],
+        { cwd: join(repositoryRoot, "packages/local") },
+      ),
     );
   }, 120_000);
 
@@ -221,3 +223,48 @@ function childExit(child: ChildProcess): Promise<number | null> {
     child.once("exit", resolveExit);
   });
 }
+
+async function withLocalCompileAssets<T>(run: () => Promise<T>): Promise<T> {
+  const created: string[] = [];
+  try {
+    for (const [relativePath, contents] of localCompileAssetPlaceholders) {
+      const path = join(repositoryRoot, relativePath);
+      try {
+        await writeFile(path, contents, { flag: "wx" });
+        created.push(path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }
+    return await run();
+  } finally {
+    await Promise.all(created.map((path) => rm(path, { force: true })));
+  }
+}
+
+const localCompileAssetPlaceholders = [
+  [
+    "packages/local/internal/assets/embed/eval-coordinator.mjs",
+    "export {};\n",
+  ],
+  [
+    "packages/local/internal/assets/embed/source-resolver.mjs",
+    "export {};\n",
+  ],
+  [
+    "packages/local/internal/assets/embed/project-indexer.mjs",
+    "export {};\n",
+  ],
+  [
+    "packages/local/internal/assets/embed/project-semantic-indexer.mjs",
+    "export {};\n",
+  ],
+  [
+    "packages/local/internal/assets/embed/project-runtime-indexer.mjs",
+    "export {};\n",
+  ],
+  [
+    "packages/local/internal/assets/ui-embed/index.html",
+    "<!doctype html>\n",
+  ],
+] as const;
