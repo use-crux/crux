@@ -47,6 +47,7 @@ import { createGoogleImageOperation } from "./image-generation";
 import { createGoogleTranscriptionOperation } from "./transcription";
 import { createGoogleSpeechOperation } from "./speech";
 import { materializeGoogleToolSource } from "./mcp-materializer";
+import { googleModelCapacity } from "./capacity";
 import { createGoogleImageStreamingOperation } from "./image-streaming";
 import { createGoogleSpeechStreamingOperation } from "./speech-streaming";
 
@@ -92,6 +93,7 @@ const google = defineSingleTurnProviderBundle({
   id: "google",
   bind: bindGoogle,
   profile: {
+    capacity: googleModelCapacity,
     materializeToolSource: materializeGoogleToolSource,
     request: (args, { deps }) =>
       googleRequest(

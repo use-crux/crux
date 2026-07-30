@@ -89,6 +89,7 @@ import type {
 } from "./extensions";
 import { aiSdkProviderRuntime } from "./profile";
 import { extractModelInfo } from "./provider-profile";
+import { aiSdkModelCapacity } from "./capacity";
 import { createAiStreamResult } from "./stream-result";
 import { createStructuredGenerateObjectFn } from "./structured-generation";
 import {
@@ -111,6 +112,7 @@ import {
 export { stableModel } from "./stable-model";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
+export { aiSdkModelCapacity } from "./capacity";
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
@@ -304,6 +306,15 @@ interface AIStream {
 
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
+  /**
+   * Report capacity facts for a concrete AI SDK language model without I/O.
+   *
+   * @param model - Concrete AI SDK language model.
+   * @returns Capacity facts used for whole-request budget derivation.
+   */
+  capacity(
+    model: LanguageModel,
+  ): import("@use-crux/core/adapter").ModelCapacityProfile;
   /** Run one stateless AI SDK image operation without entering a language loop. */
   generateImage: AIGenerateImage;
   /** Run one stateless AI SDK transcription operation. */
@@ -651,6 +662,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   };
 
   return {
+    capacity: (model: LanguageModel) =>
+      aiSdkModelCapacity(extractModelInfo(model)),
     generateImage: executor.generateImage,
     generateSpeech: executor.generateSpeech,
     transcribe: executor.transcribe,

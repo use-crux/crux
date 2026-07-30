@@ -17,6 +17,7 @@ import {
 } from "./provider-profile";
 import { mapAiSdkSettings } from "./sdk-codec";
 import { aiSdkMediaHooks } from "./media-preflight";
+import { aiSdkModelCapacity } from "./capacity";
 import { createAiSdkImageOperation } from "./image-generation";
 import { createAiSdkTranscriptionOperation } from "./transcription";
 import { createAiSdkSpeechOperation } from "./speech";
@@ -35,6 +36,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
   ownership: "loop-owned",
   loop: {
     describeModel: extractModelInfo,
+    capacity: aiSdkModelCapacity,
     settings: mapAiSdkSettings,
     media: aiSdkMediaHooks,
     structuredOutput: { capabilities: aiSdkStructuredCapabilities },
