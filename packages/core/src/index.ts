@@ -943,6 +943,27 @@ export {
   CONSERVATIVE_MODEL_CAPACITY,
   resolveModelCapacityProfile,
 } from "./request/capacity/model-profile";
+export { RequestCompositionError } from "./request/errors";
+export { mergeInputBudget } from "./request/budget/input-budget";
+export type {
+  InputBudget,
+} from "./request/budget/input-budget";
+export type {
+  RequestCompositionErrorCode,
+  RequestDiagnostic,
+} from "./request/errors";
+export type {
+  RequestAdaptation,
+  RequestWarning,
+} from "./request/receipt/adaptations";
+export type {
+  RequestInspection,
+  RequestReceipt,
+} from "./request/receipt/receipt";
+export type {
+  RequestTokenBreakdown,
+  RequestTokenBreakdownEntry,
+} from "./request/measure/breakdown";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { loopRuntimeAdapter } from "./adapter/define-executor";

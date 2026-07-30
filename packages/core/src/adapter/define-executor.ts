@@ -38,6 +38,7 @@ import type {
   ExecutorStreamOptions,
   ExecutorStreamResult,
 } from "./executor-contracts";
+import { mergeInputBudget } from "../request/budget/input-budget";
 import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 
 export type {
@@ -168,6 +169,7 @@ export function loopRuntimeAdapter<
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
+      inputBudget: opts.inputBudget,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -242,6 +244,7 @@ export function loopRuntimeAdapter<
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
+      inputBudget: opts.inputBudget,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -268,6 +271,7 @@ export function loopRuntimeAdapter<
       routing: agentRoutingContext(agent, getExecutionContext()),
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
+      inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
     } as unknown as ExecutorGenerateOptions<TModel>;
 

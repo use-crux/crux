@@ -30,6 +30,7 @@ import type { GenerateResult, StreamResult } from "./result-accumulator";
 import type { DeepPartial } from "./logical-stream";
 import type { CallHandle } from "./call-handle";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
+import type { InputBudget } from "../request/budget/input-budget";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
 export interface AdapterTransportInfo {
@@ -63,6 +64,13 @@ export interface AdapterGenerateBaseOptions<
   provider?: string;
   /** Token budget for system message. */
   tokenBudget?: number;
+  /**
+   * Whole-request input pressure settings for each provider call.
+   *
+   * `optimizeAt` is soft; `max` is strict. Crux never silently truncates exact
+   * contributors to satisfy either value.
+   */
+  inputBudget?: InputBudget;
   /** Maximum tool loop iterations. Default: 10. */
   maxSteps?: number;
   /** Additional generation settings at call-site (highest precedence). */

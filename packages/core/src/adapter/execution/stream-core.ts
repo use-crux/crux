@@ -62,6 +62,8 @@ import { withDefaultResolverPorts } from "../../resolver/ports";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
+import { sealRequest } from "../../request/planner/seal";
+import { recordRequestRetryCount } from "../../request/receipt/receipt";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -240,6 +242,24 @@ export async function streamCore<
       tools,
       extra: (args.extra ?? {}) as TExtra,
     };
+    const sealStreamRequest = (
+      request: CallArgs<TExtra>,
+      previousRequestId?: string,
+    ) =>
+      sealRequest({
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        request,
+        settings: resolved.settings,
+        inputBudget: args.inputBudget,
+        capacity: dialect.capacity,
+        countTokens: dialect.countTokens
+          ? (candidate) => dialect.countTokens!(dialect.client, candidate)
+          : undefined,
+        media: dialect.media,
+        previousRequestId,
+      });
+    const sealed = await sealStreamRequest(callArgs);
 
     // Resolved BEFORE the provider stream is observed: `token.chunk` telemetry must
     // know whether these deltas belong to an attempt a gate can still discard.
@@ -285,7 +305,7 @@ export async function streamCore<
           });
           const providerHandle = await withBudget(
             (signal) =>
-              dialect.stream(dialect.client, callArgs, {
+              dialect.stream(dialect.client, sealed.request, {
                 signal: composeAbortSignals(callerSignal, signal),
               }),
             {
@@ -300,7 +320,20 @@ export async function streamCore<
             });
           });
           providerRawStream = providerHandle.raw ?? providerHandle.rawStream;
-          return providerHandle;
+          return {
+            ...providerHandle,
+            completion: async () => {
+              const completion = await providerHandle.completion();
+              recordRequestRetryCount(
+                sealed.receipt,
+                completion?.transportRetries,
+              );
+              return {
+                ...completion,
+                request: sealed.receipt,
+              };
+            },
+          };
         },
       ),
     );
@@ -321,6 +354,8 @@ export async function streamCore<
             handle,
             providerRawStream,
             callArgs,
+            initialRequest: sealed.receipt,
+            sealAttempt: sealStreamRequest,
             safety,
             ...(resolved.schema ? { schema: resolved.schema } : {}),
             messages,

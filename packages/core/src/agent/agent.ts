@@ -16,6 +16,8 @@ import type { AnyModel, AnyToolSet } from '../types'
 import type { Prompt } from '../prompt/prompt-types'
 import type { Context } from '../prompt/context-types'
 import type { AnyRoutable } from '../routing/types'
+import type { InputBudget } from '../request/budget/input-budget'
+import { mergeInputBudget } from '../request/budget/input-budget'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -45,6 +47,8 @@ export interface AgentConfig<
   model?: RoutableModel<TModel>
   /** Default tools available to this agent. */
   tools?: AnyToolSet
+  /** Default whole-request input pressure settings for each provider call. */
+  inputBudget?: InputBudget
   /**
    * Agent IDs this agent can hand off to in a swarm.
    *
@@ -107,6 +111,8 @@ export interface Agent<
   readonly model: RoutableModel<TModel> | undefined
   /** Default tools. */
   readonly tools: AnyToolSet | undefined
+  /** Default whole-request input pressure settings. */
+  readonly inputBudget: InputBudget | undefined
   /** Agent IDs this agent can hand off to in a swarm. */
   readonly handoffs: readonly HandoffTarget[]
   /** Tool names available in swarm context. */
@@ -246,6 +252,7 @@ export function agent<
     prompt: config.prompt,
     model: config.model,
     tools: config.tools,
+    inputBudget: mergeInputBudget(undefined, config.inputBudget),
     handoffs: Object.freeze(
       (config.handoffs ?? []).map(
         (h): HandoffTarget => (typeof h === 'string' ? { id: h } : { id: h.id, when: h.when }),

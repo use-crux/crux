@@ -46,6 +46,25 @@ export type {
   ModelCapacityResolver,
   ModelCountingConfidence,
 } from "../request/capacity/model-profile";
+export { RequestCompositionError } from "../request/errors";
+export { mergeInputBudget } from "../request/budget/input-budget";
+export type { InputBudget } from "../request/budget/input-budget";
+export type {
+  RequestCompositionErrorCode,
+  RequestDiagnostic,
+} from "../request/errors";
+export type {
+  RequestAdaptation,
+  RequestWarning,
+} from "../request/receipt/adaptations";
+export type {
+  RequestInspection,
+  RequestReceipt,
+} from "../request/receipt/receipt";
+export type {
+  RequestTokenBreakdown,
+  RequestTokenBreakdownEntry,
+} from "../request/measure/breakdown";
 
 // Normalized, provider-neutral outcome taxonomy (finish reason + errors)
 export {

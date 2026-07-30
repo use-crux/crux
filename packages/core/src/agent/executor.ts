@@ -14,6 +14,7 @@ import type { AnyModel, AnyToolSet } from '../types'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { TokenUsage } from '../generation/types'
 import type { WithOperationResultMeta } from '../observability'
+import type { InputBudget } from '../request/budget/input-budget'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -68,6 +69,8 @@ export interface ExecuteOptions {
    * @default 1 — single generation, no tool loop (backward compatible).
    */
   maxSteps?: number
+  /** Invocation-level whole-request input pressure overrides. */
+  inputBudget?: InputBudget
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.

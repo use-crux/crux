@@ -698,6 +698,11 @@ Network/rate-limit retries reuse the exact sealed request. A provider
 context-overflow rejection may create one linked recovery request using only
 already-authorized representations. Crux never repeatedly guesses truncation.
 
+Provider adapters report additional wire attempts for the same sealed request
+as `transportRetries` on normalized completion facts. Core never infers this
+count by re-planning: live receipt inspection exposes it as `retryCount`, while
+the small JSON-safe receipt remains unchanged.
+
 ### Measurement
 
 Every candidate receives a fast adapter/model-specific estimate. When

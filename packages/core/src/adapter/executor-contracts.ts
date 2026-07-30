@@ -27,6 +27,7 @@ import type { AnyPrompt } from "../prompt/prompt-types";
 import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
 import type { GenerateResult } from "./result-accumulator";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
+import type { InputBudget } from "../request/budget/input-budget";
 
 /**
  * Model argument accepted by a loop-owning executor.
@@ -68,6 +69,8 @@ export interface ExecutorGenerateBaseOptions<
   settings?: GenerationSettings;
   /** Token budget for the system message. */
   tokenBudget?: number;
+  /** Whole-request input pressure settings for each provider call. */
+  inputBudget?: InputBudget;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
   /**

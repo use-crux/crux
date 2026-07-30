@@ -19,6 +19,7 @@ import type { RoutingReceipt } from "../routing/receipt";
 import { sumUsageWhenComplete } from "./result-usage";
 import type { CruxRunId } from "../observability";
 import type { StreamCompletionPayload } from "./stream-result-types";
+import type { RequestReceipt } from "../request/receipt/receipt";
 
 export { createStreamResult } from "./result-stream";
 export { sumUsageWhenComplete } from "./result-usage";
@@ -30,6 +31,8 @@ export type { StreamResult } from "./logical-stream";
 
 /** Last provider-call step facts exposed next to accumulated result fields. */
 export interface FinalStepInfo {
+  /** Sealed request evidence for this provider-call step. */
+  readonly request?: RequestReceipt;
   /** Exact ordered assistant output produced by this provider-call step. */
   readonly content: readonly AssistantContentPart[];
   /** Text-only projection of {@link content}. */
@@ -134,6 +137,8 @@ export type GenerateResult<TRaw, TOutput = unknown> =
 
 /** One provider-call step that participates in envelope accumulation. */
 export interface ResultStepFacts {
+  /** Sealed request evidence for this provider-call step. */
+  readonly request?: RequestReceipt;
   /** Exact ordered assistant output for this step. */
   readonly content: readonly AssistantContentPart[];
   /** Usage reported by this step, if any. */
@@ -268,6 +273,7 @@ function finalStepInfo(step: ResultStepFacts | undefined): FinalStepInfo {
   if (!step) return emptyStepInfo();
 
   return Object.freeze({
+    ...(step.request !== undefined ? { request: step.request } : {}),
     content: Object.freeze([...step.content]),
     text: textFromAssistantContent(step.content),
     ...(step.usage !== undefined ? { usage: step.usage } : {}),

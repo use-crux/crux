@@ -44,6 +44,7 @@ import type {
   CruxAdapter,
 } from "./define-adapter-types";
 import { createStreamResult } from "./result-accumulator";
+import { mergeInputBudget } from "../request/budget/input-budget";
 
 export type {
   AdapterGenerateOptions,
@@ -149,6 +150,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -189,6 +191,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -235,6 +238,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -272,6 +276,7 @@ export function adapter<
         input: options.input as Record<string, unknown>,
         maxSteps: options.maxSteps,
         validationRetry: options.validationRetry,
+        inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
         extra: {} as TExtra,
       };
 

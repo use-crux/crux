@@ -85,6 +85,12 @@ import {
 import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
+import { sealRequest } from "../../request/planner/seal";
+import type { SealedRequestPlan } from "../../request/planner/plan";
+import {
+  recordRequestRetryCount,
+  type RequestReceipt,
+} from "../../request/receipt/receipt";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -156,6 +162,7 @@ export async function generateCore<
   let steps = 0;
   let providerResponseOrdinal = 0;
   const stepFacts: ResultStepFacts[] = [];
+  let lastRequestReceipt: RequestReceipt | undefined;
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
   let validationRetries = 0;
@@ -304,6 +311,26 @@ export async function generateCore<
       });
     });
 
+  const sealProviderRequest = async (
+    request: CallArgs<TExtra>,
+  ): Promise<SealedRequestPlan<TExtra>> => {
+    const sealed = await sealRequest({
+      provider: modelInfo.provider,
+      model: modelInfo.modelId,
+      request,
+      settings: resolved.settings,
+      inputBudget: args.inputBudget,
+      capacity: dialect.capacity,
+      countTokens: dialect.countTokens
+        ? (candidate) => dialect.countTokens!(dialect.client, candidate)
+        : undefined,
+      media: dialect.media,
+      previousRequestId: lastRequestReceipt?.id,
+    });
+    lastRequestReceipt = sealed.receipt;
+    return sealed;
+  };
+
   const generated = await sourceSession
     .withContext(() =>
       orchestrateGenerateWithCompletion(
@@ -359,9 +386,14 @@ export async function generateCore<
                 : undefined,
               extra: (args.extra ?? {}) as TExtra,
             };
-            lastCallArgs = callArgs;
+            const sealed = await sealProviderRequest(callArgs);
+            lastCallArgs = sealed.request;
 
-            const { raw, extracted } = await callProvider(callArgs);
+            const { raw, extracted } = await callProvider(lastCallArgs);
+            recordRequestRetryCount(
+              sealed.receipt,
+              extracted.transportRetries,
+            );
             lastRaw = raw;
             const providerStep = stepFactsFromResponse(extracted);
             const guardedStep = await guardSafetySessionLanguageStep(
@@ -406,6 +438,7 @@ export async function generateCore<
               lastExtracted.toolCalls,
             );
             if (amendment) {
+              rememberStep(lastExtracted);
               if ("system" in amendment) {
                 currentSystem = amendment.system;
                 currentSystemBlocks = amendment.systemBlocks;
@@ -458,10 +491,17 @@ export async function generateCore<
               );
               messages = [...messages, ...guardedWriteback.corrective];
               const providerMessages = await prepareProviderMessages(messages);
-              const regen = await callProvider({
+              const regenArgs = {
                 ...lastCallArgs!,
                 messages: providerMessages,
-              });
+              };
+              const sealed = await sealProviderRequest(regenArgs);
+              lastCallArgs = sealed.request;
+              const regen = await callProvider(lastCallArgs);
+              recordRequestRetryCount(
+                sealed.receipt,
+                regen.extracted.transportRetries,
+              );
               lastRaw = regen.raw;
               steps++;
               const providerRegenStep = stepFactsFromResponse(regen.extracted);
@@ -592,18 +632,25 @@ export async function generateCore<
   }
 
   function rememberStep(response: AdapterResponse | undefined): void {
-    if (!response) return;
-    stepFacts.push(stepFactsFromResponse(response));
+    if (!response || !lastRequestReceipt) return;
+    stepFacts.push(stepFactsFromResponse(response, lastRequestReceipt));
   }
 
   function replaceLastStep(response: AdapterResponse | undefined): void {
-    if (!response || stepFacts.length === 0) return;
-    stepFacts[stepFacts.length - 1] = stepFactsFromResponse(response);
+    if (!response || !lastRequestReceipt || stepFacts.length === 0) return;
+    stepFacts[stepFacts.length - 1] = stepFactsFromResponse(
+      response,
+      lastRequestReceipt,
+    );
   }
 }
 
-function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
+function stepFactsFromResponse(
+  response: AdapterResponse,
+  request?: RequestReceipt,
+): ResultStepFacts {
   return {
+    ...(request ? { request } : {}),
     content: responseContent(response),
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
     ...(response.toolCalls !== undefined
