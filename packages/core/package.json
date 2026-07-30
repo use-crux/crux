@@ -137,6 +137,10 @@
       "types": "./src/retrieval/index.ts",
       "import": "./src/retrieval/index.ts"
     },
+    "./knowledge": {
+      "types": "./src/knowledge/index.ts",
+      "import": "./src/knowledge/index.ts"
+    },
     "./citations": {
       "types": "./src/citations/index.ts",
       "import": "./src/citations/index.ts"

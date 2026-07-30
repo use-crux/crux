@@ -7,6 +7,7 @@ import type {
   CruxChunk,
   CruxDocument,
   CruxIngestLoadResultLike,
+  IndexingPipeline,
   IndexResult,
 } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
@@ -74,6 +75,8 @@ export interface KnowledgeBaseRuntimeConfig<
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions
+  /** Explicit indexing pipeline used for document indexing. */
+  pipeline?: IndexingPipeline
   /** Indexing cache configuration. */
   cache?: PipelineCacheConfig
   /** Lifecycle policy for replaced source generations. */
@@ -229,6 +232,7 @@ function createIndexer<TModality extends EmbeddingModality>(
     storage: config.storage,
     dense: config.embeddings,
     sparse: config.sparseEmbeddings,
+    pipeline: config.pipeline,
     cache: config.cache,
   })
 }

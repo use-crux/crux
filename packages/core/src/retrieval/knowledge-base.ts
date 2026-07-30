@@ -10,7 +10,7 @@
  */
 
 import type { z } from 'zod'
-import type { ChunkingOptions, Corpus, IndexResult, PipelineCacheConfig } from '../indexing'
+import type { ChunkingOptions, Corpus, IndexingPipeline, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import { grounding } from '../citations'
@@ -112,6 +112,8 @@ export interface KnowledgeBaseConfig<
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions
+  /** Explicit indexing pipeline used for document indexing. */
+  pipeline?: IndexingPipeline
   /** Metadata schema used to type retrieval filters. */
   metadataSchema?: TMetadataSchema
   /** Lifecycle policy for inactive generations and vector retention. */
@@ -166,6 +168,9 @@ export function knowledgeBase<
 ): KnowledgeBase<TMetadataSchema, TModality> {
   if (config.corpus && config.corpus.id !== config.id) {
     throw new Error(`knowledgeBase("${config.id}") requires corpus.id to match the knowledge base id.`)
+  }
+  if (config.pipeline && config.chunking) {
+    throw new Error('knowledgeBase() accepts either pipeline or chunking, not both.')
   }
   const namespace = config.corpus?.namespace ?? config.id
   return createKnowledgeBaseHandle({ ...config, namespace }, true)
