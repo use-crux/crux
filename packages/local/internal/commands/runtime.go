@@ -40,7 +40,9 @@ var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRun
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
 var runSetupOperationForCommand setupOperationFunc = runSetupOperationWithWorker
 
-const runtimeGenerateTimeout = 120 * time.Second
+// Leave enough time for worker process-group cleanup while keeping the command
+// inside its user-visible 30-second failure bound.
+const runtimeGenerateTimeout = 25 * time.Second
 
 // NewRuntimeCmd creates the "crux runtime" command group.
 func NewRuntimeCmd(f *cli.Factory) *cobra.Command {
@@ -68,21 +70,31 @@ manifest and host entry files, and never creates infrastructure or credentials.`
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := f.Streams()
+			jsonOutput := f.JSONOutput(opts.jsonOutput)
 			root, err := resolveRuntimeGenerateRoot(opts.cwd)
 			if err != nil {
 				return err
 			}
-			result, err := generateRuntimeArtifactsForCommand(cmd.Context(), root, newCommandWorkerProcess(io))
+			if !jsonOutput {
+				fmt.Fprintln(io.Err, "Generating Runtime artifacts...")
+			}
+			generationCtx, cancel := context.WithTimeout(cmd.Context(), runtimeGenerateTimeout)
+			defer cancel()
+			result, err := generateRuntimeArtifactsForCommand(generationCtx, root, newCommandWorkerProcess(io))
 			if err != nil {
-				if opts.jsonOutput {
+				if jsonOutput {
 					return printRuntimeGenerateErrorJSON(io, err)
+				}
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintln(io.Err, "Runtime artifact generation timed out before it completed.")
+					return domain.ExitError{Code: 1}
 				}
 				if handled := printRuntimeGenerateError(io, err); handled != nil {
 					return handled
 				}
 				return err
 			}
-			if opts.jsonOutput {
+			if jsonOutput {
 				return writePrettyJSON(io.Out, result)
 			}
 			if err := printRuntimeGenerateResult(io, result); err != nil {

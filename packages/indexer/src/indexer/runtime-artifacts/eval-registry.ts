@@ -153,7 +153,8 @@ function runtimeEvalDefinitions(
     if (
       definition.kind !== "eval" ||
       definition.metadata?.evalContract !== "crux.eval" ||
-      definition.metadata?.exportName !== "default"
+      definition.metadata?.exportName !== "default" ||
+      definition.metadata?.runtimeDiscovered !== true
     ) {
       continue;
     }

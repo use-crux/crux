@@ -63,7 +63,7 @@ func runAndPrintRuntimeOperation(cmd *cobra.Command, f *cli.Factory, opts *runti
 	if err != nil {
 		return err
 	}
-	if opts.jsonOutput {
+	if f.JSONOutput(opts.jsonOutput) {
 		return writePrettyJSON(io.Out, result)
 	}
 	return printRuntimeOperationResult(io, result)
