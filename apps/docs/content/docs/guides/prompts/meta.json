@@ -1,5 +1,12 @@
 {
   "title": "Prompts",
-  "description": "prompt(), prompt composition, structured output, multi-turn, and execution patterns.",
-  "pages": ["index", "execution", "semantic-cache"]
+  "description": "Typed prompt contracts, PromptText, structured output, execution, and response caching.",
+  "pages": [
+    "index",
+    "prompt-text",
+    "structured-output",
+    "execution",
+    "sdk-bridges",
+    "semantic-cache"
+  ]
 }

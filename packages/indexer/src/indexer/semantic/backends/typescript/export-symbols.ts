@@ -41,6 +41,39 @@ export function tagSite(
   return { declaration, exportName, terminal };
 }
 
+/** Resolves a namespace import binding to one requested module export. */
+export function namespaceExportSite(
+  node: ts.Node,
+  exportName: string,
+  checker: ts.TypeChecker,
+): TypeScriptTagSite | undefined {
+  if (
+    !ts.isIdentifier(node) ||
+    !ts.isNamespaceImport(node.parent) ||
+    node.parent.name !== node ||
+    node.parent.parent.isTypeOnly
+  ) {
+    return undefined;
+  }
+  const importDeclaration = nearestImportDeclaration(node);
+  if (
+    !importDeclaration ||
+    !ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
+  ) {
+    return undefined;
+  }
+  const module = checker.getSymbolAtLocation(importDeclaration.moduleSpecifier);
+  const exported = module
+    ? checker
+        .getExportsOfModule(module)
+        .find((candidate) => candidate.getName() === exportName)
+    : undefined;
+  const terminal = canonicalSymbol(exported, checker);
+  return terminal
+    ? { declaration: node.parent, exportName, terminal }
+    : undefined;
+}
+
 /** Follows value aliases while rejecting type-only or cyclic routes. */
 export function canonicalSymbol(
   symbol: ts.Symbol | undefined,

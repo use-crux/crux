@@ -1,0 +1,242 @@
+---
+title: PromptText
+description: Compose readable Markdown-oriented prompt text and inspect it from source to captured Run.
+---
+
+Use `md` when a prompt benefits from headings, lists, code blocks, nested
+fragments, or multiline interpolation. It creates an immutable `PromptText`
+value while keeping control flow in ordinary TypeScript.
+
+```ts twoslash title="support-prompt.ts"
+import { md, prompt } from "@use-crux/core";
+import { z } from "zod";
+
+export const answerSupport = prompt({
+  id: "answer-support",
+  input: z.object({
+    question: z.string(),
+  }),
+  system: md`
+    # Role
+
+    You are a concise product support assistant.
+  `,
+  prompt: ({ input }) => md`
+    ## Question
+
+    ${input.question}
+  `,
+});
+```
+
+`md` is optional. Existing strings preserve their exact behavior. At runtime,
+PromptText resolves to provider-neutral plain text; it does not ask the model
+or provider to render Markdown. Crux editor tooling can classify the authored
+Markdown structure without changing those runtime bytes.
+
+## Interpolate Scalars and Fragments
+
+Keep a scalar inline when it needs no continuation indentation. Put multiline
+content on its own interpolation line so it inherits that line's indentation.
+
+```ts
+const audience = "support";
+const evidence = md`
+  1. Account is active.
+  2. Invoice is overdue.
+`;
+
+const instructions = md`
+  # Review
+
+  - Evidence:
+    ${evidence}
+
+  Audience: ${audience}
+`;
+```
+
+The result is:
+
+```md
+# Review
+
+- Evidence:
+  1. Account is active.
+  2. Invoice is overdue.
+
+Audience: support
+```
+
+Every `md` template removes its outer blank lines and common source
+indentation. Relative indentation and intentional internal blank lines remain.
+An inline multiline value is inserted verbatim; only block interpolation adds
+continuation indentation.
+
+## Use TypeScript for Conditions and Sequences
+
+PromptText does not add a template language. Use normal expressions:
+
+```ts
+const warning = input.warning && md`> Warning: ${input.warning}`;
+
+const report = md`
+  # Report
+
+  ${warning}
+
+  ## Events
+
+  ${input.events.map((event) => md`- **${event.type}:** ${event.summary}`)}
+`;
+```
+
+`false`, `null`, and `undefined` omit content. When an omitted value is alone on
+a block line, its carrier line disappears. Arrays are valid in block position,
+where items are joined with one newline.
+
+Inline arrays are rejected because their intended separator is ambiguous. Join
+known scalar values explicitly:
+
+```ts
+md`Regions: ${input.regions.join(", ")}`;
+```
+
+## Serialize Objects Explicitly
+
+Objects are rejected as ordinary interpolations so they cannot silently become
+`[object Object]`. Use `md.json()` when JSON is intentional:
+
+````ts
+const account = md`
+  ## Account
+
+  ```json
+  ${md.json(input.account)}
+  ```
+`;
+````
+
+`md.json()` snapshots `JSON.stringify(value, null, 2)` and adds no Markdown
+fence. It is serialization, not sanitization, escaping, redaction, or a trust
+marker.
+
+## Extract Named Fragments
+
+Extract a fragment when nesting begins to hide the prompt's structure:
+
+```ts
+const outputRules = md`
+  ## Output
+
+  - State uncertainty.
+  - Cite the relevant event.
+`;
+
+const supportSystem = md`
+  # Role
+
+  You are a support specialist.
+
+  ${outputRules}
+`;
+```
+
+Nested PromptText retains its structural boundaries through inspection. It
+does not create a fragment registry or change capability placement. Contexts,
+memory, retrieval, skills, and other contributors still belong in `use`.
+
+## Inspect PromptText in Your Editor
+
+The Crux extension connects authored PromptText to Project Index and runtime
+evidence while preserving native TypeScript behavior inside interpolations.
+
+It provides three distinct views:
+
+1. **Static preview** opens projected text without evaluating workspace code.
+   Unknown values appear as placeholders.
+2. **Exact preview** opens Devtools and calls the active application's
+   `Prompt.inspect()` only after you explicitly press Preview.
+3. **Latest Run** opens the newest captured generation for the owning Prompt,
+   including PromptText provenance and token attribution when capture policy
+   permits it.
+
+The editor also highlights and folds Markdown around interpolation barriers,
+reports proven composition errors, and navigates between owners and fragments.
+
+Install and verify the extension with the [VS Code & Cursor
+guide](/docs/developer-tools/vscode).
+
+## Inspect in Code
+
+`.resolve()` returns the final plain strings. `.inspect()` additionally keeps
+PromptText segments and token attribution:
+
+```ts
+const inspection = await answerSupport.inspect({
+  input: {
+    question: "How do I rotate credentials?",
+  },
+});
+
+inspection.prompt?.text;
+inspection.prompt?.segments;
+inspection.prompt?.staticTokens;
+inspection.prompt?.dynamicTokens;
+inspection.system.parts[0]?.segments;
+```
+
+Concatenating the segment text reproduces the exact resolved value.
+
+For exact preview, register runtime-addressable prompts explicitly:
+
+```ts
+import { configure } from "@use-crux/core";
+
+const registry = configure({
+  prompts: [answerSupport],
+});
+
+// Dispose during application shutdown or replacement.
+registry.dispose();
+```
+
+Opening Devtools, editing input, or saving source never runs inspection. Only
+Preview or Retry dispatches it. Inspection does not call a model, invoke tools,
+create an ordinary Run, or emit observability records. Authored callbacks are
+trusted application code and may still contain their own side effects.
+
+## Understand the Safety Boundary
+
+PromptText composes text only. It does not:
+
+- make interpolated values trusted or safe;
+- bypass schemas, sanitization, escaping, guardrails, or diagnostics;
+- add `raw`, `trusted`, or `safe` markers;
+- render Markdown at runtime; or
+- place Contexts or other capabilities inside the text.
+
+General booleans, non-finite numbers, bigint, symbols, functions, Promises, and
+arbitrary objects are invalid interpolations. See the [PromptText
+reference](/docs/reference/crux-core/prompt-text) for the complete value,
+whitespace, error, inspection, and Project Index contracts.
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="VS Code & Cursor"
+    description="Install the extension and use highlighting, previews, diagnostics, and navigation."
+    href="/docs/developer-tools/vscode"
+  />
+  <Card
+    title="PromptText Reference"
+    description="Exact composition, interpolation, runtime, evidence, and error semantics."
+    href="/docs/reference/crux-core/prompt-text"
+  />
+  <Card
+    title="Prompts"
+    description="Return to the core prompt mental model and composition workflow."
+    href="/docs/guides/prompts"
+  />
+</Cards>

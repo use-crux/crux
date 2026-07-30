@@ -29,7 +29,10 @@ import {
 } from "@typescript/native-preview/unstable/sync";
 import { pathsInterceptModule } from "../../compiler-options";
 import type { SemanticCacheValidationDependencyCollector } from "../../cache-validation";
-import { tsgoCanonicalExportProof } from "./export-provenance";
+import {
+  tsgoCanonicalExportProof,
+  type TsgoTerminalSymbol,
+} from "./export-provenance";
 import { createTsgoPackageManifestIdentity } from "./package-manifest";
 
 export type TsgoCanonicalExportStatus =
@@ -100,25 +103,34 @@ export function createTsgoCanonicalExportIdentity(
       return "unresolved";
     }
     if (isTypeOnlyNamespaceAccess(node)) return "resolved-other";
+    const namespaceBinding =
+      isIdentifier(node) && node.parent && isNamespaceImport(node.parent);
     const location = isPropertyAccessExpression(node) ? node.name : node;
     if (!isIdentifier(location)) return "unresolved";
 
-    const site = terminalSymbol(project.checker.getSymbolAtLocation(location));
+    const site = namespaceBinding
+      ? namespaceExportTerminal(node.parent, exportName)
+      : terminalSymbol(project.checker.getSymbolAtLocation(location));
     if (site === "type-only") return "resolved-other";
     if (!site) return "unresolved";
     const packageTerminals = new Map<number, TsgoSymbol>();
-    const proof = tsgoCanonicalExportProof(node, moduleName, {
-      project,
-      terminalSymbol,
-      canonicalPackageEdge: (moduleSpecifier, module, expectedModuleName) =>
-        canonicalPackageEdge(
-          moduleSpecifier,
-          module,
-          expectedModuleName || moduleName,
-          exportName,
-          packageTerminals,
-        ),
-    });
+    const proof = tsgoCanonicalExportProof(
+      node,
+      moduleName,
+      {
+        project,
+        terminalSymbol,
+        canonicalPackageEdge: (moduleSpecifier, module, expectedModuleName) =>
+          canonicalPackageEdge(
+            moduleSpecifier,
+            module,
+            expectedModuleName || moduleName,
+            exportName,
+            packageTerminals,
+          ),
+      },
+      namespaceBinding ? exportName : undefined,
+    );
     return proof &&
       proof.site.id === site.id &&
       proof.terminal.id === site.id &&
@@ -126,6 +138,22 @@ export function createTsgoCanonicalExportIdentity(
       packageTerminals.has(proof.terminal.id)
       ? "canonical"
       : "resolved-other";
+  }
+
+  function namespaceExportTerminal(
+    namespace: Node,
+    exportName: string,
+  ): TsgoTerminalSymbol {
+    const owner = owningImport(namespace);
+    const module = owner
+      ? project.checker.getSymbolAtLocation(owner.moduleSpecifier)
+      : undefined;
+    const exported = module
+      ? project.checker
+          .getExportsOfModule(module)
+          .find((symbol) => symbol.name === exportName)
+      : undefined;
+    return terminalSymbol(exported);
   }
 
   function isDirectImport(

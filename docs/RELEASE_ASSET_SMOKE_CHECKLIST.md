@@ -26,19 +26,33 @@ the same release version.
    Windows). Do not separate them.
 4. Run the extracted `crux --version` and confirm it reports the release
    version.
-5. Install the VSIX using **Extensions: Install from VSIX...**. VS Code users
-   may instead run:
+5. Prove the version-locked CLI path in the editor being tested:
+
+   ```bash
+   crux editor install vscode
+   # or
+   crux editor install cursor
+   ```
+
+   Confirm the command downloads the release under test and reports the exact
+   release version. For an independent manual seam, install the downloaded
+   VSIX using **Extensions: Install from VSIX...** or:
 
    ```bash
    code --install-extension crux-vscode-<version>.vsix
+   cursor --install-extension crux-vscode-<version>.vsix
    ```
+
+   Record at least one successful Visual Studio Code result and one successful
+   Cursor result before a stable release is considered editor-smoke complete.
 
 6. Open `packages/local/internal/lsp/testdata/fixture-project` as a trusted
    workspace. Set `crux.binaryPath` to the extracted CLI and reload the editor.
 7. Open the Crux output channel. Confirm it names the expected CLI version and
    reports language-server startup without a binary-discovery error.
-8. Open a fixture TypeScript file and confirm Crux diagnostics appear. Run
-   **Crux: Restart Language Server** and confirm diagnostics return.
+8. Open a fixture TypeScript file and confirm Crux diagnostics appear. Open a
+   canonical Core `md` template and confirm Markdown roles stop at interpolation
+   boundaries. Run **Crux: Restart Language Server** and confirm both return.
 9. Record that the extension and direct-download binary do not advertise or
    perform an automatic update; upgrades require installing both newer
    lockstep assets.

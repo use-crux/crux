@@ -2,46 +2,155 @@
   "name": "crux-vscode",
   "version": "0.1.0",
   "displayName": "Crux",
-  "description": "Crux language support for Visual Studio Code",
+  "description": "Markdown-aware PromptText authoring, previews, diagnostics, and Project Index intelligence for TypeScript",
   "publisher": "use-crux",
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "crux",
+    "prompt",
+    "markdown",
+    "typescript",
+    "llm",
+    "ai"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/use-crux/crux.git",
     "directory": "packages/vscode"
   },
-  "bugs": { "url": "https://github.com/use-crux/crux/issues" },
-  "homepage": "https://cruxjs.dev/docs/reference/lsp",
-  "files": ["dist/extension.js", "README.md", "LICENSE"],
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://cruxjs.dev/docs/developer-tools/vscode",
+  "files": [
+    "dist/extension.js",
+    "README.md",
+    "LICENSE"
+  ],
   "main": "./dist/extension.js",
-  "engines": { "vscode": "^1.90.0" },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
   "activationEvents": [
     "workspaceContains:**/crux.config.ts",
     "workspaceContains:**/crux.config.js",
     "workspaceContains:**/crux.config.mjs"
   ],
   "capabilities": {
-    "untrustedWorkspaces": { "supported": false }
+    "untrustedWorkspaces": {
+      "supported": false
+    }
   },
   "contributes": {
     "commands": [
-      { "command": "crux.openDocs", "title": "Crux: Open Rule Documentation" },
-      { "command": "crux.openDevtools", "title": "Crux: Open Devtools" },
-      { "command": "crux.restartServer", "title": "Crux: Restart Language Server" }
+      {
+        "command": "crux.openDocs",
+        "title": "Crux: Open Rule Documentation"
+      },
+      {
+        "command": "crux.openDevtools",
+        "title": "Crux: Open Devtools"
+      },
+      {
+        "command": "crux.restartServer",
+        "title": "Crux: Restart Language Server"
+      },
+      {
+        "command": "crux.promptText.previewStatic",
+        "title": "Crux: Preview PromptText Statically"
+      },
+      {
+        "command": "crux.promptText.previewExact",
+        "title": "Crux: Preview PromptText in Application Runtime"
+      },
+      {
+        "command": "crux.promptText.openLatestRun",
+        "title": "Crux: Open Latest PromptText Run"
+      }
     ],
     "configuration": {
       "title": "Crux",
       "properties": {
-        "crux.binaryPath": { "type": "string", "default": "", "description": "Absolute or workspace-relative path to the Crux CLI." },
-        "crux.port": { "type": "number", "default": 4400, "minimum": 1, "maximum": 65535, "description": "Port used to discover a running Crux dev server." },
-        "crux.lint.profile": { "type": "string", "default": "", "enum": ["", "off", "recommended", "strict", "experimental"], "description": "Lint profile override. Empty follows the project configuration." },
-        "crux.lint.includeSuppressed": { "type": "boolean", "default": false, "description": "Includes findings retained with suppression evidence." },
-        "crux.inlayHints.enabled": { "type": "boolean", "default": true, "description": "Controls Crux inlay hint finding badges." },
-        "crux.codeLens.enabled": { "type": "boolean", "default": true, "description": "Controls Crux code lens finding counts." },
-        "crux.decorations.mode": { "type": "string", "default": "auto", "enum": ["auto", "on", "off"], "description": "Controls client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
-        "crux.decorations.maxLength": { "type": "number", "default": 80, "minimum": 1, "description": "Maximum client-side inline decoration length. This extension-only setting is not sent to the language server." },
-        "crux.decorations.opacity": { "type": "number", "default": 0.65, "minimum": 0.1, "maximum": 1, "description": "Controls the opacity of client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
-        "crux.trace": { "type": "string", "default": "off", "enum": ["off", "messages"], "description": "Log LSP method names without payloads." }
+        "crux.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute or workspace-relative path to the Crux CLI."
+        },
+        "crux.port": {
+          "type": "number",
+          "default": 4400,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Port used to discover a running Crux dev server."
+        },
+        "crux.lint.profile": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "off",
+            "recommended",
+            "strict",
+            "experimental"
+          ],
+          "description": "Lint profile override. Empty follows the project configuration."
+        },
+        "crux.lint.includeSuppressed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Includes findings retained with suppression evidence."
+        },
+        "crux.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Controls Crux inlay hint finding badges."
+        },
+        "crux.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Controls Crux code lens finding counts."
+        },
+        "crux.promptText.decorations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window"
+        },
+        "crux.decorations.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "description": "Controls client-side inline diagnostic decorations. This extension-only setting is not sent to the language server."
+        },
+        "crux.decorations.maxLength": {
+          "type": "number",
+          "default": 80,
+          "minimum": 1,
+          "description": "Maximum client-side inline decoration length. This extension-only setting is not sent to the language server."
+        },
+        "crux.decorations.opacity": {
+          "type": "number",
+          "default": 0.65,
+          "minimum": 0.1,
+          "maximum": 1,
+          "description": "Controls the opacity of client-side inline diagnostic decorations. This extension-only setting is not sent to the language server."
+        },
+        "crux.trace": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "messages"
+          ],
+          "description": "Log LSP method names without payloads."
+        }
       }
     }
   },
@@ -49,12 +158,17 @@
     "build": "node ./scripts/build.mjs",
     "package": "vsce package --no-dependencies",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "pnpm test:unit && pnpm test:extension",
+    "test:unit": "vitest run",
+    "test:extension": "pnpm build && node ./scripts/test-extension.mjs"
   },
-  "dependencies": { "vscode-languageclient": "^9.0.1" },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "devDependencies": {
     "@types/node": "^24.12.4",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^3.6.2",
     "esbuild": "^0.28.0",
     "typescript": "5.9.3",

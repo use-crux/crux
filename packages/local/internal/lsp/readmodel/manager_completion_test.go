@@ -9,22 +9,22 @@ import (
 
 func TestManagerEnablesAttachedCompletionOnlyForExactTransportContract(t *testing.T) {
 	transport := NewAttachTransport(api.New("http://localhost:4598"))
-	var got CompletionSource
+	var got TransientSource
 	manager := NewManager(ManagerOptions{
 		Version: "v-test", Transport: transport,
-		OnCompletionSource: func(source CompletionSource) { got = source },
+		OnTransientSource: func(source TransientSource) { got = source },
 	})
 	generation := uint64(3)
-	manager.setAttachedCompletionSource(Snapshot{ServerVersion: "v-test", Generation: &generation})
+	manager.setAttachedTransientSource(Snapshot{ServerVersion: "v-test", Generation: &generation})
 	if got != transport {
 		t.Fatalf("exact attached source = %#v, want transport", got)
 	}
 
-	manager.setAttachedCompletionSource(Snapshot{ServerVersion: "v-old", Generation: &generation})
+	manager.setAttachedTransientSource(Snapshot{ServerVersion: "v-old", Generation: &generation})
 	if got != nil {
 		t.Fatalf("version-skew source = %#v, want nil", got)
 	}
-	manager.setAttachedCompletionSource(Snapshot{ServerVersion: "v-test"})
+	manager.setAttachedTransientSource(Snapshot{ServerVersion: "v-test"})
 	if got != nil {
 		t.Fatalf("generation-less source = %#v, want nil", got)
 	}

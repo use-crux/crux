@@ -6,52 +6,138 @@ import (
 )
 
 func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.Mode) {
+	session.promptTextTransition.Lock()
+	defer session.promptTextTransition.Unlock()
+	w.setSessionModeLocked(session, mode)
+}
+
+func (w *workspaceRuntime) setSessionModeLocked(
+	session *scopeSession,
+	mode readmodel.Mode,
+) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
 		return
 	}
 	previous := session.mode
-	session.mode = mode
-	if previous != mode {
-		session.sourceEpoch++
-		session.completionFailures = 0
+	if previous == mode {
+		w.mu.Unlock()
+		return
 	}
+	w.mu.Unlock()
+
+	if session.promptTextViews != nil {
+		session.promptTextViews.RetireAll()
+		w.refreshPromptTextViews(session, nil)
+	}
+	uris := w.retireOpenPromptTextDiagnostics(session)
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return
+	}
+	session.mode = mode
+	session.sourceEpoch++
+	session.completionFailures = 0
 	enabled := w.settings.CodeLensEnabled
 	w.mu.Unlock()
 	if enabled && (previous == readmodel.ModeAttached) != (mode == readmodel.ModeAttached) {
 		w.server.requestCodeLensRefresh()
 	}
+	if w.server != nil {
+		w.server.requestPromptTextRefresh()
+		w.resumeOpenPromptTextDiagnostics(session, uris)
+	}
 }
 
-func (w *workspaceRuntime) setSessionCompletionSource(session *scopeSession, source readmodel.CompletionSource) {
+func (w *workspaceRuntime) setSessionTransientSource(session *scopeSession, source readmodel.TransientSource) {
+	session.promptTextTransition.Lock()
+	defer session.promptTextTransition.Unlock()
+	w.setSessionTransientSourceLocked(session, source)
+}
+
+func (w *workspaceRuntime) setSessionTransientSourceLocked(
+	session *scopeSession,
+	source readmodel.TransientSource,
+) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.closed {
+		w.mu.Unlock()
 		return
 	}
-	session.completion = source
+	w.mu.Unlock()
+
+	if session.promptTextViews != nil {
+		session.promptTextViews.RetireAll()
+		w.refreshPromptTextViews(session, nil)
+	}
+	uris := w.retireOpenPromptTextDiagnostics(session)
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return
+	}
+	session.transient = source
 	session.sourceEpoch++
 	session.completionFailures = 0
+	w.mu.Unlock()
+	if w.server != nil {
+		w.server.requestPromptTextRefresh()
+		w.resumeOpenPromptTextDiagnostics(session, uris)
+	}
 }
 
 func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readmodel.Change) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed {
-		return
-	}
-	session.publisher.Change(change)
+	session.promptTextTransition.Lock()
+	defer session.promptTextTransition.Unlock()
+	w.handleScopeChangeLocked(session, change)
 }
 
-func (w *workspaceRuntime) invalidateCompletionSource(session *scopeSession) {
+func (w *workspaceRuntime) handleScopeChangeLocked(
+	session *scopeSession,
+	change readmodel.Change,
+) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.closed {
+		w.mu.Unlock()
+		return
+	}
+	w.mu.Unlock()
+	session.publisher.Change(change)
+	w.refreshPromptTextViews(session, change.Files)
+	w.resetOpenPromptTextDiagnostics(session, change.Files)
+}
+
+func (w *workspaceRuntime) invalidateTransientSource(session *scopeSession) {
+	session.promptTextTransition.Lock()
+	defer session.promptTextTransition.Unlock()
+	w.invalidateTransientSourceLocked(session)
+}
+
+func (w *workspaceRuntime) invalidateTransientSourceLocked(
+	session *scopeSession,
+) {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return
+	}
+	w.mu.Unlock()
+
+	uris := w.retireOpenPromptTextDiagnostics(session)
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
 		return
 	}
 	session.sourceEpoch++
 	session.completionFailures = 0
+	w.mu.Unlock()
+	if w.server != nil {
+		w.server.requestPromptTextRefresh()
+		w.resumeOpenPromptTextDiagnostics(session, uris)
+	}
 }
 
 func (s *Server) requestCodeLensRefresh() {
@@ -95,4 +181,5 @@ func (s *Server) requestInlayHintRefreshIfEnabled() {
 func (s *Server) requestEditorAnnotationsRefreshIfEnabled() {
 	s.requestInlayHintRefreshIfEnabled()
 	s.requestCodeLensRefreshIfEnabled()
+	s.requestPromptTextRefresh()
 }

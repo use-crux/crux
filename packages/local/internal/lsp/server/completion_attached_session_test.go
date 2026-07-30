@@ -50,7 +50,7 @@ func TestAttachedCompletionAndLateHandoverMatchGolden(t *testing.T) {
 	indexStore.ApplySnapshot("scope", snapshot)
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeAttached,
-		completion: transport, sourceEpoch: 1,
+		transient: transport, sourceEpoch: 1,
 	}
 	workspace := &workspaceRuntime{store: indexStore, sessions: []*scopeSession{session}}
 	editor := newTrustedCompletionServer(Options{Version: "v-test"})
@@ -74,7 +74,7 @@ func TestAttachedCompletionAndLateHandoverMatchGolden(t *testing.T) {
 	secondDone := make(chan protocol.CompletionList, 1)
 	go func() { secondDone <- secondResult.Deferred().Result.(protocol.CompletionList) }()
 	<-compiler.secondStarted
-	workspace.setSessionCompletionSource(session, nil)
+	workspace.setSessionTransientSource(session, nil)
 	workspace.setSessionMode(session, readmodel.ModeOwn)
 	close(compiler.releaseSecond)
 	second := <-secondDone

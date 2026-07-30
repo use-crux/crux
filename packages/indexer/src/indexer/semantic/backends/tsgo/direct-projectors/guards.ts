@@ -8,6 +8,7 @@ import {
   isFunctionExpression,
   isIdentifier,
   isMethodDeclaration,
+  isPropertyAssignment,
   isPropertyAccessExpression,
   type Node,
 } from "@typescript/native-preview/unstable/ast";
@@ -48,7 +49,8 @@ function promptTextRequiresSharedAnalyzer(
   return (definition.primitive.promptText ?? []).some((spec) => {
     const property = nativeNodeList(definition.object.properties).find(
       (candidate) =>
-        "name" in candidate && propertyName(candidate.name) === spec.property,
+        (isPropertyAssignment(candidate) || isMethodDeclaration(candidate)) &&
+        propertyName(candidate.name) === spec.property,
     );
     if (!property) return false;
     if (isMethodDeclaration(property)) {

@@ -78,19 +78,23 @@ type projectIndexFactBatchEvent struct {
 }
 
 type projectIndexPhaseDoneEvent struct {
-	ProtocolVersion int                      `json:"protocolVersion"`
-	Type            string                   `json:"type"`
-	TransactionID   string                   `json:"transactionId"`
-	Phase           IndexPatchPhase          `json:"phase"`
-	Patch           IndexPatch               `json:"patch"`
-	Summary         projectIndexPhaseSummary `json:"summary"`
+	ProtocolVersion int               `json:"protocolVersion"`
+	Type            string            `json:"type"`
+	TransactionID   string            `json:"transactionId"`
+	Phase           IndexPatchPhase   `json:"phase"`
+	Patch           IndexPatch        `json:"patch"`
+	Summary         *PhaseDoneSummary `json:"summary"`
 }
 
-type projectIndexPhaseSummary struct {
-	FactCount int                            `json:"factCount"`
-	Timings   []ProjectIndexPhaseTiming      `json:"timings,omitempty"`
-	Decision  map[string]any                 `json:"decision,omitempty"`
-	Report    *ProjectIndexIncrementalReport `json:"report,omitempty"`
+// PhaseDoneSummary closes one V3 phase transaction. FactGroups remains raw
+// until strict decoding so legacy omission, explicit empty, and invalid null
+// cannot collapse at the JSON boundary.
+type PhaseDoneSummary struct {
+	FactCount  int64                          `json:"factCount"`
+	FactGroups json.RawMessage                `json:"factGroups,omitempty"`
+	Timings    []ProjectIndexPhaseTiming      `json:"timings,omitempty"`
+	Decision   map[string]any                 `json:"decision,omitempty"`
+	Report     *ProjectIndexIncrementalReport `json:"report,omitempty"`
 }
 
 // NewProjectIndexPatchStreamCollector creates an empty collector for one worker
@@ -246,6 +250,9 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 	if err := json.Unmarshal(raw, &event); err != nil {
 		return fmt.Errorf("decode phase:done: %w", err)
 	}
+	if event.Summary == nil {
+		return fmt.Errorf("phase:done requires non-null summary")
+	}
 	tx, err := c.openTransaction(event.TransactionID)
 	if err != nil {
 		return err
@@ -253,8 +260,16 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 	if event.Phase != tx.phase {
 		return fmt.Errorf("project index worker transaction %s done phase = %s, want %s", event.TransactionID, event.Phase, tx.phase)
 	}
-	if event.Summary.FactCount != tx.factCount {
+	if event.Summary.FactCount != int64(tx.factCount) {
 		return fmt.Errorf("project index worker transaction %s fact count = %d, want %d", event.TransactionID, event.Summary.FactCount, tx.factCount)
+	}
+	factGroups, err := DecodeFactGroups(event.Summary.FactGroups)
+	if err != nil {
+		return fmt.Errorf("project index worker transaction %s: %w", event.TransactionID, err)
+	}
+	facts, err := reconstructDeclaredFactGroups(tx.facts, factGroups, tx.envelopes)
+	if err != nil {
+		return fmt.Errorf("project index worker transaction %s: %w", event.TransactionID, err)
 	}
 	if event.Patch.Phase == "" {
 		event.Patch.Phase = tx.phase
@@ -265,7 +280,7 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 	if err := c.validateRoot(event.Patch.Project.Root); err != nil {
 		return err
 	}
-	event.Patch.Facts = tx.facts
+	event.Patch.Facts = facts
 	if event.Patch.SemanticSourceProfile == nil && len(tx.sourceProfileFiles) > 0 {
 		event.Patch.SemanticSourceProfile = semanticSourceProfileFromStreamFiles(tx.sourceProfileFiles)
 	}

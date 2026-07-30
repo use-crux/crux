@@ -163,20 +163,34 @@ func ApplyPatch(state PatchState, patch IndexPatch) PatchState {
 	if patch.Facts.RuleDescriptors != nil {
 		next.Index.RuleDescriptors = append([]store.IndexRuleDescriptor(nil), patch.Facts.RuleDescriptors...)
 	}
-	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources, patch.Invalidates)
-	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
-	if patch.Facts.SourceGraph != nil {
-		next.Index.SourceGraph = patch.Facts.SourceGraph
-	}
 	if patch.Phase == PhaseRuntime {
 		next.DiagnosticsByPhase[patch.Phase] = nil
 	}
 	if patch.Facts.Diagnostics != nil || patch.Phase == PhaseRuntime {
-		if patch.Phase == PhaseQuality {
+		replacedDiagnosticIDs := diagnosticIDs(patch.Facts.Diagnostics)
+		if patch.Phase == PhaseQuality ||
+			patch.Phase == PhaseRuntime ||
+			(patch.Facts.Diagnostics != nil && len(patch.Facts.Diagnostics) == 0) {
+			replacedDiagnosticIDs = append(
+				replacedDiagnosticIDs,
+				diagnosticIDs(next.DiagnosticsByPhase[patch.Phase])...,
+			)
 			next.DiagnosticsByPhase[patch.Phase] = nil
 		}
-		next.DiagnosticsByPhase[patch.Phase] = mergePatchDiagnostics(next.DiagnosticsByPhase[patch.Phase], patch.Facts.Diagnostics)
+		next.Index.Sources = removeSourceDiagnosticIDs(
+			next.Index.Sources,
+			replacedDiagnosticIDs,
+		)
+		next.DiagnosticsByPhase[patch.Phase] = mergePatchDiagnostics(
+			next.DiagnosticsByPhase[patch.Phase],
+			patch.Facts.Diagnostics,
+		)
 		next.Index.Diagnostics = diagnosticsFromPatchPhases(next.DiagnosticsByPhase)
+	}
+	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources, patch.Invalidates)
+	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
+	if patch.Facts.SourceGraph != nil {
+		next.Index.SourceGraph = patch.Facts.SourceGraph
 	}
 	next.Index.Definitions = finalizeInjectionInputContracts(next.Index.Definitions, next.Index.Relations)
 	return next

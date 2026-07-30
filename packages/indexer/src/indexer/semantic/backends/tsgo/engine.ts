@@ -147,6 +147,8 @@ function* sharedAnalyzerEvidence(
         root: analyzeInput.root,
         sourceFiles: session.sourceFiles,
         view: session.view,
+        promptTextDiagnosticConclusions:
+          session.promptTextDiagnosticConclusions,
       },
       { instrumentation: analyzeInput.instrumentation },
     );

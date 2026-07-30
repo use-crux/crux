@@ -36,15 +36,15 @@ func (m *Manager) runOwn(ctx context.Context) {
 		}
 		source = started
 		snapshots = started.Snapshots()
-		if completion, ok := started.(CompletionSource); ok {
-			m.setCompletionSource(completion)
+		if transient, ok := started.(TransientSource); ok {
+			m.setTransientSource(transient)
 		} else {
-			m.setCompletionSource(nil)
+			m.setTransientSource(nil)
 		}
 	}
 	start()
 	defer func() {
-		m.setCompletionSource(nil)
+		m.setTransientSource(nil)
 		if source != nil {
 			source.Close()
 		}
@@ -58,12 +58,14 @@ func (m *Manager) runOwn(ctx context.Context) {
 			return
 		case snapshot, ok := <-snapshots:
 			if !ok {
-				m.setCompletionSource(nil)
+				m.setTransientSource(nil)
 				source = nil
 				snapshots = nil
 				continue
 			}
-			m.applySnapshot(snapshot)
+			if !m.applySnapshot(snapshot) {
+				return
+			}
 		case <-ticker.C:
 			probe, err := m.options.Transport.Probe(ctx, m.options.Root, m.options.Version, m.options.ProbeBudget)
 			if err != nil {
@@ -99,20 +101,22 @@ func (m *Manager) handoverToAttached(ctx context.Context, stopOwn context.Cancel
 		return false
 	}
 
-	stopOwn()
-	m.setCompletionSource(nil)
-	if source != nil {
-		source.Close()
+	if !m.applySnapshot(snapshot) {
+		stream.Close()
+		return true
 	}
-	m.applySnapshot(snapshot)
 	if delta != nil {
 		if err := m.applyDelta(ctx, *delta); err != nil {
 			stream.Close()
 			return true
 		}
 	}
+	m.setAttachedTransientSource(snapshot)
 	m.setMode(ModeAttached)
-	m.setAttachedCompletionSource(snapshot)
+	stopOwn()
+	if source != nil {
+		source.Close()
+	}
 	err = m.consumeMessages(ctx, messages, false)
 	stream.Close()
 	for ctx.Err() == nil && m.reconnect(ctx, err) {
@@ -121,16 +125,16 @@ func (m *Manager) handoverToAttached(ctx context.Context, stopOwn context.Cancel
 	return true
 }
 
-func (m *Manager) setCompletionSource(source CompletionSource) {
-	if m.options.OnCompletionSource != nil {
-		m.options.OnCompletionSource(source)
+func (m *Manager) setTransientSource(source TransientSource) {
+	if m.options.OnTransientSource != nil {
+		m.options.OnTransientSource(source)
 	}
 }
 
-func (m *Manager) setAttachedCompletionSource(snapshot Snapshot) {
+func (m *Manager) setAttachedTransientSource(snapshot Snapshot) {
 	if m.options.Transport == nil || snapshot.Generation == nil || snapshot.ServerVersion == "" || snapshot.ServerVersion != m.options.Version {
-		m.setCompletionSource(nil)
+		m.setTransientSource(nil)
 		return
 	}
-	m.setCompletionSource(m.options.Transport)
+	m.setTransientSource(m.options.Transport)
 }

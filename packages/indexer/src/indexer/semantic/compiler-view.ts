@@ -55,6 +55,17 @@ export interface SemanticCanonicalExportIdentity {
   readonly export: string;
 }
 
+/** Insertion-ready value binding for one canonical package export. */
+export type SemanticCanonicalValueBinding =
+  | {
+      readonly kind: "identifier";
+      readonly expression: string;
+    }
+  | {
+      readonly kind: "namespace-access";
+      readonly expression: string;
+    };
+
 /**
  * Backend-neutral compiler view used by semantic analyzers.
  *
@@ -113,4 +124,13 @@ export interface SemanticCompilerView<
     moduleName: string,
     exportName: string,
   ): SemanticCanonicalExportIdentity | undefined;
+  /**
+   * Return every in-scope import binding that resolves to one canonical value
+   * export at `node`. Implementations reject type-only routes and shadows.
+   */
+  canonicalValueBindingsAt?(
+    node: TNode,
+    moduleName: string,
+    exportName: string,
+  ): readonly SemanticCanonicalValueBinding[];
 }

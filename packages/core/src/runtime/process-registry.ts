@@ -7,9 +7,13 @@ import type { CruxCorrelators } from "../observability/correlators";
 import type { CruxDeploymentIdentity } from "../project-index";
 import type { RuntimeConfigInstallation } from "./config-transaction";
 import type { CruxHooks } from "./runtime";
-
-const PROCESS_REGISTRY_VERSION = 2;
-const PROCESS_REGISTRY_KEY = Symbol.for("@use-crux/core/process-registry/v2");
+import type {
+  ActivePromptCatalogue,
+  PromptCatalogueListener,
+} from "./prompt-catalogue-state";
+import { isActivePromptCatalogue } from "./prompt-catalogue-state";
+const PROCESS_REGISTRY_VERSION = 3;
+const PROCESS_REGISTRY_KEY = Symbol.for("@use-crux/core/process-registry/v3");
 
 export type ObservabilityRegistryListener = () => void;
 
@@ -25,6 +29,7 @@ const CRUX_HOOK_KEYS = new Set<keyof CruxHooks>([
   "streamProgressHook",
   "streamStartHook",
   "observabilityTransport",
+  "projectIndexRuntimeTransport",
   "observabilityDelivery",
   "observabilityCapture",
   "spanActivationHook",
@@ -46,6 +51,12 @@ export interface CruxProcessRegistry {
     nextHooksLayerId: number;
     hooksLayers: Map<number, RegistryHooksLayer>;
     activeInstallation: RuntimeConfigInstallation | undefined;
+  };
+  readonly promptCatalogue: {
+    nextOwnerToken: number;
+    activeOwnerToken: number;
+    current: ActivePromptCatalogue;
+    listeners: Set<PromptCatalogueListener>;
   };
   readonly observability: {
     transport: CruxObservabilityTransport | undefined;
@@ -70,7 +81,7 @@ export function getCruxProcessRegistry(): CruxProcessRegistry {
 
   if (existing !== undefined) {
     throw new Error(
-      "Incompatible @use-crux/core process registry found at the v2 global symbol",
+      "Incompatible @use-crux/core process registry found at the v3 global symbol",
     );
   }
 
@@ -88,6 +99,15 @@ function createCruxProcessRegistry(): CruxProcessRegistry {
       nextHooksLayerId: 1,
       hooksLayers: new Map(),
       activeInstallation: undefined,
+    },
+    promptCatalogue: {
+      nextOwnerToken: 0,
+      activeOwnerToken: 0,
+      current: Object.freeze({
+        revision: 0,
+        entries: Object.freeze([]),
+      }),
+      listeners: new Set(),
     },
     observability: {
       transport: undefined,
@@ -113,6 +133,9 @@ function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
   const observability = candidate.observability as Partial<
     CruxProcessRegistry["observability"]
   >;
+  const promptCatalogue = candidate.promptCatalogue as Partial<
+    CruxProcessRegistry["promptCatalogue"]
+  >;
   return (
     candidate.packageName === "@use-crux/core" &&
     candidate.registryVersion === PROCESS_REGISTRY_VERSION &&
@@ -123,6 +146,16 @@ function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
     isRegistryNumber(runtime.nextHooksLayerId) &&
     runtime.nextHooksLayerId > 0 &&
     isRegistryHooksLayers(runtime.hooksLayers, runtime.nextHooksLayerId) &&
+    typeof candidate.promptCatalogue === "object" &&
+    candidate.promptCatalogue !== null &&
+    isRegistryNumber(promptCatalogue.nextOwnerToken) &&
+    isRegistryNumber(promptCatalogue.activeOwnerToken) &&
+    promptCatalogue.activeOwnerToken! <= promptCatalogue.nextOwnerToken! &&
+    isActivePromptCatalogue(promptCatalogue.current) &&
+    promptCatalogue.listeners instanceof Set &&
+    [...promptCatalogue.listeners].every(
+      (listener) => typeof listener === "function",
+    ) &&
     typeof candidate.observability === "object" &&
     candidate.observability !== null &&
     isRegistryNumber(observability.nextConfigurationToken) &&

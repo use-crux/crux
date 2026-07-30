@@ -3,6 +3,7 @@ import type {
   CruxContextContributionPreview,
   CruxPrimitiveName,
   CruxPromptBudgetPreview,
+  CruxPromptTextUserPromptPreview,
   CruxSpanId,
   CruxSpanStatus,
 } from '../contract'
@@ -96,6 +97,8 @@ export interface CruxRunDetailRequest {
   representative?: CruxRunDetailRequestRepresentative
   modelSummary?: CruxRunDetailRequestModelSummary
   basePrompt?: CruxRunDetailRequestBasePrompt
+  /** Exact captured user PromptText, absent for strings and invalid/redacted evidence. */
+  userPrompt?: CruxPromptTextUserPromptPreview
   messages?: CruxRunDetailRequestMessages
   contributions: CruxRunDetailRequestContribution[]
   budget?: CruxRunDetailRequestBudget

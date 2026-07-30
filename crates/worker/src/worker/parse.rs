@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use crate::protocol::completion::{COMPLETION_QUERY_METHOD, CompletionWorkerRequest};
+use crate::protocol::prompt_text::{PROMPT_TEXT_QUERY_METHOD, PromptTextWorkerRequest};
 
 use crate::protocol::static_index::{
     STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_COMPILE_METHOD, STATIC_INDEX_FINALIZE_METHOD,
@@ -14,6 +15,11 @@ pub(crate) fn has_completion_method(value: &Value) -> bool {
     value.get("method").and_then(Value::as_str) == Some(COMPLETION_QUERY_METHOD)
 }
 
+/// Return whether a JSON value is a PromptText query.
+pub(crate) fn has_prompt_text_method(value: &Value) -> bool {
+    value.get("method").and_then(Value::as_str) == Some(PROMPT_TEXT_QUERY_METHOD)
+}
+
 /// Parses the private completion branch of the persistent worker protocol.
 pub(crate) fn parse_completion_worker_request(
     value: Value,
@@ -23,6 +29,21 @@ pub(crate) fn parse_completion_worker_request(
     if request.method != COMPLETION_QUERY_METHOD {
         return Err(format!(
             "unknown completion worker method {}",
+            request.method
+        ));
+    }
+    Ok(request)
+}
+
+/// Parses the private PromptText branch of the persistent worker protocol.
+pub(crate) fn parse_prompt_text_worker_request(
+    value: Value,
+) -> Result<PromptTextWorkerRequest, String> {
+    let request: PromptTextWorkerRequest =
+        serde_json::from_value(value).map_err(|error| error.to_string())?;
+    if request.method != PROMPT_TEXT_QUERY_METHOD {
+        return Err(format!(
+            "unknown PromptText worker method {}",
             request.method
         ));
     }

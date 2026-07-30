@@ -27,7 +27,7 @@ func TestWorkspaceCompletionRejectsGenerationAdvance(t *testing.T) {
 	}
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeOwn,
-		completion: source, sourceEpoch: 1,
+		transient: source, sourceEpoch: 1,
 	}
 	workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{session}}
 	done := make(chan completionOutcome, 1)
@@ -55,7 +55,7 @@ func TestWorkspaceCompletionAcceptsAttachedPinnedResult(t *testing.T) {
 	}}
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeAttached,
-		completion: source, sourceEpoch: 2,
+		transient: source, sourceEpoch: 2,
 	}
 	workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{session}}
 	outcome := workspace.Completion(context.Background(), uri, readmodel.CompletionRequest{DocumentVersion: 4})
@@ -101,7 +101,7 @@ func TestWorkspaceCompletionDoesNotMutatePublicationViews(t *testing.T) {
 		store: store,
 		sessions: []*scopeSession{{
 			scope: readmodel.Scope{ID: "scope", Root: root},
-			mode:  readmodel.ModeOwn, completion: source, sourceEpoch: 1,
+			mode:  readmodel.ModeOwn, transient: source, sourceEpoch: 1,
 		}},
 	}
 	before := store.PublicationSnapshot("scope")
@@ -131,7 +131,7 @@ func TestWorkspaceCompletionRejectsModeSourceEpochAdvance(t *testing.T) {
 	}
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeOwn,
-		completion: source, sourceEpoch: 1,
+		transient: source, sourceEpoch: 1,
 	}
 	workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{session}}
 	done := make(chan completionOutcome, 1)
@@ -167,7 +167,7 @@ func TestWorkspaceCompletionRejectsBothHandoverDirections(t *testing.T) {
 			}
 			session := &scopeSession{
 				scope: readmodel.Scope{ID: "scope", Root: root}, mode: test.from,
-				completion: source, sourceEpoch: 1,
+				transient: source, sourceEpoch: 1,
 			}
 			workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{session}}
 			done := make(chan completionOutcome, 1)
@@ -193,7 +193,7 @@ func TestWorkspaceCompletionBoundsAttachedTransportLatency(t *testing.T) {
 	source := &controlledCompletionSource{waitForContext: true}
 	workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeAttached,
-		completion: source, sourceEpoch: 1,
+		transient: source, sourceEpoch: 1,
 	}}}
 	started := time.Now()
 	if outcome := workspace.Completion(context.Background(), uri, readmodel.CompletionRequest{}); outcome.Kind != completionOutcomeSoft {
@@ -215,14 +215,14 @@ func TestWorkspaceCompletionRouteAbsenceDoesNotLeaveAttachedMode(t *testing.T) {
 	store.ApplySnapshot("scope", readmodel.Snapshot{Generation: &generation})
 	session := &scopeSession{
 		scope: readmodel.Scope{ID: "scope", Root: root}, mode: readmodel.ModeAttached,
-		completion: transport, sourceEpoch: 3,
+		transient: transport, sourceEpoch: 3,
 	}
 	workspace := &workspaceRuntime{store: store, sessions: []*scopeSession{session}}
 	if outcome := workspace.Completion(context.Background(), uri, readmodel.CompletionRequest{}); outcome.Kind != completionOutcomeSoft {
 		t.Fatalf("missing attached completion route = %+v, want soft unavailable", outcome)
 	}
-	if session.mode != readmodel.ModeAttached || session.completion != transport || session.sourceEpoch != 3 {
-		t.Fatalf("completion failure changed lifecycle state: mode=%s source=%T epoch=%d", session.mode, session.completion, session.sourceEpoch)
+	if session.mode != readmodel.ModeAttached || session.transient != transport || session.sourceEpoch != 3 {
+		t.Fatalf("completion failure changed lifecycle state: mode=%s source=%T epoch=%d", session.mode, session.transient, session.sourceEpoch)
 	}
 }
 
@@ -246,4 +246,11 @@ func (s *controlledCompletionSource) Completion(ctx context.Context, _ readmodel
 		return readmodel.CompletionResult{}, errors.New("completion context ended")
 	}
 	return s.result, s.err
+}
+
+func (*controlledCompletionSource) PromptText(
+	context.Context,
+	readmodel.PromptTextRequest,
+) (readmodel.PromptTextResult, error) {
+	return readmodel.PromptTextResult{}, nil
 }

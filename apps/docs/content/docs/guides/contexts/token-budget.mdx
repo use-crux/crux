@@ -3,7 +3,10 @@ title: Token Management
 description: Token-aware rendering and automatic context dropping under budget pressure.
 ---
 
-Assembled prompts can outgrow the model's context window or your cost budget. Set `tokenBudget` and Crux drops the least important contexts first: it preserves the prompt's own system text and any provider-cache prefix, then drops the lowest-priority uncached contexts until the total fits. Provider-specific adaptations let you tweak prompts per model without breaking portability.
+Assembled prompts can outgrow the model's context window or your cost budget.
+Set `tokenBudget` and Crux drops the least important contexts first: it
+preserves the prompt's own system text and any provider-cache prefix, then
+drops the lowest-priority uncached contexts until the total fits.
 
 ```ts title="generate.ts"
 import { prompt, context } from '@use-crux/core'
@@ -92,43 +95,13 @@ const brand = context({
 
 See the **[Context Caching guide](/docs/guides/contexts/caching)** for full details on resolver memoization, provider behavior, and observability.
 
-## Provider-specific adaptations
-
-Different models sometimes need different prompting strategies. The `adapt` field lets you apply provider-specific tweaks:
-
-```ts title="prompts.ts"
-const myPrompt = prompt({
-  system: "You are a helpful assistant.",
-  adapt: {
-    anthropic: {
-      appendSystem: "\nReturn raw JSON, no markdown fences.",
-    },
-    openai: {
-      prependPrompt: "Think step by step.\n\n",
-      settings: { temperature: 0.1 },
-    },
-    "*": { appendSystem: "\nRespond with valid JSON only." },
-  },
-});
-```
-
-**Resolution priority:** exact `provider` match > `modelId` prefix (for OpenRouter-style routing) > `'*'` wildcard.
-
-System adaptations participate in the same block model as prompt and context text. Prompt-owned system text remains first; `prependSystem` is inserted after that own-system block when it exists, and `appendSystem` is appended at the end. In `messages` mode, the final adapted system text is folded into the messages array instead of returning a parallel `system` field.
-
-<Callout type="warn">
-`adapt` tweaks are applied during `.resolve()`, so `.inspect()` output reflects them. Test with `inspect({ provider: 'anthropic' })` to verify provider-specific changes.
-</Callout>
-
-Settings merge with priority: `config.settings` < `adapt.settings` < call-site overrides.
-
 ## Next steps
 
 <Cards>
   <Card
-    title="Middleware & Hooks"
-    description="Global middleware and per-prompt lifecycle hooks for observability."
-    href="/docs/guides/observability/middleware"
+    title="Context Caching"
+    description="Separate resolver memoization from provider prefix caching."
+    href="/docs/guides/contexts/caching"
   />
   <Card
     title="Compaction"
@@ -136,13 +109,13 @@ Settings merge with priority: `config.settings` < `adapt.settings` < call-site o
     href="/docs/guides/compaction"
   />
   <Card
-    title="Core Concepts"
-    description="How contexts, prompts, and adapters compose together."
-    href="/docs/foundations/mental-model"
+    title="Prompts"
+    description="Inspect the complete composed request before execution."
+    href="/docs/guides/prompts#inspect-before-you-run"
   />
   <Card
     title="API Reference"
-    description="Full compaction and budget manager API signatures."
-    href="/docs/reference/crux-core/compaction"
+    description="Exact context priority, cache-tier, and merge semantics."
+    href="/docs/reference/crux-core/contexts"
   />
 </Cards>

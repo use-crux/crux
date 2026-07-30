@@ -391,6 +391,7 @@ type RunDetailRequest struct {
 	Representative *RunDetailRequestRepresentative `json:"representative,omitempty"`
 	ModelSummary   *RunDetailRequestModelSummary   `json:"modelSummary,omitempty"`
 	BasePrompt     *RunDetailRequestBasePrompt     `json:"basePrompt,omitempty"`
+	UserPrompt     *RunDetailPromptTextUserPrompt  `json:"userPrompt,omitempty"`
 	Messages       *RunDetailRequestMessages       `json:"messages,omitempty"`
 	Contributions  []RunDetailRequestContribution  `json:"contributions"`
 	Budget         *RunDetailRequestBudget         `json:"budget,omitempty"`

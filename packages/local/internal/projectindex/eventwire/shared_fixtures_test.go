@@ -70,7 +70,8 @@ func TestArtifactErrorRequiresErrorMessage(t *testing.T) {
 
 func TestSharedWorkerEventFixtureDecodes(t *testing.T) {
 	var fixture struct {
-		Events []json.RawMessage `json:"events"`
+		Events       []json.RawMessage `json:"events"`
+		LegacyEvents []json.RawMessage `json:"legacyEvents"`
 	}
 	readSharedWorkerEventFixture(t, "worker-events.json", &fixture)
 
@@ -99,8 +100,48 @@ func TestSharedWorkerEventFixtureDecodes(t *testing.T) {
 	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:contract-spine" {
 		t.Fatalf("definitions = %+v, want prompt:contract-spine", patch.Facts.Definitions)
 	}
+	if len(patch.Facts.Diagnostics) != 1 || patch.Facts.Diagnostics[0].Evidence == nil {
+		t.Fatalf("diagnostics = %#v, want one PromptText evidence row", patch.Facts.Diagnostics)
+	}
+	evidence := patch.Facts.Diagnostics[0].Evidence
+	if evidence.SourceRefID != "prompt:contract-spine:source:prompt" ||
+		evidence.InterpolationIndex != 0 ||
+		evidence.Proof != "semantic-exact" ||
+		evidence.Cause.Kind != "invalid-interpolation" ||
+		len(evidence.Cause.RuntimeKinds) != 1 ||
+		evidence.Cause.RuntimeKinds[0] != "boolean" ||
+		!evidence.Cause.MDJSONApplicable {
+		t.Fatalf("evidence = %#v, want exact PromptText golden", evidence)
+	}
+	diagnosticJSON, err := json.Marshal(patch.Facts.Diagnostics[0])
+	if err != nil {
+		t.Fatalf("marshal diagnostic: %v", err)
+	}
+	if !strings.Contains(string(diagnosticJSON), `"evidence"`) {
+		t.Fatalf("diagnostic = %s, want PromptText evidence round trip", diagnosticJSON)
+	}
 	if patch.SemanticSourceProfile == nil || patch.SemanticSourceProfile.SourceBytes != 42 {
 		t.Fatalf("semantic source profile = %+v, want 42 bytes", patch.SemanticSourceProfile)
+	}
+
+	legacyCollector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
+		Root:     "/repo",
+		Producer: "@use-crux/indexer",
+	})
+	for _, event := range fixture.LegacyEvents {
+		if err := legacyCollector.Handle(event); err != nil {
+			t.Fatalf("Handle legacy event %s error = %v", event, err)
+		}
+	}
+	legacyPatches, err := legacyCollector.Patches()
+	if err != nil {
+		t.Fatalf("legacy Patches error = %v", err)
+	}
+	if len(legacyPatches) != 1 {
+		t.Fatalf("legacy patches len = %d, want 1", len(legacyPatches))
+	}
+	if legacyPatches[0].Facts.Diagnostics != nil {
+		t.Fatalf("legacy diagnostics = %#v, want omitted nil slice", legacyPatches[0].Facts.Diagnostics)
 	}
 }
 

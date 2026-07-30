@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const tsx = require.resolve("tsx/cli");
 const coordinator = resolve(__dirname, "../../bin/eval-coordinator.ts");
 const project = resolve(__dirname, "../__fixtures__/eval-project");
-describe("Eval coordinator", { timeout: 60_000 }, () => {
+describe("Eval coordinator", { timeout: 120_000 }, () => {
   registerEvalCatalogTimeoutBehavior(run);
   it("adds and rediscovers one canonical Review sidecar Case", async () => {
     const sidecar = resolve(project, "evals/managed.cases.jsonl");

@@ -59,6 +59,10 @@ import {
   type ToolApprovalMap,
 } from "../tools/approval-policy";
 import { safeParseSchema } from "./schema";
+import {
+  PromptInputValidationError,
+  promptInputValidationIssues,
+} from "./input-validation-error";
 import { createSkillToolSurface } from "./skills";
 import { buildSystemMessage } from "./system-message";
 import {
@@ -67,6 +71,7 @@ import {
 } from "./system-ingress-provenance";
 import { resolveSystemContent } from "./system-content";
 import { inspectPromptText, resolvePromptText } from "./prompt-content";
+import { attachPromptTextObservation } from "./prompt-text-observation";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
 import type {
   PromptResolutionPass,
@@ -115,7 +120,8 @@ export async function runPromptPass(
           promptInputPreview(config.id, input, mergedSchema, "failed"),
         );
       }
-      throw new Error(
+      throw new PromptInputValidationError(
+        promptInputValidationIssues(parseResult.error?.issues),
         `Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`,
       );
     }
@@ -301,6 +307,7 @@ export async function runPromptPass(
     ...(config.output ? { schema: config.output } : {}),
     settings,
   };
+  attachPromptTextObservation(resolved, promptInfo);
   if (systemIngressBlocks.length > 0) {
     if (foldedSystem) {
       attachSystemIngressCarrier(resolved, {

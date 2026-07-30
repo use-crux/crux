@@ -1,8 +1,11 @@
 package compiler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
@@ -27,6 +30,12 @@ type CompileStreamer interface {
 // worker process.
 type Completer interface {
 	Completion(context.Context, protocol.CompletionQuery) (protocol.CompletionResponse, error)
+}
+
+// PromptTextAnalyzer runs normalized, cache-bypassing PromptText queries on
+// the persistent worker process.
+type PromptTextAnalyzer interface {
+	PromptText(context.Context, protocol.PromptTextQuery) (protocol.PromptTextQueryResponse, error)
 }
 
 type Worker struct {
@@ -140,10 +149,74 @@ func (p *Pool) Completion(ctx context.Context, query protocol.CompletionQuery) (
 	return worker.Completion(ctx, query)
 }
 
+// PromptText runs one transient query without entering Static Index stages.
+func (w *Worker) PromptText(
+	ctx context.Context,
+	query protocol.PromptTextQuery,
+) (protocol.PromptTextQueryResponse, error) {
+	id := w.NextID()
+	request := protocol.PromptTextWorkerRequest{
+		ID: id, Method: protocol.PromptTextMethod, Query: query,
+	}
+	envelope, err := callStrict[protocol.WorkerResponse[protocol.PromptTextQueryResponse]](
+		ctx, w, request,
+	)
+	if err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	if err := protocol.ValidateWorkerResponse(envelope.ID, envelope.OK, envelope.Error, id); err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	return envelope.Response, nil
+}
+
+// PromptText borrows one already-running worker from the compiler pool.
+func (p *Pool) PromptText(
+	ctx context.Context,
+	query protocol.PromptTextQuery,
+) (protocol.PromptTextQueryResponse, error) {
+	worker, err := p.staticIndexWorker()
+	if err != nil {
+		return protocol.PromptTextQueryResponse{}, err
+	}
+	return worker.PromptText(ctx, query)
+}
+
 func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, error) {
 	var zero Resp
 	if worker == nil || worker.Process() == nil {
 		return zero, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	return workerproc.Call[Resp](ctx, worker.Process(), request)
+}
+
+func callStrict[Resp any](
+	ctx context.Context,
+	worker *Worker,
+	request any,
+) (Resp, error) {
+	var zero Resp
+	if worker == nil || worker.Process() == nil {
+		return zero, fmt.Errorf("project Static Index compiler is not configured")
+	}
+	raw, err := workerproc.CallRaw(ctx, worker.Process(), request)
+	if err != nil {
+		return zero, err
+	}
+	return decodeStrict[Resp](raw)
+}
+
+func decodeStrict[Resp any](raw json.RawMessage) (Resp, error) {
+	var response Resp
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&response); err != nil {
+		return response, fmt.Errorf("unmarshal strict response: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err == nil {
+		return response, fmt.Errorf("unmarshal strict response: trailing data")
+	} else if err != io.EOF {
+		return response, fmt.Errorf("unmarshal strict response trailing data: %w", err)
+	}
+	return response, nil
 }

@@ -1,5 +1,9 @@
 import type { SemanticBackendParityFixture } from "./semantic-backend-parity-fixtures";
-import { promptTextRef } from "./prompt-text-semantic-fixture-helpers";
+import type { PromptTextSourceKind } from "@use-crux/core/project-index";
+import {
+  promptTextRef,
+  sourceRange,
+} from "./prompt-text-semantic-fixture-helpers";
 
 const file = "src/prompt-text-direct.ts";
 const fileKey = "src-prompt-text-direct.ts-226b0abf8dcb039a";
@@ -59,7 +63,11 @@ const ref = (
   role: "system" | "prompt",
   authoredSource: string,
   lifecycle: "static" | "dynamic",
-  options: { readonly symbol?: string; readonly occurrence?: number } = {},
+  options: {
+    readonly symbol?: string;
+    readonly occurrence?: number;
+    readonly sourceKind?: PromptTextSourceKind;
+  } = {},
 ) =>
   promptTextRef({
     definitionId,
@@ -71,6 +79,44 @@ const ref = (
     lifecycle,
     ...options,
   });
+
+const outerInner = ref("prompt:outer-system", "system", "md`Inner`", "static", {
+  symbol: "inner",
+});
+const outerRoot = ref(
+  "prompt:outer-system",
+  "system",
+  "md`Outer ${inner}`",
+  "static",
+  { symbol: "outer" },
+);
+const outerRootWithJoin = {
+  ...outerRoot,
+  ref: {
+    ...outerRoot.ref,
+    metadata: {
+      ...outerRoot.ref.metadata,
+      promptText: {
+        ...outerRoot.ref.metadata!.promptText!,
+        fragmentJoins: [
+          {
+            kind: "named-fragment" as const,
+            ownerSourceRefId: outerRoot.ref.id,
+            ownerTemplateRange: outerRoot.ref.snippet!.range,
+            interpolationIndex: 0,
+            expressionRange: {
+              file,
+              ...sourceRange(source, "inner", 1),
+            },
+            targetSourceRefId: outerInner.ref.id,
+            targetTemplateRange: outerInner.ref.snippet!.range,
+            proof: "semantic-exact" as const,
+          },
+        ],
+      },
+    },
+  },
+};
 
 /** Same-file prompt-text shapes required on both shared and native-direct paths. */
 export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
@@ -93,12 +139,8 @@ export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
       ref("prompt:object-prompt", "prompt", "md`Object`", "static", {
         symbol: "fragments.answer",
       }),
-      ref("prompt:outer-system", "system", "md`Inner`", "static", {
-        symbol: "inner",
-      }),
-      ref("prompt:outer-system", "system", "md`Outer ${inner}`", "static", {
-        symbol: "outer",
-      }),
+      outerInner,
+      outerRootWithJoin,
       ref(
         "prompt:nested-prompt",
         "prompt",
@@ -106,7 +148,9 @@ export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
         "static",
         { symbol: "inlineNested" },
       ),
-      ref("prompt:nested-prompt", "prompt", "md`Inline`", "static"),
+      ref("prompt:nested-prompt", "prompt", "md`Inline`", "static", {
+        sourceKind: "anonymous-fragment",
+      }),
       ref("prompt:concise", "prompt", "md`Concise`", "dynamic"),
       ref("prompt:function", "prompt", "md`Function`", "dynamic"),
       ref("prompt:method", "prompt", "md`Method`", "dynamic"),

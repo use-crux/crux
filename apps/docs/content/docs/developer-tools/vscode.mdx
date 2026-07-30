@@ -1,52 +1,158 @@
 ---
-title: VS Code & LSP
-description: Install the Crux editor extension or connect another editor to the language server.
+title: VS Code & Cursor
+description: Author Markdown-aware PromptText in TypeScript and connect your editor to Crux Project Index and runtime evidence.
 ---
 
-The Crux VS Code extension is the packaged editor experience. It discovers the
-`crux` binary, starts `crux lsp`, displays diagnostics and inline findings, and
-adds commands for opening Devtools and restarting the language server.
+The Crux extension brings authored source, Project Index evidence, and runtime
+inspection into one TypeScript workflow. PromptText reads like Markdown while
+interpolations keep native TypeScript completion, hover, rename, diagnostics,
+and navigation.
 
-Install the CLI and the matching VSIX from the same [GitHub
-Release](https://github.com/use-crux/crux/releases):
+Use it to:
+
+- highlight and fold Markdown structure around `${...}` interpolation
+  barriers;
+- preview projected text safely without evaluating workspace code;
+- explicitly inspect exact composition through an active application runtime;
+- open the latest captured Run with PromptText provenance and token
+  attribution;
+- fix proven composition failures conservatively; and
+- navigate Catalog definitions, relations, diagnostics, and source evidence.
+
+## Install in VS Code
+
+Install Crux Local, then let it download and verify the VSIX from the exact
+matching GitHub Release:
 
 ```bash
 npm install -g @use-crux/local
-code --install-extension crux-vscode-<version>.vsix
+crux editor install vscode
 ```
 
-The extension also works in compatible VS Code-based editors. Other editors can
-start `crux lsp` over stdio with a custom LSP configuration.
+## Install in Cursor
 
-Use the editor integration for:
+The same VSIX runs through Cursor's VS Code extension compatibility:
 
-- diagnostics and rule actions;
-- go to definition, references, symbols, and source-aware hover;
-- inlay hints and code lenses linked to indexed Crux definitions; and
-- semantic completion in supported Crux dependency slots.
+```bash
+npm install -g @use-crux/local
+crux editor install cursor
+```
 
-Most Project Index features are based on saved files. Semantic completion is
-the exception: it uses a bounded, request-only overlay of the current unsaved
-document and never writes that text into the Project Index or cache.
+The editor argument is always explicit. Crux will not install into every
+detected editor.
+
+Crux is not currently published to Visual Studio Marketplace or Open VSX.
+GitHub Release VSIX files do not update automatically. Upgrade the CLI and
+rerun the matching command:
+
+```bash
+npm install -g @use-crux/local@latest
+crux editor install vscode
+# or: crux editor install cursor
+```
+
+Nightly users should install `@use-crux/local@nightly`; its CLI selects the
+same nightly prerelease rather than substituting a stable version.
+
+### Manual VSIX installation
+
+Download a verified copy without executing an editor:
+
+```bash
+crux editor install vscode --download-only ./artifacts
+```
+
+Then run either:
+
+```bash
+code --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+cursor --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+```
+
+You can also select the file from **Extensions: Install from VSIX...** in
+either editor. For npm-free Local installation and platform archive names, see
+the [LSP installation reference](/docs/reference/lsp#direct-download).
+
+## Verify your first workspace
+
+1. Run `crux --version` and note the installed version.
+2. Open a trusted workspace containing `crux.config.ts`, `.js`, or `.mjs`.
+3. Open **Output: Crux** and confirm the matching language server started.
+4. Save a TypeScript file containing a canonical Core `md` template.
+5. Run **Crux: Preview PromptText Statically** with the cursor in the template.
+6. Start `crux dev` when you want exact preview, Catalog, and captured-Run
+   workflows.
+
+```ts
+import { md } from "@use-crux/core";
+
+const audience = "developers";
+
+export const launchBrief = md`
+  # Launch brief
+
+  Explain the release to ${audience}.
+`;
+```
+
+Markdown styling never covers the tag, backticks, `${`, `}`, or interpolation
+expressions. Identity-sensitive results require compiler evidence for the
+canonical Core `md`; unrelated or uncertain bindings fail closed.
+
+## Three PromptText views
+
+### Static preview
+
+**Crux: Preview PromptText Statically** opens a read-only Markdown document
+beside the source. It contains only projected output bytes, so copying preserves
+what the preview shows. Unknown values remain visible placeholders. The editor
+never evaluates workspace callbacks to produce it.
+
+### Exact preview
+
+**Crux: Preview PromptText in Application Runtime** opens Devtools for the
+canonical owning Prompt. Input changes do nothing until you explicitly press
+Preview. The active application runtime owns validation and `Prompt.inspect()`;
+the LSP and editor never import workspace modules.
+
+### Latest Run
+
+**Crux: Open Latest PromptText Run** resolves the newest captured Run when you
+click, then opens Run Detail. When no Run exists, Devtools opens the owning
+Catalog definition with a clear empty state and an Exact preview action when a
+compatible runtime is available.
+
+## More editor intelligence
+
+The same extension supplies Project Index diagnostics and actions, definitions,
+references, symbols, source-aware hover, inlay hints, code lenses, and semantic
+completion for supported Crux dependency slots. Most Project Index evidence is
+save-based. Completion alone uses a bounded request-only view of the current
+document; unsaved text never enters Project Index caches or logs.
 
 <Cards>
   <Card
     title="VS Code and LSP reference"
-    description="Installation, workspace trust, binary discovery, settings, diagnostics, navigation, and editor configuration."
+    description="Binary discovery, direct downloads, settings, diagnostics, navigation, and protocol behavior."
     href="/docs/reference/lsp"
   />
   <Card
+    title="PromptText reference"
+    description="Composition semantics, interpolation rules, inspection, and runtime behavior."
+    href="/docs/reference/crux-core/prompt-text"
+  />
+  <Card
     title="Semantic completion"
-    description="Supported slots, import behavior, unsaved text, privacy, and limitations."
+    description="Supported dependency slots, safe import edits, privacy, and limitations."
     href="/docs/reference/lsp-completion"
   />
   <Card
     title="Project Health"
-    description="Understand the source model behind editor diagnostics and navigation."
+    description="Understand the source model behind diagnostics, Catalog evidence, and navigation."
     href="/docs/guides/project-health"
   />
 </Cards>
 
-The extension and language server are one toolchain, but distinct layers: the
-extension supplies the VS Code user interface, while `crux lsp` is the
-editor-neutral protocol server.
+The extension supplies editor lifecycle and presentation. `crux lsp` remains
+the editor-neutral language server, Devtools owns exact-input UX, and the
+application runtime owns exact execution.

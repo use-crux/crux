@@ -48,6 +48,7 @@ import {
   semanticToolMapSourceRefs,
 } from "../model";
 import { semanticPromptTextSourceRefs } from "../model/prompt-text-source-refs";
+import { projectPromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
 
 interface SemanticSchemaIndexFacts {
   readonly definitions: readonly ProjectDefinition[];
@@ -173,6 +174,9 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     ...media.relations,
     ...embeddings.relations,
   ];
+  const promptTextDiagnostics = projectPromptTextDiagnosticConclusions(
+    input.promptTextDiagnosticConclusions?.(result.sourceRefs) ?? [],
+  );
 
   yield* semanticEvidenceBatchesFromFacts({
     definitions,
@@ -182,7 +186,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
       ...embeddings.sourceRefs,
     ],
     relations,
-    diagnostics: [],
+    diagnostics: promptTextDiagnostics,
     lintFindings: [
       ...media.lintFindings,
       ...embeddings.lintFindings,

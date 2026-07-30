@@ -13,7 +13,7 @@ const allowedKeysByPath: Readonly<Record<string, readonly string[]>> = {
   definitions: ['id', 'kind', 'name', 'description', 'tags', 'path', 'source', 'sourceSnippet', 'sourceRefs', 'fidelity', 'status', 'fingerprint', 'metadata'],
   relations: ['id', 'type', 'from', 'to', 'fidelity', 'source', 'metadata'],
   sourceRefs: ['definitionId', 'ref'],
-  diagnostics: ['id', 'severity', 'code', 'message', 'source', 'relatedDefinitionIds', 'suggestedFix'],
+  diagnostics: ['id', 'severity', 'code', 'message', 'source', 'relatedDefinitionIds', 'suggestedFix', 'evidence'],
   lintFindings: [
     'id',
     'severity',
@@ -79,6 +79,7 @@ const dynamicJsonPathParts = new Set([
   'optionSchema',
   'defaultOptions',
   'budget',
+  'evidence',
 ])
 
 const unorderedArrayPaths = new Set([

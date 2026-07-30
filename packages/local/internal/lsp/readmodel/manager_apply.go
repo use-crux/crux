@@ -2,12 +2,22 @@ package readmodel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
+var errManagerSuperseded = errors.New("read-model manager superseded")
+
 func (m *Manager) applyDelta(ctx context.Context, delta Delta) error {
-	before := m.options.Store.PublicationSnapshot(m.options.ScopeID)
-	result := m.options.Store.ApplyDelta(m.options.ScopeID, delta)
+	var before, after Publication
+	var result DeltaResult
+	if !m.applyCurrent(func() {
+		before = m.options.Store.PublicationSnapshot(m.options.ScopeID)
+		result = m.options.Store.ApplyDelta(m.options.ScopeID, delta)
+		after = m.options.Store.PublicationSnapshot(m.options.ScopeID)
+	}) {
+		return errManagerSuperseded
+	}
 	if result.Status == DeltaNeedsResync {
 		snapshot, err := m.options.Transport.Snapshot(ctx)
 		if err != nil {
@@ -16,11 +26,12 @@ func (m *Manager) applyDelta(ctx context.Context, delta Delta) error {
 		if err := m.validateRemoteSnapshot(snapshot); err != nil {
 			return fmt.Errorf("generation-gap resync identity: %w", err)
 		}
-		m.applySnapshot(snapshot)
-		m.setAttachedCompletionSource(snapshot)
+		if !m.applySnapshot(snapshot) {
+			return errManagerSuperseded
+		}
+		m.setAttachedTransientSource(snapshot)
 		return nil
 	}
-	after := m.options.Store.PublicationSnapshot(m.options.ScopeID)
 	if result.Status == DeltaApplied &&
 		(!before.GenerationKnown ||
 			!after.GenerationKnown ||
@@ -31,8 +42,13 @@ func (m *Manager) applyDelta(ctx context.Context, delta Delta) error {
 	return nil
 }
 
-func (m *Manager) applySnapshot(snapshot Snapshot) {
-	files := m.options.Store.ApplySnapshot(m.options.ScopeID, snapshot)
+func (m *Manager) applySnapshot(snapshot Snapshot) bool {
+	var files []string
+	if !m.applyCurrent(func() {
+		files = m.options.Store.ApplySnapshot(m.options.ScopeID, snapshot)
+	}) {
+		return false
+	}
 	m.indexChanged()
 	m.changed(files, true)
 	findings := m.options.Store.AllFindings(m.options.ScopeID)
@@ -41,6 +57,15 @@ func (m *Manager) applySnapshot(snapshot Snapshot) {
 			fmt.Fprintf(m.options.Logs, "crux lsp: scope %s finding %s\n", m.options.ScopeID, finding.ID)
 		}
 	}
+	return true
+}
+
+func (m *Manager) applyCurrent(apply func()) bool {
+	if m.options.ApplyCurrent == nil {
+		apply()
+		return true
+	}
+	return m.options.ApplyCurrent(apply)
 }
 
 func (m *Manager) indexChanged() {

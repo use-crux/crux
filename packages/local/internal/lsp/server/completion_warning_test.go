@@ -70,7 +70,7 @@ func TestCompletionFailureWarningIsSharedAcrossScopes(t *testing.T) {
 		workspace.sessions = append(workspace.sessions, &scopeSession{
 			scope: readmodel.Scope{ID: id, Root: root},
 			mode:  readmodel.ModeOwn,
-			completion: &controlledCompletionSource{
+			transient: &controlledCompletionSource{
 				err: errors.New("private compiler failure"),
 			},
 			sourceEpoch: 1,

@@ -108,7 +108,6 @@ describe("official MCP HTTP materializer", () => {
         }),
         {
           runtimeContext: undefined,
-          abortSignal: AbortSignal.timeout(100),
         },
       ),
     ).rejects.toMatchObject({

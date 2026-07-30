@@ -66,7 +66,7 @@ export async function validateVsix(version, path) {
     manifest.license !== "Apache-2.0" ||
     manifest.repository?.url !== "https://github.com/use-crux/crux.git" ||
     manifest.bugs?.url !== "https://github.com/use-crux/crux/issues" ||
-    manifest.homepage !== "https://cruxjs.dev/docs/reference/lsp"
+    manifest.homepage !== "https://cruxjs.dev/docs/developer-tools/vscode"
   ) {
     throw new Error(`VSIX public metadata is incomplete: ${basename(path)}`);
   }
@@ -74,6 +74,7 @@ export async function validateVsix(version, path) {
   for (const href of [
     "https://github.com/use-crux/crux/releases",
     "https://github.com/use-crux/crux/issues",
+    "https://cruxjs.dev/docs/developer-tools/vscode",
     "https://cruxjs.dev/docs/reference/lsp",
   ]) {
     if (!readme.includes(href))

@@ -47,7 +47,7 @@ Validation retry follows a 3-tier approach, from cheapest to most expensive:
 
 After text repair, the output is parsed as JSON, any transport encoding the schema
 compiler introduced is reversed (see
-[optional and nullable fields](/docs/guides/prompts#optional-and-nullable-fields)),
+[optional and nullable fields](/docs/guides/prompts/structured-output#optional-and-nullable-fields)),
 output guardrails run, and the canonical value is validated against **your authored**
 Zod schema with `safeParse()` — exactly once, on the value you wrote the schema for.
 

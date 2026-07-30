@@ -317,8 +317,9 @@ export type {
 } from "./defer";
 
 // Configuration + runtime domain (runtime/config/plugin/hook surface)
-export { config } from "./runtime";
+export { config, configure } from "./runtime";
 export type {
+  ConfigureOptions,
   CruxConfig,
   Crux,
   CruxDevtoolsConfig,
@@ -338,8 +339,8 @@ export type {
   CruxObservabilityConfig,
   CruxPersistenceConfig,
   CruxRuntimeConfig,
+  PromptRegistry,
 } from "./runtime";
-export type { PromptRegistry } from "./runtime";
 
 export {
   withSession,

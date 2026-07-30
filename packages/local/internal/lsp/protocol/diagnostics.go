@@ -85,6 +85,13 @@ type PublishDiagnosticsParams struct {
 	Diagnostics []Diagnostic `json:"diagnostics"`
 }
 
+// PublishDiagnosticsClientCapabilities declares support required for exact
+// versioned PromptText diagnostics and their strict action locators.
+type PublishDiagnosticsClientCapabilities struct {
+	VersionSupport bool `json:"versionSupport,omitempty"`
+	DataSupport    bool `json:"dataSupport,omitempty"`
+}
+
 type MessageType int
 
 const (

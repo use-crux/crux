@@ -1,5 +1,13 @@
 package store
 
+// ProjectIndexCapture atomically pairs a detached current Project Index with
+// its process-local publication generation. Generation is never serialized or
+// persisted.
+type ProjectIndexCapture struct {
+	Generation uint64
+	Index      IndexData
+}
+
 // SetIndex replaces the index with new data.
 func (s *Store) SetIndex(prompts []PromptMeta, contexts []ContextMeta, tools []ToolMeta) {
 	s.SetIndexData(IndexData{Prompts: prompts, Contexts: contexts, Tools: tools})
@@ -38,9 +46,24 @@ func (s *Store) SetIndexData(index IndexData) {
 	}
 
 	s.index = index
+	if s.indexGeneration == ^uint64(0) {
+		panic("project index publication generation exhausted")
+	}
+	s.indexGeneration++
 
 	s.mu.Unlock()
 	s.notify()
+}
+
+// CaptureProjectIndex returns the current detached Project Index and its
+// process-local publication generation under one read lock.
+func (s *Store) CaptureProjectIndex() ProjectIndexCapture {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return ProjectIndexCapture{
+		Generation: s.indexGeneration,
+		Index:      cloneIndexData(s.index),
+	}
 }
 
 // GetIndex returns the raw current Project Index.

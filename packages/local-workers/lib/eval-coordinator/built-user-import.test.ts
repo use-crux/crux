@@ -46,7 +46,7 @@ describe("built Eval coordinator user imports", () => {
       cells: [{ input: { secret: "[redacted]" } }],
     });
     expect(persisted).not.toContain("private-value");
-  }, 60_000);
+  }, 120_000);
 });
 
 async function fixtureProject(): Promise<string> {

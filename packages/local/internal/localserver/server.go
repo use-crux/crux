@@ -12,6 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
+	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
@@ -53,6 +54,7 @@ type Options struct {
 	Hub                      Hub
 	ProjectIndex             endpoints.DevtoolsReads
 	Completion               indexcompletion.Provider
+	PromptText               indexprompttext.Analyzer
 	ProjectRoot              string
 	ConfigPath               string
 	SourceResolver           SourceResolverOptions
@@ -101,6 +103,7 @@ func New(options Options) http.Handler {
 		mux.HandleFunc("/ws/ui", options.Hub.HandleUpgrade)
 	}
 	registerRuntimeBridgeRoutes(mux, runtimeBridge, originAllowed)
+	registerPromptPreviewRoutes(mux, options.Devtools, runtimeBridge)
 	registerResourceRoutes(mux, resourceInspection)
 	registerObservabilityRoutesWithReview(mux, options.Observability, inspectEvents(options.Inspect), options.Devtools, options.Review)
 	registerFeedbackRoutes(mux, options.Review, options.Observability)
@@ -108,6 +111,7 @@ func New(options Options) http.Handler {
 	registerEvalRoutes(mux, options.BaselineWriter, options.EvalRunner)
 	registerIndexRoutes(mux, options.Devtools)
 	registerCompletionRoutes(mux, options.Completion)
+	registerPromptTextRoutes(mux, options.PromptText)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +128,13 @@ func New(options Options) http.Handler {
 		mux.Handle("/", options.UI)
 	}
 
-	return requestLoggerMiddleware(corsMiddleware(mux, originAllowed), logger)
+	handler := wrapPromptLatestRunRoute(
+		mux,
+		options.Devtools,
+		options.Observability,
+		runtimeBridge,
+	)
+	return requestLoggerMiddleware(corsMiddleware(handler, originAllowed), logger)
 }
 
 func inspectEvents(service *inspect.Service) *inspect.EventBus {

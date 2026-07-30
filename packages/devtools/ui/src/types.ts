@@ -80,6 +80,38 @@ export type ProjectSourceRefRole =
   | "config"
   | "helper";
 
+export type PromptTextSourceKind =
+  | "owner"
+  | "named-fragment"
+  | "anonymous-fragment";
+
+export interface PromptTextFragmentJoinEvidence {
+  readonly kind: "named-fragment";
+  readonly ownerSourceRefId: string;
+  readonly ownerTemplateRange: SourceRange;
+  readonly interpolationIndex: number;
+  readonly expressionRange: SourceRange;
+  readonly targetSourceRefId: string;
+  readonly targetTemplateRange: SourceRange;
+  readonly proof: "semantic-exact";
+}
+
+export interface PromptTextRefactorEvidence {
+  readonly kind: "ordinary-string-to-md";
+  readonly proof: "semantic-exact";
+  readonly lifecycle: "static";
+  readonly target: "md";
+  readonly binding:
+    | {
+        readonly kind: "identifier";
+        readonly expression: string;
+      }
+    | {
+        readonly kind: "namespace-access";
+        readonly expression: string;
+      };
+}
+
 export interface ProjectSourceRef {
   id: string;
   role: ProjectSourceRefRole;
@@ -102,6 +134,14 @@ export interface ProjectSourceRef {
     argumentName?: string;
     toolMapContributor?: "spread" | "property";
     routingTarget?: boolean;
+    promptText?: {
+      readonly tag: "md";
+      readonly language: "markdown";
+      readonly lifecycle: "static" | "dynamic";
+      readonly sourceKind: PromptTextSourceKind;
+      readonly fragmentJoins?: readonly PromptTextFragmentJoinEvidence[];
+    };
+    promptTextRefactor?: PromptTextRefactorEvidence;
     extensions?: Record<string, unknown>;
   };
 }
@@ -817,6 +857,43 @@ export interface IndexDiagnostic {
   source?: { file: string; line: number; column?: number; function?: string };
   relatedDefinitionIds?: string[];
   suggestedFix?: string;
+  evidence?: PromptTextDiagnosticEvidence;
+}
+
+export const PROMPT_TEXT_RUNTIME_KINDS = [
+  "non-finite-number",
+  "boolean",
+  "bigint",
+  "symbol",
+  "function",
+  "object",
+  "cyclic-array",
+] as const;
+
+export type PromptTextRuntimeKind = (typeof PROMPT_TEXT_RUNTIME_KINDS)[number];
+
+export type PromptTextDiagnosticCause =
+  | {
+      readonly kind: "invalid-interpolation";
+      readonly runtimeKinds: readonly PromptTextRuntimeKind[];
+      readonly mdJsonApplicable?: true;
+    }
+  | {
+      readonly kind: "inline-sequence";
+      readonly joinableWithComma?: true;
+    }
+  | {
+      readonly kind: "json-serialization";
+      readonly reason: "undefined-result";
+    };
+
+export interface PromptTextDiagnosticEvidence {
+  readonly kind: "prompt-text";
+  readonly sourceRefId: string;
+  readonly interpolationIndex: number;
+  readonly interpolationPath?: readonly number[];
+  readonly proof: "syntax-exact" | "semantic-exact";
+  readonly cause: PromptTextDiagnosticCause;
 }
 
 interface IndexLintFindingBase {

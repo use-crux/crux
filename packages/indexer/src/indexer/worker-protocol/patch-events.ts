@@ -1,4 +1,4 @@
-import type { IndexPatch, IndexPatchFacts } from "../patches";
+import type { IndexPatch } from "../patches";
 import {
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   type ProjectIndexFactEnvelope,
@@ -21,21 +21,12 @@ import {
   projectIndexSourceProfileBatchEvents,
 } from "./event-batches";
 import { semanticSourceProfileFromStreamFiles } from "./source-profile-events";
-
-const patchFactKinds = [
-  "prompts",
-  "contexts",
-  "tools",
-  "lint",
-  "definitions",
-  "relations",
-  "sourceRefs",
-  "diagnostics",
-  "lintFindings",
-  "ruleDescriptors",
-  "sources",
-  "sourceGraph",
-] as const satisfies readonly ProjectIndexPatchFactKind[];
+import {
+  factGroupsFromPatchFacts,
+  prepareFactGroupReconstruction,
+  projectIndexFactGroups,
+  type MutableIndexPatchFacts,
+} from "./fact-groups";
 
 /** Options for converting an `IndexPatch` into worker stream events. */
 export interface IndexPatchToWorkerEventsOptions {
@@ -80,6 +71,7 @@ export function* indexPatchToWorkerEventStream(
   options: IndexPatchToWorkerEventsOptions,
 ): Iterable<ProjectIndexWorkerEvent> {
   const maxFactsPerBatch = Math.max(1, options.maxFactsPerBatch ?? 100);
+  const factGroups = factGroupsFromPatchFacts(patch.facts);
   let factCount = 0;
 
   yield {
@@ -126,7 +118,7 @@ export function* indexPatchToWorkerEventStream(
     transactionId: options.transactionId,
     phase: patch.phase,
     patch: patchMetadata,
-    summary: { factCount },
+    summary: { factCount, factGroups },
   };
 }
 
@@ -148,32 +140,28 @@ export function indexPatchFromWorkerEvents(
   );
   if (!done) throw new Error("worker event sequence is missing phase:done");
 
-  const facts: MutableIndexPatchFacts = {};
   const definitionExtractors: Record<
     string,
     ProjectIndexFactExtractorProvenance[]
   > = {};
-  const factExtractors: Record<
-    string,
-    ProjectIndexFactExtractorProvenance[]
-  > = {};
+  const factExtractors: Record<string, ProjectIndexFactExtractorProvenance[]> =
+    {};
   const sourceProfileFiles: Array<
     NonNullable<IndexPatch["semanticSourceProfile"]>["files"][number]
   > = [];
+  const envelopes: ProjectIndexFactEnvelope[] = [];
   for (const event of events) {
     if (event.type === "fact:batch") {
-      for (const envelope of event.facts) {
-        addEnvelopeFact(facts, envelope);
-        addEnvelopeExtractors(
-          definitionExtractors,
-          factExtractors,
-          envelope,
-        );
-      }
+      envelopes.push(...event.facts);
     }
     if (event.type === "sourceProfile:batch") {
       sourceProfileFiles.push(...event.files);
     }
+  }
+  const facts = prepareFactGroupReconstruction(done.summary, envelopes);
+  for (const envelope of envelopes) {
+    addEnvelopeFact(facts, envelope);
+    addEnvelopeExtractors(definitionExtractors, factExtractors, envelope);
   }
 
   const semanticSourceProfile =
@@ -181,9 +169,8 @@ export function indexPatchFromWorkerEvents(
     (sourceProfileFiles.length > 0
       ? semanticSourceProfileFromStreamFiles(sourceProfileFiles)
       : undefined);
-  const canonicalDefinitions = canonicalDefinitionExtractors(
-    definitionExtractors,
-  );
+  const canonicalDefinitions =
+    canonicalDefinitionExtractors(definitionExtractors);
   const canonicalFacts = canonicalFactExtractorMap(factExtractors);
 
   return {
@@ -216,14 +203,10 @@ function* factEnvelopesForIndexPatch(
   patch: IndexPatch,
   options: IndexPatchToWorkerEventsOptions,
 ): Iterable<ProjectIndexFactEnvelope> {
-  for (const kind of patchFactKinds) {
+  for (const kind of projectIndexFactGroups) {
     yield* factEnvelopesForKind(patch, options, kind);
   }
 }
-
-type MutableIndexPatchFacts = {
-  -readonly [TKey in keyof IndexPatchFacts]: IndexPatchFacts[TKey];
-};
 
 function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
   patch: IndexPatch,
@@ -318,14 +301,8 @@ function factExtractorKey(
 }
 
 function addEnvelopeExtractors(
-  definitionExtractors: Record<
-    string,
-    ProjectIndexFactExtractorProvenance[]
-  >,
-  factExtractors: Record<
-    string,
-    ProjectIndexFactExtractorProvenance[]
-  >,
+  definitionExtractors: Record<string, ProjectIndexFactExtractorProvenance[]>,
+  factExtractors: Record<string, ProjectIndexFactExtractorProvenance[]>,
   envelope: ProjectIndexFactEnvelope,
 ): void {
   const extractors = envelope.provenance.extractors;

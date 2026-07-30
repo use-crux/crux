@@ -20,6 +20,7 @@ mod completion_import_edits;
 mod completion_import_paths;
 mod completion_imports;
 mod completion_items;
+pub mod prompt_text;
 
 pub mod frontend {
     //! Public parser entry points.

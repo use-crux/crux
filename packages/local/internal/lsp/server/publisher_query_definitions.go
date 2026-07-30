@@ -6,6 +6,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
+	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 )
 
 // DefinitionAt returns the definition whose displayed range contains the
@@ -20,6 +21,20 @@ func (p *Publisher) DefinitionAt(
 		publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
 		view = p.currentDocumentView(uri, publication, nil, nil)
 	}
+	for _, definition := range view.definitions {
+		if rangeContainsPosition(definition.Range, position) {
+			return definition, true
+		}
+	}
+	return documentDefinition{}, false
+}
+
+func (p *Publisher) definitionAtPublication(
+	uri protocol.DocumentURI,
+	position protocol.Position,
+	publication readmodel.Publication,
+) (documentDefinition, bool) {
+	view := p.navigationDocumentView(uri, publication)
 	for _, definition := range view.definitions {
 		if rangeContainsPosition(definition.Range, position) {
 			return definition, true
@@ -72,6 +87,29 @@ func (p *Publisher) Definition(id string) (documentDefinition, bool) {
 	}
 	if _, hidden := open[uri]; hidden {
 		return documentDefinition{}, false
+	}
+	return mapped, true
+}
+
+func (p *Publisher) definitionFromPublication(
+	id string,
+	publication readmodel.Publication,
+) (documentDefinition, bool) {
+	definition, ok := publication.DefinitionsByID[id]
+	if !ok {
+		return documentDefinition{}, false
+	}
+	uri, mapped, ok := p.mapDefinition(definition)
+	if !ok {
+		return documentDefinition{}, false
+	}
+	if displayed, open := p.openDocumentViews()[uri]; open {
+		displayedRange, firstLineEnd, found := displayedDefinitionRange(displayed, id)
+		if !found {
+			return documentDefinition{}, false
+		}
+		mapped.Range = displayedRange
+		mapped.FirstLineEnd = firstLineEnd
 	}
 	return mapped, true
 }

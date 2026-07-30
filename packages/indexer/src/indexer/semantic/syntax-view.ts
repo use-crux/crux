@@ -136,6 +136,8 @@ export interface SemanticSyntaxView<
   propertyName(node: TNode): TNode | undefined;
   /** Return the value expression represented by a property-like member. */
   propertyInitializer(node: TNode): TNode | undefined;
+  /** Return whether an object property uses computed key syntax. */
+  isComputedProperty?(node: TNode): boolean;
   /** Return array literal elements. */
   arrayElements(node: TNode): readonly TNode[];
   /** Return the expression carried by a spread element or spread assignment. */
@@ -168,6 +170,8 @@ export interface SemanticSyntaxView<
   numericLiteralText(node: TNode): string | undefined;
   /** Remove syntax wrappers that do not affect semantic identity. */
   unwrapExpression(node: TNode): TNode;
+  /** Remove only transparent parentheses, preserving every TypeScript wrapper. */
+  unwrapParentheses?(node: TNode): TNode;
   /** Return the binding name for a variable declaration. */
   variableDeclarationName(node: TNode): TNode | undefined;
   /** Return the initializer for a variable declaration. */

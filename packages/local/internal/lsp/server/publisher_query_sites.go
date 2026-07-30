@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
+	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
 )
 
 // SiteAt returns the nearest navigable site displayed on the requested line.
@@ -18,6 +19,15 @@ func (p *Publisher) SiteAt(
 		publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
 		view = p.currentDocumentView(uri, publication, nil, nil)
 	}
+	return siteAt(view.sites, position)
+}
+
+func (p *Publisher) siteAtPublication(
+	uri protocol.DocumentURI,
+	position protocol.Position,
+	publication readmodel.Publication,
+) (documentNavigationSite, bool) {
+	view := p.navigationDocumentView(uri, publication)
 	return siteAt(view.sites, position)
 }
 
@@ -77,8 +87,8 @@ func displayedNavigationSiteLess(left, right documentNavigationSite) bool {
 }
 
 // ReferencesTo returns every displayed relation and source-ref site targeting
-// a definition. Open documents replace Store rows for their URI, including
-// while a newer authoritative view is held behind unsaved edits.
+// a definition. Open documents replace Store records for their URI in this
+// display-oriented query.
 func (p *Publisher) ReferencesTo(definitionID string) []documentNavigationSite {
 	open := p.openDocumentViews()
 	publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
@@ -97,6 +107,34 @@ func (p *Publisher) ReferencesTo(definitionID string) []documentNavigationSite {
 			if site.Site.TargetDefinitionID == definitionID {
 				result = append(result, site)
 			}
+		}
+	}
+	sort.Slice(result, func(left, right int) bool {
+		return displayedNavigationSiteLess(result[left], result[right])
+	})
+	return result
+}
+
+func (p *Publisher) referencesToPublication(
+	definitionID string,
+	publication readmodel.Publication,
+) []documentNavigationSite {
+	open := p.openDocumentViews()
+	result := make([]documentNavigationSite, 0)
+	for _, sites := range publication.SitesByFile {
+		for _, site := range sites {
+			uri, range_ := p.mapper.MapSourceLoc(site.Source)
+			if site.TargetDefinitionID != definitionID {
+				continue
+			}
+			if displayed, substituted := open[uri]; substituted {
+				var found bool
+				range_, found = displayedNavigationRange(displayed, site.ID)
+				if !found {
+					continue
+				}
+			}
+			result = append(result, documentNavigationSite{Site: site, Range: range_})
 		}
 	}
 	sort.Slice(result, func(left, right int) bool {

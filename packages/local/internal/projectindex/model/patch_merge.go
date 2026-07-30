@@ -260,27 +260,6 @@ func pruneDeletedSourceEdges(sources []store.IndexSourceFile, deleted map[string
 	return next
 }
 
-func mergePatchDiagnostics(existing []store.IndexDiagnostic, incoming []store.IndexDiagnostic) []store.IndexDiagnostic {
-	merged := make([]store.IndexDiagnostic, 0, len(existing)+len(incoming))
-	index := map[string]int{}
-	for _, diagnostic := range existing {
-		if existingIndex, ok := index[diagnostic.ID]; ok {
-			merged[existingIndex] = diagnostic
-			continue
-		}
-		index[diagnostic.ID] = len(merged)
-		merged = append(merged, diagnostic)
-	}
-	for _, diagnostic := range incoming {
-		if existingIndex, ok := index[diagnostic.ID]; ok {
-			merged[existingIndex] = diagnostic
-			continue
-		}
-		index[diagnostic.ID] = len(merged)
-		merged = append(merged, diagnostic)
-	}
-	return merged
-}
 func removeLintFindingsByPhase(findings []store.IndexLintFinding, phases map[string]IndexPatchPhase, phase IndexPatchPhase) ([]store.IndexLintFinding, map[string]IndexPatchPhase) {
 	nextFindings := make([]store.IndexLintFinding, 0, len(findings))
 	nextPhases := map[string]IndexPatchPhase{}
@@ -331,6 +310,28 @@ func diagnosticsFromPatchPhases(byPhase map[IndexPatchPhase][]store.IndexDiagnos
 	return diagnostics
 }
 
+func mergePatchDiagnostics(existing []store.IndexDiagnostic, incoming []store.IndexDiagnostic) []store.IndexDiagnostic {
+	merged := make([]store.IndexDiagnostic, 0, len(existing)+len(incoming))
+	index := map[string]int{}
+	for _, diagnostic := range existing {
+		if existingIndex, ok := index[diagnostic.ID]; ok {
+			merged[existingIndex] = diagnostic
+			continue
+		}
+		index[diagnostic.ID] = len(merged)
+		merged = append(merged, diagnostic)
+	}
+	for _, diagnostic := range incoming {
+		if existingIndex, ok := index[diagnostic.ID]; ok {
+			merged[existingIndex] = diagnostic
+			continue
+		}
+		index[diagnostic.ID] = len(merged)
+		merged = append(merged, diagnostic)
+	}
+	return merged
+}
+
 func indexPatchPhaseRank(phase IndexPatchPhase) int {
 	switch phase {
 	case PhaseQuality:
@@ -350,6 +351,14 @@ func definitionIDs(definitions []store.ProjectDefinition) []string {
 	ids := make([]string, 0, len(definitions))
 	for _, definition := range definitions {
 		ids = append(ids, definition.ID)
+	}
+	return ids
+}
+
+func diagnosticIDs(diagnostics []store.IndexDiagnostic) []string {
+	ids := make([]string, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		ids = append(ids, diagnostic.ID)
 	}
 	return ids
 }

@@ -1,5 +1,13 @@
 import type { SemanticBackendParityFixture } from "./semantic-backend-parity-fixtures";
-import { promptTextRef } from "./prompt-text-semantic-fixture-helpers";
+import {
+  promptTextRef,
+  sourceRange,
+} from "./prompt-text-semantic-fixture-helpers";
+import { promptTextSemanticCycleFixture } from "./prompt-text-semantic-cycle-fixture";
+import {
+  promptTextAmbiguousObjectJoinFixture,
+  promptTextRoleScopedJoinFixture,
+} from "./prompt-text-semantic-join-fixtures";
 
 const fragmentAFile = "src/fragments-a.ts";
 const fragmentBFile = "src/fragments-b.ts";
@@ -449,6 +457,104 @@ export const unresolvedPrompt = prompt({ id: 'unresolved', prompt: missingMd\`Mi
   },
 };
 
+const namedFragmentFile = "src/named-fragment.ts";
+const namedWriterFile = "src/named-writer.ts";
+const namedFragmentSource = `import { md } from '@use-crux/core'
+export const sharedFragment = md\`Shared\`
+`;
+const namedWriterSource = `import { md, prompt } from '@use-crux/core'
+import { sharedFragment } from './named-fragment'
+
+export const writer = prompt({
+  id: 'named-join',
+  prompt: md\`Before \${sharedFragment} and \${sharedFragment} after\`,
+})
+`;
+const namedOwner = promptTextRef({
+  definitionId: "prompt:named-join",
+  file: namedWriterFile,
+  fileSource: namedWriterSource,
+  fileKey: "src-named-writer.ts-2bf38db3ffbc46de",
+  role: "prompt",
+  source: "md`Before ${sharedFragment} and ${sharedFragment} after`",
+  lifecycle: "static",
+});
+const namedTarget = promptTextRef({
+  definitionId: "prompt:named-join",
+  file: namedFragmentFile,
+  fileSource: namedFragmentSource,
+  fileKey: "src-named-fragment.ts-08463a43eed348ac",
+  role: "prompt",
+  source: "md`Shared`",
+  lifecycle: "static",
+  symbol: "sharedFragment",
+});
+const namedExpressionRange = sourceRange(
+  namedWriterSource,
+  "sharedFragment",
+  1,
+);
+const repeatedNamedExpressionRange = sourceRange(
+  namedWriterSource,
+  "sharedFragment",
+  2,
+);
+
+export const namedFragmentJoinFixture: SemanticBackendParityFixture = {
+  name: "prompt-text-named-fragment-join-evidence",
+  workspacePackages: ["core"],
+  files: {
+    [namedFragmentFile]: namedFragmentSource,
+    [namedWriterFile]: namedWriterSource,
+  },
+  expect: {
+    sourceRefRoles: ["prompt"],
+    promptTextSourceRefs: [
+      namedTarget,
+      {
+        ...namedOwner,
+        ref: {
+          ...namedOwner.ref,
+          metadata: {
+            ...namedOwner.ref.metadata,
+            promptText: {
+              ...namedOwner.ref.metadata!.promptText!,
+              fragmentJoins: [
+                {
+                  kind: "named-fragment",
+                  ownerSourceRefId: namedOwner.ref.id,
+                  ownerTemplateRange: namedOwner.ref.snippet!.range,
+                  interpolationIndex: 0,
+                  expressionRange: {
+                    file: namedWriterFile,
+                    ...namedExpressionRange,
+                  },
+                  targetSourceRefId: namedTarget.ref.id,
+                  targetTemplateRange: namedTarget.ref.snippet!.range,
+                  proof: "semantic-exact",
+                },
+                {
+                  kind: "named-fragment",
+                  ownerSourceRefId: namedOwner.ref.id,
+                  ownerTemplateRange: namedOwner.ref.snippet!.range,
+                  interpolationIndex: 1,
+                  expressionRange: {
+                    file: namedWriterFile,
+                    ...repeatedNamedExpressionRange,
+                  },
+                  targetSourceRefId: namedTarget.ref.id,
+                  targetTemplateRange: namedTarget.ref.snippet!.range,
+                  proof: "semantic-exact",
+                },
+              ],
+            },
+          },
+        },
+      },
+    ],
+  },
+};
+
 export const promptTextSemanticSharedFixtures: readonly SemanticBackendParityFixture[] =
   [
     importedFragmentsFixture,
@@ -465,4 +571,8 @@ export const promptTextSemanticSharedFixtures: readonly SemanticBackendParityFix
     cyclicFragmentReexportFixture,
     broadControlFlowFixture,
     unresolvedIdentityFixture,
+    namedFragmentJoinFixture,
+    promptTextSemanticCycleFixture,
+    promptTextRoleScopedJoinFixture,
+    promptTextAmbiguousObjectJoinFixture,
   ];

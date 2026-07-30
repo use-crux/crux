@@ -1,4 +1,8 @@
-import type { ProjectSourceRef } from "@use-crux/core/project-index";
+import type {
+  ProjectSourceRef,
+  PromptTextFragmentJoinEvidence,
+  SourceRange,
+} from "@use-crux/core/project-index";
 import {
   definitionFingerprintFile,
   fingerprint,
@@ -10,13 +14,17 @@ import type {
 } from "../candidates";
 import {
   semanticExactSourceSnippetForNode,
+  semanticNodeKey,
   semanticSourceForNode,
 } from "../syntax-readers";
 import {
+  semanticPromptTextProperties,
   semanticPromptTextEdges,
   type SemanticPromptTextEdge,
   type SemanticPromptTextPropertySpec,
 } from "./prompt-text-reachability";
+import { semanticPromptTextRefactorSourceRefs } from "./prompt-text-refactors";
+import { suppressCyclicPromptTextJoins } from "./prompt-text-join-cycles";
 
 /** Builds canonical Project Index refs for every proven authored `md` region. */
 export function semanticPromptTextSourceRefs(
@@ -25,8 +33,11 @@ export function semanticPromptTextSourceRefs(
   view: SemanticAnalyzerView,
   properties?: readonly SemanticPromptTextPropertySpec[],
 ): readonly ProjectSourceRef[] {
+  const effectiveProperties =
+    properties ?? semanticPromptTextProperties(candidate);
+  const edges = semanticPromptTextEdges(candidate, view, effectiveProperties);
   const earliestByTag = new Map<string, SemanticPromptTextEdge>();
-  for (const edge of semanticPromptTextEdges(candidate, view, properties)) {
+  for (const edge of edges) {
     const key = promptTextDedupKey(candidate.definitionId, edge, view);
     const existing = earliestByTag.get(key);
     if (!existing || compareEdge(edge, existing, view) < 0) {
@@ -34,11 +45,146 @@ export function semanticPromptTextSourceRefs(
     }
   }
 
-  return [...earliestByTag.values()]
-    .sort((left, right) => compareTag(left, right, view))
-    .map((edge) =>
-      promptTextSourceRef(root, candidate.definitionId, edge, view),
+  const retainedEdges = [...earliestByTag.values()].sort((left, right) =>
+    compareTag(left, right, view),
+  );
+  const refs = retainedEdges.map((edge) =>
+    promptTextSourceRef(root, candidate.definitionId, edge, view),
+  );
+  const refsByTag = new Map(
+    retainedEdges.map((edge, index) => [
+      promptTextRefKey(edge, view),
+      refs[index]!,
+    ]),
+  );
+  const joinsByOwner = promptTextFragmentJoins(edges, refsByTag, view);
+  const templates = refs.map((ref) => {
+    const joins = joinsByOwner.get(ref.id);
+    if (!joins || joins.length === 0) return ref;
+    return {
+      ...ref,
+      metadata: {
+        ...ref.metadata,
+        promptText: {
+          ...ref.metadata!.promptText!,
+          fragmentJoins: joins,
+        },
+      },
+    };
+  });
+  return [
+    ...templates,
+    ...semanticPromptTextRefactorSourceRefs(
+      root,
+      candidate,
+      view,
+      effectiveProperties,
+    ),
+  ];
+}
+
+function promptTextFragmentJoins(
+  edges: readonly SemanticPromptTextEdge[],
+  refsByTag: ReadonlyMap<string, ProjectSourceRef>,
+  view: SemanticAnalyzerView,
+): ReadonlyMap<string, readonly PromptTextFragmentJoinEvidence[]> {
+  const candidates = new Map<
+    string,
+    {
+      readonly ownerId: string;
+      readonly join: PromptTextFragmentJoinEvidence;
+    }[]
+  >();
+  for (const edge of edges) {
+    const occurrence = edge.fragmentJoin;
+    if (!occurrence) continue;
+    const owner = refsByTag.get(
+      promptTextRefKey({ ...edge, tag: occurrence.ownerTag }, view),
     );
+    const target = refsByTag.get(promptTextRefKey(edge, view));
+    if (
+      !owner?.snippet ||
+      owner.snippet.truncated ||
+      !target?.snippet ||
+      target.snippet.truncated
+    ) {
+      continue;
+    }
+    const expression = semanticExactSourceSnippetForNode(
+      occurrence.expression,
+      view.syntax,
+    );
+    if (expression.truncated) continue;
+    const join: PromptTextFragmentJoinEvidence = {
+      kind: "named-fragment",
+      ownerSourceRefId: owner.id,
+      ownerTemplateRange: owner.snippet.range,
+      interpolationIndex: occurrence.interpolationIndex,
+      expressionRange: expression.range,
+      targetSourceRefId: target.id,
+      targetTemplateRange: target.snippet.range,
+      proof: "semantic-exact",
+    };
+    const key = fragmentJoinKey(join);
+    const values = candidates.get(key) ?? [];
+    values.push({ ownerId: owner.id, join });
+    candidates.set(key, values);
+  }
+
+  const unique = [...candidates.values()].flatMap((values) =>
+    values.length === 1 ? values : [],
+  );
+  const byOwner = new Map<string, PromptTextFragmentJoinEvidence[]>();
+  for (const { ownerId, join } of suppressCyclicPromptTextJoins(unique)) {
+    const joins = byOwner.get(ownerId) ?? [];
+    joins.push(join);
+    byOwner.set(ownerId, joins);
+  }
+  for (const joins of byOwner.values()) joins.sort(compareFragmentJoin);
+  return byOwner;
+}
+
+function promptTextRefKey(
+  edge: Pick<SemanticPromptTextEdge, "tag" | "role" | "property" | "lifecycle">,
+  view: SemanticAnalyzerView,
+): string {
+  return [
+    semanticNodeKey(edge.tag, view.syntax),
+    edge.role,
+    edge.property,
+    edge.lifecycle,
+  ].join("\0");
+}
+
+function fragmentJoinKey(join: PromptTextFragmentJoinEvidence): string {
+  return [
+    join.ownerSourceRefId,
+    join.interpolationIndex,
+    rangeKey(join.expressionRange),
+  ].join("\0");
+}
+
+function rangeKey(range: SourceRange): string {
+  return [
+    range.file,
+    range.startLine,
+    range.startColumn ?? "",
+    range.endLine ?? "",
+    range.endColumn ?? "",
+  ].join(":");
+}
+
+function compareFragmentJoin(
+  left: PromptTextFragmentJoinEvidence,
+  right: PromptTextFragmentJoinEvidence,
+): number {
+  return (
+    left.interpolationIndex - right.interpolationIndex ||
+    rangeKey(left.expressionRange).localeCompare(
+      rangeKey(right.expressionRange),
+    ) ||
+    left.targetSourceRefId.localeCompare(right.targetSourceRefId)
+  );
 }
 
 function promptTextSourceRef(
@@ -64,6 +210,7 @@ function promptTextSourceRef(
         tag: "md",
         language: "markdown",
         lifecycle: edge.lifecycle,
+        sourceKind: edge.sourceKind,
       },
     },
   };

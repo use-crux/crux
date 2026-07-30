@@ -23,11 +23,12 @@ type snapshotMetadata struct {
 }
 
 type deltaMessage struct {
-	Generation  *uint64           `json:"generation"`
-	File        string            `json:"file"`
-	Lints       *LintReplacement  `json:"lints,omitempty"`
-	Definitions DefinitionChanges `json:"definitions"`
-	SourceRow   json.RawMessage   `json:"sourceRow"`
+	Generation  *uint64               `json:"generation"`
+	File        string                `json:"file"`
+	Lints       *LintReplacement      `json:"lints,omitempty"`
+	Definitions DefinitionChanges     `json:"definitions"`
+	Diagnostics []api.IndexDiagnostic `json:"diagnostics"`
+	SourceRow   json.RawMessage       `json:"sourceRow"`
 }
 
 func decodeSnapshot(data []byte) (Snapshot, error) {
@@ -46,6 +47,8 @@ func decodeSnapshot(data []byte) (Snapshot, error) {
 		ProjectRoot:   metadata.ProjectRoot,
 		ServerVersion: metadata.ServerVersion,
 		Generation:    metadata.Generation,
+		Indexing:      index.Indexing,
+		Diagnostics:   index.Diagnostics,
 		Findings:      index.LintFindings,
 		Definitions:   index.Definitions,
 		Relations:     index.Relations,
@@ -73,11 +76,19 @@ func decodeWSMessage(data []byte) (wsMessage, bool, error) {
 		if wire.Generation == nil {
 			return wsMessage{}, false, fmt.Errorf("decode Project Index delta: generation is required")
 		}
+		var sourceRow *api.IndexSourceFile
+		if wire.SourceRow != nil {
+			if err := json.Unmarshal(wire.SourceRow, &sourceRow); err != nil {
+				return wsMessage{}, false, fmt.Errorf("decode Project Index source row: %w", err)
+			}
+		}
 		return wsMessage{Delta: &Delta{
 			Generation:    *wire.Generation,
 			File:          wire.File,
 			Lints:         wire.Lints,
 			Definitions:   wire.Definitions,
+			Diagnostics:   wire.Diagnostics,
+			SourceRow:     sourceRow,
 			SourceChanged: wire.SourceRow != nil,
 		}}, true, nil
 	default:

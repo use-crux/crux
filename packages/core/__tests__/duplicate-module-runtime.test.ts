@@ -381,12 +381,12 @@ describe("duplicate module runtime state", () => {
   }, 15_000);
 
   it("rejects a malformed registry at the exact versioned global key", async () => {
-    const key = Symbol.for("@use-crux/core/process-registry/v2");
+    const key = Symbol.for("@use-crux/core/process-registry/v3");
     const original = Reflect.get(globalThis, key);
     try {
       Reflect.set(globalThis, key, {
         packageName: "@use-crux/core",
-        registryVersion: 2,
+        registryVersion: 3,
         runtime: {
           currentHooks: {},
           nextHooksLayerId: 1,
@@ -398,7 +398,7 @@ describe("duplicate module runtime state", () => {
       vi.resetModules();
 
       await expect(import("../src/index")).rejects.toThrow(
-        "Incompatible @use-crux/core process registry found at the v2 global symbol",
+        "Incompatible @use-crux/core process registry found at the v3 global symbol",
       );
     } finally {
       Reflect.set(globalThis, key, original);
@@ -408,7 +408,7 @@ describe("duplicate module runtime state", () => {
 
   it("does not reuse a legacy v1 registry that lacks the privacy fields", async () => {
     const legacyKey = Symbol.for("@use-crux/core/process-registry/v1");
-    const currentKey = Symbol.for("@use-crux/core/process-registry/v2");
+    const currentKey = Symbol.for("@use-crux/core/process-registry/v3");
     await import("../src/index");
     const originalLegacy = Reflect.get(globalThis, legacyKey);
     const originalCurrent = Reflect.get(globalThis, currentKey);
@@ -444,7 +444,7 @@ describe("duplicate module runtime state", () => {
   }, 15_000);
 
   it("rejects malformed listener entries in an otherwise compatible registry", async () => {
-    const key = Symbol.for("@use-crux/core/process-registry/v2");
+    const key = Symbol.for("@use-crux/core/process-registry/v3");
     const original = Reflect.get(globalThis, key);
     try {
       const registry = original as {
@@ -462,7 +462,7 @@ describe("duplicate module runtime state", () => {
       vi.resetModules();
 
       await expect(import("../src/index")).rejects.toThrow(
-        "Incompatible @use-crux/core process registry found at the v2 global symbol",
+        "Incompatible @use-crux/core process registry found at the v3 global symbol",
       );
     } finally {
       Reflect.set(globalThis, key, original);
@@ -485,7 +485,7 @@ describe("duplicate module runtime state", () => {
   ])(
     "rejects %s in an otherwise compatible registry",
     async (_, configurationParents) => {
-      const key = Symbol.for("@use-crux/core/process-registry/v2");
+      const key = Symbol.for("@use-crux/core/process-registry/v3");
       const original = Reflect.get(globalThis, key);
       try {
         const registry = original as {
@@ -505,7 +505,7 @@ describe("duplicate module runtime state", () => {
         vi.resetModules();
 
         await expect(import("../src/index")).rejects.toThrow(
-          "Incompatible @use-crux/core process registry found at the v2 global symbol",
+          "Incompatible @use-crux/core process registry found at the v3 global symbol",
         );
       } finally {
         Reflect.set(globalThis, key, original);
@@ -546,7 +546,7 @@ describe("duplicate module runtime state", () => {
   ])(
     "rejects %s in an otherwise compatible registry",
     async (_, nextHooksLayerId, hooksLayers) => {
-      const key = Symbol.for("@use-crux/core/process-registry/v2");
+      const key = Symbol.for("@use-crux/core/process-registry/v3");
       const original = Reflect.get(globalThis, key);
       try {
         const registry = original as {
@@ -565,7 +565,7 @@ describe("duplicate module runtime state", () => {
         vi.resetModules();
 
         await expect(import("../src/index")).rejects.toThrow(
-          "Incompatible @use-crux/core process registry found at the v2 global symbol",
+          "Incompatible @use-crux/core process registry found at the v3 global symbol",
         );
       } finally {
         Reflect.set(globalThis, key, original);

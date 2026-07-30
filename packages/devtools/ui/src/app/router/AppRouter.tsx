@@ -54,6 +54,16 @@ const EvalRunsPage = lazy(() =>
 const ReviewPage = lazy(() =>
   import("@/pages/ReviewPage").then((m) => ({ default: m.ReviewPage })),
 );
+const PromptPreviewPage = lazy(() =>
+  import("@/pages/PromptPreviewPage").then((m) => ({
+    default: m.PromptPreviewPage,
+  })),
+);
+const PromptLatestRunPage = lazy(() =>
+  import("@/pages/PromptLatestRunPage").then((m) => ({
+    default: m.PromptLatestRunPage,
+  })),
+);
 
 export function AppRouter({ nav }: { nav: NavState }) {
   switch (nav.view) {
@@ -113,6 +123,10 @@ export function AppRouter({ nav }: { nav: NavState }) {
           tab={nav.tab}
         />
       );
+    case "prompt-preview":
+      return <PromptPreviewPage definitionId={nav.definitionId} />;
+    case "prompt-latest-run":
+      return <PromptLatestRunPage definitionId={nav.definitionId} />;
     case "library-memory":
       return <MemoryPage memoryId={nav.memoryId} />;
     case "library-workspaces":

@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
+	indexprompttext "github.com/use-crux/crux/packages/local/internal/projectindex/prompttext"
 	projectwatchhost "github.com/use-crux/crux/packages/local/internal/projectwatch/host"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -27,6 +28,7 @@ type ownIndexerSource struct {
 	latestSnapshot     Snapshot
 	nextGeneration     uint64
 	completionCompiler indexcompletion.Compiler
+	promptTextCompiler indexprompttext.Compiler
 }
 
 // StartOwnIndexer starts the same devtools indexing service and filesystem
@@ -42,7 +44,8 @@ func StartOwnIndexer(ctx context.Context, options OwnOptions) (OwnSource, error)
 	service.WithProjectIndexer(worker)
 	source := &ownIndexerSource{
 		context: ownContext, cancel: cancel, devtools: service,
-		closeWork: worker.Close, snapshots: make(chan Snapshot, 16), completionCompiler: worker,
+		closeWork: worker.Close, snapshots: make(chan Snapshot, 16),
+		completionCompiler: worker, promptTextCompiler: worker,
 	}
 	fail := func(err error) (OwnSource, error) {
 		source.Close()
@@ -117,6 +120,13 @@ func (s *ownIndexerSource) Completion(ctx context.Context, request CompletionReq
 	return completeOwn(ctx, s.completionCompiler, snapshot, request)
 }
 
+func (s *ownIndexerSource) PromptText(
+	ctx context.Context,
+	request PromptTextRequest,
+) (PromptTextResult, error) {
+	return indexprompttext.New(s.promptTextCompiler).Analyze(ctx, request)
+}
+
 func (s *ownIndexerSource) stampSnapshot(snapshot Snapshot) Snapshot {
 	s.snapshotMu.Lock()
 	s.nextGeneration++
@@ -142,6 +152,8 @@ func snapshotFromIndex(index api.IndexData) Snapshot {
 	}
 	return Snapshot{
 		ProjectRoot: root,
+		Indexing:    index.Indexing,
+		Diagnostics: index.Diagnostics,
 		Findings:    index.LintFindings,
 		Definitions: index.Definitions,
 		Relations:   index.Relations,

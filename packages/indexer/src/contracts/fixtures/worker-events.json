@@ -20,7 +20,10 @@
           "kind": "definitions",
           "phase": "ast",
           "projectRoot": "/repo",
-          "producer": { "name": "@use-crux/indexer", "version": "contract-spine" },
+          "producer": {
+            "name": "@use-crux/indexer",
+            "version": "contract-spine"
+          },
           "fidelity": "inferred",
           "provenance": { "kind": "source", "file": "/repo/src/contract.ts" },
           "fact": {
@@ -38,15 +41,30 @@
           "kind": "diagnostics",
           "phase": "ast",
           "projectRoot": "/repo",
-          "producer": { "name": "@use-crux/indexer", "version": "contract-spine" },
+          "producer": {
+            "name": "@use-crux/indexer",
+            "version": "contract-spine"
+          },
           "fidelity": "inferred",
           "provenance": { "kind": "source", "file": "/repo/src/contract.ts" },
           "fact": {
             "id": "diagnostic:contract-spine",
-            "severity": "info",
-            "code": "index.contract",
-            "message": "contract fixture indexed",
-            "source": { "file": "/repo/src/contract.ts", "line": 2 }
+            "severity": "error",
+            "code": "CRUX_PROMPT_TEXT_INVALID_INTERPOLATION",
+            "message": "PromptText interpolation 0 is always invalid (boolean). Use a string, finite number, PromptText fragment, false, null, undefined, or a supported sequence.",
+            "source": { "file": "/repo/src/contract.ts", "line": 2 },
+            "relatedDefinitionIds": ["prompt:contract-spine"],
+            "evidence": {
+              "kind": "prompt-text",
+              "sourceRefId": "prompt:contract-spine:source:prompt",
+              "interpolationIndex": 0,
+              "proof": "semantic-exact",
+              "cause": {
+                "kind": "invalid-interpolation",
+                "runtimeKinds": ["boolean"],
+                "mdJsonApplicable": true
+              }
+            }
           }
         }
       ]
@@ -61,7 +79,10 @@
           "file": "/repo/src/contract.ts",
           "sourceHash": "sha256:contract",
           "sourceBytes": 42,
-          "hints": { "nativeDirectCruxCandidate": true, "cruxCallNames": ["prompt"] }
+          "hints": {
+            "nativeDirectCruxCandidate": true,
+            "cruxCallNames": ["prompt"]
+          }
         }
       ]
     },
@@ -73,7 +94,11 @@
       "patch": {
         "schemaVersion": 1,
         "phase": "ast",
-        "project": { "root": "/repo", "name": "contract-spine", "configFile": "crux.config.ts" },
+        "project": {
+          "root": "/repo",
+          "name": "contract-spine",
+          "configFile": "crux.config.ts"
+        },
         "startedAt": "2026-06-24T10:00:00.000Z",
         "finishedAt": "2026-06-24T10:00:00.010Z",
         "status": "ok",
@@ -83,7 +108,10 @@
               "file": "/repo/src/contract.ts",
               "sourceHash": "sha256:contract",
               "sourceBytes": 42,
-              "hints": { "nativeDirectCruxCandidate": true, "cruxCallNames": ["prompt"] }
+              "hints": {
+                "nativeDirectCruxCandidate": true,
+                "cruxCallNames": ["prompt"]
+              }
             }
           ],
           "dependencyClosure": ["/repo/src/contract.ts"],
@@ -92,7 +120,35 @@
         },
         "invalidates": { "all": true }
       },
-      "summary": { "factCount": 2 }
+      "summary": {
+        "factCount": 2,
+        "factGroups": ["definitions", "diagnostics"]
+      }
+    }
+  ],
+  "legacyEvents": [
+    {
+      "protocolVersion": 3,
+      "type": "phase:start",
+      "transactionId": "tx-contract-spine-legacy",
+      "phase": "semantic",
+      "root": "/repo",
+      "startedAt": "2026-06-24T10:00:00.000Z"
+    },
+    {
+      "protocolVersion": 3,
+      "type": "phase:done",
+      "transactionId": "tx-contract-spine-legacy",
+      "phase": "semantic",
+      "patch": {
+        "schemaVersion": 1,
+        "phase": "semantic",
+        "project": { "root": "/repo" },
+        "startedAt": "2026-06-24T10:00:00.000Z",
+        "finishedAt": "2026-06-24T10:00:00.001Z",
+        "status": "ok"
+      },
+      "summary": { "factCount": 0 }
     }
   ]
 }

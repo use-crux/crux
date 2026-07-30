@@ -216,6 +216,14 @@ test("stable workflow validates every artifact before external publication", asy
   assert.match(stable, /release:publish-staged -- --no-skip-existing/);
   assert.match(stable, /release:assets:reconcile/);
   assert.doesNotMatch(stable, /gh release (?:create|edit|upload)/);
+  assert.match(
+    workflow,
+    /releaseVersion: \$\{\{ steps\.package-version\.outputs\.version \}\}/,
+  );
+  assert.match(
+    workflow,
+    /make -C packages\/local \$\{\{ matrix\.target \}\} VERSION="\$\{\{ needs\.changesets\.outputs\.releaseVersion \}\}"/,
+  );
 });
 
 test("GitHub reconciler never enables destructive asset clobbering", async () => {

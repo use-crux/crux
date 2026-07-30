@@ -7,6 +7,7 @@ export type {
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
   ProjectIndexFactFidelity,
+  ProjectIndexFactGroup,
   ProjectIndexFactExtractorProvenance,
   ProjectIndexFactProvenance,
   ProjectIndexFactProducer,
@@ -23,7 +24,10 @@ export type {
 } from './types'
 export { PROJECT_INDEX_WORKER_PROTOCOL_VERSION } from './types'
 export type { ProjectIndexArtifactToWorkerEventOptions } from './artifact-events'
-export { projectIndexArtifactToWorkerEvent, projectIndexArtifactToWorkerEvents } from './artifact-events'
+export {
+  projectIndexArtifactToWorkerEvent,
+  projectIndexArtifactToWorkerEvents,
+} from './artifact-events'
 export type { IndexPatchToWorkerEventsOptions } from './patch-events'
 export {
   factEnvelopesFromIndexPatch,

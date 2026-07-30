@@ -23,13 +23,24 @@ import type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestResult,
 } from '../extensions'
-import type { RuntimeArtifactFinding, RuntimeArtifactGenerationResult } from '../runtime-artifacts'
+import type {
+  RuntimeArtifactFinding,
+  RuntimeArtifactGenerationResult,
+} from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
 import type { SetupCommandResult } from '../setup-ops'
-import type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
+import type {
+  ProjectIndexFactExtractorProvenance,
+  ProjectIndexFactProvenance,
+} from '../fact-provenance'
+import type { ProjectIndexFactGroup } from './fact-groups'
 
-export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
+export type {
+  ProjectIndexFactExtractorProvenance,
+  ProjectIndexFactProvenance,
+} from '../fact-provenance'
+export type { ProjectIndexFactGroup } from './fact-groups'
 export type { RuntimeArtifactFinding } from '../runtime-artifacts'
 
 /** Current Project Index worker stream protocol version. */
@@ -51,7 +62,11 @@ export interface ProjectIndexFactProducer {
 }
 
 /** Evidence fidelity attached to streamed fact envelopes. */
-export type ProjectIndexFactFidelity = 'authoritative' | 'inferred' | 'best-effort' | 'runtime-observed'
+export type ProjectIndexFactFidelity =
+  | 'authoritative'
+  | 'inferred'
+  | 'best-effort'
+  | 'runtime-observed'
 
 /**
  * Typed mapping between `IndexPatchFacts` fields and streamed fact values.
@@ -69,7 +84,9 @@ export interface ProjectIndexPatchFactMap {
   readonly sourceRefs: ArrayItem<NonNullable<IndexPatchFacts['sourceRefs']>>
   readonly diagnostics: ArrayItem<NonNullable<IndexPatchFacts['diagnostics']>>
   readonly lintFindings: ArrayItem<NonNullable<IndexPatchFacts['lintFindings']>>
-  readonly ruleDescriptors: ArrayItem<NonNullable<IndexPatchFacts['ruleDescriptors']>>
+  readonly ruleDescriptors: ArrayItem<
+    NonNullable<IndexPatchFacts['ruleDescriptors']>
+  >
   readonly sources: ArrayItem<NonNullable<IndexPatchFacts['sources']>>
   readonly sourceGraph: NonNullable<IndexPatchFacts['sourceGraph']>
 }
@@ -83,7 +100,9 @@ export type ProjectIndexPatchFactKind = keyof ProjectIndexPatchFactMap
  * The generic parameter narrows `fact` from the envelope kind, giving worker
  * helpers precise inference without exposing raw compiler objects.
  */
-export interface ProjectIndexFactEnvelopeFor<TKind extends ProjectIndexPatchFactKind> {
+export interface ProjectIndexFactEnvelopeFor<
+  TKind extends ProjectIndexPatchFactKind,
+> {
   /** Envelope schema version. */
   readonly schemaVersion: 1
   /** Stable identifier for this fact within the transaction. */
@@ -190,6 +209,13 @@ export interface ProjectIndexSourceProfileBatchEvent extends ProjectIndexWorkerE
 export interface ProjectIndexPhaseSummary {
   /** Number of fact envelopes emitted for the transaction. */
   readonly factCount: number
+  /**
+   * Fact groups defined by the original patch in canonical order.
+   *
+   * Omission identifies a legacy producer. An empty array is an explicit
+   * presence claim and therefore must survive serialization.
+   */
+  readonly factGroups?: readonly ProjectIndexFactGroup[]
   /** Optional compiler phase timings for diagnostics and benchmarks. */
   readonly timings?: readonly ProjectIndexPhaseTiming[]
   /** Optional whole-run incremental planning decision attached to the final patch. */

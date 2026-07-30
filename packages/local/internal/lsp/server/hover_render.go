@@ -7,6 +7,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
+	lsprompttext "github.com/use-crux/crux/packages/local/internal/lsp/prompttext"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
@@ -21,6 +22,15 @@ func buildHoverWithDefinition(
 	definition *definitionSummary,
 	format protocol.MarkupKind,
 ) *protocol.Hover {
+	return buildHoverWithPromptText(findings, definition, nil, format)
+}
+
+func buildHoverWithPromptText(
+	findings []displayedFinding,
+	definition *definitionSummary,
+	promptText *lsprompttext.PromptTextHover,
+	format protocol.MarkupKind,
+) *protocol.Hover {
 	ordered := append([]displayedFinding(nil), findings...)
 	sort.SliceStable(ordered, func(left, right int) bool {
 		return displayedFindingLess(ordered[left], ordered[right])
@@ -30,6 +40,8 @@ func buildHoverWithDefinition(
 		hoverRange = ordered[0].Diagnostic.Range
 	} else if definition != nil {
 		hoverRange = definition.Definition.Range
+	} else if promptText != nil {
+		hoverRange = promptText.Range
 	}
 	if len(ordered) > maxHoverFindings {
 		ordered = ordered[:maxHoverFindings]
@@ -74,6 +86,17 @@ func buildHoverWithDefinition(
 				break
 			}
 		}
+	}
+	if !writer.truncated && promptText != nil {
+		separator := ""
+		if writer.units > 0 {
+			if format == protocol.MarkupKindMarkdown {
+				separator = "\n\n---\n\n"
+			} else {
+				separator = "\n\n"
+			}
+		}
+		writer.append(promptTextHoverSection(*promptText, format), separator)
 	}
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{Kind: format, Value: writer.String()},

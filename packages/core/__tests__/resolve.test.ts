@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
-import { compilePrompt, type ResolveCallOptions } from "../src/resolver/compile";
+import {
+  compilePrompt,
+  type ResolveCallOptions,
+} from "../src/resolver/compile";
 import { context } from "../src/prompt/context";
 import { setTokenizer, defaultTokenizer } from "../src/shared/tokenizer";
 import type { AnyPromptConfig } from "../src/prompt/prompt-types";
@@ -85,18 +88,23 @@ describe("compilePrompt input schema", () => {
 describe("compilePrompt resolution", () => {
   it("validates input against the compiled schema", async () => {
     const input = z.object({ name: z.string() });
+    const parsed = input.safeParse({ name: 123 });
+    if (parsed.success) throw new Error("invalid test fixture");
+    const message = `Input validation failed: ${JSON.stringify(parsed.error.issues)}`;
 
     await expect(
       compilePrompt({ system: "test", input } as AnyPromptConfig).resolve({
         input: { name: 123 },
       }),
-    ).rejects.toThrow(/Input validation failed/);
+    ).rejects.toMatchObject({ message });
   });
 
   it("rejects object-coercion markers inside multimodal message text parts", async () => {
     await expect(
       compilePrompt({
-        messages: () => [{ role: "user", content: [textPart("bad [object Object] marker")] }],
+        messages: () => [
+          { role: "user", content: [textPart("bad [object Object] marker")] },
+        ],
       } as AnyPromptConfig).resolve(),
     ).rejects.toThrow(/Message content contains "\[object Object\]"/);
   });

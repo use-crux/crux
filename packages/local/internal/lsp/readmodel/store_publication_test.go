@@ -36,6 +36,50 @@ func TestStorePublicationSnapshotIsCoherentDetachedAndIdentified(t *testing.T) {
 	}
 }
 
+func TestStorePublicationRetainsDetachedDiagnosticsSourcesAndIndexing(t *testing.T) {
+	t.Parallel()
+
+	const file = "/repo/writer.ts"
+	generation := uint64(3)
+	store := NewStore()
+	store.ApplySnapshot("scope", Snapshot{
+		Generation: &generation,
+		Indexing: &api.ProjectIndexingStatus{
+			Semantic: api.IndexIndexingSemanticStatus{Status: "ready"},
+			Cache:    &api.IndexIndexingCacheStatus{Status: "stale"},
+		},
+		Diagnostics: []api.IndexDiagnostic{{
+			ID: "diagnostic:writer", Source: &api.SourceLoc{File: file, Line: 1},
+			RelatedDefinitionIDs: []string{"prompt:writer"},
+		}},
+		Sources: []api.IndexSourceFile{{
+			File: file, SourceHash: "writer-hash",
+			DefinitionIDs: []string{"prompt:writer"},
+		}},
+	})
+
+	publication := store.PublicationSnapshot("scope")
+	if publication.Indexing == nil || publication.Indexing.Semantic.Status != "ready" {
+		t.Fatalf("indexing = %#v, want semantic ready", publication.Indexing)
+	}
+	if publication.Diagnostics[file][0].ID != "diagnostic:writer" {
+		t.Fatalf("diagnostics = %#v, want source-grouped diagnostic", publication.Diagnostics)
+	}
+	if publication.SourcesByFile[file].SourceHash != "writer-hash" {
+		t.Fatalf("sources = %#v, want source row", publication.SourcesByFile)
+	}
+
+	publication.Diagnostics[file][0].RelatedDefinitionIDs[0] = "mutated"
+	publication.SourcesByFile[file] = api.IndexSourceFile{File: file, SourceHash: "mutated"}
+	publication.Indexing.Cache.Status = "mutated"
+	again := store.PublicationSnapshot("scope")
+	if again.Diagnostics[file][0].RelatedDefinitionIDs[0] != "prompt:writer" ||
+		again.SourcesByFile[file].SourceHash != "writer-hash" ||
+		again.Indexing.Cache.Status != "stale" {
+		t.Fatalf("publication was not detached: %#v", again)
+	}
+}
+
 func publicationFixture(id, file string, generation *uint64) Snapshot {
 	column := 1
 	return Snapshot{

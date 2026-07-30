@@ -3,7 +3,10 @@ package server
 import (
 	"path/filepath"
 
+	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
+	"github.com/use-crux/crux/packages/local/internal/lsp/readmodel"
+	indexview "github.com/use-crux/crux/packages/local/internal/lsp/view"
 )
 
 // DefinitionLocation resolves a navigable site within the most-specific scope
@@ -12,12 +15,17 @@ func (w *workspaceRuntime) DefinitionLocation(
 	uri protocol.DocumentURI,
 	position protocol.Position,
 ) (protocol.Location, bool) {
-	publisher := w.navigationPublisher(uri)
-	if publisher == nil {
+	session := w.navigationSession(uri)
+	view, ok := w.savedNavigationView(session, uri)
+	if !ok {
 		return protocol.Location{}, false
 	}
-	if site, ok := publisher.SiteAt(uri, position); ok {
-		definition, found := publisher.Definition(site.Site.TargetDefinitionID)
+	publisher := session.publisher
+	if site, ok := publisher.siteAtPublication(uri, position, view.Publication); ok {
+		definition, found := publisher.definitionFromPublication(
+			site.Site.TargetDefinitionID,
+			view.Publication,
+		)
 		if !found {
 			return protocol.Location{}, false
 		}
@@ -34,11 +42,13 @@ func (w *workspaceRuntime) ReferenceLocations(
 	position protocol.Position,
 	includeDeclaration bool,
 ) []protocol.Location {
-	publisher := w.navigationPublisher(uri)
-	if publisher == nil {
+	session := w.navigationSession(uri)
+	view, ok := w.savedNavigationView(session, uri)
+	if !ok {
 		return nil
 	}
-	definition, ok := publisher.navigationDefinitionAt(uri, position)
+	publisher := session.publisher
+	definition, ok := publisher.navigationDefinitionAtPublication(uri, position, view.Publication)
 	if !ok {
 		return nil
 	}
@@ -48,7 +58,7 @@ func (w *workspaceRuntime) ReferenceLocations(
 			result = append(result, declaration)
 		}
 	}
-	for _, site := range publisher.ReferencesTo(definition.Definition.ID) {
+	for _, site := range publisher.referencesToPublication(definition.Definition.ID, view.Publication) {
 		referenceURI, _ := publisher.mapper.MapSourceLoc(site.Site.Source)
 		line := site.Range.Start.Line
 		result = append(result, protocol.Location{
@@ -60,14 +70,6 @@ func (w *workspaceRuntime) ReferenceLocations(
 		})
 	}
 	return result
-}
-
-func (w *workspaceRuntime) navigationPublisher(uri protocol.DocumentURI) *Publisher {
-	session := w.navigationSession(uri)
-	if session == nil {
-		return nil
-	}
-	return session.publisher
 }
 
 func (w *workspaceRuntime) navigationSession(uri protocol.DocumentURI) *scopeSession {
@@ -84,14 +86,49 @@ func (w *workspaceRuntime) navigationSession(uri protocol.DocumentURI) *scopeSes
 	return selected
 }
 
-func (p *Publisher) navigationDefinitionAt(
+func (w *workspaceRuntime) navigationPublisher(uri protocol.DocumentURI) *Publisher {
+	session := w.navigationSession(uri)
+	if session == nil {
+		return nil
+	}
+	return session.publisher
+}
+
+func (p *Publisher) navigationDefinitionAtPublication(
 	uri protocol.DocumentURI,
 	position protocol.Position,
+	publication readmodel.Publication,
 ) (documentDefinition, bool) {
-	if site, ok := p.SiteAt(uri, position); ok {
-		return p.Definition(site.Site.TargetDefinitionID)
+	if site, ok := p.siteAtPublication(uri, position, publication); ok {
+		return p.definitionFromPublication(site.Site.TargetDefinitionID, publication)
 	}
-	return p.DefinitionAt(uri, position)
+	return p.definitionAtPublication(uri, position, publication)
+}
+
+func (w *workspaceRuntime) savedNavigationView(
+	session *scopeSession,
+	uri protocol.DocumentURI,
+) (*indexview.ProjectIndexView, bool) {
+	if session == nil || session.publisher == nil {
+		return nil, false
+	}
+	file, err := mapping.URIToPath(string(uri))
+	if err != nil {
+		return nil, false
+	}
+	provider := session.views
+	if provider == nil {
+		provider = indexview.NewSavedProvider(session.publisher.options.Store)
+	}
+	selection := provider.BestAvailableView(indexview.ViewRequest{
+		ScopeID: session.scope.ID, File: file,
+		MinimumEvidence: indexview.EvidenceSemantic,
+		Freshness:       indexview.AllowSavedFallback,
+	})
+	if selection.Status == indexview.ViewStatusUnavailable || selection.View == nil {
+		return nil, false
+	}
+	return selection.View, true
 }
 
 func (p *Publisher) definitionLocation(definition documentDefinition) (protocol.Location, bool) {

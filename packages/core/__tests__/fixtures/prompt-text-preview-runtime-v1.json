@@ -1,0 +1,103 @@
+{
+  "version": "crux-prompt-text-preview-runtime-v1",
+  "cases": [
+    {
+      "name": "scalars and omissions",
+      "source": "const value = md`${\"value\"}:${42}:${-0}:${false}:${null}:${undefined}`;",
+      "candidateId": 0,
+      "quasis": ["", ":", ":", ":", ":", ":", ""],
+      "values": [
+        { "kind": "string", "value": "value" },
+        { "kind": "number", "value": 42 },
+        { "kind": "number", "value": -0 },
+        { "kind": "false" },
+        { "kind": "null" },
+        { "kind": "undefined" }
+      ],
+      "text": "value:42:0:::"
+    },
+    {
+      "name": "block scalar indentation",
+      "source": "const value = md`\n  value:\n    ${\"a\\nb\"}\n`;",
+      "candidateId": 0,
+      "quasis": ["\n  value:\n    ", "\n"],
+      "values": [{ "kind": "string", "value": "a\nb" }],
+      "text": "value:\n  a\n  b"
+    },
+    {
+      "name": "block scalar trailing newline indentation",
+      "source": "const value = md`\n  before:\n    ${\"a\\n\"}\n  after\n`;",
+      "candidateId": 0,
+      "quasis": ["\n  before:\n    ", "\n  after\n"],
+      "values": [{ "kind": "string", "value": "a\n" }],
+      "text": "before:\n  a\n  \nafter"
+    },
+    {
+      "name": "recursive block sequence",
+      "source": "const value = md`\n  ## Events\n\n  ${[\"one\", false, [\"two\", undefined]]}\n`;",
+      "candidateId": 0,
+      "quasis": ["\n  ## Events\n\n  ", "\n"],
+      "values": [
+        {
+          "kind": "array",
+          "value": [
+            { "kind": "string", "value": "one" },
+            { "kind": "false" },
+            {
+              "kind": "array",
+              "value": [
+                { "kind": "string", "value": "two" },
+                { "kind": "undefined" }
+              ]
+            }
+          ]
+        }
+      ],
+      "text": "## Events\n\none\ntwo"
+    },
+    {
+      "name": "earliest longest empty-carrier seam",
+      "source": "const value = md`\n    before\n \n    ${undefined}\n\t\n\t\n    ${undefined}\n  \n  \n    after\n`;",
+      "candidateId": 0,
+      "quasis": [
+        "\n    before\n \n    ",
+        "\n\t\n\t\n    ",
+        "\n  \n  \n    after\n"
+      ],
+      "values": [{ "kind": "undefined" }, { "kind": "undefined" }],
+      "text": "before\n\t\n\t\nafter"
+    },
+    {
+      "name": "inert JSON runtime bytes",
+      "source": "const value = md`\n  payload:\n    ${md.json({ name: \"value\", 10: \"ten\", 2: \"two\", items: [undefined] })}\n`;",
+      "candidateId": 0,
+      "quasis": ["\n  payload:\n    ", "\n"],
+      "values": [
+        {
+          "kind": "json",
+          "value": {
+            "2": "two",
+            "10": "ten",
+            "name": "value",
+            "items": [null]
+          }
+        }
+      ],
+      "text": "payload:\n  {\n    \"2\": \"two\",\n    \"10\": \"ten\",\n    \"name\": \"value\",\n    \"items\": [\n      null\n    ]\n  }"
+    },
+    {
+      "name": "nested fragment normalization",
+      "source": "const child = md`\n      1. First\n      2. ${\"Second\"}\n    `;\nconst value = md`\n  - Evidence:\n    ${child}\n`;",
+      "candidateId": 1,
+      "quasis": ["\n  - Evidence:\n    ", "\n"],
+      "values": [
+        {
+          "kind": "fragment",
+          "quasis": ["\n      1. First\n      2. ", "\n    "],
+          "values": [{ "kind": "string", "value": "Second" }]
+        }
+      ],
+      "text": "- Evidence:\n  1. First\n  2. Second"
+    }
+  ]
+}

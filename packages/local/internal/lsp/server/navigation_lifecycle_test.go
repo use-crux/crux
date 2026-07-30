@@ -42,6 +42,7 @@ func TestNavigationMethodsAreClientRequests(t *testing.T) {
 		protocol.MethodDefinition,
 		protocol.MethodReferences,
 		protocol.MethodDocumentSymbol,
+		protocol.MethodDocumentLink,
 		protocol.MethodWorkspaceSymbol,
 	} {
 		t.Run(method, func(t *testing.T) {

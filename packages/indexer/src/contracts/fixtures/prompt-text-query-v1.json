@@ -1,0 +1,369 @@
+{
+  "request": {
+    "id": 401,
+    "method": "promptTextQuery",
+    "query": {
+      "protocolVersion": 1,
+      "file": "/repo/src/writer.ts",
+      "languageId": "typescript",
+      "revision": {
+        "openEpoch": 7,
+        "version": 11,
+        "sourceHash": "1a1a7b292efe74e2ec0e56905cfe9d04784c248c88c9cc452dcc0cf5bb64f7ff"
+      },
+      "source": "import { md, prompt } from '@use-crux/core'\nexport const writer = prompt({\n  id: 'writer',\n  prompt: md`# Hello`,\n})\nconst preview = md`head ${items} tail`\nconst ordinary = { prompt: \"first\\nsecond\" }\nconst invalid = md`\\u{110000}`\n",
+      "fragments": [
+        {
+          "id": "source-ref:shared",
+          "symbol": "shared",
+          "file": "/repo/src/shared.ts",
+          "sourceHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 10 }
+          },
+          "snippet": "md`Shared`"
+        }
+      ],
+      "fragmentJoins": [
+        {
+          "key": {
+            "file": "/repo/src/writer.ts",
+            "sourceHash": "1a1a7b292efe74e2ec0e56905cfe9d04784c248c88c9cc452dcc0cf5bb64f7ff",
+            "templateRange": {
+              "start": { "line": 3, "character": 10 },
+              "end": { "line": 3, "character": 21 }
+            },
+            "interpolation": 0,
+            "expressionRange": {
+              "start": { "line": 3, "character": 15 },
+              "end": { "line": 3, "character": 20 }
+            }
+          },
+          "fragmentId": "source-ref:shared",
+          "proof": "semantic-exact"
+        }
+      ],
+      "limits": {
+        "maxSourceBytes": 2097152,
+        "maxTemplates": 256,
+        "maxTemplateBytes": 262144,
+        "maxTraversalNodes": 100000,
+        "maxOutputBytes": 1048576,
+        "maxStringRefactors": 128,
+        "maxStringRefactorBytes": 262144,
+        "maxStringRefactorOutputBytes": 262144,
+        "maxFragments": 256,
+        "maxFragmentJoins": 256,
+        "maxFragmentBytes": 65536,
+        "maxFragmentDepth": 16,
+        "maxPreviewBytes": 1048576
+      }
+    }
+  },
+  "response": {
+    "id": 401,
+    "ok": true,
+    "response": {
+      "protocolVersion": 1,
+      "file": "/repo/src/writer.ts",
+      "revision": {
+        "openEpoch": 7,
+        "version": 11,
+        "sourceHash": "1a1a7b292efe74e2ec0e56905cfe9d04784c248c88c9cc452dcc0cf5bb64f7ff"
+      },
+      "status": {
+        "kind": "complete"
+      },
+      "templates": [
+        {
+          "candidateId": 0,
+          "range": {
+            "start": { "line": 3, "character": 10 },
+            "end": { "line": 3, "character": 21 }
+          },
+          "tagRange": {
+            "start": { "line": 3, "character": 10 },
+            "end": { "line": 3, "character": 12 }
+          },
+          "templateRange": {
+            "start": { "line": 3, "character": 12 },
+            "end": { "line": 3, "character": 21 }
+          },
+          "backtickRanges": [
+            {
+              "start": { "line": 3, "character": 12 },
+              "end": { "line": 3, "character": 13 }
+            },
+            {
+              "start": { "line": 3, "character": 20 },
+              "end": { "line": 3, "character": 21 }
+            }
+          ],
+          "status": {
+            "kind": "complete"
+          },
+          "literalIslands": [
+            {
+              "index": 0,
+              "range": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              },
+              "projectionLength": 7
+            }
+          ],
+          "interpolationBarriers": [],
+          "mappings": [
+            {
+              "island": 0,
+              "projectionRange": { "start": 0, "end": 7 },
+              "sourceRange": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              }
+            }
+          ],
+          "blocks": [
+            {
+              "kind": "heading",
+              "index": 0,
+              "island": 0,
+              "level": 1,
+              "label": "Hello",
+              "range": {
+                "start": { "line": 3, "character": 13 },
+                "end": { "line": 3, "character": 20 }
+              },
+              "textRange": {
+                "start": { "line": 3, "character": 15 },
+                "end": { "line": 3, "character": 20 }
+              }
+            }
+          ],
+          "spans": [],
+          "links": [],
+          "nesting": [],
+          "preview": {
+            "status": {
+              "kind": "complete"
+            },
+            "evidence": "syntax-exact",
+            "text": "# Hello",
+            "segments": [
+              {
+                "kind": "authored-literal",
+                "text": "# Hello",
+                "range": {
+                  "start": { "line": 3, "character": 13 },
+                  "end": { "line": 3, "character": 20 }
+                }
+              }
+            ],
+            "truncation": null
+          }
+        },
+        {
+          "candidateId": 1,
+          "range": {
+            "start": { "line": 5, "character": 16 },
+            "end": { "line": 5, "character": 38 }
+          },
+          "tagRange": {
+            "start": { "line": 5, "character": 16 },
+            "end": { "line": 5, "character": 18 }
+          },
+          "templateRange": {
+            "start": { "line": 5, "character": 18 },
+            "end": { "line": 5, "character": 38 }
+          },
+          "backtickRanges": [
+            {
+              "start": { "line": 5, "character": 18 },
+              "end": { "line": 5, "character": 19 }
+            },
+            {
+              "start": { "line": 5, "character": 37 },
+              "end": { "line": 5, "character": 38 }
+            }
+          ],
+          "status": {
+            "kind": "complete"
+          },
+          "literalIslands": [
+            {
+              "index": 0,
+              "range": {
+                "start": { "line": 5, "character": 19 },
+                "end": { "line": 5, "character": 24 }
+              },
+              "projectionLength": 5
+            },
+            {
+              "index": 1,
+              "range": {
+                "start": { "line": 5, "character": 32 },
+                "end": { "line": 5, "character": 37 }
+              },
+              "projectionLength": 5
+            }
+          ],
+          "interpolationBarriers": [
+            {
+              "index": 0,
+              "range": {
+                "start": { "line": 5, "character": 24 },
+                "end": { "line": 5, "character": 32 }
+              },
+              "expressionRange": {
+                "start": { "line": 5, "character": 26 },
+                "end": { "line": 5, "character": 31 }
+              },
+              "lineIsolationEdit": {
+                "range": {
+                  "start": { "line": 5, "character": 23 },
+                  "end": { "line": 5, "character": 33 }
+                },
+                "expectedText": " ${items} ",
+                "newText": "\n${items}\n"
+              }
+            }
+          ],
+          "mappings": [
+            {
+              "island": 0,
+              "projectionRange": { "start": 0, "end": 5 },
+              "sourceRange": {
+                "start": { "line": 5, "character": 19 },
+                "end": { "line": 5, "character": 24 }
+              }
+            },
+            {
+              "island": 1,
+              "projectionRange": { "start": 0, "end": 5 },
+              "sourceRange": {
+                "start": { "line": 5, "character": 32 },
+                "end": { "line": 5, "character": 37 }
+              }
+            }
+          ],
+          "blocks": [
+            {
+              "kind": "paragraph",
+              "index": 0,
+              "island": 0,
+              "range": {
+                "start": { "line": 5, "character": 19 },
+                "end": { "line": 5, "character": 24 }
+              }
+            },
+            {
+              "kind": "paragraph",
+              "index": 1,
+              "island": 1,
+              "range": {
+                "start": { "line": 5, "character": 33 },
+                "end": { "line": 5, "character": 37 }
+              }
+            }
+          ],
+          "spans": [],
+          "links": [],
+          "nesting": [],
+          "preview": {
+            "status": {
+              "kind": "complete"
+            },
+            "evidence": "syntax-exact",
+            "text": "head ⟪unknown⟫ tail",
+            "segments": [
+              {
+                "kind": "authored-literal",
+                "text": "head ",
+                "range": {
+                  "start": { "line": 5, "character": 19 },
+                  "end": { "line": 5, "character": 24 }
+                }
+              },
+              {
+                "kind": "placeholder",
+                "text": "⟪unknown⟫",
+                "interpolation": 0,
+                "interpolationPath": []
+              },
+              {
+                "kind": "authored-literal",
+                "text": " tail",
+                "range": {
+                  "start": { "line": 5, "character": 32 },
+                  "end": { "line": 5, "character": 37 }
+                }
+              }
+            ],
+            "truncation": null
+          }
+        },
+        {
+          "candidateId": 2,
+          "range": {
+            "start": { "line": 7, "character": 16 },
+            "end": { "line": 7, "character": 30 }
+          },
+          "tagRange": {
+            "start": { "line": 7, "character": 16 },
+            "end": { "line": 7, "character": 18 }
+          },
+          "templateRange": {
+            "start": { "line": 7, "character": 18 },
+            "end": { "line": 7, "character": 30 }
+          },
+          "backtickRanges": [
+            {
+              "start": { "line": 7, "character": 18 },
+              "end": { "line": 7, "character": 19 }
+            },
+            {
+              "start": { "line": 7, "character": 29 },
+              "end": { "line": 7, "character": 30 }
+            }
+          ],
+          "status": {
+            "kind": "unsupported"
+          },
+          "literalIslands": [],
+          "interpolationBarriers": [],
+          "mappings": [],
+          "blocks": [],
+          "spans": [],
+          "links": [],
+          "nesting": [],
+          "preview": {
+            "status": {
+              "kind": "unavailable"
+            },
+            "evidence": null,
+            "text": "",
+            "segments": [],
+            "truncation": null
+          }
+        }
+      ],
+      "refactors": {
+        "status": { "kind": "complete" },
+        "proofs": [
+          {
+            "kind": "ordinary-string-to-md",
+            "candidateId": 0,
+            "range": {
+              "start": { "line": 6, "character": 27 },
+              "end": { "line": 6, "character": 42 }
+            },
+            "expectedText": "\"first\\nsecond\"",
+            "templateText": "`\nfirst\nsecond\n`",
+            "proof": "syntax-exact"
+          }
+        ]
+      }
+    }
+  }
+}

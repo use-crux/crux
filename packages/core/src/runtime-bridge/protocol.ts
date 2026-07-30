@@ -9,10 +9,17 @@
  */
 
 import { z } from 'zod'
+import {
+  PromptPreviewCancelSchema,
+  PromptPreviewCapabilitySchema,
+  PromptPreviewRequestSchema,
+} from './prompt-preview/protocol'
 
 /** Supported transports for Runtime Bridge peers. */
 export const RuntimeBridgeTransportSchema = z.enum(['ws', 'http'])
-export type RuntimeBridgeTransport = z.infer<typeof RuntimeBridgeTransportSchema>
+export type RuntimeBridgeTransport = z.infer<
+  typeof RuntimeBridgeTransportSchema
+>
 
 /** User-facing `devtools.bridge` configuration accepted by Crux config. */
 export const RuntimeBridgeConfigSchema = z.union([
@@ -54,7 +61,13 @@ export const RuntimeBridgeConfigSchema = z.union([
 export type RuntimeBridgeOptions = z.infer<typeof RuntimeBridgeConfigSchema>
 
 /** Environment label advertised by a runtime peer. */
-export const BridgePeerEnvironmentSchema = z.enum(['node', 'convex', 'serverless', 'browser', 'unknown'])
+export const BridgePeerEnvironmentSchema = z.enum([
+  'node',
+  'convex',
+  'serverless',
+  'browser',
+  'unknown',
+])
 export type BridgePeerEnvironment = z.infer<typeof BridgePeerEnvironmentSchema>
 
 /** Inspectable record-store resource advertised by a runtime peer. */
@@ -68,10 +81,14 @@ export const BridgeStoreResourceSchema = z.object({
 export type BridgeStoreResource = z.infer<typeof BridgeStoreResourceSchema>
 
 /** Capability advertised by a runtime peer. */
-export const BridgeCapabilitySchema = z.object({
+const BridgeStoreCapabilitySchema = z.object({
   command: z.literal('store.read'),
   resources: z.array(BridgeStoreResourceSchema),
 })
+export const BridgeCapabilitySchema = z.discriminatedUnion('command', [
+  BridgeStoreCapabilitySchema,
+  PromptPreviewCapabilitySchema,
+])
 export type BridgeCapability = z.infer<typeof BridgeCapabilitySchema>
 
 /** Runtime peer manifest discovered by the local service. */
@@ -113,7 +130,12 @@ export const RuntimePeerHeartbeatSchema = z.object({
 })
 export type RuntimePeerHeartbeat = z.infer<typeof RuntimePeerHeartbeatSchema>
 
-const ExactFilterValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
+const ExactFilterValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+])
 const ExactFilterSchema = z.record(z.string(), ExactFilterValueSchema)
 
 /** Payload accepted by the `store.read` bridge command. */
@@ -132,16 +154,22 @@ export const StoreReadCommandPayloadSchema = z.discriminatedUnion('operation', [
     filter: ExactFilterSchema.optional(),
   }),
 ])
-export type StoreReadCommandPayload = z.infer<typeof StoreReadCommandPayloadSchema>
+export type StoreReadCommandPayload = z.infer<
+  typeof StoreReadCommandPayloadSchema
+>
 
 /** Command request sent by the Go service to a runtime peer. */
-export const BridgeCommandRequestSchema = z.object({
+const StoreReadCommandRequestSchema = z.object({
   type: z.literal('command.request'),
   commandId: z.string().min(1),
   command: z.literal('store.read'),
   payload: StoreReadCommandPayloadSchema,
   deadlineMs: z.number().int().positive().optional(),
 })
+export const BridgeCommandRequestSchema = z.discriminatedUnion('command', [
+  StoreReadCommandRequestSchema,
+  PromptPreviewRequestSchema,
+])
 export type BridgeCommandRequest = z.infer<typeof BridgeCommandRequestSchema>
 
 /** Optional progress event emitted while a command is running. */
@@ -183,10 +211,11 @@ export const BridgeCommandErrorSchema = z.object({
 export type BridgeCommandError = z.infer<typeof BridgeCommandErrorSchema>
 
 /** All messages that can cross the Runtime Bridge command channel. */
-export const RuntimeBridgeMessageSchema = z.discriminatedUnion('type', [
+export const RuntimeBridgeMessageSchema = z.union([
   RuntimePeerHelloSchema,
   RuntimePeerHeartbeatSchema,
   BridgeCommandRequestSchema,
+  PromptPreviewCancelSchema,
   BridgeCommandProgressSchema,
   BridgeCommandResultSchema,
   BridgeCommandErrorSchema,
@@ -239,7 +268,10 @@ export interface RuntimeBridgeWebSocket {
   readonly readyState: number
   send(data: string): void
   close(): void
-  addEventListener?(type: 'open' | 'message' | 'error' | 'close', listener: (event: unknown) => void): void
+  addEventListener?(
+    type: 'open' | 'message' | 'error' | 'close',
+    listener: (event: unknown) => void,
+  ): void
   onopen?: ((event: unknown) => void) | null
   onmessage?: ((event: unknown) => void) | null
   onerror?: ((event: unknown) => void) | null

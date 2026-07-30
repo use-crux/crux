@@ -16,6 +16,7 @@ import {
   runReleaseScript,
 } from "./release-assets-test-mutations.mjs";
 import { releaseAssetNames } from "./release/asset-names.mjs";
+import { readPublicReleaseAssets } from "./release/public-assets.mjs";
 import { stageReleaseAssets } from "./release/stage-release-assets.mjs";
 import { validateReleaseAssets } from "./release/validate-release-assets.mjs";
 
@@ -81,6 +82,33 @@ test("complete release matrix is exact, valid, and byte-reproducible", async (t)
   );
 });
 
+test("reconciliation reads the exact validated public asset set", async (t) => {
+  const fixture = await createMatrixFixture(t);
+  const outDir = join(fixture.root, "reconciliation");
+  await stageReleaseAssets({
+    version: VERSION,
+    sourceCommit: SOURCE_COMMIT,
+    nativeRoot: fixture.nativeRoot,
+    extensionDir: fixture.extensionDir,
+    outDir,
+  });
+  await validateReleaseAssets({
+    version: VERSION,
+    sourceCommit: SOURCE_COMMIT,
+    outDir,
+  });
+
+  const assets = await readPublicReleaseAssets(join(outDir, "public"));
+  assert.deepEqual(
+    assets.map(({ name }) => name),
+    [
+      releaseAssetNames(VERSION).checksums,
+      ...releaseAssetNames(VERSION).archives,
+      releaseAssetNames(VERSION).extension,
+    ].sort(),
+  );
+});
+
 test("stable and nightly staging emit the same public matrix shape", async (t) => {
   const fixture = await createMatrixFixture(t);
   const shapes = [];
@@ -93,7 +121,11 @@ test("stable and nightly staging emit the same public matrix shape", async (t) =
       extensionDir: fixture.extensionDir,
       outDir,
     });
-    await validateReleaseAssets({ version, sourceCommit: SOURCE_COMMIT, outDir });
+    await validateReleaseAssets({
+      version,
+      sourceCommit: SOURCE_COMMIT,
+      outDir,
+    });
     shapes.push(
       (await readdir(join(outDir, "public")))
         .sort()
@@ -140,7 +172,7 @@ test("validator rejects matrix identity and archive drift", async (t) => {
     {
       name: "duplicate checksum identity",
       mutate: duplicateFirstChecksum,
-      error: /SHA256SUMS does not cover exactly/,
+      error: /SHA256SUMS contains duplicate asset identities/,
     },
     {
       name: "duplicate manifest identity",

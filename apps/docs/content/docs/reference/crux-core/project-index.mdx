@@ -261,7 +261,10 @@ interface ProjectSourceRef {
       tag: "md";
       language: "markdown";
       lifecycle: "static" | "dynamic";
+      sourceKind: "owner" | "named-fragment" | "anonymous-fragment";
+      fragmentJoins?: PromptTextFragmentJoinEvidence[];
     };
+    promptTextRefactor?: PromptTextRefactorEvidence;
   };
 }
 ```
@@ -269,10 +272,23 @@ interface ProjectSourceRef {
 Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
 
 `metadata.promptText` marks compiler-proven
-[`md` prompt text](/docs/reference/crux-core/prompts#md-and-prompttext).
+[`md` PromptText](/docs/reference/crux-core/prompt-text).
 `static` means the value is authored directly and `dynamic` means it is returned
 by a callback. The metadata is source authoring evidence, not Markdown
 rendering, sanitization, trust, or a runtime security boundary.
+`sourceKind` is required compiler-owned reachability evidence; clients must not
+infer it from the source-ref role, symbol, ranges, or legacy
+`metadata.fragment`. Named-fragment joins carry exact owner/target source-ref
+identities, ranges, and interpolation position. `promptTextRefactor` is a
+separate semantic proof that an ordinary static prompt/system string can be
+converted using an existing canonical `md` binding.
+
+Catalog presents those records directly as PromptText classification,
+lifecycle, joins, and refactor availability. Top-level hard
+`IndexDiagnostic` rows with `evidence.kind: "prompt-text"` are associated with
+their exact definition/source ref and shown with code, severity, location, and
+structured cause. They are compiler correctness evidence and are never
+collapsed into `lintFindings`.
 
 Semantic attribution follows supported alias and re-export chains to the
 canonical root `md` export. It rejects local lookalikes. If the active

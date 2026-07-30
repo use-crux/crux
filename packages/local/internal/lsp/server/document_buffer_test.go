@@ -32,6 +32,45 @@ func TestDocumentBufferOpenSnapshotsSupportedText(t *testing.T) {
 	}
 }
 
+func TestDocumentBufferRevisionKeepsEpochAcrossChangesAndAdvancesOnReopen(t *testing.T) {
+	t.Parallel()
+
+	buffers := newDocumentBuffers(documentBufferLimits{
+		DocumentBytes: 2 << 20,
+		ProcessBytes:  32 << 20,
+	})
+	uri := protocol.DocumentURI("file:///workspace/src/writer.ts")
+	buffers.Open(protocol.TextDocumentItem{
+		URI: uri, LanguageID: "typescript", Version: 3, Text: "md`# First`",
+	})
+	opened, ok := buffers.Snapshot(uri)
+	if !ok || opened.Revision.OpenEpoch == 0 || opened.Revision.Version != 3 ||
+		opened.Revision.SourceHash == "" {
+		t.Fatalf("opened revision = %#v, ok=%v; want exact non-zero stamp", opened.Revision, ok)
+	}
+
+	if !buffers.Change(uri, 4, []protocol.TextDocumentContentChangeEvent{{Text: "md`# Second`"}}) {
+		t.Fatal("full replacement was rejected")
+	}
+	changed, ok := buffers.Snapshot(uri)
+	if !ok || changed.Revision.OpenEpoch != opened.Revision.OpenEpoch ||
+		changed.Revision.Version != 4 ||
+		changed.Revision.SourceHash == opened.Revision.SourceHash {
+		t.Fatalf("changed revision = %#v, want same epoch with new version/hash", changed.Revision)
+	}
+
+	buffers.Close(uri)
+	buffers.Open(protocol.TextDocumentItem{
+		URI: uri, LanguageID: "typescript", Version: 1, Text: "md`# Second`",
+	})
+	reopened, ok := buffers.Snapshot(uri)
+	if !ok || reopened.Revision.OpenEpoch <= changed.Revision.OpenEpoch ||
+		reopened.Revision.Version != 1 ||
+		reopened.Revision.SourceHash != changed.Revision.SourceHash {
+		t.Fatalf("reopened revision = %#v, want newer epoch and exact same-byte hash", reopened.Revision)
+	}
+}
+
 func TestServerDocumentEventsOwnAndClearCompletionBuffer(t *testing.T) {
 	t.Parallel()
 

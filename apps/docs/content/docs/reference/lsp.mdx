@@ -11,6 +11,10 @@ It also projects indexed definitions and relations into editor navigation,
 symbols, definition hover, inlay hints, and code lenses. In supported
 first-party dependency slots, it adds
 [Project Index-aware semantic completion](/docs/reference/lsp-completion).
+Canonical [`md` PromptText](/docs/reference/crux-core/prompt-text)
+also receives Markdown-aware highlighting, folding, headings, links, previews,
+diagnostics, and safe refactors without replacing the native TypeScript
+language service.
 
 ## Command
 
@@ -20,9 +24,9 @@ crux lsp --port 4500
 crux lsp --root packages/app
 ```
 
-| Flag            | Default | Description |
-| --------------- | ------- | ----------- |
-| `--port <port>` | `4400`  | Local `crux dev` port to discover for attach mode. |
+| Flag            | Default | Description                                                                  |
+| --------------- | ------- | ---------------------------------------------------------------------------- |
+| `--port <port>` | `4400`  | Local `crux dev` port to discover for attach mode.                           |
 | `--root <dir>`  | `.`     | Fallback project root when the editor sends no workspace folder or root URI. |
 
 The command speaks JSON-RPC over stdio. Editors should start it directly as
@@ -64,8 +68,11 @@ slots, import behavior, privacy, limits, and exclusions.
 ## Visual Studio Code and compatible editors
 
 The Crux extension starts one language client for the window, discovers the
-Crux binary, renders optional inline finding text, forwards server settings,
-and registers **Crux: Open Devtools** and **Crux: Restart Language Server**.
+Crux binary, renders optional inline finding text and PromptText highlighting,
+forwards server settings, and registers **Crux: Open Devtools**, **Crux:
+Restart Language Server**, **Crux: Preview PromptText Statically**, **Crux:
+Preview PromptText in Application Runtime**, and **Crux: Open Latest PromptText
+Run**.
 It activates in workspaces containing `crux.config.ts`, `crux.config.js`, or
 `crux.config.mjs`.
 
@@ -83,23 +90,30 @@ CLI are versioned in lockstep. Choose the latest stable release for normal use;
 entries marked **Pre-release** are nightly builds from the exact source commit
 named in their release notes.
 
-The recommended installation is the npm CLI plus the VSIX from the same
-release:
+The recommended installation lets the CLI select, download, checksum, and
+install the VSIX from its own exact release:
 
 ```bash
 npm install -g @use-crux/local
-code --install-extension crux-vscode-<version>.vsix
+crux editor install vscode
+# or
+crux editor install cursor
 ```
 
-In VS Code, Cursor, or another compatible editor, you can instead run
-**Extensions: Install from VSIX...** and select the downloaded file. A VSIX
-installed from GitHub does not update automatically; download and install the
-new VSIX when changing Crux versions.
+The editor target is required; Crux never installs into every detected editor.
+The installer verifies `crux-vscode-<version>.vsix` against that release's
+`SHA256SUMS` before invoking `code` or `cursor`. It never falls forward or
+backward to another release.
+
+Crux is not published to Visual Studio Marketplace or Open VSX yet. A VSIX
+installed from GitHub does not update automatically. Upgrade
+`@use-crux/local`, then run the editor installer again.
 
 For a project-local CLI, install the package in the workspace:
 
 ```bash
 npm install --save-dev @use-crux/local
+npx crux editor install vscode
 ```
 
 Without an explicit path, discovery checks repository build outputs, the
@@ -148,6 +162,19 @@ publisher-identity boundary. Extract the archive and keep `crux` (or
 `crux.binaryPath` to the extracted CLI. Direct-download binaries do not update
 automatically.
 
+To download only the verified VSIX with an installed CLI:
+
+```bash
+crux editor install vscode --download-only ./artifacts
+```
+
+Install that file with **Extensions: Install from VSIX...**, or run:
+
+```bash
+code --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+cursor --install-extension ./artifacts/crux-vscode-<version>.vsix --force
+```
+
 For a repository build instead, run `pnpm install`, build the extension, and
 package it with `pnpm --filter crux-vscode package`.
 
@@ -174,18 +201,19 @@ VS Code settings use the names below. Other clients can send the same nested
 `crux` object in `initializationOptions` or
 `workspace/didChangeConfiguration`.
 
-| Setting | Type / default | Effect |
-| ------- | -------------- | ------ |
-| `crux.binaryPath` | string, `""` | VS Code extension only. Explicit CLI path; an invalid configured path is an error. |
-| `crux.port` | number, `4400` | Port used to discover and attach to a matching local dev server. |
-| `crux.lint.profile` | `""`, `"off"`, `"recommended"`, `"strict"`, or `"experimental"`; default `""` | Overrides presentation filtering. Empty follows the project's configured output; `off` publishes no findings. |
-| `crux.lint.includeSuppressed` | boolean, `false` | Includes findings retained with suppression evidence. They are hidden by default and shown as unnecessary when enabled. |
-| `crux.inlayHints.enabled` | boolean, `true` | Shows a finding-count hint on each indexed definition with current findings. |
-| `crux.codeLens.enabled` | boolean, `true` | Shows a finding-count code lens above each indexed definition with current findings. |
-| `crux.decorations.mode` | `"auto"`, `"on"`, or `"off"`; default `"auto"` | VS Code extension only. Controls inline diagnostic text; `auto` disables it when a supported general inline-diagnostics extension is active. |
-| `crux.decorations.maxLength` | number, `80` | VS Code extension only. Maximum inline decoration length, including its severity glyph, rule code, message, and additional-finding count. |
-| `crux.decorations.opacity` | number, `0.65` | VS Code extension only. Opacity from `0.1` to `1` for inline diagnostic decorations. |
-| `crux.trace` | `"off"` or `"messages"`; default `"off"` | Logs LSP method names without logging request or response payloads. |
+| Setting                               | Type / default                                                                | Effect                                                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `crux.binaryPath`                     | string, `""`                                                                  | VS Code extension only. Explicit CLI path; an invalid configured path is an error.                                                               |
+| `crux.port`                           | number, `4400`                                                                | Port used to discover and attach to a matching local dev server.                                                                                 |
+| `crux.lint.profile`                   | `""`, `"off"`, `"recommended"`, `"strict"`, or `"experimental"`; default `""` | Overrides presentation filtering. Empty follows the project's configured output; `off` publishes no findings.                                    |
+| `crux.lint.includeSuppressed`         | boolean, `false`                                                              | Includes findings retained with suppression evidence. They are hidden by default and shown as unnecessary when enabled.                          |
+| `crux.inlayHints.enabled`             | boolean, `true`                                                               | Shows a finding-count hint on each indexed definition with current findings.                                                                     |
+| `crux.codeLens.enabled`               | boolean, `true`                                                               | Shows a finding-count code lens above each indexed definition with current findings.                                                             |
+| `crux.decorations.mode`               | `"auto"`, `"on"`, or `"off"`; default `"auto"`                                | VS Code extension only. Controls inline diagnostic text; `auto` disables it when a supported general inline-diagnostics extension is active.     |
+| `crux.decorations.maxLength`          | number, `80`                                                                  | VS Code extension only. Maximum inline decoration length, including its severity glyph, rule code, message, and additional-finding count.        |
+| `crux.decorations.opacity`            | number, `0.65`                                                                | VS Code extension only. Opacity from `0.1` to `1` for inline diagnostic decorations.                                                             |
+| `crux.promptText.decorations.enabled` | boolean, `true`                                                               | VS Code extension only. Controls Markdown-role highlighting inside PromptText. Disabling cancels pending work and clears every role immediately. |
+| `crux.trace`                          | `"off"` or `"messages"`; default `"off"`                                      | Logs LSP method names without logging request or response payloads.                                                                              |
 
 Changing the lint profile or suppression setting re-filters the current read
 model without reindexing. Inlay-hint and code-lens changes apply live. Changing
@@ -225,6 +253,91 @@ signals:
   declare the client-side command, the count remains visible but informational.
 
 Definitions without findings receive neither signal.
+
+## PromptText editor support
+
+Crux recognizes PromptText only when semantic indexing proves that a tagged
+template resolves to the canonical `md` export from `@use-crux/core`. Named
+imports, import aliases, namespace access, and supported re-exports work. A
+local `md` variable or lookalike tag receives none of these features.
+
+Identity-sensitive features require saved semantic evidence whose generation
+and source hash match the editor buffer. Before dirty semantic overlays are
+available, changing a canonical template may temporarily clear highlighting,
+symbols, links, and PromptText diagnostics until save and reindex. Folding and
+static preview remain syntax-exact for the current buffer. Saved navigation can
+follow range transforms, but it never treats stale saved bytes as current
+PromptText evidence.
+
+### Highlighting, folding, symbols, and links
+
+Mapped decorations distinguish headings, strong and emphasized text, links,
+inline and fenced code, lists, and block quotes. Interpolations are barriers:
+Crux never decorates through `${...}`, so completions, hover, definitions,
+rename, selection, brackets, and semantic highlighting inside an expression
+remain native TypeScript behavior.
+
+Colors come from `ThemeColor`, so Dark+, Light+, Dark High Contrast, Light High
+Contrast, and later theme changes need no decoration rebuild or reparse.
+`crux.promptText.decorations.enabled: false` affects highlighting only; folding,
+symbols, links, previews, and diagnostics remain available.
+
+Outline receives parser-produced heading labels and nesting. Folding covers
+multiline headings, lists, block quotes, and fenced code without folding across
+an interpolation. Literal links use their visible text range. Crux permits
+hierarchical `http`/`https` URLs and lexically contained workspace-relative
+paths; it rejects unsafe schemes, ambiguous encodings, and scope escapes. Link
+validation performs no file read, stat, DNS lookup, or network request.
+
+### Static and exact preview
+
+**Crux: Preview PromptText Statically** opens a read-only Markdown document
+from the current buffer. Rust evaluates only syntax-exact scalars, arrays,
+inert JSON, and proven same-document fragments. Unknown runtime values appear
+as `⟪unknown⟫`. The preview reports whether it is complete or truncated; it
+never appends hidden source bytes to a truncated result and never executes
+application code.
+
+**Crux: Preview PromptText in Application Runtime** is available only for a
+current semantic Prompt owner and an active `crux dev` runtime that published
+that exact Prompt through `configure({ prompts })`. Devtools shows an explicit
+confirmation before dispatch. Dispatch invokes `Prompt.inspect()` once. It
+does not call a model, invoke tools, or create a Run or observability record,
+but authored callbacks are trusted application code and may perform their own
+I/O or side effects. Inputs and results remain in the active in-memory preview
+session and are not placed in URLs, logs, caches, persistence, or broadcasts.
+
+### Latest Run
+
+**Crux: Open Latest PromptText Run** resolves the current Prompt owner and the
+latest captured operation at click time. Ordering is by first observation,
+then operation ID, within one SQLite snapshot. The extension caches neither
+the owner nor a Run selection. If no Run exists, Devtools shows the Prompt's
+Catalog empty state and can link to exact preview when a matching runtime is
+currently available; it never dispatches a preview or navigates automatically
+when a Run later appears.
+
+The opened ordinary Run can show the exact captured user prompt split into
+authored/static and interpolated/dynamic regions, with retained segment source
+and token attribution. This depends on normal observability input capture.
+String prompts and missing, invalid, truncated, disabled, or redacted
+provenance use the existing plain-text presentation.
+
+### PromptText diagnostics and quick fixes
+
+Semantic indexing publishes three exact error diagnostics:
+
+| Code                                     | Meaning                                  | Quick fix                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | A supported sequence is used inline.     | Wrap the exact expression as `(<expression>).join(", ")`, or use the Rust-proven **Put sequence on its own line — changes layout** edit when available. |
+| `CRUX_PROMPT_TEXT_INVALID_INTERPOLATION` | The value is proven always invalid.      | **Serialize with `md.json()`** only when the expression is proven applicable.                                                                           |
+| `CRUX_PROMPT_TEXT_JSON_SERIALIZATION`    | `md.json()` is proven to return no text. | Correct the authored value; no automatic rewrite is offered.                                                                                            |
+
+Actions regenerate current syntax and semantic evidence and return one
+versioned edit. They never trust a previously published diagnostic payload.
+The editor preserves exact UTF-16 ranges for valid Unicode, CRLF, escapes, and
+cooked template text. It does not rewrite file encodings, normalize Unicode,
+repair invalid source bytes, or claim encoding diagnostics.
 
 ## Diagnostics and actions
 

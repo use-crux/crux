@@ -29,6 +29,15 @@ func (s *SQLiteIndexFactStore) CommitPhase(ctx context.Context, tx IndexFactTran
 	if err := deleteInvalidatedFacts(ctx, sqlTx, root, tx.Patch.Invalidates); err != nil {
 		return err
 	}
+	if err := deleteReplacedFactGroups(
+		ctx,
+		sqlTx,
+		root,
+		tx.Patch.Phase,
+		tx.Patch.Facts,
+	); err != nil {
+		return err
+	}
 	if err := upsertProjectIndexSnapshotState(ctx, sqlTx, tx.Patch); err != nil {
 		return err
 	}

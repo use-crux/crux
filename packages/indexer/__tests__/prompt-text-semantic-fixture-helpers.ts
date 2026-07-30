@@ -1,4 +1,7 @@
-import type { ProjectSourceRefRole } from "@use-crux/core/project-index";
+import type {
+  ProjectSourceRefRole,
+  PromptTextSourceKind,
+} from "@use-crux/core/project-index";
 import type { ExpectedPromptTextSourceRef } from "./semantic-backend-parity-fixtures";
 
 interface PromptTextRefInput {
@@ -11,6 +14,7 @@ interface PromptTextRefInput {
   readonly occurrence?: number;
   readonly lifecycle: "static" | "dynamic";
   readonly symbol?: string;
+  readonly sourceKind?: PromptTextSourceKind;
 }
 
 /** Builds exact, project-relative prompt-text evidence for parity fixtures. */
@@ -50,13 +54,15 @@ export function promptTextRef(
           tag: "md",
           language: "markdown",
           lifecycle: input.lifecycle,
+          sourceKind:
+            input.sourceKind ?? (input.symbol ? "named-fragment" : "owner"),
         },
       },
     },
   };
 }
 
-function sourceRange(
+export function sourceRange(
   fileSource: string,
   source: string,
   occurrence: number,

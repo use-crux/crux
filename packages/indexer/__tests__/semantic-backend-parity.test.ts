@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { IndexPatchFacts } from "../src/indexer/patches";
-import { definitionFingerprintFile } from "../src/indexer/definitions";
 import {
   createNativeSemanticBackend,
   createSemanticIndexService,
@@ -13,6 +12,7 @@ import {
   semanticBackendParityFixtures,
   type SemanticBackendParityFixture,
 } from "./semantic-backend-parity-fixtures";
+import { normalizedPromptTextSourceRefs } from "./prompt-text-semantic-parity-normalize";
 
 const roots: string[] = [];
 
@@ -168,6 +168,14 @@ function assertFixtureCoverage(
   expect(coverage.lintRuleIds).toEqual(
     expect.arrayContaining([...(fixture.expect.lintRuleIds ?? [])]),
   );
+  expect(coverage.diagnosticCodes).toEqual(
+    expect.arrayContaining([...(fixture.expect.diagnosticCodes ?? [])]),
+  );
+  expect(coverage.diagnosticDefinitionIds).toEqual(
+    expect.arrayContaining([
+      ...(fixture.expect.diagnosticDefinitionIds ?? []),
+    ]),
+  );
   for (const [definitionId, expectedFacts] of Object.entries(
     fixture.expect.definitionFacts ?? {},
   )) {
@@ -194,32 +202,7 @@ function assertFixtureCoverage(
     expect(definition?.metadata?.profile).toEqual(profile);
   }
   if (fixture.expect.promptTextSourceRefs) {
-    const promptTextSourceRefs = (facts.sourceRefs ?? [])
-      .filter((sourceRef) => sourceRef.ref.metadata?.promptText)
-      .map((sourceRef) => ({
-        ...sourceRef,
-        ref: {
-          ...sourceRef.ref,
-          source: {
-            ...sourceRef.ref.source,
-            file: definitionFingerprintFile(root, sourceRef.ref.source.file),
-          },
-          ...(sourceRef.ref.snippet
-            ? {
-                snippet: {
-                  ...sourceRef.ref.snippet,
-                  range: {
-                    ...sourceRef.ref.snippet.range,
-                    file: definitionFingerprintFile(
-                      root,
-                      sourceRef.ref.snippet.range.file,
-                    ),
-                  },
-                },
-              }
-            : {}),
-        },
-      }));
+    const promptTextSourceRefs = normalizedPromptTextSourceRefs(facts, root);
     expect(promptTextSourceRefs).toEqual(fixture.expect.promptTextSourceRefs);
   }
 }
@@ -229,6 +212,8 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
   readonly relationTypes: readonly string[];
   readonly sourceRefRoles: readonly string[];
   readonly lintRuleIds: readonly string[];
+  readonly diagnosticCodes: readonly string[];
+  readonly diagnosticDefinitionIds: readonly string[];
 } {
   return {
     definitionIds: [
@@ -242,6 +227,16 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
     ].sort(),
     lintRuleIds: [
       ...new Set((facts.lintFindings ?? []).map((finding) => finding.ruleId)),
+    ].sort(),
+    diagnosticCodes: [
+      ...new Set((facts.diagnostics ?? []).map((diagnostic) => diagnostic.code)),
+    ].sort(),
+    diagnosticDefinitionIds: [
+      ...new Set(
+        (facts.diagnostics ?? []).flatMap(
+          (diagnostic) => diagnostic.relatedDefinitionIds ?? [],
+        ),
+      ),
     ].sort(),
   };
 }

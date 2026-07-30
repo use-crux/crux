@@ -16,6 +16,7 @@
 import type {
   IndexLintFinding,
   IndexLintSuppressedBy,
+  IndexDiagnostic,
   ContractFacts,
   ControlFacts,
   DataFacts,
@@ -380,6 +381,8 @@ export interface ViewDef {
   data?: DataFacts;
   dependencies?: DependencyFacts;
   diagnostics?: DefinitionIntelligence["diagnostics"];
+  /** Hard compiler diagnostics associated through definition or source-ref identity. */
+  indexDiagnostics?: readonly IndexDiagnostic[];
   runtimeJoin?: ProjectRuntimeJoin;
   sourceStatus?: ProjectDefinitionMetadata["sourceStatus"];
   presentation?: PresentationView;
@@ -634,6 +637,7 @@ export function toViewDef(
   def: ProjectDefinition,
   lintRuleIds: ReadonlyMap<string, string[]>,
   relPath: (file?: string) => string | undefined,
+  indexDiagnostics: readonly IndexDiagnostic[] = [],
 ): ViewDef {
   const meta = def.metadata ?? {};
   const intel = meta.intelligence;
@@ -667,6 +671,7 @@ export function toViewDef(
     data: intel?.data,
     dependencies: intel?.dependencies,
     diagnostics: intel?.diagnostics,
+    indexDiagnostics,
     runtimeJoin: meta.runtimeJoin ?? intel?.runtimeJoin,
     sourceStatus: meta.sourceStatus,
     presentation: pres
@@ -782,6 +787,45 @@ const SEV_ORDER: Record<LintSeverity, number> = {
   info: 1,
 };
 
+function associateIndexDiagnostics(
+  definitions: readonly ProjectDefinition[],
+  diagnostics: readonly IndexDiagnostic[],
+): ReadonlyMap<string, readonly IndexDiagnostic[]> {
+  const definitionIds = new Set(definitions.map((definition) => definition.id));
+  const sourceRefOwners = new Map<string, string | null>();
+
+  for (const definition of definitions) {
+    for (const sourceRef of definition.sourceRefs ?? []) {
+      const existing = sourceRefOwners.get(sourceRef.id);
+      sourceRefOwners.set(
+        sourceRef.id,
+        existing === undefined || existing === definition.id
+          ? definition.id
+          : null,
+      );
+    }
+  }
+
+  const associated = new Map<string, IndexDiagnostic[]>();
+  for (const diagnostic of diagnostics) {
+    const targets = new Set(
+      (diagnostic.relatedDefinitionIds ?? []).filter((id) =>
+        definitionIds.has(id),
+      ),
+    );
+    if (diagnostic.evidence?.kind === "prompt-text") {
+      const owner = sourceRefOwners.get(diagnostic.evidence.sourceRefId);
+      if (owner) targets.add(owner);
+    }
+    for (const target of targets) {
+      const current = associated.get(target) ?? [];
+      current.push(diagnostic);
+      associated.set(target, current);
+    }
+  }
+  return associated;
+}
+
 // ── the index (replaces the design's INDEX_* module globals) ───────────────────
 export interface IndexIndex {
   defs: ViewDef[];
@@ -830,6 +874,10 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     .filter((f) => !LINT_INTERNAL_RULE_IDS.has(f.ruleId))
     .map(toLintView);
   const findings = allFindings.filter((f) => !f.suppressed);
+  const indexDiagnostics = associateIndexDiagnostics(
+    rawDefs,
+    index.diagnostics ?? [],
+  );
 
   // ruleIds per primary definition (drives ViewDef.lint hero warnings).
   const lintRuleIds = new Map<string, string[]>();
@@ -840,7 +888,9 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     lintRuleIds.set(f.primaryDefinitionId, arr);
   }
 
-  const defs = rawDefs.map((d) => toViewDef(d, lintRuleIds, relPath));
+  const defs = rawDefs.map((d) =>
+    toViewDef(d, lintRuleIds, relPath, indexDiagnostics.get(d.id) ?? []),
+  );
   const byIdMap = new Map(defs.map((d) => [d.id, d]));
 
   // Secondary lookup for references that use a bare name rather than the full

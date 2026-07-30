@@ -40,10 +40,14 @@ type CompletionResult struct {
 	Items           []CompletionItem
 }
 
-// CompletionSource is the optional transient-query surface implemented by
-// both OWN and ATTACHED read-model sources.
-type CompletionSource interface {
+// TransientSource is the client-private, cache-bypassing query surface shared
+// by OWN and ATTACHED read-model sources.
+//
+// The manager publishes one source for both modes so source identity and
+// lifecycle cannot diverge between transient query capabilities.
+type TransientSource interface {
 	Completion(context.Context, CompletionRequest) (CompletionResult, error)
+	PromptText(context.Context, PromptTextRequest) (PromptTextResult, error)
 }
 
 func completeOwn(

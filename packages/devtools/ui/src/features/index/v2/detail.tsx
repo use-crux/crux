@@ -45,6 +45,7 @@ import { IndexMedia } from "./media-section";
 import { IndexSafety } from "./safety-section";
 import { IndexMcpDetail } from "./mcp-detail";
 import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
+import { PromptTextSection } from "./prompt-text/section";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
@@ -592,6 +593,7 @@ export function IndexDetail({
 
         {/* intelligence diagnostics (notable, near top) */}
         <IndexDiagnostics def={def} />
+        <PromptTextSection def={def} />
 
         {/* per-kind ordered sections */}
         {order.map((key) => {

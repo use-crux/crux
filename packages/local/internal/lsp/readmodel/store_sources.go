@@ -10,14 +10,30 @@ import (
 func sourcesByFile(sources []api.IndexSourceFile) map[string]api.IndexSourceFile {
 	result := make(map[string]api.IndexSourceFile, len(sources))
 	for _, source := range sources {
-		cloned := source
-		cloned.DefinitionIDs = append([]string(nil), source.DefinitionIDs...)
-		cloned.Dependencies = append([]string(nil), source.Dependencies...)
-		cloned.Dependents = append([]string(nil), source.Dependents...)
-		cloned.Diagnostics = append([]string(nil), source.Diagnostics...)
-		result[source.File] = cloned
+		result[source.File] = cloneSourceFile(source)
 	}
 	return result
+}
+
+func cloneSourceFile(source api.IndexSourceFile) api.IndexSourceFile {
+	cloned := source
+	cloned.DefinitionIDs = append([]string(nil), source.DefinitionIDs...)
+	cloned.Dependencies = append([]string(nil), source.Dependencies...)
+	cloned.Dependents = append([]string(nil), source.Dependents...)
+	cloned.Diagnostics = append([]string(nil), source.Diagnostics...)
+	return cloned
+}
+
+func cloneIndexingStatus(status *api.ProjectIndexingStatus) *api.ProjectIndexingStatus {
+	if status == nil {
+		return nil
+	}
+	cloned := *status
+	if status.Cache != nil {
+		cache := *status.Cache
+		cloned.Cache = &cache
+	}
+	return &cloned
 }
 
 func changedSources(previous, current map[string]api.IndexSourceFile) []string {

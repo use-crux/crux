@@ -3,7 +3,16 @@ title: Contexts
 description: Reusable fragments that contribute system text, input fields, and tools to any prompt.
 ---
 
-A context is a reusable fragment that any prompt or other context can compose into its system message. Contexts contribute system text, additional input fields, and optional tools. They can also bundle richer primitives such as [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), and [blackboards](/docs/guides/agents/blackboard) through the same `use` array that prompts use.
+A Crux context is a reusable contribution created with `context()`—not the
+model's context window. A prompt or another context can compose it through
+`use`.
+
+Contexts contribute system text, additional input fields, and optional tools.
+They can also bundle richer primitives such as
+[memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval),
+[grounding](/docs/guides/retrieval/grounding),
+[skills](/docs/guides/skills), and
+[blackboards](/docs/guides/agents/blackboard).
 
 ## What problem does this solve?
 
@@ -61,12 +70,21 @@ const reply = prompt({
 
 When a prompt resolves, contexts are processed in this order:
 
-1. **Conditional filtering**: drop contexts where `when()` returns false, or that are wrapped in `when()` / `match()` and don't match
-2. **Resolve in `use` order**: call each `system()` callback, including nested `context({ use })` entries before the context that owns them
-3. **Concatenate**: the prompt's own `system` text comes first, then active context blocks in `use` order
-4. **Token budget**: if a budget is set, drop lowest-priority contexts until the total fits. The prompt's own system text is always kept.
+1. **Filter** contexts whose own `when` returns false, falsy entries, and
+   unmatched `when()` or `match()` branches.
+2. **Resolve** each active `system()` callback, including nested
+   `context({ use })` entries before the context that owns them within the same
+   cache tier.
+3. **Compose** the prompt's own system text first, followed by cached contexts
+   as a stable prefix and then uncached contexts as the droppable tail. Each
+   tier preserves `use` order.
+4. **Apply the token budget** by dropping the lowest-priority uncached contexts
+   until the text fits. The prompt's own system text and cached prefix remain.
 
-Priority is `0–100` (default `50`). Higher priority means dropped later under token pressure. It does not reorder normal output. Use array order for ordering and priority for degradation. See [Best Practices](/docs/foundations/best-practices) for priority guidelines.
+Priority is `0–100` (default `50`). Higher priority means dropped later under
+token pressure. It does not reorder contexts within a cache tier. See [Context
+Caching](/docs/guides/contexts/caching) for prefix behavior and [Best
+Practices](/docs/foundations/best-practices) for priority guidelines.
 
 ## Conditional Contexts
 

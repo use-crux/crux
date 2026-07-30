@@ -54,8 +54,14 @@ export function tsgoCanonicalExportProof(
   node: Node,
   moduleName: string,
   input: TsgoExportProvenanceInput,
+  namespaceExportName?: string,
 ): TsgoCanonicalExportProof | undefined {
-  const site = tsgoTagSite(node, input.project, input.terminalSymbol);
+  const site = tsgoTagSite(
+    node,
+    input.project,
+    input.terminalSymbol,
+    namespaceExportName,
+  );
   if (!site) return undefined;
   const root = moduleEdge(site.declaration, site.exportName, moduleName, input);
   if (!root) return undefined;

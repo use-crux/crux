@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/jsonrpc"
+	lsprompttext "github.com/use-crux/crux/packages/local/internal/lsp/prompttext"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
@@ -34,23 +35,30 @@ type Options struct {
 type Server struct {
 	options Options
 
-	mu                      sync.Mutex
-	shutdown                bool
-	exitCode                int
-	folders                 []protocol.WorkspaceFolder
-	clientInfo              *protocol.ClientInfo
-	initialized             bool
-	scopeCancel             context.CancelFunc
-	outbound                chan protocol.OutboundMessage
-	settings                Settings
-	hoverFormat             protocol.MarkupKind
-	inlayHintRefreshSupport bool
-	codeLensRefreshSupport  bool
-	openDevtoolsCommand     bool
-	trusted                 bool
-	workspace               workspaceController
-	documents               map[protocol.DocumentURI]documentStatus
-	buffers                 *documentBuffers
+	mu                        sync.Mutex
+	shutdown                  bool
+	exitCode                  int
+	folders                   []protocol.WorkspaceFolder
+	clientInfo                *protocol.ClientInfo
+	initialized               bool
+	scopeCancel               context.CancelFunc
+	outbound                  chan protocol.OutboundMessage
+	settings                  Settings
+	hoverFormat               protocol.MarkupKind
+	inlayHintRefreshSupport   bool
+	codeLensRefreshSupport    bool
+	promptTextRefreshSupport  bool
+	diagnosticVersionSupport  bool
+	diagnosticDataSupport     bool
+	codeActionLiteralSupport  bool
+	codeActionRefactorSupport bool
+	openDevtoolsCommand       bool
+	trusted                   bool
+	workspace                 workspaceController
+	documents                 map[protocol.DocumentURI]documentStatus
+	buffers                   *documentBuffers
+	promptText                *lsprompttext.Controller
+	diagnostics               *diagnosticComposer
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
@@ -63,10 +71,15 @@ type Server struct {
 	pendingCompletions    map[string]*pendingCompletion
 	completionByURI       map[protocol.DocumentURI]*pendingCompletion
 	lastCompletionWarning time.Time
+
+	promptTextMu       sync.Mutex
+	pendingPromptTexts map[string]*pendingPromptText
+	promptTextByURI    map[protocol.DocumentURI]map[*pendingPromptText]struct{}
 }
 
 type documentStatus struct {
 	Open    bool
+	Version int
 	SavedAt time.Time
 }
 
@@ -81,7 +94,7 @@ func New(options Options) *Server {
 	if options.FixExecutable == nil {
 		options.FixExecutable = os.Executable
 	}
-	return &Server{
+	server := &Server{
 		options:     options,
 		outbound:    make(chan protocol.OutboundMessage, 256),
 		settings:    defaultSettings(options.Port),
@@ -95,7 +108,14 @@ func New(options Options) *Server {
 		pendingClientRequests: make(map[string]*pendingClientRequest),
 		pendingCompletions:    make(map[string]*pendingCompletion),
 		completionByURI:       make(map[protocol.DocumentURI]*pendingCompletion),
+		pendingPromptTexts:    make(map[string]*pendingPromptText),
+		promptTextByURI: make(
+			map[protocol.DocumentURI]map[*pendingPromptText]struct{},
+		),
 	}
+	server.promptText = lsprompttext.NewController(server.buffers)
+	server.diagnostics = newServerDiagnosticComposer(server)
+	return server
 }
 
 // Outbound returns asynchronous LSP requests and notifications for the
@@ -142,6 +162,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.buffers.Clear()
 		s.closeClientRequests()
 		s.closeCompletionRequests()
+		s.closePromptTextRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -158,28 +179,41 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.buffers.Clear()
 		s.closeClientRequests()
 		s.closeCompletionRequests()
+		s.closePromptTextRequests()
 		if cancel != nil {
 			cancel()
 		}
 		return jsonrpc.HandlerResult{Stop: true}
 	case protocol.MethodCodeAction:
-		return s.codeAction(request.Params)
+		return s.codeActionRequest(ctx, request.ID, request.Params)
 	case protocol.MethodExecuteCommand:
 		return s.executeCommand(ctx, request.Params)
 	case protocol.MethodHover:
-		return s.hover(request.Params)
+		return s.hover(ctx, request.ID, request.Params)
 	case protocol.MethodDefinition:
-		return s.definition(request.Params)
+		return s.definition(ctx, request.ID, request.Params)
 	case protocol.MethodReferences:
-		return s.references(request.Params)
+		return s.references(ctx, request.ID, request.Params)
 	case protocol.MethodDocumentSymbol:
-		return s.documentSymbol(request.Params)
+		return s.documentSymbol(ctx, request.ID, request.Params)
+	case protocol.MethodFoldingRange:
+		return s.promptTextFolding(ctx, request.ID, request.Params)
+	case protocol.MethodDocumentLink:
+		return s.promptTextLinks(ctx, request.ID, request.Params)
 	case protocol.MethodInlayHint:
 		return s.inlayHint(request.Params)
 	case protocol.MethodCodeLens:
 		return s.codeLens(request.Params)
 	case protocol.MethodCompletion:
 		return s.completion(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextDecorations:
+		return s.promptTextDecorations(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextPreviewStatic:
+		return s.promptTextPreviewStatic(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextPreviewExactLink:
+		return s.promptTextPreviewExactLink(ctx, request.ID, request.Params)
+	case protocol.MethodPromptTextOpenLatestRunLink:
+		return s.promptTextOpenLatestRunLink(ctx, request.ID, request.Params)
 	case protocol.MethodWorkspaceSymbol:
 		return s.workspaceSymbol(ctx, request.Params)
 	case protocol.MethodDidOpen:
@@ -222,9 +256,15 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodDefinition ||
 		request.Method == protocol.MethodReferences ||
 		request.Method == protocol.MethodDocumentSymbol ||
+		request.Method == protocol.MethodFoldingRange ||
+		request.Method == protocol.MethodDocumentLink ||
 		request.Method == protocol.MethodInlayHint ||
 		request.Method == protocol.MethodCodeLens ||
 		request.Method == protocol.MethodCompletion ||
+		request.Method == protocol.MethodPromptTextDecorations ||
+		request.Method == protocol.MethodPromptTextPreviewStatic ||
+		request.Method == protocol.MethodPromptTextPreviewExactLink ||
+		request.Method == protocol.MethodPromptTextOpenLatestRunLink ||
 		request.Method == protocol.MethodCodeAction ||
 		request.Method == protocol.MethodWorkspaceSymbol ||
 		request.Method == protocol.MethodExecuteCommand

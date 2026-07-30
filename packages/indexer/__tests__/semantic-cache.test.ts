@@ -46,16 +46,16 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the bounded media streaming semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v35");
+  it("uses the combined media-stream and PromptText refactor epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v38");
   });
 
-  it("does not reuse a valid cache artifact from the pre-prompt-text v33 namespace", async () => {
+  it("does not reuse a valid artifact from the pre-refactor v37 namespace", async () => {
     const root = await fixtureRoot();
     const file = join(root, "src/writer.ts");
     await writeFile(file, `export const writer = true`);
     const backendIdentity: SemanticBackendIdentity = {
-      name: "test-cache-media-epoch",
+      name: "test-cache-prompt-text-refactor-epoch",
       version: "v1",
     };
     const produce = () => ({
@@ -78,7 +78,7 @@ describe("semantic facts cache", () => {
       ".crux/cache/index",
       SEMANTIC_FACTS_CACHE_EPOCH,
     );
-    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v33");
+    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v37");
     await mkdir(staleDir, { recursive: true });
     await copyFile(join(currentDir, cacheName), join(staleDir, cacheName));
     await rm(currentDir, { recursive: true, force: true });

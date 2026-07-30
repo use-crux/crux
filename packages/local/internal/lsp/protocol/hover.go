@@ -12,6 +12,7 @@ const (
 type ClientCapabilities struct {
 	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 	Workspace    *WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+	Experimental *ExperimentalClientCapabilities `json:"experimental,omitempty"`
 }
 
 // WorkspaceClientCapabilities contains workspace-wide refresh support.
@@ -28,7 +29,9 @@ type RefreshSupportClientCapabilities struct {
 
 // TextDocumentClientCapabilities contains document-oriented client support.
 type TextDocumentClientCapabilities struct {
-	Hover *HoverClientCapabilities `json:"hover,omitempty"`
+	Hover              *HoverClientCapabilities              `json:"hover,omitempty"`
+	PublishDiagnostics *PublishDiagnosticsClientCapabilities `json:"publishDiagnostics,omitempty"`
+	CodeAction         *CodeActionClientCapabilities         `json:"codeAction,omitempty"`
 }
 
 // HoverClientCapabilities declares the client's preferred content formats.

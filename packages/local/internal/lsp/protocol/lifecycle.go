@@ -40,6 +40,8 @@ type ServerCapabilities struct {
 	DefinitionProvider      bool                    `json:"definitionProvider"`
 	ReferencesProvider      bool                    `json:"referencesProvider"`
 	DocumentSymbolProvider  bool                    `json:"documentSymbolProvider"`
+	FoldingRangeProvider    bool                    `json:"foldingRangeProvider"`
+	DocumentLinkProvider    DocumentLinkOptions     `json:"documentLinkProvider"`
 	CodeActionProvider      CodeActionOptions       `json:"codeActionProvider"`
 	ExecuteCommandProvider  ExecuteCommandOptions   `json:"executeCommandProvider"`
 	WorkspaceSymbolProvider bool                    `json:"workspaceSymbolProvider"`
@@ -79,6 +81,7 @@ type SaveOptions struct {
 
 type CodeActionOptions struct {
 	CodeActionKinds []CodeActionKind `json:"codeActionKinds"`
+	ResolveProvider bool             `json:"resolveProvider"`
 }
 
 type ExecuteCommandOptions struct {

@@ -264,6 +264,12 @@ func (h *WSHub) forwardIndexEvents(events <-chan store.IndexData) {
 		for _, message := range h.indexUpdateMessages(index) {
 			h.BroadcastJSON(message)
 		}
+		if h.runtimeBridge != nil {
+			h.BroadcastJSON(map[string]any{
+				"type":               "prompt-preview.changed",
+				"projectionRevision": h.runtimeBridge.PromptPreviewProjectionRevision(),
+			})
+		}
 	}
 }
 
@@ -273,6 +279,12 @@ func (h *WSHub) forwardRuntimeBridgeEvents(events <-chan runtimebridge.Event) {
 			"type":  "runtime_bridge:event",
 			"event": event,
 		})
+		if event.PreviewProjectionRevision > 0 {
+			h.BroadcastJSON(map[string]any{
+				"type":               "prompt-preview.changed",
+				"projectionRevision": event.PreviewProjectionRevision,
+			})
+		}
 		if event.Action == "peer.connected" || event.Action == "peer.disconnected" {
 			h.BroadcastJSON(map[string]any{
 				"type":  "runtime_bridge.capabilities_changed",

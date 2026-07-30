@@ -92,10 +92,15 @@ func TestServiceLifecycleKeepsActiveStreamingRunLive(t *testing.T) {
 	if err := service.PublishLifecycleReconciliations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case event := <-events:
-		t.Fatalf("active streaming run produced lifecycle event = %#v", event)
-	default:
+	for {
+		select {
+		case event := <-events:
+			if event.Kind == "observability.lifecycle" {
+				t.Fatalf("active streaming run produced lifecycle event = %#v", event)
+			}
+		default:
+			return
+		}
 	}
 }
 

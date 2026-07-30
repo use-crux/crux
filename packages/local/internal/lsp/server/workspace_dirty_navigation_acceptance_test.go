@@ -30,10 +30,10 @@ func TestWorkspaceNavigationFeaturesSwitchTogetherFromDirtyViewToSavedDiskTruth(
 		Source: &api.SourceLoc{File: usageFile, Line: 1, Column: &siteColumn},
 	}
 	store := readmodel.NewStore()
-	store.ApplySnapshot(scopeID, readmodel.Snapshot{
+	store.ApplySnapshot(scopeID, navigationSemanticSnapshot(readmodel.Snapshot{
 		Definitions: []api.ProjectDefinition{definition},
 		Relations:   []api.ProjectRelation{relation},
-	})
+	}))
 	publisher := NewPublisher(PublisherOptions{
 		ScopeID: scopeID, Root: root, ConfigFile: filepath.Join(root, "crux.config.ts"),
 		Store: store, Lines: mapping.NewLineIndex(),
@@ -55,10 +55,10 @@ func TestWorkspaceNavigationFeaturesSwitchTogetherFromDirtyViewToSavedDiskTruth(
 	assertWorkspaceNavigationFeatureRanges(t, workspace, usageURI, targetURI, shifted)
 
 	diskDefinition := navigationTestDefinition(definitionID, targetFile, 8, &startColumn, &endColumn)
-	changed := store.ApplySnapshot(scopeID, readmodel.Snapshot{
+	changed := store.ApplySnapshot(scopeID, navigationSemanticSnapshot(readmodel.Snapshot{
 		Definitions: []api.ProjectDefinition{diskDefinition},
 		Relations:   []api.ProjectRelation{relation},
-	})
+	}))
 	publisher.Change(readmodel.Change{Scope: scopeID, Files: changed, Immediate: true})
 	assertWorkspaceNavigationFeatureRanges(t, workspace, usageURI, targetURI, shifted)
 

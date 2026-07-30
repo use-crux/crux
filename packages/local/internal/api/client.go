@@ -96,6 +96,22 @@ func (c *Client) GetJSON(ctx context.Context, path string, target any) error {
 
 // PostJSON posts a JSON request body and decodes the JSON response into target.
 func (c *Client) PostJSON(ctx context.Context, path string, body any, target any) error {
+	return c.postJSON(ctx, path, body, target, false)
+}
+
+// PostJSONStrict posts JSON and rejects unknown or trailing response fields.
+// Use it for versioned private ABIs whose closed shape is part of correctness.
+func (c *Client) PostJSONStrict(ctx context.Context, path string, body any, target any) error {
+	return c.postJSON(ctx, path, body, target, true)
+}
+
+func (c *Client) postJSON(
+	ctx context.Context,
+	path string,
+	body any,
+	target any,
+	strict bool,
+) error {
 	var payload bytes.Buffer
 	if err := json.NewEncoder(&payload).Encode(body); err != nil {
 		return fmt.Errorf("failed to encode request: %w", err)
@@ -119,7 +135,22 @@ func (c *Client) PostJSON(ctx context.Context, path string, body any, target any
 		return fmt.Errorf("server error %d: %s", resp.StatusCode, string(data))
 	}
 
-	return json.NewDecoder(resp.Body).Decode(target)
+	decoder := json.NewDecoder(resp.Body)
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if strict {
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			if err == nil {
+				return fmt.Errorf("decode JSON response: trailing data")
+			}
+			return fmt.Errorf("decode JSON response trailing data: %w", err)
+		}
+	}
+	return nil
 }
 
 // DeleteJSON sends a JSON DELETE request and decodes the JSON response into target.

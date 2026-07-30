@@ -12,6 +12,7 @@ import {
   validateVsix,
 } from "./inspect-release-bundles.mjs";
 import { LOCAL_PLATFORMS, localPlatform } from "./platforms.mjs";
+import { readPublicReleaseAssets } from "./public-assets.mjs";
 
 /** Opens and validates every public and internal release-asset contract. */
 export async function validateReleaseAssets({ version, sourceCommit, outDir }) {
@@ -34,7 +35,7 @@ export async function validateReleaseAssets({ version, sourceCommit, outDir }) {
     await readFile(join(internalDir, "release-assets.json"), "utf8"),
   );
   validateManifestIdentity(manifest, { version, sourceCommit, assetNames });
-  await validateChecksums(publicDir, assetNames);
+  await validatePublicAssetNames(publicDir, [...assetNames, names.checksums]);
 
   const records = new Map(manifest.assets.map((asset) => [asset.name, asset]));
   for (const platform of LOCAL_PLATFORMS) {
@@ -70,7 +71,7 @@ export async function validateReleaseTracer({ version, platformId, outDir }) {
     [...assets, "SHA256SUMS"],
     "Release tracer assets",
   );
-  await validateChecksums(publicDir, assets);
+  await validatePublicAssetNames(publicDir, [...assets, "SHA256SUMS"]);
   await validateNativeArchive({
     version,
     platform,
@@ -154,40 +155,26 @@ async function validateRecordedBytes(publicDir, record) {
     throw new Error(`Recorded checksum mismatch for ${record.name}`);
 }
 
-async function validateChecksums(publicDir, assetNames) {
-  const rows = (await readFile(join(publicDir, "SHA256SUMS"), "utf8"))
-    .trim()
-    .split("\n")
-    .map((line) => {
-      const match = line.match(/^([a-f0-9]{64})  (.+)$/);
-      if (!match) throw new Error(`Malformed SHA256SUMS entry: ${line}`);
-      return [match[2], match[1]];
-    });
-  const entries = new Map(rows);
-  if (
-    rows.length !== entries.size ||
-    entries.size !== assetNames.length ||
-    !sameStrings([...entries.keys()].sort(), [...assetNames].sort())
-  ) {
-    throw new Error(
-      "SHA256SUMS does not cover exactly the staged release assets.",
-    );
-  }
-  for (const name of assetNames) {
-    const actual = createHash("sha256")
-      .update(await readFile(join(publicDir, name)))
-      .digest("hex");
-    if (entries.get(name) !== actual)
-      throw new Error(`Checksum mismatch for ${name}`);
-  }
-}
-
 async function validateExactFiles(directory, expected, label) {
   const actual = (await readdir(directory)).sort();
   const sortedExpected = [...expected].sort();
   if (!sameStrings(actual, sortedExpected)) {
     throw new Error(
       `${label} ${JSON.stringify(actual)}, want ${JSON.stringify(sortedExpected)}`,
+    );
+  }
+}
+
+async function validatePublicAssetNames(publicDir, expectedNames) {
+  const publicAssets = await readPublicReleaseAssets(publicDir);
+  if (
+    !sameStrings(
+      publicAssets.map(({ name }) => name).sort(),
+      [...expectedNames].sort(),
+    )
+  ) {
+    throw new Error(
+      "SHA256SUMS does not cover exactly the staged release assets.",
     );
   }
 }

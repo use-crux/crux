@@ -54,7 +54,7 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 	var modeMu sync.Mutex
 	var modes []Mode
 	var completionMu sync.Mutex
-	var completionSources []CompletionSource
+	var completionSources []TransientSource
 	modeChanges := make(chan Mode, 16)
 	emptyPublish := atomic.Bool{}
 	manager := NewManager(ManagerOptions{
@@ -68,7 +68,7 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 			modeMu.Unlock()
 			modeChanges <- mode
 		},
-		OnCompletionSource: func(source CompletionSource) {
+		OnTransientSource: func(source TransientSource) {
 			completionMu.Lock()
 			completionSources = append(completionSources, source)
 			completionMu.Unlock()

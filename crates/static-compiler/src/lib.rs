@@ -33,6 +33,7 @@ pub(crate) mod contracts {
 
 pub mod compat;
 pub mod completion;
+pub mod prompt_text;
 
 pub(crate) mod core {
     pub(crate) mod definition_merge;

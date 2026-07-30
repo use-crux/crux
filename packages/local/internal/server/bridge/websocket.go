@@ -36,7 +36,7 @@ func UpgradeHandler(bridge *runtimebridge.Service, checkOrigin func(*http.Reques
 		}
 
 		var writeMu sync.Mutex
-		peer := bridge.RegisterPeer(hello.Peer, func(ctx context.Context, data []byte) error {
+		peer, connectionID := bridge.RegisterPeerConnection(hello.Peer, func(ctx context.Context, data []byte) error {
 			done := make(chan error, 1)
 			go func() {
 				writeMu.Lock()
@@ -51,7 +51,7 @@ func UpgradeHandler(bridge *runtimebridge.Service, checkOrigin func(*http.Reques
 			}
 		})
 		defer func() {
-			bridge.UnregisterPeer(peer.PeerID)
+			bridge.UnregisterPeerConnection(peer.PeerID, connectionID)
 			_ = conn.Close()
 		}()
 
@@ -60,7 +60,7 @@ func UpgradeHandler(bridge *runtimebridge.Service, checkOrigin func(*http.Reques
 			if err != nil {
 				return
 			}
-			if err := bridge.HandlePeerMessage(peer.PeerID, data); err != nil {
+			if err := bridge.HandlePeerConnectionMessage(peer.PeerID, connectionID, data); err != nil {
 				bridge.Logger().Debug("runtime bridge message ignored", "error", err, "peerId", peer.PeerID)
 			}
 		}

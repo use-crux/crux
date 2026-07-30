@@ -101,6 +101,58 @@ func TestStoreReportsSourceOnlyDeltaForLineCacheInvalidation(t *testing.T) {
 	assertStrings(t, result.ChangedFiles, []string{"/repo/source.ts"})
 }
 
+func TestStoreAppliesDiagnosticAndSourceRowReplacements(t *testing.T) {
+	t.Parallel()
+
+	const file = "/repo/source.ts"
+	generation := uint64(1)
+	store := NewStore()
+	store.ApplySnapshot("scope", Snapshot{
+		Generation: &generation,
+		Diagnostics: []api.IndexDiagnostic{{
+			ID: "diagnostic:old", Source: &api.SourceLoc{File: file, Line: 1},
+		}},
+		Sources: []api.IndexSourceFile{{File: file, SourceHash: "old-hash"}},
+	})
+
+	result := store.ApplyDelta("scope", Delta{
+		Generation: 2,
+		File:       file,
+		Diagnostics: []api.IndexDiagnostic{{
+			ID: "diagnostic:new", Source: &api.SourceLoc{File: file, Line: 2},
+		}},
+		SourceRow:     &api.IndexSourceFile{File: file, SourceHash: "new-hash"},
+		SourceChanged: true,
+	})
+	if result.Status != DeltaApplied {
+		t.Fatalf("replacement status = %v, want applied", result.Status)
+	}
+	assertStrings(t, result.ChangedFiles, []string{file})
+	publication := store.PublicationSnapshot("scope")
+	if len(publication.Diagnostics[file]) != 1 ||
+		publication.Diagnostics[file][0].ID != "diagnostic:new" ||
+		publication.SourcesByFile[file].SourceHash != "new-hash" {
+		t.Fatalf("replacement publication = %#v", publication)
+	}
+
+	result = store.ApplyDelta("scope", Delta{
+		Generation:    3,
+		File:          file,
+		Diagnostics:   []api.IndexDiagnostic{},
+		SourceChanged: true,
+	})
+	if result.Status != DeltaApplied {
+		t.Fatalf("clear status = %v, want applied", result.Status)
+	}
+	publication = store.PublicationSnapshot("scope")
+	if len(publication.Diagnostics[file]) != 0 {
+		t.Fatalf("diagnostics = %#v, want cleared", publication.Diagnostics[file])
+	}
+	if _, exists := publication.SourcesByFile[file]; exists {
+		t.Fatalf("sources = %#v, want removed row", publication.SourcesByFile)
+	}
+}
+
 func TestStoreReportsSourceOnlySnapshotChangeForLineCacheInvalidation(t *testing.T) {
 	store := NewStore()
 	generation := uint64(1)

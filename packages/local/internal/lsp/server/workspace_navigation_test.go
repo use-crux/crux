@@ -130,6 +130,7 @@ func TestWorkspaceNavigationUsesMostSpecificContainingScope(t *testing.T) {
 
 func navigationTestPublisher(t *testing.T, scope, root string, snapshot readmodel.Snapshot) *Publisher {
 	t.Helper()
+	snapshot = navigationSemanticSnapshot(snapshot)
 	store := readmodel.NewStore()
 	store.ApplySnapshot(scope, snapshot)
 	publisher := NewPublisher(PublisherOptions{
@@ -138,6 +139,18 @@ func navigationTestPublisher(t *testing.T, scope, root string, snapshot readmode
 	})
 	t.Cleanup(publisher.Close)
 	return publisher
+}
+
+func navigationSemanticSnapshot(snapshot readmodel.Snapshot) readmodel.Snapshot {
+	if snapshot.Generation == nil {
+		generation := uint64(1)
+		snapshot.Generation = &generation
+	}
+	if snapshot.Indexing == nil {
+		snapshot.Indexing = &api.ProjectIndexingStatus{}
+	}
+	snapshot.Indexing.Semantic.Status = "ready"
+	return snapshot
 }
 
 func navigationTestDefinition(id, file string, line int, start, end *int) api.ProjectDefinition {

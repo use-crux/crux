@@ -2,11 +2,12 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { planReleaseAssetReconciliation } from "./release/asset-reconciliation-policy.mjs";
+import { readPublicReleaseAssets } from "./release/public-assets.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const tag = required(options, "tag");
@@ -24,7 +25,7 @@ const publicDir = resolve(
   options["asset-root"] ?? ".tmp/github-release-assets",
   "public",
 );
-const expectedAssets = await readExpectedAssets(publicDir);
+const expectedAssets = await readPublicReleaseAssets(publicDir);
 const release = viewRelease(tag, repo);
 if (release) {
   verifyExistingTagSource(tag, sourceCommit);
@@ -107,41 +108,6 @@ try {
   );
 } finally {
   await rm(workspace, { recursive: true, force: true });
-}
-
-async function readExpectedAssets(publicDir) {
-  const checksumPath = join(publicDir, "SHA256SUMS");
-  const rows = (await readFile(checksumPath, "utf8"))
-    .trim()
-    .split("\n")
-    .map((line) => {
-      const match = line.match(/^([a-f0-9]{64})  (.+)$/);
-      if (!match) throw new Error(`Malformed SHA256SUMS entry: ${line}`);
-      return { name: match[2], sha256: match[1] };
-    });
-  if (new Set(rows.map(({ name }) => name)).size !== rows.length) {
-    throw new Error("SHA256SUMS contains duplicate asset identities.");
-  }
-
-  for (const asset of rows) {
-    const actual = sha256(await readFile(join(publicDir, asset.name)));
-    if (actual !== asset.sha256)
-      throw new Error(`Checksum mismatch before upload: ${asset.name}`);
-  }
-  const checksumAsset = {
-    name: "SHA256SUMS",
-    sha256: sha256(await readFile(checksumPath)),
-  };
-  const expected = [...rows, checksumAsset].sort((left, right) =>
-    left.name.localeCompare(right.name),
-  );
-  const actualNames = (await readdir(publicDir)).sort();
-  if (actualNames.join("\n") !== expected.map(({ name }) => name).join("\n")) {
-    throw new Error(
-      "Public release directory does not match its checksum identities.",
-    );
-  }
-  return expected;
 }
 
 function viewRelease(tag, repo) {

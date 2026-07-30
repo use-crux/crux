@@ -41,11 +41,11 @@ func TestWorkspaceCompletionUsesMostSpecificScope(t *testing.T) {
 		sessions: []*scopeSession{
 			{
 				scope: readmodel.Scope{ID: "outer", Root: root},
-				mode:  readmodel.ModeOwn, completion: outer,
+				mode:  readmodel.ModeOwn, transient: outer,
 			},
 			{
 				scope: readmodel.Scope{ID: "nested", Root: nested},
-				mode:  readmodel.ModeOwn, completion: child,
+				mode:  readmodel.ModeOwn, transient: child,
 			},
 		},
 	}
