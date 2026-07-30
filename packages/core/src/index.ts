@@ -936,10 +936,13 @@ export type {
   StreamCompletionPayload,
   StreamResult,
 } from "./adapter/index";
+// Value exports come from the source module: a value re-export through the
+// adapter barrel would pull its testing helpers (and vitest) into
+// platform-neutral runtime bundles.
 export {
   CONSERVATIVE_MODEL_CAPACITY,
   resolveModelCapacityProfile,
-} from "./adapter/index";
+} from "./request/capacity/model-profile";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { loopRuntimeAdapter } from "./adapter/define-executor";
