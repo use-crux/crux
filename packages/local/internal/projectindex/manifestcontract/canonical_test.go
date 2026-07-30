@@ -2,10 +2,10 @@ package manifestcontract
 
 import "testing"
 
-func TestValidDefinitionKindAcceptsEmbeddingDefinitions(t *testing.T) {
+func TestValidDefinitionKindAcceptsAuthoredCallsiteDefinitions(t *testing.T) {
 	t.Parallel()
 
-	for _, kind := range []string{"embedding", "embedding.call", "rag.indexer"} {
+	for _, kind := range []string{"embedding", "embedding.call", "evidence.record", "rag.indexer"} {
 		kind := kind
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()

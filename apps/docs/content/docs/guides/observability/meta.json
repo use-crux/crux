@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "devtools",
+    "execution-evidence",
     "catalog-runtime-evidence",
     "runs-and-delivery",
     "adapter-outcomes",

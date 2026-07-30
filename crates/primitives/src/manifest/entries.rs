@@ -16,6 +16,7 @@ use crate::{
     embedding::call::embedding_call_facts,
     embedding::facts::embedding_facts,
     eval::facts::eval_facts,
+    evidence_record::facts::evidence_record_facts,
     flow::facts::flow_facts,
     injection::injectable::injectable_facts,
     mcp::facts::mcp_server_facts,
@@ -53,6 +54,26 @@ const LOCAL_REFERENCE_FORMS: &[LocalReferenceForm] = &[
 /// a source match wins. Names are otherwise disjoint, but the order is the
 /// historical projection order and is preserved deliberately.
 pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
+    first_party(
+        "evidence.record",
+        &["record"],
+        &[],
+        &["evidence.record"],
+        &["evidence.record:"],
+        &[
+            "role",
+            "kind",
+            "conclusion",
+            "data",
+            "ref",
+            "subject",
+            "idempotencyKey",
+            "supersedes",
+        ],
+        LOCAL_REFERENCE_FORMS,
+        Projector::CallParts(evidence_record_facts),
+        false,
+    ),
     first_party(
         "embedding",
         &["embedding"],

@@ -8,13 +8,17 @@ whenever graph records change.
 
 ## Current Version
 
-`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `4`.
+`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `5`.
 
-Version 4 adds required `operationId` identity to every record and immutable
+Version 5 adds the canonical `evidence` family, `evidence.record` primitive,
+and qualified `evidence.for` relationships. Evidence edges require a strict
+safe metadata shape with role-correlated conclusions. Writers and readers
+accept v5 only.
+
+Version 4 added required `operationId` identity to every record and immutable
 `parentRunId`/`triggeredBySpanId` topology to child `run:start` records. Writers
-and readers accept v4 only: earlier records cannot be assigned truthful
-operation families from trace, timing, names, or edges. The local runtime resets
-only observability-owned storage when it detects the older schema.
+could not assign earlier records truthful operation families from trace,
+timing, names, or edges.
 
 Version 3 added optional, validated `deployment` identity to the record
 envelope.

@@ -1,0 +1,261 @@
+---
+title: Execution evidence
+description: Author and inspect qualified evidence relationships for Crux executions and artifacts.
+---
+
+```ts
+import {
+  evidence,
+  CruxEvidenceError,
+  type EvidenceRecordInput,
+  type EvidenceRef,
+  type EvidenceView,
+} from "@use-crux/core/evidence";
+```
+
+Execution evidence records a qualified relationship between a source and the
+execution or artifact it describes. It answers one of five fixed questions:
+
+| Role | Question | Conclusions |
+| --- | --- | --- |
+| `intent` | Why was this attempted? | None; intent is provenance, not a verdict |
+| `authority` | Why was it allowed or denied? | `allowed`, `denied`, `revoked`, `inconclusive` |
+| `change` | What state transition occurred? | `applied`, `partial`, `no-change`, `unknown` |
+| `verification` | How was it checked? | `passed`, `failed`, `inconclusive` |
+| `recovery` | Was mitigation available or attempted? | `available`, `unavailable`, `succeeded`, `failed`, `partial` |
+
+Evidence is not an artifact payload, an observability edge, or a claim that
+delivery is durable. A stable `EvidenceRef` identifies the relationship while
+Core projects its source and subject into the canonical observability graph.
+
+Crux automatically authors selected native intent, authority, and change
+evidence. Start with the
+[execution-evidence guide](/docs/guides/observability/execution-evidence) and
+use this API for advanced domain claims that have an exact subject and no
+native producer.
+
+## Record inline evidence
+
+Use a non-empty `custom.*` kind for inline JSON evidence:
+
+```ts
+const review = evidence.record({
+  role: "verification",
+  conclusion: "passed",
+  kind: "custom.editorial-review",
+  data: {
+    approved: true,
+    checks: ["citations", "tone"],
+  },
+});
+```
+
+`record()` is synchronous. It validates and accepts the relationship into the
+active Core scope, then returns a frozen `EvidenceRef`. Delivery through the
+configured observability transport remains asynchronous and failure-isolated.
+The ref does not prove that a remote destination committed the record.
+
+Inside a Crux execution, omit `subject` to describe the current span, or the
+current run when no span is active. Outside a Crux execution, pass an explicit
+execution or artifact:
+
+```ts
+const review = evidence.record({
+  subject: { kind: "artifact", id: artifactId },
+  role: "verification",
+  conclusion: "passed",
+  kind: "custom.editorial-review",
+  data: { approved: true },
+});
+```
+
+An explicit call outside an execution opens a small `evidence.record`
+observability scope automatically.
+
+## Link existing evidence
+
+Use `ref` to qualify an existing artifact or execution without copying its
+payload:
+
+```ts
+const verification = evidence.record({
+  subject: { kind: "execution", id: runId },
+  role: "verification",
+  conclusion: "passed",
+  ref: { kind: "artifact", id: scoreArtifactId },
+  kind: "score.report",
+});
+```
+
+`kind` may be omitted only when Core can resolve trusted local metadata
+synchronously. Pass it when linking an artifact from another process or
+destination.
+
+The public subject union reserves an `effect.receipt` shape for the Effects
+API. Receipt construction, graph resolution, recovery, and rollback are not
+part of this Core release; unresolved receipt refs are rejected.
+
+## Inspect evidence
+
+Inspect before the owning scope closes for immediate read-your-writes:
+
+```ts
+const view = await evidence.inspect(review.subject, {
+  role: "verification",
+  includeData: true,
+  includeHistory: true,
+  limit: 25,
+});
+
+view.roles.verification.status;
+view.roles.verification.records;
+```
+
+Every `EvidenceView` has all five role slots. Selecting `role` hydrates rows for
+that role while the other slots retain bounded aggregate state. `limit` must be
+an integer from 1 through 50; Core rejects larger values instead of clamping.
+A returned `cursor` is opaque and is valid only for the same subject, selected
+role, and history mode.
+
+After the owning scope seals, inspection requires a configured canonical
+observability transport with an `evidence.inspectEvidence()` capability. Core
+captures that destination when `inspect()` is called, validates every returned
+row and aggregate, and conservatively merges it with any active-scope snapshot.
+Crux Local implements this capability with a durable, restart-safe read model.
+Devtools, the Local Go API client, and Core's Local HTTP transport consume that
+same model.
+
+Each destination role includes a required `status` summary computed from the
+complete authorized active set before row hydration, pagination, or history
+selection. It also includes `activeRecordCount`, the exact authorized count of
+retained, active, non-superseded relationships for that role. Both values stay
+stable when a role is not selected and across cursor pages. `present` means a
+usable relationship representation exists; it does not promise that inline
+`data` is retained, authorized, or requested.
+
+Crux Local also exposes bounded, positional batch reads for Devtools: complete
+active counts for up to 100 subjects and exact retained navigation for up to
+100 canonical graph refs. Related Evidence waits for every subject-count chunk
+before showing an exact total. Navigation returns persisted run, span, or
+artifact-owner provenance and retained DefinitionRefs; it never substitutes a
+live Catalog lookup for historical source data.
+
+Local inspection follows the existing same-user Devtools access model:
+headerless loopback access is allowed, while non-loopback browser access uses
+the Devtools session capability. `CRUX_DEVTOOLS_TOKEN` remains ingest-only; an
+ingest bearer does not authorize evidence inspection.
+
+## Missing and conflicting states
+
+A role status describes what the current source can prove:
+
+| Status | Meaning |
+| --- | --- |
+| `present` | At least one usable active relationship is available or referenced; inline data may still be omitted |
+| `not-yet-recorded` | No relationship or explicit coverage fact is visible |
+| `not-configured` | A producer or destination explicitly reports no configured producer |
+| `not-applicable` | A producer or destination explicitly reports that the role does not apply |
+| `not-captured` | Capture policy intentionally retained no source content |
+| `redacted` | Privacy policy removed the usable source |
+
+“Active” means “not explicitly superseded,” not “newest.” Replace an earlier
+same-subject, same-role relationship explicitly:
+
+```ts
+const corrected = evidence.record({
+  role: "verification",
+  conclusion: "failed",
+  kind: "custom.editorial-review",
+  data: { approved: false },
+  supersedes: review,
+});
+```
+
+Timestamps do not choose a winner. If active classified records disagree,
+`conflicting` is `true`, the records remain visible, and the aggregate
+`conclusion` is omitted. `includeHistory: true` returns explicitly superseded
+rows separately.
+
+## Capture and privacy
+
+Inline data passes through the existing observability capture and privacy
+policy before the collector, Eval capture, subscribers, or transport sees it.
+`includeData: true` requests retained data but never overrides policy.
+
+| `payloadState` | Retained data |
+| --- | --- |
+| `available` | The exact safe preview after configured redaction |
+| `reference` | No inline data; only reference-level capture remains |
+| `not-captured` | Capture is off |
+| `redacted` | Privacy policy removed the preview or rejected the graph batch |
+
+A preview containing `[redacted]` markers remains `available`: safe content is
+still present. If privacy rejects either the inline artifact or its
+`evidence.for` edge, Core publishes neither half, retains no data, and records
+the local relationship as `redacted`.
+
+Raw idempotency keys, inline data, paths, authorization details, and arbitrary
+resource metadata never appear on the qualified edge.
+
+### Local retention
+
+Crux Local retains relationships independently from routine runs. Relationship
+retention defaults to the normalized observability retention age, currently 14
+days; `CRUX_EVIDENCE_RETENTION_DAYS` overrides it. Payload retention defaults
+to the relationship window and can be shortened with
+`CRUX_EVIDENCE_PAYLOAD_RETENTION_DAYS`.
+
+An expired formerly available payload returns `payloadState: "redacted"` with
+optional `payloadUnavailableReason: "retention"` and no `data`. The
+relationship, conclusion, source identity, and conflict behavior remain until
+relationship expiry. Retries never refresh or restore expired content.
+Durable first-write-wins lasts for the configured relationship-retention
+window.
+
+## Idempotent retries
+
+Pass a stable bounded key when the same logical authoring call may retry:
+
+```ts
+const ref = evidence.record({
+  role: "change",
+  conclusion: "applied",
+  kind: "custom.cms-publication",
+  data: { revision: 42 },
+  idempotencyKey: `publish:${operationId}`,
+});
+```
+
+Within one active collector, an identical retry returns the original frozen
+ref and emits nothing again. Reusing the identity with different post-policy
+content throws `EVIDENCE_IDEMPOTENCY_CONFLICT`. The raw key is never returned
+or emitted; only a one-way bounded digest may appear in qualified graph
+metadata. Across process restarts, durable deduplication belongs to the
+readable destination.
+
+## Errors
+
+Evidence failures use `CruxEvidenceError`. Each error includes `code`,
+`whatFailed`, `why`, `whatStillWorks`, `nextStep`, and a stable `docsUrl`.
+Use `CruxEvidenceError.isInstance(error)` when multiple copies of Core may be
+installed. Local delivery dispositions use the same
+[evidence error catalog](/docs/errors#execution-evidence-codes).
+
+| Code | Cause |
+| --- | --- |
+| `EVIDENCE_INPUT_INVALID` | A record, option, or destination shape is invalid |
+| `EVIDENCE_SUBJECT_REQUIRED` | No explicit or ambient subject exists |
+| `EVIDENCE_SUBJECT_NOT_FOUND` | A readable destination cannot find the subject |
+| `EVIDENCE_KIND_INVALID` | The kind is invalid or cannot be resolved locally |
+| `EVIDENCE_CONCLUSION_INVALID` | The conclusion does not belong to the selected role |
+| `EVIDENCE_REFERENCE_INVALID` | A subject or source cannot map to a canonical reference |
+| `EVIDENCE_SUPERSESSION_INVALID` | Supersession is duplicated, mismatched, self-referential, or cyclic |
+| `EVIDENCE_IDEMPOTENCY_CONFLICT` | One visible retry identity has different immutable content |
+| `EVIDENCE_WRITE_QUARANTINED` | A closed Eval cell rejected a late authoring call |
+| `EVIDENCE_QUERY_UNAVAILABLE` | Neither an active collector nor readable destination can answer |
+| `EVIDENCE_CURSOR_INVALID` | The cursor is empty, oversized, stale, or bound to another query |
+| `EVIDENCE_ACCESS_DENIED` | The readable destination denied the query |
+
+All exports are available from both `@use-crux/core` and
+`@use-crux/core/evidence`. See [Observability](/docs/reference/crux-core/observability)
+for the canonical artifact and `evidence.for` projection.

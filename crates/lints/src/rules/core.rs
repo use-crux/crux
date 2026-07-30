@@ -19,6 +19,7 @@ use crate::helpers::{
     should_require_coverage, targets_by_relation,
 };
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
+use crate::rules::evidence::evidence_record_findings;
 use crate::rules::relation::relation_lint_findings;
 
 pub(crate) fn core_lint_findings(
@@ -143,6 +144,7 @@ fn append_definition_findings(
     context: DefinitionRuleContext<'_>,
     findings: &mut Vec<StaticIndexLintFinding>,
 ) {
+    findings.extend(evidence_record_findings(builder, definition));
     if definition.kind == "prompt" && !has_input_schema(definition) {
         push_definition_finding(
             builder,

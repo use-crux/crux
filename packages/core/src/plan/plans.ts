@@ -16,6 +16,11 @@ import type { JsonObject as StorageJsonObject } from '../storage'
 import { planAgent } from './agent'
 import { createPlanCreationTool, type PlanToolOptions } from './creation-tools'
 import { assertTaskJsonValue } from './task-values'
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from '../evidence/internal'
 
 /** Options for listing plans. */
 export interface PlanListOptions {
@@ -251,7 +256,7 @@ function emitPlanArtifact(
   operation: 'create' | 'update',
   data: Plan,
 ): void {
-  const artifactId = observe.artifact({
+  const artifact = emitNativeEvidenceArtifact({
     kind: 'output',
     contentType: 'application/json',
     encoding: 'json',
@@ -275,11 +280,17 @@ function emitPlanArtifact(
       metadataKeys: data.metadata ? Object.keys(data.metadata).sort() : [],
     },
   })
-  if (!artifactId) return
+  if (!artifact) return
+  const artifactId = nativeEvidenceArtifactRef(artifact).id
   observe.edge({
     edgeType: 'produced',
     from: { kind: 'span', id: spanId },
     to: { kind: 'artifact', id: artifactId },
     attributes: { primitive: 'plan.operation', operation, planId: data.id },
+  })
+  recordNativeEvidence({
+    artifact,
+    subject: { kind: 'execution', id: spanId },
+    role: 'change',
   })
 }

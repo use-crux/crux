@@ -95,7 +95,7 @@ import {
   normalizeToolInput,
   toJsonValue,
   openToolCallSpan,
-  emitToolArgsArtifact,
+  emitToolCallArgsArtifact,
   emitToolResultArtifact,
   sourceResultPreview,
   toolCallProvenance,
@@ -127,9 +127,16 @@ import {
 import type { ToolApprovalRequirement } from "./approval-policy-evaluator";
 import {
   createApprovalReplayProvenance,
+  createCommittedApprovalReplayProvenance,
   matchesApprovalReplayIdentity,
   verifyApprovalReplayCommitment,
+  type CommittedApprovalReplayLifecycle,
 } from "./approval-replay";
+import {
+  emitToolApprovalDecisionAuthority,
+  emitToolApprovalRequestAuthority,
+  recordResumedToolApprovalAuthority,
+} from "./approval-evidence";
 import { toolSourceReplayIdentity } from "../../tools/tool-source";
 import { resolveToolsContext, type ResolvedToolsContext } from "./context";
 import {
@@ -179,8 +186,15 @@ export type AppendToolRound = (
  *   structured-output semantics); the permissive default is used.
  */
 export type ToolInputCapabilitiesResolution =
-  | { readonly kind: "verified"; readonly capabilities: StructuredOutputCapabilities }
-  | { readonly kind: "unverified"; readonly providerId: string; readonly modelId?: string }
+  | {
+      readonly kind: "verified";
+      readonly capabilities: StructuredOutputCapabilities;
+    }
+  | {
+      readonly kind: "unverified";
+      readonly providerId: string;
+      readonly modelId?: string;
+    }
   | { readonly kind: "default" };
 
 /** Options for {@link createToolLifecycle} — one session per generate/stream call. */
@@ -510,7 +524,6 @@ interface SessionToolShape {
   }) => ToolModelOutput | Promise<ToolModelOutput>;
 }
 
-
 /**
  * The private verdict kernel: `gate()` returns a capability-carrying
  * verdict — the variant IS the only legal continuation, so per-call
@@ -530,6 +543,14 @@ interface SessionToolCall {
   readonly name: string;
   readonly args: unknown;
 }
+
+interface SdkAttemptedToolCall {
+  readonly inputIdentity: string;
+  readonly span: ReturnType<typeof openToolCallSpan>;
+  readonly toolName: string;
+}
+
+const MAX_PENDING_SDK_ATTEMPTS = 1000;
 
 // ─────────────────────────────────────────────────────────────────
 // createToolLifecycle
@@ -570,6 +591,11 @@ export function createToolLifecycle(
   let skillSession: SkillActivationSession | undefined;
   let approvalDeclarations: readonly ApprovalDeclaration[] = [];
   let toolContexts: ResolvedToolsContext = {};
+  const pendingApprovalRequirements = new Map<
+    string,
+    ToolApprovalRequirement
+  >();
+  const sdkAttempts = new Map<string, SdkAttemptedToolCall>();
 
   function arm(resolved: ResolvedPrompt): void {
     skillSession = readSkillActivationSession(resolved);
@@ -608,7 +634,11 @@ export function createToolLifecycle(
     // authored `safeParse` boundary, then middleware, then the outer decode
     // boundary — so the execution order is: wire args → decode → middleware over
     // canonical z.input → authored safeParse exactly once → execute(safeParse.data).
-    const prepared = prepareToolInputPlans(merged, toolCapabilities, toolInputPlans);
+    const prepared = prepareToolInputPlans(
+      merged,
+      toolCapabilities,
+      toolInputPlans,
+    );
     wrappedTools = withToolInputDecode(
       applyToolMiddleware(prepared, middleware),
       toolInputPlans,
@@ -645,10 +675,6 @@ export function createToolLifecycle(
   let memoryCaptured = false;
   let lastMessages: readonly Message[] | undefined;
   const settledToolResults = new Map<string, ToolResultEntry>();
-  const pendingApprovalRequirements = new Map<
-    string,
-    ToolApprovalRequirement
-  >();
   const announcedSkills = new Set<string>();
 
   // Snapshot runtime hooks once — a mid-call setHooks() cannot
@@ -714,11 +740,86 @@ export function createToolLifecycle(
         provider: options.modelIngressProvider,
       });
     }
-    armedTools = instrumentToolSet(executable);
+    armedTools = instrumentToolSet(executable, {
+      takeAttemptedSpan: consumeSdkAttempt,
+    });
   }
 
   const currentTraceId = (): string | undefined =>
     getExecutionContext()?.traceId ?? observe.captureContext()?.traceId;
+
+  function rememberSdkAttempt(
+    toolCall: SessionToolCall,
+    tool: SessionToolShape,
+  ): SdkAttemptedToolCall {
+    const inputIdentity = sdkAttemptInputIdentity(toolCall.args);
+    const existing = sdkAttempts.get(toolCall.id);
+    if (
+      existing?.toolName === toolCall.name &&
+      existing.inputIdentity === inputIdentity
+    ) {
+      return existing;
+    }
+    if (existing) {
+      endAbandonedSdkAttempt(existing, "sdk_attempt_replaced");
+      sdkAttempts.delete(toolCall.id);
+    }
+    const attempted = {
+      inputIdentity,
+      span: openAttemptedToolCall(toolCall, tool),
+      toolName: toolCall.name,
+    } satisfies SdkAttemptedToolCall;
+    sdkAttempts.set(toolCall.id, attempted);
+    if (sdkAttempts.size > MAX_PENDING_SDK_ATTEMPTS) {
+      const oldestId = sdkAttempts.keys().next().value;
+      if (oldestId !== undefined) {
+        const oldest = sdkAttempts.get(oldestId);
+        if (oldest) {
+          endAbandonedSdkAttempt(oldest, "sdk_attempt_capacity");
+        }
+        sdkAttempts.delete(oldestId);
+      }
+    }
+    return attempted;
+  }
+
+  function consumeSdkAttempt(
+    toolName: string,
+    toolCallId: string,
+    input: unknown,
+  ): ReturnType<typeof openToolCallSpan> | undefined {
+    const attempted = sdkAttempts.get(toolCallId);
+    if (
+      !attempted ||
+      attempted.toolName !== toolName ||
+      attempted.inputIdentity !== sdkAttemptInputIdentity(input)
+    ) {
+      return undefined;
+    }
+    sdkAttempts.delete(toolCallId);
+    return attempted.span;
+  }
+
+  function finalizeSdkAttempts(): void {
+    for (const attempted of sdkAttempts.values()) {
+      endAbandonedSdkAttempt(attempted, "sdk_attempt_unconsumed");
+    }
+    sdkAttempts.clear();
+  }
+
+  function endAbandonedSdkAttempt(
+    attempted: SdkAttemptedToolCall,
+    reason: string,
+  ): void {
+    attempted.span.end({
+      status: "skipped",
+      attributes: { isError: false, reason },
+    });
+  }
+
+  function sdkAttemptInputIdentity(input: unknown): string {
+    return JSON.stringify(toJsonValue(input));
+  }
 
   function executionOptionsFor(
     toolCall: SessionToolCall,
@@ -779,11 +880,15 @@ export function createToolLifecycle(
       value: { error: `Tool "${toolCall.name}" not found` },
     };
     const modelOutput = await span.withContext(() =>
-      guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+      guardCanonicalToolOutput(
+        convertedModelOutput,
+        toolCall.name,
+        toolCall.id,
+      ),
     );
     const modelOutputSize = measureModelOutput(modelOutput);
     span.withContext(() => {
-      emitToolArgsArtifact(
+      emitToolCallArgsArtifact(
         span.spanId,
         toolCall.name,
         toolCall.id,
@@ -866,7 +971,11 @@ export function createToolLifecycle(
       value: { error: error.message },
     };
     const modelOutput = await span.withContext(() =>
-      guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+      guardCanonicalToolOutput(
+        convertedModelOutput,
+        toolCall.name,
+        toolCall.id,
+      ),
     );
     const modelOutputSize = measureModelOutput(modelOutput);
     span.withContext(() => {
@@ -963,26 +1072,24 @@ export function createToolLifecycle(
     tool: SessionToolShape,
     messages: readonly Message[],
     traceId: string | undefined,
+    attemptedSpan?: ReturnType<typeof openToolCallSpan>,
   ): Promise<ToolResultEntry> {
     return runToolScope(toolCall.name, async () => {
       const startedAt = now();
       const provenance = toolCallProvenance(tool);
-      const span = openToolCallSpan(
-        toolCall.name,
-        toolCall.id,
-        toolCall.args,
-        provenance?.definitionRefs,
-        provenance,
-      );
-      try {
-        span.withContext(() =>
-          emitToolArgsArtifact(
-            span.spanId,
-            toolCall.name,
-            toolCall.id,
-            toolCall.args,
-          ),
+      const span =
+        attemptedSpan ??
+        openToolCallSpan(
+          toolCall.name,
+          toolCall.id,
+          toolCall.args,
+          provenance?.definitionRefs,
+          provenance,
         );
+      try {
+        if (attemptedSpan === undefined) {
+          emitAttemptedToolCallIntent(span, toolCall);
+        }
         const execute = tool.execute ?? (() => undefined);
         const toolOptions = executionOptionsFor(toolCall, messages);
         const result = await span.withContext(() =>
@@ -1004,7 +1111,11 @@ export function createToolLifecycle(
           }),
         );
         const modelOutput = await span.withContext(() =>
-          guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+          guardCanonicalToolOutput(
+            convertedModelOutput,
+            toolCall.name,
+            toolCall.id,
+          ),
         );
         const outputSize = measureUnknown(result);
         const modelOutputSize = measureModelOutput(modelOutput);
@@ -1089,7 +1200,11 @@ export function createToolLifecycle(
           value: { error: err instanceof Error ? err.message : String(err) },
         };
         const modelOutput = await span.withContext(() =>
-          guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+          guardCanonicalToolOutput(
+            convertedModelOutput,
+            toolCall.name,
+            toolCall.id,
+          ),
         );
         const modelOutputSize = measureModelOutput(modelOutput);
         span.withContext(() => {
@@ -1138,6 +1253,35 @@ export function createToolLifecycle(
     });
   }
 
+  function openAttemptedToolCall(
+    toolCall: SessionToolCall,
+    tool: SessionToolShape,
+  ): ReturnType<typeof openToolCallSpan> {
+    const provenance = toolCallProvenance(tool);
+    const span = openToolCallSpan(
+      toolCall.name,
+      toolCall.id,
+      toolCall.args,
+      provenance?.definitionRefs,
+      provenance,
+    );
+    emitAttemptedToolCallIntent(span, toolCall);
+    return span;
+  }
+
+  function emitAttemptedToolCallIntent(
+    span: ReturnType<typeof openToolCallSpan>,
+    toolCall: SessionToolCall,
+  ): void {
+    span.withContext(() =>
+      emitToolCallArgsArtifact(
+        span.spanId,
+        toolCall.name,
+        toolCall.id,
+        toolCall.args,
+      ),
+    );
+  }
 
   async function approvalRequirement(
     toolCall: SessionToolCall,
@@ -1161,10 +1305,15 @@ export function createToolLifecycle(
   function approvalRequest(
     toolCall: Pick<SessionToolCall, "id" | "name" | "args">,
     requirement: ToolApprovalRequirement,
+    prepared?: Readonly<{
+      approvalId: string;
+      approvalToken: string;
+      lifecycle?: CommittedApprovalReplayLifecycle;
+    }>,
   ): ApprovalRequestInfo {
-    const approvalId = createApprovalId(toolCall.id);
+    const approvalId = prepared?.approvalId ?? createApprovalId(toolCall.id);
     const input = toJsonValue(toolCall.args);
-    const approvalToken = mintToken();
+    const approvalToken = prepared?.approvalToken ?? mintToken();
     const toolIdentity = toolSourceReplayIdentity(wrappedTools[toolCall.name]);
     return {
       approvalId,
@@ -1174,17 +1323,30 @@ export function createToolLifecycle(
       approvalToken,
       ...(toolIdentity !== undefined
         ? {
-            replay: createApprovalReplayProvenance(
-              {
-                approvalId,
-                toolCallId: toolCall.id,
-                toolName: toolCall.name,
-                input,
-              },
-              approvalToken,
-              toolIdentity,
-              requirement.policies,
-            ),
+            replay: prepared?.lifecycle
+              ? createCommittedApprovalReplayProvenance(
+                  {
+                    approvalId,
+                    toolCallId: toolCall.id,
+                    toolName: toolCall.name,
+                    input,
+                  },
+                  approvalToken,
+                  toolIdentity,
+                  requirement.policies,
+                  prepared.lifecycle,
+                )
+              : createApprovalReplayProvenance(
+                  {
+                    approvalId,
+                    toolCallId: toolCall.id,
+                    toolName: toolCall.name,
+                    input,
+                  },
+                  approvalToken,
+                  toolIdentity,
+                  requirement.policies,
+                ),
           }
         : {}),
     };
@@ -1260,7 +1422,10 @@ export function createToolLifecycle(
         verdict: "not-found",
         origin,
       });
-      return { kind: "not-found", settled: await settleNotFound(toolCall, traceId) };
+      return {
+        kind: "not-found",
+        settled: await settleNotFound(toolCall, traceId),
+      };
     }
     const shaped = tool as SessionToolShape;
 
@@ -1281,14 +1446,18 @@ export function createToolLifecycle(
           return await changedApprovalVerdict(toolCall, approvalId);
         }
       }
+      const committedReplay =
+        request?.replay?.version === 2 ? request.replay : undefined;
       if (!decision.approved) {
         const modelOutput = deniedToolModelOutput(decision.reason);
         const modelOutputSize = measureModelOutput(modelOutput);
-        emitToolApprovalObservation("denied", {
+        emitToolApprovalDecisionAuthority({
           approvalId,
           toolCallId: toolCall.id,
           toolName: toolCall.name,
           input: toolCall.args,
+          ...(committedReplay ? { replay: committedReplay } : {}),
+          status: "denied",
           reason: decision.reason,
           modelOutput,
           modelOutputSize,
@@ -1314,12 +1483,35 @@ export function createToolLifecycle(
           },
         };
       }
-      emitToolApprovalObservation("approved", {
+      const decisionEvidence = emitToolApprovalDecisionAuthority({
         approvalId,
         toolCallId: toolCall.id,
         toolName: toolCall.name,
         input: toolCall.args,
+        ...(committedReplay ? { replay: committedReplay } : {}),
+        status: "approved",
       });
+      const executionSpan = openAttemptedToolCall(toolCall, shaped);
+      if (committedReplay) {
+        executionSpan.withContext(() =>
+          observe.edge({
+            edgeType: "triggered",
+            from: {
+              kind: "span",
+              id: committedReplay.attempt.spanId,
+            },
+            to: { kind: "span", id: executionSpan.spanId },
+          }),
+        );
+      }
+      if (decisionEvidence) {
+        executionSpan.withContext(() =>
+          recordResumedToolApprovalAuthority(
+            decisionEvidence,
+            executionSpan.spanId,
+          ),
+        );
+      }
       transcript.push({
         t: "gate",
         toolCallId: toolCall.id,
@@ -1329,21 +1521,51 @@ export function createToolLifecycle(
       });
       return {
         kind: "execute",
-        run: () => runTool(toolCall, shaped, messages, traceId),
+        run: () =>
+          runTool(
+            toolCall,
+            shaped,
+            messages,
+            traceId,
+            executionSpan,
+          ),
       };
     }
 
+    const attemptedSpan = openAttemptedToolCall(toolCall, shaped);
     const requirement = await approvalRequirement(toolCall, messages);
     if (requirement.requiresApproval) {
-      const minted = approvalRequest(toolCall, requirement);
-      emitToolApprovalObservation("request", {
+      const approvalToken = mintToken();
+      const preparedLifecycle = attemptedSpan.withContext(() =>
+        emitToolApprovalRequestAuthority({
+          approvalId,
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          input: toolCall.args,
+          attempt: attemptedSpan,
+          ...(requirement.observeRequest
+            ? { observePolicyDecision: requirement.observeRequest }
+            : {}),
+        }),
+      );
+      if (preparedLifecycle instanceof Promise) {
+        throw new TypeError(
+          "Tool approval evidence preparation must remain synchronous.",
+        );
+      }
+      const lifecycle = preparedLifecycle;
+      const minted = approvalRequest(toolCall, requirement, {
         approvalId,
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        input: toolCall.args,
-        ...(requirement.observeRequest
-          ? { observePolicyDecision: requirement.observeRequest }
-          : {}),
+        approvalToken,
+        ...(lifecycle ? { lifecycle } : {}),
+      });
+      attemptedSpan.end({
+        status: "suspended",
+        attributes: {
+          isError: false,
+          approvalId,
+          approvalRequired: true,
+        },
       });
       transcript.push({
         t: "gate",
@@ -1369,7 +1591,8 @@ export function createToolLifecycle(
     });
     return {
       kind: "execute",
-      run: () => runTool(toolCall, shaped, messages, traceId),
+      run: () =>
+        runTool(toolCall, shaped, messages, traceId, attemptedSpan),
     };
   }
 
@@ -1458,6 +1681,9 @@ export function createToolLifecycle(
         decode.args !== toolCall.args
           ? { ...toolCall, args: decode.args }
           : toolCall;
+      const tool = wrappedTools[decodedCall.name];
+      if (!tool || typeof tool !== "object") return false;
+      rememberSdkAttempt(decodedCall, tool as SessionToolShape);
       const requirement = await approvalRequirement(decodedCall, messages);
       if (requirement.requiresApproval)
         pendingApprovalRequirements.set(toolCall.id, requirement);
@@ -1595,9 +1821,7 @@ export function createToolLifecycle(
 
       return {
         ...amendment,
-        ...(prefixPatch
-          ? { [systemMessagePrefixPatch]: prefixPatch }
-          : {}),
+        ...(prefixPatch ? { [systemMessagePrefixPatch]: prefixPatch } : {}),
         refundStep: true,
       };
     },
@@ -1608,9 +1832,9 @@ export function createToolLifecycle(
           "suspend() is unavailable in the core regime — executeRound() returns suspension as a value instead.",
         );
       }
-      const traceId = currentTraceId();
-      const requestObservers = new Map<string, () => void>();
-      const requests: ApprovalRequestInfo[] = pending.map((pendingCall) => {
+      const requests: ApprovalRequestInfo[] = [];
+      let sealedMessages = [...messages];
+      for (const pendingCall of pending) {
         const requirement = pendingApprovalRequirements.get(
           pendingCall.toolCallId,
         ) ?? {
@@ -1618,32 +1842,68 @@ export function createToolLifecycle(
           policies: [],
         };
         pendingApprovalRequirements.delete(pendingCall.toolCallId);
-        if (requirement.observeRequest) {
-          requestObservers.set(
-            pendingCall.toolCallId,
-            requirement.observeRequest,
-          );
-        }
-        return approvalRequest(
-          {
-            id: pendingCall.toolCallId,
-            name: pendingCall.toolName,
-            args: pendingCall.input,
-          },
-          requirement,
+        const call = {
+          id: pendingCall.toolCallId,
+          name: pendingCall.toolName,
+          args: pendingCall.input,
+        };
+        const approvalId = createApprovalId(call.id);
+        const approvalToken = mintToken();
+        const attemptedSpan = consumeSdkAttempt(
+          call.name,
+          call.id,
+          call.args,
         );
-      });
-
-      let sealedMessages = [...messages];
-      for (const request of requests) {
-        const observePolicyDecision = requestObservers.get(request.toolCallId);
-        emitToolApprovalObservation("request", {
-          approvalId: request.approvalId,
-          toolCallId: request.toolCallId,
-          toolName: request.toolName,
-          input: request.input,
-          ...(observePolicyDecision ? { observePolicyDecision } : {}),
+        let lifecycle: CommittedApprovalReplayLifecycle | undefined;
+        if (attemptedSpan) {
+          const preparedLifecycle = attemptedSpan.withContext(() =>
+            emitToolApprovalRequestAuthority({
+              approvalId,
+              toolCallId: call.id,
+              toolName: call.name,
+              input: call.args,
+              attempt: attemptedSpan,
+              ...(requirement.observeRequest
+                ? {
+                    observePolicyDecision:
+                      requirement.observeRequest,
+                  }
+                : {}),
+            }),
+          );
+          if (preparedLifecycle instanceof Promise) {
+            throw new TypeError(
+              "Tool approval evidence preparation must remain synchronous.",
+            );
+          }
+          lifecycle = preparedLifecycle;
+        } else {
+          emitToolApprovalObservation("request", {
+            approvalId,
+            toolCallId: call.id,
+            toolName: call.name,
+            input: call.args,
+            ...(requirement.observeRequest
+              ? { observePolicyDecision: requirement.observeRequest }
+              : {}),
+          });
+        }
+        const request = approvalRequest(call, requirement, {
+          approvalId,
+          approvalToken,
+          ...(lifecycle ? { lifecycle } : {}),
         });
+        requests.push(request);
+        if (attemptedSpan) {
+          attemptedSpan.end({
+            status: "suspended",
+            attributes: {
+              isError: false,
+              approvalId: request.approvalId,
+              approvalRequired: true,
+            },
+          });
+        }
         transcript.push({
           t: "suspend.mint",
           toolCallId: request.toolCallId,
@@ -1660,6 +1920,7 @@ export function createToolLifecycle(
     // Keyed on memory bindings, not `enabled` — a prompt can bind memory
     // without declaring any tools.
     async captureTurn(args) {
+      finalizeSdkAttempts();
       if (memoryCaptured) return;
       memoryCaptured = true;
       const bindings = options.resolved.memoryBindings?.length ?? 0;

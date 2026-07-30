@@ -1,4 +1,5 @@
 import type { RunLens } from "@/features/run-detail/types";
+import type { EvidenceRole } from "@use-crux/core/evidence";
 
 /** Complete URL-backed state for one Devtools screen. */
 export type NavState =
@@ -34,6 +35,9 @@ export type NavState =
       lens?: RunLens;
       spanId?: string;
       summary?: boolean;
+      detailTab?: "evidence";
+      evidenceRole?: EvidenceRole;
+      evidenceId?: string;
     }
   | { view: "baselines" }
   | { view: "eval-runs"; runId?: string }

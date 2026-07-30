@@ -94,6 +94,8 @@ describe("first-party shared static index fixtures", () => {
           ? "media-native-static.test.ts"
           : mcp
             ? "mcp-native-static.test.ts"
+            : identity.extractor === "evidence.record"
+              ? "evidence-record-native-static.test.ts"
           : "first-party-native-negative-fixtures.test.ts",
       );
       for (const fixtureClass of coverage.requiredFixtureClasses) {

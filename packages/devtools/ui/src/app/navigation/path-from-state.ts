@@ -38,6 +38,12 @@ export function pathFromState(state: NavState): string {
       if (state.lens && state.lens !== "tree") params.set("lens", state.lens);
       if (state.summary) params.set("summary", "1");
       if (state.spanId) params.set("spanId", state.spanId);
+      if (state.detailTab === "evidence") {
+        params.set("tab", "evidence");
+        if (state.evidenceRole)
+          params.set("evidenceRole", state.evidenceRole);
+        if (state.evidenceId) params.set("evidenceId", state.evidenceId);
+      }
       return withQuery(`/runs/${encodeURIComponent(state.traceId)}`, params);
     }
     case "baselines":

@@ -63,7 +63,7 @@ func TestRunDetailSeparatesHistoricalManifestAndCurrentIndexContext(t *testing.T
 	service.WithManifestStore(manifests)
 	t.Cleanup(func() { _ = service.Close() })
 	var batch observability.Batch
-	if err := json.Unmarshal([]byte(`{"schemaVersion":4,"records":[{"schemaVersion":4,"recordId":"record-manifest-api","type":"run:start","runId":"run-manifest-api","operationId":"run-manifest-api","segmentId":"segment-manifest-api","segmentSeq":1,"name":"manifest","rootPrimitive":"run","startedAt":"2026-01-01T00:00:00.000Z","status":"running","deployment":{"projectId":"fixture","manifestId":"pim_15b48ab7fa9b323034d77aec99352109ae2a5ad1185b1f8adbd5821a7bb9c866"},"definitionRefs":[{"id":"prompt:writer","kind":"prompt","role":"resolved-prompt"}]}]}`), &batch); err != nil {
+	if err := json.Unmarshal([]byte(`{"schemaVersion":5,"records":[{"schemaVersion":5,"recordId":"record-manifest-api","type":"run:start","runId":"run-manifest-api","operationId":"run-manifest-api","segmentId":"segment-manifest-api","segmentSeq":1,"name":"manifest","rootPrimitive":"run","startedAt":"2026-01-01T00:00:00.000Z","status":"running","deployment":{"projectId":"fixture","manifestId":"pim_15b48ab7fa9b323034d77aec99352109ae2a5ad1185b1f8adbd5821a7bb9c866"},"definitionRefs":[{"id":"prompt:writer","kind":"prompt","role":"resolved-prompt"}]}]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Ingest(ctx, batch); err != nil {
@@ -145,9 +145,9 @@ func TestObservabilityIngestRouteReportsPartialBatchValidation(t *testing.T) {
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"rec_ok","type":"run:start","runId":"run_partial_route","operationId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"partial","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":4,"recordId":"rec_bad","type":"span:start","runId":"run_partial_route","operationId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"2222222222222222","family":"tool","primitive":"generation.call","name":"bad","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}
+	body := []byte(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"rec_ok","type":"run:start","runId":"run_partial_route","operationId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"partial","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":5,"recordId":"rec_bad","type":"span:start","runId":"run_partial_route","operationId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"2222222222222222","family":"tool","primitive":"generation.call","name":"bad","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}
 	]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
@@ -218,7 +218,7 @@ func TestObservabilityIngestRouteRejectsUnsupportedBatchSchemaPerRecord(t *testi
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":5,"records":[{"schemaVersion":5,"recordId":"rec_future"}]}`)
+	body := []byte(`{"schemaVersion":6,"records":[{"schemaVersion":6,"recordId":"rec_future"}]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
 
@@ -246,8 +246,8 @@ func TestObservabilityIngestRouteReportsTransientFailuresAsRetryable(t *testing.
 	}
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"rec_retry","type":"run:start","runId":"run_retry_route","operationId":"run_retry_route","segmentId":"seg_retry_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"retry","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	body := []byte(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"rec_retry","type":"run:start","runId":"run_retry_route","operationId":"run_retry_route","segmentId":"seg_retry_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"retry","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
@@ -276,9 +276,9 @@ func TestObservabilityIngestRouteIndexesDuplicateIDs(t *testing.T) {
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":4,"sourceHealth":{"sourceId":"source_route","accepted":4,"retried":2,"permanentlyRejected":1,"overflowDropped":3,"deadlineDropped":0,"lastError":{"code":"delivery_retry","message":"https://collector.example/private Bearer secret-token"}},"records":[
-		{"schemaVersion":4,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","operationId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"first","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":4,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","operationId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"conflict","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	body := []byte(`{"schemaVersion":5,"sourceHealth":{"sourceId":"source_route","accepted":4,"retried":2,"permanentlyRejected":1,"overflowDropped":3,"deadlineDropped":0,"lastError":{"code":"delivery_retry","message":"https://collector.example/private Bearer secret-token"}},"records":[
+		{"schemaVersion":5,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","operationId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"first","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":5,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","operationId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"conflict","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
@@ -304,10 +304,10 @@ func TestObservabilitySpanEventsRouteReadsLazyTokenChunks(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = service.Close() })
 	if err := service.Ingest(ctx, observability.Batch{Records: []observability.Record{
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_run_start","type":"run:start","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_span_start","type":"span:start","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`),
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_token_1","type":"span:event","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":3,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`),
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_token_2","type":"span:event","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":4,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_run_start","type":"run:start","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_span_start","type":"span:start","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_token_1","type":"span:event","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":3,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_token_2","type":"span:event","runId":"run_span_events_route","operationId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":4,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`),
 	}}); err != nil {
 		t.Fatal(err)
 	}

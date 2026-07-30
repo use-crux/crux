@@ -14,6 +14,7 @@ import { findToolApprovalDecision, findToolApprovalRequests } from '../../tools/
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { ToolApprovalReplayProvenance } from '../../tools/types'
+import type { OpenObservedSpan } from '../../observability'
 import type { AdapterResponse } from '../types'
 import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'
 import { collectToolApprovalDecisions } from '../../tools/internal/message-parsing'
@@ -296,6 +297,8 @@ export function emitToolApprovalObservation(
     error?: unknown
     /** Internal policy evidence emitted within this approval span. */
     observePolicyDecision?: () => void
+    /** Internal evidence authored with this exact approval span as producer. */
+    observeWithinSpan?: (span: OpenObservedSpan) => void
   },
 ): void {
   const span = observe.openSpan({
@@ -315,6 +318,7 @@ export function emitToolApprovalObservation(
     span.withContext(() => {
       emitToolArgsArtifact(span.spanId, args.toolName, args.toolCallId, args.input)
       args.observePolicyDecision?.()
+      args.observeWithinSpan?.(span)
       if (args.modelOutput) {
         emitToolResultArtifact(span.spanId, args.toolName, args.toolCallId, args.modelOutput, {
           resultKind: 'model',

@@ -15,6 +15,19 @@ import {
 import { normalizedPromptTextSourceRefs } from "./prompt-text-semantic-parity-normalize";
 
 const roots: string[] = [];
+const uncachedTypeScriptService = createSemanticIndexService({
+  backend: createTypeScriptSemanticBackend({
+    cache: "disabled",
+    maxSessions: 1,
+  }),
+});
+const uncachedNativeService = createSemanticIndexService({
+  backend: createNativeSemanticBackend({
+    cache: "disabled",
+    maxSessions: 1,
+  }),
+});
+const cachedParityService = createSemanticIndexService();
 
 async function fixtureRoot(externalRoot = false): Promise<string> {
   const base = externalRoot ? tmpdir() : join(process.cwd(), ".tmp");
@@ -31,12 +44,14 @@ describe("semantic backend parity", () => {
   for (const fixture of semanticBackendParityFixtures) {
     it(`matches TypeScript semantic facts without cache for ${fixture.name}`, async () => {
       const { root, files } = await writeFixture(fixture);
-      const typescriptPatch = await createSemanticIndexService({
-        backend: createTypeScriptSemanticBackend({ cache: "disabled" }),
-      }).indexFiles({ root, files });
-      const nativePatch = await createSemanticIndexService({
-        backend: createNativeSemanticBackend({ cache: "disabled" }),
-      }).indexFiles({ root, files });
+      const typescriptPatch = await uncachedTypeScriptService.indexFiles({
+        root,
+        files,
+      });
+      const nativePatch = await uncachedNativeService.indexFiles({
+        root,
+        files,
+      });
 
       expect(typescriptPatch.status).toBe("ok");
       expect(nativePatch.status).toBe("ok");
@@ -49,30 +64,30 @@ describe("semantic backend parity", () => {
       if (
         fixture.name === "authored-media-shared-analyzer" ||
         fixture.name === "authored-mcp-shared-analyzer" ||
-        fixture.name === "authored-embedding-shared-analyzer"
+        fixture.name === "authored-embedding-shared-analyzer" ||
+        fixture.name === "authored-evidence-record-shared-analyzer"
       ) {
         expect(JSON.stringify(nativePatch.facts)).not.toMatch(
-          /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN|PHASE7_PRIVATE_SENTINEL|mediaBytes/,
+          /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN|PHASE7_PRIVATE_SENTINEL|PRIVATE_EVIDENCE_PARITY_SENTINEL|PRIVATE_EVIDENCE_REF|mediaBytes/,
         );
       }
     }, 60_000);
 
     it(`matches TypeScript semantic facts through public cached indexing for ${fixture.name}`, async () => {
       const { root } = await writeFixture(fixture);
-      const service = createSemanticIndexService();
-      const typescriptPatch = await service.indexProject({
+      const typescriptPatch = await cachedParityService.indexProject({
         root,
         semanticBackend: "typescript",
       });
-      const nativePatch = await service.indexProject({
+      const nativePatch = await cachedParityService.indexProject({
         root,
         semanticBackend: { name: "native" },
       });
-      const cachedTypescriptPatch = await service.indexProject({
+      const cachedTypescriptPatch = await cachedParityService.indexProject({
         root,
         semanticBackend: "typescript",
       });
-      const cachedNativePatch = await service.indexProject({
+      const cachedNativePatch = await cachedParityService.indexProject({
         root,
         semanticBackend: { name: "native" },
       });

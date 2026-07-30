@@ -1,7 +1,7 @@
 {
   "records": [
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_1",
       "type": "run:start",
       "runId": "run_cccccccccccccccccccccccc",
@@ -15,7 +15,7 @@
       "segmentSeq": 1
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_2",
       "type": "span:start",
       "runId": "run_cccccccccccccccccccccccc",
@@ -31,7 +31,7 @@
       "segmentSeq": 2
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_3",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
@@ -48,7 +48,7 @@
       "segmentSeq": 3
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_4",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
@@ -65,7 +65,7 @@
       "segmentSeq": 4
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_5",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
@@ -80,7 +80,7 @@
       "segmentSeq": 5
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_6",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
@@ -95,7 +95,7 @@
       "segmentSeq": 6
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_7",
       "type": "span:end",
       "runId": "run_cccccccccccccccccccccccc",
@@ -108,7 +108,7 @@
       "segmentSeq": 7
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_cccccccccccccccc_8",
       "type": "run:end",
       "runId": "run_cccccccccccccccccccccccc",

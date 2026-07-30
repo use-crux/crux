@@ -65,11 +65,11 @@ func nullJSON(value json.RawMessage) interface{} {
 	return string(value)
 }
 
-func nullInt64(value int64) interface{} {
-	if value == 0 {
+func nullInt64(value *int64) interface{} {
+	if value == nil {
 		return nil
 	}
-	return value
+	return *value
 }
 
 func nullFloat64(value float64) interface{} {

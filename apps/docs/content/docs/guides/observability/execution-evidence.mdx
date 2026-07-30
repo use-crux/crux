@@ -1,0 +1,226 @@
+---
+title: Execution evidence
+description: Inspect automatic evidence, retain it in Crux Local, and add qualified custom claims when a native producer is not available.
+---
+
+Execution evidence connects a claim to the exact run, span, or artifact it
+describes. It separates five questions that ordinary traces cannot answer on
+their own:
+
+- **intent** — why an action was attempted;
+- **authority** — why it was allowed or denied;
+- **change** — what state transition occurred;
+- **verification** — how the result was checked; and
+- **recovery** — what mitigation was available or attempted.
+
+Evidence is a claim with provenance, not ground truth. A verification producer
+can be wrong, two producers can disagree, and a custom authority claim does not
+grant permission. Crux preserves those disagreements instead of inventing a
+winner.
+
+## Start with automatic evidence
+
+Open a run in Devtools and select **Evidence**. The role rail shows the complete
+durable status for all five roles. Shipped native producers currently include:
+
+| Execution | Automatic evidence |
+| --- | --- |
+| `tool.call` | Intent from the capture-safe tool arguments |
+| `tool.approval` | Request and final authority decisions for the exact attempted call |
+| `memory.write` | Change |
+| `plan.operation` | Change |
+| `task.operation` | Change |
+| `workspace.operation` | Change |
+
+Automatic Workspace recovery is not shipped yet. Effect receipt and rollback
+evidence also waits for the canonical Effects receipt model. Crux does not
+infer authority, verification, mutation, or recovery from names, nesting, or
+timestamps.
+
+The generated, version-controlled primitive coverage matrix is the exact
+inventory. `custom-only` means the subject is supported but no native producer
+is promised.
+
+## Retain evidence across restarts
+
+Active-scope inspection works without Crux Local, but only while the owning
+collector is open. Cross-run and restart-safe inspection requires the canonical
+readable destination provided by Local:
+
+```bash
+crux dev --open
+```
+
+Configure your application to send observability records to that Local server,
+then use the normal host-lifecycle drain for serverless deployments. See
+[Runtime setup](/docs/guides/observability/runtime-setup) and
+[Runs and delivery](/docs/guides/observability/runs-and-delivery).
+
+Local keeps evidence separately from routine run retention. Its Local-only
+retention settings are:
+
+```bash
+CRUX_EVIDENCE_RETENTION_DAYS=14
+CRUX_EVIDENCE_PAYLOAD_RETENTION_DAYS=7
+```
+
+Both values must be positive integers. Relationship retention defaults to the
+normalized observability retention age, currently 14 days. Payload retention
+defaults to relationship retention and cannot exceed it. Durable
+first-write-wins idempotency lasts for the relationship-retention window, not
+forever.
+
+Payload expiry does not erase the claim. Local returns `payloadState:
+"redacted"` with `payloadUnavailableReason: "retention"` and no data. A retry
+cannot restore expired bytes. Routine run retention may remove producer or
+source navigation while independently retained evidence remains.
+
+Inspection uses the same-user Local access boundary: headerless loopback
+requests are allowed, and non-loopback browser requests use the Devtools
+session. `CRUX_DEVTOOLS_TOKEN` authorizes ingest only and cannot inspect
+evidence.
+
+## Add custom evidence
+
+Use custom authoring only when a native producer does not express the domain
+claim. Inline evidence kinds start with `custom.`:
+
+```ts
+import { evidence } from "@use-crux/core/evidence";
+
+const firstReview = evidence.record({
+  subject: { kind: "artifact", id: articleArtifactId },
+  role: "verification",
+  conclusion: "passed",
+  kind: "custom.editorial-review",
+  data: {
+    checks: ["citations", "style"],
+  },
+  idempotencyKey: `editorial-review:${reviewOccurrenceId}`,
+});
+```
+
+`evidence.record()` validates synchronously and returns an `EvidenceRef`; it
+does not wait for destination acceptance. In one active collector, divergent
+reuse throws immediately. Across processes, Local keeps the first accepted
+relationship and reports a permanent `EVIDENCE_IDEMPOTENCY_CONFLICT`
+asynchronously through delivery diagnostics and `observe.flush().rejected`.
+The flush still drains once every delivery has reached a final outcome.
+
+Correct an earlier claim with explicit supersession:
+
+```ts
+evidence.record({
+  subject: firstReview.subject,
+  role: "verification",
+  conclusion: "failed",
+  kind: "custom.editorial-review",
+  data: { checks: ["citations"], reason: "citation mismatch" },
+  supersedes: firstReview,
+});
+```
+
+Crux never uses timestamps to choose the newest claim. Superseded rows appear
+in history; incompatible active conclusions remain visible as a conflict.
+
+## Record late review against the exact subject
+
+Async reviewers must carry the subject they evaluated. Never substitute the
+reviewer's current span:
+
+```ts
+async function recordReview(
+  evaluatedSubject: { kind: "execution"; id: string },
+  passed: boolean,
+) {
+  evidence.record({
+    subject: evaluatedSubject,
+    role: "verification",
+    conclusion: passed ? "passed" : "failed",
+    kind: "custom.async-review",
+    data: { reviewed: true },
+  });
+}
+```
+
+When Local can prove that a run or span relationship was first accepted after
+that execution had an explicit terminal record, Devtools shows neutral
+“Recorded after this run/span had ended” provenance. Absence of that metadata
+means unknown, never “on time.”
+
+## Read the five role states
+
+| Status | Meaning |
+| --- | --- |
+| `present` | An active usable relationship representation exists; inline data is not promised |
+| `not-yet-recorded` | No active evidence or explicit missing fact is known |
+| `not-configured` | A producer explicitly reported that it was not configured |
+| `not-applicable` | A producer explicitly reported that the role did not apply |
+| `not-captured` | Capture policy retained no payload |
+| `redacted` | Policy, retention, or access made known content unavailable |
+
+`not-yet-recorded` is a read-model default, not evidence inferred from absence
+or elapsed time. Active evidence outranks explicit missing facts. Devtools
+shows conclusions, conflicts, supersession history, late provenance, payload
+availability, and exact producer/source navigation when retained and
+authorized.
+
+Catalog separately shows authored `evidence.record()` definitions, source
+locations, diagnostics, and primitive coverage. Navigation from historical
+evidence uses retained definition references; Crux does not rewrite history
+with a newer Catalog location. See
+[Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+and [Devtools](/docs/developer-tools/devtools).
+
+## Privacy and OpenTelemetry
+
+Inline evidence passes once through capture policy, configured path redaction,
+the last-mile privacy hook, sanitization, and validation before any collector,
+subscriber, transport, or Eval capture sees it.
+
+Qualified relationships use a closed OTel projection. `crux.evidence` may
+contain only:
+
+```text
+crux.evidence.id
+crux.evidence.role
+crux.evidence.kind
+crux.evidence.conclusion
+crux.evidence.subject_kind
+```
+
+`crux.evidence.conclusion` is optional. Canonical kinds retain their value;
+every `custom.*` kind becomes `custom`. Coverage emits only role and coverage
+status. The evidence ID is an event-only correlation value and must never be a
+metric dimension.
+
+OTel never exports inline evidence, raw custom kind values, graph endpoints,
+raw resource IDs, paths, recovery envelopes, idempotency keys, content
+digests, producer identity, supersession IDs, arbitrary attributes, or the
+protected evidence-source marker. Qualified evidence cannot fall through the
+generic edge or span-event mapper. See
+[Privacy](/docs/guides/observability/privacy) and
+[Telemetry](/docs/guides/observability/telemetry).
+
+## Local delivery health
+
+Authoring/query failures and per-record dispositions have dedicated
+[error pages](/docs/errors). Local also emits bounded aggregate health signals
+that do not identify a relationship and are not thrown authoring errors:
+
+- `EVIDENCE_COVERAGE_CONFLICT`
+- `EVIDENCE_STAGING_EXPIRED`
+- `EVIDENCE_STAGING_UNPROMOTABLE`
+
+Temporary staging capacity is retryable through Core's existing delivery
+engine. Local does not add a second retry queue. Explicit privacy deletion is
+irreversible within the project and rejects delayed resurrection with
+`EVIDENCE_PRIVACY_DELETED`.
+
+## Related
+
+- [Core evidence reference](/docs/reference/crux-core/evidence)
+- [Core observability](/docs/reference/crux-core/observability)
+- [Project Index](/docs/reference/crux-core/project-index)
+- [Workspace](/docs/guides/workspaces)
+- [Runs and delivery](/docs/guides/observability/runs-and-delivery)

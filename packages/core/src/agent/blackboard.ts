@@ -17,6 +17,11 @@ import { contextWithFamily } from '../prompt/context'
 import { observe } from '../observability'
 import { blackboardDefinitionRef } from '../observability/definition-ref'
 import { registerInspectableResource } from '../runtime-bridge/resources'
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from '../evidence/internal'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -223,7 +228,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       attributes: { memoryId: config.id, memoryType: 'blackboard', operation },
     })
     if (kind === 'write' && diff) {
-      const diffArtifactId = observe.artifact({
+      const diffArtifactOptions = {
         kind: 'memory.diff',
         contentType: 'application/json',
         encoding: 'json',
@@ -243,7 +248,15 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           operation,
           ...(fieldsChanged ? { fieldsChanged } : {}),
         },
-      })
+      } as const
+      const nativeArtifact = config.records
+        ? emitNativeEvidenceArtifact(diffArtifactOptions)
+        : undefined
+      const diffArtifactId = nativeArtifact
+        ? nativeEvidenceArtifactRef(nativeArtifact).id
+        : config.records
+          ? undefined
+          : observe.artifact(diffArtifactOptions)
       if (diffArtifactId) {
         observe.edge({
           edgeType: 'memory.write',
@@ -251,6 +264,16 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           to: { kind: 'artifact', id: diffArtifactId },
           attributes: { memoryId: config.id, memoryType: 'blackboard', operation },
         })
+        if (nativeArtifact) {
+          recordNativeEvidence({
+            artifact: nativeArtifact,
+            subject: {
+              kind: 'execution',
+              id: observedContext.currentSpanId,
+            },
+            role: 'change',
+          })
+        }
       }
     }
   }

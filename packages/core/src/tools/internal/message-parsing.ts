@@ -16,6 +16,7 @@ import type {
   ToolApprovalRequest,
   ToolApprovalRequestPayload,
 } from '../types'
+import { isCommittedToolApprovalReplayProvenance } from './approval-replay-validation'
 
 /** A resolved approval pairing a request with its decision, used by the middleware. */
 export interface ResolvedToolApproval {
@@ -179,6 +180,9 @@ function normalizeApprovalRequest(value: unknown): ToolApprovalRequest | undefin
   const toolName = readStringProperty(value, 'toolName') ?? readStringProperty(toolCall, 'toolName')
   if (!approvalId || !toolCallId) return undefined
 
+  const rawReplay = readProperty(value, 'replay')
+  if (rawReplay !== undefined && !isReplayProvenance(rawReplay)) return undefined
+
   return {
     approvalId,
     toolCallId,
@@ -190,8 +194,8 @@ function normalizeApprovalRequest(value: unknown): ToolApprovalRequest | undefin
     ...(readStringProperty(value, 'approvalToken')
       ? { approvalToken: readStringProperty(value, 'approvalToken') }
       : {}),
-    ...(isReplayProvenance(readProperty(value, 'replay'))
-      ? { replay: readProperty(value, 'replay') as ToolApprovalReplayProvenance }
+    ...(isReplayProvenance(rawReplay)
+      ? { replay: rawReplay }
       : {}),
   }
 }
@@ -232,6 +236,7 @@ function isApprovalRequestPayload(value: unknown): value is ToolApprovalRequestP
 }
 
 function isReplayProvenance(value: unknown): value is ToolApprovalReplayProvenance {
+  if (isCommittedToolApprovalReplayProvenance(value)) return true
   return (
     value !== null &&
     typeof value === 'object' &&

@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_QUERY_UNAVAILABLE
+description: No active or configured readable evidence source can answer.
+---
+
+## What failed
+
+Core has neither a readable active collector result nor a usable destination
+response for this inspection.
+
+## Retryability
+
+Retryable. A destination or active execution may become readable later.
+
+The diagnostic contains no evidence payload or destination credentials.
+
+## Fix
+
+Inspect before the active scope seals, or configure the Crux Local readable
+observability destination and retry after delivery drains.

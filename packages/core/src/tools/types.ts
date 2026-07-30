@@ -17,6 +17,13 @@
  */
 
 import type { z } from 'zod'
+import type {
+  CruxArtifactId,
+  CruxRunId,
+  CruxSpanId,
+  CruxTraceId,
+} from '../observability/contract'
+import type { EvidenceRef } from '../evidence/record-types'
 import type { JsonValue, ToolDef, ToolExecutionOptions, ToolModelOutput, ToModelOutputArgs } from '../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
@@ -99,8 +106,8 @@ export type ToolApprovalPolicyIdentity =
   | { readonly kind: 'approvalMiddleware'; readonly id: string }
   | { readonly kind: 'toolPolicy'; readonly id: string }
 
-/** Versioned, request-local identity used to validate stateless replay. */
-export interface ToolApprovalReplayProvenance {
+/** Original request-local identity used to validate legacy stateless replay. */
+interface LegacyToolApprovalReplayProvenance {
   readonly version: 1
   /** Source-owned, secret-free tool identity. Core treats this as opaque JSON. */
   readonly tool: JsonValue
@@ -108,6 +115,44 @@ export interface ToolApprovalReplayProvenance {
   /** Lowercase HMAC-SHA256 over the canonical approved request. */
   readonly commitment: string
 }
+
+/** Exact persisted lifecycle identity for one approval-producing execution. */
+export interface ToolApprovalReplayExecutionRef {
+  readonly runId: CruxRunId
+  readonly traceId: CruxTraceId
+  readonly spanId: CruxSpanId
+}
+
+/**
+ * Committed approval continuation with exact authority provenance.
+ *
+ * @remarks Every lifecycle field is authenticated by `commitment`. Callers
+ * must treat this as opaque persisted protocol state rather than replacing
+ * graph identities with ambient execution context.
+ */
+interface CommittedToolApprovalReplayProvenance {
+  readonly version: 2
+  /** Identity-derivation epoch, validated as `1` by the V2 reader. */
+  readonly identityEpoch: number
+  readonly namespace: {
+    readonly operationId: CruxRunId
+    readonly runId: CruxRunId
+  }
+  readonly attempt: ToolApprovalReplayExecutionRef
+  readonly requestProducer: ToolApprovalReplayExecutionRef
+  readonly requestArtifactId: CruxArtifactId
+  readonly requestEvidence: EvidenceRef<'authority'>
+  /** Source-owned, secret-free tool identity. Core treats this as opaque JSON. */
+  readonly tool: JsonValue
+  readonly policies: readonly ToolApprovalPolicyIdentity[]
+  /** Lowercase HMAC-SHA256 over the canonical approved request and lifecycle. */
+  readonly commitment: string
+}
+
+/** Versioned, request-local identity used to validate stateless replay. */
+export type ToolApprovalReplayProvenance =
+  | LegacyToolApprovalReplayProvenance
+  | CommittedToolApprovalReplayProvenance
 
 /** Message part emitted when a tool call is suspended pending approval. */
 export interface ToolApprovalRequestPart {

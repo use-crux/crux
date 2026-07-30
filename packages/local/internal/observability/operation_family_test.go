@@ -15,7 +15,7 @@ func TestOperationFamilyChildBeforeRootIsStableAndAggregated(t *testing.T) {
 	traceID := "11111111111111111111111111111111"
 
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"child-start","type":"run:start","runId":"`+childID+`","operationId":"`+operationID+`","parentRunId":"`+operationID+`","triggeredBySpanId":"root-trigger","segmentId":"child-segment","segmentSeq":1,"traceId":"`+traceID+`","name":"research","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"child-start","type":"run:start","runId":"`+childID+`","operationId":"`+operationID+`","parentRunId":"`+operationID+`","triggeredBySpanId":"root-trigger","segmentId":"child-segment","segmentSeq":1,"traceId":"`+traceID+`","name":"research","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -33,10 +33,10 @@ func TestOperationFamilyChildBeforeRootIsStableAndAggregated(t *testing.T) {
 	}
 
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"root-start","type":"run:start","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":1,"traceId":"`+traceID+`","name":"request","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"root-trigger-start","type":"span:start","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":2,"traceId":"`+traceID+`","spanId":"root-trigger","family":"flow","primitive":"flow.run","name":"research","startedAt":"2026-07-20T12:00:00.500Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"child-end","type":"run:end","runId":"`+childID+`","operationId":"`+operationID+`","segmentId":"child-segment","segmentSeq":2,"traceId":"`+traceID+`","endedAt":"2026-07-20T12:00:02Z","status":"error"}`,
-		`{"schemaVersion":4,"recordId":"root-end","type":"run:end","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":3,"traceId":"`+traceID+`","endedAt":"2026-07-20T12:00:03Z","status":"ok"}`,
+		`{"schemaVersion":5,"recordId":"root-start","type":"run:start","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":1,"traceId":"`+traceID+`","name":"request","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"root-trigger-start","type":"span:start","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":2,"traceId":"`+traceID+`","spanId":"root-trigger","family":"flow","primitive":"flow.run","name":"research","startedAt":"2026-07-20T12:00:00.500Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"child-end","type":"run:end","runId":"`+childID+`","operationId":"`+operationID+`","segmentId":"child-segment","segmentSeq":2,"traceId":"`+traceID+`","endedAt":"2026-07-20T12:00:02Z","status":"error"}`,
+		`{"schemaVersion":5,"recordId":"root-end","type":"run:end","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":3,"traceId":"`+traceID+`","endedAt":"2026-07-20T12:00:03Z","status":"ok"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -81,8 +81,8 @@ func TestOperationFamiliesNeverGroupBySharedTrace(t *testing.T) {
 	service := newTestService(t)
 	traceID := "22222222222222222222222222222222"
 	if err := service.Ingest(context.Background(), mustBatch(t,
-		`{"schemaVersion":4,"recordId":"shared-a","type":"run:start","runId":"run_shared_a","operationId":"run_shared_a","segmentId":"seg-shared-a","segmentSeq":1,"traceId":"`+traceID+`","name":"a","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"shared-b","type":"run:start","runId":"run_shared_b","operationId":"run_shared_b","segmentId":"seg-shared-b","segmentSeq":1,"traceId":"`+traceID+`","name":"b","rootPrimitive":"eval.case","startedAt":"2026-07-20T13:00:01Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"shared-a","type":"run:start","runId":"run_shared_a","operationId":"run_shared_a","segmentId":"seg-shared-a","segmentSeq":1,"traceId":"`+traceID+`","name":"a","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"shared-b","type":"run:start","runId":"run_shared_b","operationId":"run_shared_b","segmentId":"seg-shared-b","segmentSeq":1,"traceId":"`+traceID+`","name":"b","rootPrimitive":"eval.case","startedAt":"2026-07-20T13:00:01Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -110,10 +110,10 @@ func TestOperationFamilyChildHealthMatchesListAndDetail(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"health-root","type":"run:start","runId":"run_health_root","operationId":"run_health_root","segmentId":"health-root-seg","segmentSeq":1,"name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:30:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"health-blocked-start","type":"run:start","runId":"run_health_blocked","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-1","segmentId":"health-blocked-seg","segmentSeq":1,"name":"blocked","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:01Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"health-blocked-end","type":"run:end","runId":"run_health_blocked","operationId":"run_health_root","segmentId":"health-blocked-seg","segmentSeq":2,"endedAt":"2026-07-20T13:30:02Z","status":"blocked"}`,
-		`{"schemaVersion":4,"recordId":"health-incomplete-start","type":"run:start","runId":"run_health_incomplete","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-2","segmentId":"health-incomplete-seg","segmentSeq":1,"name":"incomplete","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:03Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"health-root","type":"run:start","runId":"run_health_root","operationId":"run_health_root","segmentId":"health-root-seg","segmentSeq":1,"name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:30:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"health-blocked-start","type":"run:start","runId":"run_health_blocked","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-1","segmentId":"health-blocked-seg","segmentSeq":1,"name":"blocked","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:01Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"health-blocked-end","type":"run:end","runId":"run_health_blocked","operationId":"run_health_root","segmentId":"health-blocked-seg","segmentSeq":2,"endedAt":"2026-07-20T13:30:02Z","status":"blocked"}`,
+		`{"schemaVersion":5,"recordId":"health-incomplete-start","type":"run:start","runId":"run_health_incomplete","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-2","segmentId":"health-incomplete-seg","segmentSeq":1,"name":"incomplete","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:03Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -141,9 +141,9 @@ func TestOperationFamilyForeignParentConflictsInListAndDetail(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"foreign-parent","type":"run:start","runId":"run_foreign_parent","operationId":"run_foreign_parent","segmentId":"foreign-parent-seg","segmentSeq":1,"traceId":"trace_foreign","name":"foreign","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"foreign-root","type":"run:start","runId":"run_foreign_root","operationId":"run_foreign_root","segmentId":"foreign-root-seg","segmentSeq":1,"traceId":"trace_foreign","name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:01Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"foreign-child","type":"run:start","runId":"run_foreign_child","operationId":"run_foreign_root","parentRunId":"run_foreign_parent","triggeredBySpanId":"foreign-trigger","segmentId":"foreign-child-seg","segmentSeq":1,"traceId":"trace_foreign","name":"child","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:40:02Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"foreign-parent","type":"run:start","runId":"run_foreign_parent","operationId":"run_foreign_parent","segmentId":"foreign-parent-seg","segmentSeq":1,"traceId":"trace_foreign","name":"foreign","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"foreign-root","type":"run:start","runId":"run_foreign_root","operationId":"run_foreign_root","segmentId":"foreign-root-seg","segmentSeq":1,"traceId":"trace_foreign","name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:01Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"foreign-child","type":"run:start","runId":"run_foreign_child","operationId":"run_foreign_root","parentRunId":"run_foreign_parent","triggeredBySpanId":"foreign-trigger","segmentId":"foreign-child-seg","segmentSeq":1,"traceId":"trace_foreign","name":"child","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:40:02Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -173,12 +173,12 @@ func TestOperationIdentityIsImmutable(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"identity-root","type":"run:start","runId":"run_identity_root","operationId":"run_identity_root","segmentId":"identity-segment","segmentSeq":1,"name":"root","rootPrimitive":"run","startedAt":"2026-07-20T14:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"identity-root","type":"run:start","runId":"run_identity_root","operationId":"run_identity_root","segmentId":"identity-segment","segmentSeq":1,"name":"root","rootPrimitive":"run","startedAt":"2026-07-20T14:00:00Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
 	err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"identity-conflict","type":"span:event","runId":"run_identity_root","operationId":"run_other_operation","segmentId":"identity-segment","segmentSeq":2,"spanId":"span","eventId":"event","name":"custom.identity","timestamp":"2026-07-20T14:00:01Z"}`,
+		`{"schemaVersion":5,"recordId":"identity-conflict","type":"span:event","runId":"run_identity_root","operationId":"run_other_operation","segmentId":"identity-segment","segmentSeq":2,"spanId":"span","eventId":"event","name":"custom.identity","timestamp":"2026-07-20T14:00:01Z"}`,
 	))
 	if err == nil || !strings.Contains(err.Error(), "operation_identity_conflict") {
 		t.Fatalf("identity conflict error = %v", err)
@@ -189,7 +189,7 @@ func TestDeletedOperationCannotBeResurrected(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"delete-root","type":"run:start","runId":"run_delete_operation","operationId":"run_delete_operation","segmentId":"delete-segment","segmentSeq":1,"name":"delete","rootPrimitive":"run","startedAt":"2026-07-20T15:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"delete-root","type":"run:start","runId":"run_delete_operation","operationId":"run_delete_operation","segmentId":"delete-segment","segmentSeq":1,"name":"delete","rootPrimitive":"run","startedAt":"2026-07-20T15:00:00Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestDeletedOperationCannotBeResurrected(t *testing.T) {
 		t.Fatalf("delete = %v, %v", deleted, err)
 	}
 	dispositions := service.IngestWithDispositions(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"delete-late","type":"run:end","runId":"run_delete_operation","operationId":"run_delete_operation","segmentId":"delete-segment","segmentSeq":2,"endedAt":"2026-07-20T15:00:01Z","status":"ok"}`,
+		`{"schemaVersion":5,"recordId":"delete-late","type":"run:end","runId":"run_delete_operation","operationId":"run_delete_operation","segmentId":"delete-segment","segmentSeq":2,"endedAt":"2026-07-20T15:00:01Z","status":"ok"}`,
 	))
 	if len(dispositions) != 1 || dispositions[0].Code != "operation_deleted" || dispositions[0].Retryable {
 		t.Fatalf("late deletion disposition = %#v", dispositions)
@@ -209,11 +209,11 @@ func TestRetentionKeepsActiveFamiliesAndDeletesTerminalFamiliesAtomically(t *tes
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"active-root","type":"run:start","runId":"run_active_family","operationId":"run_active_family","segmentId":"active-root-seg","segmentSeq":1,"name":"active","rootPrimitive":"run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"active-root-end","type":"run:end","runId":"run_active_family","operationId":"run_active_family","segmentId":"active-root-seg","segmentSeq":2,"endedAt":"2020-01-01T00:00:01Z","status":"ok"}`,
-		`{"schemaVersion":4,"recordId":"active-child","type":"run:start","runId":"run_active_child","operationId":"run_active_family","parentRunId":"run_active_family","triggeredBySpanId":"missing-trigger","segmentId":"active-child-seg","segmentSeq":1,"name":"child","rootPrimitive":"flow.run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"terminal-root","type":"run:start","runId":"run_terminal_family","operationId":"run_terminal_family","segmentId":"terminal-seg","segmentSeq":1,"name":"terminal","rootPrimitive":"run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"terminal-end","type":"run:end","runId":"run_terminal_family","operationId":"run_terminal_family","segmentId":"terminal-seg","segmentSeq":2,"endedAt":"2020-01-01T00:00:01Z","status":"ok"}`,
+		`{"schemaVersion":5,"recordId":"active-root","type":"run:start","runId":"run_active_family","operationId":"run_active_family","segmentId":"active-root-seg","segmentSeq":1,"name":"active","rootPrimitive":"run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"active-root-end","type":"run:end","runId":"run_active_family","operationId":"run_active_family","segmentId":"active-root-seg","segmentSeq":2,"endedAt":"2020-01-01T00:00:01Z","status":"ok"}`,
+		`{"schemaVersion":5,"recordId":"active-child","type":"run:start","runId":"run_active_child","operationId":"run_active_family","parentRunId":"run_active_family","triggeredBySpanId":"missing-trigger","segmentId":"active-child-seg","segmentSeq":1,"name":"child","rootPrimitive":"flow.run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"terminal-root","type":"run:start","runId":"run_terminal_family","operationId":"run_terminal_family","segmentId":"terminal-seg","segmentSeq":1,"name":"terminal","rootPrimitive":"run","startedAt":"2020-01-01T00:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"terminal-end","type":"run:end","runId":"run_terminal_family","operationId":"run_terminal_family","segmentId":"terminal-seg","segmentSeq":2,"endedAt":"2020-01-01T00:00:01Z","status":"ok"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -237,9 +237,9 @@ func TestMalformedOperationTopologyIsBoundedAndVisible(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":4,"recordId":"cycle-a","type":"run:start","runId":"run_cycle_a","operationId":"run_cycle_root","parentRunId":"run_cycle_b","segmentId":"cycle-a-seg","segmentSeq":1,"name":"a","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:00Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"cycle-b","type":"run:start","runId":"run_cycle_b","operationId":"run_cycle_root","parentRunId":"run_cycle_a","segmentId":"cycle-b-seg","segmentSeq":1,"name":"b","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:01Z","status":"running"}`,
-		`{"schemaVersion":4,"recordId":"self-parent","type":"run:start","runId":"run_self_parent","operationId":"run_cycle_root","parentRunId":"run_self_parent","segmentId":"self-seg","segmentSeq":1,"name":"self","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:02Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"cycle-a","type":"run:start","runId":"run_cycle_a","operationId":"run_cycle_root","parentRunId":"run_cycle_b","segmentId":"cycle-a-seg","segmentSeq":1,"name":"a","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:00Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"cycle-b","type":"run:start","runId":"run_cycle_b","operationId":"run_cycle_root","parentRunId":"run_cycle_a","segmentId":"cycle-b-seg","segmentSeq":1,"name":"b","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:01Z","status":"running"}`,
+		`{"schemaVersion":5,"recordId":"self-parent","type":"run:start","runId":"run_self_parent","operationId":"run_cycle_root","parentRunId":"run_self_parent","segmentId":"self-seg","segmentSeq":1,"name":"self","rootPrimitive":"flow.run","startedAt":"2026-07-20T17:00:02Z","status":"running"}`,
 	)); err != nil {
 		t.Fatal(err)
 	}

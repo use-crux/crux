@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_CURSOR_INVALID
+description: An evidence cursor is stale, malformed, or bound to another query.
+---
+
+## What failed
+
+The opaque cursor does not match the subject, role, options, or current subject
+revision.
+
+## Retryability
+
+Not retryable. That cursor cannot be reused.
+
+The response does not decode or expose cursor contents.
+
+## Fix
+
+Restart inspection without a cursor, then follow only cursors returned by that
+same subject, selected role, history mode, and data mode.

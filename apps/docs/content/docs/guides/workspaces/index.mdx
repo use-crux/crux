@@ -155,6 +155,19 @@ const tools = ws.asTools({ namespace: "thread:123" });
 The override is also useful when running workspace operations outside a prompt
 resolution.
 
+## Execution evidence
+
+Successful native `workspace.operation` mutations author capture-safe change
+evidence against the exact operation subject. Delivery retries of the same
+prepared artifact and relationship do not duplicate the claim; a separate
+workspace occurrence remains a separate claim.
+
+Automatic Workspace recovery evidence is not shipped yet. Crux does not infer
+recovery from undo support, versions, names, nesting, or timestamps. Add
+advanced custom evidence only when your application has an exact recovery
+claim and subject. See
+[Execution evidence](/docs/guides/observability/execution-evidence).
+
 ## Where To Go Next
 
 <Cards>

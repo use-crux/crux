@@ -32,6 +32,10 @@ import {
   addDefinitionRefEvents,
   definitionRefProjection,
 } from './definition-ref-mapper'
+import {
+  evidenceCoverageEventProjection,
+  evidenceEventProjection,
+} from './evidence-events'
 
 const RECENTLY_ENDED_SPAN_TTL_MS = 30_000
 const RECENTLY_ENDED_SPAN_MAX_ENTRIES = 1_000
@@ -257,6 +261,26 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'span:event': {
+        if (
+          record.name === 'evidence.coverage' ||
+          record.name === 'evidence.coverage.conflict'
+        ) {
+          const projection = evidenceCoverageEventProjection(record)
+          if (!projection) break
+          const target = spanEventTarget(
+            openSpans,
+            openRuns,
+            recentlyEndedSpans,
+            record,
+          )
+          if (!target) break
+          spanManager.addEvent(
+            target.ref,
+            projection.name,
+            projection.attributes,
+          )
+          break
+        }
         const target = spanEventTarget(
           openSpans,
           openRuns,
@@ -275,6 +299,7 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'artifact': {
+        if (isQualifiedEvidenceArtifact(record)) break
         const target = artifactEventTarget(
           openSpans,
           openRuns,
@@ -304,6 +329,23 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'edge': {
+        if (record.edgeType === 'evidence.for') {
+          const projection = evidenceEventProjection(record)
+          if (!projection) break
+          const ref = evidenceProducerTarget(
+            openSpans,
+            openRuns,
+            recentlyEndedSpans,
+            projection.producer,
+          )
+          if (!ref) break
+          spanManager.addEvent(
+            ref,
+            projection.name,
+            projection.attributes,
+          )
+          break
+        }
         const ref =
           spanRefForNode(openSpans, openRuns, record.to) ??
           spanRefForNode(openSpans, openRuns, record.from)
@@ -320,6 +362,36 @@ export function createOtelRecordSubscriber(
         assertNever(record)
     }
   }
+}
+
+function isQualifiedEvidenceArtifact(
+  record: Extract<CruxGraphRecord, { type: 'artifact' }>,
+): boolean {
+  const attributes = record.attributes
+  return (
+    typeof attributes === 'object' &&
+    attributes !== null &&
+    (Object.prototype.hasOwnProperty.call(attributes, 'evidenceSource') ||
+      Object.prototype.hasOwnProperty.call(attributes, 'approvalOccurrence'))
+  )
+}
+
+function evidenceProducerTarget(
+  spans: SpanRefLookup,
+  runs: SpanRefLookup,
+  recentlyEndedSpans: {
+    get(spanId: string): RecentlyEndedSpan | undefined
+  },
+  producer: {
+    readonly kind: 'run' | 'span'
+    readonly id: string
+  },
+): SpanRef | undefined {
+  if (producer.kind === 'run') return runs.get(producer.id)
+  const active = spans.get(producer.id)
+  if (active) return active
+  const ended = recentlyEndedSpans.get(producer.id)
+  return ended ? runs.get(ended.runId) : undefined
 }
 
 function spanEventTarget(

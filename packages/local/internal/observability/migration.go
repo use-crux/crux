@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 type observabilityMigrationHook func(step string) error
@@ -47,10 +48,31 @@ func (s *Service) migrateWithHook(ctx context.Context, hook observabilityMigrati
 	if err := createObservabilitySchema(ctx, tx); err != nil {
 		return err
 	}
+	if err := ensureEvidenceSupersessionState(ctx, tx); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if s.evidenceNow != nil {
+		now = s.evidenceNow().UTC()
+	}
+	converted, err := migrateLegacyApprovalArtifactPrivacyState(
+		ctx,
+		tx,
+		formatEvidenceAcceptanceTime(now),
+	)
+	if err != nil {
+		return err
+	}
+	if hook != nil {
+		if err := hook("after-approval-privacy-migration"); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit observability schema migration: %w", err)
 	}
 	committed = true
+	s.approvalMigrationConverted = converted
 	return nil
 }
 
@@ -229,6 +251,7 @@ func observabilitySchemaStatements() []string {
 			deadline_dropped INTEGER NOT NULL DEFAULT 0,
 			last_error_code TEXT,
 			last_error_message TEXT,
+			last_error_evidence_ids_json TEXT,
 			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		// observability_revision is a single-row monotonic counter. Every run
@@ -293,7 +316,13 @@ func observabilitySchemaStatements() []string {
 }
 
 func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
-	statements := observabilitySchemaStatements()
+	if err := rebuildProvisionalEvidenceStagingSchema(ctx, runner); err != nil {
+		return err
+	}
+	if err := rebuildProvisionalApprovalArtifactSchema(ctx, runner); err != nil {
+		return err
+	}
+	statements := append(observabilitySchemaStatements(), evidenceSchemaStatements()...)
 	for _, statement := range statements {
 		if _, err := runner.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("execute migration statement: %w", err)
@@ -340,6 +369,57 @@ func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
 		if err := ensureColumn(ctx, runner, "runs", column.name, column.ddl); err != nil {
 			return err
 		}
+	}
+	if err := ensureColumn(
+		ctx,
+		runner,
+		"observability_source_health",
+		"last_error_evidence_ids_json",
+		`ALTER TABLE observability_source_health ADD COLUMN last_error_evidence_ids_json TEXT`,
+	); err != nil {
+		return err
+	}
+	if err := ensureColumn(
+		ctx,
+		runner,
+		"evidence_reservations",
+		"digest_verification_state",
+		`ALTER TABLE evidence_reservations
+		 ADD COLUMN digest_verification_state TEXT NOT NULL DEFAULT 'not-required'`,
+	); err != nil {
+		return err
+	}
+	if _, err := runner.ExecContext(ctx, `
+		UPDATE evidence_reservations
+		SET digest_verification_state = CASE
+			WHEN content_digest IS NULL THEN 'not-required'
+			WHEN source_mode = 'reference' THEN 'verified'
+			WHEN EXISTS (
+				SELECT 1 FROM evidence_relationships relationships
+				WHERE relationships.authorization_namespace =
+					evidence_reservations.authorization_namespace
+				  AND relationships.evidence_id =
+					evidence_reservations.evidence_id
+				  AND relationships.original_capture_state IN (
+					'redacted', 'not-captured'
+				  )
+			) THEN 'verified'
+			ELSE 'pending'
+		END
+	`); err != nil {
+		return fmt.Errorf(
+			"backfill evidence digest verification state: %w",
+			err,
+		)
+	}
+	if _, err := runner.ExecContext(ctx, `
+		DELETE FROM evidence_staging_candidates
+		WHERE digest_version <> ?
+	`, evidenceCandidateDigestVersion); err != nil {
+		return fmt.Errorf(
+			"purge incompatible evidence staging candidates: %w",
+			err,
+		)
 	}
 	if _, err := runner.ExecContext(ctx, `INSERT OR IGNORE INTO observability_revision (id, value) VALUES (1, 0)`); err != nil {
 		return fmt.Errorf("seed observability revision counter: %w", err)
@@ -451,7 +531,7 @@ func hasExactColumns(actual map[string]bool, expected []string) bool {
 }
 
 func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
-	for _, table := range []string{
+	tables := append(evidenceTableNamesForDeletion(), []string{
 		"records",
 		"span_events",
 		"artifacts",
@@ -466,7 +546,8 @@ func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
 		"operations",
 		"operation_tombstones",
 		"run_definition_activity",
-	} {
+	}...)
+	for _, table := range tables {
 		if _, err := runner.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return fmt.Errorf("reset pre-v2 observability table %s: %w", table, err)
 		}

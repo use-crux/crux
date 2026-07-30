@@ -91,6 +91,20 @@ enum ResolveOutcome<'a> {
 }
 
 impl<'a> PrimitiveContext<'a> {
+    /// Proves one local binding is a named import from an approved module.
+    pub(crate) fn has_named_import(
+        &self,
+        local_name: &str,
+        imported_name: &str,
+        modules: &[&str],
+    ) -> bool {
+        self.imports.iter().any(|item| {
+            item.local_name == local_name
+                && item.imported_name == imported_name
+                && modules.contains(&item.module_specifier.as_str())
+        })
+    }
+
     pub fn new(
         file: &'a str,
         fingerprint_file: &'a str,

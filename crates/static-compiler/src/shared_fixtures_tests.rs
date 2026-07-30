@@ -374,6 +374,8 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "media.missing-attribution",
             "media.output-discarded",
             "media.raw-retention",
+            "evidence.invalid-custom-kind",
+            "evidence.reserved-inline-kind",
             "embedding.unsupported-modality",
             "embedding.namespace-identity-mismatch",
             "embedding.sparse-media"
@@ -389,7 +391,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 26);
+    assert_eq!(coverage.identities.len(), 27);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -436,6 +438,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             match identity.extractor.as_str() {
                 "mcp.server" => "mcp-native-static.test.ts",
                 "media.operation" | "ingest.source" => "media-native-static.test.ts",
+                "evidence.record" => "evidence-record-native-static.test.ts",
                 _ => "first-party-native-negative-fixtures.test.ts",
             }
         );

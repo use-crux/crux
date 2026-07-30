@@ -125,6 +125,15 @@ func TestRequireSessionAuth_ingestBearerCanOnlyIngestRecordsAndSubmitFeedback(t 
 		path   string
 	}{
 		{method: http.MethodGet, path: "/api/observability/runs/page"},
+		{method: http.MethodPost, path: "/api/observability/evidence/inspect"},
+		{
+			method: http.MethodPost,
+			path:   "/api/observability/evidence/subjects/summary",
+		},
+		{
+			method: http.MethodPost,
+			path:   "/api/observability/evidence/navigation/resolve",
+		},
 		{method: http.MethodGet, path: "/api/feedback"},
 		{method: http.MethodPost, path: "/api/inspect/run"},
 		{method: http.MethodPost, path: "/api/project/index/completions"},

@@ -10,13 +10,29 @@ func (s *Service) listResourceArtifactsBySpan(ctx context.Context, spanIDs []str
 	if len(spanIDs) == 0 {
 		return out, nil
 	}
+	payloadCutoff := formatEvidenceAcceptanceTime(
+		s.evidenceNow().Add(-s.evidenceSettings.PayloadRetention),
+	)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT artifact_id, run_id, ifnull(trace_id, ''), ifnull(span_id, ''), kind, created_at,
-			content_type, encoding, ifnull(size_bytes, 0), ifnull(hash, ''), preview_json, ifnull(uri, ''), attributes_json
+			content_type, encoding, ifnull(size_bytes, 0), ifnull(hash, ''),
+			CASE WHEN EXISTS (
+				SELECT 1 FROM evidence_relationships relationship
+				WHERE relationship.authorization_namespace = ?
+				  AND relationship.source_mode = 'inline'
+				  AND relationship.source_kind = 'artifact'
+				  AND relationship.source_id = artifacts.artifact_id
+				  AND relationship.payload_state = 'available'
+				  AND relationship.payload_accepted_at <= ?
+			) THEN NULL ELSE preview_json END,
+			ifnull(uri, ''), attributes_json
 		FROM artifacts
 		WHERE span_id IN (`+queryPlaceholders(len(spanIDs))+`)
 		ORDER BY span_id, created_at, artifact_id
-	`, queryArgs(spanIDs)...)
+	`, append(
+		[]any{localEvidenceAuthorizationNamespace, payloadCutoff},
+		queryArgs(spanIDs)...,
+	)...)
 	if err != nil {
 		return nil, err
 	}

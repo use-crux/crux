@@ -1,7 +1,11 @@
 import type { CruxGraphRecord } from '../contract'
 import type { CruxObservabilityTransport } from '../transport'
 import { deliveryEnvelopeBytes } from './bytes'
-import { partitionDeliveryReceipt, type CruxDeliveryAttemptContext } from './receipt'
+import {
+  partitionDeliveryReceipt,
+  type CruxDeliveryAttemptContext,
+  type DeliveryDispositionRecord,
+} from './receipt'
 
 const DEFAULT_MAX_RECORDS_PER_REQUEST = 50
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
@@ -10,6 +14,8 @@ export interface ChunkDeliveryResult {
   readonly accepted: readonly CruxGraphRecord[]
   readonly permanentlyRejected: readonly CruxGraphRecord[]
   readonly retryable: readonly CruxGraphRecord[]
+  readonly permanentRejections: readonly DeliveryDispositionRecord[]
+  readonly retryableRejections: readonly DeliveryDispositionRecord[]
   readonly retryAfterMs: number
   readonly error?: unknown
 }
@@ -24,6 +30,8 @@ export async function sendBatchInChunks(
   const accepted: CruxGraphRecord[] = []
   const permanentlyRejected: CruxGraphRecord[] = [...requests.oversized]
   const retryableSet = new Set<CruxGraphRecord>()
+  const permanentRejections: DeliveryDispositionRecord[] = []
+  const retryableRejections: DeliveryDispositionRecord[] = []
   let retryAfterMs = 0
 
   for (let requestIndex = 0; requestIndex < requests.chunks.length; requestIndex += 1) {
@@ -33,6 +41,8 @@ export async function sendBatchInChunks(
       const partition = partitionDeliveryReceipt(chunk, receipt)
       accepted.push(...partition.accepted)
       permanentlyRejected.push(...partition.permanentlyRejected)
+      permanentRejections.push(...partition.permanentRejections)
+      retryableRejections.push(...partition.retryableRejections)
       for (const record of [...partition.retryable, ...partition.unaccounted]) retryableSet.add(record)
       retryAfterMs = Math.max(retryAfterMs, receipt.retryAfterMs ?? 0)
     } catch (error) {
@@ -44,6 +54,8 @@ export async function sendBatchInChunks(
         accepted,
         permanentlyRejected,
         retryable: batch.filter((record) => retryableSet.has(record)),
+        permanentRejections,
+        retryableRejections,
         retryAfterMs: retryAfterFromError(error),
         error,
       }
@@ -54,6 +66,8 @@ export async function sendBatchInChunks(
     accepted,
     permanentlyRejected,
     retryable: batch.filter((record) => retryableSet.has(record)),
+    permanentRejections,
+    retryableRejections,
     retryAfterMs,
   }
 }

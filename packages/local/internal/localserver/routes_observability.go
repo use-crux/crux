@@ -25,6 +25,8 @@ func registerObservabilityRoutesWithCatalog(mux *http.ServeMux, service *observa
 }
 
 func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observability.Service, inspectEvents *inspect.EventBus, catalog *devtools.Service, reviews *review.Service) {
+	registerEvidenceInspectRoute(mux, service)
+	registerEvidenceBatchReadRoutes(mux, service)
 	mux.HandleFunc("POST /api/observability/records", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)

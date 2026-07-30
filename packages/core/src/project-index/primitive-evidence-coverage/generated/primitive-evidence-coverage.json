@@ -1,0 +1,1620 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "name": "run",
+      "family": "run",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "generation.call",
+      "family": "generation",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "generation.stream",
+      "family": "generation",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "generation.stream.attempt",
+      "family": "generation",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "media.generate_image",
+      "family": "media",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "media.transcribe",
+      "family": "media",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "media.generate_speech",
+      "family": "media",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "media.describe",
+      "family": "media",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "prompt.resolve",
+      "family": "prompt",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "prompt.budget",
+      "family": "prompt",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "context.resolve",
+      "family": "context",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "context.predicate",
+      "family": "context",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "context.cache",
+      "family": "context",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "agent.run",
+      "family": "agent",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "flow.run",
+      "family": "flow",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "flow.step",
+      "family": "flow",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "flow.suspension",
+      "family": "flow",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.parallel",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.pipeline",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.consensus",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.swarm",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.branch",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.join",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "composition.vote",
+      "family": "composition",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "tool.call",
+      "family": "tool",
+      "participation": "subject",
+      "roles": {
+        "intent": "automatic",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "automaticRoles": {
+        "intent": {
+          "producer": "adapter/tool/emission.emitToolCallArgsArtifact",
+          "sourceKinds": [
+            "tool.args"
+          ],
+          "conformanceTest": "packages/core/__tests__/evidence/native-tool-intent.test.ts"
+        }
+      },
+      "nativeEvidence": {
+        "status": "automatic"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed native roles are authored automatically; other roles remain available to advanced custom authors."
+    },
+    {
+      "name": "tool.approval",
+      "family": "tool",
+      "participation": "producer",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "automatic",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "automaticRoles": {
+        "authority": {
+          "producer": "adapter/tool/approval-evidence.emitToolApprovalDecisionAuthority",
+          "sourceKinds": [
+            "approval.request",
+            "approval.decision"
+          ],
+          "conformanceTest": "packages/core/__tests__/observability/tool-approval-sdk-attempt.test.ts"
+        }
+      },
+      "nativeEvidence": {
+        "status": "automatic"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed native roles are authored automatically; other roles remain available to advanced custom authors."
+    },
+    {
+      "name": "mcp.connect",
+      "family": "mcp",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "mcp.discover",
+      "family": "mcp",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.pipeline",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.recipe",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.retrieve",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.query",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.stage",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "retrieval.step",
+      "family": "retrieval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "embedding.call",
+      "family": "embedding",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "memory.capture",
+      "family": "memory",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "memory.read",
+      "family": "memory",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "memory.write",
+      "family": "memory",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "automatic",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "automaticRoles": {
+        "change": {
+          "producer": "memory/block-system.emitMemoryObservation",
+          "sourceKinds": [
+            "memory.diff"
+          ],
+          "conformanceTest": "packages/core/__tests__/evidence/native-memory.test.ts"
+        }
+      },
+      "nativeEvidence": {
+        "status": "automatic"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed native roles are authored automatically; other roles remain available to advanced custom authors."
+    },
+    {
+      "name": "constraint.check",
+      "family": "constraint",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "constraint.retry",
+      "family": "constraint",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "guardrail.run",
+      "family": "guardrail",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "routing.router",
+      "family": "routing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "routing.split",
+      "family": "routing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "routing.retry",
+      "family": "routing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "routing.cascade",
+      "family": "routing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "routing.fallback",
+      "family": "routing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "cache.lookup",
+      "family": "cache",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "compaction.run",
+      "family": "compaction",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "eval.run",
+      "family": "eval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "eval.case",
+      "family": "eval",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "scoring.judge",
+      "family": "scoring",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "citation.check",
+      "family": "citation",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "handoff.prepare",
+      "family": "handoff",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "delegate.invoke",
+      "family": "delegate",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "plan.operation",
+      "family": "plan",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "automatic",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "automaticRoles": {
+        "change": {
+          "producer": "plan/plans.emitPlanArtifact",
+          "sourceKinds": [
+            "output"
+          ],
+          "conformanceTest": "packages/core/__tests__/evidence/native-plan-task.test.ts"
+        }
+      },
+      "nativeEvidence": {
+        "status": "automatic"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed native roles are authored automatically; other roles remain available to advanced custom authors."
+    },
+    {
+      "name": "task.operation",
+      "family": "task",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "automatic",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "automaticRoles": {
+        "change": {
+          "producer": "plan/tasks.emitTaskArtifact",
+          "sourceKinds": [
+            "output"
+          ],
+          "conformanceTest": "packages/core/__tests__/evidence/native-plan-task.test.ts"
+        }
+      },
+      "nativeEvidence": {
+        "status": "automatic"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed native roles are authored automatically; other roles remain available to advanced custom authors."
+    },
+    {
+      "name": "workspace.operation",
+      "family": "workspace",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "automatic",
+        "verification": "advanced-custom",
+        "recovery": "blocked"
+      },
+      "automaticRoles": {
+        "change": {
+          "producer": "workspace/observability.emitWorkspaceArtifact",
+          "sourceKinds": [
+            "output"
+          ],
+          "conformanceTest": "packages/core/__tests__/evidence/native-workspace.test.ts"
+        }
+      },
+      "blockedRoles": {
+        "recovery": "https://github.com/use-crux/crux/issues/258"
+      },
+      "nativeEvidence": {
+        "status": "partial",
+        "blockers": [
+          "https://github.com/use-crux/crux/issues/258"
+        ]
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Listed automatic roles are shipped; planned or dependency-blocked native roles remain explicit."
+    },
+    {
+      "name": "indexing.pipeline",
+      "family": "indexing",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "ingest.parse",
+      "family": "ingest",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "corpus.sync",
+      "family": "corpus",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "skill.load",
+      "family": "skill",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "security.warning",
+      "family": "security",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "cost.record",
+      "family": "cost",
+      "participation": "consumer",
+      "roles": {
+        "intent": "not-applicable",
+        "authority": "not-applicable",
+        "change": "not-applicable",
+        "verification": "not-applicable",
+        "recovery": "not-applicable"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "feedback.record",
+      "family": "feedback",
+      "participation": "consumer",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.action",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.query",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.mutation",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.schedule",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.resume",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "runtime.convex.flush",
+      "family": "runtime",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "defer.scheduled",
+      "family": "defer",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "defer.run",
+      "family": "defer",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "evidence.record",
+      "family": "evidence",
+      "participation": "producer",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
+      "name": "custom.operation",
+      "family": "custom",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    }
+  ]
+}

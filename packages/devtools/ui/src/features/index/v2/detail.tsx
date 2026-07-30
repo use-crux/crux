@@ -46,12 +46,21 @@ import { IndexSafety } from "./safety-section";
 import { IndexMcpDetail } from "./mcp-detail";
 import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 import { PromptTextSection } from "./prompt-text/section";
+import { IndexEvidence } from "./evidence-section";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
   const idx = useIndexIndex();
   const select = useIndexSelect();
-  const rels = idx.relationsOf(def.id);
+  const rawRelations = idx.relationsOf(def.id);
+  const rels = {
+    incoming: rawRelations.incoming.filter(
+      (relation) => relation.type !== "evidence.record.declared_in",
+    ),
+    outgoing: rawRelations.outgoing.filter(
+      (relation) => relation.type !== "evidence.record.declared_in",
+    ),
+  };
   if (!rels.incoming.length && !rels.outgoing.length) return null;
   const Col = ({
     title,
@@ -178,6 +187,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   safety: IndexSafety,
   mcp: IndexMcpDetail,
   workspaceSnapshots: IndexWorkspaceSnapshotUsage,
+  evidence: IndexEvidence,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -397,11 +407,14 @@ export function IndexDetail({
     .lintsForDef(def.id)
     .filter((f) => f.primaryDefinitionId === def.id);
   const configuredOrder = indexSectionOrder(def);
+  const evidenceOrder = configuredOrder.includes("evidence")
+    ? configuredOrder
+    : [configuredOrder[0] ?? "hero", "evidence", ...configuredOrder.slice(1)];
   // Runtime coverage is exhaustive and manifest-driven; even static-only and
   // structural kinds need a truthful "no runtime evidence" explanation.
-  const order = configuredOrder.includes("observability")
-    ? configuredOrder
-    : [...configuredOrder, "observability"];
+  const order = evidenceOrder.includes("observability")
+    ? evidenceOrder
+    : [...evidenceOrder, "observability"];
 
   // quick-reference properties band — the at-a-glance health of the entry
   const props: ReactNode[] = [];

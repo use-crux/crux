@@ -40,6 +40,7 @@
     "index-lints",
     "runtime-bridge",
     "operation-results",
+    "evidence",
     "observability",
     "devtools"
   ]

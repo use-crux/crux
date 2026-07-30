@@ -1453,5 +1453,12 @@
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
+  },
+  {
+    "type": "evidence.record.declared_in",
+    "fromKinds": ["evidence.record"],
+    "presentation": "detail",
+    "fidelity": "partial",
+    "runtimeJoin": false
   }
 ]

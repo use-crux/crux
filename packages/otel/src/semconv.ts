@@ -148,6 +148,7 @@ export const primitiveSpanNames = {
   'security.warning': 'crux.security.warning',
   'cost.record': 'crux.cost.record',
   'feedback.record': 'crux.feedback.record',
+  'evidence.record': 'crux.evidence.record',
   'runtime.convex.action': 'crux.runtime.convex.action',
   'runtime.convex.query': 'crux.runtime.convex.query',
   'runtime.convex.mutation': 'crux.runtime.convex.mutation',

@@ -70,13 +70,13 @@ func TestObservabilityStatsExcludeIncompleteFromExecutionDenominators(t *testing
 	old := time.Now().Add(-2 * time.Minute).UTC().Format(time.RFC3339Nano)
 	fresh := time.Now().UTC().Format(time.RFC3339Nano)
 	var batch observability.Batch
-	if err := json.Unmarshal([]byte(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"success-start","type":"run:start","runId":"success","operationId":"success","segmentId":"success-segment","segmentSeq":1,"name":"success","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
-		{"schemaVersion":4,"recordId":"success-end","type":"run:end","runId":"success","operationId":"success","segmentId":"success-segment","segmentSeq":2,"endedAt":"`+old+`","status":"ok"},
-		{"schemaVersion":4,"recordId":"error-start","type":"run:start","runId":"error","operationId":"error","segmentId":"error-segment","segmentSeq":1,"name":"error","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
-		{"schemaVersion":4,"recordId":"error-end","type":"run:end","runId":"error","operationId":"error","segmentId":"error-segment","segmentSeq":2,"endedAt":"`+old+`","status":"error"},
-		{"schemaVersion":4,"recordId":"running-start","type":"run:start","runId":"running","operationId":"running","segmentId":"running-segment","segmentSeq":1,"name":"running","rootPrimitive":"agent.run","startedAt":"`+fresh+`","status":"running"},
-		{"schemaVersion":4,"recordId":"incomplete-start","type":"run:start","runId":"incomplete","operationId":"incomplete","segmentId":"incomplete-segment","segmentSeq":1,"name":"incomplete","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"}
+	if err := json.Unmarshal([]byte(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"success-start","type":"run:start","runId":"success","operationId":"success","segmentId":"success-segment","segmentSeq":1,"name":"success","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
+		{"schemaVersion":5,"recordId":"success-end","type":"run:end","runId":"success","operationId":"success","segmentId":"success-segment","segmentSeq":2,"endedAt":"`+old+`","status":"ok"},
+		{"schemaVersion":5,"recordId":"error-start","type":"run:start","runId":"error","operationId":"error","segmentId":"error-segment","segmentSeq":1,"name":"error","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
+		{"schemaVersion":5,"recordId":"error-end","type":"run:end","runId":"error","operationId":"error","segmentId":"error-segment","segmentSeq":2,"endedAt":"`+old+`","status":"error"},
+		{"schemaVersion":5,"recordId":"running-start","type":"run:start","runId":"running","operationId":"running","segmentId":"running-segment","segmentSeq":1,"name":"running","rootPrimitive":"agent.run","startedAt":"`+fresh+`","status":"running"},
+		{"schemaVersion":5,"recordId":"incomplete-start","type":"run:start","runId":"incomplete","operationId":"incomplete","segmentId":"incomplete-segment","segmentSeq":1,"name":"incomplete","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}

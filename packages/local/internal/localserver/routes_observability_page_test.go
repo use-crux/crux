@@ -38,7 +38,7 @@ func TestObservabilityRunsPageRouteServesJoinedRevisionedResponse(t *testing.T) 
 	registerObservabilityRoutes(mux, service, nil)
 
 	if err := service.Ingest(ctx, observability.Batch{Records: []observability.Record{
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_page_start","type":"run:start","runId":"run_page_route","operationId":"run_page_route","segmentId":"seg_page_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"paged","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_page_start","type":"run:start","runId":"run_page_route","operationId":"run_page_route","segmentId":"seg_page_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"paged","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestObservabilityRunsDeltaRouteReturnsBoundedCatchUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := service.Ingest(ctx, observability.Batch{Records: []observability.Record{
-		mustObservabilityRecord(t, `{"schemaVersion":4,"recordId":"rec_delta_start","type":"run:start","runId":"run_delta_route","operationId":"run_delta_route","segmentId":"seg_delta_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"delta","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":5,"recordId":"rec_delta_start","type":"run:start","runId":"run_delta_route","operationId":"run_delta_route","segmentId":"seg_delta_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"delta","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -117,14 +117,14 @@ func TestObservabilityRoutesProjectDurableChildrenAsOneOperation(t *testing.T) {
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
 
-	body := []byte(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"family-root-start","type":"run:start","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":1,"traceId":"family-trace","name":"request","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"},
-		{"schemaVersion":4,"recordId":"family-trigger","type":"span","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":2,"traceId":"family-trace","spanId":"trigger-span","family":"flow","primitive":"flow.run","name":"fan-out","startedAt":"2026-07-20T12:00:00.100Z","endedAt":"2026-07-20T12:00:00.200Z","durationMs":100,"status":"ok"},
-		{"schemaVersion":4,"recordId":"family-child-a-start","type":"run:start","runId":"family-child-a","operationId":"operation-family","parentRunId":"operation-family","triggeredBySpanId":"trigger-span","segmentId":"child-a-segment","segmentSeq":1,"traceId":"family-trace","name":"child a","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"},
-		{"schemaVersion":4,"recordId":"family-child-a-end","type":"run:end","runId":"family-child-a","operationId":"operation-family","segmentId":"child-a-segment","segmentSeq":2,"traceId":"family-trace","endedAt":"2026-07-20T12:00:02Z","status":"ok"},
-		{"schemaVersion":4,"recordId":"family-child-b-start","type":"run:start","runId":"family-child-b","operationId":"operation-family","parentRunId":"operation-family","triggeredBySpanId":"trigger-span","segmentId":"child-b-segment","segmentSeq":1,"traceId":"family-trace","name":"child b","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"},
-		{"schemaVersion":4,"recordId":"family-child-b-end","type":"run:end","runId":"family-child-b","operationId":"operation-family","segmentId":"child-b-segment","segmentSeq":2,"traceId":"family-trace","endedAt":"2026-07-20T12:00:02Z","status":"error"},
-		{"schemaVersion":4,"recordId":"family-root-end","type":"run:end","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":3,"traceId":"family-trace","endedAt":"2026-07-20T12:00:03Z","status":"ok"}
+	body := []byte(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"family-root-start","type":"run:start","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":1,"traceId":"family-trace","name":"request","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"},
+		{"schemaVersion":5,"recordId":"family-trigger","type":"span","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":2,"traceId":"family-trace","spanId":"trigger-span","family":"flow","primitive":"flow.run","name":"fan-out","startedAt":"2026-07-20T12:00:00.100Z","endedAt":"2026-07-20T12:00:00.200Z","durationMs":100,"status":"ok"},
+		{"schemaVersion":5,"recordId":"family-child-a-start","type":"run:start","runId":"family-child-a","operationId":"operation-family","parentRunId":"operation-family","triggeredBySpanId":"trigger-span","segmentId":"child-a-segment","segmentSeq":1,"traceId":"family-trace","name":"child a","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"},
+		{"schemaVersion":5,"recordId":"family-child-a-end","type":"run:end","runId":"family-child-a","operationId":"operation-family","segmentId":"child-a-segment","segmentSeq":2,"traceId":"family-trace","endedAt":"2026-07-20T12:00:02Z","status":"ok"},
+		{"schemaVersion":5,"recordId":"family-child-b-start","type":"run:start","runId":"family-child-b","operationId":"operation-family","parentRunId":"operation-family","triggeredBySpanId":"trigger-span","segmentId":"child-b-segment","segmentSeq":1,"traceId":"family-trace","name":"child b","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"},
+		{"schemaVersion":5,"recordId":"family-child-b-end","type":"run:end","runId":"family-child-b","operationId":"operation-family","segmentId":"child-b-segment","segmentSeq":2,"traceId":"family-trace","endedAt":"2026-07-20T12:00:02Z","status":"error"},
+		{"schemaVersion":5,"recordId":"family-root-end","type":"run:end","runId":"operation-family","operationId":"operation-family","segmentId":"root-segment","segmentSeq":3,"traceId":"family-trace","endedAt":"2026-07-20T12:00:03Z","status":"ok"}
 	]}`)
 	response := performObservabilityIngestRequest(mux, body)
 	if response.Code != http.StatusAccepted {

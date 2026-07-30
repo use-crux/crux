@@ -18,14 +18,16 @@ import {
 import { providerEmbeddingFacts } from "./provider-facts";
 import { byteSafeEmbeddingDefinition } from "./safe-definition";
 import { extractEmbeddingCall } from "./static-call";
+import { evidenceRecordPrimitiveContributions } from "../evidence-record/primitive-manifest";
 
 export { authoredEmbeddingPrimitiveManifest } from "./manifest";
 
 /** Immutable first-party embedding and vector-indexer primitive manifest. */
 export const embeddingPrimitiveManifest = Object.freeze({
   name: "@use-crux/indexer/crux-core",
-  version: "1",
+  version: "2",
   extractors: [
+    ...evidenceRecordPrimitiveContributions.extractors,
     {
       name: "embedding",
       patterns: embeddingFactoryDeclarations.map((factory) => ({
@@ -57,14 +59,17 @@ export const embeddingPrimitiveManifest = Object.freeze({
       extract: extractEmbeddingCall,
     },
   ],
-  relations: embeddingRelationDeclarations.map((type) => ({
-    type,
-    fromKinds: relationKinds(type).from,
-    toKinds: ["embedding"] as const,
-    presentation: "both" as const,
-    fidelity: "resolved" as const,
-    runtimeJoin: false,
-  })),
+  relations: [
+    ...embeddingRelationDeclarations.map((type) => ({
+      type,
+      fromKinds: relationKinds(type).from,
+      toKinds: ["embedding"] as const,
+      presentation: "both" as const,
+      fidelity: "resolved" as const,
+      runtimeJoin: false,
+    })),
+    ...evidenceRecordPrimitiveContributions.relations,
+  ],
 } satisfies IndexerExtension);
 
 function extractEmbedding(ctx: ExtractContext) {

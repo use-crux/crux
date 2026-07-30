@@ -4,6 +4,10 @@ import {
   taskEventsFromResourceActivity,
   workspaceEventsFromResourceActivity,
 } from "./resource-activity";
+import {
+  projectWorkspaceSnapshotPresentation,
+  workspaceSnapshotSummary,
+} from "@/shared/lib/workspace-snapshot";
 
 function taskActivity(
   status: string,
@@ -182,6 +186,19 @@ describe("workspaceEventsFromResourceActivity", () => {
     ]);
     expect(events[0].size).toBeUndefined();
 
+    const summaries = events.map((event) => {
+      const presentation = projectWorkspaceSnapshotPresentation({ ...event });
+      return presentation
+        ? workspaceSnapshotSummary(presentation)
+        : "Workspace operation";
+    });
+    expect(summaries).toEqual([
+      "Created snapshot — 2 files, 64 bytes",
+      "Listed snapshots — 3 snapshots",
+      "Restored snapshot — 4 restored, 1 deleted, 2 unchanged",
+      "Deleted snapshot",
+      "Failure — corrupt_snapshot",
+    ]);
     expect(JSON.stringify(events)).not.toMatch(
       /private-path|snapshot-id-private|asset:\/\/private/,
     );

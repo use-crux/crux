@@ -104,6 +104,9 @@ export function AppRouter({ nav }: { nav: NavState }) {
           lens={nav.lens}
           spanId={nav.spanId}
           summary={nav.summary}
+          detailTab={nav.detailTab}
+          evidenceRole={nav.evidenceRole}
+          evidenceId={nav.evidenceId}
         />
       );
     case "evals":

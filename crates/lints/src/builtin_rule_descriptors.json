@@ -1425,6 +1425,64 @@
     "fidelity": "safe"
   },
   {
+    "id": "evidence.invalid-custom-kind",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "experimental",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Evidence kind is invalid",
+    "description": "A canonical evidence.record call uses a literal kind outside the bounded evidence-kind contract.",
+    "rationale": "Inline application evidence requires a valid custom.* kind; references may use canonical or custom kinds.",
+    "impact": "Runtime evidence authoring rejects this call before collector mutation.",
+    "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+    "fixes": [
+      {
+        "title": "Use a valid evidence kind",
+        "description": "Use a bounded custom.* kind for inline data or a canonical kind for an existing artifact reference.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line evidence.invalid-custom-kind -- reason"
+    },
+    "phase": "index",
+    "requires": ["definitions"],
+    "fidelity": "safe"
+  },
+  {
+    "id": "evidence.reserved-inline-kind",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "experimental",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Canonical evidence kind is reserved",
+    "description": "A canonical evidence.record call uses a reserved canonical artifact kind for inline evidence.",
+    "rationale": "Canonical artifact kinds describe Crux-owned sources; inline application evidence must use custom.*.",
+    "impact": "Runtime evidence authoring rejects this call before collector mutation.",
+    "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+    "fixes": [
+      {
+        "title": "Use a custom kind",
+        "description": "Rename the inline evidence kind to a bounded custom.* value.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line evidence.reserved-inline-kind -- reason"
+    },
+    "phase": "index",
+    "requires": ["definitions"],
+    "fidelity": "safe"
+  },
+  {
     "id": "embedding.unsupported-modality",
     "source": "builtin",
     "severity": "error",

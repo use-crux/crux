@@ -15,8 +15,7 @@
 import { canonicalJson } from "./evidence/canonical-json";
 import { fingerprintEvalValue } from "./identity";
 import {
-  REDACTED,
-  SENSITIVE_KEY_PATTERN,
+  applyRedaction,
   normalizeRedactPaths,
 } from "../../shared/redaction";
 
@@ -55,85 +54,7 @@ export const OUTPUT_TRUNCATION_LIMIT = 32 * 1024;
 /** Truncation marker appended to oversized snapshots. @internal */
 export const TRUNCATION_MARKER = "…[truncated]";
 
-/**
- * Always-on redaction: key names that are redacted at every depth regardless
- * of configuration — authorization headers and API keys (spec 01 §9).
- */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function redactNode(
-  value: unknown,
-  paths: ReadonlyArray<readonly string[]>,
-): unknown {
-  if (Array.isArray(value)) {
-    // Arrays are transparent to dot-paths: the same segments apply per item.
-    return value.map((item) => redactNode(item, paths));
-  }
-  if (value === null || typeof value !== "object") return value;
-  if (!isPlainRecord(value)) {
-    throw new TypeError(
-      "Eval snapshot cannot persist non-plain object values; use plain objects, arrays, and primitive values.",
-    );
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (SENSITIVE_KEY_PATTERN.test(key)) {
-      defineProjectedValue(out, key, REDACTED);
-      continue;
-    }
-    const matching = paths.filter((path) => path[0] === key);
-    if (matching.some((path) => path.length === 1)) {
-      defineProjectedValue(out, key, REDACTED);
-      continue;
-    }
-    const remaining = matching.map((path) => path.slice(1));
-    defineProjectedValue(
-      out,
-      key,
-      remaining.length > 0
-        ? redactNode(entry, remaining)
-        : redactNode(entry, []),
-    );
-  }
-  return out;
-}
-
-function defineProjectedValue(
-  target: Record<string, unknown>,
-  key: string,
-  value: unknown,
-): void {
-  Object.defineProperty(target, key, {
-    value,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
-}
-
-/**
- * Apply dot-path redaction plus the always-on defaults to a value snapshot.
- * Pure — returns a new structure, never mutates the input.
- *
- * @param value - The snapshot to redact.
- * @param paths - Configured dot-paths (e.g. `['user.email']`). Arrays are
- *                transparent: `items.secret` redacts `secret` in every item.
- *
- * @internal
- */
-export function applyRedaction(
-  value: unknown,
-  paths: readonly string[],
-): unknown {
-  const split = paths.map((path) =>
-    path.split(".").filter((segment) => segment !== ""),
-  );
-  return redactNode(value, split);
-}
+export { applyRedaction } from "../../shared/redaction";
 
 /**
  * Enforce the 32 KiB output-snapshot limit. Oversized strings are cut with
