@@ -44,14 +44,15 @@ export async function runStaticPreviewHost(): Promise<void> {
     assert.equal(first[0]?.uri.query, 'slot=1')
     assert.equal(first[0]?.uri.authority, '')
     assert.equal(first[0]?.uri.fragment, '')
+    const previewUri = first[0]!.uri
     assert.equal(
       vscode.window.activeTextEditor?.document.uri.toString(),
-      first[0]?.uri.toString(),
+      previewUri.toString(),
       'The preview was not focused.',
     )
     const lenses = await vscode.commands.executeCommand<
       readonly vscode.CodeLens[]
-    >('vscode.executeCodeLensProvider', first[0]?.uri)
+    >('vscode.executeCodeLensProvider', previewUri)
     assert.equal(lenses?.length, 1)
     assert.equal(lenses?.[0]?.range.isEmpty, true)
     assert.match(lenses?.[0]?.command?.title ?? '', /syntax-exact/)
@@ -100,20 +101,20 @@ export async function runStaticPreviewHost(): Promise<void> {
       true,
     )
     await eventually(
-      () => first[0]?.getText() === '# Edited\n',
+      () => currentPreviewText(previewUri) === '# Edited\n',
       'The 150 ms edit refresh did not republish the tracked range.',
     )
     assert.equal(await source.save(), true)
 
     previews.disconnect()
     await eventually(
-      () => first[0]?.getText() === '',
+      () => currentPreviewText(previewUri) === '',
       'Disconnect did not clear the retained preview bytes.',
     )
     client.setText('# Reconnected\n')
     previews.connect(client as never)
     await eventually(
-      () => first[0]?.getText() === '# Reconnected\n',
+      () => currentPreviewText(previewUri) === '# Reconnected\n',
       'Reconnect did not repull the still-open exact range.',
     )
 
@@ -122,7 +123,7 @@ export async function runStaticPreviewHost(): Promise<void> {
     rename.renameFile(source.uri, renamed)
     assert.equal(await vscode.workspace.applyEdit(rename), true)
     await eventually(
-      () => first[0]?.getText() === '',
+      () => currentPreviewText(previewUri) === '',
       'Source rename followed the old slot instead of detaching it.',
     )
     await closeDocumentTabs(renamed)
@@ -195,6 +196,12 @@ function previewDocuments(): readonly vscode.TextDocument[] {
   return vscode.workspace.textDocuments.filter(
     (document) => document.uri.scheme === previewScheme,
   )
+}
+
+function currentPreviewText(uri: vscode.Uri): string | undefined {
+  return vscode.workspace.textDocuments
+    .find((document) => document.uri.toString() === uri.toString())
+    ?.getText()
 }
 
 function previewClient(text: string) {
