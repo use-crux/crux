@@ -66,6 +66,40 @@ func TruncateMiddle(s string, w int, tail string) string {
 	return left + tail + right.String()
 }
 
+// TruncateWords clips plain prose to whole words. When no complete word fits,
+// it returns only tail instead of producing a misleading mid-word fragment.
+func TruncateWords(s string, w int, tail string) string {
+	if w <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= w {
+		return s
+	}
+	tailW := lipgloss.Width(tail)
+	if tailW >= w {
+		return fitPlain(tail, w)
+	}
+
+	budget := w - tailW
+	words := strings.Fields(s)
+	var kept strings.Builder
+	for _, word := range words {
+		candidate := word
+		if kept.Len() > 0 {
+			candidate = kept.String() + " " + word
+		}
+		if lipgloss.Width(candidate) > budget {
+			break
+		}
+		kept.Reset()
+		kept.WriteString(candidate)
+	}
+	if kept.Len() == 0 {
+		return tail
+	}
+	return kept.String() + tail
+}
+
 // Fit bounds an ANSI-styled line to exactly w cells. Clipped lines end in
 // tail, making truncation visible instead of silently dropping content.
 func Fit(s string, w int, tail string) string {

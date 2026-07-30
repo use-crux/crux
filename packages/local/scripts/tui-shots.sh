@@ -221,9 +221,12 @@ EOF
   return 0
 }
 
-# Crux refuses --tui when CI=true (agent shells often set it). Always scrub.
+# Captures model a modern truecolor terminal, independent of the invoking
+# shell's CI/color preferences. TERM cannot retain tmux's screen-* value here:
+# colorprofile deliberately ignores COLORTERM for screen/tmux terminals unless
+# an attached tmux client reports Tc/RGB, while these sessions are detached.
 crux_env_prefix() {
-  printf 'env -u CI -u GITHUB_ACTIONS -u BUILDKITE -u GITLAB_CI -u CIRCLECI -u TEAMCITY_VERSION TERM=xterm-256color'
+  printf 'env -u CI -u GITHUB_ACTIONS -u BUILDKITE -u GITLAB_CI -u CIRCLECI -u TEAMCITY_VERSION -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor'
 }
 
 export_node_path() {
@@ -407,6 +410,9 @@ Set Height ${px_h}
 Set TypingSpeed 1ms
 Env CI ""
 Env GITHUB_ACTIONS ""
+Env NO_COLOR ""
+Env TERM "xterm-256color"
+Env COLORTERM "truecolor"
 Env PATH "${NODE_BIN}:${HOME}/.local/bin:${HOME}/go/bin:/usr/local/bin:/usr/bin:/bin"
 Type "cd ${q_project} && $(crux_env_prefix) ${q_binary} dev --port ${port} --tui"
 Enter
@@ -467,7 +473,8 @@ run_vhs_size() {
     cd "$REPO_ROOT"
     PATH="${HOME}/.local/bin:${HOME}/go/bin:${NODE_BIN}:${PATH}"
     # Scrub CI for the vhs process itself too (Env in tape handles the shell).
-    env -u CI -u GITHUB_ACTIONS "$VHS_BIN" "$tape"
+    env -u CI -u GITHUB_ACTIONS -u NO_COLOR \
+      TERM=xterm-256color COLORTERM=truecolor "$VHS_BIN" "$tape"
   ) >"$vhs_log" 2>&1; then
     err "vhs failed for ${size} (see ${vhs_log})"
     kill_port_listeners "$port"

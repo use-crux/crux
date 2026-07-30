@@ -52,15 +52,11 @@ func (s *Insights) renderListRow(ins api.InspectInsightRecord, width int, select
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
 	}
 	dot := kit.SeverityDot(ins.Severity)
-	id := shell.TextMuted.Render(shortID(ins.InsightID, 8))
-	title := shell.Text.Render(kit.Truncate(ins.Title, max(0, width-24), "…"))
 	age := shell.TextMuted.Render(relTime(ins.UpdatedAt))
-	line1 := fmt.Sprintf("%s%s %s  %s", bar, dot, id, title)
-	pad := width - lipgloss.Width(line1) - lipgloss.Width(age) - 1
-	if pad < 1 {
-		pad = 1
-	}
-	line1 += strings.Repeat(" ", pad) + age
+	leading := fmt.Sprintf("%s%s ", bar, dot)
+	titleWidth := max(0, width-lipgloss.Width(leading)-lipgloss.Width(age)-2)
+	title := shell.Text.Render(kit.TruncateWords(ins.Title, titleWidth, "…"))
+	line1 := kit.FitMiddle(width, leading, title, age+" ", "…")
 
 	meta := []string{}
 	if tag := firstString(ins.Tags); tag != "" {

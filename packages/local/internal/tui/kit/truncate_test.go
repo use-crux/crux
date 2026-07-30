@@ -29,6 +29,15 @@ func TestTruncateMiddlePreservesDistinguishingTail(t *testing.T) {
 	}
 }
 
+func TestTruncateWordsNeverLeavesMidWordFragment(t *testing.T) {
+	if got := TruncateWords("Run is waiting on a human approval", 21, "…"); got != "Run is waiting on a…" {
+		t.Fatalf("TruncateWords() = %q", got)
+	}
+	if got := TruncateWords("extraordinary", 6, "…"); got != "…" {
+		t.Fatalf("TruncateWords() split a word: %q", got)
+	}
+}
+
 func TestFitMarksANSIStyledClipping(t *testing.T) {
 	got := Fit(lipgloss.NewStyle().Bold(true).Render("long body value"), 8, "…")
 	if !strings.Contains(got, "…") {

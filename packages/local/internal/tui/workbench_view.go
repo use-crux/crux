@@ -98,7 +98,8 @@ func blockLines(value string) []string {
 	return strings.Split(strings.TrimRight(value, "\n"), "\n")
 }
 
-// contextMeta composes the right-side block of the breadcrumb row.
+// contextMeta composes independently droppable right-side breadcrumb segments.
+// shell.Breadcrumb removes these from the right when the terminal narrows.
 func (w *Workbench) contextMeta() string {
 	parts := make([]string, 0, 5)
 	if w.serverURL != "" {
