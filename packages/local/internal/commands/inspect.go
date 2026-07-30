@@ -22,10 +22,10 @@ for that prompt ID and displaying its inspect data (system parts, token
 counts, dropped contexts).`,
 		Example: `  crux inspect my.prompt.id
   crux inspect my.prompt.id --json`,
-		Args: cobra.ExactArgs(1),
+		Args: cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			c := f.Client()
+			c := f.ClientFor("inspect")
 			promptID := normalizeInspectPromptID(args[0])
 
 			runs, err := c.ObservabilityRuns(ctx)

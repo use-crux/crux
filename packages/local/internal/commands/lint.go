@@ -50,7 +50,7 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 			}
 			if opts.server {
 				var index api.IndexData
-				if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
+				if err := f.ClientFor("lint --server").GetJSON(cmd.Context(), "/api/index", &index); err != nil {
 					return err
 				}
 				return writeLintResult(f.Streams(), index, opts)
@@ -81,7 +81,11 @@ func validateLintOptions(opts lintOptions) error {
 }
 
 func runLint(ctx context.Context, io *output.IO, opts lintOptions, run projectIndexRunFunc) error {
-	result, err := run(ctx, oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID})
+	result, err := run(
+		ctx,
+		oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID},
+		newCommandWorkerProcess(io),
+	)
 	if err != nil {
 		fmt.Fprintf(io.Err, "crux lint: %v\n", err)
 		return domain.ExitError{Code: 2}

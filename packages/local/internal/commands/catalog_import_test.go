@@ -38,3 +38,23 @@ func TestRunCatalogImportRejectsInvalidArtifact(t *testing.T) {
 	err := runCatalogImport(context.Background(), io, manifeststore.New(t.TempDir()), path, true)
 	assertExitCode(t, err, 2)
 }
+
+func TestRunCatalogImportMissingFileUsesSingleCleanError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.json")
+	var stdout, stderr bytes.Buffer
+	err := runCatalogImport(
+		context.Background(),
+		output.NewTestIO(&stdout, &stderr, output.TestIOOptions{}),
+		manifeststore.New(t.TempDir()),
+		path,
+		false,
+	)
+	assertExitCode(t, err, 2)
+	want := `crux catalog import: manifest file "` + path + `" does not exist`
+	if strings.TrimSpace(stderr.String()) != want {
+		t.Fatalf("stderr = %q, want %q", stderr.String(), want)
+	}
+	if strings.Count(stderr.String(), path) != 1 {
+		t.Fatalf("stderr repeated path: %q", stderr.String())
+	}
+}

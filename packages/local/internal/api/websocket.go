@@ -23,6 +23,16 @@ func ConnectWS(baseURL string) (*WSClient, error) {
 	return ConnectWSContext(ctx, baseURL)
 }
 
+// ConnectWebSocket connects the client to live events and preserves the same
+// command-aware connection remediation as HTTP requests.
+func (c *Client) ConnectWebSocket(ctx context.Context) (*WSClient, error) {
+	ws, err := ConnectWSContext(ctx, c.BaseURL)
+	if err != nil {
+		return nil, c.connectError()
+	}
+	return ws, nil
+}
+
 // ConnectWSContext connects to the devtools WebSocket within the caller's
 // lifecycle and deadline budget.
 func ConnectWSContext(ctx context.Context, baseURL string) (*WSClient, error) {

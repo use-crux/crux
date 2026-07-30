@@ -90,7 +90,7 @@ func TestLintInputErrorsExitTwoBeforeIndexing(t *testing.T) {
 	original := runProjectIndexForCommand
 	defer func() { runProjectIndexForCommand = original }()
 	called := false
-	runProjectIndexForCommand = func(context.Context, oneshot.Options) (oneshot.Result, error) {
+	runProjectIndexForCommand = func(context.Context, oneshot.Options, commandWorkerProcess) (oneshot.Result, error) {
 		called = true
 		return oneshot.Result{}, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/commandui"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -66,15 +68,22 @@ side effects) so explicit overrides are reflected, not just defaults.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := resolveConfigInspectRoot(opts.cwd)
 			if err != nil {
-				return err
+				fmt.Fprintf(f.Streams().Err, "crux config inspect: %v\n", err)
+				return domain.ExitError{Code: 2}
 			}
 
 			io := f.Streams()
-			config, err := resolveProjectConfigWithProgress(cmd.Context(), io, root, opts.configPath, opts.project, newCommandWorkerProcess(io))
+			jsonOutput := f.JSONOutput(opts.jsonOutput)
+			var config json.RawMessage
+			if jsonOutput {
+				config, err = resolveProjectConfigForInspect(cmd.Context(), root, opts.configPath, opts.project, newCommandWorkerProcess(io))
+			} else {
+				config, err = resolveProjectConfigWithProgress(cmd.Context(), io, root, opts.configPath, opts.project, newCommandWorkerProcess(io))
+			}
 			if err != nil {
 				return err
 			}
-			if f.JSONOutput(opts.jsonOutput) {
+			if jsonOutput {
 				return writePrettyJSON(io.Out, config)
 			}
 			return printConfigInspect(io, config)
@@ -90,7 +99,20 @@ side effects) so explicit overrides are reflected, not just defaults.`,
 
 func resolveConfigInspectRoot(cwd string) (string, error) {
 	if cwd != "" {
-		return filepath.Abs(cwd)
+		root, err := filepath.Abs(cwd)
+		if err != nil {
+			return "", fmt.Errorf("resolve --cwd %q: %w", cwd, err)
+		}
+		info, err := os.Stat(root)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return "", fmt.Errorf("--cwd path %q does not exist", root)
+		case err != nil:
+			return "", fmt.Errorf("inspect --cwd path %q: %w", root, err)
+		case !info.IsDir():
+			return "", fmt.Errorf("--cwd path %q is not a directory", root)
+		}
+		return root, nil
 	}
 	if root := findProjectDir(); root != "" {
 		return root, nil

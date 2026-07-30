@@ -65,6 +65,10 @@ func NewCheckCmd(f *cli.Factory) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.json = f.JSONOutput(opts.json)
+			if err := validateCheckOptions(opts); err != nil {
+				fmt.Fprintf(f.Streams().Err, "crux check: %v\n", err)
+				return domain.ExitError{Code: 2}
+			}
 			return runCheck(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
 		},
 	}
@@ -78,8 +82,16 @@ func NewCheckCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
+func validateCheckOptions(opts checkOptions) error {
+	return validateLintOptions(lintOptions{profile: opts.profile, failOn: opts.failOn})
+}
+
 func runCheck(ctx context.Context, ioStreams *output.IO, opts checkOptions, run projectIndexRunFunc) error {
-	result, err := run(ctx, oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID})
+	result, err := run(
+		ctx,
+		oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID},
+		newCommandWorkerProcess(ioStreams),
+	)
 	if err != nil {
 		fmt.Fprintf(ioStreams.Err, "crux check: %v\n", err)
 		return domain.ExitError{Code: 2}

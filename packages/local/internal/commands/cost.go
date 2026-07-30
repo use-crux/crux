@@ -21,7 +21,7 @@ func NewCostCmd(f *cli.Factory) *cobra.Command {
   crux cost --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var events []api.CostEvent
-			if err := f.Client().GetJSON(cmd.Context(), "/api/cost", &events); err != nil {
+			if err := f.ClientFor("cost").GetJSON(cmd.Context(), "/api/cost", &events); err != nil {
 				return err
 			}
 			if f.JSONOutput(jsonOutput) {

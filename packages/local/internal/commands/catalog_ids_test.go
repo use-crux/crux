@@ -32,7 +32,7 @@ func TestResolveCatalogDefinitionIDAcceptsCanonicalAndBareIDs(t *testing.T) {
 		{input: "searchPolicies", want: "tool:searchPolicies"},
 	} {
 		t.Run(test.input, func(t *testing.T) {
-			got, err := resolveCatalogDefinitionID(context.Background(), client, test.input)
+			got, err := resolveCatalogDefinitionID(context.Background(), client, test.input, "crux catalog list")
 			if err != nil || got != test.want {
 				t.Fatalf("resolveCatalogDefinitionID(%q) = (%q, %v), want %q", test.input, got, err, test.want)
 			}
@@ -51,12 +51,12 @@ func TestResolveCatalogDefinitionIDListsAmbiguousMatchesAndAcceptedShape(t *test
 	defer server.Close()
 	client := api.New(server.URL)
 
-	_, err := resolveCatalogDefinitionID(context.Background(), client, "shared")
+	_, err := resolveCatalogDefinitionID(context.Background(), client, "shared", "crux catalog list")
 	if err == nil || err.Error() != `definition ID "shared" is ambiguous; use one of: prompt:shared, tool:shared` {
 		t.Fatalf("ambiguous error = %v", err)
 	}
-	_, err = resolveCatalogDefinitionID(context.Background(), client, "missing")
-	if err == nil || err.Error() != `Catalog definition "missing" not found; expected a bare ID or kind-prefixed ID such as prompt:missing` {
+	_, err = resolveCatalogDefinitionID(context.Background(), client, "missing", "crux catalog list")
+	if err == nil || err.Error() != "Catalog definition \"missing\" not found; expected a bare ID like my.prompt or a kind-prefixed ID like prompt:my.prompt. Run `crux catalog list` to list available definitions" {
 		t.Fatalf("not-found error = %v", err)
 	}
 }

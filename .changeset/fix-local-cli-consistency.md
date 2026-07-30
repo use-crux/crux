@@ -8,3 +8,5 @@ Make Local CLI lookup and output behavior consistent: accept trace and run IDs, 
 Restore runtime-discovered Eval execution and timeout facts across bundled Core boundaries, distinguish them from static-only Eval calls, and invalidate pre-fix Local Project Index snapshots.
 
 Make `crux runtime generate` report progress and fail with a bounded timeout instead of hanging silently.
+
+Improve Local CLI error quality and output hygiene: make connection hints command- and port-aware, keep one-shot worker lifecycle logs quiet, explain non-project roots, lead Runtime errors with their actionable diagnostic, validate config/check inputs before work begins, suppress non-interactive spinners and Eval color warnings, and add actionable argument, lookup, import, live-stream, and Stats help guidance.

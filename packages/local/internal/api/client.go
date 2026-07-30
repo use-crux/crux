@@ -25,6 +25,7 @@ var ErrNotFound = errors.New("not found")
 type Client struct {
 	BaseURL    string
 	httpClient *http.Client
+	command    string
 }
 
 // New creates a client targeting the given base URL (e.g. "http://localhost:4400").
@@ -43,8 +44,29 @@ func NewDefault(port int) *Client {
 	return New(fmt.Sprintf("http://localhost:%d", port))
 }
 
+// WithCommand returns a shallow copy whose connection remediation names the
+// CLI command that issued the request.
+func (c *Client) WithCommand(command string) *Client {
+	clone := *c
+	clone.command = command
+	return &clone
+}
+
 func (c *Client) connectError() error {
-	return fmt.Errorf("cannot connect to crux devtools at %s\n\n  Start the server first:  crux dev\n  Or specify a port:       crux --port 8080 traces", c.BaseURL)
+	port := "4400"
+	if parsed, err := url.Parse(c.BaseURL); err == nil && parsed.Port() != "" {
+		port = parsed.Port()
+	}
+	command := c.command
+	if command == "" {
+		command = "<command>"
+	}
+	return fmt.Errorf(
+		"cannot connect to crux devtools at %s\n\n  Start the server first:  crux dev\n  Or specify a port:       crux --port %s %s",
+		c.BaseURL,
+		port,
+		command,
+	)
 }
 
 func (c *Client) doGet(ctx context.Context, path string) (*http.Response, error) {

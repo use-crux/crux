@@ -58,6 +58,12 @@ func (f *Factory) Client() *api.Client {
 	return f.client
 }
 
+// ClientFor returns the shared API client scoped with a user-facing command
+// name for connection remediation.
+func (f *Factory) ClientFor(command string) *api.Client {
+	return f.Client().WithCommand(command)
+}
+
 // Streams returns the shared [output.IO] for terminal-capability decisions
 // (color, TTY, width, CI), constructing it from the real process streams on
 // first call. It observes the root --no-color flag via f.NoColor.

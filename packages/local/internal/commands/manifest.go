@@ -22,7 +22,7 @@ type manifestOptions struct {
 	json       bool
 }
 
-type manifestCompileFunc func(context.Context, manifestOptions) ([]byte, error)
+type manifestCompileFunc func(context.Context, manifestOptions, commandWorkerProcess) ([]byte, error)
 
 type manifestJSONSummaryV1 struct {
 	SchemaVersion  int    `json:"schemaVersion"`
@@ -59,7 +59,7 @@ func runManifest(ctx context.Context, io *output.IO, opts manifestOptions, compi
 		fmt.Fprintln(io.Err, "crux manifest: --project-id is required")
 		return domain.ExitError{Code: 2}
 	}
-	artifact, err := compile(ctx, opts)
+	artifact, err := compile(ctx, opts, newCommandWorkerProcess(io))
 	if err != nil {
 		fmt.Fprintf(io.Err, "crux manifest: %v\n", err)
 		return domain.ExitError{Code: 2}
@@ -105,8 +105,13 @@ func runManifest(ctx context.Context, io *output.IO, opts manifestOptions, compi
 	return nil
 }
 
-func compileDeploymentManifest(ctx context.Context, opts manifestOptions) (artifact []byte, err error) {
-	indexer := assets.NewEmbeddedProjectIndexer("")
+func compileDeploymentManifest(ctx context.Context, opts manifestOptions, process commandWorkerProcess) (artifact []byte, err error) {
+	root, err := validateOneShotProjectRoot(opts.root, opts.configPath)
+	if err != nil {
+		return nil, err
+	}
+	opts.root = root
+	indexer := assets.NewEmbeddedProjectIndexer("", process.options()...)
 	defer func() {
 		if closeErr := indexer.Close(); err == nil && closeErr != nil {
 			err = fmt.Errorf("close Project Index workers: %w", closeErr)
@@ -118,12 +123,12 @@ func compileDeploymentManifest(ctx context.Context, opts manifestOptions) (artif
 	if err != nil {
 		return nil, err
 	}
-	root := opts.root
+	outputRoot := opts.root
 	if result.Index.Project != nil && result.Index.Project.Root != "" {
-		root = result.Index.Project.Root
+		outputRoot = result.Index.Project.Root
 	}
 	return indexer.CreateDeploymentManifest(ctx, projectindex.DeploymentManifestProjectionInput{
-		Root: root, ProjectID: opts.projectID,
+		Root: outputRoot, ProjectID: opts.projectID,
 		Definitions: result.Index.Definitions, Relations: result.Index.Relations,
 		StaticFrontend: "oxc", SemanticStatus: manifestSemanticStatus(result.Execution),
 	})

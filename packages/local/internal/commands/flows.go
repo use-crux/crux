@@ -19,7 +19,7 @@ func NewFlowsCmd(f *cli.Factory) *cobra.Command {
 		Example: `  crux flows
   crux flows --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := f.Client()
+			c := f.ClientFor("flows")
 			var flows []api.RuntimeFlowRun
 			if err := c.GetJSON(cmd.Context(), "/api/runtime-flows", &flows); err != nil {
 				return err

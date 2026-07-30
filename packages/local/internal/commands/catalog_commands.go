@@ -27,15 +27,18 @@ func newCatalogShowCmd(f *cli.Factory, jsonOutput *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <definition-id>",
 		Short: "Show one safe current Catalog definition",
-		Args:  cobra.ExactArgs(1),
+		Example: `  crux catalog show prompt:my.prompt
+  crux catalog show my.prompt --json`,
+		Args: cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := resolveCatalogDefinitionID(cmd.Context(), f.Client(), args[0])
+			client := f.ClientFor("catalog show")
+			id, err := resolveCatalogDefinitionID(cmd.Context(), client, args[0], "crux catalog list")
 			if err != nil {
 				return err
 			}
 			var definition api.CatalogDefinitionV1
-			if err := f.Client().GetJSON(cmd.Context(), catalogDefinitionPath(id), &definition); err != nil {
-				return catalogReadError(args[0], err)
+			if err := client.GetJSON(cmd.Context(), catalogDefinitionPath(id), &definition); err != nil {
+				return catalogReadError(args[0], err, "crux catalog list")
 			}
 			if f.JSONOutput(*jsonOutput) {
 				return writeCatalogJSON(f, definition)
@@ -53,7 +56,7 @@ func newCatalogStatusCmd(f *cli.Factory, jsonOutput *bool) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var status api.CatalogStatusV1
-			if err := f.Client().GetJSON(cmd.Context(), "/api/catalog/status", &status); err != nil {
+			if err := f.ClientFor("catalog status").GetJSON(cmd.Context(), "/api/catalog/status", &status); err != nil {
 				return err
 			}
 			if f.JSONOutput(*jsonOutput) {
@@ -69,16 +72,19 @@ func newCatalogExplainCmd(f *cli.Factory, jsonOutput *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "explain <definition-id>",
 		Short: "Explain compiler-owned evidence for one current definition",
-		Args:  cobra.ExactArgs(1),
+		Example: `  crux catalog explain prompt:my.prompt
+  crux catalog explain my.prompt --json`,
+		Args: cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := resolveCatalogDefinitionID(cmd.Context(), f.Client(), args[0])
+			client := f.ClientFor("catalog explain")
+			id, err := resolveCatalogDefinitionID(cmd.Context(), client, args[0], "crux catalog list")
 			if err != nil {
 				return err
 			}
 			var explanation api.CatalogExplanationV1
 			path := "/api/catalog/explain/" + url.PathEscape(id)
-			if err := f.Client().GetJSON(cmd.Context(), path, &explanation); err != nil {
-				return catalogReadError(args[0], err)
+			if err := client.GetJSON(cmd.Context(), path, &explanation); err != nil {
+				return catalogReadError(args[0], err, "crux catalog list")
 			}
 			if f.JSONOutput(*jsonOutput) {
 				return writeCatalogJSON(f, explanation)
@@ -99,7 +105,7 @@ func runCatalogListWithHeader(ctx context.Context, f *cli.Factory, kind string, 
 		path += "?" + url.Values{"kind": []string{kind}}.Encode()
 	}
 	var catalog api.CatalogListV1
-	if err := f.Client().GetJSON(ctx, path, &catalog); err != nil {
+	if err := f.ClientFor(header).GetJSON(ctx, path, &catalog); err != nil {
 		return err
 	}
 	if jsonOutput {

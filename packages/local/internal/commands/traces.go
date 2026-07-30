@@ -26,6 +26,10 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "traces [id]",
 		Short: "List recent traces or show trace detail",
+		Long: `List recent traces or show trace detail.
+
+With --live, Crux streams until Ctrl+C. When stdout is not a TTY, completed
+traces are appended instead of redrawing terminal output.`,
 		Example: `  crux traces
   crux traces --prompt my.prompt.id
   crux traces --live
@@ -33,7 +37,7 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			c := f.Client()
+			c := f.ClientFor("traces")
 			io := f.Streams()
 			jsonOut := f.JSONOutput(jsonOutput)
 
@@ -52,7 +56,7 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&promptFilter, "prompt", "", "Filter by prompt ID")
 	cmd.Flags().StringVar(&sessionFilter, "session", "", "Filter by session ID")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().BoolVar(&live, "live", false, "Tail traces in real-time")
+	cmd.Flags().BoolVar(&live, "live", false, "Stream until Ctrl+C; non-TTY output appends completed traces")
 
 	return cmd
 }

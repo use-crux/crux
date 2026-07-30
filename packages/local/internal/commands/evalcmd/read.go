@@ -19,7 +19,8 @@ func newShowCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "show <eval-run-id>",
 		Short:        "Inspect a saved Eval run",
-		Args:         cobra.ExactArgs(1),
+		Example:      "  crux eval show eval-run-01",
+		Args:         cli.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := resolvedRoot(cwd)
@@ -46,7 +47,8 @@ func newDiffCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "diff <run-a> <run-b>",
 		Short:        "Compare two saved Eval runs",
-		Args:         cobra.ExactArgs(2),
+		Example:      "  crux eval diff eval-run-before eval-run-after",
+		Args:         cli.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store := evalfs.OpenProject(resolvedRoot(cwd))

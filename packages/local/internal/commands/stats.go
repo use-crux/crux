@@ -21,9 +21,16 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Show aggregate statistics",
+		Long: `Show aggregate statistics.
+
+With --live, Crux streams until Ctrl+C. When stdout is not a TTY, each full
+statistics snapshot is appended instead of redrawing terminal output.`,
+		Example: `  crux stats
+  crux stats --json
+  crux stats --live`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			c := f.Client()
+			c := f.ClientFor("stats")
 			jsonOut := f.JSONOutput(jsonOutput)
 
 			if live {
@@ -52,12 +59,12 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().BoolVar(&live, "live", false, "Continuously update stats")
+	cmd.Flags().BoolVar(&live, "live", false, "Stream until Ctrl+C; non-TTY output appends full snapshots")
 	return cmd
 }
 
 func liveStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) error {
-	ws, err := api.ConnectWS(c.BaseURL)
+	ws, err := c.ConnectWebSocket(ctx)
 	if err != nil {
 		return err
 	}

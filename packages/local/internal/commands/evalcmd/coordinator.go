@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/domain"
@@ -131,7 +132,7 @@ func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bo
 		return fmt.Errorf("extract Eval coordinator: %w", err)
 	}
 	child := exec.Command(node, append([]string{worker}, args...)...)
-	child.Env = os.Environ()
+	child.Env = coordinatorEnvironment(os.Environ())
 	if cwd == "" {
 		cwd = projectroot.Dir()
 	}
@@ -180,6 +181,27 @@ func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bo
 		return domain.ExitError{Code: exitCode}
 	}
 	return waitErr
+}
+
+func coordinatorEnvironment(environment []string) []string {
+	hasNoColor := false
+	for _, entry := range environment {
+		if key, _, _ := strings.Cut(entry, "="); key == "NO_COLOR" {
+			hasNoColor = true
+			break
+		}
+	}
+	if !hasNoColor {
+		return environment
+	}
+	normalized := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		if key, _, _ := strings.Cut(entry, "="); key == "FORCE_COLOR" {
+			continue
+		}
+		normalized = append(normalized, entry)
+	}
+	return normalized
 }
 
 func consumeStream(out io.Writer, stream io.Reader) (int, error) {

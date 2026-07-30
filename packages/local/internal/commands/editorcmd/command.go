@@ -44,7 +44,7 @@ func newCommand(factory *cli.Factory, install installOperation) *cobra.Command {
 	installCommand := &cobra.Command{
 		Use:       "install <vscode|cursor>",
 		Short:     "Install the matching Crux editor extension",
-		Args:      cobra.ExactArgs(1),
+		Args:      cli.ExactArgs(1),
 		ValidArgs: []string{string(editorVSCode), string(editorCursor)},
 		Example: `  crux editor install vscode
   crux editor install cursor

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -54,7 +55,9 @@ func NewCatalogCmd(f *cli.Factory) *cobra.Command {
 	importCmd := &cobra.Command{
 		Use:   "import <manifest-path>",
 		Short: "Verify and import an immutable deployment manifest",
-		Args:  cobra.ExactArgs(1),
+		Example: `  crux catalog import .crux/project-index.manifest.json
+  crux catalog import ./manifest.json --json`,
+		Args: cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store := manifeststore.New(projectroot.Dir())
 			return runCatalogImport(cmd.Context(), f.Streams(), store, args[0], f.JSONOutput(jsonOutput))
@@ -98,6 +101,9 @@ func runCatalogImport(ctx context.Context, ioStreams *output.IO, store *manifest
 func readBoundedManifest(path string) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("manifest file %q does not exist", path)
+		}
 		return nil, fmt.Errorf("open manifest %q: %w", path, err)
 	}
 	defer file.Close()

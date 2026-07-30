@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -75,7 +77,7 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	}
 
 	var out, errOut strings.Builder
-	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{StderrTTY: true})
 	cmd := NewConfigCmd(cli.NewFactoryWithStreams(streams))
 	cmd.SetArgs([]string{"inspect", "--json", "--cwd", root})
 
@@ -95,6 +97,33 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("JSON output contains ANSI styling: %q", out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("JSON config inspect wrote spinner frames to stderr: %q", errOut.String())
+	}
+}
+
+func TestConfigInspectMissingCWDIsUsageError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	var out, errOut strings.Builder
+	cmd := NewConfigCmd(cli.NewFactoryWithStreams(
+		output.NewTestIO(&out, &errOut, output.TestIOOptions{StderrTTY: true}),
+	))
+	cmd.SetArgs([]string{"inspect", "--cwd", missing})
+
+	err := cmd.Execute()
+	var exitErr domain.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != 2 {
+		t.Fatalf("error = %T %v, want usage exit 2", err, err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), `--cwd path "`+missing+`" does not exist`) {
+		t.Fatalf("stderr = %q, want missing path", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "\r") || strings.Contains(errOut.String(), "\x1b[") {
+		t.Fatalf("stderr contains spinner frames: %q", errOut.String())
 	}
 }
 

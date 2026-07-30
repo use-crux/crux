@@ -40,7 +40,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 		Use:   "reindex",
 		Short: "Rebuild the Project Index through the running dev server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := f.Client()
+			c := f.ClientFor("index reindex")
 			var index api.IndexData
 			req := map[string]any{}
 			if reindexRoot != "" {
@@ -119,13 +119,14 @@ func runIndexCompatibility(ctx context.Context, f *cli.Factory, filter string, j
 		kind, _ := indexCatalogKind(filter)
 		return runCatalogListWithHeader(ctx, f, kind, jsonOutput, "index")
 	case "catalog-show":
-		id, err := resolveCatalogDefinitionID(ctx, f.Client(), filter)
+		client := f.ClientFor("index")
+		id, err := resolveCatalogDefinitionID(ctx, client, filter, "crux index")
 		if err != nil {
 			return err
 		}
 		var definition api.CatalogDefinitionV1
-		if err := f.Client().GetJSON(ctx, catalogDefinitionPath(id), &definition); err != nil {
-			return catalogReadError(filter, err)
+		if err := client.GetJSON(ctx, catalogDefinitionPath(id), &definition); err != nil {
+			return catalogReadError(filter, err, "crux index")
 		}
 		if jsonOutput {
 			return writeCatalogJSON(f, definition)
@@ -139,7 +140,7 @@ func runIndexCompatibility(ctx context.Context, f *cli.Factory, filter string, j
 
 func runLegacyIndexCategory(ctx context.Context, f *cli.Factory, filter string, jsonOutput bool) error {
 	var index api.IndexData
-	if err := f.Client().GetJSON(ctx, "/api/index", &index); err != nil {
+	if err := f.ClientFor("index").GetJSON(ctx, "/api/index", &index); err != nil {
 		return err
 	}
 	if jsonOutput {
