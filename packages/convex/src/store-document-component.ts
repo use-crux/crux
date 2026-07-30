@@ -24,6 +24,7 @@ import type {
   StoreDocWrite,
 } from './store-doc'
 import { STORE_DOC_COMPONENT_SPEC } from './store-doc'
+import { storeDocVersion } from './store-doc'
 
 /** Options for `createInMemoryConvexStoreDocumentComponent()`. */
 export interface InMemoryConvexStoreDocumentComponentOptions {
@@ -75,6 +76,7 @@ export function createInMemoryConvexStoreDocumentComponent(
       set: Symbol('memory.set'),
       insert: Symbol('memory.insert'),
       remove: Symbol('memory.remove'),
+      compareAndSet: Symbol('memory.compareAndSet'),
     },
   }
   const docs = new Map<string, StoreDocRecord>()
@@ -100,6 +102,17 @@ export function createInMemoryConvexStoreDocumentComponent(
     },
     async delete(key) {
       docs.delete(key)
+    },
+    async compareAndSet(key, expectedVersion, doc) {
+      const existing = docs.get(key)
+      const currentVersion = existing ? storeDocVersion(existing) : null
+      if (currentVersion !== expectedVersion) return false
+      if (doc) {
+        docs.set(key, doc)
+      } else {
+        docs.delete(key)
+      }
+      return true
     },
   }
 
@@ -127,6 +140,15 @@ export function createInMemoryConvexStoreDocumentComponent(
       if (ref === refs.memory.remove) {
         await port.delete(String(args.key))
         return null as TResult
+      }
+      if (ref === refs.memory.compareAndSet) {
+        return (await port.compareAndSet(
+          String(args.key),
+          typeof args.expectedVersion === 'string'
+            ? args.expectedVersion
+            : null,
+          (args.doc ?? null) as StoreDocWrite | null,
+        )) as TResult
       }
       return undefined as TResult
     },

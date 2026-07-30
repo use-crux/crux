@@ -386,7 +386,7 @@ describe('devtools runtime bridge contract', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 
     const crux = config({
-      persistence: {
+      storage: {
         records: inMemoryRecordStore(),
       },
       devtools: {

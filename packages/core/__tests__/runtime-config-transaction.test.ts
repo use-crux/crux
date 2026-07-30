@@ -205,6 +205,17 @@ describe('runtime config transaction', () => {
     expect(plan.hooksPatch.hostBinding).toBe(host)
   })
 
+  it('installs the standard storage bundle as the runtime record source', () => {
+    const records = inMemoryRecordStore()
+
+    const plan = planRuntimeConfig({
+      config: { storage: { records } },
+    })
+
+    expect(plan.hooksPatch.records).toBe(records)
+    expect(plan.bridgeOptions.records).toBe(records)
+  })
+
   it('applies persistence and explicit observability before plugins run through ports', () => {
     const records = inMemoryRecordStore()
     const transport: CruxObservabilityTransport = { send: vi.fn() }
@@ -253,7 +264,7 @@ describe('runtime config transaction', () => {
     const installation = createRuntimeConfigTransaction(
       {
         config: {
-          persistence: { records },
+          storage: { records },
           observability: { transport },
           plugins: [plugin],
         },

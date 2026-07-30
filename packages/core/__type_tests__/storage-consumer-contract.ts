@@ -135,14 +135,14 @@ createSemanticCache({
 })
 
 config({
-  persistence: {
+  storage: {
     records,
   },
 })
 
 config({
-  persistence: {
-    // @ts-expect-error - runtime persistence rejects unknown storage fields.
+  storage: {
+    // @ts-expect-error - runtime storage rejects unknown storage fields.
     extraRecords: records,
   },
 })

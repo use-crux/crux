@@ -584,7 +584,7 @@ async function executeFlow<
       const flowStore = store ?? getHooks().records;
       if (!flowStore) {
         throw new Error(
-          "flow.suspend() requires a RecordStore. Configure one via config({ persistence: { records } }).",
+          "flow.suspend() requires a RecordStore. Configure one via config({ storage: { records } }).",
         );
       }
 
@@ -619,7 +619,7 @@ async function executeFlow<
       const flowStore = store ?? getHooks().records;
       if (!flowStore) {
         throw new Error(
-          "flow.waitUntil() requires a RecordStore. Configure one via config({ persistence: { records } }).",
+          "flow.waitUntil() requires a RecordStore. Configure one via config({ storage: { records } }).",
         );
       }
 

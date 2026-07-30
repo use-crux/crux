@@ -16,7 +16,7 @@ afterEach(() => {
 describe("flow result correlation context edges", () => {
   it("does not copy a nested child flow or step span onto the parent result", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);

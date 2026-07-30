@@ -26,6 +26,8 @@ export interface ConvexCruxStorageMemoryComponent {
   readonly insert: unknown
   /** Mutation reference for deleting one memory document by key. */
   readonly remove: unknown
+  /** Mutation reference for a versioned conditional write or delete. */
+  readonly compareAndSet?: unknown
 }
 
 /** Convex component reference required by the Crux storage document contract. */

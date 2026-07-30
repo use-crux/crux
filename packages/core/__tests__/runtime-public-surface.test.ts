@@ -66,13 +66,13 @@ describe('@use-crux/core (runtime surface)', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('@use-crux/core config()', () => {
-  it('applies persistence and returns a frozen Crux with the raw config', () => {
+  it('applies storage and returns a frozen Crux with the raw config', () => {
     const records = inMemoryRecordStore()
-    const crux = config({ persistence: { records } })
+    const crux = config({ storage: { records } })
 
     try {
       expect(Object.isFrozen(crux)).toBe(true)
-      expect(crux.config.persistence?.records).toBe(records)
+      expect(crux.config.storage?.records).toBe(records)
       expect(resolveRecords()).toBe(records)
       expect(typeof crux.dispose).toBe('function')
     } finally {

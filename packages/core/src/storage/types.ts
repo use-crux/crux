@@ -73,6 +73,23 @@ export interface RecordPage<T extends JsonObject = JsonObject> {
   readonly cursor?: string;
 }
 
+/** Outcome of an atomic {@link RecordStore.mutate} operation. */
+export type RecordMutation<T extends JsonObject = JsonObject> =
+  | {
+      /** Publish the supplied value. */
+      readonly type: "put";
+      /** Value to publish. */
+      readonly value: T;
+    }
+  | {
+      /** Delete the current record. */
+      readonly type: "delete";
+    }
+  | {
+      /** Preserve the current record without writing. */
+      readonly type: "none";
+    };
+
 /** Event emitted by a record store watch subscription. */
 export type RecordEvent<T extends JsonObject = JsonObject> =
   | {
@@ -97,6 +114,8 @@ export interface RecordStoreCapabilities {
   readonly watch: boolean;
   /** Whether native batch operations are supported. */
   readonly batch: boolean;
+  /** Atomic single-key mutation support: native, versioned CAS, or unsupported. */
+  readonly mutate: "native" | "cas" | false;
 }
 
 /** JSON record storage capability. */
@@ -115,6 +134,32 @@ export interface RecordStore<T extends JsonObject = JsonObject> {
     options?: Omit<RecordListOptions, "cursor">,
   ): AsyncIterable<RecordEntry<T>>;
   watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void;
+  /**
+   * Atomically derive and publish one record from its current value.
+   *
+   * The callback may run more than once on adapters that retry transactions.
+   */
+  mutate?(
+    key: string,
+    fn: (
+      current: T | null,
+    ) => RecordMutation<T> | Promise<RecordMutation<T>>,
+  ): Promise<T | null>;
+  /** Read a record together with its opaque compare-and-set version. */
+  getVersioned?(
+    key: string,
+  ): Promise<{ readonly value: T | null; readonly version: string | null }>;
+  /**
+   * Conditionally replace or delete a record at an observed version.
+   *
+   * A `null` value deletes the record. A `null` expected version means the
+   * record must still be absent.
+   */
+  putVersioned?(
+    key: string,
+    value: T | null,
+    expectedVersion: string | null,
+  ): Promise<boolean>;
   capabilities(): RecordStoreCapabilities;
 }
 

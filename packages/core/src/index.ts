@@ -337,7 +337,6 @@ export type {
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
-  CruxPersistenceConfig,
   CruxRuntimeConfig,
   PromptRegistry,
 } from "./runtime";
