@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/indexer",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Crux-owned Catalog compiler contracts, experimental extensions, and source resolution.",
   "keywords": [
     "ai",

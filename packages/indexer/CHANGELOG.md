@@ -1,5 +1,292 @@
 # @use-crux/indexer
 
+## 0.7.0
+
+### Minor Changes
+
+- 70a8520: Add eagerly executing, replayable `streamImage()` and `streamSpeech()` bounded
+  operations with provider-neutral events, final-result identity, cancellation,
+  deadlines, routing commitment, observability, and input/output Safety.
+
+  OpenAI uses genuine Images API previews and Speech API response-body chunks.
+  Google uses current Interactions image deltas and finite Generate Content TTS
+  PCM chunks. Unsupported models and controls fail before provider I/O; Crux
+  never synthesizes progressive events from a completed artifact or persists
+  media implicitly.
+
+  Project Index now recognizes both operations as authored media work with
+  static, semantic, native, and Local read-model parity. Catalog classifies them
+  as bounded streams with safe modality/support/source facts. Runs separates one
+  logical operation from its physical attempts and presents payload-free
+  progress, route commitment, timing, terminal, and output-media Safety facts.
+
+  `@use-crux/google` now requires `@google/genai` 2.x. This peer migration is a
+  breaking install change because the removed 1.x Interactions event schema is no
+  longer accepted.
+
+- 69564b7: Memory capture now follows the active execution lifecycle automatically.
+
+  Capture modes are now `inline | deferred`, with `deferred` as the default. Deferred capture uses the shared `config({ host })` retention binding; when retention is unavailable, Crux safely captures inline and emits one development warning instead of losing work. Retained failures remain observable through `memory.flush()`.
+
+  Adapters submit one completed turn and leave mode selection, deterministic tool-event fan-out, settlement, and block flushing to memory. Catalog exposes the effective configured mode, while Runs records one payload-free `memory.capture` lifecycle inside the owning generation Run with the actual inline, fallback, retained, or Eval-captured disposition.
+
+  Migrate `afterResponse` to `deferred`, replace `detached` with `deferred`, and remove memory-specific `capture.waitUntil` in favor of a shared host binding.
+
+- be06e40: Add authored Eval and Case timeout policies, task-scoped cancellation context,
+  and automatic signal and nested-budget propagation for managed AI tasks.
+  Timed-out tasks now produce structured complete Run outcomes with comparable
+  Baseline coverage, while versioned local and remote readers preserve existing
+  artifacts and quarantine late evidence or result publication. Project Index
+  and the hydrated Eval catalog expose effective and inherited policy, while Eval
+  Runs and normal Runs show structured timeout causes and counts.
+- 3140e0b: Add materialized Workspace subtree snapshots through
+  `workspace.snapshot.create/list/restore/delete`, including exact-tree restore and
+  independent asset ownership. Index authored snapshot usage and present observed
+  snapshot operations with privacy-safe, snapshot-aware Local Devtools views.
+- 9b4d06e: Add `crux lsp`, a stdio language server that publishes Project Index lint
+  diagnostics, keeps ranges aligned with unsaved edits, explains findings on
+  hover, offers suppression and safe allowlisted companion-command actions, and
+  moves between an attached `crux dev` read model and its own watcher without
+  clearing diagnostics during handover. Add index-backed go-to-definition,
+  references, document and workspace symbols, definition context on hover,
+  finding-count inlay hints and code lenses, Devtools definition links, and
+  live editor settings for hints, lenses, and inline-decoration opacity. Publish
+  the lockstep VSIX, six native CLI archives, and checksums on stable and nightly
+  GitHub Releases; discover trusted project-local npm CLI shims on Unix and
+  Windows, and provide npm-first plus direct-download installation guidance.
+  Add Project Index-aware semantic completion for supported first-party prompt,
+  context, MCP, tool, agent, handoff, and routing dependency slots. Completion
+  uses a bounded, private unsaved-document overlay, safe named-import edits, and
+  the existing persistent compiler in both attached and own modes. Cross-file
+  items require compiler-proven direct named-export evidence. This additive
+  Project Index metadata advances the static, semantic, and local snapshot cache
+  identities, so upgrades automatically reindex instead of reusing an older
+  snapshot.
+
+  Add PromptText-aware editor support for canonical Core `md` templates. One
+  bounded Rust analysis now drives theme-aware Markdown-role highlighting,
+  folding, heading symbols, safe literal links, static preview, semantic
+  diagnostics, and versioned quick fixes while preserving native TypeScript
+  behavior inside interpolations. Identity-sensitive results fail closed against
+  saved semantic generation and source hashes; transient source and preview
+  content never enter Project Index, caches, logs, or broadcasts.
+
+  The VS Code extension adds explicit static preview, runtime exact preview, and
+  latest-Run commands. Exact preview discovers a currently configured Prompt,
+  requires confirmation, and invokes `Prompt.inspect()` without model
+  generation, tool calls, or Run creation. Latest Run resolves current ownership
+  and SQLite ordering at click time, with no cached selection or automatic
+  navigation. The embedded Devtools routes are bounded, no-store, cancellation
+  aware, and keep preview inputs/results in memory only.
+
+  Distribute the editor extension as a checksum-verified, lockstep GitHub Release
+  asset for Visual Studio Code and Cursor. `crux editor install vscode|cursor`
+  downloads the VSIX matching the running CLI version, verifies `SHA256SUMS`, and
+  installs only into the explicitly selected editor; `--download-only` supports
+  managed environments. Release builds now embed that same stable or nightly
+  version in every native CLI, and release reconciliation shares the validated
+  asset set so the VSIX, six native archives, and checksums cannot disappear
+  after a successful staging pass.
+
+- 0e52c7d: Make Rust/Oxc the required Static Index path, remove the obsolete
+  `experimental.indexer.nativeAst` option and TypeScript static-plan worker
+  artifact, and advance Project Index worker events to protocol v3. Configured
+  third-party static extractors continue to run through the trusted JavaScript
+  host.
+
+  Lint suppressions now remain in Project Index snapshots as materialized
+  evidence instead of deleting matched findings. `IndexLintFinding` is a strict
+  active/suppressed union: suppressed rows require directive source, scope, and
+  optional reason metadata, while canonical active rows omit suppression state.
+  Default lint/check views remain active-only, `--include-suppressed` exposes the
+  retained rows, and suppressed findings never fail a gate.
+
+  Devtools Index and Catalog Health now report active and suppressed totals
+  separately while retaining complete directive evidence for audit. Crux Local
+  run-detail reads correlate observed definition references with current Project
+  Index findings, and Devtools presents that non-historical context as Current
+  project health with links back to Catalog. This read-time context never changes
+  run status or creates suppression telemetry.
+
+- 2b50f9d: Normalize structured response and tool-input schemas through provider capability
+  profiles. Crux now compiles provider-compatible wire schemas, decodes transport
+  sentinels before Safety, validates once with the authored schema, and exposes the
+  parsed output consistently across native, AI SDK, generate, and stream routes.
+
+  Structured outputs are now always validated. `validationRetry` controls whether
+  another attempt is made; without it, invalid structured output throws instead of
+  being returned. Adapter authors must declare their structured-output
+  capabilities and use the prepared `outputSchema` supplied to request builders.
+  AI SDK and provider adapters now accept `@use-crux/mcp` 0.7 peers.
+
+  ## Provider-neutral media classification
+
+  Add `guardrail.mediaClassifier()` for per-part image, audio, video, and
+  file/document classification through any `GenerateObjectFn`. Caller-authored
+  categories, inclusive thresholds, capability handling, input/output media
+  boundaries, report mode, and strip escalation share one provider-neutral
+  contract.
+
+  `GenerateObjectFn` now accepts either a text prompt or canonical messages so
+  structured media reaches provider adapters without flattening. Native OpenAI,
+  Anthropic, and Google object helpers bind only their client; callers pass the
+  model per invocation. Existing two-argument helper construction must migrate
+  to `createGenerateObjectFn(client)` plus `{ model, ... }` on each call.
+
+  Guardrail findings now survive callback collection into audits, terminal
+  decisions, privacy-safe report artifacts, and Devtools Run Detail. Project
+  Index and Catalog expose only complete literal classifier-safe configuration;
+  telemetry retains bounded counts rather than category or media details.
+
+  ## Boundary-driven streaming Safety
+
+  An `assert` constraint is transactional on a stream: it gates release, and a failed
+  attempt is discarded without publishing bytes and re-streamed with corrective feedback
+  under the shared `maxSteps` budget. A positive `validationRetry.maxRetries` installs the
+  same commit gate for schema validation. Buffering is attributable through a content-free
+  `bufferedBy` reason and `generation.stream.attempt` spans, and constraint settlement is
+  occurrence- and value-precise, so a settled `constraint.judge()` is not re-run at
+  completion.
+
+  Streaming Safety holds an occurrence until every downstream transformation that could
+  change it has completed: an object assertion that passes while a text guard can still
+  rewrite the represented JSON is provisional and cannot release bytes, and it is
+  re-evaluated against the final value before anything is published. Object-only pipelines
+  keep progressive release.
+
+  `stream()` on `@use-crux/ai` now honors `validationRetry`, which it previously discarded.
+  Adapters report the model steps an SDK invocation actually consumed while core enforces
+  the shared `maxSteps` budget; when consumption is unknown or settled tool rounds cannot be
+  resumed safely, Crux fails closed instead of risking duplicate tool side effects.
+
+  Rejected candidates are evidence-only on public terminal errors: `ValidationExhaustedError`
+  and `ConstraintViolationError` expose size and hash, never a preview of output the caller
+  was not allowed to see. Constraint feedback and metadata no longer reach telemetry (only a
+  feedback length and a metadata count), and `ValidationExhaustedError` no longer exposes
+  custom Zod issue messages or model-controlled record keys — use its new `issues` summary
+  for stable `{ path, depth, code }` diagnostics.
+
+  Structured-output compilation fails closed rather than risking silent corruption: an
+  optional property is rejected at compile time when its encoding cannot be proven
+  reversible — inside a recursive schema, a union branch, an intersection or tuple, or when
+  the property is literally named `"*"`.
+
+  ## Managed logical streams
+
+  `stream()` now returns one Crux-owned logical stream with the same shape on every route:
+  `{ runId, _meta, textStream, fullStream, partialOutputStream, completion, cancel }`. A
+  logical stream may use several physical provider attempts, but provider framing, discarded
+  attempts, and the provider stream object are never observable. All three streams project
+  one shared append-only event log, so they can be read concurrently, a surface first read
+  late replays from logical `start`, and retention never delays publication — `completion`
+  settles without any stream being drained. A terminal failure now reaches every surface with
+  the same normalized error object rather than only rejecting `completion`.
+  `result.cancel(reason?)` aborts the whole operation, including the active provider attempt.
+
+  For a structured prompt, `textStream` carries canonical serialized `z.input` JSON, and
+  `partialOutputStream` is a parsed projection of that same published text — so a partial can
+  only ever describe committed output. `completion.object` remains the single
+  authored-schema-validated `z.output`.
+
+  Logical `usage` and `cost` are scalar aggregates across every BILLABLE physical attempt,
+  discarded ones included — the caller paid for each provider call. Everything else in the
+  envelope still describes the accepted attempt alone, so logical `usage` deliberately stops
+  equalling the sum of `steps[].usage` once a policy retry occurred. If any billable attempt
+  did not report a figure the total is omitted rather than under-reported; on the AI SDK route
+  a rejected attempt reports no usage at all, so a retried SDK stream omits logical usage.
+
+  The local runtime accepts the new `generation.stream.attempt` primitive, so coordinated
+  streams keep their buffering attribution in Devtools instead of being dropped as unknown.
+
+  `onChunk`, `onFinish`, and `onError` are logical: they observe the published sequence and
+  the logical completion, and no caller callback is installed on a physical attempt, so a
+  discarded attempt invokes none of them. `@use-crux/ai` adds `toUIMessageStream(result)` and
+  `createTextStreamResponse(result)`, and its existing UI-message helpers are now built from
+  `fullStream`, which makes a discarded attempt unrepresentable in their input.
+
+  ## Breaking removals
+
+  Streamed `result.raw` is removed on every adapter. A provider stream resolves before
+  terminal Safety and describes only one attempt, so exposing it bypassed guardrail holds,
+  structured occurrence gating, commit gates, and validation retry. Provider-specific request
+  options are unchanged, and provider-specific terminal facts remain on
+  `completion.providerMetadata`. Replace `result.raw.partialObjectStream` with
+  `result.partialOutputStream`, `result.raw.fullStream` with `result.fullStream`, and
+  `result.raw.toUIMessageStream(...)` with `toUIMessageStream(result)`. `generate()` results
+  keep `.raw` unchanged. The public `StreamResult` type parameters change from
+  `StreamResult<TRawStream, TOutput>` to `StreamResult<TOutput, TPartial>`, and the
+  `TextStreamResult`/`ObjectStreamResult` aliases are removed.
+
+  Guardrail streaming configuration moved onto the boundary: `GuardrailConfig.stream`, the
+  `stream` tune field, `ConstraintConfig.onChunk`, and `onHoldLimit: 'release'` are removed in
+  favor of
+  `boundary.output.text().sentences() | .lines() | .deltas() | .complete() | .segments()`.
+  The curried `boundary.output.path<T>()('a.b')` spelling is replaced by
+  `boundary.output.object<T>().path('a.b')`.
+
+- f5c5da3: Add optional Markdown-oriented prompt composition with `md`, the opaque
+  `PromptText` type, and explicit `md.json()` snapshots. Existing strings remain
+  fully supported. Resolution still yields provider-neutral plain text;
+  `.inspect()` retains structural provenance for PromptText, and Project Index
+  records compiler-proven `md` regions with exact source ranges and
+  direct-versus-callback lifecycle metadata.
+
+  Export `configure`, `ConfigureOptions`, and `PromptRegistry` from the Core root
+  and let that explicit registry lifecycle publish a revisioned Prompt catalogue
+  for local exact inspection. Explicit preview dispatch invokes
+  `Prompt.inspect()` only; it creates no provider generation, tool invocation,
+  ordinary Run, or observability record. Trusted authored callbacks may still
+  perform their own side effects.
+
+  Project Index PromptText evidence now classifies every canonical source as an
+  owner, named fragment, or anonymous fragment, retains exact semantic fragment
+  joins, and emits conservative diagnostics for invalid interpolations, inline
+  sequences, and `md.json()` calls proven to return no text. JavaScript and
+  native semantic backends produce the same backend-neutral evidence.
+
+  `prompt.prompt` stays synchronous: callbacks return `string | PromptText`.
+  Runtime now rejects Promise results from untyped or cast async callbacks instead
+  of awaiting this unsupported shape, matching the existing synchronous public
+  type. An unconfigured user prompt stays absent through provider adaptations.
+  Context staticness follows `systemKind`, so inputless dynamic callbacks are
+  neither executed nor classified static during serialization or indexing.
+  Direct `ContextSystemContent` and `PromptText` use the static provider-cache
+  lifecycle, like direct strings.
+
+  Devtools now presents PromptText compiler evidence and hard diagnostics in
+  Catalog, shows structured exact-preview composition and validation, and keeps
+  PromptText segment provenance plus token attribution in ordinary captured Runs
+  when input capture policy permits it. Local persists that evidence through the
+  existing messages artifact; malformed or unavailable provenance falls back to
+  the ordinary plain-text Run Detail presentation.
+
+### Patch Changes
+
+- 42419b1: Unify model-input Safety around semantic text, media, and instruction boundaries
+  for caller, tool, retrieval, memory, blackboard, handoff, and retry-feedback
+  content. Add provider-visible authored/discovered tool boundaries and managed
+  memory commit guardrails; raw tool execution controls remain in `toolPolicy`.
+
+  Guard rejected output and corrective feedback before every eligible retry.
+  Semantic-cache hits now pass through current output guardrails, one authored
+  schema parse, and constraints before publication, with safe live fallback for
+  expected content rejections.
+
+  Deprecate `boundary.validation.feedback()` in favor of
+  `boundary.input.text({ from: "feedback" })`; the compatibility boundary remains
+  operational for validation feedback.
+
+- Updated dependencies [70a8520]
+- Updated dependencies [69564b7]
+- Updated dependencies [be06e40]
+- Updated dependencies [3140e0b]
+- Updated dependencies [d5d37bf]
+- Updated dependencies [42419b1]
+- Updated dependencies [0e52c7d]
+- Updated dependencies [2b50f9d]
+- Updated dependencies [f5c5da3]
+  - @use-crux/core@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes

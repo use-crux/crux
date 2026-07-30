@@ -1,5 +1,20 @@
 # @use-crux/react
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [70a8520]
+- Updated dependencies [69564b7]
+- Updated dependencies [be06e40]
+- Updated dependencies [3140e0b]
+- Updated dependencies [d5d37bf]
+- Updated dependencies [42419b1]
+- Updated dependencies [0e52c7d]
+- Updated dependencies [2b50f9d]
+- Updated dependencies [f5c5da3]
+  - @use-crux/core@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

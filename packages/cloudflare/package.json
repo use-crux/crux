@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/cloudflare",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Cloudflare Workers and Durable Object runtime host for Crux.",
   "keywords": [
     "cloudflare",
