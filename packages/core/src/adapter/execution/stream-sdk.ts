@@ -82,6 +82,10 @@ import {
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
+import {
+  assertSdkRequestPlanning,
+  createSdkRequestStepPlanner,
+} from "./sdk-request-planner";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -100,11 +104,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
 ): Promise<ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId }> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
+  assertSdkRequestPlanning(dialect);
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
@@ -380,6 +384,16 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           ...(callerSignal ? { signal: callerSignal } : {}),
         })
       : undefined;
+  const planStep = createSdkRequestStepPlanner({
+    dialect,
+    settings: resolved.settings,
+    inputBudget: args.inputBudget,
+    schema: resolved.schema,
+    outputSchema: structuredOutputSchema,
+    tools: () =>
+      lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    extra: args.extra,
+  });
 
   const request: ExecutorRequest<TModel> & {
     schema?: z.ZodType;
@@ -387,6 +401,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   } = {
     model: args.model,
     modelInfo,
+    planStep,
     system: currentSystem,
     systemBlocks: currentSystemBlocks,
     prompt: promptText,
@@ -474,7 +489,6 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             provider: modelInfo.provider,
             model: modelInfo.modelId,
             media: dialect.media,
-            tokenBudget: args.tokenBudget,
           });
           return dialect.runStream(request);
         },

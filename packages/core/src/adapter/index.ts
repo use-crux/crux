@@ -251,6 +251,9 @@ export type {
 } from "./loop-runtime-port";
 export type {
   ExecutorRequest,
+  ExecutorRequestStepInput,
+  ExecutorRequestStepPlanner,
+  SealedExecutorRequestStep,
   StructuredRequest,
   ExecutorStep,
   ExecutorModelStep,

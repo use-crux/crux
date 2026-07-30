@@ -365,10 +365,10 @@ export interface Prompt<
    *
    * @example
    * ```ts
-   * const debug = await prompt.inspect({ input: { ... }, tokenBudget: 4000 })
+   * const debug = await prompt.inspect({ input: { ... } })
    * debug.system.parts     // per-context breakdown
    * debug.totalTokens      // total estimated tokens
-   * debug.droppedContexts  // what was dropped for budget
+   * debug.droppedContexts  // retained for legacy inspection compatibility
    * ```
    */
   inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult>;

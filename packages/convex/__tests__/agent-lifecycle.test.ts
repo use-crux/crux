@@ -91,7 +91,6 @@ describe('profile-backed Convex Agent lifecycle', () => {
           currentPrompt: 'expand the outline',
         },
         use: [draftContext],
-        tokenBudget: 123,
       }),
     })
 

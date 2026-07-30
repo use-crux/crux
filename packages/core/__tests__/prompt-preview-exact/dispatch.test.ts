@@ -242,7 +242,6 @@ describe("exact prompt preview dispatch", () => {
           options: {
             provider: "openai",
             modelId: "gpt-test",
-            tokenBudget: 100,
           },
         },
         deadlineMs: 1_000,
@@ -262,7 +261,6 @@ describe("exact prompt preview dispatch", () => {
             reason: "when() predicate returned false",
           },
         ],
-        tokenBudget: 100,
         tools: ["lookup"],
       },
     });

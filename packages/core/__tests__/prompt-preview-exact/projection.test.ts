@@ -31,7 +31,6 @@ describe("exact prompt preview result limits", () => {
         totalTokens: 0,
         droppedContexts: [],
         excludedContexts: [],
-        tokenBudget: undefined,
         tools: undefined,
       };
     };
@@ -58,7 +57,6 @@ describe("exact prompt preview result limits", () => {
       totalTokens: 0,
       droppedContexts: [],
       excludedContexts: [],
-      tokenBudget: undefined,
       tools: undefined,
     });
 
@@ -90,7 +88,6 @@ describe("exact prompt preview result limits", () => {
         totalTokens: 0,
         droppedContexts: [],
         excludedContexts: [],
-        tokenBudget: undefined,
         tools: undefined,
       };
     };

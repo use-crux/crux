@@ -84,7 +84,6 @@ function inspection(
     totalTokens: 0,
     droppedContexts: [],
     excludedContexts: [],
-    tokenBudget: undefined,
     tools: undefined,
   };
 }

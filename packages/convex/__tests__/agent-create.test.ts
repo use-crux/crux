@@ -26,7 +26,7 @@ describe('createAgent', () => {
     })
 
     expect(agent).toBeInstanceOf(Agent)
-    expect(prompt.resolve).toHaveBeenCalledWith({ input: { locale: 'en' }, tokenBudget: undefined })
+    expect(prompt.resolve).toHaveBeenCalledWith({ input: { locale: 'en' } })
     expect(agent.options.name).toBe('Support')
     expect(agent.options.instructions).toBe('Resolved support instructions.')
     expect(agent.options.languageModel).toBe(model)

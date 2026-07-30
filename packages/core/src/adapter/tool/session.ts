@@ -400,10 +400,9 @@ export interface ToolLifecycle {
   readonly toolWireSchemas: Record<string, JsonSchemaObject> | undefined;
 
   /**
-   * Core regime: the canonical, schema-sanitized descriptor array for the
-   * provider call. Always current — re-read after each round instead of
-   * keeping a dialect-local copy. `undefined` in the sdk regime or when no
-   * tools apply.
+   * Canonical, schema-sanitized descriptors for request planning and Core-owned
+   * provider calls. Always current — re-read after each round instead of
+   * keeping a dialect-local copy.
    */
   readonly descriptors: readonly ToolDescriptor[] | undefined;
 
@@ -705,7 +704,7 @@ export function createToolLifecycle(
       return;
     }
 
-    descriptors = undefined;
+    descriptors = exposed.length > 0 ? [...exposed] : undefined;
     const exposedTools = createToolRegistry<unknown>();
     for (const descriptor of exposed) {
       const tool = wrappedTools[descriptor.name];

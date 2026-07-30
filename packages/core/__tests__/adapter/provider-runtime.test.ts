@@ -153,6 +153,7 @@ describe('provider runtime', () => {
         describeModel: fake.runtime.describeModel,
         settings: fake.runtime.mapSettings,
         bind: () => ({
+          capabilities: fake.runtime.capabilities,
           runTextLoop: fake.runtime.runTextLoop,
           runStructuredAttempt: fake.runtime.runStructuredAttempt,
           runStream: fake.runtime.runStream,
@@ -186,6 +187,7 @@ describe('provider runtime', () => {
         describeModel: fake.runtime.describeModel,
         settings: fake.runtime.mapSettings,
         bind: () => ({
+          capabilities: fake.runtime.capabilities,
           runTextLoop: fake.runtime.runTextLoop,
           runStructuredAttempt: fake.runtime.runStructuredAttempt,
           runStream: fake.runtime.runStream,
@@ -215,6 +217,7 @@ describe('provider runtime', () => {
           describeModel: fake.runtime.describeModel,
           settings: fake.runtime.mapSettings,
           bind: () => ({
+            capabilities: fake.runtime.capabilities,
             runTextLoop: fake.runtime.runTextLoop,
             runStructuredAttempt: fake.runtime.runStructuredAttempt,
             runStream: fake.runtime.runStream,

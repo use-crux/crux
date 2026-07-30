@@ -18,6 +18,7 @@ import type { z } from "zod";
 import type {
   ContextEntry,
   GenerationSettings,
+  InputBudget,
   KnownToolsFor,
   Message,
   MergedInput,
@@ -145,8 +146,6 @@ interface AIGenerateBaseOptions<
   activeTools?: readonly string[];
   /** AI SDK-native, non-portable options. */
   extra?: AIExtra;
-  /** Token budget for system message. */
-  tokenBudget?: number;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
   /**
@@ -171,6 +170,8 @@ interface AIGenerateBaseOptions<
   constraints?: Constraint[];
   /** Shared cap on total constraint retries across all constraints. */
   constraintMaxRetries?: number;
+  /** Maximum provider input budget for each semantic model call. */
+  inputBudget?: InputBudget;
   /** Per-call guardrails (highest precedence in the safety merge). */
   guardrails?: Guardrail[];
   /** Per-call safety posture overrides keyed by policy id. */
@@ -237,12 +238,12 @@ export type AIExecutorCallOptions = Record<string, unknown> & {
   maxSteps?: number;
   extra?: AIExtra;
   activeTools?: readonly string[];
-  tokenBudget?: number;
   timeout?: TimeoutOptions;
   signal?: AbortSignal;
   validationRetry?: ValidationRetryOptions;
   constraints?: Constraint[];
   constraintMaxRetries?: number;
+  inputBudget?: InputBudget;
   guardrails?: Guardrail[];
   safety?: SafetyTuneOptions;
   input?: Record<string, unknown>;

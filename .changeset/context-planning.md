@@ -1,6 +1,7 @@
 ---
-"@use-crux/core": minor
-"@use-crux/ai": minor
+"@use-crux/core": major
+"@use-crux/ai": major
+"@use-crux/convex": major
 "@use-crux/openai": minor
 "@use-crux/anthropic": minor
 "@use-crux/google": minor
@@ -16,3 +17,13 @@ Add per-call `inputBudget` settings, typed pre-dispatch composition failures,
 and linked JSON-safe request receipts with redacted token breakdowns on
 generation and stream steps. Adapters may report transport retries for the
 same sealed request so live receipt inspection can expose the retry count.
+
+Apply the same measure-plan-seal contract to every semantic provider call in
+AI SDK-owned loops, including tool steps, structured retries, and streams.
+Loop runtimes now declare and invoke an awaited per-step planning boundary.
+
+Remove the narrow `tokenBudget` resolver and adapter option. Migrate managed
+calls to `inputBudget`, which measures the complete provider request and never
+silently drops exact context contributions. Prompt resolution now retains all
+exact contexts; representation wrappers authorize future lossy alternatives.
+Resolver-only Convex lifecycle budget fields are removed as well.

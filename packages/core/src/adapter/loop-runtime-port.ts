@@ -104,6 +104,11 @@ export interface LoopRuntimePort<
 
   /** Explicit timing guarantees implemented by this loop-owning runtime. */
   readonly capabilities?: {
+    /**
+     * The runtime exposes an awaited pre-dispatch boundary for every semantic
+     * provider call and invokes `request.planStep` at that boundary.
+     */
+    readonly requestPlanning?: "per-step";
     /** The runtime applies `request.stepTransformer` before SDK/Crux client tools. */
     readonly stepTransform?: "before-client-tools";
     /**

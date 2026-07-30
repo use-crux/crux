@@ -116,7 +116,6 @@ export const PromptPreviewReadyResultSchema = z
         totalTokens: z.number().int().nonnegative(),
         droppedContexts: z.array(PromptPreviewDroppedContextSchema).max(1024),
         excludedContexts: z.array(PromptPreviewExcludedContextSchema).max(1024),
-        tokenBudget: z.number().int().nonnegative().optional(),
         tools: z
           .array(ScalarValidStringSchema.min(1).max(512))
           .max(1024)

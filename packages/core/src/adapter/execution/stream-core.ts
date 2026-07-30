@@ -97,7 +97,6 @@ export async function streamCore<
     input: args.input,
     provider: args.provider ?? modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
@@ -301,7 +300,6 @@ export async function streamCore<
             provider: modelInfo.provider,
             model: modelInfo.modelId,
             media: dialect.media,
-            tokenBudget: args.tokenBudget,
           });
           const providerHandle = await withBudget(
             (signal) =>

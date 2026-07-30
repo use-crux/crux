@@ -62,8 +62,6 @@ export interface AdapterGenerateBaseOptions<
   input?: Record<string, unknown>;
   /** Provider identifier for adaptation matching. Defaults to spec.providerId. */
   provider?: string;
-  /** Token budget for system message. */
-  tokenBudget?: number;
   /**
    * Whole-request input pressure settings for each provider call.
    *

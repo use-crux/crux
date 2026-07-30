@@ -51,17 +51,15 @@ export function resolveToolInputCapabilities(
  * @returns Resolve options suitable for `AnyPrompt.resolve()`.
  */
 export function buildResolveOpts(args: {
-  readonly input?: Record<string, unknown>
-  readonly provider: string
-  readonly modelId: string
-  readonly tokenBudget?: number
-  readonly settings?: GenerationSettings
+  readonly input?: Record<string, unknown>;
+  readonly provider: string;
+  readonly modelId: string;
+  readonly settings?: GenerationSettings;
 }): ExecutionResolveOpts {
   return {
     input: args.input,
     provider: args.provider,
     modelId: args.modelId,
-    tokenBudget: args.tokenBudget,
     ...(args.settings ?? {}),
   } as ExecutionResolveOpts
 }

@@ -68,7 +68,6 @@ export interface ExecutorGenerateBaseOptions<
   /** Call-site generation settings with highest precedence. */
   settings?: GenerationSettings;
   /** Token budget for the system message. */
-  tokenBudget?: number;
   /** Whole-request input pressure settings for each provider call. */
   inputBudget?: InputBudget;
   /** Structured timeout budgets for this managed call. */

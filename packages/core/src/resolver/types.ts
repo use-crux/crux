@@ -84,7 +84,7 @@ export interface SystemBlock {
  *
  * @example
  * ```ts
- * const resolved = myPrompt.resolve({ input: { ... }, tokenBudget: 4000 })
+ * const resolved = myPrompt.resolve({ input: { ... } })
  * // Use with any SDK:
  * await generateObject({ model: myModel, ...resolved })
  * ```
@@ -123,8 +123,6 @@ export interface ResolvedPrompt {
    * `\n\n` produces the `system` string.
    */
   systemBlocks?: readonly SystemBlock[];
-  /** Prompt budget artifact emitted while resolving this prompt, when token-budget decisions were recorded. */
-  promptBudgetArtifactId?: CruxArtifactId;
   /** Constraints collected from prompt config + contexts (merged at resolution). */
   constraints?: Constraint[];
   /** Guardrails collected from prompt config + contexts (merged at resolution). */
@@ -163,12 +161,6 @@ export type ResolveOptions<
    * Used for OpenRouter-style `modelId` prefix matching in the `adapt` map.
    */
   modelId?: string;
-  /**
-   * Optional token budget for the system message. When set, contexts are
-   * sorted by priority and lowest-priority ones are dropped until the
-   * assembled system message fits within the budget.
-   */
-  tokenBudget?: number;
 } & GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
@@ -281,8 +273,6 @@ export interface InspectResult {
   droppedContexts: DroppedContext[];
   /** Contexts that were excluded by `when` or `match` conditions (never resolved). */
   excludedContexts: ExcludedContext[];
-  /** The token budget that was applied, if any. */
-  tokenBudget: number | undefined;
   /** Names of all tools that would be included (context + config), if any. */
   tools: string[] | undefined;
   /** Effective prompt-time approval policy per composed tool. */

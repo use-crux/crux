@@ -33,12 +33,11 @@ export async function resolveAgentInstructions<
   opts: AgentResolveOptions<TOwnInput, TContexts>,
 ): Promise<AgentResolveResult> {
   const optsRecord = opts as AgentResolveOptions<TOwnInput, TContexts> & {
-    input?: Record<string, unknown>
-    tokenBudget?: number
-    tools?: readonly string[]
-  }
-  const input = optsRecord.input ?? {}
-  const resolveOpts = { input, tokenBudget: optsRecord.tokenBudget }
+    input?: Record<string, unknown>;
+    tools?: readonly string[];
+  };
+  const input = optsRecord.input ?? {};
+  const resolveOpts = { input };
 
   const source = captureSource()
   type PromptResolveOpts = Parameters<typeof prompt.resolve>[0]

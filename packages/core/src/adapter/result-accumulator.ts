@@ -20,6 +20,7 @@ import { sumUsageWhenComplete } from "./result-usage";
 import type { CruxRunId } from "../observability";
 import type { StreamCompletionPayload } from "./stream-result-types";
 import type { RequestReceipt } from "../request/receipt/receipt";
+import { recordRequestRetryCount } from "../request/receipt/receipt";
 
 export { createStreamResult } from "./result-stream";
 export { sumUsageWhenComplete } from "./result-usage";
@@ -155,6 +156,8 @@ export interface ResultStepFacts {
   readonly warnings?: readonly unknown[];
   /** Provider-owned metadata reported for this step. */
   readonly providerMetadata?: unknown;
+  /** Additional transport attempts made for this sealed request. */
+  readonly transportRetries?: number;
 }
 
 /** Fields supplied by the execution runtime when finalizing an envelope. */
@@ -195,6 +198,9 @@ export function createResultAccumulator() {
   return {
     /** Record one provider-call step after Crux policy has finalized its facts. */
     addStep(facts: ResultStepFacts): void {
+      if (facts.request) {
+        recordRequestRetryCount(facts.request, facts.transportRetries);
+      }
       steps.push(facts);
     },
 

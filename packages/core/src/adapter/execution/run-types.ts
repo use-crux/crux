@@ -66,9 +66,6 @@ export interface AdapterExecutionGenerateArgs<
   /** Provider override for prompt adaptation; defaults to the dialect id. */
   readonly provider?: string;
 
-  /** Token budget exposed to prompt resolution. */
-  readonly tokenBudget?: number;
-
   /** Whole-request input pressure settings applied to each provider call. */
   readonly inputBudget?: InputBudget;
 

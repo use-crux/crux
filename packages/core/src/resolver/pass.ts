@@ -220,7 +220,6 @@ export async function runPromptPass(
     ownSystem,
     postMerge.contexts,
     guardedInput,
-    opts.tokenBudget,
     ports,
     {
       ownProviderCache: config.cache?.provider === true,
@@ -283,13 +282,11 @@ export async function runPromptPass(
     input: _input,
     provider: _provider,
     modelId: _modelId,
-    tokenBudget: _tokenBudget,
     ...callSettings
   } = opts;
   void _input;
   void _provider;
   void _modelId;
-  void _tokenBudget;
   const settings = mergeSettings(
     config.settings,
     adaptation?.adaptation.settings,
@@ -299,9 +296,6 @@ export async function runPromptPass(
   const resolved: ResolvedPrompt = {
     ...(system ? { system } : {}),
     ...(!config.messages && systemBlocks.length > 0 ? { systemBlocks } : {}),
-    ...(composed.promptBudgetArtifactId
-      ? { promptBudgetArtifactId: composed.promptBudgetArtifactId }
-      : {}),
     ...(promptText ? { prompt: promptText } : {}),
     ...(messages ? { messages } : {}),
     ...(config.output ? { schema: config.output } : {}),
@@ -414,7 +408,6 @@ export async function runPromptPass(
       totalTokens: systemTokens + promptTokens,
       droppedContexts: composed.droppedContexts,
       excludedContexts: postMerge.excluded,
-      tokenBudget: opts.tokenBudget,
       tools: toolNames.length > 0 ? toolNames : undefined,
       ...(toolNames.length > 0
         ? {

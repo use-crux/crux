@@ -80,6 +80,10 @@ import {
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import {
+  assertSdkRequestPlanning,
+  createSdkRequestStepPlanner,
+} from "./sdk-request-planner";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -104,11 +108,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
 ): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
+  assertSdkRequestPlanning(dialect);
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
@@ -275,6 +279,16 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           safety,
           messages: () => messages,
         });
+  const planStep = createSdkRequestStepPlanner({
+    dialect,
+    settings: resolved.settings,
+    inputBudget: args.inputBudget,
+    schema: resolved.schema,
+    outputSchema: structuredPlan?.outputSchema,
+    tools: () =>
+      lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    extra: args.extra,
+  });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);
   const stepFacts: ResultStepFacts[] = [];
@@ -333,11 +347,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       provider: modelInfo.provider,
       model: modelInfo.modelId,
       media: dialect.media,
-      tokenBudget: args.tokenBudget,
     });
     return {
       model: args.model,
       modelInfo,
+      planStep,
       system: currentSystem,
       systemBlocks: currentSystemBlocks,
       prompt: promptText,
@@ -506,7 +520,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           finalResponse = regen.response;
           finalCostUsd = regen.meta.costUsd;
           resultMessages = [...regen.messages];
-          resultStepFacts.push(sdkResponseFacts(regen.response));
+          resultStepFacts.push(
+            ...(regen.stepFacts ?? [sdkResponseFacts(regen.response)]),
+          );
           return { text: regen.response.text, parsed: undefined };
         }
         return { text: finalText, parsed: undefined };

@@ -2,6 +2,7 @@ import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
+  RequestReceipt,
   SystemMessagePrefixPatch,
 } from "@use-crux/core/adapter";
 import {
@@ -11,8 +12,13 @@ import {
 import type { SdkGateway } from "../gateway";
 import type { SdkUsageLike } from "../meta";
 import { extractCost, normalizeUsage } from "../meta";
-import { dropTrailingAssistant, fromResponseMessages } from "../messages";
-import { buildSystemArg } from "../provider-profile";
+import {
+  dropTrailingAssistant,
+  fromResponseMessages,
+  lowerSealedAiSdkMessages,
+  normalizeAiSdkMessages,
+} from "../messages";
+import { buildSystemArg, extractModelInfo } from "../provider-profile";
 import { extractResponse } from "../result-shape";
 import { mapAiSdkFinishReason } from "../normalized-outcome";
 import { canonicalBase, buildBaseArgs } from "./request-args";
@@ -49,6 +55,7 @@ const APPROVAL_PART = "tool-approval-request";
 export function createLoopCallPlan(
   request: ExecutorRequest<LanguageModel>,
 ): AiSdkCallPlan<"generateText", ExecutorOutcome<SdkLoopResultLike>> {
+  const planStep = request.planStep;
   const args = buildBaseArgs(request, { includeTools: true });
   withToolCallRepair(args);
   const wrapStepModel = request.stepTransformer
@@ -58,6 +65,9 @@ export function createLoopCallPlan(
   let stopReason: string | undefined;
   let refunds = 0;
   let stepIndex = 0;
+  const requestReceipts: RequestReceipt[] = [];
+  let planningSystem = request.system;
+  let planningSystemBlocks = request.systemBlocks;
   let overrides:
     | {
         system?: ReturnType<typeof buildSystemArg>;
@@ -108,6 +118,9 @@ export function createLoopCallPlan(
           ? ([{ type: "text", text: step.text }] as const)
           : [];
       const directive = await observer.onStepEnd({
+        ...(requestReceipts[stepIndex]
+          ? { request: requestReceipts[stepIndex] }
+          : {}),
         index: stepIndex,
         text: step.text,
         content,
@@ -128,6 +141,13 @@ export function createLoopCallPlan(
       if (directive.kind === "stop") {
         stopReason = directive.reason ?? "observer";
       } else if (directive.kind === "amend") {
+        if (
+          directive.system !== undefined ||
+          directive.systemBlocks !== undefined
+        ) {
+          planningSystem = directive.system;
+          planningSystemBlocks = directive.systemBlocks;
+        }
         if (directive.refundStep) {
           refunds++;
           stepIndex--;
@@ -156,30 +176,29 @@ export function createLoopCallPlan(
       }
     };
   }
-  if (request.observer || wrapStepModel) {
-    args.prepareStep = ({
-      model,
-      messages,
-    }: {
-      model: Parameters<NonNullable<typeof wrapStepModel>>[0];
-      messages: readonly unknown[];
-    }) => {
-      const prefixPatch = overrides?.[systemMessagePrefixPatch];
-      const patchedMessages = prefixPatch
-        ? applyAiSdkSystemMessagePrefixPatch(messages, prefixPatch)
-        : undefined;
-      if (prefixPatch && overrides) {
-        overrides = {
-          ...(overrides.system !== undefined
-            ? { system: overrides.system }
-            : {}),
-          ...(overrides.activeTools !== undefined
-            ? { activeTools: overrides.activeTools }
-            : {}),
-        };
-      }
+  args.prepareStep = async ({
+    model,
+    messages,
+  }: {
+    model: Parameters<NonNullable<typeof wrapStepModel>>[0];
+    messages: Array<{ role: string; content: unknown }>;
+  }) => {
+    const prefixPatch = overrides?.[systemMessagePrefixPatch];
+    const patchedMessages = prefixPatch
+      ? applyAiSdkSystemMessagePrefixPatch(messages, prefixPatch)
+      : undefined;
+    if (prefixPatch && overrides) {
+      overrides = {
+        ...(overrides.system !== undefined ? { system: overrides.system } : {}),
+        ...(overrides.activeTools !== undefined
+          ? { activeTools: overrides.activeTools }
+          : {}),
+      };
+    }
+    const stepModel = wrapStepModel ? wrapStepModel(model) : model;
+    if (!planStep) {
       return {
-        ...(wrapStepModel ? { model: wrapStepModel(model) } : {}),
+        ...(wrapStepModel ? { model: stepModel } : {}),
         ...(overrides?.system !== undefined
           ? { system: overrides.system }
           : {}),
@@ -190,14 +209,54 @@ export function createLoopCallPlan(
           ? { messages: patchedMessages }
           : {}),
       };
+    }
+    const stepMessages = patchedMessages ?? messages;
+      const normalizedMessages = normalizeAiSdkMessages(
+        stepMessages as Array<{
+          role: string;
+          content: unknown;
+        }>,
+      );
+      const planned = await planStep({
+          model: stepModel,
+          modelInfo: extractModelInfo(stepModel),
+          system: planningSystem,
+          systemBlocks: planningSystemBlocks,
+          messages: normalizedMessages,
+        });
+    requestReceipts.push(planned.receipt);
+    return {
+      model: planned.model,
+      system: buildSystemArg(
+        planned.systemBlocks,
+        planned.system,
+        planned.modelInfo,
+      ),
+      ...(overrides?.activeTools !== undefined
+        ? { activeTools: [...overrides.activeTools] }
+        : {}),
+        messages: lowerSealedAiSdkMessages(
+          stepMessages as Array<{ role: string; content: unknown }>,
+          normalizedMessages,
+          planned.messages,
+          {
+            provider: planned.modelInfo.provider || "ai-sdk",
+            diagnostics: request.diagnostics,
+          },
+        ),
     };
-  }
+  };
 
   return {
     method: "generateText",
     args: args as Parameters<SdkGateway["generateText"]>[0],
     decode(raw): ExecutorOutcome<SdkLoopResultLike> {
-      return decodeLoopResult(request, raw as SdkLoopResultLike, refunds);
+      return decodeLoopResult(
+        request,
+        raw as SdkLoopResultLike,
+        refunds,
+        requestReceipts,
+      );
     },
   };
 }
@@ -206,6 +265,7 @@ function decodeLoopResult(
   request: ExecutorRequest<LanguageModel>,
   result: SdkLoopResultLike,
   refunds: number,
+  requestReceipts: readonly RequestReceipt[],
 ): ExecutorOutcome<SdkLoopResultLike> {
   const base = canonicalBase(request);
   const sdkSteps = result.steps?.length ?? 1;
@@ -239,7 +299,7 @@ function decodeLoopResult(
       ...fromResponseMessages(result.response?.messages ?? []),
     ],
     steps: budgetSteps,
-    stepFacts: sdkStepFacts(result.steps),
+    stepFacts: sdkStepFacts(result.steps, requestReceipts),
     meta: {
       costUsd: extractCost(result.providerMetadata),
       providerMetadata: result.providerMetadata,
@@ -249,14 +309,16 @@ function decodeLoopResult(
 
 function sdkStepFacts(
   steps: ReadonlyArray<SdkStepResultLike> | undefined,
+  requestReceipts: readonly RequestReceipt[],
 ): LoopStepFacts | undefined {
   if (!steps || steps.length === 0) return undefined;
-  const facts = steps.map((step) => {
+  const facts = steps.map((step, index) => {
     const usage = normalizeUsage(step.usage);
     const content = step.content
       ? decodeAssistantContentFromAiSdkParts(step.content)
       : undefined;
     return {
+      ...(requestReceipts[index] ? { request: requestReceipts[index] } : {}),
       content:
         content !== undefined && (content.length > 0 || !step.text)
           ? content

@@ -94,9 +94,6 @@ export function projectPromptInspection(
         source: context.source,
         reason: context.reason,
       })),
-      ...(inspection.tokenBudget !== undefined
-        ? { tokenBudget: inspection.tokenBudget }
-        : {}),
       ...(inspection.tools ? { tools: [...inspection.tools] } : {}),
     },
   };

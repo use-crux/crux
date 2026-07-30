@@ -21,18 +21,21 @@ export interface CanonicalOptionsFixture {
   readonly runtimeContext: Readonly<Record<string, unknown>>
   readonly activeTools: readonly string[]
   readonly timeout: {
-    readonly totalMs: number
-    readonly stepMs: number
-    readonly chunkMs: number
-    readonly toolMs: number
-    readonly tools: Readonly<Record<string, number>>
-  }
-  readonly tokenBudget: number
-  readonly validationRetry: ValidationRetryOptions
-  readonly constraints: readonly unknown[]
-  readonly constraintMaxRetries: number
-  readonly guardrails: readonly unknown[]
-  readonly abortSignal: AbortSignal
+    readonly totalMs: number;
+    readonly stepMs: number;
+    readonly chunkMs: number;
+    readonly toolMs: number;
+    readonly tools: Readonly<Record<string, number>>;
+  };
+  readonly inputBudget: {
+    readonly optimizeAt: number;
+    readonly max: number;
+  };
+  readonly validationRetry: ValidationRetryOptions;
+  readonly constraints: readonly unknown[];
+  readonly constraintMaxRetries: number;
+  readonly guardrails: readonly unknown[];
+  readonly abortSignal: AbortSignal;
   readonly transport: (
     params: unknown,
     info: { readonly stepIndex: number; readonly modelId: string; readonly signal: AbortSignal },
@@ -94,7 +97,7 @@ export function createCanonicalOptionsFixture(
       toolMs: 5_000,
       tools: { search: 1_000 },
     },
-    tokenBudget: 4_096,
+    inputBudget: { optimizeAt: 4_096, max: 8_192 },
     validationRetry: { maxRetries: 1 },
     constraints: [],
     constraintMaxRetries: 1,
