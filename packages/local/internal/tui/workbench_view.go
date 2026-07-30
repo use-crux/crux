@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
@@ -84,11 +85,24 @@ func overlayOnto(base, overlay string, width, height int) string {
 	left := max(0, (width-overlayWidth)/2)
 	top := max(0, (height-len(overlayLines))/3)
 	canvasHeight := max(len(baseLines), height)
-	compositor := lipgloss.NewCompositor(
-		lipgloss.NewLayer(base),
-		lipgloss.NewLayer(overlay).X(left).Y(top).Z(1),
-	)
-	return kit.PadBlock(compositor.Render(), width, canvasHeight)
+	canvas := strings.Split(kit.PadBlock(base, width, canvasHeight), "\n")
+	overlayWidth = min(width, overlayWidth)
+	for row, line := range overlayLines {
+		y := top + row
+		if y >= len(canvas) {
+			break
+		}
+		// A partial base row reads as a path or prose fragment beside a modal.
+		// Make every occupied row opaque across the viewport and isolate SGR at
+		// both seams; rows above and below still show the complete base.
+		right := max(0, width-left-overlayWidth)
+		canvas[y] = ansi.ResetStyle +
+			strings.Repeat(" ", left) +
+			kit.Fit(line, overlayWidth, "") +
+			ansi.ResetStyle +
+			strings.Repeat(" ", right)
+	}
+	return strings.Join(canvas, "\n")
 }
 
 func blockLines(value string) []string {

@@ -9,7 +9,7 @@ import (
 
 func TestFitMiddleNeverWraps(t *testing.T) {
 	for width := 1; width <= 100; width++ {
-		got := FitMiddle(width, "▸ Runs", "  · Last 1h", "sort: time ↓", "…")
+		got := FitMiddle(width, "▸ Runs", "  · last 1h", "sort: time ↓", "…")
 		if strings.Contains(got, "\n") {
 			t.Fatalf("width %d introduced a newline: %q", width, got)
 		}

@@ -10,7 +10,7 @@ import (
 
 func TestPaneTitleNeverWrapsAtSupportedWidths(t *testing.T) {
 	for width := 60; width <= 200; width++ {
-		view := shell.PaneHeader(width, "▸ Runs", "Last 1h", "sort: time ↓")
+		view := shell.PaneHeader(width, "▸ Runs", "last 1h", "sort: time ↓")
 		lines := strings.Split(view, "\n")
 		if len(lines) != 3 {
 			t.Fatalf("width %d rendered %d pane-header rows, want 3:\n%s", width, len(lines), view)

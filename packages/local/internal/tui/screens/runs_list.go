@@ -26,7 +26,7 @@ func (s *Runs) renderList(width, height int) string {
 	}
 	header := shell.PaneHeader(width,
 		focusTitle("Runs", s.focus == focusRuns),
-		"Last 1h", right)
+		"last 1h", right)
 	hdrH := strings.Count(header, "\n") + 1
 	status := resourceLifecycleStatus(listSnapshot.State, listSnapshot.Refreshing, listSnapshot.Err)
 	if status != "" {
