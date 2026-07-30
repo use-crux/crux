@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_KIND_INVALID
+description: An evidence kind is malformed, reserved, or cannot be resolved.
+---
+
+## What failed
+
+Inline custom evidence did not use a valid non-empty `custom.*` kind, or a
+referenced source had no trusted resolvable canonical kind.
+
+## Retryability
+
+Not retryable. The kind must be corrected.
+
+The diagnostic does not return the rejected application-authored kind.
+
+## Fix
+
+Use `custom.your-kind` for inline authoring. When linking a remote artifact,
+pass its exact valid canonical or `custom.*` kind.

@@ -7,6 +7,11 @@ import type { DenseEmbedding } from '../embedding'
 import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
 import { memoryDefinitionRef } from '../observability/definition-ref'
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from '../evidence/internal'
 
 /**
  * Structured `invoked-memory` ref for a memory span, or `{}` when the memory is
@@ -445,7 +450,7 @@ function emitMemoryObservation(
       }
       const diff = memoryDiffInput(attributes.diff)
       if (diff) {
-        const artifactId = observe.artifact({
+        const artifact = emitNativeEvidenceArtifact({
           kind: 'memory.diff',
           contentType: 'application/json',
           encoding: 'json',
@@ -463,12 +468,18 @@ function emitMemoryObservation(
             namespaceHash: namespaceHash(ctx.namespace),
           },
         })
-        if (artifactId) {
+        if (artifact) {
+          const artifactId = nativeEvidenceArtifactRef(artifact).id
           observe.edge({
             edgeType: 'memory.write',
             from: { kind: 'span', id: span.spanId },
             to: { kind: 'artifact', id: artifactId },
             attributes: { memoryId, blockId: block.id, blockKind: block.kind, operation },
+          })
+          recordNativeEvidence({
+            artifact,
+            subject: { kind: 'execution', id: span.spanId },
+            role: 'change',
           })
         }
       }

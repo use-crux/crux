@@ -10,6 +10,17 @@ import (
 
 func (s *Service) Ingest(ctx context.Context, batch Batch) error {
 	err := s.ingest(ctx, batch)
+	var evidenceError *evidenceDispositionError
+	if errors.As(err, &evidenceError) &&
+		evidenceError.code == evidenceStagingCapacityCode {
+		if healthErr := s.recordEvidenceIngestHealthOutsideTransaction(
+			context.Background(),
+			evidenceStagingCapacityCode,
+			1,
+		); healthErr != nil {
+			return fmt.Errorf("%w; %v", err, healthErr)
+		}
+	}
 	var conflict *recordIDConflictError
 	if err == nil || !errors.As(err, &conflict) {
 		return err
@@ -31,6 +42,10 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 
 	s.mutationMu.Lock()
 	defer s.mutationMu.Unlock()
+
+	if err := s.cleanupEvidenceCandidatesForBatch(ctx, batch); err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

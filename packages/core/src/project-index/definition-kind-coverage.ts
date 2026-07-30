@@ -187,6 +187,11 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["embedding.call"],
   },
+  "evidence.record": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["evidence.record"],
+  },
   "rag.indexer": {
     primary: "runtime-observed-unjoined",
     runtimeIdentity: "none",

@@ -143,6 +143,36 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         ],
       },
     },
+    {
+      name: "authored-evidence-record-shared-analyzer",
+      workspacePackages: ["core"],
+      compilerOptions: { allowJs: true, checkJs: true },
+      files: {
+        "src/bridge.ts": `
+          export { evidence as proof } from '@use-crux/core'
+        `,
+        "src/evidence.ts": `
+          import { proof } from './bridge'
+          const request = {
+            role: 'verification',
+            kind: 'output',
+            data: { secret: 'PRIVATE_EVIDENCE_PARITY_SENTINEL' },
+          } as const
+          proof.record(request)
+        `,
+        "src/evidence.js": `
+          import { evidence as proof } from '@use-crux/core'
+          proof.record({
+            role: 'intent',
+            kind: 'custom.review',
+            ref: { kind: 'artifact', id: 'PRIVATE_EVIDENCE_REF' },
+          })
+        `,
+      },
+      expect: {
+        lintRuleIds: ["evidence.reserved-inline-kind"],
+      },
+    },
     completionSemanticParityFixture,
     {
       name: "authored-media-shared-analyzer",

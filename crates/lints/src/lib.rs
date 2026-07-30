@@ -26,6 +26,7 @@ mod rules {
     pub(crate) mod core;
     pub(crate) mod defer;
     pub(crate) mod definition_tail;
+    pub(crate) mod evidence;
     pub(crate) mod filter;
     pub(crate) mod relation;
     pub(crate) mod routing;

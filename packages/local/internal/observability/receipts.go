@@ -2,6 +2,8 @@ package observability
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -67,16 +69,22 @@ func (s *Service) RecordSourceHealth(ctx context.Context, health SourceHealth) e
 	defer cancel()
 	s.mutationMu.Lock()
 	defer s.mutationMu.Unlock()
-	var code, message string
+	var code, message, evidenceIDsJSON string
 	if health.LastError != nil {
 		code = sanitizeHealthToken(health.LastError.Code, 80)
 		message = sanitizeHealthMessage(health.LastError.Message)
+		encoded, err := json.Marshal(uniqueStrings(health.LastError.EvidenceIDs))
+		if err != nil {
+			return fmt.Errorf("encode observability source health evidence correlation: %w", err)
+		}
+		evidenceIDsJSON = string(encoded)
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO observability_source_health (
 			source_id, accepted, retried, permanently_rejected,
-			overflow_dropped, deadline_dropped, last_error_code, last_error_message
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			overflow_dropped, deadline_dropped, last_error_code,
+			last_error_message, last_error_evidence_ids_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(source_id) DO UPDATE SET
 			accepted = max(observability_source_health.accepted, excluded.accepted),
 			retried = max(observability_source_health.retried, excluded.retried),
@@ -85,9 +93,15 @@ func (s *Service) RecordSourceHealth(ctx context.Context, health SourceHealth) e
 			deadline_dropped = max(observability_source_health.deadline_dropped, excluded.deadline_dropped),
 			last_error_code = coalesce(excluded.last_error_code, observability_source_health.last_error_code),
 			last_error_message = coalesce(excluded.last_error_message, observability_source_health.last_error_message),
+			last_error_evidence_ids_json = CASE
+				WHEN excluded.last_error_code IS NOT NULL
+				THEN excluded.last_error_evidence_ids_json
+				ELSE observability_source_health.last_error_evidence_ids_json
+			END,
 			updated_at = CURRENT_TIMESTAMP
 	`, health.SourceID, health.Accepted, health.Retried, health.PermanentlyRejected,
-		health.OverflowDropped, health.DeadlineDropped, nullIfEmpty(code), nullIfEmpty(message))
+		health.OverflowDropped, health.DeadlineDropped, nullIfEmpty(code),
+		nullIfEmpty(message), nullIfEmpty(evidenceIDsJSON))
 	if err != nil {
 		return fmt.Errorf("persist observability source health: %w", err)
 	}
@@ -140,6 +154,10 @@ func rejectedDisposition(index int, recordID, code string, retryable bool) Inges
 }
 
 func classifyIngestDisposition(err error) (string, bool) {
+	var evidenceError *evidenceDispositionError
+	if errors.As(err, &evidenceError) {
+		return evidenceError.code, evidenceError.retryable
+	}
 	message := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(message, "operation_deleted"):
@@ -173,6 +191,14 @@ func dispositionMessage(code string) string {
 		return "segment sequence already identifies another record"
 	case "invalid_record":
 		return "record failed canonical validation"
+	case evidenceIdempotencyConflictCode:
+		return "Content diverges from the first accepted content for this evidence identity."
+	case evidenceStagingCapacityCode:
+		return "evidence staging is temporarily at capacity"
+	case evidenceStagingCandidateTooLargeCode:
+		return "evidence candidate exceeds the fixed staging size limit"
+	case evidencePrivacyDeletedCode:
+		return evidencePrivacyDeletedMessage
 	default:
 		return "observability ingest is temporarily unavailable"
 	}
@@ -185,7 +211,33 @@ func validateSourceHealth(health SourceHealth) error {
 	if health.Accepted < 0 || health.Retried < 0 || health.PermanentlyRejected < 0 || health.OverflowDropped < 0 || health.DeadlineDropped < 0 {
 		return fmt.Errorf("invalid negative observability source health counter")
 	}
+	if health.LastError != nil {
+		if len(health.LastError.EvidenceIDs) > 16 {
+			return fmt.Errorf("too many observability source health evidence IDs")
+		}
+		for _, evidenceID := range health.LastError.EvidenceIDs {
+			if !evidenceIDPattern.MatchString(evidenceID) {
+				return fmt.Errorf("invalid observability source health evidence ID")
+			}
+		}
+	}
 	return nil
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func sanitizeHealthToken(value string, maximum int) string {

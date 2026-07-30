@@ -62,14 +62,14 @@ describe('observability deployment identity', () => {
     await crux.dispose()
   })
 
-  it('writes schema v4 and rejects records without operation identity', () => {
-    expect(CRUX_OBSERVABILITY_SCHEMA_VERSION).toBe(4)
+  it('writes schema v5 and rejects records without operation identity', () => {
+    expect(CRUX_OBSERVABILITY_SCHEMA_VERSION).toBe(5)
     expect(CruxGraphRecordSchema.safeParse(persistedV2RunStart).success).toBe(
       false,
     )
     const current = {
       ...persistedV2RunStart,
-      schemaVersion: 4,
+      schemaVersion: 5,
       operationId: persistedV2RunStart.runId,
       deployment: identity,
     }

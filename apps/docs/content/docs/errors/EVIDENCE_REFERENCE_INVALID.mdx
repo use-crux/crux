@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_REFERENCE_INVALID
+description: An evidence subject or source is not a canonical graph reference.
+---
+
+## What failed
+
+The execution, artifact, or reserved effect-receipt reference is malformed or
+cannot be projected safely.
+
+## Retryability
+
+Not retryable. The reference must be corrected.
+
+The diagnostic never echoes raw resource IDs or paths.
+
+## Fix
+
+Use exact Crux-issued execution and artifact identities. Effect-receipt
+projection remains unavailable until the Effects receipt contract ships.

@@ -1,0 +1,48 @@
+{
+  "marker": {
+    "approvalOccurrence": {
+      "domain": "crux.tool.approval",
+      "identityEpoch": 1,
+      "namespace": {
+        "operationId": "run_111111111111111111111111",
+        "runId": "run_222222222222222222222222"
+      },
+      "approvalId": "approval_call_α",
+      "slot": "request"
+    }
+  },
+  "expectedArtifactId": "artifact_66b1c7d0f1ce62e8c0b2f1df489d37680a70a101e27da1e81d8b52e2cae7ad47",
+  "bounds": {
+    "prefix": "approval_",
+    "maximumScalars": 512,
+    "maximumUtf8Bytes": 2048
+  },
+  "approvalIdCases": [
+    { "value": "approval_a", "valid": true },
+    { "value": "approval_call_α", "valid": true },
+    { "value": "approval_a b", "valid": true },
+    { "value": "approval_a b", "valid": true },
+    { "value": "approval_a‍b", "valid": true },
+    { "value": "approval_", "valid": false },
+    { "value": "other_a", "valid": false },
+    { "value": "approval_\ta", "valid": false },
+    { "value": "approval_a\r", "valid": false },
+    { "value": "approval_ a", "valid": false },
+    { "value": "approval_a", "valid": false },
+    { "value": "approval_a ", "valid": false },
+    { "value": "approval_ a", "valid": false },
+    { "value": "approval_ a", "valid": false },
+    { "value": "approval_a ", "valid": false },
+    { "value": "approval_ a", "valid": false },
+    { "value": "approval_a ", "valid": false },
+    { "value": "approval_ a", "valid": false },
+    { "value": "approval_a ", "valid": false },
+    { "value": "approval_　a", "valid": false },
+    { "value": "approval_a﻿", "valid": false },
+    { "value": "approval_a\u0000b", "valid": false },
+    { "value": "approval_a\u001fb", "valid": false },
+    { "value": "approval_ab", "valid": false },
+    { "value": "approval_ab", "valid": false },
+    { "value": "approval_a\nb", "valid": false }
+  ]
+}

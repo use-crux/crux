@@ -1,0 +1,19 @@
+---
+title: EVIDENCE_SUBJECT_REQUIRED
+description: Evidence authoring had no explicit or active execution subject.
+---
+
+## What failed
+
+`evidence.record()` could not resolve the execution or artifact being described.
+
+## Retryability
+
+Not retryable. The same call still has no subject.
+
+The diagnostic contains no ambient execution or caller input.
+
+## Fix
+
+Call it inside the execution it describes or pass an exact `subject`
+explicitly. Do not infer a verification subject from span nesting or time.

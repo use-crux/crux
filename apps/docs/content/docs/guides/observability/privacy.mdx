@@ -165,6 +165,22 @@ An enforcing policy may be presented as **held, then released** or **held, then
 discarded** based on terminal and Safety facts. That label does not imply the
 held bytes were captured. Report mode may be shown as live.
 
+### Execution evidence
+
+Qualified execution evidence uses an even narrower positive allowlist.
+`crux.evidence` contains only the validated evidence ID, role, canonical or
+normalized `custom` kind, optional role-valid conclusion, and canonical subject
+kind. Coverage contains only role and status. Evidence payloads, raw custom
+kinds, graph endpoints, raw resource IDs, paths, recovery envelopes,
+idempotency keys, content digests, producer identity, supersession, markers,
+and arbitrary attributes are always excluded.
+
+Local payload expiry returns `payloadState: "redacted"` and may expose the
+bounded reason `retention`; access-controlled reads prefer the less revealing
+`access`. Explicit privacy deletion writes only private resurrection guards and
+permanently rejects delayed evidence retries. See
+[Execution evidence](/docs/guides/observability/execution-evidence).
+
 ## Storage and Memory explorers
 
 DevTools Storage and related resource views show wiring, capabilities, and operation summaries. They do not display record values, vector contents, blob bodies, or signed URLs unless the application explicitly enables raw debug inspection.
@@ -174,4 +190,5 @@ DevTools Storage and related resource views show wiring, capabilities, and opera
 - [Adapter outcomes](/docs/guides/observability/adapter-outcomes)
 - [Telemetry](/docs/guides/observability/telemetry)
 - [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+- [Execution evidence](/docs/guides/observability/execution-evidence)
 - [Observability reference](/docs/reference/crux-core/observability)

@@ -145,6 +145,22 @@ provider-native events are dropped before OTel mapping.
 
 Generate/stream spans follow Crux's pinned `genai-dev-2026-06` GenAI semantic convention table. Attributes like `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.client.operation.duration`, and `gen_ai.server.time_to_first_token` work with dashboards and alerting rules while keeping semconv churn isolated to one versioned table.
 
+### Execution evidence
+
+Qualified `evidence.for` relationships bypass generic edge projection and
+become dedicated `crux.evidence` events on the protected producer span. Their
+exact attributes are `crux.evidence.id`, `crux.evidence.role`,
+`crux.evidence.kind`, optional `crux.evidence.conclusion`, and
+`crux.evidence.subject_kind`. Application `custom.*` kinds normalize to
+`custom`. Coverage maps separately to `crux.evidence.coverage` with role and
+coverage status; coverage conflicts expose only role.
+
+The evidence ID is for event correlation with Local and delivery diagnostics.
+Never promote it to a span/resource attribute or use it as a metric dimension.
+Payloads, graph endpoints, producer identity, paths, raw keys, digests, and
+arbitrary evidence attributes are not exported. See the complete
+[positive and negative allowlists](/docs/guides/observability/execution-evidence#privacy-and-opentelemetry).
+
 ## Running alongside devtools
 
 Both local devtools and OTel can run simultaneously. Use `observability.serverUrl` for a local server

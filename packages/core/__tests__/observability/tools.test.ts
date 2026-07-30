@@ -327,6 +327,7 @@ describe('canonical tool observability', () => {
       toolApproval: { deletePost: 'always' },
     })
     const approval = pending.messages.flatMap((message) => message.metadata?.toolApprovalRequests ?? [])[0]
+    expect(approval.replay).toBeUndefined()
     const deniedMessages = appendToolApprovalResponse(pending.messages, {
       approvalId: approval.approvalId,
       approvalToken: approval.approvalToken,
@@ -356,13 +357,55 @@ describe('canonical tool observability', () => {
         name: 'deletePost.approval.denied',
       }),
     )
-    expect(transport.records).not.toContainEqual(
+    const attemptedCalls = transport.records.filter(
+      (record) =>
+        record.type === 'span:start' &&
+        record.primitive === 'tool.call' &&
+        record.name === 'deletePost',
+    )
+    expect(attemptedCalls).toHaveLength(1)
+    expect(transport.records).toContainEqual(
       expect.objectContaining({
-        type: 'span:start',
-        primitive: 'tool.call',
-        name: 'deletePost',
+        type: 'span:end',
+        spanId: attemptedCalls[0]!.spanId,
+        status: 'suspended',
       }),
     )
+    const approvalArtifacts = transport.records.filter(
+      (record) =>
+        record.type === 'artifact' &&
+        (record.kind === 'approval.request' ||
+          record.kind === 'approval.decision'),
+    )
+    expect(approvalArtifacts).toEqual([
+      expect.objectContaining({
+        kind: 'approval.request',
+        preview: { status: 'requested' },
+        attributes: {
+          approvalOccurrence: expect.objectContaining({
+            domain: 'crux.tool.approval',
+            slot: 'request',
+          }),
+        },
+      }),
+    ])
+    const authority = transport.records.filter(
+      (record) =>
+        record.type === 'edge' &&
+        record.edgeType === 'evidence.for' &&
+        record.attributes.role === 'authority',
+    )
+    const requested = authority.find(
+      (record) => record.attributes.conclusion === 'inconclusive',
+    )
+    expect(requested).toMatchObject({
+      to: { kind: 'span', id: attemptedCalls[0]!.spanId },
+    })
+    expect(
+      authority.some(
+        (record) => record.attributes.conclusion === 'denied',
+      ),
+    ).toBe(false)
   })
 
   it('redacts approval request tool args before capture', async () => {
@@ -459,6 +502,27 @@ describe('canonical tool observability', () => {
         name: 'deletePost',
       }),
     )
+    const calls = transport.records.filter(
+      (record) =>
+        record.type === 'span:start' &&
+        record.primitive === 'tool.call' &&
+        record.name === 'deletePost',
+    )
+    expect(calls).toHaveLength(2)
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        spanId: calls[0]!.spanId,
+        status: 'suspended',
+      }),
+    )
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === 'artifact' &&
+          record.kind === 'approval.decision',
+      ),
+    ).toBe(false)
   })
 
     it('records approval token mismatches as errored tool.approval spans and invalid denial results', async () => {

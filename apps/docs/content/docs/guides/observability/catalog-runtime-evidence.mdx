@@ -62,6 +62,21 @@ Catalog Health uses the same active-versus-suppressed distinction. Its badges,
 severity, rule, affected-definition, and default verdict counts are active-only,
 while suppressed rows remain available for audit. See [Index Lint](/docs/guides/project-health/lint#fix-before-suppressing).
 
+## Authored and observed execution evidence
+
+Catalog gives a statically valid `evidence.record()` call its own definition,
+source location, diagnostics, role/kind coverage, and proven subject relation.
+It deliberately omits payloads, conclusions, and idempotency values. The
+definition means “this source can author a claim,” not “the claim was recorded”
+or “the claim is true.”
+
+When Local has observed evidence for a related canonical subject, Catalog can
+navigate to the filtered Runs view. Run Detail then uses the durable evidence
+read model to show conclusions, conflicts, explicit supersession/history,
+payload availability, and retained producer/source navigation. Historical
+DefinitionRefs stay historical; a separate Catalog action may attempt to open
+the current definition with the same stable ID.
+
 ## Honest gaps
 
 Crux only joins when the runtime already holds a real compiled definition handle; it never invents an id from a stack trace, so a few kinds stay truthfully uncounted:
@@ -78,6 +93,7 @@ For status vocabulary and delivery health on those runs, see [Runs and delivery 
 ## Related
 
 - [Devtools](/docs/guides/observability/devtools): dashboard surfaces
+- [Execution evidence](/docs/guides/observability/execution-evidence)
 - [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
 - [Privacy](/docs/guides/observability/privacy): `DefinitionRef.source` sanitization
 - [Troubleshooting](/docs/guides/observability/troubleshooting): "why doesn't my definition show runs?"

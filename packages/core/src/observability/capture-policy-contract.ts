@@ -37,6 +37,7 @@ export type CruxObservabilityRedactionPattern =
 export type CruxSafetyArtifactKind = Extract<
   CruxCanonicalArtifactKind,
   | 'approval.request'
+  | 'approval.decision'
   | 'constraint.report'
   | 'guardrail.report'
   | 'memory.write'
@@ -149,6 +150,7 @@ export type CruxObservabilityArtifactCaptureDecision =
 
 export const ARTIFACT_CAPTURE_DECISIONS = {
   'approval.request': 'safety',
+  'approval.decision': 'safety',
   input: 'input',
   messages: 'input',
   system: 'input',

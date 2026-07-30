@@ -10,6 +10,11 @@
 
 import { observe } from "../observability";
 import { workspaceDefinitionRef } from "../observability/definition-ref";
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from "../evidence/internal";
 import type { WorkspaceProvenance } from "./artifact-types";
 import {
   snapshotObservationError,
@@ -118,7 +123,7 @@ function emitWorkspaceArtifact(
 ): void {
   const preview = workspaceResultPreview(result, event);
   if (preview === undefined) return;
-  const artifactId = observe.artifact({
+  const artifactOptions = {
     kind: "output",
     contentType: "application/json",
     encoding: "json",
@@ -131,7 +136,15 @@ function emitWorkspaceArtifact(
       pathHash: hashString(event.path),
       ...workspaceResultAttributes(result),
     },
-  });
+  } as const;
+  const nativeArtifact = isWorkspaceChangeOperation(event.operation)
+    ? emitNativeEvidenceArtifact(artifactOptions)
+    : undefined;
+  const artifactId = nativeArtifact
+    ? nativeEvidenceArtifactRef(nativeArtifact).id
+    : isWorkspaceChangeOperation(event.operation)
+      ? undefined
+      : observe.artifact(artifactOptions);
   if (!artifactId) return;
   observe.edge({
     edgeType: "produced",
@@ -143,13 +156,27 @@ function emitWorkspaceArtifact(
       workspaceId: event.workspaceId,
     },
   });
+  if (nativeArtifact) {
+    recordNativeEvidence({
+      artifact: nativeArtifact,
+      subject: { kind: "execution", id: spanId },
+      role: "change",
+    });
+  }
 }
 
 function workspaceResultPreview(
   result: unknown,
   event: WorkspaceEvent,
 ): Record<string, unknown> | undefined {
-  if (!result || typeof result !== "object") return undefined;
+  if (!result || typeof result !== "object") {
+    return isWorkspaceChangeOperation(event.operation)
+      ? {
+          resultKind: "mutation",
+          operation: event.operation,
+        }
+      : undefined;
+  }
   const record = result as Record<string, unknown>;
   if (Array.isArray(record.entries)) {
     return {
@@ -202,6 +229,23 @@ function workspaceResultPreview(
     };
   }
   return undefined;
+}
+
+/** Exact mutation contracts that produce native change evidence. */
+function isWorkspaceChangeOperation(
+  operation: WorkspaceOperation,
+): boolean {
+  return (
+    operation === "write" ||
+    operation === "edit" ||
+    operation === "delete" ||
+    operation === "append" ||
+    operation === "move" ||
+    operation === "copy" ||
+    operation === "finalize" ||
+    operation === "snapshot.restore" ||
+    operation === "transaction"
+  );
 }
 
 function workspaceEntryPreview(entry: unknown): Record<string, unknown> {

@@ -4,266 +4,18 @@ import type {
 } from "../project-index";
 import type { ModelInputOrigin } from "../safety/input-origin";
 import type { SafetyFinding } from "../safety/decision";
+import type {
+  CruxArtifactKind,
+  CruxEdgeType,
+  CruxPrimitiveFamily,
+  CruxPrimitiveName,
+} from "./taxonomy";
+export * from "./taxonomy";
 
-export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 4;
+export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 5;
 
 export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
 
-export const CRUX_PRIMITIVE_FAMILIES = [
-  "run",
-  "generation",
-  "media",
-  "prompt",
-  "context",
-  "agent",
-  "flow",
-  "composition",
-  "tool",
-  "mcp",
-  "retrieval",
-  "embedding",
-  "memory",
-  "constraint",
-  "guardrail",
-  "routing",
-  "cache",
-  "compaction",
-  "cost",
-  "eval",
-  "scoring",
-  "citation",
-  "handoff",
-  "delegate",
-  "plan",
-  "task",
-  "workspace",
-  "indexing",
-  "ingest",
-  "corpus",
-  "skill",
-  "security",
-  "feedback",
-  "runtime",
-  "defer",
-  "custom",
-] as const;
-
-export const CRUX_PRIMITIVE_NAMES = [
-  "run",
-  "generation.call",
-  "generation.stream",
-  "generation.stream.attempt",
-  "media.generate_image",
-  "media.transcribe",
-  "media.generate_speech",
-  "media.describe",
-  "prompt.resolve",
-  "prompt.budget",
-  "context.resolve",
-  "context.predicate",
-  "context.cache",
-  "agent.run",
-  "flow.run",
-  "flow.step",
-  "flow.suspension",
-  "composition.parallel",
-  "composition.pipeline",
-  "composition.consensus",
-  "composition.swarm",
-  "composition.branch",
-  "composition.join",
-  "composition.vote",
-  "tool.call",
-  "tool.approval",
-  "mcp.connect",
-  "mcp.discover",
-  "retrieval.pipeline",
-  "retrieval.recipe",
-  "retrieval.retrieve",
-  "retrieval.query",
-  "retrieval.stage",
-  "retrieval.step",
-  "embedding.call",
-  "memory.capture",
-  "memory.read",
-  "memory.write",
-  "constraint.check",
-  "constraint.retry",
-  "guardrail.run",
-  "routing.router",
-  "routing.split",
-  "routing.retry",
-  "routing.cascade",
-  "routing.fallback",
-  "cache.lookup",
-  "compaction.run",
-  "eval.run",
-  "eval.case",
-  "scoring.judge",
-  "citation.check",
-  "handoff.prepare",
-  "delegate.invoke",
-  "plan.operation",
-  "task.operation",
-  "workspace.operation",
-  "indexing.pipeline",
-  "ingest.parse",
-  "corpus.sync",
-  "skill.load",
-  "security.warning",
-  "cost.record",
-  "feedback.record",
-  "runtime.convex.action",
-  "runtime.convex.query",
-  "runtime.convex.mutation",
-  "runtime.convex.schedule",
-  "runtime.convex.resume",
-  "runtime.convex.flush",
-  "defer.scheduled",
-  "defer.run",
-  "custom.operation",
-] as const;
-
-export const CRUX_CANONICAL_EDGE_TYPES = [
-  "caused",
-  "triggered",
-  "called",
-  "explains",
-  "produced",
-  "consumed",
-  "handoff.payload",
-  "delegate.invoked",
-  "memory.read",
-  "memory.write",
-  "retrieval.returned",
-  "citation.used",
-  "constraint.retry",
-  "guardrail.blocked",
-  "fallback.attempt",
-  "replay.of",
-  "feedback.for",
-  "eval.case_of",
-  "derived.from",
-] as const;
-
-export const CRUX_CANONICAL_ARTIFACT_KINDS = [
-  "approval.request",
-  "input",
-  "output",
-  "messages",
-  "system",
-  "context",
-  "context.contribution",
-  "prompt",
-  "prompt.budget",
-  "tool.args",
-  "tool.request",
-  "tool.result",
-  "retrieval.hits",
-  "memory.snapshot",
-  "memory.recall",
-  "memory.diff",
-  "memory.write",
-  "handoff.payload",
-  "delegate.report",
-  "constraint.report",
-  "guardrail.report",
-  "validation.feedback",
-  "error.stack",
-  "error.raw",
-  "stream.timeline",
-  "score.report",
-  "citation.report",
-  "composition.report",
-  "routing.report",
-  "cache.report",
-  "compaction.report",
-  "embedding.report",
-  "indexing.report",
-  "ingest.report",
-  "corpus.report",
-  "security.report",
-  "media.report",
-] as const;
-
-export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
-  run: "run",
-  "generation.call": "generation",
-  "generation.stream": "generation",
-  "generation.stream.attempt": "generation",
-  "media.generate_image": "media",
-  "media.transcribe": "media",
-  "media.generate_speech": "media",
-  "media.describe": "media",
-  "prompt.resolve": "prompt",
-  "prompt.budget": "prompt",
-  "context.resolve": "context",
-  "context.predicate": "context",
-  "context.cache": "context",
-  "agent.run": "agent",
-  "flow.run": "flow",
-  "flow.step": "flow",
-  "flow.suspension": "flow",
-  "composition.parallel": "composition",
-  "composition.pipeline": "composition",
-  "composition.consensus": "composition",
-  "composition.swarm": "composition",
-  "composition.branch": "composition",
-  "composition.join": "composition",
-  "composition.vote": "composition",
-  "tool.call": "tool",
-  "tool.approval": "tool",
-  "mcp.connect": "mcp",
-  "mcp.discover": "mcp",
-  "retrieval.pipeline": "retrieval",
-  "retrieval.recipe": "retrieval",
-  "retrieval.retrieve": "retrieval",
-  "retrieval.query": "retrieval",
-  "retrieval.stage": "retrieval",
-  "retrieval.step": "retrieval",
-  "embedding.call": "embedding",
-  "memory.capture": "memory",
-  "memory.read": "memory",
-  "memory.write": "memory",
-  "constraint.check": "constraint",
-  "constraint.retry": "constraint",
-  "guardrail.run": "guardrail",
-  "routing.router": "routing",
-  "routing.split": "routing",
-  "routing.retry": "routing",
-  "routing.cascade": "routing",
-  "routing.fallback": "routing",
-  "cache.lookup": "cache",
-  "compaction.run": "compaction",
-  "eval.run": "eval",
-  "eval.case": "eval",
-  "scoring.judge": "scoring",
-  "citation.check": "citation",
-  "handoff.prepare": "handoff",
-  "delegate.invoke": "delegate",
-  "plan.operation": "plan",
-  "task.operation": "task",
-  "workspace.operation": "workspace",
-  "indexing.pipeline": "indexing",
-  "ingest.parse": "ingest",
-  "corpus.sync": "corpus",
-  "skill.load": "skill",
-  "security.warning": "security",
-  "cost.record": "cost",
-  "feedback.record": "feedback",
-  "runtime.convex.action": "runtime",
-  "runtime.convex.query": "runtime",
-  "runtime.convex.mutation": "runtime",
-  "runtime.convex.schedule": "runtime",
-  "runtime.convex.resume": "runtime",
-  "runtime.convex.flush": "runtime",
-  "defer.scheduled": "defer",
-  "defer.run": "defer",
-  "custom.operation": "custom",
-} as const satisfies Record<
-  (typeof CRUX_PRIMITIVE_NAMES)[number],
-  (typeof CRUX_PRIMITIVE_FAMILIES)[number]
->;
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -285,10 +37,6 @@ export type CruxRunStatus =
   | "suspended";
 export type CruxSpanStatus = CruxRunStatus | "skipped";
 
-export type CruxPrimitiveFamily = (typeof CRUX_PRIMITIVE_FAMILIES)[number];
-
-export type CruxPrimitiveName = (typeof CRUX_PRIMITIVE_NAMES)[number];
-
 export interface CruxContentDegradedEventAttributes extends Record<
   string,
   unknown
@@ -299,17 +47,6 @@ export interface CruxContentDegradedEventAttributes extends Record<
   provider: string;
   reason: string;
 }
-
-export type CruxCustomEdgeType = `custom.${string}`;
-export type CruxCanonicalEdgeType = (typeof CRUX_CANONICAL_EDGE_TYPES)[number];
-export type CruxEdgeType = CruxCanonicalEdgeType | CruxCustomEdgeType;
-
-export type CruxCustomArtifactKind = `custom.${string}`;
-export type CruxCanonicalArtifactKind =
-  (typeof CRUX_CANONICAL_ARTIFACT_KINDS)[number];
-export type CruxArtifactKind =
-  | CruxCanonicalArtifactKind
-  | CruxCustomArtifactKind;
 
 export type CruxContextContributionState =
   | "active"

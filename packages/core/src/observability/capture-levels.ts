@@ -16,6 +16,10 @@ import {
   serializePreview,
 } from './capture-policy-utils'
 import { sanitizeMediaPreview } from './media-preview'
+import {
+  evidenceReferenceMetadata,
+  withEvidenceSourceCaptureState,
+} from './evidence-source-capture'
 
 type ArtifactOptions = ObserveArtifactOptions
 type ArtifactRecord = Extract<
@@ -103,10 +107,10 @@ function applyCaptureLevel(
       uri: _uri,
       ...offRest
     } = artifact
-    return {
+    return withEvidenceSourceCaptureState({
       ...offRest,
       encoding: 'reference',
-    }
+    }, 'not-captured')
   }
 
   if (artifact.preview === undefined) return artifact
@@ -120,12 +124,22 @@ function applyCaptureLevel(
 
   const { preview: _preview, ...rest } = artifact
   const serialized = serializePreview(artifact.preview)
-  return {
+  const evidenceMetadata = evidenceReferenceMetadata(
+    artifact,
+    artifact.preview,
+  )
+  return withEvidenceSourceCaptureState({
     ...rest,
     encoding: 'reference',
-    sizeBytes: artifact.sizeBytes ?? byteLength(serialized),
-    hash: artifact.hash ?? hashString(serialized),
-  }
+    sizeBytes:
+      evidenceMetadata?.sizeBytes ??
+      artifact.sizeBytes ??
+      byteLength(serialized),
+    hash:
+      evidenceMetadata?.hash ??
+      artifact.hash ??
+      hashString(serialized),
+  }, 'reference')
 }
 
 /** Resolve the capture level for an input or output artifact family. */
@@ -145,8 +159,7 @@ export function captureLevelForArtifact(
   kind: CruxArtifactKind,
 ): CruxObservabilityCaptureLevel | undefined {
   if (kind.startsWith('custom.')) {
-    if (!shouldStripPayloadAttributes(modes)) return undefined
-    return 'evidence'
+    return defaultSafetyCaptureLevel(modes)
   }
   if (!isCanonicalArtifactKind(kind)) return undefined
 

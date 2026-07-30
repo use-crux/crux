@@ -41,6 +41,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\bscorer\s*\(/,
   /\bllmJudge\s*\(/,
   /\bevaluate\s*\(/,
+  /\brecord\s*\(/,
   /\bnew\s+Agent\s*\(/,
 ]
 

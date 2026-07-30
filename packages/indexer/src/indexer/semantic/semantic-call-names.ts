@@ -53,6 +53,7 @@ const firstPartySemanticCallNames = [
   "toolPolicy",
   "context",
   "prompt",
+  "record",
   "when",
   "workspace",
   ...mediaOperationNames,

@@ -110,22 +110,22 @@ func TestObservabilitySoakReconcilesEmittedAcceptedRejectedAndVisibleCounts(t *t
 	// --- Fault 1: freshRuns distinct, ordinary one-segment success runs. ---
 	for i := 0; i < freshRuns; i++ {
 		runID := fmt.Sprintf("soak_run_fresh_%d", i)
-		body := fmt.Sprintf(`{"schemaVersion":4,"records":[
-			{"schemaVersion":4,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"soak","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-			{"schemaVersion":4,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg","segmentSeq":2,"traceId":"11111111111111111111111111111111","endedAt":"2026-05-16T18:00:01.000Z","status":"ok"}
+		body := fmt.Sprintf(`{"schemaVersion":5,"records":[
+			{"schemaVersion":5,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"soak","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+			{"schemaVersion":5,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg","segmentSeq":2,"traceId":"11111111111111111111111111111111","endedAt":"2026-05-16T18:00:01.000Z","status":"ok"}
 		]}`, runID, runID, runID, runID, runID, runID)
 		tally(post(t, body))
 	}
 
 	// --- Fault 2: duplicate identical record resend must be idempotent (accepted, not double-projected). ---
-	duplicateBody := fmt.Sprintf(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"soak_run_fresh_0_start","type":"run:start","runId":"soak_run_fresh_0","segmentId":"soak_run_fresh_0_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"soak","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	duplicateBody := fmt.Sprintf(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"soak_run_fresh_0_start","type":"run:start","runId":"soak_run_fresh_0","segmentId":"soak_run_fresh_0_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"soak","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`)
 	tally(post(t, duplicateBody))
 
 	// --- Fault 3: conflicting duplicate (same recordId, different canonical content) must be a diagnosed permanent rejection. ---
-	conflictBody := fmt.Sprintf(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"soak_run_fresh_0_start","type":"run:start","runId":"soak_run_fresh_0","segmentId":"soak_run_fresh_0_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"tampered","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	conflictBody := fmt.Sprintf(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"soak_run_fresh_0_start","type":"run:start","runId":"soak_run_fresh_0","segmentId":"soak_run_fresh_0_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"tampered","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`)
 	conflictDispositions := post(t, conflictBody)
 	tally(conflictDispositions)
@@ -134,7 +134,7 @@ func TestObservabilitySoakReconcilesEmittedAcceptedRejectedAndVisibleCounts(t *t
 	}
 
 	// --- Fault 4: unsupported schema version must be a diagnosed permanent rejection, not a silent drop. ---
-	invalidSchemaBody := `{"schemaVersion":4,"records":[
+	invalidSchemaBody := `{"schemaVersion":5,"records":[
 		{"schemaVersion":1,"recordId":"soak_run_invalid_schema","type":"run:start","runId":"soak_run_invalid_schema","segmentId":"soak_run_invalid_schema_seg","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"invalid","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`
 	invalidDispositions := post(t, invalidSchemaBody)
@@ -145,13 +145,13 @@ func TestObservabilitySoakReconcilesEmittedAcceptedRejectedAndVisibleCounts(t *t
 
 	// --- Fault 5: suspend in one request, resume in a second, distinct request (simulates a fresh process/invocation). ---
 	multiSegRunID := "soak_run_multiseg"
-	tally(post(t, fmt.Sprintf(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg_a","segmentSeq":1,"traceId":"22222222222222222222222222222222","name":"soak-multiseg","rootPrimitive":"flow.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":4,"recordId":"%s_suspend","type":"run:suspend","runId":"%s","segmentId":"%s_seg_a","segmentSeq":2,"traceId":"22222222222222222222222222222222","suspendedAt":"2026-05-16T18:00:01.000Z","reason":"soak-boundary"}
+	tally(post(t, fmt.Sprintf(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg_a","segmentSeq":1,"traceId":"22222222222222222222222222222222","name":"soak-multiseg","rootPrimitive":"flow.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":5,"recordId":"%s_suspend","type":"run:suspend","runId":"%s","segmentId":"%s_seg_a","segmentSeq":2,"traceId":"22222222222222222222222222222222","suspendedAt":"2026-05-16T18:00:01.000Z","reason":"soak-boundary"}
 	]}`, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID)))
-	tally(post(t, fmt.Sprintf(`{"schemaVersion":4,"records":[
-		{"schemaVersion":4,"recordId":"%s_resume","type":"run:resume","runId":"%s","segmentId":"%s_seg_b","segmentSeq":1,"traceId":"22222222222222222222222222222222","resumedAt":"2026-05-16T18:00:02.000Z","reason":"soak-boundary","previousSegmentId":"%s_seg_a"},
-		{"schemaVersion":4,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg_b","segmentSeq":2,"traceId":"22222222222222222222222222222222","endedAt":"2026-05-16T18:00:03.000Z","status":"ok"}
+	tally(post(t, fmt.Sprintf(`{"schemaVersion":5,"records":[
+		{"schemaVersion":5,"recordId":"%s_resume","type":"run:resume","runId":"%s","segmentId":"%s_seg_b","segmentSeq":1,"traceId":"22222222222222222222222222222222","resumedAt":"2026-05-16T18:00:02.000Z","reason":"soak-boundary","previousSegmentId":"%s_seg_a"},
+		{"schemaVersion":5,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg_b","segmentSeq":2,"traceId":"22222222222222222222222222222222","endedAt":"2026-05-16T18:00:03.000Z","status":"ok"}
 	]}`, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID, multiSegRunID)))
 
 	// --- Fault 6: concurrent segments across goroutines (concurrent processes ingesting at once). ---
@@ -171,9 +171,9 @@ func TestObservabilitySoakReconcilesEmittedAcceptedRejectedAndVisibleCounts(t *t
 		go func(i int) {
 			defer wg.Done()
 			runID := fmt.Sprintf("soak_run_concurrent_%d", i)
-			body := fmt.Sprintf(`{"schemaVersion":4,"records":[
-				{"schemaVersion":4,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg","segmentSeq":1,"traceId":"33333333333333333333333333333333","name":"soak-concurrent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-				{"schemaVersion":4,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg","segmentSeq":2,"traceId":"33333333333333333333333333333333","endedAt":"2026-05-16T18:00:01.000Z","status":"ok"}
+			body := fmt.Sprintf(`{"schemaVersion":5,"records":[
+				{"schemaVersion":5,"recordId":"%s_start","type":"run:start","runId":"%s","segmentId":"%s_seg","segmentSeq":1,"traceId":"33333333333333333333333333333333","name":"soak-concurrent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+				{"schemaVersion":5,"recordId":"%s_end","type":"run:end","runId":"%s","segmentId":"%s_seg","segmentSeq":2,"traceId":"33333333333333333333333333333333","endedAt":"2026-05-16T18:00:01.000Z","status":"ok"}
 			]}`, runID, runID, runID, runID, runID, runID)
 			dispositions, err := postSafe(body)
 			results <- concurrentResult{index: i, dispositions: dispositions, err: err}

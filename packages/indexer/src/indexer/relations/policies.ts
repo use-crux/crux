@@ -769,4 +769,11 @@ export const indexRelationPolicies = [
     partial: true,
     runtimeJoin: true,
   },
+  {
+    type: 'evidence.record.declared_in',
+    fromKinds: ['evidence.record'],
+    presentation: 'detail',
+    partial: true,
+    runtimeJoin: false,
+  },
 ] as const satisfies readonly IndexRelationPolicy[]

@@ -1,0 +1,21 @@
+---
+title: EVIDENCE_QUERY_FAILED
+description: Crux Local could not complete a canonical evidence read.
+---
+
+## What failed
+
+Local encountered an internal storage or read-model failure after validating
+the request.
+
+## Retryability
+
+Retryable. A transient Local or SQLite failure may clear.
+
+The HTTP response exposes only the bounded code, not query text or retained
+evidence.
+
+## Fix
+
+Retry once, then inspect Local logs and database health. Restart Local if the
+project store is healthy but the read service is unavailable.

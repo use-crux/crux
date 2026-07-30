@@ -81,14 +81,18 @@ func (s *Service) StartRetention(ctx context.Context, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_, _ = s.runRetention(ctx, settings, time.Now().UTC())
+				_, _ = s.runRetention(
+					ctx,
+					settings,
+					s.evidenceNow().UTC(),
+				)
 			}
 		}
 	}()
 }
 
 func (s *Service) applyRetentionIngestPolicy(record Record) Record {
-	if record.Type != RecordArtifact {
+	if record.Type != RecordArtifact || isEvidenceSourceArtifact(record) {
 		return record
 	}
 	capBytes := normalizeRetentionSettings(s.retentionSettings).PreviewMaxBytes
@@ -137,6 +141,19 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 	ctx, cancel := s.maintenanceContext(ctx)
 	defer cancel()
 
+	if err := s.cleanupExpiredEvidenceCandidates(ctx, now); err != nil {
+		return 0, err
+	}
+	if err := s.cleanupExpiredEvidencePayloads(ctx, now); err != nil {
+		return 0, err
+	}
+	if err := s.cleanupExpiredEvidenceCoverage(ctx, now); err != nil {
+		return 0, err
+	}
+	if err := s.cleanupExpiredEvidenceRelationships(ctx, now); err != nil {
+		return 0, err
+	}
+
 	deleteIDs, err := s.retentionOperationIDsByAge(ctx, now.Add(-settings.MaxRunAge), retentionDeleteBatchSize)
 	if err != nil {
 		return 0, err
@@ -176,6 +193,13 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 		return 0, err
 	}
 	if len(memberRunIDs) > 0 {
+		if err := retainOutApprovalArtifacts(
+			ctx,
+			tx,
+			memberRunIDs,
+		); err != nil {
+			return 0, err
+		}
 		if err := deleteRunRows(ctx, tx, memberRunIDs); err != nil {
 			return 0, err
 		}

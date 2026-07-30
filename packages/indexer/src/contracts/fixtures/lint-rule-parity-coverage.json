@@ -249,6 +249,16 @@
       "negativeFixture": "media-lint-contract.test.ts"
     },
     {
+      "ruleId": "evidence.invalid-custom-kind",
+      "positiveFixture": "evidence-record-native-static.test.ts",
+      "negativeFixture": "evidence-record-native-static.test.ts"
+    },
+    {
+      "ruleId": "evidence.reserved-inline-kind",
+      "positiveFixture": "evidence-record-native-static.test.ts",
+      "negativeFixture": "evidence-record-native-static.test.ts"
+    },
+    {
       "ruleId": "embedding.unsupported-modality",
       "positiveFixture": "semantic-embedding-evidence.test.ts",
       "negativeFixture": "semantic-embedding-evidence.test.ts"

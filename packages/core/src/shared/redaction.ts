@@ -75,6 +75,66 @@ export function redactSensitiveValue(value: unknown): unknown {
   return output;
 }
 
+/**
+ * Apply configured dot-path redaction plus the always-on sensitive-key rules.
+ *
+ * @remarks Arrays are transparent to paths: `items.secret` redacts `secret`
+ * from every object in `items`. The input is never mutated.
+ *
+ * @param value - JSON-like value to project into a safe copy.
+ * @param paths - Normalized dot paths such as `user.email`.
+ * @returns A detached value containing redaction markers at protected paths.
+ */
+export function applyRedaction(
+  value: unknown,
+  paths: readonly string[],
+): unknown {
+  return redactNode(
+    value,
+    paths.map((path) => path.split(".")),
+  );
+}
+
+function redactNode(
+  value: unknown,
+  paths: ReadonlyArray<readonly string[]>,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactNode(item, paths));
+  }
+  if (value === null || typeof value !== "object") return value;
+  if (!isPlainRecord(value)) {
+    throw new TypeError(
+      "Eval snapshot cannot persist non-plain object values; use plain objects, arrays, and primitive values.",
+    );
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const matching = paths.filter((path) => path[0] === key);
+    const projected =
+      SENSITIVE_KEY_PATTERN.test(key) ||
+      matching.some((path) => path.length === 1)
+        ? REDACTED
+        : redactNode(
+            entry,
+            matching.map((path) => path.slice(1)),
+          );
+    Object.defineProperty(output, key, {
+      value: projected,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return output;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
+}
+
+function isPlainRecord(value: object): value is Record<string, unknown> {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }

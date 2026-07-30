@@ -1,0 +1,22 @@
+---
+title: EVIDENCE_IDEMPOTENCY_CONFLICT
+description: Content diverges from the first accepted evidence identity.
+---
+
+## What failed
+
+The same durable evidence or protected approval occurrence identity was reused
+with different final post-policy content.
+
+## Retryability
+
+Not retryable. The first accepted content remains immutable for that delivery.
+
+Diagnostics may include a bounded evidence ID correlation, but never the
+winning digest, payload, subject, or raw idempotency key.
+
+## Fix
+
+Retry the exact original relationship, or use a new stable occurrence identity
+for a genuinely different claim. Inspect delivery health or `observe.flush()`
+for asynchronous Local conflicts.

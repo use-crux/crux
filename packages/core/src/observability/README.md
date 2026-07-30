@@ -22,7 +22,7 @@ Every graph record also includes `segmentId` plus a positive `segmentSeq`; the s
 
 `config({ observability: { identity } })` captures a validated project,
 manifest, and optional host deployment identity when a logical run starts.
-Every v4 record for that run carries the same immutable `deployment` value,
+Every v5 record for that run carries the same immutable `deployment` value,
 including records emitted after configuration changes or suspend/resume. The
 owned continuation payload preserves it separately from untrusted W3C baggage.
 

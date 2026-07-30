@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "available relationship",
+      "activePayloadStates": ["available"],
+      "activeRecordCount": 1,
+      "coverage": ["redacted"],
+      "status": "present",
+      "coverageIncluded": false
+    },
+    {
+      "name": "reference relationship",
+      "activePayloadStates": ["reference"],
+      "activeRecordCount": 1,
+      "coverage": ["redacted"],
+      "status": "present",
+      "coverageIncluded": false
+    },
+    {
+      "name": "redacted relationship",
+      "activePayloadStates": ["not-captured", "redacted"],
+      "activeRecordCount": 2,
+      "coverage": ["not-configured"],
+      "status": "redacted",
+      "coverageIncluded": false
+    },
+    {
+      "name": "not-captured relationship",
+      "activePayloadStates": ["not-captured"],
+      "activeRecordCount": 1,
+      "coverage": ["not-configured"],
+      "status": "not-captured",
+      "coverageIncluded": false
+    },
+    {
+      "name": "restrictive explicit coverage",
+      "activePayloadStates": [],
+      "activeRecordCount": 0,
+      "coverage": ["not-applicable", "not-configured", "not-captured", "redacted"],
+      "status": "redacted",
+      "coverageIncluded": true
+    },
+    {
+      "name": "not-configured coverage",
+      "activePayloadStates": [],
+      "activeRecordCount": 0,
+      "coverage": ["not-applicable", "not-configured"],
+      "status": "not-configured",
+      "coverageIncluded": true
+    },
+    {
+      "name": "not-applicable coverage",
+      "activePayloadStates": [],
+      "activeRecordCount": 0,
+      "coverage": ["not-applicable"],
+      "status": "not-applicable",
+      "coverageIncluded": true
+    },
+    {
+      "name": "default missing state",
+      "activePayloadStates": [],
+      "activeRecordCount": 0,
+      "coverage": [],
+      "status": "not-yet-recorded",
+      "coverageIncluded": false
+    }
+  ]
+}

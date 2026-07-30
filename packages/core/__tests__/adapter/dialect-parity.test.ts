@@ -1184,6 +1184,12 @@ describe('dialect parity — approval protocol observability', () => {
 
     expect(executorEvents).toEqual(nativeProtocol)
     expect(nativeProtocol).toEqual([
+      {
+        t: 'start',
+        toolCallId: 'tc_prot',
+        toolName: 'dangerous',
+        args: { target: 'db' },
+      },
       { t: 'approval.request', approvalId: 'approval_tc_prot', toolCallId: 'tc_prot', toolName: 'dangerous' },
     ])
   })

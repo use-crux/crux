@@ -35,6 +35,11 @@ import { DuplicateTaskIdError, TaskListNotFoundError } from './errors'
 import { assertMutableTask, assertMutableTaskList, assertValidTaskStatusUpdate } from './lifecycle'
 import { getActiveTasks, getAllTasks, repairTaskListState } from './task-list-state'
 import { assertTaskJsonValue, parseTaskCompletionResult } from './task-values'
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from '../evidence/internal'
 
 export {
   DuplicateTaskIdError,
@@ -630,19 +635,25 @@ function emitTaskArtifact(
   operation: string,
   value: Task | TaskList,
 ): void {
-  const artifactId = observe.artifact({
+  const artifact = emitNativeEvidenceArtifact({
     kind: 'output',
     contentType: 'application/json',
     encoding: 'json',
     preview: taskArtifactPreview(operation, value),
     attributes: taskArtifactAttributes(operation, value),
   })
-  if (!artifactId) return
+  if (!artifact) return
+  const artifactId = nativeEvidenceArtifactRef(artifact).id
   observe.edge({
     edgeType: 'produced',
     from: { kind: 'span', id: spanId },
     to: { kind: 'artifact', id: artifactId },
     attributes: taskArtifactAttributes(operation, value),
+  })
+  recordNativeEvidence({
+    artifact,
+    subject: { kind: 'execution', id: spanId },
+    role: 'change',
   })
 }
 

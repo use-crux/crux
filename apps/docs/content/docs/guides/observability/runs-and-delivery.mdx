@@ -88,9 +88,24 @@ and [Index Lint](/docs/guides/project-health/lint#fix-before-suppressing).
 
 Ephemeral hosts that return before flushing the delivery queue commonly produce `incomplete` or long-lived `running` presentation until reconciliation. Use the host wrappers documented under [Runtime setup](/docs/guides/observability/runtime-setup) so `run:end` / `span:end` actually land.
 
+## Evidence delivery
+
+`evidence.record()` returns after local synchronous acceptance. Destination
+idempotency conflicts, privacy tombstones, and staging outcomes arrive later
+as per-record delivery dispositions. A permanent evidence rejection increments
+`observe.flush().rejected`; `flush().status` can still be `drained` once every
+record has a final outcome, and evidence delivery never replaces the
+application result.
+
+Run Detail's Evidence view is independent of the run lifecycle status. A claim
+may arrive after an explicit terminal record, outlive routine run retention,
+or remain queryable with its payload expired. See
+[Execution evidence](/docs/guides/observability/execution-evidence).
+
 ## Related
 
 - [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
 - [Runtime setup](/docs/guides/observability/runtime-setup)
+- [Execution evidence](/docs/guides/observability/execution-evidence)
 - [Troubleshooting](/docs/guides/observability/troubleshooting)
 - [Observability reference](/docs/reference/crux-core/observability), segments, receipts, flush results

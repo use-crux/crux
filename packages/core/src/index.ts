@@ -482,6 +482,9 @@ export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 // Canonical observability graph contract.
 export * from "./observability";
 
+// Qualified execution evidence.
+export * from "./evidence";
+
 // Canonical message type (generation lifecycle domain)
 export type { Message, CompactionResult } from "./generation";
 

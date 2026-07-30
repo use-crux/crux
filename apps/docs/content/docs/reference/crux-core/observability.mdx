@@ -223,6 +223,28 @@ Agent compositions share one runtime lifecycle contract. `parallel()` creates a 
 
 Custom edge types and artifact kinds must use the `custom.*` namespace. Unknown custom values are preserved and can be displayed generically, but specialized indexing and layouts are reserved for canonical values.
 
+## Qualified execution evidence
+
+`evidence.record()` projects qualified execution evidence into schema v5 using
+the canonical `evidence` family and `evidence.record` primitive. Inline
+authoring prepares one artifact followed by one `evidence.for` edge; linking an
+existing source emits only the edge.
+
+The edge carries a strict allowlist: evidence ID, role, kind, normalized
+conclusion, safe timestamps, superseded evidence IDs, protected run-or-span
+producer, source mode, and capture state. Idempotent relationships also carry
+an all-or-none hash/digest group that Local validates without exposing it.
+Inline data and raw idempotency keys never appear in edge attributes. Artifact
+and edge privacy are prepared as one batch, so rejecting either half suppresses
+both rather than publishing an orphan or tombstone.
+
+The graph contract makes evidence transportable, but does not itself provide a
+durable query implementation. Crux Local supplies the restart-safe canonical
+read model consumed by Core inspection, Devtools, and agent-facing Local
+queries. See [Execution evidence](/docs/reference/crux-core/evidence) for the
+API and the [end-to-end guide](/docs/guides/observability/execution-evidence)
+for automatic producers, retention, missing states, and conflict behavior.
+
 Common detail artifacts use stable kinds so `RunDetail.inspection` can route them without UI-specific parsing:
 
 | Artifact kind                                                              | Primary payload                                                                                                                                                                                              |

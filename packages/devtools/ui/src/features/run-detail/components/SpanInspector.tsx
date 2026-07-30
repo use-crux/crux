@@ -24,6 +24,7 @@ import type {
   CruxCitationReportPreview,
   CruxScoreReportPreview,
 } from "@use-crux/core/observability";
+import type { EvidenceRole } from "@use-crux/core/evidence";
 import { KindTag, StatusPill, type RunNodeKind } from "./atoms";
 import {
   definitionRefLinks,
@@ -37,6 +38,8 @@ import {
   RedactionBadge,
 } from "./RedactionEvidence";
 import { collectTurnReports } from "@/features/run-detail/lib/explain/rollup";
+import { EvidenceInspectorSummary } from "../evidence/EvidenceInspectorSummary";
+import { evidenceSubjectForSelection } from "../evidence/EvidenceSubjectPanel";
 import {
   findArtifact,
   findNode,
@@ -172,11 +175,13 @@ export function SpanInspector({
   runDetail,
   selectedNodeId,
   onSelectSpan,
+  onOpenEvidence,
   onCollapse,
 }: {
   runDetail: ObservabilityRunDetail | null;
   selectedNodeId: string | null;
   onSelectSpan: (id: string) => void;
+  onOpenEvidence?: (role: EvidenceRole) => void;
   onCollapse?: () => void;
 }) {
   const node = useMemo(() => {
@@ -192,6 +197,10 @@ export function SpanInspector({
 
   const runLevel =
     !node || node.id === runDetail?.root.id || node.kind === "run";
+  const evidenceSubject = evidenceSubjectForSelection(
+    runDetail,
+    selectedNodeId,
+  );
 
   if (!node) {
     return (
@@ -300,6 +309,15 @@ export function SpanInspector({
           />
         </div>
       )}
+
+      {evidenceSubject && onOpenEvidence ? (
+        <Section title="Evidence">
+          <EvidenceInspectorSummary
+            subject={evidenceSubject}
+            onOpen={onOpenEvidence}
+          />
+        </Section>
+      ) : null}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--devtools-border) px-4 py-3">

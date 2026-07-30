@@ -30,6 +30,7 @@ import type { SemanticAnalyzerResult } from "../types";
 import { measureSemanticTiming } from "../instrumentation";
 import { semanticMediaFacts } from "../media-facts";
 import { semanticEmbeddingFacts } from "../../embedding/semantic-facts";
+import { semanticEvidenceRecordFacts } from "../../evidence-record/semantic-facts";
 import { mediaArchitectureLintFindings } from "../media-lints";
 import {
   createTypeScriptSemanticFactInput,
@@ -164,15 +165,22 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     input.sourceFiles,
     input.view,
   );
+  const evidenceRecords = semanticEvidenceRecordFacts(
+    input.root,
+    input.sourceFiles,
+    input.view,
+  );
   const definitions = [
     ...result.definitions,
     ...media.definitions,
     ...embeddings.definitions,
+    ...evidenceRecords.definitions,
   ];
   const relations = [
     ...result.relations,
     ...media.relations,
     ...embeddings.relations,
+    ...evidenceRecords.relations,
   ];
   const promptTextDiagnostics = projectPromptTextDiagnosticConclusions(
     input.promptTextDiagnosticConclusions?.(result.sourceRefs) ?? [],
@@ -184,12 +192,14 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
       ...result.sourceRefs,
       ...media.sourceRefs,
       ...embeddings.sourceRefs,
+      ...evidenceRecords.sourceRefs,
     ],
     relations,
     diagnostics: promptTextDiagnostics,
     lintFindings: [
       ...media.lintFindings,
       ...embeddings.lintFindings,
+      ...evidenceRecords.lintFindings,
       ...mediaArchitectureLintFindings(definitions, relations),
     ],
   });

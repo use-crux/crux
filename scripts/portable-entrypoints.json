@@ -33,6 +33,7 @@
         "./runtime/testing": "node-only",
         "./runtime/next": "node-only",
         "./observability": "portable-web",
+        "./evidence": "portable-web",
         "./observability/node": "node-only",
         "./embedding": "portable-web",
         "./retrieval": "portable-web",

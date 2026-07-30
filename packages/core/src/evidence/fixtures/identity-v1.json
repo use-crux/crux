@@ -1,0 +1,85 @@
+{
+  "input": {
+    "subject": {
+      "kind": "artifact",
+      "id": "artifact_subject"
+    },
+    "source": {
+      "kind": "artifact",
+      "id": "artifact_source"
+    },
+    "role": "verification",
+    "evidenceKind": "custom.retry-review",
+    "idempotencyKey": "stable-retry-key",
+    "conclusion": "passed",
+    "observedAt": "2026-07-28T11:59:59.000Z",
+    "supersedesEvidenceIds": [
+      "evidence_2222222222222222",
+      "evidence_1111111111111111"
+    ]
+  },
+  "expected": {
+    "evidenceId": "evidence_7a919f808cd17fa3a6c0021dc72b717a959448ef48d7a2b2dffa3cdfc8a95ed4",
+    "artifactId": "artifact_04a820423a9c325bbd152cda4f234a3f4e52f4110a78dcef13a8369e27a33767",
+    "referenceDigest": "sha256:6383d2720d48b34fe8a2af59a065a5f4ac04ef27f93ee93b56336548e2187aaa",
+    "availableDigest": "sha256:86ee4f60e4ed192f88099e845f2c06971990aa32c3b6e3f223638e5f9dabd1fd",
+    "capturedReferenceDigest": "sha256:79dae59e07ac9d60e8a01db3614bc36d21424ce1e8b1b10b331ac69212815be8",
+    "notCapturedDigest": "sha256:75344fd5ad3f241037321d8cf4dd4ce3c6bd8da185b35b8fb3a6edd90190ef5b",
+    "emptySupersessionDigest": "sha256:3735a30500b50a355495d94944173f406760f18ed7ede9c05ea4518c86a10779",
+    "integerLikeKeyDigest": "sha256:bd196a01724f616333ac3a46c12088b13a8c4a0a0ff2972a777d6bcd1d47042b",
+    "separatorDigest": "sha256:497d7aff254daa0cbfce66c0e35423188cb4db3fb68d235813d0175cd9f459d1",
+    "policyProcessedDigest": "sha256:41b1dfcd2f2b37339740005069c3b4b8cf566220c0a0ce2002105e493122c3c7",
+    "numericBoundaryDigest": "sha256:93fcb93d90805516c62e23338f0b76c632f3a56402486360ebc6fee1a6ab339c"
+  },
+  "inline": {
+    "available": {
+      "approved": true,
+      "nested": {
+        "score": 0.9
+      }
+    },
+    "capturedReference": {
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sizeBytes": 42
+    },
+    "integerLikeKeys": {
+      "2": "two",
+      "10": "ten"
+    },
+    "separators": {
+      "literalEscape": "\\u2028",
+      "rawSeparator": "\u2028"
+    },
+    "policyProcessed": {
+      "policyUrl": "[url]",
+      "media": {
+        "kind": "image",
+        "mediaType": "image/png",
+        "sourceCategory": "data"
+      }
+    },
+    "numericBoundaries": {
+      "negative": -1,
+      "maxSafeInteger": 9007199254740991,
+      "smallDecimal": 0.000001,
+      "scientific": 1e+21,
+      "zero": 0
+    }
+  },
+  "executionIdentityCases": [
+    {
+      "subject": {
+        "kind": "run",
+        "id": "run_111111111111111111111111"
+      },
+      "evidenceId": "evidence_1254506b5483aaea590dbe34206a72f6ec1d172c72ae02036f1a14ed48e72525"
+    },
+    {
+      "subject": {
+        "kind": "span",
+        "id": "1111111111111111"
+      },
+      "evidenceId": "evidence_aeda1d33c1a6d5132b8b522ea2c765748f938101d4909222490b68dc72db36b2"
+    }
+  ]
+}

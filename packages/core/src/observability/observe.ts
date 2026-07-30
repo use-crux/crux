@@ -6,6 +6,7 @@ import {
   type CruxArtifactId,
   type CruxArtifactKind,
   type CruxEdgeType,
+  type CruxGraphRecord,
   type CruxGraphNodeRef,
   type CruxMetrics,
   type CruxPrimitiveName,
@@ -20,7 +21,6 @@ import {
 import { channelHasSubscribers, publishObservabilityChannel } from "./channel";
 import {
   createCruxArtifactId,
-  createCruxEdgeId,
   createCruxRecordId,
   createCruxRunId,
   createCruxSegmentId,
@@ -29,16 +29,10 @@ import {
   createCruxTraceId,
 } from "./ids";
 import { normalizeObservedError, observedErrorSummary } from "./errors";
-import { applyObservabilityCapturePolicyToRecord } from "./capture-policy";
-import { redactSanitizedObservabilityRecordDetailed } from "./redaction-record";
 import {
-  attachObservabilityRedactionEvidence,
   attachResolvedArtifactRedactionMarker,
-  canonicalizeObservabilityRedactionSurfaces,
   resolveArtifactRedactionMarker,
 } from "./redaction-evidence";
-import { normalizeObservabilityRedactionPatterns } from "./redaction-patterns";
-import { sanitizeRecord } from "./sanitize";
 import {
   applyCruxCorrelators,
   mergeCruxCorrelators,
@@ -51,7 +45,18 @@ import {
   resetObservabilitySubscribers,
 } from "./subscribers";
 import type { CruxObservabilityTransport } from "./transport";
-import { validateRecordForEmission } from "./validate-record";
+import {
+  prepareObservabilityRecord,
+  type PreparedObservabilityArtifact,
+  type PreparedObservabilityEdge,
+  type PreparedObservabilityEvent,
+  type PreparedObservabilityRecord,
+} from "./prepare-record";
+import {
+  buildArtifactRecord,
+  buildEdgeRecord,
+  buildSpanEventRecord,
+} from "./graph-record-builders";
 import {
   createDeliveryEngine,
   type DeliveryDiagnostic,
@@ -458,6 +463,20 @@ function emit(
   record: UnsequencedCruxGraphRecord,
   correlators = effectiveCorrelators(),
 ): void {
+  if (shouldQuarantineEvalObservabilityWrite()) return;
+  const prepared = prepareRecord(record, correlators);
+  if (!prepared.ok) {
+    reportPreparedObservabilityFailure(prepared);
+    return;
+  }
+  publishPreparedObservabilityBatch([prepared.record]);
+}
+
+function prepareRecord(
+  record: UnsequencedCruxGraphRecord,
+  correlators = effectiveCorrelators(),
+  previewRedactPaths?: readonly string[],
+): PreparedObservabilityRecord {
   const runOperation = runOperationIdentities.get(record.runId);
   const recordWithOperation = {
     ...record,
@@ -474,71 +493,7 @@ function emit(
   const sequencedRecord = recordSequencer.assign(
     applyCruxCorrelators(recordWithDeployment, correlators),
   );
-  const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord);
-  if (!privacy.ok) {
-    recordRedactedRecord(privacy.error);
-    return;
-  }
-  if (!sameDeploymentIdentity(sequencedRecord, privacy.record)) {
-    recordRedactedRecord(
-      new Error("Observability redaction cannot rewrite deployment identity"),
-    );
-    return;
-  }
-  if (
-    typeof privacy.record === "object" &&
-    privacy.record !== null &&
-    sequencedRecord.operationId !== privacy.record.operationId
-  ) {
-    recordRedactedRecord(
-      new Error("Observability redaction cannot rewrite operation identity"),
-    );
-    return;
-  }
-
-  let sanitized: unknown;
-  try {
-    const patterns = normalizeObservabilityRedactionPatterns(
-      getHooks().observabilityCapture?.redactPatterns,
-    );
-    const finalRedaction = redactSanitizedObservabilityRecordDetailed(
-      sanitizeRecord(privacy.record),
-      patterns,
-    );
-    sanitized = attachObservabilityRedactionEvidence(
-      finalRedaction.value,
-      canonicalizeObservabilityRedactionSurfaces([
-        ...privacy.redactionSurfaces,
-        ...finalRedaction.surfaces,
-      ]),
-    );
-  } catch (error) {
-    recordRedactedRecord(error);
-    return;
-  }
-
-  let validated: ReturnType<typeof validateRecordForEmission>;
-  try {
-    validated = validateRecordForEmission(sanitized);
-  } catch (error) {
-    recordInvalidRecord([
-      "Record validation threw unexpectedly",
-      String(error),
-    ]);
-    return;
-  }
-  if (!validated.ok) {
-    recordInvalidRecord(validated.issues);
-    return;
-  }
-
-  if (shouldQuarantineEvalObservabilityWrite()) return;
-
-  currentEvalObservabilityCaptureSession()?.send([validated.record]);
-  publishObservabilitySubscribers(validated.record);
-  publishObservabilityChannel(validated.record);
-  syncDeliveryEngineWithProcessRegistry();
-  deliveryEngine.enqueue(validated.record);
+  return prepareObservabilityRecord(sequencedRecord, previewRedactPaths);
 }
 
 function sameDeploymentIdentity(
@@ -550,6 +505,20 @@ function sameDeploymentIdentity(
     before.deployment?.manifestId === after.deployment?.manifestId &&
     before.deployment?.deploymentId === after.deployment?.deploymentId
   );
+}
+
+/** Publish records already prepared by the canonical privacy pipeline. @internal */
+export function publishPreparedObservabilityBatch(
+  records: readonly CruxGraphRecord[],
+): void {
+  if (records.length === 0) return;
+  currentEvalObservabilityCaptureSession()?.send(records);
+  for (const record of records) {
+    publishObservabilitySubscribers(record);
+    publishObservabilityChannel(record);
+  }
+  syncDeliveryEngineWithProcessRegistry();
+  for (const record of records) deliveryEngine.enqueue(record);
 }
 
 function emitObserved(
@@ -568,6 +537,137 @@ function emitObserved(
       String(error),
     ]);
   }
+}
+
+/**
+ * Prepare an artifact without publishing it.
+ *
+ * @param options - Artifact fields accepted by {@link observe.artifact}.
+ * @param redactConfiguredPaths - Whether configured data-only paths apply to
+ * the surviving preview.
+ * @returns The artifact identity and its one-pass preparation result.
+ * @internal
+ */
+export function prepareObservabilityArtifact(
+  options: ObserveArtifactOptions,
+  redactConfiguredPaths = false,
+): PreparedObservabilityArtifact {
+  const artifactId = options.artifactId ?? createCruxArtifactId();
+  const context = currentContext();
+  if (!context) {
+    return {
+      ok: false,
+      artifactId,
+      reason: "invalid",
+      detail: ["Artifact preparation requires an observability context."],
+    };
+  }
+  const marker = resolveArtifactRedactionMarker(options);
+  const prepared = prepareRecord(
+    attachResolvedArtifactRedactionMarker(
+      buildArtifactRecord(context, artifactId, options, now()),
+      marker,
+    ),
+    context.correlators ?? undefined,
+    redactConfiguredPaths ? currentObservabilityRedactPaths() : undefined,
+  );
+  return prepared.ok
+    ? {
+        ok: true,
+        artifactId,
+        record: prepared.record as Extract<
+          CruxGraphRecord,
+          { readonly type: "artifact" }
+        >,
+        ...(prepared.artifactCapture
+          ? { artifactCapture: prepared.artifactCapture }
+          : {}),
+      }
+    : { ...prepared, artifactId };
+}
+
+/**
+ * Prepare an edge without publishing it.
+ *
+ * @param options - Edge fields accepted by {@link observe.edge}.
+ * @returns Its one-pass preparation result.
+ * @internal
+ */
+export function prepareObservabilityEdge(
+  options: ObserveEdgeOptions,
+): PreparedObservabilityEdge {
+  const context = currentContext();
+  if (!context) {
+    return {
+      ok: false,
+      reason: "invalid",
+      detail: ["Edge preparation requires an observability context."],
+    };
+  }
+  const prepared = prepareRecord(
+    buildEdgeRecord(context, options, now()),
+    context.correlators ?? undefined,
+  );
+  return prepared.ok
+    ? {
+        ok: true,
+        record: prepared.record as Extract<
+          CruxGraphRecord,
+          { readonly type: "edge" }
+        >,
+      }
+    : prepared;
+}
+
+/**
+ * Prepare a span event without publishing it.
+ *
+ * @param options - Event fields accepted by {@link observe.event}.
+ * @param timestamp - Optional domain observation time used as the event time.
+ * @returns A one-pass prepared event or a closed failure result.
+ * @internal
+ */
+export function prepareObservabilityEvent(
+  options: ObserveEventOptions,
+  timestamp = now(),
+): PreparedObservabilityEvent {
+  const context = currentContext();
+  const spanId = context?.spanStack[context.spanStack.length - 1];
+  if (!context || !spanId) {
+    return {
+      ok: false,
+      reason: "invalid",
+      detail: ["Event preparation requires an active observability span."],
+    };
+  }
+  const prepared = prepareRecord(
+    buildSpanEventRecord(context, spanId, options, timestamp),
+    context.correlators ?? undefined,
+  );
+  return prepared.ok
+    ? {
+        ok: true,
+        record: prepared.record as Extract<
+          CruxGraphRecord,
+          { readonly type: "span:event" }
+        >,
+      }
+    : prepared;
+}
+
+/** Record diagnostics for a failed private preparation result. @internal */
+export function reportPreparedObservabilityFailure(
+  result: Exclude<PreparedObservabilityRecord, { readonly ok: true }>,
+): void {
+  if (result.reason === "redacted") {
+    recordRedactedRecord(result.detail);
+    return;
+  }
+  recordInvalidRecord(
+    Array.isArray(result.detail)
+      ? result.detail.map(String)
+      : ["Record validation failed", String(result.detail)],
+  );
 }
 
 function hasActiveObservabilitySinks(): boolean {
@@ -1656,90 +1756,49 @@ export const observe = {
       return;
     }
     if (!spanId) return;
-
-    emitObserved(
-      () => ({
-        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: createCruxRecordId(),
-        type: "span:event",
-        operationId: context.operationId,
-        runId: context.runId,
-        segmentId: context.segmentId,
-        traceId: context.traceId,
-        spanId,
-        eventId: createCruxSpanEventId(),
-        name: options.name,
-        timestamp: now(),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
-      }),
-      context.correlators ?? null,
-    );
+    if (!hasActiveObservabilitySinks()) return;
+    const prepared = prepareObservabilityEvent(options);
+    if (prepared.ok) {
+      publishPreparedObservabilityBatch([prepared.record]);
+    } else {
+      reportPreparedObservabilityFailure(prepared);
+    }
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
     if (shouldQuarantineEvalObservabilityWrite()) return undefined;
-    const context = currentContext();
-    if (!context) {
+    if (!currentContext()) {
       recordContextlessRecord("artifact");
       return undefined;
     }
 
-    const marker = resolveArtifactRedactionMarker(options);
     const artifactId = options.artifactId ?? createCruxArtifactId();
-    emitObserved(() => {
-      const spanId = context.spanStack[context.spanStack.length - 1];
-      return attachResolvedArtifactRedactionMarker({
-        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: createCruxRecordId(),
-        type: "artifact",
-        operationId: context.operationId,
-        runId: context.runId,
-        segmentId: context.segmentId,
-        traceId: context.traceId,
-        artifactId,
-        ...(spanId ? { spanId } : {}),
-        kind: options.kind,
-        createdAt: now(),
-        contentType: options.contentType,
-        encoding: options.encoding,
-        ...(options.sizeBytes !== undefined
-          ? { sizeBytes: options.sizeBytes }
-          : {}),
-        ...(options.hash ? { hash: options.hash } : {}),
-        ...(options.preview !== undefined ? { preview: options.preview } : {}),
-        ...(options.uri ? { uri: options.uri } : {}),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
-      }, marker);
-    }, context.correlators ?? null);
+    if (!hasActiveObservabilitySinks()) return artifactId;
+    const prepared = prepareObservabilityArtifact({
+      ...options,
+      artifactId,
+    });
+    if (prepared.ok) {
+      publishPreparedObservabilityBatch([prepared.record]);
+    } else {
+      reportPreparedObservabilityFailure(prepared);
+    }
     return artifactId;
   },
 
   edge(options: ObserveEdgeOptions): void {
     if (shouldQuarantineEvalObservabilityWrite()) return;
-    const context = currentContext();
-    if (!context) {
+    if (!currentContext()) {
       recordContextlessRecord("edge");
       return;
     }
-
-    emitObserved(
-      () => ({
-        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: createCruxRecordId(),
-        type: "edge",
-        operationId: context.operationId,
-        runId: context.runId,
-        segmentId: context.segmentId,
-        traceId: context.traceId,
-        edgeId: createCruxEdgeId(),
-        edgeType: options.edgeType,
-        from: options.from,
-        to: options.to,
-        createdAt: now(),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
-      }),
-      context.correlators ?? null,
-    );
+    if (!hasActiveObservabilitySinks()) return;
+    const prepared = prepareObservabilityEdge(options);
+    if (prepared.ok) {
+      publishPreparedObservabilityBatch([prepared.record]);
+    } else {
+      reportPreparedObservabilityFailure(prepared);
+    }
   },
 
   captureContext(): CapturedObservabilityContext | undefined {

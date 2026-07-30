@@ -66,6 +66,12 @@ export const qk = {
       ["observability", "resource", family] as const,
     definitionActivity: (definitionId: string | null | undefined) =>
       ["observability", "definition-activity", definitionId] as const,
+    evidence: (subject: unknown, role: string) =>
+      ["observability", "evidence", subject, role] as const,
+    relatedEvidence: (subjects: readonly unknown[]) =>
+      ["observability", "evidence-related", subjects] as const,
+    evidenceNavigation: (refs: readonly unknown[]) =>
+      ["observability", "evidence-navigation", refs] as const,
   },
   runtime: {
     all: ["runtime"] as const,

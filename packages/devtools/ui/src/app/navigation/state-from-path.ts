@@ -1,4 +1,5 @@
 import type { RunLens } from "@/features/run-detail/types";
+import type { EvidenceRole } from "@use-crux/core/evidence";
 import type { NavState } from "./navigation-state";
 
 /** Strictly decode a browser path and query into Devtools navigation state. */
@@ -89,12 +90,36 @@ function runsState(
       ? (requestedLens as RunLens)
       : "tree";
     const spanId = params.get("spanId") ?? undefined;
+    const detailTab =
+      params.get("tab") === "evidence" ? ("evidence" as const) : undefined;
+    const requestedRole = params.get("evidenceRole");
+    const evidenceRoles: readonly EvidenceRole[] = [
+      "intent",
+      "authority",
+      "change",
+      "verification",
+      "recovery",
+    ];
+    const evidenceRole =
+      detailTab && evidenceRoles.includes(requestedRole as EvidenceRole)
+        ? (requestedRole as EvidenceRole)
+        : undefined;
+    const requestedEvidenceId = params.get("evidenceId") ?? "";
+    const evidenceId =
+      detailTab &&
+      requestedEvidenceId.length > 0 &&
+      requestedEvidenceId.length <= 512
+        ? requestedEvidenceId
+        : undefined;
     return {
       view: "run-detail",
       traceId: decodeURIComponent(operationId),
       lens,
       ...(params.get("summary") === "1" ? { summary: true } : {}),
       ...(spanId ? { spanId: decodeURIComponent(spanId) } : {}),
+      ...(detailTab ? { detailTab } : {}),
+      ...(evidenceRole ? { evidenceRole } : {}),
+      ...(evidenceId ? { evidenceId } : {}),
     };
   }
   const group = params.get("group");
