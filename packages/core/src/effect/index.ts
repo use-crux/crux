@@ -5,6 +5,7 @@
  */
 
 export { effect } from "./define-effect";
+export { recover } from "./recover";
 export {
   CruxEffectError,
   EFFECT_ERROR_CODES,

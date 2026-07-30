@@ -101,23 +101,4 @@ describe("effect definitions", () => {
 
     await expect(fail.run()).rejects.toBe(original);
   });
-
-  it("keeps later recovery operations unavailable from the public module", async () => {
-    const recoverable = effect(
-      "customer.recoverable",
-      async () => "created",
-      { recover: async () => undefined },
-    );
-
-    await expect(
-      recoverable.recover({
-        kind: "effect.receipt",
-        id: "receipt_1",
-        effectId: "customer.recoverable",
-      }),
-    ).rejects.toMatchObject({
-      code: "EFFECT_RECOVERY_HANDLER_UNAVAILABLE",
-      message: expect.stringContaining("not implemented in this slice yet"),
-    });
-  });
 });

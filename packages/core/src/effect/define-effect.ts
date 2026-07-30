@@ -13,7 +13,11 @@ import type {
   RecoverableEffectOptions,
 } from "./types";
 import { CruxEffectError } from "./errors";
-import { executeEffectOccurrence } from "./internal/execution";
+import {
+  executeEffectOccurrence,
+  type EffectRuntimeOptions,
+} from "./internal/execution";
+import { recoverEffectReceiptForDefinition } from "./recover";
 
 interface RegistryDefinition {
   readonly id: string;
@@ -84,7 +88,9 @@ export function effect(
   options?: unknown,
 ): EffectDefinition<unknown, unknown> {
   const typedExecutor = execute as EffectExecutor<unknown, unknown>;
-  const typedOptions = options as EffectOptions<unknown> | undefined;
+  const typedOptions = options as
+    | EffectRuntimeOptions<unknown, unknown>
+    | undefined;
   const version = typedOptions?.version ?? 1;
   const recoverable = isRecoverableOptions(options);
 
@@ -99,9 +105,10 @@ export function effect(
     };
   }> =>
     executeEffectOccurrence(
-      { id, version, recoverable },
+      { id, version },
       typedExecutor,
       args,
+      typedOptions,
     );
 
   const definition = async (...args: [input: unknown] | []) =>
@@ -114,12 +121,19 @@ export function effect(
     ...(recoverable
       ? {
           recover: {
-            value: async () => {
-              throw new CruxEffectError({
-                code: "EFFECT_RECOVERY_HANDLER_UNAVAILABLE",
-                message: "Effect recovery is not implemented in this slice yet",
-              });
-            },
+            value: (
+              receipt: Parameters<
+                typeof recoverEffectReceiptForDefinition
+              >[1],
+              recoverOptions?: Parameters<
+                typeof recoverEffectReceiptForDefinition
+              >[2],
+            ) =>
+              recoverEffectReceiptForDefinition(
+                id,
+                receipt,
+                recoverOptions,
+              ),
             enumerable: true,
           },
         }
