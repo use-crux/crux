@@ -2,8 +2,11 @@
 
 import { observe } from '../../observability'
 import { recipeStepDefinitionRef, rerankerDefinitionRef } from '../../observability/definition-ref'
+import { matchesExactFilter, type JsonObject } from '../../storage'
 import type { RetrieveRequest } from '../request'
+import type { RetrieverHit } from '../types'
 import { runFederatedRetrieveStep } from './federation'
+import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 import type { RecipeRunnerConfig } from './run'
 import {
   getRerankerDefinitionId,
@@ -31,6 +34,7 @@ export async function runRecipeStep(args: {
   const startedAt = Date.now()
   const inputCounts = countStepPayload(args.state)
   const rerankerId = getRerankerDefinitionId(args.step)
+  const knowledge = stepKnowledge(args.config.knowledge, args.safeRequest)
   const definitionRefs = [
     recipeStepDefinitionRef(args.config.recipeId, args.step.id),
     ...(rerankerId ? [rerankerDefinitionRef(rerankerId)] : []),
@@ -66,6 +70,7 @@ export async function runRecipeStep(args: {
             request: args.safeRequest,
             model: args.step.model ?? args.config.model,
             concurrency: args.config.concurrency,
+            ...(knowledge ? { knowledge } : {}),
           }),
     )
 
@@ -134,8 +139,51 @@ async function runRetrieveStep(
   return runFederatedRetrieveStep(config, request, state.queries, getRetrieveStepConfig(step))
 }
 
+function stepKnowledge(
+  binding: RetrievalKnowledgeBinding | undefined,
+  request: RetrieveRequest,
+): RetrievalKnowledgeBinding | undefined {
+  const filter = request.filter
+  if (!binding || !filter) return binding
+  return {
+    ...binding,
+    hydrate: async (ref) => {
+      const hit = await binding.hydrate(ref)
+      return hit && matchesExactFilter(hitVisibility(hit), filter) ? hit : null
+    },
+  }
+}
+
 function stepInput(state: RecipeState) {
   return state.phase === 'queries' ? { queries: state.queries } : { hits: state.hits }
+}
+
+function hitVisibility(hit: RetrieverHit): JsonObject {
+  return {
+    ...scalarMetadata(hit.metadata),
+    namespace: hit.namespace,
+    sourceId: hit.source.id,
+    chunkId: hit.chunkId,
+    _cruxRecordType: 'chunk',
+    active: true,
+  }
+}
+
+function scalarMetadata(metadata: Record<string, unknown>): JsonObject {
+  const result: { [key: string]: JsonObject[string] } = {}
+  for (const [key, value] of Object.entries(metadata)) {
+    if (isFilterableJson(value)) result[key] = value
+  }
+  return result
+}
+
+function isFilterableJson(value: unknown): value is JsonObject[string] {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    typeof value === 'boolean'
+  )
 }
 
 function stepOutput(

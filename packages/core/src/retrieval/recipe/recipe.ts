@@ -16,6 +16,7 @@ import { createRetrieverTools } from '../tools'
 import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
 import { normalizeRetrieveRequest } from '../request'
 import { runRetrievalRecipe } from './run'
+import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 import { isBuiltInRetrievalStep, type RetrievalStep } from './step'
 import { normalizeRecipeSources, type NormalizedRecipeSource, type RetrievalRecipeSourceInput } from './source'
 export type { RecipeTrace, StepTrace } from './trace'
@@ -29,6 +30,11 @@ export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] =
   model?: RetrievalModel
   concurrency?: number
   onSourceError?: 'fail' | 'skip-with-warning'
+}
+
+interface InternalRetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]>
+  extends RetrievalRecipeConfig<TSteps> {
+  knowledge?: RetrievalKnowledgeBinding
 }
 
 /** Named, inspectable retrieval composition. */
@@ -57,6 +63,7 @@ export type RetrievalRecipeGroundingConfig = Omit<GroundingConfig, 'id' | 'retri
 export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   config: RetrievalRecipeConfig<TSteps>,
 ): RetrievalRecipe {
+  const internalConfig = config as InternalRetrievalRecipeConfig<TSteps>
   const sources = normalizeRecipeSources(config.retriever)
   validateRecipeConfig(config, sources)
 
@@ -67,6 +74,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     ...(config.model ? { model: config.model } : {}),
     concurrency: config.concurrency ?? 4,
     onSourceError: config.onSourceError ?? 'fail',
+    ...(internalConfig.knowledge ? { knowledge: internalConfig.knowledge } : {}),
   }
   const retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'] = (queryOrRequest, options = {}) =>
     runRetrievalRecipe(runnerConfig, queryOrRequest, options)

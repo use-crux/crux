@@ -12,6 +12,7 @@ import { RetrievalRunError } from '../errors'
 import { emitRetrievalHitsArtifact } from '../observability'
 import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
+import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 import type { RetrievalStep, RetrievalStepContext } from './step'
 import type { NormalizedRecipeSource } from './source'
 import { assertRecipeStepSupportsInput, prepareRecipeRequest, type PreparedRecipeRequest } from './input'
@@ -32,6 +33,7 @@ export interface RecipeRunnerConfig {
   model?: RetrievalStepContext['model']
   concurrency: number
   onSourceError: 'fail' | 'skip-with-warning'
+  knowledge?: RetrievalKnowledgeBinding
 }
 
 /** Execute a recipe and return hits plus a serializable trace. */

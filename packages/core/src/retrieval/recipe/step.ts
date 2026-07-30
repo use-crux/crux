@@ -10,6 +10,7 @@ import type { ExactFilter } from '../../storage'
 import type { RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
 import type { RetrievalModel } from '../model'
+import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 
 /** Phase of data flowing through a retrieval recipe. */
 export type StepPhase = 'queries' | 'hits'
@@ -67,6 +68,7 @@ export interface RetrievalStepContext {
   request: RetrieveRequest
   model?: RetrievalModel
   concurrency: number
+  readonly knowledge?: RetrievalKnowledgeBinding
 }
 
 /** Config for `retrievalStep()`. */

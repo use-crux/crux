@@ -198,17 +198,22 @@ function createKnowledgeBaseHandle<
     recipe: <const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(
       recipeConfig?: KnowledgeBaseRecipeConfig<TSteps>,
     ): RetrievalRecipe => {
+      const knowledge = runtime.knowledgeBinding()
       if (!recipeConfig) {
-        return retrievalRecipe({
+        const defaultRecipeConfig = {
           id: `${config.id}-recipe`,
           retriever: runtime.retriever(),
-          steps: [retrieve()],
-        })
+          steps: [retrieve()] as const,
+          ...(knowledge ? { knowledge } : {}),
+        }
+        return retrievalRecipe(defaultRecipeConfig)
       }
-      return retrievalRecipe({
+      const boundRecipeConfig = {
         ...recipeConfig,
         retriever: runtime.retriever() as unknown as Retriever,
-      })
+        ...(knowledge ? { knowledge } : {}),
+      }
+      return retrievalRecipe(boundRecipeConfig)
     },
     grounding: (groundingConfig?: KnowledgeBaseGroundingConfig): Grounding =>
       grounding({

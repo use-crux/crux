@@ -1,6 +1,7 @@
 import { indexer } from '../indexing'
 import { retriever } from './define-retriever'
 import { indexedNamespacePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
+import { createKnowledgeGraphStore } from '../knowledge/graph-store'
 import type {
   Corpus,
   CorpusSyncResult,
@@ -14,6 +15,7 @@ import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embe
 import type { ExactFilter, JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 import type { ChunkingOptions, PipelineCacheConfig } from '../indexing'
 import type { KnowledgeBaseRetrieverConfig } from './knowledge-base'
+import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import type { Retriever } from './types'
 
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
@@ -98,6 +100,8 @@ export interface KnowledgeBaseRuntime<TModality extends EmbeddingModality = Embe
   reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>
   remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
   retriever<TFilter extends ExactFilter>(config?: KnowledgeBaseRetrieverConfig<TFilter>): Retriever<TFilter, TModality>
+  /** @internal Return recipe-step graph access when records are configured. */
+  knowledgeBinding(): RetrievalKnowledgeBinding | undefined
 }
 
 /** Create the runtime backing a public `knowledgeBase` facade. */
@@ -114,6 +118,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     indexedChunks: 0,
     retainedInactiveChunks: 0,
   }
+  let graphStore: ReturnType<typeof createKnowledgeGraphStore> | undefined
 
   async function index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult> {
     const items = await resolveInput(config.source, input)
@@ -185,6 +190,20 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     }) as Retriever<TFilter, TModality>
   }
 
+  function knowledgeBinding(): RetrievalKnowledgeBinding | undefined {
+    if (!records) return undefined
+    graphStore ??= createKnowledgeGraphStore({
+      records,
+      indexerId: config.id,
+      namespace: config.namespace,
+    })
+    return {
+      reader: graphStore,
+      namespace: config.namespace,
+      hydrate: graphStore.hydrate,
+    }
+  }
+
   return Object.freeze({
     sourceKind: config.corpus ? 'corpus' : 'direct',
     storage: { records: records !== undefined, vectors: vectors !== undefined },
@@ -200,6 +219,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     reindex,
     remove,
     retriever: createRetriever,
+    knowledgeBinding,
   })
 }
 

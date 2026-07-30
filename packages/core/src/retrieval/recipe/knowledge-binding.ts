@@ -1,0 +1,19 @@
+/**
+ * Knowledge graph binding supplied to retrieval recipe steps.
+ *
+ * @module
+ */
+
+import type { KnowledgeGraphReader } from '../../knowledge/graph-types'
+import type { KnowledgeRef } from '../../knowledge/refs'
+import type { RetrieverHit } from '../types'
+
+/** Knowledge graph access bound to a retrieval recipe run. */
+export interface RetrievalKnowledgeBinding {
+  /** Reader for structural and persisted graph relations visible to the recipe. */
+  readonly reader: KnowledgeGraphReader
+  /** Namespace inherited from the knowledge base handle. */
+  readonly namespace: string
+  /** Hydrate a graph reference into a retrieval hit when it addresses an active chunk. */
+  readonly hydrate: (ref: KnowledgeRef) => Promise<RetrieverHit | null>
+}
