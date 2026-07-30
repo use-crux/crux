@@ -7,17 +7,24 @@
 import { runScope } from "../scope/internal";
 import { RollbackError } from "./errors";
 import {
+  closeEffectBoundary,
   createEffectBoundary,
   createEffectBoundaryId,
   effectBoundaryFacet,
-  waitForEffectBoundaryOperations,
+  startEffectBoundaryRollback,
 } from "./internal/boundary";
 import { effectLedger } from "./internal/ledger";
-import { runRollback } from "./internal/run-rollback";
+import {
+  decideRollbackBoundary,
+  type RollbackBoundarySettlement,
+  type RollbackCallbackSettlement,
+} from "./internal/plan";
+import type { RollbackExecution } from "./internal/run-rollback";
 import type {
   Awaitable,
   RollbackBoundaryController,
   RollbackOnErrorOptions,
+  RollbackOptions,
 } from "./types";
 
 /**
@@ -61,55 +68,83 @@ export async function rollbackOnError<T>(
       });
       const controller: RollbackBoundaryController = Object.freeze({
         ref: boundary.ref,
-        rollback: async () => {
-          throw new TypeError(
-            "Manual rollback is not available on this boundary.",
-          );
-        },
+        rollback: async (rollbackOptions?: RollbackOptions) =>
+          (
+            await startEffectBoundaryRollback(
+              boundary,
+              rollbackOptions,
+            )
+          ).result,
       });
-
+      let callback: RollbackCallbackSettlement<T>;
       try {
-        const value = await run(controller);
-        updateBoundary(boundary.ref.id, "closed");
-        return value;
-      } catch (cause) {
-        updateBoundary(boundary.ref.id, "rolling_back");
-        await waitForEffectBoundaryOperations(boundary);
-        let execution: Awaited<ReturnType<typeof runRollback>>;
-        try {
-          execution = await runRollback(boundary.ref);
-        } catch (recoveryError) {
-          updateBoundary(boundary.ref.id, "completed");
-          throw new RollbackError({ cause, recoveryError });
-        }
-        updateBoundary(boundary.ref.id, "completed");
-        if (
-          execution.result.status === "completed" &&
-          execution.recoveryError === undefined
-        ) {
-          throw cause;
-        }
-        throw new RollbackError({
-          cause,
-          result: execution.result,
-          recoveryError: execution.recoveryError,
-        });
+        callback = {
+          kind: "returned",
+          value: await run(controller),
+        };
+      } catch (error) {
+        callback = { kind: "threw", error };
       }
+
+      if (boundary.rollbackOperation) {
+        const rollback = await settleRollbackOperation(
+          boundary.rollbackOperation,
+        );
+        return applyBoundaryDecision(recovery, callback, rollback);
+      }
+
+      if (callback.kind === "returned") {
+        closeEffectBoundary(boundary);
+        return callback.value;
+      }
+
+      const rollback = await settleRollbackOperation(
+        startEffectBoundaryRollback(boundary),
+      );
+      return applyBoundaryDecision(recovery, callback, rollback);
     },
   );
 }
 
-function updateBoundary(
-  id: string,
-  status: "rolling_back" | "completed" | "closed",
-): void {
-  const scope = effectLedger.getScope(id);
-  if (!scope) {
-    throw new TypeError(`Effect boundary \`${id}\` was not found.`);
+async function settleRollbackOperation(
+  operation: Promise<RollbackExecution>,
+): Promise<RollbackBoundarySettlement> {
+  try {
+    const execution = await operation;
+    return {
+      kind: "result",
+      result: execution.result,
+      ...(execution.recoveryError === undefined
+        ? {}
+        : { recoveryError: execution.recoveryError }),
+    };
+  } catch (recoveryError) {
+    return { kind: "pre-result-failure", recoveryError };
   }
-  effectLedger.registerScope({
-    ...scope,
-    status,
-    unitIds: effectLedger.unitsFor(id).map((unit) => unit.id),
-  });
+}
+
+function applyBoundaryDecision<T>(
+  recovery: NonNullable<RollbackOnErrorOptions["recovery"]>,
+  callback: RollbackCallbackSettlement<T>,
+  rollback: RollbackBoundarySettlement,
+): T {
+  const decision = decideRollbackBoundary(
+    recovery,
+    callback,
+    rollback,
+  );
+  if (decision.kind === "throw-callback") {
+    throw decision.error;
+  }
+  if (decision.kind === "throw-rollback") {
+    throw new RollbackError({
+      result: decision.result,
+      recoveryError: decision.recoveryError,
+      cause: decision.cause,
+    });
+  }
+  if (callback.kind === "returned") {
+    return callback.value;
+  }
+  throw new TypeError("Rollback boundary decision is inconsistent.");
 }

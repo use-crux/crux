@@ -10,10 +10,17 @@ import {
   currentScopeFacet,
   type ExecutionScope,
 } from "../../scope/internal";
+import { CruxEffectError } from "../errors";
 import type {
   EffectScopeRef,
   RollbackOnErrorOptions,
+  RollbackOptions,
 } from "../types";
+import { effectLedger } from "./ledger";
+import {
+  runRollback,
+  type RollbackExecution,
+} from "./run-rollback";
 
 let nextImplicitBoundaryId = 0;
 let nextExplicitBoundaryId = 0;
@@ -26,6 +33,10 @@ export interface EffectBoundaryState {
   readonly recovery: NonNullable<RollbackOnErrorOptions["recovery"]>;
   /** Effect operations that began inside the boundary and remain unsettled. */
   readonly pending: Set<Promise<unknown>>;
+  /** Current boundary lifecycle. */
+  lifecycle: "open" | "rolling_back" | "completed" | "closed";
+  /** Shared rollback operation once rollback begins. */
+  rollbackOperation?: Promise<RollbackExecution>;
 }
 
 /** Typed scope-kernel slot for the nearest effect boundary. */
@@ -37,7 +48,7 @@ export function createEffectBoundary(
   scope: ExecutionScope,
   recovery: EffectBoundaryState["recovery"],
 ): EffectBoundaryState {
-  return Object.freeze({
+  return {
     ref: Object.freeze({
       kind: "effect.scope",
       id: scope.descriptor.id,
@@ -45,7 +56,8 @@ export function createEffectBoundary(
     }),
     recovery,
     pending: new Set<Promise<unknown>>(),
-  });
+    lifecycle: "open",
+  };
 }
 
 /** Resolve the nearest explicit effect boundary. */
@@ -53,6 +65,20 @@ export function currentEffectBoundary():
   | EffectBoundaryState
   | undefined {
   return currentScopeFacet(effectBoundaryFacet);
+}
+
+/** Reject effect admission after rollback has made a boundary terminal. */
+export function assertEffectBoundaryOpen(
+  boundary: EffectBoundaryState,
+  effectId: string,
+): void {
+  if (boundary.lifecycle === "open") return;
+  throw new CruxEffectError({
+    code: "EFFECT_SCOPE_TERMINAL",
+    message:
+      `Effect \`${effectId}\` cannot start because boundary ` +
+      `\`${boundary.ref.id}\` is terminal.`,
+  });
 }
 
 /** Track an effect promise on the nearest explicit boundary. */
@@ -77,6 +103,37 @@ export async function waitForEffectBoundaryOperations(
   }
 }
 
+/** Start or join rollback for one explicit boundary. */
+export function startEffectBoundaryRollback(
+  boundary: EffectBoundaryState,
+  options?: RollbackOptions,
+): Promise<RollbackExecution> {
+  if (boundary.rollbackOperation) {
+    return boundary.rollbackOperation;
+  }
+  boundary.lifecycle = "rolling_back";
+  updateBoundaryRecord(boundary, "rolling_back");
+  const operation = (async () => {
+    try {
+      await waitForEffectBoundaryOperations(boundary);
+      return await runRollback(boundary.ref, options);
+    } finally {
+      boundary.lifecycle = "completed";
+      updateBoundaryRecord(boundary, "completed");
+    }
+  })();
+  boundary.rollbackOperation = operation;
+  return operation;
+}
+
+/** Close a boundary that completed without rollback. */
+export function closeEffectBoundary(
+  boundary: EffectBoundaryState,
+): void {
+  boundary.lifecycle = "closed";
+  updateBoundaryRecord(boundary, "closed");
+}
+
 /** Allocate a unique kernel descriptor id for one explicit boundary. */
 export function createEffectBoundaryId(): string {
   return `effect-boundary:${++nextExplicitBoundaryId}`;
@@ -89,5 +146,24 @@ export function createImplicitRootBoundary(): EffectScopeRef {
     kind: "effect.scope",
     id,
     runId: id,
+  });
+}
+
+function updateBoundaryRecord(
+  boundary: EffectBoundaryState,
+  status: "rolling_back" | "completed" | "closed",
+): void {
+  const scope = effectLedger.getScope(boundary.ref.id);
+  if (!scope) {
+    throw new TypeError(
+      `Effect boundary \`${boundary.ref.id}\` was not found.`,
+    );
+  }
+  effectLedger.registerScope({
+    ...scope,
+    status,
+    unitIds: effectLedger
+      .unitsFor(boundary.ref.id)
+      .map((unit) => unit.id),
   });
 }

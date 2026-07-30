@@ -236,4 +236,37 @@ describe("rollbackOnError", () => {
     await expect(boundary).rejects.toBe(original);
     expect(recovery).toHaveBeenCalledOnce();
   });
+
+  it("preserves callback cause when rollback fails before a result", async () => {
+    const recoveryFailure = new Error("rollback could not start");
+    const update = effect(
+      "customer.rollback-pre-result-failure",
+      async () => undefined,
+      { recover: async () => undefined },
+    );
+    const original = new Error("callback failed");
+    const now = vi.spyOn(Date, "now");
+    let thrown: unknown;
+
+    try {
+      await rollbackOnError(async () => {
+        await update();
+        now.mockImplementationOnce(() => {
+          throw recoveryFailure;
+        });
+        throw original;
+      });
+    } catch (error) {
+      thrown = error;
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(thrown).toBeInstanceOf(RollbackError);
+    expect(thrown).toMatchObject({
+      cause: original,
+      recoveryError: recoveryFailure,
+    });
+    expect((thrown as RollbackError).result).toBeUndefined();
+  });
 });

@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import { CruxEffectError } from "../errors";
 import {
+  assertEffectBoundaryOpen,
   createImplicitRootBoundary,
   currentEffectBoundary,
 } from "./boundary";
@@ -60,6 +61,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   options?: EffectRuntimeOptions<TInput, TOutput>,
 ): Promise<EffectExecutionResult<TOutput>> {
   const explicitBoundary = currentEffectBoundary();
+  if (explicitBoundary) {
+    assertEffectBoundaryOpen(explicitBoundary, definition.id);
+  }
   if (
     explicitBoundary?.recovery === "required" &&
     !options?.recover

@@ -12,6 +12,7 @@ import type {
 import type {
   EffectReceiptRef,
   RecoveryUnitResult,
+  RollbackOnErrorOptions,
   RollbackResult,
 } from "../types";
 
@@ -25,6 +26,81 @@ export type RollbackPlanStep =
       readonly kind: "settle";
       readonly result: RecoveryUnitResult;
     };
+
+/** Callback settlement considered by rollback-boundary precedence. */
+export type RollbackCallbackSettlement<T = unknown> =
+  | { readonly kind: "returned"; readonly value: T }
+  | { readonly kind: "threw"; readonly error: unknown };
+
+/** Rollback settlement considered by rollback-boundary precedence. */
+export type RollbackBoundarySettlement =
+  | {
+      readonly kind: "result";
+      readonly result: RollbackResult;
+      readonly recoveryError?: unknown;
+    }
+  | {
+      readonly kind: "pre-result-failure";
+      readonly recoveryError: unknown;
+    };
+
+/** Pure outcome selected by rollback-boundary error precedence. */
+export type RollbackBoundaryDecision =
+  | { readonly kind: "return" }
+  | { readonly kind: "throw-callback"; readonly error: unknown }
+  | {
+      readonly kind: "throw-rollback";
+      readonly result?: RollbackResult;
+      readonly recoveryError?: unknown;
+      readonly cause?: unknown;
+    };
+
+/** Apply the RFC error-precedence table without throwing or running handlers. */
+export function decideRollbackBoundary(
+  recovery: NonNullable<RollbackOnErrorOptions["recovery"]>,
+  callback: RollbackCallbackSettlement,
+  rollback: RollbackBoundarySettlement,
+): RollbackBoundaryDecision {
+  if (rollback.kind === "pre-result-failure") {
+    return {
+      kind: "throw-rollback",
+      recoveryError: rollback.recoveryError,
+      ...(callback.kind === "threw" &&
+      callback.error !== rollback.recoveryError
+        ? { cause: callback.error }
+        : {}),
+    };
+  }
+  if (callback.kind === "threw") {
+    if (
+      rollback.result.status === "completed" &&
+      rollback.recoveryError === undefined
+    ) {
+      return { kind: "throw-callback", error: callback.error };
+    }
+    return {
+      kind: "throw-rollback",
+      result: rollback.result,
+      ...(rollback.recoveryError === undefined
+        ? {}
+        : { recoveryError: rollback.recoveryError }),
+      cause: callback.error,
+    };
+  }
+  if (
+    recovery === "required" &&
+    rollback.result.status !== "completed"
+  ) {
+    return {
+      kind: "throw-rollback",
+      result: rollback.result,
+      ...(rollback.recoveryError === undefined
+        ? {}
+        : { recoveryError: rollback.recoveryError }),
+    };
+  }
+  return { kind: "return" };
+}
 
 /** Build a causal LIFO plan without invoking recovery handlers. */
 export function planRollback(
