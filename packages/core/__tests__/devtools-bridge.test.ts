@@ -545,6 +545,12 @@ describe('devtools helper bridge wiring', () => {
   beforeEach(() => {
     FakeWebSocket.instances = []
     clearInspectableResources()
+    // Resolve the fire-and-forget index registration deterministically so no
+    // late fetch failure logs during worker teardown.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    )
   })
 
   it('starts and disposes the websocket peer from enableDevtools()', () => {
