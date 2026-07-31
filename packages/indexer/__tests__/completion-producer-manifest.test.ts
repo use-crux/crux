@@ -41,6 +41,7 @@ describe("completion producer identity manifest", () => {
       producer("call", "retry", ["@use-crux/core/routing"]),
       producer("call", "router", ["@use-crux/core/routing"]),
       producer("call", "split", ["@use-crux/core/routing"]),
+      producer("call", "thread", ["@use-crux/core/thread"]),
       producer("call", "tool", ["@use-crux/core", "@use-crux/core/tools"]),
       producer("new", "Agent", ["@use-crux/convex/agent"]),
     ]);
@@ -101,6 +102,11 @@ const publicModules: Readonly<
     "core",
     "./routing",
     "src/routing/index.ts",
+  ),
+  "@use-crux/core/thread": moduleEntry(
+    "core",
+    "./thread",
+    "src/thread/index.ts",
   ),
   "@use-crux/core/tools": moduleEntry("core", "./tools", "src/tools.ts"),
   "@use-crux/convex": moduleEntry("convex", ".", "src/index.ts"),

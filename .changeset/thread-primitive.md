@@ -1,5 +1,6 @@
 ---
 "@use-crux/core": minor
+"@use-crux/indexer": minor
 "@use-crux/upstash": minor
 "@use-crux/convex": minor
 ---

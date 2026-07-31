@@ -3,6 +3,8 @@ package planner
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 func TestDefaultManifestIncludesEmbeddingExtractors(t *testing.T) {
@@ -31,6 +33,43 @@ func TestDefaultManifestIncludesEmbeddingExtractors(t *testing.T) {
 		if !contains(names, name) {
 			t.Fatalf("default host extractors missing %q", name)
 		}
+	}
+}
+
+func TestDefaultManifestIncludesImportQualifiedThread(t *testing.T) {
+	if !contains(defaultCallNames, "thread") {
+		t.Fatal("defaultCallNames missing thread")
+	}
+	if !contains(defaultCallInterestNames, "thread") {
+		t.Fatal("defaultCallInterestNames missing thread")
+	}
+
+	var threadInterest *projectindex.StaticCallInterest
+	for _, interest := range defaultCallInterests() {
+		if interest.Name == "thread" {
+			value := interest
+			threadInterest = &value
+			break
+		}
+	}
+	if threadInterest == nil || !contains(threadInterest.ImportFrom, "@use-crux/core/thread") {
+		t.Fatalf("thread interest = %+v, want @use-crux/core/thread", threadInterest)
+	}
+
+	var host struct {
+		Extractors []struct {
+			Name string `json:"name"`
+		} `json:"extractors"`
+	}
+	if err := json.Unmarshal(defaultHost(), &host); err != nil {
+		t.Fatalf("decode default host: %v", err)
+	}
+	names := make([]string, 0, len(host.Extractors))
+	for _, extractor := range host.Extractors {
+		names = append(names, extractor.Name)
+	}
+	if !contains(names, "thread") {
+		t.Fatal("default host extractors missing thread")
 	}
 }
 

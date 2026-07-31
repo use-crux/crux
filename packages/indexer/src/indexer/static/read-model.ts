@@ -11,8 +11,12 @@ import type { StaticFactParseResult, StaticParseResult } from './types'
  */
 export function staticParseResultFromFacts(input: StaticFactParseResult): StaticParseResult {
   const found = staticFoundDefinitionsFromExtractedFacts(input.facts)
+  const references = input.facts.flatMap((facts) =>
+    facts.definitions?.length ? [] : (facts.references ?? []),
+  )
   const model = resolveRelationModel({
     found,
+    references,
     importedDefinitions: input.importedDefinitions,
     definitions: [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...input.pathDefinitions],
   })
