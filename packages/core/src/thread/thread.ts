@@ -1,0 +1,61 @@
+/**
+ * Canonical Thread factory.
+ *
+ * Construction is inert: configured Storage is resolved only when append or
+ * read executes, matching other authored Crux primitives.
+ *
+ * @module
+ */
+
+import { resolveRecords } from "../runtime/runtime";
+import type { Storage } from "../storage";
+import { ThreadError } from "./errors";
+import { assertThreadId } from "./ids";
+import { commitThreadAppend } from "./store/commit";
+import { readThread } from "./store/read";
+import type { Thread, ThreadOptions } from "./types";
+
+/**
+ * Create canonical provider-neutral conversation history.
+ *
+ * @param options - Stable identity and optional explicit Storage.
+ * @returns A frozen, inert Thread handle.
+ *
+ * @example
+ * ```ts
+ * const conversation = thread({ id: "support-42", storage });
+ * await conversation.append({ role: "user", content: "Hello" });
+ * const snapshot = await conversation.read();
+ * ```
+ */
+export function thread(options: ThreadOptions): Thread {
+  assertThreadId(options.id);
+  let resolved: Storage | undefined;
+  const resolveStorage = (): Storage => {
+    if (resolved) return resolved;
+    if (options.storage) {
+      resolved = options.storage;
+      return resolved;
+    }
+    try {
+      resolved = Object.freeze({ records: resolveRecords() });
+      return resolved;
+    } catch (error) {
+      throw new ThreadError(
+        "unsupported_capability",
+        `Thread "${options.id}" requires Storage. Configure config({ storage: { records } }) or pass thread({ storage }).`,
+        { cause: error },
+      );
+    }
+  };
+  const append: Thread["append"] = (input, appendOptions) =>
+    commitThreadAppend(resolveStorage(), options.id, input, appendOptions);
+  const read: Thread["read"] = (readOptions) =>
+    readThread(resolveStorage(), options.id, readOptions);
+  return Object.freeze({
+    _tag: "Thread",
+    id: options.id,
+    append,
+    read,
+  });
+}
