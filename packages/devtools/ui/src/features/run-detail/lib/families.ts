@@ -12,7 +12,7 @@
  *   Orchestration → crux   composition.* · flow.*
  *   Agents        → iris   agent.* · delegate.*
  *   Generation    → warn   generation.* · compaction.*
- *   Capabilities  → ok/—   retrieval.*·embedding.* (ok) · tool.*·cache.* (neutral)
+ *   Capabilities  → ok/—   retrieval.*·knowledge.*·embedding.* (ok) · tool.*·cache.* (neutral)
  *   State         → plum   memory.* · thread.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
  *   Routing       → warn   routing.* · fallback.* · tool.approval
  *   Safety        → danger guardrail.* · constraint.* · security.*
@@ -71,7 +71,16 @@ export function primitiveFamily(
   if (hasPrefix(p, ["generation.", "compaction."])) return "generation";
   // Multimodal completed operations read as generation-adjacent (warn tone).
   if (hasPrefix(p, ["media."])) return "generation";
-  if (hasPrefix(p, ["retrieval.", "embedding.", "tool.", "cache.", "mcp."]))
+  if (
+    hasPrefix(p, [
+      "retrieval.",
+      "knowledge.",
+      "embedding.",
+      "tool.",
+      "cache.",
+      "mcp.",
+    ])
+  )
     return "capabilities";
   if (
     p === "operation" ||
@@ -112,7 +121,9 @@ export function primitiveTone(primitive: string | undefined): ChipTone {
     case "state":
       return "plum";
     case "capabilities":
-      return hasPrefix(p, ["retrieval.", "embedding."]) ? "ok" : "muted";
+      return hasPrefix(p, ["retrieval.", "knowledge.", "embedding."])
+        ? "ok"
+        : "muted";
     case "transition":
     default:
       return "muted";

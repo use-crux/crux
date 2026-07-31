@@ -25,6 +25,8 @@ package cache
 // Epoch 58 prevents snapshots from retaining sources deleted while offline.
 // Epoch 59 combines the independently advanced Thread and context-planning
 // snapshot contracts.
+// Epoch 60 adds authored Connected Knowledge definitions, view children, and
+// static relation facts.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 59
+const ProjectIndexSnapshotCacheEpoch = 60

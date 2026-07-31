@@ -38,7 +38,7 @@ import type { EvalTimeoutPolicyProjection } from "@use-crux/core/project-index";
 import { kindMeta, type FamilyId, type LintSeverity } from "./kit";
 /** Structural/containment relation types — a child rolls up under `from`. */
 const CONTAINMENT_RE =
-  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
+  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|includes_view|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
 
 // ── schema field tree (JSON Schema → typed field nodes) ──────────────────────
 export interface SchemaField {

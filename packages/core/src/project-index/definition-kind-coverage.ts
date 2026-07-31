@@ -302,7 +302,7 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
   },
 
-  // Category D — structural child (13 kinds; `eval.case` is also Eval-owned
+  // Category D — structural child (14 kinds; `eval.case` is also Eval-owned
   // via `secondary`). Classified mechanically: a
   // `<parent>.<child>` kind whose `parent` is itself a union member.
   "flow.step": {
@@ -344,6 +344,10 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimeIdentity: "definition-ref",
     runtimePrimitiveNames: ["retrieval.step"],
   },
+  "rag.knowledgeBase.view": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
   "rag.pipeline.stage": {
     primary: "structural-child",
     runtimeIdentity: "none",
@@ -371,9 +375,13 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimePrimitiveNames: ["scoring.judge"],
   },
   eval: { primary: "eval-owned", runtimeIdentity: "eval" },
-  // Category F — genuinely static-only (4 kinds). Declarative/config; never
+  // Category F — genuinely static-only (8 kinds). Declarative/config; never
   // the target or subject of any runtime primitive.
   registry: { primary: "static-only" },
+  "knowledge.relation": { primary: "static-only" },
+  "knowledge.assertions": { primary: "static-only" },
+  "knowledge.communities": { primary: "static-only" },
+  "knowledge.model": { primary: "static-only" },
   "storage.bundle": { primary: "static-only" },
   "storage.scope": { primary: "static-only" },
   // Refuted category-A claim: no first-party emitter, compiled-definition

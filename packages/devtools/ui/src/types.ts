@@ -649,13 +649,26 @@ export type PrimitiveSpecificFacts =
   | {
       kind:
         | "rag.knowledgeBase"
+        | "rag.knowledgeBase.view"
         | "rag.recipe"
         | "rag.recipe.step"
         | "rag.pipeline"
         | "rag.pipeline.stage"
         | "rag.reranker"
-        | "rag.retriever";
+        | "rag.retriever"
+        | "knowledge.relation"
+        | "knowledge.assertions"
+        | "knowledge.communities"
+        | "knowledge.model";
       knowledgeBaseId?: string;
+      viewId?: string;
+      whereFields?: readonly string[];
+      relationId?: string;
+      assertionId?: string;
+      communitiesId?: string;
+      modelName?: string;
+      version?: string | number;
+      typeNames?: string[];
       recipeId?: string;
       stepId?: string;
       rerankerId?: string;
