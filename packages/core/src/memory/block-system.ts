@@ -12,6 +12,14 @@ import {
   nativeEvidenceArtifactRef,
   recordNativeEvidence,
 } from '../evidence/internal'
+import {
+  CONTROL_RESOURCE_BINDER,
+  CONTROL_RESOURCE_RUNTIME,
+  CONTROL_RESOURCE_TYPE,
+  type ControlReadable,
+  type ControlResourceRuntime,
+} from '../request/prepare/resources'
+import { readPinnedPreparationResource } from '../request/prepare/pin-context'
 
 /**
  * Structured `invoked-memory` ref for a memory span, or `{}` when the memory is
@@ -872,11 +880,26 @@ export function memory(config: MemoryConfig): Memory {
     createContext: (options) => createContext(options.input, options),
   })
 
-  const api: Memory = {
+  const api: Memory & {
+    readonly [CONTROL_RESOURCE_BINDER]: (
+      resource: object & {
+        readonly [CONTROL_RESOURCE_RUNTIME]?: ControlResourceRuntime<unknown>
+      },
+      input: Readonly<Record<string, unknown>>,
+      promptId?: string,
+    ) => Promise<unknown | null>
+  } = {
     _tag: 'Memory',
     id: config.id,
     blocks: Object.freeze([...config.blocks]),
     config,
+    async [CONTROL_RESOURCE_BINDER](resource, input, promptId) {
+      const runtime = resource[CONTROL_RESOURCE_RUNTIME]
+      if (!runtime || !config.blocks.includes(resource as MemoryBlock)) {
+        throw new Error('Control resource is not declared by this Memory.')
+      }
+      return runtime.read(await createContext({ ...input }, { promptId }))
+    },
     asContext(options) {
       return contextWithFullPromptInput({
         id: `memory:${config.id}`,
@@ -1064,106 +1087,6 @@ async function findProposal(
   return entry ? (entry.value as unknown as MemoryProposal) : null
 }
 
-export function recentMessages(config: { id: string; maxMessages?: number; priority?: number }): MemoryBlock & {
-  addTurn(turn: MemoryTurn, options: MemoryRuntimeOptions): Promise<void>
-  list(options: MemoryRuntimeOptions): Promise<MemoryMessage[]>
-  clear(options: MemoryRuntimeOptions): Promise<void>
-} {
-  const maxMessages = config.maxMessages ?? 10
-
-  async function addTurn(turn: MemoryTurn, options: MemoryRuntimeOptions) {
-    const startedAt = now()
-    const prefix = blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id)
-    const existing = await list({ ...options, memoryId: options.memoryId ?? 'standalone' })
-    const messages = [...existing, ...turn.messages].slice(-maxMessages)
-    await clear({ ...options, memoryId: options.memoryId ?? 'standalone' })
-    for (let index = 0; index < messages.length; index++) {
-      await options.records.put(
-        `${prefix}${String(index).padStart(6, '0')}`,
-        toJsonObject({
-          ...messages[index],
-          order: index,
-          createdAt: now(),
-          updatedAt: now(),
-        }),
-      )
-    }
-    emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'addTurn', {
-      content: turn.messages
-        .map(memoryMessageLine)
-        .join('\n')
-        .slice(0, 200),
-      snapshot: messages.map((message, index) => ({ key: `${prefix}${String(index).padStart(6, '0')}`, ...message })),
-      diff: {
-        before: existing,
-        after: messages,
-        added: turn.messages.map((message) => ({
-          preview: memoryMessageLine(message).slice(0, 240),
-        })),
-      },
-      durationMs: now() - startedAt,
-    })
-  }
-
-  async function list(options: MemoryRuntimeOptions): Promise<MemoryMessage[]> {
-    const startedAt = now()
-    const result = await options.records.list(blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id))
-    const sortedEntries = [...result.entries].sort((a, b) => String(a.key).localeCompare(String(b.key)))
-    const messages = sortedEntries.map((entry) => ({
-        role: String(entry.value.role ?? ''),
-        content: storedContentText(entry.value.content),
-        metadata: isRecord(entry.value.metadata) ? entry.value.metadata : undefined,
-      }))
-    emitBlockRead(options, { id: config.id, kind: 'recent' }, 'list', messages.length, startedAt, {
-      snapshot: messages,
-      recall: {
-        results: sortedEntries.map((entry) =>
-          valueToEntry({
-            key: entry.key,
-            value: {
-              content: memoryMessageLine({ role: entry.value.role, content: entry.value.content }),
-              metadata: isRecord(entry.value.metadata) ? entry.value.metadata : {},
-              createdAt: typeof entry.value.createdAt === 'number' ? entry.value.createdAt : 0,
-              updatedAt: typeof entry.value.updatedAt === 'number' ? entry.value.updatedAt : 0,
-            },
-          }),
-        ),
-      },
-    })
-    return messages
-  }
-
-  async function clear(options: MemoryRuntimeOptions) {
-    const result = await options.records.list(blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id))
-    await Promise.all(result.entries.map((entry) => options.records.delete(entry.key)))
-    emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'clear', {
-      snapshot: [],
-      diff: {
-        before: result.entries.map((entry) => entry.value),
-        after: [],
-        removed: result.entries.map((entry) => ({
-          key: entry.key,
-          preview: memoryMessageLine({ role: entry.value.role, content: entry.value.content }).slice(0, 240),
-        })),
-      },
-    })
-  }
-
-  const block = memoryBlock({
-    id: config.id,
-    kind: 'recent',
-    priority: config.priority,
-    captureTurn: addTurn,
-    render: async (ctx) => {
-      const messages = await list(ctx)
-      if (messages.length === 0) return ''
-      return ['Recent messages:', ...messages.map((message) => `- ${message.role}: ${message.content}`)].join('\n')
-    },
-  })
-
-  return Object.assign(block, { addTurn, list, clear })
-}
-
 export function workingState<T extends z.ZodType>(config: {
   id: string
   schema: T
@@ -1173,12 +1096,19 @@ export function workingState<T extends z.ZodType>(config: {
   set(value: z.infer<T>, options: MemoryRuntimeOptions): Promise<void>
   patch(value: Partial<z.infer<T>>, options: MemoryRuntimeOptions): Promise<void>
   clear(options: MemoryRuntimeOptions): Promise<void>
-} {
+} & ControlReadable<z.infer<T>> {
   function key(options: MemoryRuntimeOptions) {
     return `${blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id)}state`
   }
 
   async function get(options: MemoryRuntimeOptions): Promise<z.infer<T> | null> {
+    const pinned = readPinnedPreparationResource(
+      (options as MemoryRuntimeOptions & {
+        readonly input?: Record<string, unknown>
+      }).input,
+      block as MemoryBlock & ControlReadable<z.infer<T>>,
+    )
+    if (pinned) return pinned
     const startedAt = now()
     const value = await options.records.get(key(options))
     const state = value ? (value.state as z.infer<T>) : null
@@ -1230,7 +1160,17 @@ export function workingState<T extends z.ZodType>(config: {
     },
   })
 
-  return Object.assign(block, { get, set, patch, clear })
+  return Object.assign(block, {
+    get,
+    set,
+    patch,
+    clear,
+    [CONTROL_RESOURCE_TYPE]: (value: z.infer<T>) => value,
+    [CONTROL_RESOURCE_RUNTIME]: {
+      kind: 'working-state' as const,
+      read: (options: unknown) => get(options as MemoryRuntimeOptions),
+    },
+  })
 }
 
 export function episodes(config: {

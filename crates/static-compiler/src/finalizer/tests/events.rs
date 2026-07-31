@@ -57,11 +57,11 @@ fn project_patch_events_chunks_fact_batches() {
     );
     assert_eq!(
         batches[2]["facts"].as_array().expect("batch facts").len(),
-        59
+        61
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["factCount"],
-        259
+        261
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["decision"]["staticIndexComplete"],

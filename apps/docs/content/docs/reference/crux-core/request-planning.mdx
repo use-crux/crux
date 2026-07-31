@@ -1,0 +1,234 @@
+---
+title: Request planning
+description: Input budgets, representation ladders, and adapter capacity contracts.
+---
+
+```ts
+import {
+  droppable,
+  mergeInputBudget,
+  offload,
+  offloadable,
+  prefer,
+  RequestCompositionError,
+  summarize,
+  summarizable,
+} from "@use-crux/core";
+import type { InputBudget } from "@use-crux/core";
+```
+
+Request planning runs after Crux resolves a concrete model and before each
+provider call. It measures the complete request and selects only
+representations you authorized.
+
+Use these APIs when messages, context, Tools, schemas, or media can approach a
+model limit. Plain contributors remain exact and required.
+
+## `inputBudget`
+
+`inputBudget` sets a soft optimization watermark and a strict input limit for
+one provider call.
+
+```ts
+const result = await generate(supportReply, {
+  model,
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { optimizeAt: 24_000, max: 30_000 },
+});
+```
+
+Use it when your product needs a lower operating target than the model's
+context window. Leave it unset when the model-derived limit is appropriate.
+Use `maxTokens` for output length; `inputBudget` does not replace it.
+
+| Field | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `optimizeAt` | `number?` | Effective strict maximum | Soft watermark. Crux prefers the highest-fidelity complete candidate in this tier. |
+| `max` | `number?` | Model-derived maximum | Strict per-call input maximum, capped by model capacity and output reserve. |
+
+Both fields must be positive safe integers. `optimizeAt` cannot exceed `max`.
+Invalid values throw `TypeError`. If no legal complete candidate fits, Crux
+throws `RequestCompositionError` with code `REQUEST_TOO_LARGE` before dispatch.
+
+Set a reusable Agent default, then override only the field that changes:
+
+```ts
+const responder = agent({
+  id: "support-responder",
+  prompt: supportReply,
+  model,
+  inputBudget: { optimizeAt: 18_000, max: 28_000 },
+});
+
+await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { max: 22_000 },
+});
+```
+
+`mergeInputBudget(definition, invocation)` exposes the same field-by-field
+merge used by Core. It returns a frozen value and never mutates either input.
+
+## Representation constructors
+
+Representation constructors declare a fixed fidelity ladder for one canonical
+source. Construction does not call a model, publish content, or discard the
+canonical value.
+
+| API | What it authorizes | Use when | Do not use when |
+| --- | --- | --- | --- |
+| `prefer(primary, ...alternatives)` | Exact authored alternatives | You maintain a reviewed shorter form. | An alternative changes capabilities owned by the primary. |
+| `summarizable(source, options?)` | A generated summary | Narrative or retrieved content may lose detail. | The source is an instruction, schema, or safety contract. |
+| `offloadable(source, options?)` | A preview plus exact-recovery reference | Large data must remain recoverable through a Tool. | The request cannot expose the retrieval Tool. |
+| `droppable(source)` | Complete content and capability omission | The request remains correct without the contributor. | The contributor is required for behavior or safety. |
+| `offload(value)` | A forced exact-recovery representation | One Tool result or value must stay outside model input. | You want the planner to choose between full content and a reference. |
+
+The only legal order is:
+
+```text
+full -> authored -> summary -> offload -> omitted
+```
+
+### `prefer(primary, ...alternatives)`
+
+`prefer()` selects one authored representation while the primary keeps
+identity, priority, input schema, and capabilities.
+
+```ts
+const policy = prefer(fullRefundPolicy, refundPolicyIndex);
+```
+
+An empty alternatives list is a TypeScript error. Capability differences throw
+`RequestCompositionError` with code `INVALID_COMPOSITION` during preflight.
+
+### `summarizable(source, options?)`
+
+`summarizable()` adds a generated-summary rung. An array is one atomic source.
+
+```ts
+const knowledge = summarizable([productDocs, incidentTimeline], {
+  model: summaryModel,
+  strategy: summarize.hierarchical(),
+});
+```
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `model` | `unknown` | Resolved response model |
+| `strategy` | `SummarizeStrategy` | `summarize.adaptive()` |
+
+Use it for descriptive evidence. If a needed artifact cannot be prepared,
+Crux throws `REPRESENTATION_UNAVAILABLE`.
+
+### `offloadable(source, options?)`
+
+`offloadable()` retains an exact value outside model input and injects a
+required retrieval Tool.
+
+```ts
+const logs = offloadable(logContext, { aboveTokens: 4_000 });
+```
+
+`aboveTokens` prefers the reference only when the source estimate exceeds the
+threshold. The rung is unavailable when backing publication, authorization,
+residency, or required Tool access cannot be satisfied.
+
+### `droppable(source)`
+
+`droppable()` adds terminal omission. Omission removes the contributor's
+model-facing content and every capability it owns.
+
+```ts
+const examples = droppable(exampleReplies);
+```
+
+A terminal ladder nested inside another wrapper is rejected by TypeScript and
+runtime preflight with `INVALID_COMPOSITION`.
+
+### `offload(value)` and Tool `output`
+
+Force exact recovery for one result:
+
+```ts
+const fetchAuditLog = tool({
+  description: "Fetch the complete audit log",
+  parameters: auditLogInput,
+  execute: async ({ deploymentId }) =>
+    offload(await readAuditLog(deploymentId)),
+});
+```
+
+Use `output: offloadable({ aboveTokens })` when only large Tool results should
+become references. The application still receives the canonical output.
+`OffloadReceipt` reports the opaque handle, revision, and byte size.
+
+See the [representation guide](/docs/guides/context-planning/representations)
+for the complete grammar and capability rules.
+
+## Adapter capacity contract
+
+Provider authors describe model limits with `ModelCapacityProfile` and may
+provide authoritative counting separately.
+
+```ts
+const profile: ModelCapacityProfile = {
+  contextWindow: 128_000,
+  defaultOutputReserve: 16_384,
+  countingConfidence: "estimated",
+};
+
+const spec = {
+  capacity: (model: string) =>
+    model.startsWith("acme-long") ? profile : undefined,
+  async countTokens(client, args) {
+    return client.tokens.count(args);
+  },
+};
+```
+
+| Profile field | Meaning |
+| --- | --- |
+| `contextWindow` | Maximum combined input and output tokens. |
+| `defaultOutputReserve` | Output reserve used when the caller omits a maximum. |
+| `countingConfidence` | `exact`, `estimated`, or `conservative`. |
+
+`ModelCapacityResolver` is synchronous and side-effect free. Return `undefined`
+for an unknown model. `resolveModelCapacityProfile(model, resolver?)` then uses
+`CONSERVATIVE_MODEL_CAPACITY`: an 8,192-token window with a 2,048-token reserve.
+
+`AdapterSpec.countTokens(client, args)` is optional and asynchronous. It must
+count the complete canonical request without dispatching generation. Core calls
+it only when an exact count can change fit or selection. An invalid count throws
+`TypeError` before provider dispatch.
+
+`AdapterSpec.compactHistory(client, input)` is the optional provider-native
+managed-history lowering. See the
+[history reference](/docs/reference/crux-core/request-history).
+
+### Loop-owning runtimes
+
+A loop-owning runtime must call `ExecutorRequest.planStep` exactly once before
+each semantic provider call. `ExecutorRequestStepPlanner` accepts
+`ExecutorRequestStepInput` and returns `SealedExecutorRequestStep` with the
+approved canonical fields, active Tools, and receipt. If planning rejects, the
+runtime must not dispatch.
+
+## Public type inventory
+
+| Area | Public exports |
+| --- | --- |
+| Budget | `InputBudget` |
+| Representations | `RepresentationSource`, `RepresentationSourceSchema`, `RepresentationLadder`, `RepresentationEntry`, `PreferLadder`, `SummarizableLadder`, `OffloadableLadder`, `DroppableLadder`, `ForcedOffload`, `SummarizableOptions`, `OffloadableOptions`, `ToolOutputOffloadPolicy`, `OffloadReceipt` |
+| Capacity | `ModelCapacityProfile`, `ModelCapacityResolver`, `ModelCountingConfidence` |
+| Loop runtime | `ExecutorRequestStepInput`, `ExecutorRequestStepPlanner`, `SealedExecutorRequestStep` |
+
+Use concrete constructors in application code. Ladder and loop-runtime types
+are intended for reusable libraries and provider integrations.
+
+## Related
+
+- Guide: [Context planning](/docs/guides/context-planning)
+- Guide: [Representation ladders](/docs/guides/context-planning/representations)
+- Reference: [Request evidence](/docs/reference/crux-core/request-evidence)
+- Reference: [Request history](/docs/reference/crux-core/request-history)
+- Reference: [Request preparation](/docs/reference/crux-core/request-preparation)

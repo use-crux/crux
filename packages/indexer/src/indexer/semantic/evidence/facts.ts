@@ -49,6 +49,7 @@ import {
   semanticToolMapSourceRefs,
 } from "../model";
 import { semanticPromptTextSourceRefs } from "../model/prompt-text-source-refs";
+import { semanticContextPlanningFacts } from "../context-planning/facts";
 import { projectPromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
 
 interface SemanticSchemaIndexFacts {
@@ -170,14 +171,25 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     input.sourceFiles,
     input.view,
   );
+  const contextPlanning = semanticContextPlanningFacts(
+    input.sourceFiles,
+    input.view,
+  );
+  const authored = mergeSemanticAnalyzerResults([
+    result,
+    {
+      definitions: contextPlanning.definitions,
+      sourceRefs: contextPlanning.sourceRefs,
+    },
+  ]);
   const definitions = [
-    ...result.definitions,
+    ...authored.definitions,
     ...media.definitions,
     ...embeddings.definitions,
     ...evidenceRecords.definitions,
   ];
   const relations = [
-    ...result.relations,
+    ...authored.relations,
     ...media.relations,
     ...embeddings.relations,
     ...evidenceRecords.relations,
@@ -189,7 +201,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
   yield* semanticEvidenceBatchesFromFacts({
     definitions,
     sourceRefs: [
-      ...result.sourceRefs,
+      ...authored.sourceRefs,
       ...media.sourceRefs,
       ...embeddings.sourceRefs,
       ...evidenceRecords.sourceRefs,
@@ -200,6 +212,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
       ...media.lintFindings,
       ...embeddings.lintFindings,
       ...evidenceRecords.lintFindings,
+      ...contextPlanning.lintFindings,
       ...mediaArchitectureLintFindings(definitions, relations),
     ],
   });

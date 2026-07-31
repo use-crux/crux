@@ -2,7 +2,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '@use-crux/core'
+import { config, offload, prompt } from '@use-crux/core'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 import {
   boundary,
   guardrail,
@@ -245,7 +246,7 @@ describe('AI SDK tool model ingress', () => {
     )
   })
 
-  it('does not install a native converter when no Safety policy applies', async () => {
+  it('installs exact-recovery conversion without changing ordinary output', async () => {
     const scripted = scriptedGateway({ generateText: [{ text: 'done' }] })
     const authored = {
       description: 'lookup',
@@ -260,7 +261,45 @@ describe('AI SDK tool model ingress', () => {
 
     const sent = (scripted.calls.generateText[0]?.tools as Record<string, unknown>)
       .lookup as Record<string, unknown>
-    expect(sent).not.toHaveProperty('toModelOutput')
+    expect(sent).toHaveProperty('toModelOutput', expect.any(Function))
+  })
+
+  it('lowers a forced exact result before the next SDK provider step', async () => {
+    const installation = config({
+      persistence: { records: inMemoryRecordStore() },
+    })
+    const canonical = { exact: 'SDK Tool result' }
+    const { model, prompts, toolNames } = capturingEmissionModel([
+      { toolCalls: [{ id: 'call-offload', name: 'lookup', args: {} }] },
+      { text: 'done' },
+    ])
+
+    try {
+      await createCruxAi().generate(toolPrompt, {
+        model,
+        tools: {
+          lookup: {
+            description: 'lookup',
+            inputSchema: z.object({}),
+            execute: async () => offload(canonical),
+          },
+        },
+      })
+
+      expect(providerToolOutput(prompts[1])).toEqual({
+        type: 'json',
+        value: expect.objectContaining({
+          type: 'exact-recovery-reference',
+          handle: expect.stringMatching(/^offload_[a-f0-9]+$/),
+        }),
+      })
+      expect(toolNames).toEqual([
+        ['lookup'],
+        ['lookup', '__crux_ReadOffload'],
+      ])
+    } finally {
+      installation.dispose()
+    }
   })
 })
 

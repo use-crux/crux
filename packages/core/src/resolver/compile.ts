@@ -11,7 +11,11 @@
  */
 
 import type { AnyPromptConfig } from '../prompt/prompt-types'
-import { assertUniqueStaticEntryIds, emitStaticContextDefinitionWarnings } from './definition-analysis'
+import {
+  assertValidRepresentationLadders,
+  assertUniqueStaticEntryIds,
+  emitStaticContextDefinitionWarnings,
+} from './definition-analysis'
 import { validatePromptConfig } from './pass'
 import { createPromptResolverPlan } from './plan'
 import { withDefaultResolverPorts } from './ports'
@@ -36,6 +40,7 @@ export type {
  */
 export function compilePrompt(config: AnyPromptConfig, options?: CompilePromptOptions): PromptResolutionPipeline {
   validatePromptConfig(config)
+  assertValidRepresentationLadders(config.use ?? [])
   assertUniqueStaticEntryIds(config.use ?? [], config.id)
 
   const ports = withDefaultResolverPorts(options?.ports)

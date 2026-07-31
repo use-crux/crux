@@ -4,62 +4,50 @@ import (
 	"encoding/json"
 )
 
-type Segment struct {
-	Kind          string  `json:"kind"`
-	StartUTF16    int     `json:"startUtf16"`
-	EndUTF16      int     `json:"endUtf16"`
-	Source        string  `json:"source,omitempty"`
-	ObservedAt    *uint64 `json:"observedAt,omitempty"`
-	SourceVersion string  `json:"sourceVersion,omitempty"`
+type PreviewAdaptation struct {
+	Contributor    string `json:"contributor"`
+	Representation string `json:"representation"`
+	State          string `json:"state"`
+	FullTokens     *int   `json:"fullTokens,omitempty"`
+	SelectedTokens *int   `json:"selectedTokens,omitempty"`
 }
 
-type Part struct {
-	Source        string    `json:"source"`
-	Text          string    `json:"text"`
-	Tokens        int       `json:"tokens"`
-	Skipped       bool      `json:"skipped"`
-	Segments      []Segment `json:"segments"`
-	StaticTokens  *int      `json:"staticTokens,omitempty"`
-	DynamicTokens *int      `json:"dynamicTokens,omitempty"`
+type PreviewWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
-type DroppedContext struct {
-	Source   string    `json:"source"`
-	Text     string    `json:"text"`
-	Tokens   int       `json:"tokens"`
-	Priority float64   `json:"priority"`
-	Segments []Segment `json:"segments"`
+type PreviewDiagnostic struct {
+	ID          string `json:"id"`
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Contributor string `json:"contributor,omitempty"`
+	Tokens      *int   `json:"tokens,omitempty"`
 }
 
-type ExcludedContext struct {
-	Source string `json:"source"`
-	Reason string `json:"reason"`
+type RequestPreview struct {
+	Status         string              `json:"status"`
+	Model          string              `json:"model,omitempty"`
+	InputTokens    *int                `json:"inputTokens,omitempty"`
+	MaxInputTokens *int                `json:"maxInputTokens,omitempty"`
+	Measurement    string              `json:"measurement"`
+	Adaptations    []PreviewAdaptation `json:"adaptations"`
+	Warnings       []PreviewWarning    `json:"warnings"`
+	Diagnostics    []PreviewDiagnostic `json:"diagnostics"`
+}
+
+type PreviewContribution struct {
+	ID              string   `json:"id"`
+	Boundary        string   `json:"boundary"`
+	Representations []string `json:"representations"`
 }
 
 type ReadyResult struct {
-	Status            string `json:"status"`
-	TargetID          string `json:"targetId"`
-	CatalogueRevision uint64 `json:"catalogueRevision"`
-	Inspection        struct {
-		System struct {
-			Text     string `json:"text"`
-			Tokens   int    `json:"tokens"`
-			Coverage string `json:"coverage"`
-			Parts    []Part `json:"parts"`
-		} `json:"system"`
-		Prompt *struct {
-			Text          string    `json:"text"`
-			Tokens        int       `json:"tokens"`
-			Segments      []Segment `json:"segments"`
-			StaticTokens  *int      `json:"staticTokens,omitempty"`
-			DynamicTokens *int      `json:"dynamicTokens,omitempty"`
-		} `json:"prompt,omitempty"`
-		TotalTokens      int               `json:"totalTokens"`
-		DroppedContexts  []DroppedContext  `json:"droppedContexts"`
-		ExcludedContexts []ExcludedContext `json:"excludedContexts"`
-		TokenBudget      *int              `json:"tokenBudget,omitempty"`
-		Tools            []string          `json:"tools,omitempty"`
-	} `json:"inspection"`
+	Status            string                `json:"status"`
+	TargetID          string                `json:"targetId"`
+	CatalogueRevision uint64                `json:"catalogueRevision"`
+	Preview           RequestPreview        `json:"preview"`
+	Contributions     []PreviewContribution `json:"contributions"`
 }
 
 type ValidationIssue struct {
@@ -124,9 +112,6 @@ func DecodeResponse(data []byte, commandID, targetID string, revision uint64) (D
 	}
 	switch discriminator.Type {
 	case "command.result":
-		if !validResultOptionalStrings(data) {
-			return DecodedResponse{}, NewFailure("invalid_response")
-		}
 		return decodeResultEnvelope(data, commandID, targetID, revision)
 	case "command.error":
 		if !validErrorOptionalStrings(data) {
@@ -222,42 +207,6 @@ func validRuntimeError(value ErrorBody, targetID string, revision uint64) bool {
 		return false
 	}
 	return true
-}
-
-func validResultOptionalStrings(data []byte) bool {
-	var value any
-	if json.Unmarshal(data, &value) != nil {
-		return false
-	}
-	var visit func(any) bool
-	visit = func(candidate any) bool {
-		switch typed := candidate.(type) {
-		case []any:
-			for _, child := range typed {
-				if !visit(child) {
-					return false
-				}
-			}
-		case map[string]any:
-			if _, isSegment := typed["startUtf16"]; isSegment {
-				for _, field := range []string{"source", "sourceVersion"} {
-					if value, present := typed[field]; present {
-						text, ok := value.(string)
-						if !ok || text == "" {
-							return false
-						}
-					}
-				}
-			}
-			for _, child := range typed {
-				if !visit(child) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	return visit(value)
 }
 
 func validErrorOptionalStrings(data []byte) bool {

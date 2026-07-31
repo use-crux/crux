@@ -109,7 +109,6 @@ export async function createAgent(
     {
       model: model as never,
       input: options.input as never,
-      tokenBudget: options.tokenBudget,
       tools: Object.keys(tools),
     } as Parameters<typeof resolveAiAgent>[1],
   )

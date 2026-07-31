@@ -381,6 +381,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"context.contribution": {},
 	"prompt":               {},
 	"prompt.budget":        {},
+	"request.plan":         {},
 	"tool.args":            {},
 	"tool.request":         {},
 	"tool.result":          {},

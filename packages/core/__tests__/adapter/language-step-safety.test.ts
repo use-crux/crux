@@ -157,7 +157,9 @@ describe("language step Safety — SDK transform capability", () => {
   it("rejects an applicable step guard before model I/O when the runtime cannot transform before client tools", async () => {
     const fake = fakeLoopRuntime({ loops: [[{ text: "must not run" }]] });
     const runtime = loopRuntimeAdapter(
-      Object.assign({}, fake.runtime, { capabilities: undefined }),
+      Object.assign({}, fake.runtime, {
+        capabilities: { requestPlanning: "per-step" as const },
+      }),
     );
 
     await expect(

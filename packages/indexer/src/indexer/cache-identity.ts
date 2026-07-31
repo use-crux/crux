@@ -9,11 +9,10 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  */
 export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v80";
 /**
- * Semantic v39 owns bounded media streaming, PromptText diagnostic/refactor
- * evidence, compiler-owned source classification, and authored execution
- * evidence projection.
+ * Semantic v40 adds authored context-planning structure, hook/budget refs,
+ * and conclusive composition findings.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v39";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v40";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

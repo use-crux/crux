@@ -39,6 +39,37 @@ import { resolve } from "@use-crux/ai/agent";
   guide](/docs/guides/prompts/execution).
 </Callout>
 
+## Request capacity and counting
+
+The adapter reports a `ModelCapacityProfile` before each planned language
+request. Use `adapter.capacity(model)` for the bound model object, or call the
+exported `aiSdkModelCapacity({ provider, modelId })` when you already have its
+normalized identity.
+
+```ts
+import { aiSdkModelCapacity } from "@use-crux/ai";
+
+const profile = aiSdkModelCapacity({
+  provider: "openai",
+  modelId: "gpt-4o-mini",
+});
+```
+
+Known profiles use model-id prefix matching. They cover OpenAI GPT 3.5 through
+5 and reasoning families `o1`, `o3`, and `o4`; Anthropic generations 2 through
+4; and Google Gemini 1.5 through 3. Versioned model aliases inherit their
+family profile.
+
+Unknown models use Core's conservative fallback: an 8,192-token context window
+with a 2,048-token default output reserve. Known profiles report
+`countingConfidence: "estimated"`; the fallback reports `"conservative"`.
+
+This adapter does not make a provider token-counting request. Crux measures the
+complete request with its provider-aware estimator and applies the confidence
+margin shown in receipt inspection. Set `inputBudget.max` below the derived
+limit when your product needs a smaller strict boundary. See
+[Input budgets](/docs/guides/context-planning/budgets) for selection behavior.
+
 ## Architecture
 
 `@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `router()`/`split()`/`retry()`/`fallback()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, SDK-owned tool approval hooks, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
@@ -182,7 +213,7 @@ Execute a prompt using the Vercel AI SDK.
 | `options.extra.maxRetries`      | `number?`                                                    | AI SDK retry policy.                                                                                                                                                                                                                                 |
 | `options.activeTools`           | `string[]?`                                                  | Restrict available tools                                                                                                                                                                                                                             |
 | `options.messages`              | `Message[] \| ModelMessage[]?`                               | Explicit message history. Pass `ModelMessage[]` from `convertToModelMessages()` to preserve native AI SDK attachments and provider options.                                                                                                          |
-| `options.tokenBudget`           | `number?`                                                    | Token budget for context dropping                                                                                                                                                                                                                    |
+| `options.inputBudget`           | `{ optimizeAt?: number; max?: number }?`                     | Whole-request soft optimization watermark and strict per-call input maximum                                                                                                                                                                          |
 | `options.timeout`               | `{ totalMs?, stepMs?, chunkMs?, toolMs?, tools? }?`          | Structured timeout budgets. Crux rejects with `TimeoutError`; `tools[name]` overrides `toolMs` for one tool.                                                                                                                                         |
 | `options.validationRetry`       | [`ValidationRetryOptions?`](/docs/guides/safety/constraints) | Retry structured output on validation failure                                                                                                                                                                                                        |
 | `options.constraints`           | [`Constraint[]?`](/docs/guides/safety/constraints)           | Per-call semantic constraints (highest precedence in the safety merge)                                                                                                                                                                               |
@@ -213,9 +244,9 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | `options.extra.stopWhen`   | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?` | AI SDK-native, non-portable stop conditions                                                                                                                                                             |
 | `options.activeTools`      | `string[]?`                                           | Restrict available tools                                                                                                                                                                                |
 | `options.messages`         | `ModelMessage[]?`                                     | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                                                               |
-| `options.tokenBudget`      | `number?`                                             | Token budget for context dropping                                                                                                                                                                       |
+| `options.inputBudget`      | `{ optimizeAt?: number; max?: number }?`              | Whole-request soft optimization watermark and strict per-call input maximum                                                                                                                             |
 
-**Returns:** `StreamResult<TOutput, TPartial>` — one managed logical stream with
+**Returns:** `StreamResult<TOutput, TPartial>`, one managed logical stream with
 `.textStream`, `.fullStream`, `.partialOutputStream`, `.completion`, and
 `.cancel()`. There is no `.raw`: the AI SDK result resolves before terminal
 Safety and describes only one attempt, so exposing it would bypass the gates
@@ -226,7 +257,7 @@ const result = await stream(editDraft, {
   model: openai("gpt-4o"),
   input: { instruction: "Fix the intro" },
 });
-// Canonical partial `z.input` — manifest-decoded, never provider wire JSON,
+// Canonical partial `z.input`: manifest-decoded, never provider wire JSON,
 // and never published from an attempt Safety went on to discard.
 for await (const partial of result.partialOutputStream) {
   console.log(partial);
@@ -330,11 +361,9 @@ const evaluator = judge({
 });
 ```
 
-For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.
-
 ### `generateTextFn`
 
-Pre-bound `GenerateTextFn` for `@use-crux/core` APIs (summarization, compaction).
+Pre-bound `GenerateTextFn` for provider-neutral `@use-crux/core` APIs.
 
 **Signature:** `GenerateTextFn`, `(opts: { model, system?, prompt }) => Promise<{ text: string }>`
 
@@ -374,7 +403,7 @@ emulate native media embeddings.
 For object models, the helper identity uses `{ provider, modelId }`; string
 models use the raw string id. The user `version` is appended rather than
 replacing that identity. Headers and `providerOptions` are deliberately excluded
-because they may be sensitive or non-canonical—bump `version` when an option
+because they may be sensitive or non-canonical. Bump `version` when an option
 changes vector semantics.
 
 ### `retrievalModel(config)`

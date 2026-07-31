@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GenerateObjectFn } from '../../src/compaction'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import {
   guardrail,
   MEDIA_CLASSIFIER_PROMPT_VERSION,

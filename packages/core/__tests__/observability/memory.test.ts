@@ -8,7 +8,7 @@ import {
 } from '../../src/observability'
 import type { DefinitionRef } from '../../src/observability'
 import { blackboard } from '../../src/agent/blackboard'
-import { facts, memory, recentMessages, workingState } from '../../src/memory'
+import { facts, memory, workingState } from '../../src/memory'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 describe('canonical memory observability', () => {
@@ -236,9 +236,9 @@ describe('canonical memory observability', () => {
 
   it('records memory context hydration as child memory.read spans', async () => {
     const store = inMemoryRecordStore()
-    const recent = recentMessages({ id: 'recent' })
-    await recent.addTurn(
-      { messages: [{ role: 'user', content: 'Remember concise answers.' }] },
+    const factBlock = facts({ id: 'facts', write: { mode: 'auto' } })
+    await factBlock.add(
+      { content: 'Remember concise answers.' },
       { records: store, namespace: 'thread:1', memoryId: 'conversation' },
     )
     const transport = createInMemoryObservabilityTransport()
@@ -248,7 +248,7 @@ describe('canonical memory observability', () => {
       id: 'conversation',
       records: store,
       namespace: 'thread:1',
-      blocks: [recent],
+      blocks: [factBlock],
     })
 
     await observe.run({ name: 'hydrate memory', rootPrimitive: 'prompt.resolve' }, async () => {
@@ -259,11 +259,11 @@ describe('canonical memory observability', () => {
     await observe.flush()
 
     const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    const readSpan = spanStarts.find((record) => record.primitive === 'memory.read' && record.name === 'recent.list')
+    const readSpan = spanStarts.find((record) => record.primitive === 'memory.read' && record.name === 'facts.list')
     expect(readSpan).toMatchObject({
       family: 'memory',
       primitive: 'memory.read',
-      attributes: expect.objectContaining({ memoryId: 'conversation', blockId: 'recent', operation: 'list' }),
+      attributes: expect.objectContaining({ memoryId: 'conversation', blockId: 'facts', operation: 'list' }),
     })
     expect(readSpan?.parentSpanId).toBeTruthy()
   })

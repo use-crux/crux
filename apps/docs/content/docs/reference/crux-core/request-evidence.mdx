@@ -1,0 +1,163 @@
+---
+title: Request evidence
+description: Preview prospective fit and inspect redacted evidence from executed requests.
+---
+
+```ts
+import {
+  inspectRequest,
+  preview,
+  RequestCompositionError,
+  RequestInspectionUnavailableError,
+} from "@use-crux/core";
+```
+
+Use `preview()` before execution and request receipts after execution. Preview
+is observational and cannot be passed to a provider. Receipts describe one
+exact sealed provider call.
+
+## `preview(target, options?)`
+
+`preview()` plans the initial Prompt or Agent request without executing it.
+
+```ts
+const request = await preview(responder, {
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { max: 22_000 },
+});
+```
+
+Use preview for preflight checks, development tools, and fit tests. It does not
+generate summaries, publish offloads, run Tools or preparation hooks, schedule
+maintenance, or write canonical state.
+
+| Option | Use |
+| --- | --- |
+| `input` | Resolve the Prompt's typed input. |
+| `model` | Supply a concrete model for a Prompt. An Agent may use its configured model. |
+| `provider` | Apply provider-specific Prompt adaptation. |
+| `messages` | Supply caller-owned canonical history. |
+| `inputBudget` | Preview per-call pressure settings. |
+| `settings` | Include settings that affect request shape or output reserve. |
+| `tools` | Include call-site Tools in measurement. |
+
+| Status | Meaning |
+| --- | --- |
+| `fits` | A ready complete request fits. |
+| `over-limit` | No legal complete request fits. This expected result does not throw. |
+| `unknown` | Runtime-only sources or unprepared artifacts prevent a complete answer. |
+
+`RequestPreview.measurement` is `exact`, `estimated`, `conservative`, or
+`incomplete`. `PreviewAdaptation.state` is `selected` or `unprepared`.
+Preview throws for invalid input or composition, and throws `TypeError` when no
+concrete model is available.
+
+## `RequestReceipt`
+
+Every executed provider step exposes a small JSON-safe receipt:
+
+```ts
+const receipt = result.steps[0].request;
+console.log(receipt.inputTokens, receipt.adaptations);
+```
+
+Use enumerable receipt fields for logs and durable result payloads. The common
+exact request has `adaptations: []`.
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Identity of the sealed provider request. |
+| `model` | Concrete selected model. |
+| `inputTokens` | Measured complete-request input. |
+| `maxInputTokens` | Effective strict input maximum. |
+| `measurement` | `exact`, `estimated`, or `conservative`. |
+| `adaptations` | Authorized deviations from full exact representations. |
+| `warnings` | Non-fatal content-free warnings. |
+| `previousRequestId` | Previous semantic call in the same managed loop. |
+| `inspect()` | Full redacted evidence retained with the live receipt. |
+
+`RequestAdaptation` identifies the contributor and selected `authored`,
+`summary`, `offload`, or `omitted` representation. Optional token fields show
+the full and selected complete-request sizes. `RequestWarning` contains a safe
+code and message.
+
+## Full inspection
+
+```ts
+const inspection = await receipt.inspect();
+console.table(inspection.breakdown.contributions);
+console.table(inspection.candidates);
+```
+
+| Inspection field | Purpose |
+| --- | --- |
+| `contributions` | Required, sticky, or elastic boundaries and their authorized rungs. |
+| `candidates` | Availability, selection, size, and rejection reason. |
+| `breakdown` | Largest-first token attribution by safe contribution class. |
+| `counting` | Measurement confidence, safety margin, and provider overhead. |
+| `retryCount` | Adapter-reported transport retries for this sealed request. |
+| `artifacts` | Summary or offload evidence. |
+| `supportTools` | Required support Tool identities. |
+| `supportRequests` | Redacted receipts for linked summary calls. |
+| `linkedRequestIds` | Previous and support request identities. |
+| `preparation` | Accepted amendment counts and resource hashes. |
+
+Inspection never includes authored prompt, message, Tool-result, resource, or
+schema content.
+
+## `inspectRequest(receiptOrId)`
+
+`inspectRequest()` restores evidence for a live receipt, serialized receipt,
+or request id.
+
+```ts
+const serialized = JSON.parse(JSON.stringify(receipt));
+const inspection = await inspectRequest(serialized);
+```
+
+Use it after JSON transport or from another process when your observability
+destination retains request evidence. Prefer `receipt.inspect()` for a live
+result. Process-local standalone retention keeps at most 256 requests for five
+minutes.
+
+After eviction or expiry, lookup throws
+`RequestInspectionUnavailableError` with code
+`REQUEST_INSPECTION_UNAVAILABLE`. The small receipt remains valid.
+
+## `RequestCompositionError`
+
+Catch this error when you need to choose a user-facing remedy:
+
+```ts
+try {
+  return await generate(responder, options);
+} catch (error) {
+  if (error instanceof RequestCompositionError) {
+    logger.warn({ code: error.code, diagnostics: error.diagnostics });
+  }
+  throw error;
+}
+```
+
+| Code | Cause |
+| --- | --- |
+| `REQUEST_TOO_LARGE` | The minimum legal complete request exceeds the effective maximum. |
+| `REPRESENTATION_UNAVAILABLE` | A required summary, reference, or support capability is not ready. |
+| `INVALID_COMPOSITION` | A ladder, history policy, capability graph, or amendment is invalid. |
+
+`RequestDiagnostic` carries a safe id, machine code, optional contributor and
+token count, and an actionable message. Sensitive content remains redacted.
+
+## Public type inventory
+
+| Area | Public exports |
+| --- | --- |
+| Preview | `RequestPreviewTarget`, `RequestPreviewOptions`, `RequestPreview`, `PreviewAdaptation`, `PreviewAdaptationState` |
+| Receipt | `RequestReceipt`, `RequestAdaptation`, `RequestWarning`, `RequestInspection`, `RequestContributionInspection`, `RequestCandidateInspection`, `RequestArtifactInspection`, `RequestSupportReceipt`, `RequestTokenBreakdown`, `RequestTokenBreakdownEntry` |
+| Errors | `RequestCompositionErrorCode`, `RequestDiagnostic` |
+
+## Related
+
+- Guide: [Receipts and preview](/docs/guides/context-planning/receipts-preview)
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Reference: [Request preparation](/docs/reference/crux-core/request-preparation)

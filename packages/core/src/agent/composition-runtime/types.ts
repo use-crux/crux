@@ -6,6 +6,11 @@ import type { CruxSpanId } from '../../observability'
 import type { WithOperationResultMeta } from '../../observability'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import type { AnyModel, AnyToolSet } from '../../types'
+import type {
+  InvocationContextSeed,
+  PrepareInvocation,
+} from '../../request/prepare/invocation-context'
+import type { CompositionRequestReceiptTree } from '../../request/receipt/tree'
 
 /** Composition modes supported by the shared agent composition runtime. */
 export type CompositionKind = 'parallel' | 'pipeline' | 'consensus' | 'swarm'
@@ -38,6 +43,8 @@ export interface CompositionRuntimeConfig {
   readonly sessionId?: string
   /** Extra root span attributes owned by the composition mode. */
   readonly attributes?: Readonly<Record<string, unknown>>
+  /** Callback evaluated before each managed leaf child. */
+  readonly prepareInvocation?: PrepareInvocation
 }
 
 /** Agent execution request owned by a composition mode. */
@@ -73,6 +80,8 @@ export interface CompositionAgentExecution<TOutput = unknown> {
     readonly spanId: CruxSpanId
     readonly attributes?: Readonly<Record<string, unknown>>
   }
+  /** Composition-specific facts for a managed invocation boundary. */
+  readonly invocation?: InvocationContextSeed
 }
 
 /** Function step execution request owned by a composition mode. */
@@ -113,6 +122,8 @@ export interface CompositionScope {
   report(input: CompositionReport): void
   /** Build the child execution context for a composition step. */
   childContext(input: CompositionStepContextInput): ExecutionContext
+  /** Snapshot linked child provider-request evidence. */
+  requestReceipts(): CompositionRequestReceiptTree
 }
 
 /** Internal runtime that owns shared composition lifecycle mechanics. */

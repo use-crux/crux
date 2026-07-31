@@ -92,6 +92,7 @@ export function defineNativeChatProvider<
       providerId: profile.providerId,
 
       materializeToolSource: profile.materializeToolSource,
+      capacity: profile.capacity,
 
       async call(client, args, context) {
         const mode = callModeFor(args);

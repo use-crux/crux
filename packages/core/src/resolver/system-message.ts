@@ -3,7 +3,7 @@
  *
  * This module turns prompt-owned system text and active context contributions
  * into the final system string, inspect parts, provider-cache blocks, and
- * token-budget artifacts. It is deliberately below `compilePrompt()` so the
+ * exact contribution metadata. It is deliberately below `compilePrompt()` so the
  * public compiler boundary can stay small while this lower layer owns the
  * ordering and budget rules.
  *
@@ -26,11 +26,6 @@ import {
 } from "./lower";
 import type { ResolverPorts } from "./ports";
 import {
-  emitBudgetArtifact,
-  includeByBudget,
-  type BudgetContextPart,
-} from "./system-budget";
-import {
   inputForSourceKeys,
   normalizeSystemContent,
   recountSystemContent,
@@ -47,12 +42,26 @@ export interface BuiltSystemMessage {
   blocks: SystemBlock[];
   /** Exact ordered semantic ownership retained for managed model ingress. */
   ingressBlocks: readonly SystemIngressBlock[];
-  promptBudgetArtifactId?: CruxArtifactId;
 }
 
 /** Internal representation of a resolved context contribution. */
-interface ResolvedContextPart extends BudgetContextPart {
+interface ResolvedContextPart {
+  source: string;
+  injectableKind: ReturnType<typeof contextContributionKind>;
+  text: string;
+  tokens: number;
+  priority: number;
+  index: number;
   providerCache: boolean;
+  injectedTools?: readonly string[];
+  segments?: InspectPart["segments"];
+  staticTokens?: number;
+  dynamicTokens?: number;
+  servedFrom?: "live" | "memo";
+  resolvedAt?: number;
+  age?: number;
+  observedAt?: number;
+  sourceVersion?: string;
   contextId?: string;
   artifactId?: CruxArtifactId;
 }
@@ -107,7 +116,6 @@ export async function buildSystemMessage(
   ownSystem: string | ResolvedSystemContent,
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
-  tokenBudget: number | undefined,
   ports: ResolverPorts,
   options: {
     ownProviderCache?: boolean;
@@ -118,7 +126,6 @@ export async function buildSystemMessage(
 ): Promise<BuiltSystemMessage> {
   const parts: InspectPart[] = [];
   const droppedContexts: DroppedContext[] = [];
-  let promptBudgetArtifactId: CruxArtifactId | undefined;
 
   const count = ports.tokenizer.count;
   const ownContent =
@@ -308,26 +315,22 @@ export async function buildSystemMessage(
     );
   }
 
-  const budgetSelection = includeByBudget({
-    parts,
-    resolved: orderedResolved,
-    droppedContexts,
-    tokenBudget,
-    ownContent,
-    ownTokens,
-  });
-  if (tokenBudget !== undefined && budgetSelection.prefixOverflow) {
-    ports.diagnostics.warn(
-      `prompt "${options.promptId ?? "unknown"}": token budget ${tokenBudget} is smaller than the stable prefix (${budgetSelection.prefixTokens} tokens); uncached contexts were dropped entirely. Shrink cached contexts or raise the budget.`,
-    );
+  for (const part of orderedResolved) {
+    parts.push({
+      source: part.source,
+      text: part.text,
+      tokens: part.tokens,
+      skipped: false,
+      ...(part.segments ? { segments: part.segments } : {}),
+      ...(part.staticTokens !== undefined
+        ? { staticTokens: part.staticTokens }
+        : {}),
+      ...(part.dynamicTokens !== undefined
+        ? { dynamicTokens: part.dynamicTokens }
+        : {}),
+      ...freshnessProjection(part),
+    });
   }
-  promptBudgetArtifactId = emitBudgetArtifact({
-    parts,
-    droppedContexts,
-    tokenBudget,
-    prefixOverflow: budgetSelection.prefixOverflow,
-    ports,
-  });
 
   const system = parts
     .filter((part) => !part.skipped && part.text)
@@ -383,7 +386,6 @@ export async function buildSystemMessage(
     droppedContexts,
     blocks,
     ingressBlocks,
-    ...(promptBudgetArtifactId ? { promptBudgetArtifactId } : {}),
   };
 }
 

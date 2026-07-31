@@ -78,10 +78,8 @@ The same exact-owner rule applies to:
 
 - `AgentResult`, `ParallelResult`, `PipelineResult`, `ConsensusResult`, `SwarmResult`, and `DelegateResult`;
 - every successful/in-band `FlowResult` variant, including suspended, cancelled, and expired;
-- `JudgeResult`, `CompactionResult`, and `CitationValidationResult`;
+- `JudgeResult` and `CitationValidationResult`;
 - `IndexResult`, `IndexDryRunResult`, and `CorpusSyncResult`.
-
-`compactConversation()` is observed even when there is no work. Generated conversation compaction may create a child summary span, but the returned result is restamped by the outer `compaction.run` owner.
 
 Flow resume preserves the validated `traceId` and opens a fresh `flow.run` span, so the resumed result has a fresh `spanId`. Invocation-local result IDs are removed recursively from persisted flow inputs, step outputs, signals, and scheduled inputs; continuation trace carriers remain intact deliberately.
 
@@ -120,14 +118,14 @@ Do not copy a child generation pair onto a media, agent, or composition payload.
 | Completed image/transcription/speech                                                    | Included: exact outer `media.*` pair                                                              |
 | Agent/composition/delegate                                                              | Included: parent and nested child envelopes retain their own spans                                |
 | Flow public results                                                                     | Included: current invocation pair; IDs are not persisted with business values                     |
-| Judge, compaction, citations, content indexing summaries                                | Included: exact owning-operation pair                                                             |
+| Judge, citations, content indexing summaries                                            | Included: exact owning-operation pair                                                             |
 | Eval cells                                                                              | Aggregate only: logical `runIds`, correlated task response when retained, assertion `spanIds`      |
 | Provider payloads, callbacks, validators, and `raw`                                     | Excluded: provider-authored and ID-free                                                           |
 | Prompt resolve/inspect values, tools, MCP payloads                                      | Excluded: portable/domain/protocol values                                                         |
 | Bare retrieval arrays, embeddings, chunks, progress items, numeric delete/clear returns | Excluded: no envelope shape change                                                                |
 | Durable memory, plan, task, workspace, flow step/signal data                            | Excluded from ephemeral result identity                                                           |
 | Project Index compiler facts, snapshots, HTTP read model, and caches                    | Excluded; content indexing summaries are a separate included system                               |
-| Convex upstream Agent aliases, swarm durable state, and turn results                    | Excluded; only Core-owned `compactConversation()` is re-exported with its observed result         |
+| Convex upstream Agent aliases, swarm durable state, and turn results                    | Excluded                                                                                           |
 | Errors                                                                                  | Excluded: thrown identity remains unchanged                                                       |
 
 The runtime finalizer is intentionally not exported. Application code consumes typed observed results; adapter authors consume payload contracts and let Core finalize them.

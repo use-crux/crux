@@ -301,40 +301,35 @@ describe("compilePrompt resolution", () => {
   });
 });
 
-describe("compilePrompt token-aware system composition", () => {
-  it("drops lower-priority contexts first when the token budget is tight", async () => {
+describe("compilePrompt exact system composition", () => {
+  it("keeps every context regardless of priority", async () => {
     setTokenizer((text) => text.length);
 
     const low = context({ id: "low", system: "AAAA", priority: 10 });
     const high = context({ id: "high", system: "BB", priority: 90 });
 
-    const resolved = await resolveArgs(
-      { system: "X", use: [low, high] } as AnyPromptConfig,
-      { tokenBudget: 5 },
-    );
-    const inspected = await inspect(
-      { system: "X", use: [low, high] } as AnyPromptConfig,
-      { tokenBudget: 5 },
-    );
+    const resolved = await resolveArgs({
+      system: "X",
+      use: [low, high],
+    } as AnyPromptConfig);
+    const inspected = await inspect({
+      system: "X",
+      use: [low, high],
+    } as AnyPromptConfig);
 
     expect(resolved.system).toContain("BB");
-    expect(resolved.system).not.toContain("AAAA");
-    expect(inspected.droppedContexts).toHaveLength(1);
-    expect(inspected.droppedContexts[0]).toMatchObject({
-      source: "context:low",
-      priority: 10,
-      tokens: 4,
-    });
+    expect(resolved.system).toContain("AAAA");
+    expect(inspected.droppedContexts).toEqual([]);
   });
 
   it("never drops the prompt-owned system text", async () => {
     setTokenizer((text) => text.length);
 
     const ctx = context({ id: "ctx", system: "context text", priority: 10 });
-    const result = await resolveArgs(
-      { system: "my system", use: [ctx] } as AnyPromptConfig,
-      { tokenBudget: 10 },
-    );
+    const result = await resolveArgs({
+      system: "my system",
+      use: [ctx],
+    } as AnyPromptConfig);
 
     expect(result.system).toContain("my system");
   });
@@ -366,7 +361,7 @@ describe("compilePrompt token-aware system composition", () => {
     });
   });
 
-  it("excludes skipped and dropped contexts from blocks", async () => {
+  it("excludes skipped contexts and retains exact contexts in blocks", async () => {
     setTokenizer((text) => text.length);
 
     const empty = context({
@@ -385,12 +380,13 @@ describe("compilePrompt token-aware system composition", () => {
       "prompt",
     ]);
 
-    const budgeted = await resolveArgs(
-      { system: "X", use: [low, high] } as AnyPromptConfig,
-      { tokenBudget: 5 },
-    );
-    expect(budgeted.systemBlocks?.map((block) => block.source)).toEqual([
+    const exact = await resolveArgs({
+      system: "X",
+      use: [low, high],
+    } as AnyPromptConfig);
+    expect(exact.systemBlocks?.map((block) => block.source)).toEqual([
       "prompt",
+      "context:low",
       "context:high",
     ]);
   });

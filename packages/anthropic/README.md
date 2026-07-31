@@ -44,7 +44,7 @@ provider-neutral `messages`, typed `raw`, and retained `_meta` for observability
 returns `{ textStream, raw, completion }`, where `completion` resolves to the
 same envelope fields without `raw`/`_meta`.
 
-`createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client)` (with `model` in each prompt-or-messages call) or `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). The object helper is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
+`createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client)` (with `model` in each prompt-or-messages call) or `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (for example, `llmJudge`). The object helper is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, tools, memory, or instrumentation.
 
 For headless use, `toParams(resolved, { model })` converts a resolved prompt
 into Anthropic request params and `fromResponse(response)` normalizes an

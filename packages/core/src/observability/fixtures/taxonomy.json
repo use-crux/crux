@@ -104,6 +104,7 @@
     "output",
     "prompt",
     "prompt.budget",
+    "request.plan",
     "retrieval.hits",
     "routing.report",
     "score.report",

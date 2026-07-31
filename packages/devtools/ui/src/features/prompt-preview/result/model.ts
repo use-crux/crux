@@ -1,20 +1,31 @@
-import type { PromptPreviewSegment, PromptPreviewText } from "../types";
+import type { PromptPreviewContribution, PromptRequestPreview } from "../types";
 
-export interface PromptPreviewTextSlice extends PromptPreviewSegment {
-  readonly text: string;
+/** Human-readable fit label for one closed preview status. */
+export function promptPreviewStatusLabel(
+  status: PromptRequestPreview["status"],
+): string {
+  switch (status) {
+    case "fits":
+      return "Fits";
+    case "over-limit":
+      return "Over limit";
+    case "unknown":
+      return "Needs preparation";
+  }
 }
 
-/**
- * Materializes already-validated UTF-16 provenance ranges for presentation.
- * The wire decoder remains the authority for contiguity and bounds.
- */
-export function promptPreviewTextSlices(
-  value: PromptPreviewText,
-): readonly PromptPreviewTextSlice[] {
-  return value.segments.map((segment) => ({
-    ...segment,
-    text: value.text.slice(segment.startUtf16, segment.endUtf16),
-  }));
+/** Explain what one contribution boundary permits under request pressure. */
+export function contributionBoundaryDescription(
+  boundary: PromptPreviewContribution["boundary"],
+): string {
+  switch (boundary) {
+    case "required":
+      return "Exact and always retained";
+    case "sticky":
+      return "May shrink but cannot disappear";
+    case "elastic":
+      return "May shrink or be omitted";
+  }
 }
 
 /** Formats one validation path without interpreting its source schema. */

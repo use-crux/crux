@@ -10,9 +10,12 @@ import type {
 import type { RoutingReceipt } from "../routing/receipt";
 import type { AssistantContentPart } from "../types/content";
 import type { LogicalBillingTotals } from "./types";
+import type { RequestReceipt } from "../request/receipt/receipt";
 
 /** Provider/SDK completion facts produced before core operation stamping. */
 export interface ExecutorStreamCompletionPayload extends GenerationMeta {
+  /** Ordered sealed requests for semantic model calls in this SDK stream. */
+  readonly requestReceipts?: readonly RequestReceipt[];
   /**
    * Scalar totals across every billable physical attempt (RFC #173, law 7).
    *

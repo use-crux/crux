@@ -208,7 +208,14 @@ export function normalizeAiSdkMessages(
     [key: string]: unknown
   }>,
 ): Message[] {
-  return sdkMessages.map((msg) => {
+  return sdkMessages.flatMap((msg) => {
+    if (
+      msg.role === 'tool' &&
+      Array.isArray(msg.content) &&
+      msg.content.some((part) => isRecord(part) && part.type === 'tool-result')
+    ) {
+      return fromResponseMessages([msg as ResponseMessageLike])
+    }
     const content =
       typeof msg.content === 'string'
         ? msg.content
@@ -259,12 +266,35 @@ export function normalizeAiSdkMessages(
       }
     }
 
-    return {
-      role,
-      content,
-      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-    }
+    return [
+      {
+        role,
+        content,
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      },
+    ]
   })
+}
+
+/**
+ * Lower a sealed canonical transcript without discarding SDK-only fidelity.
+ *
+ * Exact planning clones but does not alter the normalized transcript. In that
+ * case the original SDK representation is already a faithful lowering and
+ * preserves provider parts that canonical persistence does not model. Future
+ * adaptations that change the canonical transcript are lowered from the sealed
+ * value instead.
+ */
+export function lowerSealedAiSdkMessages(
+  nativeMessages: Array<{ role: string; content: unknown }>,
+  normalizedMessages: readonly Message[],
+  sealedMessages: readonly Message[],
+  options: AiSdkContentPartOptions = {},
+): Array<Record<string, unknown>> {
+  if (JSON.stringify(normalizedMessages) === JSON.stringify(sealedMessages)) {
+    return nativeMessages
+  }
+  return toModelMessages(sealedMessages, options)
 }
 
 function normalizeRole(role: string): Message['role'] {

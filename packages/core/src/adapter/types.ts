@@ -16,6 +16,8 @@ import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
 import type { CruxFinishReason } from "./normalized-outcome";
 import type { AssistantContentPart } from "../types/content";
+import type { RequestReceipt } from "../request/receipt/receipt";
+import type { OffloadReceipt } from "../request/offload/handle";
 
 // ─────────────────────────────────────────────────────────────────
 // Adapter Response
@@ -37,6 +39,8 @@ export interface AdapterResponse {
   warnings?: readonly unknown[];
   /** Provider-owned metadata preserved without interpretation. */
   providerMetadata?: unknown;
+  /** Additional transport attempts used for this same sealed request. */
+  transportRetries?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -144,6 +148,8 @@ export interface LogicalBillingTotals {
 
 /** Exact buffered facts available after a provider-native stream completes. */
 export interface StreamCompletionMetadata extends GenerationMeta {
+  /** Sealed request evidence for the accepted provider attempt. */
+  readonly request?: RequestReceipt;
   /** Logical totals when this stream spanned several billable attempts. */
   readonly logicalTotals?: LogicalBillingTotals;
   /** Final text projection, when supplied independently of stream deltas. */
@@ -156,6 +162,8 @@ export interface StreamCompletionMetadata extends GenerationMeta {
   readonly warnings?: readonly unknown[];
   /** Provider-owned completion metadata. */
   readonly providerMetadata?: unknown;
+  /** Additional transport attempts used for this same sealed request. */
+  readonly transportRetries?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -171,6 +179,8 @@ export interface ToolResultEntry {
   content: string;
   outputSize: number;
   modelOutputSize: number;
+  /** Exact-recovery publication evidence when the model view is a reference. */
+  offloadReceipt?: OffloadReceipt;
   modelOutputError?: string;
   isError?: boolean;
 }

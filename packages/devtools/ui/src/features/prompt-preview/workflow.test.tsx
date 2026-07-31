@@ -33,17 +33,14 @@ describe("Prompt exact-preview workflow", () => {
               environment: "node",
             },
             catalogueRevision: 7,
-            inspection: {
-              system: {
-                text: "",
-                tokens: 0,
-                coverage: "complete",
-                parts: [],
-              },
-              totalTokens: 0,
-              droppedContexts: [],
-              excludedContexts: [],
+            preview: {
+              status: "fits",
+              measurement: "exact",
+              adaptations: [],
+              warnings: [],
+              diagnostics: [],
             },
+            contributions: [],
           });
         }
         return Response.json(

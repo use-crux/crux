@@ -22,6 +22,7 @@ import {
   type ProviderStreamingOperationFactories,
 } from "./streaming-operations";
 import { toolModelIngressDialect } from "../tool/model-ingress-port";
+import { resolveModelCapacityProfile } from "../../request/capacity/model-profile";
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
   unknown,
@@ -81,12 +82,23 @@ function portForBoundLoop(
 ): LoopRuntimePort<unknown, unknown, unknown> {
   const port: LoopRuntimePort<unknown, unknown, unknown> = {
     id,
+    ...(loop.capacity
+      ? {
+          capacity: (model) =>
+            resolveModelCapacityProfile(model.modelId, () =>
+              loop.capacity!(model),
+            ),
+        }
+      : {}),
     capabilities: bound.capabilities,
     ...(loop.structuredOutput
       ? { structuredOutput: loop.structuredOutput }
       : {}),
     media: loop.media,
     materializeToolSource: bound.materializeToolSource,
+    compactHistory: bound.compactHistory
+      ? (input) => bound.compactHistory!(input)
+      : undefined,
     [toolModelIngressDialect]: bound[toolModelIngressDialect],
     describeModel:
       loop.describeModel ?? ((model) => describeModelFallback(id, model)),

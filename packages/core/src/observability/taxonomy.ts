@@ -153,6 +153,7 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   "context.contribution",
   "prompt",
   "prompt.budget",
+  "request.plan",
   "tool.args",
   "tool.request",
   "tool.result",

@@ -57,17 +57,14 @@ describe("Prompt preview strict browser wire", () => {
         environment: "node",
       },
       catalogueRevision: 4,
-      inspection: {
-        system: {
-          text: "",
-          tokens: 0,
-          coverage: "complete",
-          parts: [],
-        },
-        totalTokens: 0,
-        droppedContexts: [],
-        excludedContexts: [],
+      preview: {
+        status: "fits",
+        measurement: "exact",
+        adaptations: [],
+        warnings: [],
+        diagnostics: [],
       },
+      contributions: [],
     };
     expect(decodePromptPreviewBrowserResponse(ready)).toEqual(ready);
     expect(() =>

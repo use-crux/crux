@@ -83,6 +83,7 @@ export function tool<
     execute: config.execute,
     ...(config.contextSchema ? { contextSchema: config.contextSchema } : {}),
     ...(config.toModelOutput ? { toModelOutput: config.toModelOutput } : {}),
+    ...(config.output ? { output: config.output } : {}),
   }) as NamedToolDef<
     z.infer<TInputSchema>,
     TOutput,

@@ -4,84 +4,49 @@ import { describe, expect, it } from "vitest";
 import type { PromptPreviewWorkflowState } from "../types";
 import { PromptPreviewResultView } from "./view";
 
-describe("Exact Prompt preview result", () => {
-  it("renders inspection structure and keeps JSON secondary", () => {
+describe("Prompt request preview result", () => {
+  it("renders fit and required, sticky, and elastic contribution boundaries", () => {
     const state: PromptPreviewWorkflowState = {
       phase: "ready",
       rawText: "{}",
       canPreview: true,
       result: {
         status: "ready",
-        peer: {
-          peerId: "peer",
-          runtimeName: "App",
-          environment: "node",
-        },
+        peer: { peerId: "peer", runtimeName: "App", environment: "node" },
         catalogueRevision: 4,
-        inspection: {
-          system: {
-            text: "Policy\n\nLive context",
-            tokens: 5,
-            coverage: "complete",
-            parts: [
-              {
-                source: "prompt:writer",
-                text: "Policy",
-                tokens: 2,
-                staticTokens: 2,
-                dynamicTokens: 0,
-                skipped: false,
-                segments: [{ kind: "static", startUtf16: 0, endUtf16: 6 }],
-              },
-              {
-                source: "context:live",
-                text: "Live context",
-                tokens: 3,
-                staticTokens: 1,
-                dynamicTokens: 2,
-                skipped: false,
-                segments: [
-                  { kind: "static", startUtf16: 0, endUtf16: 5 },
-                  {
-                    kind: "dynamic",
-                    startUtf16: 5,
-                    endUtf16: 12,
-                    source: "profile",
-                  },
-                ],
-              },
-            ],
-          },
-          prompt: {
-            text: "Hello Ada",
-            tokens: 2,
-            staticTokens: 1,
-            dynamicTokens: 1,
-            segments: [
-              { kind: "static", startUtf16: 0, endUtf16: 6 },
-              {
-                kind: "dynamic",
-                startUtf16: 6,
-                endUtf16: 9,
-                source: "name",
-              },
-            ],
-          },
-          totalTokens: 7,
-          tokenBudget: 12,
-          droppedContexts: [
+        preview: {
+          status: "unknown",
+          model: "provider:model",
+          inputTokens: 900,
+          maxInputTokens: 1_000,
+          measurement: "incomplete",
+          adaptations: [
             {
-              source: "context:large",
-              text: "Dropped text",
-              tokens: 4,
-              priority: 1,
-              segments: [{ kind: "unknown", startUtf16: 0, endUtf16: 12 }],
+              contributor: "context:examples",
+              representation: "summary",
+              state: "unprepared",
             },
           ],
-          excludedContexts: [
-            { source: "context:disabled", reason: "disabled" },
-          ],
+          warnings: [],
+          diagnostics: [],
         },
+        contributions: [
+          {
+            id: "prompt:writer",
+            boundary: "required",
+            representations: ["full"],
+          },
+          {
+            id: "context:style",
+            boundary: "sticky",
+            representations: ["full", "authored", "summary"],
+          },
+          {
+            id: "context:examples",
+            boundary: "elastic",
+            representations: ["full", "summary", "omitted"],
+          },
+        ],
       },
     };
 
@@ -89,19 +54,17 @@ describe("Exact Prompt preview result", () => {
       <PromptPreviewResultView state={state} />,
     );
 
-    expect(html).toContain("Assembled system");
+    expect(html).toContain("Request preview");
+    expect(html).toContain("Needs preparation");
+    expect(html).toContain("Contribution map");
     expect(html).toContain("prompt:writer");
-    expect(html).toContain("context:live");
-    expect(html).toContain("User prompt");
-    expect(html).toContain(">Ada</span>");
-    expect(html).toContain("authored · 1");
-    expect(html).toContain("interpolated · 1");
-    expect(html).toContain("total · 7");
-    expect(html).toContain("budget · 12");
-    expect(html).toContain("Dropped contexts");
-    expect(html).toContain("context:large");
-    expect(html).toContain("Excluded contexts");
-    expect(html).toContain("context:disabled");
+    expect(html).toContain("required");
+    expect(html).toContain("context:style");
+    expect(html).toContain("sticky");
+    expect(html).toContain("context:examples");
+    expect(html).toContain("elastic");
+    expect(html).toContain("full → authored → summary");
+    expect(html).toContain("summary · unprepared");
     expect(html).toContain("Raw result JSON");
   });
 
@@ -128,10 +91,8 @@ describe("Exact Prompt preview result", () => {
       />,
     );
 
-    expect(html).toContain("Validation");
     expect(html).toContain("invalid_type");
     expect(html).toContain("profile.0.name");
-    expect(html).toContain("Expected string.");
     expect(html).toContain("2 additional issues omitted");
   });
 
@@ -139,11 +100,7 @@ describe("Exact Prompt preview result", () => {
     expect(
       renderToStaticMarkup(
         <PromptPreviewResultView
-          state={{
-            phase: "input",
-            rawText: "{}",
-            canPreview: true,
-          }}
+          state={{ phase: "input", rawText: "{}", canPreview: true }}
         />,
       ),
     ).toContain("No preview result yet.");
