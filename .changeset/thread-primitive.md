@@ -41,3 +41,8 @@ Threads plus Prompt/Agent bindings and binding diagnostics in Project Index.
 Surface duplicate active Thread ids and conflicting Thread bindings as
 descriptor-backed Project Index lint findings, including `crux lint` and LSP
 diagnostics, without unresolved-target false positives for valid Thread uses.
+
+Wire the devtools helpers' `bridge` option so `enableDevtools()` and
+`withDevtools()` connect the Runtime Bridge peer directly, and make
+`crux lint --port` read the running dev server instead of silently
+falling back to a one-shot index.

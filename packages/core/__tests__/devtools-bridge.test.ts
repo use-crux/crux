@@ -14,6 +14,7 @@ import {
 } from '../src/runtime-bridge'
 import { clearInspectableResources } from '../src/runtime-bridge/resources'
 import { memory, recentMessages } from '../src/memory'
+import { enableDevtools } from '../src/observability/devtools'
 import { inMemoryRecordStore } from '../src/storage'
 import { thread } from '../src/thread'
 
@@ -537,5 +538,41 @@ describe('devtools runtime bridge contract', () => {
     ).resolves.toMatchObject({
       entries: [{ key: 'memory:dynamic:thread-1:block:recent:000001' }],
     })
+  })
+})
+
+describe('devtools helper bridge wiring', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = []
+    clearInspectableResources()
+  })
+
+  it('starts and disposes the websocket peer from enableDevtools()', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+
+    const disable = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+      bridge: true,
+    })
+
+    const socket = FakeWebSocket.instances[0]
+    expect(socket).toBeDefined()
+    expect(socket?.url).toBe('ws://localhost:4400/ws/runtime')
+
+    disable()
+    expect(socket?.readyState).toBe(3)
+  })
+
+  it('does not connect a peer when bridge is omitted', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+
+    const disable = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    disable()
   })
 })
