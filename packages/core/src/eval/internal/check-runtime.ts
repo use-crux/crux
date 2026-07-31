@@ -2,7 +2,7 @@
 
 import type { StepAccess, StepAccessor } from "./assertions/types";
 import type { CellAssertionPhase } from "./assertion-types";
-import type { StandardSchemaV1 } from "./schema";
+import type { StandardSchemaV1 } from "../../internal/standard-schema";
 import { runAssertionCallbacks } from "./assertions/callbacks";
 import type { AssertionRecorder } from "./assertions/runtime";
 import type { NormalizedEvalCheck } from "./definition";

@@ -17,6 +17,7 @@ The **Runtime Engine** is the durable execution layer that makes those cases wor
 You do not need the Runtime Engine to get started. Plenty works without it:
 
 - Plain [prompts](/docs/guides/prompts), [agents](/docs/guides/agents), and [compositions](/docs/guides/compositions).
+- [Process-local Signals](/docs/guides/durable-execution/signals) for typed publication and callbacks that do not need to survive a restart.
 - Object-bound [flows](/docs/guides/flows): `flow.suspend()`, `handle.signal()`, `handle.resume()`, and `handle.cancel()` work when your code still holds the flow handle.
 - Best-effort inline [background work](/docs/guides/background-work) with `defer(callback)`.
 

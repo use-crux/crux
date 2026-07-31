@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from "../../eval/internal/schema";
+import type { StandardSchemaV1 } from "../../internal/standard-schema";
 import type { AnyEval } from "../../eval/evaluate";
 import type { RawEvalCase } from "../../eval/internal/definition";
 import type { EvalPlannedArm } from "../../eval/internal/types";

@@ -5,6 +5,7 @@
  * Compose prompts once, execute with any adapter.
  *
  * **Core API:**
+ * - `signal()` — Declare and publish typed process-local Signal occurrences
  * - `prompt()` — Compose typed, SDK-agnostic prompts with contexts and schemas
  * - `context()` — Create reusable typed fragments that contribute to system messages
  * - `createPrompts()` — Organize prompts into a nested tree with IDE autocomplete
@@ -54,6 +55,7 @@
  */
 
 // Core definition API (prompt authoring domain)
+export { signal } from "./signal";
 export {
   prompt,
   context,

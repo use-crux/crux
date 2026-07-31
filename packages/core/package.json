@@ -29,6 +29,10 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./signal": {
+      "types": "./src/signal/index.ts",
+      "import": "./src/signal/index.ts"
+    },
     "./eval": {
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
@@ -248,6 +252,9 @@
   },
   "typesVersions": {
     "*": {
+      "signal": [
+        "src/signal/index.ts"
+      ],
       "eval": [
         "src/eval/index.ts"
       ],

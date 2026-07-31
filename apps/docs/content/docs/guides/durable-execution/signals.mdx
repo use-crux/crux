@@ -1,0 +1,83 @@
+---
+title: Process-local Signals
+description: Define, publish, filter, and subscribe to typed Signals in one process.
+---
+
+A Signal is an inert typed event definition. The process-local API is useful for application callbacks, local composition, and tests where losing subscriptions on restart is acceptable.
+
+```ts
+import { signal } from "@use-crux/core";
+import { z } from "zod";
+
+const orderSubmitted = signal({
+  id: "order.submitted",
+  schema: z.object({
+    orderId: z.string(),
+    quantity: z.coerce.number().int().positive(),
+  }),
+});
+```
+
+`signal()` performs no I/O, starts no worker, and returns a frozen definition. It accepts any Standard Schema v1-compatible schema; there is no separate Crux schema package.
+
+## Subscribe to future occurrences
+
+```ts
+const unsubscribe = orderSubmitted.subscribe((occurrence) => {
+  occurrence.signalId; // "order.submitted"
+  occurrence.payload.quantity; // number after schema normalization
+});
+
+unsubscribe();
+unsubscribe(); // safe: unsubscribe is idempotent
+```
+
+Subscriptions exist only in the current JavaScript process. They receive no historical replay, and a restart loses them.
+
+## Publish at acceptance
+
+```ts
+const receipt = await orderSubmitted.publish({
+  orderId: "order_123",
+  quantity: "2",
+});
+
+receipt.guarantee; // "process-local"
+receipt.occurrenceId; // stable for this accepted occurrence
+receipt.acceptedAt; // Date
+```
+
+The Promise resolves when Crux accepts the normalized occurrence. It does **not** wait for listeners to finish. Slow or failing listeners are isolated from one another and cannot reject an accepted publication.
+
+Schema-invalid input and JSON-unsafe normalized output reject before an occurrence is accepted. Dates, class instances, functions, non-finite numbers, and cyclic values are not JSON-safe; normalize them to plain JSON in the schema.
+
+## Retry safely
+
+Use an idempotency key when an external source can retry the same publication:
+
+```ts
+const receipt = await orderSubmitted.publish(payload, {
+  idempotencyKey: providerEventId,
+});
+```
+
+For one Signal definition, the same key and canonical normalized payload return the original receipt and deliver no second callback. Reusing the key with different normalized data rejects with `idempotency_conflict`. Receipts and errors never expose the key or payload values.
+
+## Create filter identities
+
+`when()` creates an inert filtered view. Predicates carry deployed code; match views carry canonical recursive partial-equality data:
+
+```ts
+const largeOrder = orderSubmitted.when((payload) => payload.quantity >= 10);
+const thisOrder = orderSubmitted.when({ orderId: "order_123" });
+```
+
+Included scalar fields compare exactly, nested object fields recurse, and included arrays compare as exact arrays. Filtered views intentionally have no `publish()`, `subscribe()`, or chained `when()` methods.
+
+These views are inert identities. Creating one does not activate a consumer or strengthen the publication guarantee.
+
+## Guarantee boundary
+
+`guarantee: "process-local"` means the occurrence and callbacks are not persisted. It does not survive process exit, serverless suspension, deployment, or a different worker receiving the next request. Do not treat the receipt as proof that a listener completed.
+
+Durable Signal bindings require Runtime capabilities and are documented only when those bindings are configured and available.
