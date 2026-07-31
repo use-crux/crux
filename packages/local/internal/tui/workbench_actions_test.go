@@ -213,6 +213,27 @@ func TestWorkbenchJumpPrefixHintPrecedesStandingStartupBadge(t *testing.T) {
 	}
 }
 
+func TestWorkbenchNoStartupIssuesKeyShowsTemporaryStatus(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(100, 30)
+
+	cmd := w.Update(tea.KeyPressMsg(tea.Key{Text: "!", Code: '!'}))
+	if cmd == nil {
+		t.Fatal("! without startup diagnostics did not schedule status expiry")
+	}
+	if w.statusToast != "no startup issues" {
+		t.Fatalf("! status = %q, want no startup issues", w.statusToast)
+	}
+	if view := ansi.Strip(w.View()); !strings.Contains(view, "no startup issues") {
+		t.Fatalf("! status was not visible:\n%s", view)
+	}
+
+	w.Update(statusToastExpiredMsg{Status: "no startup issues"})
+	if w.statusToast != "" {
+		t.Fatalf("expired ! status remained %q", w.statusToast)
+	}
+}
+
 func TestWorkbenchUnknownJumpSuffixFallsThroughToWorkflow(t *testing.T) {
 	calls := 0
 	w := newTestWorkbench(nil, nil, "http://localhost:4400")

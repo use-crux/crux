@@ -38,10 +38,10 @@ func TestInsightsCommandsInheritWorkbenchContext(t *testing.T) {
 	screen := NewInsights()
 
 	applyInsightsTestCommand(t, root, screen, screen.Init(root, client), client)
-	if client.listCtx != root {
+	if client.listCtx == nil || client.listCtx.Value(contextKey{}) != "root" {
 		t.Fatal("Insights list fetch did not inherit the Workbench context")
 	}
-	if client.evalCtx != root {
+	if client.evalCtx == nil || client.evalCtx.Value(contextKey{}) != "root" {
 		t.Fatal("Insights Eval runs fetch did not inherit the Workbench context")
 	}
 

@@ -133,7 +133,7 @@ func TestExplicitBrowserFailureTemporarilyPrecedesStartupBadge(t *testing.T) {
 		t.Fatal("browser status did not schedule transient expiry")
 	}
 
-	w.Update(browserStatusExpiredMsg{Status: w.browserStatus})
+	w.Update(statusToastExpiredMsg{Status: w.statusToast})
 	view = ansi.Strip(w.View())
 	if !strings.Contains(view, "⚠ 1 issue") || strings.Contains(view, "browser launch…") {
 		t.Fatalf("startup badge did not return after transient expiry:\n%s", view)
@@ -205,7 +205,7 @@ func TestWorkspaceOpenBrowserFailureIsSafeAndBoundedAtMinimumWidth(t *testing.T)
 	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch…") {
 		t.Fatalf("browser failure was not safely visible:\n%q", plain)
 	}
-	if width := lipgloss.Width(w.browserStatus); width > 256 {
+	if width := lipgloss.Width(w.statusToast); width > 256 {
 		t.Fatalf("stored browser status width = %d, want <= 256", width)
 	}
 	for lineNumber, line := range strings.Split(view, "\n") {

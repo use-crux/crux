@@ -16,23 +16,30 @@ const (
 func (s *Index) groupedDefinitions() []api.ProjectDefinition {
 	source := s.indexData().Definitions
 	groups := make([]string, 0)
-	seen := map[string]bool{}
+	definitionsByGroup := make(map[string][]api.ProjectDefinition)
 	for _, definition := range source {
 		group := s.definitionGroup(definition)
-		if !seen[group] {
-			seen[group] = true
+		if _, seen := definitionsByGroup[group]; !seen {
 			groups = append(groups, group)
 		}
+		definitionsByGroup[group] = append(definitionsByGroup[group], definition)
 	}
 	definitions := make([]api.ProjectDefinition, 0, len(source))
 	for _, group := range groups {
-		for _, definition := range source {
-			if s.definitionGroup(definition) == group {
-				definitions = append(definitions, definition)
-			}
-		}
+		definitions = append(definitions, definitionsByGroup[group]...)
 	}
 	return definitions
+}
+
+func (s *Index) setGroupedDefinitions() {
+	definitions := s.groupedDefinitions()
+	s.groupStartIDs = make(map[string]bool, len(definitions))
+	for index, definition := range definitions {
+		if index == 0 || s.definitionGroup(definitions[index-1]) != s.definitionGroup(definition) {
+			s.groupStartIDs[definition.ID] = true
+		}
+	}
+	s.definitions.SetItems(definitions)
 }
 
 func (s *Index) definitionGroup(definition api.ProjectDefinition) string {
@@ -57,15 +64,8 @@ func (s *Index) definitionGroup(definition api.ProjectDefinition) string {
 }
 
 func (s *Index) definitionRowHeight(definition api.ProjectDefinition) int {
-	definitions := s.groupedDefinitions()
-	for index, candidate := range definitions {
-		if candidate.ID != definition.ID {
-			continue
-		}
-		if index == 0 || s.definitionGroup(definitions[index-1]) != s.definitionGroup(candidate) {
-			return 2
-		}
-		break
+	if s.groupStartIDs[definition.ID] {
+		return 2
 	}
 	return 1
 }
@@ -101,7 +101,7 @@ func (s *Index) toggleGroupAxis() {
 	} else {
 		s.groupAxis = indexGroupKind
 	}
-	s.definitions.SetItems(s.groupedDefinitions())
+	s.setGroupedDefinitions()
 	s.definitions.Select(selected)
 	s.syncDetail()
 }

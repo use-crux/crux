@@ -80,3 +80,29 @@ func TestRunsFilterFooterAdvertisesApplyAndClear(t *testing.T) {
 		t.Fatalf("^x left filter query %q, want cleared", runs.runQuery)
 	}
 }
+
+func TestRunsModelFilterStatesNewestPageScope(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "model run", Model: "openai/gpt-5"})
+	runs.modelFilter = "openai/gpt-5"
+
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
+	if !strings.Contains(view, "model: gpt-5 · newest 100") {
+		t.Fatalf("model filter hid its bounded-page scope:\n%s", view)
+	}
+}
+
+func TestRunsModelFilterScopeSurvivesCombinedFilterMetadata(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "refund", Model: "openai/gpt-5"})
+	runs.modelFilter = "openai/gpt-5"
+	runs.sessionFilter = "session-refund"
+	runs.runQuery = "refund"
+
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 160, Height: 24}))
+	for _, want := range []string{"model: gpt-5 · newest 100", "session: session-refund", "/refund"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("combined filters hid %q:\n%s", want, view)
+		}
+	}
+}

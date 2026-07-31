@@ -6,47 +6,48 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
-type insightsListLoadedMsg struct {
-	requestID uint64
-	value     []api.InspectInsightRecord
-	err       string
+var insightsListOwner = resource.ResourceOwner{Screen: "insights", Resource: "list"}
+var insightsEvalRunsOwner = resource.ResourceOwner{Screen: "insights", Resource: "eval-runs"}
+
+type insightsListLoadedMsg resource.ResourceResult[[]api.InspectInsightRecord]
+type insightsEvalRunsLoadedMsg resource.ResourceResult[[]json.RawMessage]
+
+func (m insightsListLoadedMsg) ResourceOwner() resource.ResourceOwner {
+	return resource.ResourceResult[[]api.InspectInsightRecord](m).Token.Owner
 }
 
-type insightsEvalRunsLoadedMsg struct {
-	requestID uint64
-	value     []json.RawMessage
-	err       string
+func (m insightsEvalRunsLoadedMsg) ResourceOwner() resource.ResourceOwner {
+	return resource.ResourceResult[[]json.RawMessage](m).Token.Owner
 }
 
 func (s *Insights) fetchData(ctx context.Context, c DataClient) tea.Cmd {
-	s.insightsRequest++
-	s.evalRunsRequest++
 	return tea.Batch(
-		fetchInsightsList(ctx, c, s.insightsRequest),
-		fetchInsightsEvalRuns(ctx, c, s.evalRunsRequest),
+		s.fetchInsightsList(ctx, c, 0),
+		s.fetchInsightsEvalRuns(ctx, c, 0),
 	)
 }
 
-func fetchInsightsList(ctx context.Context, c DataClient, requestID uint64) tea.Cmd {
+func (s *Insights) fetchInsightsList(parent context.Context, c DataClient, revision uint64) tea.Cmd {
+	snapshot := s.insightsResource.Snapshot()
+	ctx, token := s.insightsResource.Begin(parent, insightsListOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return func() tea.Msg {
 		value, err := c.Insights(ctx)
-		message := insightsListLoadedMsg{requestID: requestID, value: value}
-		if err != nil {
-			message.err = err.Error()
-		}
-		return message
+		return insightsListLoadedMsg(resource.ResourceResult[[]api.InspectInsightRecord]{
+			Token: token, Value: value, Err: err,
+		})
 	}
 }
 
-func fetchInsightsEvalRuns(ctx context.Context, c DataClient, requestID uint64) tea.Cmd {
+func (s *Insights) fetchInsightsEvalRuns(parent context.Context, c DataClient, revision uint64) tea.Cmd {
+	snapshot := s.evalRunsResource.Snapshot()
+	ctx, token := s.evalRunsResource.Begin(parent, insightsEvalRunsOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return func() tea.Msg {
 		value, err := c.EvalRuns(ctx)
-		message := insightsEvalRunsLoadedMsg{requestID: requestID, value: value}
-		if err != nil {
-			message.err = err.Error()
-		}
-		return message
+		return insightsEvalRunsLoadedMsg(resource.ResourceResult[[]json.RawMessage]{
+			Token: token, Value: value, Err: err,
+		})
 	}
 }

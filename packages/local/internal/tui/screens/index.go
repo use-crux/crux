@@ -26,6 +26,10 @@ type Index struct {
 	snapshot                      *resource.Resource[api.IndexData]
 	watch                         *resource.Resource[api.ProjectIndexWatchStatus]
 	activity                      *resource.Resource[api.CatalogRuntimeActivityV1]
+	pendingSnapshotRefresh        bool
+	pendingSnapshotRevision       uint64
+	snapshotRequestActive         bool
+	groupStartIDs                 map[string]bool
 	definitions                   *kit.ListPane[api.ProjectDefinition]
 	detail                        *kit.DocumentPane
 	focus                         indexFocus
@@ -56,9 +60,10 @@ func NewIndex() *Index {
 		activity: resource.New(func(activity api.CatalogRuntimeActivityV1) bool {
 			return activity.DefinitionID == ""
 		}),
-		definitions: definitions,
-		detail:      kit.NewDocumentPane(),
-		exportRoot:  defaultIndexExportRoot,
+		groupStartIDs: map[string]bool{},
+		definitions:   definitions,
+		detail:        kit.NewDocumentPane(),
+		exportRoot:    defaultIndexExportRoot,
 	}
 	definitions.SetRowHeight(index.definitionRowHeight)
 	index.setFocus(indexFocusDefinitions)
@@ -106,6 +111,12 @@ func (s *Index) Init(ctx context.Context, c DataClient) tea.Cmd {
 func (s *Index) Deactivate() bridge.Invalidations {
 	invalidations := bridge.Invalidations{}
 	cancelPendingResource(invalidations, bridge.IndexSnapshotResource, s.snapshot)
+	if s.pendingSnapshotRefresh {
+		invalidations.Add(bridge.IndexSnapshotResource, s.pendingSnapshotRevision)
+		s.pendingSnapshotRefresh = false
+		s.pendingSnapshotRevision = 0
+	}
+	s.snapshotRequestActive = false
 	s.watch.Cancel()
 	s.activity.Cancel()
 	return invalidations
@@ -115,7 +126,16 @@ func (s *Index) Deactivate() bridge.Invalidations {
 // has not yet been loaded.
 func (s *Index) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
 	revision, invalid := invalidations.Revision(bridge.IndexSnapshotResource)
-	if invalid || s.snapshot.Snapshot().State == resource.ResourceIdle {
+	snapshot := s.snapshot.Snapshot()
+	if invalid && s.snapshotRequestActive {
+		// ProjectIndex reads can be expensive and their production source cannot
+		// stop cloning an already-captured snapshot when its context is canceled.
+		// Keep one active read and collapse a watch burst into one trailing read.
+		s.pendingSnapshotRefresh = true
+		s.pendingSnapshotRevision = maxRevisionFloor(s.pendingSnapshotRevision, revision)
+		return nil
+	}
+	if invalid || snapshot.State == resource.ResourceIdle {
 		return s.fetchIndexAtRevision(ctx, c, revision)
 	}
 	selectedID := s.SelectedDefinitionID()
@@ -133,8 +153,24 @@ func (s *Index) Counts() map[string]int {
 func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case indexLoadedMsg:
-		s.applyIndexResult(resource.ResourceResult[api.IndexData](m))
-		return tea.Batch(s.fetchDefinitionActivity(ctx, c), s.fetchWatchStatus(ctx, c))
+		result := resource.ResourceResult[api.IndexData](m)
+		current := s.snapshot.Snapshot().Token
+		currentCompletion := result.Token.Request == current.Request && result.Token.Owner == current.Owner
+		if currentCompletion {
+			s.snapshotRequestActive = false
+		}
+		applied := s.applyIndexResult(result)
+		commands := make([]tea.Cmd, 0, 3)
+		if applied {
+			commands = append(commands, s.fetchDefinitionActivity(ctx, c), s.fetchWatchStatus(ctx, c))
+		}
+		if currentCompletion && s.pendingSnapshotRefresh {
+			revision := s.pendingSnapshotRevision
+			s.pendingSnapshotRefresh = false
+			s.pendingSnapshotRevision = 0
+			commands = append(commands, s.fetchIndexAtRevision(ctx, c, revision))
+		}
+		return tea.Batch(commands...)
 	case indexWatchLoadedMsg:
 		s.watch.Apply(resource.ResourceResult[api.ProjectIndexWatchStatus](m))
 		s.syncDetail()
@@ -157,15 +193,17 @@ func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	return nil
 }
 
-func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) {
-	if s.snapshot.Apply(result) {
-		s.definitions.SetItems(s.groupedDefinitions())
+func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) bool {
+	applied := s.snapshot.Apply(result)
+	if applied {
+		s.setGroupedDefinitions()
 		if s.routedDefinitionID != "" {
 			s.resolveRoutedDefinition()
 		} else {
 			s.syncDetail()
 		}
 	}
+	return applied
 }
 
 func (s *Index) resolveRoutedDefinition() {

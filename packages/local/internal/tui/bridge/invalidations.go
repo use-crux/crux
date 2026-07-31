@@ -8,6 +8,8 @@ const (
 	OverviewInsightsResource ResourceName = "overview:insights"
 	OverviewRunsResource     ResourceName = "overview:runs"
 	OverviewActivityResource ResourceName = "overview:activity"
+	InsightsListResource     ResourceName = "insights:list"
+	InsightsEvalRunsResource ResourceName = "insights:eval-runs"
 	RunsListResource         ResourceName = "runs:list"
 	RunsAnyDetailResource    ResourceName = "runs:detail:*"
 	IndexSnapshotResource    ResourceName = "index:snapshot"

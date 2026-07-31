@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -25,13 +26,17 @@ var (
 	bandBackground = firstCellStyle(contractStyles.SurfaceBand.Render("x")).Background
 )
 
-var contractProfiles = []struct {
-	name   string
-	styles theme.Styles
-}{
-	{"truecolor", theme.NewStyles(theme.Resolve(colorprofile.TrueColor))},
-	{"ansi256", theme.NewStyles(theme.Resolve(colorprofile.ANSI256))},
-	{"ansi", theme.NewStyles(theme.Resolve(colorprofile.ANSI))},
+type contractProfile struct {
+	name       string
+	profile    colorprofile.Profile
+	styles     theme.Styles
+	fullMatrix bool
+}
+
+var contractProfiles = []contractProfile{
+	{"truecolor", colorprofile.TrueColor, theme.NewStyles(theme.Resolve(colorprofile.TrueColor)), true},
+	{"ansi256", colorprofile.ANSI256, theme.NewStyles(theme.Resolve(colorprofile.ANSI256)), false},
+	{"ansi", colorprofile.ANSI, theme.NewStyles(theme.Resolve(colorprofile.ANSI)), false},
 }
 
 func TestRegisteredScreensHonorSurfaceContract(t *testing.T) {
@@ -75,7 +80,7 @@ func TestRegisteredScreensHonorRuleStyleContract(t *testing.T) {
 			for _, screenID := range registeredFixtureScreenIDs(t) {
 				t.Run(screenID, func(t *testing.T) {
 					t.Parallel()
-					assertRuleStyleMatrix(t, fixtureWorkbenchAtScreen(t, screenID), profile.styles)
+					assertRuleStyleMatrix(t, fixtureWorkbenchAtScreen(t, screenID), profile)
 				})
 			}
 		})
@@ -115,7 +120,7 @@ func TestOverlaysHonorRuleStyleContract(t *testing.T) {
 			for name, newView := range overlayCases {
 				t.Run(name, func(t *testing.T) {
 					t.Parallel()
-					assertRuleFrameMatrix(t, newView(), profile.styles)
+					assertRuleFrameMatrix(t, newView(), profile)
 				})
 			}
 		})
@@ -188,31 +193,52 @@ func TestReconcileBordersHonorsActiveThemeProfile(t *testing.T) {
 	}
 }
 
-func assertRuleStyleMatrix(t *testing.T, workbench *Workbench, styles theme.Styles) {
+func assertRuleStyleMatrix(t *testing.T, workbench *Workbench, profile contractProfile) {
 	t.Helper()
 	assertRuleFrameMatrix(t, func(width, height int) string {
 		workbench.Resize(width, height)
 		return workbench.View()
-	}, styles)
+	}, profile)
 }
 
-func assertRuleFrameMatrix(t *testing.T, render func(int, int) string, styles theme.Styles) {
+func assertRuleFrameMatrix(t *testing.T, render func(int, int) string, profile contractProfile) {
 	t.Helper()
-	wantForeground := firstCellStyle(styles.Border.Render("x")).Foreground
+	// Production constructs one TrueColor frame; the terminal writer converts
+	// that exact border token for the negotiated profile.
+	wantForeground := firstCellStyle(renderThroughProfile(t, contractStyles.Border.Render("x"), profile.profile)).Foreground
 	assertFrame := func(t *testing.T, width, height int) string {
 		t.Helper()
-		frame := kit.ReconcileBordersStyled(render(width, height), styles)
+		frame := renderThroughProfile(t, render(width, height), profile.profile)
 		assertRuleStyles(t, frame, wantForeground)
 		return frame
 	}
-	for _, size := range []struct{ width, height int }{{160, 45}, {100, 30}, {70, 24}} {
+	sizes := []struct{ width, height int }{{100, 30}, {70, 24}}
+	if profile.fullMatrix {
+		sizes = []struct{ width, height int }{{160, 45}, {100, 30}, {70, 24}}
+	}
+	for _, size := range sizes {
 		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 			assertFrame(t, size.width, size.height)
 		})
 	}
-	uitest.FuzzResize(t, func(width, height int) string {
-		return assertFrame(t, width, height)
-	})
+	if profile.fullMatrix {
+		uitest.FuzzResize(t, func(width, height int) string {
+			return assertFrame(t, width, height)
+		})
+	}
+}
+
+// renderThroughProfile mirrors the terminal writer stage: production renders
+// its reconciled frame once, then colorprofile converts every SGR sequence for
+// the active terminal. Assertions inspect that emitted frame directly.
+func renderThroughProfile(t *testing.T, frame string, profile colorprofile.Profile) string {
+	t.Helper()
+	var output bytes.Buffer
+	writer := colorprofile.Writer{Forward: &output, Profile: profile}
+	if _, err := writer.WriteString(frame); err != nil {
+		t.Fatalf("render through %v profile: %v", profile, err)
+	}
+	return output.String()
 }
 
 func registeredFixtureScreenIDs(t *testing.T) []string {

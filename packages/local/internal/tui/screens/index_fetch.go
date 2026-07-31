@@ -72,6 +72,7 @@ func (s *Index) fetchIndexAtRevision(parent context.Context, client DataClient, 
 	}
 	snapshot := s.snapshot.Snapshot()
 	ctx, token := s.snapshot.Begin(parent, indexSnapshotOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
+	s.snapshotRequestActive = true
 	return func() tea.Msg {
 		value, err := client.ProjectIndex(ctx)
 		return indexLoadedMsg(resource.ResourceResult[api.IndexData]{Token: token, Value: value, Err: err})

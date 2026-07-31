@@ -27,6 +27,7 @@ func invalidationsForBatch(batch bridge.Batch) bridge.Invalidations {
 		addRunsInvalidations(invalidations, batch.Inspect)
 	}
 	if batch.Changed.Has(bridge.DomainEvals) {
+		invalidations.Add(bridge.InsightsEvalRunsResource, batch.Revs.Evals)
 		invalidations.Add(bridge.EvalsCatalogResource, batch.Revs.Evals)
 		invalidations.Add(bridge.EvalsRunsResource, batch.Revs.Evals)
 		invalidations.Add(bridge.EvalsAnyRunResource, batch.Revs.Evals)
@@ -37,6 +38,7 @@ func invalidationsForBatch(batch bridge.Batch) bridge.Invalidations {
 	if batch.Changed.Has(bridge.DomainInsights) {
 		invalidations.Add(bridge.OverviewSummaryResource, batch.Revs.Activity)
 		invalidations.Add(bridge.OverviewInsightsResource, batch.Revs.Insights)
+		invalidations.Add(bridge.InsightsListResource, batch.Revs.Insights)
 	}
 	if batch.Changed.Has(bridge.DomainActivity) {
 		invalidations.Add(bridge.OverviewActivityResource, batch.Revs.Activity)

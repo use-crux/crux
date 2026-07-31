@@ -156,7 +156,9 @@ func TestAppPaletteQuitAliasesUseTheSameCleanupPath(t *testing.T) {
 				if result.err != nil {
 					t.Fatalf("run program: %v", result.err)
 				}
-			case <-time.After(time.Second):
+			// The aggregate race suite runs several render-heavy packages in
+			// parallel; keep the deadline about deadlock detection, not CPU share.
+			case <-time.After(5 * time.Second):
 				t.Fatal("palette quit did not complete")
 			}
 			select {

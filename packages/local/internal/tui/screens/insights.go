@@ -14,6 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -32,21 +33,25 @@ const (
 // live updates arrive through the bridge interest contract, and all rendering
 // is bounded by the Rects supplied by the kit layout engine.
 type Insights struct {
-	items           []api.InspectInsightRecord
-	evalRuns        []evalRunItem
-	selectedID      string
-	loaded          bool
-	err             string
-	evalEvidenceErr string
-	insightsRequest uint64
-	evalRunsRequest uint64
-	tab             string
-	focus           insightsFocus
-	list            kit.VList[api.InspectInsightRecord]
+	insightsResource *resource.Resource[[]api.InspectInsightRecord]
+	evalRunsResource *resource.Resource[[]json.RawMessage]
+	items            []api.InspectInsightRecord
+	evalRuns         []evalRunItem
+	selectedID       string
+	loaded           bool
+	err              string
+	evalEvidenceErr  string
+	tab              string
+	focus            insightsFocus
+	list             kit.VList[api.InspectInsightRecord]
 }
 
 func NewInsights() *Insights {
-	s := &Insights{tab: "diagnosis"}
+	s := &Insights{
+		insightsResource: resource.New(func(items []api.InspectInsightRecord) bool { return len(items) == 0 }),
+		evalRunsResource: resource.New(func(runs []json.RawMessage) bool { return len(runs) == 0 }),
+		tab:              "diagnosis",
+	}
 	s.list.SetIdentity(func(ins api.InspectInsightRecord) string { return ins.InsightID })
 	s.list.SetRowHeight(func(api.InspectInsightRecord) int { return 2 })
 	return s
@@ -54,39 +59,60 @@ func NewInsights() *Insights {
 
 func (s *Insights) ID() string { return "insights" }
 
-func (s *Insights) Interested(domains bridge.Domains) bool {
-	return domains.Has(bridge.DomainInsights) || domains.Has(bridge.DomainEvals)
-}
-
 func (s *Insights) Init(ctx context.Context, client DataClient) tea.Cmd {
 	return s.fetchData(ctx, client)
+}
+
+func (s *Insights) Deactivate() bridge.Invalidations {
+	invalidations := bridge.Invalidations{}
+	cancelPendingResource(invalidations, bridge.InsightsListResource, s.insightsResource)
+	cancelPendingResource(invalidations, bridge.InsightsEvalRunsResource, s.evalRunsResource)
+	// Cases evidence is a focus-scoped projection. Always refresh it when the
+	// user returns so completed evidence cannot remain stale across navigation.
+	invalidations.Add(bridge.InsightsEvalRunsResource, s.evalRunsResource.Snapshot().Token.Revision)
+	return invalidations
+}
+
+func (s *Insights) Refresh(ctx context.Context, client DataClient, invalidations bridge.Invalidations) tea.Cmd {
+	commands := make([]tea.Cmd, 0, 2)
+	listRevision, listInvalid := invalidations.Revision(bridge.InsightsListResource)
+	if listInvalid || s.insightsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchInsightsList(ctx, client, listRevision))
+	}
+	evalRevision, evalInvalid := invalidations.Revision(bridge.InsightsEvalRunsResource)
+	if evalInvalid || s.evalRunsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchInsightsEvalRuns(ctx, client, evalRevision))
+	}
+	return tea.Batch(commands...)
 }
 
 func (s *Insights) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
-		if m.requestID != s.insightsRequest {
+		if !s.insightsResource.Apply(resource.ResourceResult[[]api.InspectInsightRecord](m)) {
 			return nil
 		}
-		if m.err != "" {
-			s.err = m.err
-			s.loaded = true
-		} else {
-			s.err = ""
-			s.applyInsights(m.value)
+		snapshot := s.insightsResource.Snapshot()
+		s.loaded = snapshot.State != resource.ResourceLoading && snapshot.State != resource.ResourceIdle
+		s.err = ""
+		if snapshot.Err != nil {
+			s.err = snapshot.Err.Error()
+		}
+		if snapshot.HasValue {
+			s.applyInsights(snapshot.Value)
 		}
 	case insightsEvalRunsLoadedMsg:
-		if m.requestID != s.evalRunsRequest {
+		if !s.evalRunsResource.Apply(resource.ResourceResult[[]json.RawMessage](m)) {
 			return nil
 		}
-		if m.err != "" {
-			s.evalEvidenceErr = m.err
-		} else {
-			s.evalEvidenceErr = ""
-			s.evalRuns = projectEvalRuns(m.value)
+		snapshot := s.evalRunsResource.Snapshot()
+		s.evalEvidenceErr = ""
+		if snapshot.Err != nil {
+			s.evalEvidenceErr = snapshot.Err.Error()
 		}
-	case api.InspectEvent:
-		return s.fetchData(ctx, client)
+		if snapshot.HasValue {
+			s.evalRuns = projectEvalRuns(snapshot.Value)
+		}
 	case dataErrMsg:
 		s.err = string(m)
 	case insightStatusMsg:

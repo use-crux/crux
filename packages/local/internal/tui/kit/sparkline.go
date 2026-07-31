@@ -41,23 +41,3 @@ func Sparkline(values []float64, width int, c color.Color) string {
 	}
 	return lipgloss.NewStyle().Foreground(c).Render(out.String())
 }
-
-// SparklineFilled remains as a compatibility name for callers migrating from
-// the old braille area renderer.
-func SparklineFilled(values []float64, width int, c color.Color) string {
-	return Sparkline(values, width, c)
-}
-
-// SparklineBlock is the explicit name for the same block-ramp contract.
-func SparklineBlock(values []float64, width int, c color.Color) string {
-	return Sparkline(values, width, c)
-}
-
-// SparklineInt is a convenience wrapper for integer series.
-func SparklineInt(values []int, width int, c color.Color) string {
-	floats := make([]float64, len(values))
-	for index, value := range values {
-		floats[index] = float64(value)
-	}
-	return Sparkline(floats, width, c)
-}

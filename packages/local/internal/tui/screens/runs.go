@@ -198,6 +198,11 @@ func (s *Runs) Deactivate() bridge.Invalidations {
 // have never been requested for the current owner.
 func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
 	commands := make([]tea.Cmd, 0, 2)
+	// Navigation can outlive the ListPane's transient rows (for example after
+	// a filtered selection is cleared while a refresh is canceled). Rebuild
+	// the pane from the retained resource before deciding whether to refetch.
+	// This keeps the visible filter and its rows in the same state on re-entry.
+	s.ensureFilteredRunSelection(ctx, nil)
 	listRevision, listInvalid := invalidations.Revision(bridge.RunsListResource)
 	if listInvalid || s.runsResource.Snapshot().State == resource.ResourceIdle {
 		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))

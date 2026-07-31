@@ -14,28 +14,38 @@ import (
 // --- left pane: run list ----------------------------------------------------
 
 func (s *Runs) renderList(width, height int) string {
-	right := shell.TextMuted.Render("sort: time ↓")
+	meta := make([]string, 0, 7)
 	listSnapshot := s.runsResource.Snapshot()
 	if group := s.activeRunGroup(); group.label != "none" {
-		right = shell.TextMuted.Render("group: " + group.label)
+		meta = append(meta, "group: "+group.label)
 	}
 	if filter := s.activeRunStatusFilter(); filter.label != "all" {
-		right = shell.TextMuted.Render("filter: " + filter.label)
-	}
-	if s.modelFilter != "" {
-		right = shell.TextMuted.Render("model: " + shortRunModel(s.modelFilter))
+		meta = append(meta, "filter: "+filter.label)
 	}
 	if s.sessionFilter != "" {
-		right = shell.TextMuted.Render("session: " + kit.TruncateMiddle(sanitizeRunsInline(s.sessionFilter), 18, "…"))
+		meta = append(meta, "session: "+kit.TruncateMiddle(sanitizeRunsInline(s.sessionFilter), 18, "…"))
 	}
 	if s.definitionFilter != "" {
-		right = shell.TextMuted.Render("definition: " + kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 24, "…"))
+		meta = append(meta, "definition: "+kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 24, "…"))
 	}
 	if s.runQuery != "" {
-		right = shell.TextMuted.Render("/" + sanitizeRunsInline(s.runQuery))
+		meta = append(meta, "/"+sanitizeRunsInline(s.runQuery))
 	}
 	if export := s.currentRunExportState(); export != "" {
-		right = shell.TextMuted.Render(export)
+		meta = append(meta, export)
+	}
+	if len(meta) == 0 {
+		meta = append(meta, "sort: time ↓")
+	}
+	right := shell.TextMuted.Render(strings.Join(meta, " · "))
+	modelScope := ""
+	if s.modelFilter != "" {
+		// The canonical observability list cannot apply model metadata before
+		// its bounded page yet. Keep the scope on a dedicated row so combined
+		// filter metadata cannot crowd it out or be replaced by it.
+		modelBudget := max(1, width-lipgloss.Width(" model:  · newest 100"))
+		model := kit.TruncateMiddle(shortRunModel(s.modelFilter), modelBudget, "…")
+		modelScope = "model: " + model + " · newest 100"
 	}
 	window := "all time"
 	if s.activeRunWindow().label != "all" {
@@ -49,6 +59,9 @@ func (s *Runs) renderList(width, height int) string {
 	if status != "" {
 		hdrH++
 	}
+	if modelScope != "" {
+		hdrH++
+	}
 	bodyRows := height - hdrH
 	if bodyRows < 1 {
 		bodyRows = 1
@@ -59,6 +72,10 @@ func (s *Runs) renderList(width, height int) string {
 	b.WriteString("\n")
 	if status != "" {
 		b.WriteString(padRow(" "+shell.TextMuted.Render(truncateRunsInline(status, max(0, width-2))), width))
+		b.WriteString("\n")
+	}
+	if modelScope != "" {
+		b.WriteString(padRow(" "+shell.TextMuted.Render(modelScope), width))
 		b.WriteString("\n")
 	}
 

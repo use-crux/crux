@@ -26,7 +26,7 @@ type Workbench struct {
 	ingestTokenPath   string
 	browserURL        string
 	openBrowser       BrowserOpener
-	browserStatus     string
+	statusToast       string
 	startupStatus     string
 	startupDiagnostic *startup.Diagnostic
 
@@ -189,9 +189,9 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return cmd
 	case browserResultMsg:
 		return w.handleBrowserResult(m)
-	case browserStatusExpiredMsg:
-		if w.browserStatus == m.Status {
-			w.browserStatus = ""
+	case statusToastExpiredMsg:
+		if w.statusToast == m.Status {
+			w.statusToast = ""
 		}
 		return nil
 	}

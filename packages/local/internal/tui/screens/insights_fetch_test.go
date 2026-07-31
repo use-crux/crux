@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 type insightsIndependentFetchClient struct {
@@ -46,21 +47,23 @@ func TestInsightsPrimaryListCanCompleteBeforeEvalRuns(t *testing.T) {
 
 func TestInsightsEvalErrorRecoversOnNewerSuccess(t *testing.T) {
 	screen := NewInsights()
-	screen.Init(testContext, &insightsIndependentFetchClient{})
-	screen.Update(testContext, insightsEvalRunsLoadedMsg{
-		requestID: 1, err: errors.New("eval unavailable").Error(),
-	}, nil)
+	screen.fetchInsightsEvalRuns(testContext, &insightsIndependentFetchClient{}, 0)
+	first := screen.evalRunsResource.Snapshot().Token
+	screen.Update(testContext, insightsEvalRunsLoadedMsg(resource.ResourceResult[[]json.RawMessage]{
+		Token: first, Err: errors.New("eval unavailable"),
+	}), nil)
 	if screen.evalEvidenceErr == "" {
 		t.Fatal("Eval error was not retained")
 	}
 
-	screen.Update(testContext, api.InspectEvent{}, &insightsIndependentFetchClient{})
-	screen.Update(testContext, insightsEvalRunsLoadedMsg{
-		requestID: 2,
-		value: []json.RawMessage{insightEvalRunJSON("recovered", 200, []any{
+	screen.fetchInsightsEvalRuns(testContext, &insightsIndependentFetchClient{}, 0)
+	second := screen.evalRunsResource.Snapshot().Token
+	screen.Update(testContext, insightsEvalRunsLoadedMsg(resource.ResourceResult[[]json.RawMessage]{
+		Token: second,
+		Value: []json.RawMessage{insightEvalRunJSON("recovered", 200, []any{
 			insightEvalCellJSON("case-a", "current", 0, "passed", "passed", ""),
 		})},
-	}, nil)
+	}), nil)
 	if screen.evalEvidenceErr != "" || len(screen.evalRuns) != 1 || screen.evalRuns[0].RunID != "recovered" {
 		t.Fatalf("Eval success did not recover state: err=%q runs=%#v", screen.evalEvidenceErr, screen.evalRuns)
 	}
@@ -69,15 +72,17 @@ func TestInsightsEvalErrorRecoversOnNewerSuccess(t *testing.T) {
 func TestInsightsIgnoresOutOfOrderReadCompletions(t *testing.T) {
 	screen := NewInsights()
 	client := &insightsIndependentFetchClient{}
-	screen.Init(testContext, client)
-	screen.Update(testContext, api.InspectEvent{}, client)
+	screen.fetchInsightsList(testContext, client, 0)
+	staleList := screen.insightsResource.Snapshot().Token
+	screen.fetchInsightsList(testContext, client, 0)
+	newList := screen.insightsResource.Snapshot().Token
 
-	screen.Update(testContext, insightsListLoadedMsg{
-		requestID: 2, value: []api.InspectInsightRecord{{InsightID: "new"}},
-	}, client)
-	screen.Update(testContext, insightsListLoadedMsg{
-		requestID: 1, value: []api.InspectInsightRecord{{InsightID: "stale"}},
-	}, client)
+	screen.Update(testContext, insightsListLoadedMsg(resource.ResourceResult[[]api.InspectInsightRecord]{
+		Token: newList, Value: []api.InspectInsightRecord{{InsightID: "new"}},
+	}), client)
+	screen.Update(testContext, insightsListLoadedMsg(resource.ResourceResult[[]api.InspectInsightRecord]{
+		Token: staleList, Value: []api.InspectInsightRecord{{InsightID: "stale"}},
+	}), client)
 	if len(screen.items) != 1 || screen.items[0].InsightID != "new" {
 		t.Fatalf("stale Insights completion won: %#v", screen.items)
 	}
@@ -88,12 +93,16 @@ func TestInsightsIgnoresOutOfOrderReadCompletions(t *testing.T) {
 	staleRun := insightEvalRunJSON("stale-run", 100, []any{
 		insightEvalCellJSON("case-a", "current", 0, "failed", "failed", ""),
 	})
-	screen.Update(testContext, insightsEvalRunsLoadedMsg{
-		requestID: 2, value: []json.RawMessage{newRun},
-	}, client)
-	screen.Update(testContext, insightsEvalRunsLoadedMsg{
-		requestID: 1, value: []json.RawMessage{staleRun},
-	}, client)
+	screen.fetchInsightsEvalRuns(testContext, client, 0)
+	staleEval := screen.evalRunsResource.Snapshot().Token
+	screen.fetchInsightsEvalRuns(testContext, client, 0)
+	newEval := screen.evalRunsResource.Snapshot().Token
+	screen.Update(testContext, insightsEvalRunsLoadedMsg(resource.ResourceResult[[]json.RawMessage]{
+		Token: newEval, Value: []json.RawMessage{newRun},
+	}), client)
+	screen.Update(testContext, insightsEvalRunsLoadedMsg(resource.ResourceResult[[]json.RawMessage]{
+		Token: staleEval, Value: []json.RawMessage{staleRun},
+	}), client)
 	if len(screen.evalRuns) != 1 || screen.evalRuns[0].RunID != "new-run" {
 		t.Fatalf("stale Eval completion won: %#v", screen.evalRuns)
 	}

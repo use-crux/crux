@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -142,5 +143,25 @@ func TestIndexHeroesRelationsAndPromptTextProjection(t *testing.T) {
 	flowDocument := stripANSI(renderIndexDefinitionDocument(api.IndexData{}, flow))
 	if !strings.Contains(flowDocument, "1 research  →  2 draft  →  3 review") {
 		t.Fatalf("flow hero omitted ordered step names:\n%s", flowDocument)
+	}
+}
+
+func TestIndexRelationColumnsStayInsideDocumentCell(t *testing.T) {
+	definition := api.ProjectDefinition{ID: "agent:source", Kind: "agent", Name: "source"}
+	index := api.IndexData{
+		Definitions: []api.ProjectDefinition{
+			definition,
+			{ID: "agent:target", Kind: "agent", Name: "target with a deliberately long edge label"},
+		},
+		Relations: []api.ProjectRelation{{
+			Type: "agent.can_handoff_to_a_deliberately_long_destination", From: definition.ID, To: "agent:target",
+		}},
+	}
+	const width = 80
+	document := buildIndexDefinitionDocument(index, definition, width).content
+	for lineNumber, line := range strings.Split(document, "\n") {
+		if got := lipgloss.Width(line); got > width {
+			t.Fatalf("relation line %d width = %d, want <= %d: %q", lineNumber+1, got, width, stripANSI(line))
+		}
 	}
 }

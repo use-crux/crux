@@ -152,7 +152,7 @@ func (a *App) Init() tea.Cmd {
 		close(a.programStarted)
 	})
 	if a.bootComplete {
-		return tea.Batch(a.watchRootCancellation(), a.spinner.Tick, a.workbench.Init())
+		return tea.Batch(a.watchRootCancellation(), a.workbench.Init())
 	}
 	return tea.Batch(a.watchRootCancellation(), a.spinner.Tick)
 }
@@ -193,6 +193,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.workbench.Update(m)
 
 	case spinner.TickMsg:
+		if a.bootComplete {
+			return a, nil
+		}
 		var cmd tea.Cmd
 		a.spinner, cmd = a.spinner.Update(m)
 		return a, cmd

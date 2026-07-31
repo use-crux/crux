@@ -245,15 +245,12 @@ func TestInsightEvalValuePreservesJSONScalarTypes(t *testing.T) {
 	}
 }
 
-func TestInsightsInterestedInInsightAndEvalFreshness(t *testing.T) {
+func TestInsightsOwnsInsightAndEvalFreshness(t *testing.T) {
 	screen := NewInsights()
-	for _, domain := range []bridge.Domain{bridge.DomainInsights, bridge.DomainEvals} {
-		if !screen.Interested(bridge.NewDomains(domain)) {
-			t.Fatalf("Insights did not declare interest in %s", domain)
-		}
-	}
-	if screen.Interested(bridge.NewDomains(bridge.DomainRuns)) {
-		t.Fatal("Insights declared unrelated Runs freshness interest")
+	var _ ResourceScreen = screen
+	invalidations := screen.Deactivate()
+	if _, ok := invalidations.Revision(bridge.InsightsEvalRunsResource); !ok || len(invalidations) != 1 {
+		t.Fatalf("Insights did not mark focus-scoped Eval evidence stale: %#v", invalidations)
 	}
 }
 

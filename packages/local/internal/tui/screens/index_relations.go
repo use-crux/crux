@@ -70,8 +70,11 @@ func (b *indexDocumentBuilder) renderRelations(cursor int) {
 		b.renderRelationStack("DEPENDS ON", outgoing, len(incoming), cursor)
 		return
 	}
-	leftWidth := max(22, (b.width-3)/2)
-	rightWidth := max(22, b.width-leftWidth-3)
+	// Reserve the leading cell as well as the inter-column separator. If the
+	// columns consume the full width, DocumentPane wraps the final edge-label
+	// cell onto column zero instead of keeping it inside the relation cell.
+	leftWidth := max(22, (b.width-4)/2)
+	rightWidth := max(22, b.width-leftWidth-4)
 	b.lines = append(b.lines,
 		" "+kit.Fit(shell.TextMuted.Render(fmt.Sprintf("USED BY · %d", len(incoming))), leftWidth, "…")+
 			" │ "+

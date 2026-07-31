@@ -2,6 +2,7 @@ package screens
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -266,5 +267,31 @@ func TestRunsRefetchesAfterSameOwnerInitialLoadIsCanceled(t *testing.T) {
 	}
 	if got := runs.detailResource.Snapshot().Token.Request; got <= firstRequest {
 		t.Fatalf("detail request = %d, want newer than canceled request %d", got, firstRequest)
+	}
+}
+
+func TestRunsRefreshReconcilesFilteredListAfterNavigation(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs,
+		api.ObservabilityRunSummary{RunID: "run-visible", Name: "200-span deep trace"},
+		api.ObservabilityRunSummary{RunID: "run-hidden", Name: "ordinary trace"},
+	)
+	runs.runQuery = "200-span"
+	runs.ensureFilteredRunSelection(testContext, nil)
+	if got := runs.SelectedRunID(); got != "run-visible" {
+		t.Fatalf("initial filtered selection = %q, want run-visible", got)
+	}
+
+	// The resource is durable across navigation, while pane rows are transient.
+	// Re-entry must reconcile the visible query from the retained resource even
+	// when no invalidation requires a network fetch.
+	runs.runList.SetItems(nil)
+	runs.Refresh(testContext, nil, nil)
+	if got := runs.SelectedRunID(); got != "run-visible" {
+		t.Fatalf("filtered selection after re-entry = %q, want run-visible", got)
+	}
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
+	if !strings.Contains(view, "/200-span") || !strings.Contains(view, "200-span deep trace") {
+		t.Fatalf("filtered rows and chip diverged after re-entry:\n%s", view)
 	}
 }

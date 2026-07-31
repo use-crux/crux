@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -21,7 +22,7 @@ func (w *Workbench) startupDiagnosticsAction() interaction.Action {
 		Binding: startupDiagnosticsBinding(),
 		Run: func() tea.Cmd {
 			if w.startupDiagnostic == nil {
-				return nil
+				return w.showStatusToast("no startup issues", 2*time.Second)
 			}
 			count := len(w.startupDiagnostic.Children)
 			if count == 0 {

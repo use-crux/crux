@@ -29,8 +29,8 @@
                                             [38;2;42;53;47m│[m [38;2;69;78;73mtitle         [m [38;2;204;214;207mPrompt has no output schema[m
                                             [38;2;42;53;47m│[m [38;2;69;78;73mwhy           [m [38;2;204;214;207mA schema keeps downstream handling deterministic.[m
                                             [38;2;42;53;47m│[m [38;2;69;78;73mRELATIONS · ↵ OPEN[m
-                                            [38;2;42;53;47m│[m [38;2;69;78;73mUSED BY · 0[m                                              │ [38;2;69;78;73mDEPENDS ON · 1[m
-                                            [38;2;42;53;47m│[m                                                          │ [38;2;95;227;200m▸[m [38;2;95;227;200m≣[m docs context  [38;2;69;78;73muses[m
+                                            [38;2;42;53;47m│[m [38;2;69;78;73mUSED BY · 0[m                                             │ [38;2;69;78;73mDEPENDS ON · 1[m
+                                            [38;2;42;53;47m│[m                                                         │ [38;2;95;227;200m▸[m [38;2;95;227;200m≣[m docs context  [38;2;69;78;73muses[m
                                             [38;2;42;53;47m│[m [38;2;69;78;73mDIAGNOSTIC[m
                                             [38;2;42;53;47m│[m [38;2;69;78;73mdiagnostic    [m [38;2;204;214;207mINDEX_SOURCE_PARTIAL · warning · The source snippet was bounded by the indexer.[m
                                             [38;2;42;53;47m│[m [38;2;69;78;73mfix           [m [38;2;204;214;207mOpen the source file for the complete definition.[m

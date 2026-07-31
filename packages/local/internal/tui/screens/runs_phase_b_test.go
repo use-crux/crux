@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -108,6 +109,43 @@ func TestRunsServerFilterOptionsRoundTrip(t *testing.T) {
 		len(inspect.Session) != 1 ||
 		inspect.Session[0] != "session_docs" {
 		t.Fatalf("RunsWithOptions round-trip = %#v", inspect)
+	}
+}
+
+type boundedModelFilterClient struct{ *uitest.FixtureClient }
+
+func (c *boundedModelFilterClient) ObservabilityRunsPageWithOptions(
+	context.Context,
+	api.InspectRunsOptions,
+	...string,
+) (api.ObservabilityRunsPage, error) {
+	rows := make([]api.ObservabilityRunSummary, 100)
+	for index := range rows {
+		rows[index] = api.ObservabilityRunSummary{
+			RunID: fmt.Sprintf("new-model-b-%03d", index), Model: "model-b", Name: "new model B",
+		}
+	}
+	return api.ObservabilityRunsPage{Rows: rows}, nil
+}
+
+func (c *boundedModelFilterClient) RunsWithOptions(context.Context, api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
+	return []api.InspectRunRecord{{OperationID: "older-model-a", Model: "model-a"}}, nil
+}
+
+func TestRunsModelFilterHonestlyStatesCanonicalPageTruncation(t *testing.T) {
+	client := &boundedModelFilterClient{FixtureClient: uitest.NewFixtureClient()}
+	runs := NewRuns()
+	runs.modelFilter = "model-a"
+	runs.Update(testContext, runs.fetchRunsList(testContext, client)(), client)
+
+	if got := len(runs.runSummaries()); got != 0 {
+		t.Fatalf("bounded canonical page fabricated %d older model matches", got)
+	}
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
+	for _, want := range []string{"model: model-a · newest 100", "No runs match the current filters"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("bounded model filter omitted %q:\n%s", want, view)
+		}
 	}
 }
 

@@ -21,7 +21,7 @@ type browserResultMsg struct {
 	Status string
 }
 
-type browserStatusExpiredMsg struct {
+type statusToastExpiredMsg struct {
 	Status string
 }
 
@@ -54,18 +54,23 @@ func (w *Workbench) browserAction() interaction.Action {
 }
 
 func (w *Workbench) handleBrowserResult(result browserResultMsg) tea.Cmd {
-	w.browserStatus = kit.Truncate(kit.SanitizeInline(result.Status), 256, "…")
-	status := w.browserStatus
-	return tea.Tick(4*time.Second, func(time.Time) tea.Msg {
-		return browserStatusExpiredMsg{Status: status}
+	return w.showStatusToast(result.Status, 4*time.Second)
+
+}
+
+func (w *Workbench) showStatusToast(value string, duration time.Duration) tea.Cmd {
+	w.statusToast = kit.Truncate(kit.SanitizeInline(value), 256, "…")
+	status := w.statusToast
+	return tea.Tick(duration, func(time.Time) tea.Msg {
+		return statusToastExpiredMsg{Status: status}
 	})
 }
 
 func (w *Workbench) statusBadge() shell.StatusBadge {
-	if w.browserStatus != "" {
-		badge := shell.StatusBadge{Full: w.browserStatus}
-		if strings.HasPrefix(w.browserStatus, "browser launch failed") {
-			badge.Compact = kit.TruncateWords(w.browserStatus, 19, "…")
+	if w.statusToast != "" {
+		badge := shell.StatusBadge{Full: w.statusToast}
+		if strings.HasPrefix(w.statusToast, "browser launch failed") {
+			badge.Compact = kit.TruncateWords(w.statusToast, 19, "…")
 			badge.Warning = true
 		}
 		return badge
