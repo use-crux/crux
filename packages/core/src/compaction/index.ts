@@ -7,7 +7,6 @@
 // Compaction primitives
 export { summarizeMessages } from './summarize'
 export { compactConversation } from './compact-conversation'
-export { createSlidingWindow } from './sliding-window'
 export { createBudgetManager } from './budget'
 export { extractKeyFacts } from './extract'
 export { createGenerateObjectFnFromGenerate } from './generate-object'
@@ -19,9 +18,6 @@ export type {
   GenerateObjectFn,
   SummarizeConfig,
   CompactConversationArgs,
-  SlidingWindowConfig,
-  SlidingWindow,
-  SlidingWindowStats,
   BudgetConfig,
   BudgetManager,
   BudgetState,

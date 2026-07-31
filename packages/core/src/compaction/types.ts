@@ -10,7 +10,6 @@
 import type { z } from "zod";
 import type { Message, CompactionResult } from "../generation/messages";
 import type { RoutingReceipt } from "../routing/receipt";
-import type { Storage } from "../storage";
 
 // ── Generate Function Abstractions ──────────────────────────────────
 
@@ -123,45 +122,6 @@ export interface CompactConversationArgs {
 
 // Re-export CompactionResult — it's the return type of summarizeMessages
 export type { CompactionResult };
-
-// ── createSlidingWindow ─────────────────────────────────────────────
-
-export interface SlidingWindowConfig {
-  /** Number of recent messages to keep verbatim. */
-  windowSize: number;
-  /** Text generation function for summarization. */
-  generate: GenerateTextFn;
-  /** Model to use for summarization. */
-  model: unknown;
-  /** Max tokens for the running summary. Default: 1000. */
-  summaryBudget?: number;
-  /** Optional media-description overrides. */
-  media?: CompactionMediaConfig;
-  /** Storage used for durable messages and their media assets. */
-  storage?: Storage;
-  /** Namespace key for this window instance. Default: 'default'. */
-  id?: string;
-}
-
-export interface SlidingWindow {
-  /** Append a message. Triggers compaction when window overflows. */
-  push(message: Message): Promise<void>;
-  /** Get compacted messages: [summary_system_msg, ...recent]. */
-  getMessages(): Promise<Message[]>;
-  /** Current compaction statistics. */
-  getStats(): SlidingWindowStats;
-}
-
-export interface SlidingWindowStats {
-  /** Total messages received (including evicted). */
-  totalMessages: number;
-  /** Messages currently in the window. */
-  windowedMessages: number;
-  /** Token count of the running summary. */
-  summaryTokens: number;
-  /** Total number of messages evicted and summarized. */
-  evictions: number;
-}
 
 // ── createBudgetManager ─────────────────────────────────────────────
 

@@ -27,3 +27,17 @@ calls to `inputBudget`, which measures the complete provider request and never
 silently drops exact context contributions. Prompt resolution now retains all
 exact contexts; representation wrappers authorize future lossy alternatives.
 Resolver-only Convex lifecycle budget fields are removed as well.
+
+Add stateless, causal-group-safe `history.recent()` projection for complete
+caller-owned transcripts across Core-owned and SDK-owned language loops.
+Message and token caps retain leading system directives, keep Tool lifecycles
+atomic, and receipt soft-cap boundary adjustments. Bare exact history now
+warns predictively near its optimization watermark and points to
+`history.recent()` or managed `history()` before an oversized request is
+dispatched.
+
+Remove the stateful MemoryBlock `recentMessages()` API and the stateful
+`createSlidingWindow()` compaction helper. Use `history.recent()` for a
+stateless exact-history suffix; managed summary artifacts will be provided by
+the context-planning history surface. The Convex memory profile mirrors the
+MemoryBlock removal.

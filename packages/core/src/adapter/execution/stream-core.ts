@@ -257,6 +257,7 @@ export async function streamCore<
           : undefined,
         media: dialect.media,
         previousRequestId,
+        history: initialMessages.history,
       });
     const sealed = await sealStreamRequest(callArgs);
 

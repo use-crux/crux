@@ -21,6 +21,7 @@ import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { AnyToolSet } from "../types";
 import type { InternalInjectableEntry } from "./internal-injection";
 import type { ToolSource } from "../tools/tool-source";
+import type { RecentHistoryProjection } from "../request/history/source";
 import type { PromptText } from "../prompt-text";
 
 // ─────────────────────────────────────────────────────────────────
@@ -307,6 +308,7 @@ export type ContextEntry =
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
   | ToolSource
+  | RecentHistoryProjection
   | false
   | null
   | undefined;

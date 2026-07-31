@@ -37,6 +37,7 @@ import type {
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyMessage, AnyToolSet } from "../types";
 import type { GenerationSettings } from "../generation/types";
+import type { RecentHistoryProjection } from "../request/history/source";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 
@@ -90,6 +91,8 @@ export interface SystemBlock {
  * ```
  */
 export interface ResolvedPrompt {
+  /** Stateless history policy selected by the resolved `use` graph. */
+  historyProjection?: RecentHistoryProjection;
   /** The assembled system message (own system + context contributions + adaptations). */
   system?: string;
   /** The user prompt text (if using system+prompt mode). */

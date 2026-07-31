@@ -120,7 +120,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     args.nativeMessages,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = args.nativeMessages;
+  let nativeMessages = initialMessages.history?.changed
+    ? undefined
+    : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafetyWithBindingApplicability(
@@ -393,6 +395,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
     extra: args.extra,
+    history: initialMessages.history,
   });
 
   const request: ExecutorRequest<TModel> & {

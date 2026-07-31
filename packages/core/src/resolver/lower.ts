@@ -39,6 +39,7 @@ import type {
   MemoryEntry,
   SkillEntry,
 } from '../prompt/context-types'
+import type { RecentHistoryProjection } from '../request/history/source'
 import type { InternalInjectableEntry, InternalPromptInjection } from '../prompt/internal-injection'
 import type { CruxContextInjectableKind, CruxContextInjects } from '../observability/contract'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
@@ -503,6 +504,8 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
   if (isInternalInjectableEntry(entry)) return lowerInjectable(entry, index)
   if (isToolSource(entry)) return lowerToolSource(entry, index)
   switch (entry._tag) {
+    case 'HistoryRecent':
+      return lowerRecentHistory(entry as RecentHistoryProjection, index)
     case 'Skill':
       return lowerSkill(entry as SkillEntry, index)
     case 'Memory':
@@ -515,6 +518,21 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
       return lowerConditional(entry as ConditionalContext<Context<z.ZodType>>, index)
     default:
       return lowerContext(entry as Context<z.ZodType>, index)
+  }
+}
+
+function lowerRecentHistory(
+  projection: RecentHistoryProjection,
+  index: number,
+): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: undefined,
+    family: 'history',
+    index,
+    mergeSourceId: `history[${index}]`,
+    toolOwnerLabel: undefined,
+    contribute: () => ({ history: projection }),
   }
 }
 

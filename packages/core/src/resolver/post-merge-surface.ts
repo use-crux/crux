@@ -21,6 +21,8 @@ import type { MergedResolution } from './contract'
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
 import type { ToolOwnerLabel } from './tool-merge'
+import type { RecentHistoryProjection } from '../request/history/source'
+import { invalidHistoryComposition } from '../request/history/recent'
 
 /** Runtime surface ready for system composition and prompt arg projection. */
 export interface PostMergeSurface {
@@ -29,6 +31,7 @@ export interface PostMergeSurface {
   readonly skills: SkillEntry[]
   readonly memories: MemoryEntry[]
   readonly blackboards: BlackboardEntry[]
+  readonly historyProjection: RecentHistoryProjection | undefined
   readonly injectedTools: AnyToolSet
   readonly toolSources: readonly ToolSource[]
   readonly injectedToolOwners: ReadonlyMap<string, ToolOwnerLabel>
@@ -44,6 +47,11 @@ export async function resolvePostMergeSurface(
   input: Record<string, unknown>,
   ports: ResolverPorts,
 ): Promise<PostMergeSurface> {
+  if (merged.history.length > 1) {
+    throw invalidHistoryComposition(
+      "Exactly one history projection may be active after prompt resolution. Remove the duplicate history.recent() entry.",
+    )
+  }
   const contexts = [...merged.active]
   let skills = [...merged.skills]
 
@@ -60,6 +68,7 @@ export async function resolvePostMergeSurface(
     skills,
     memories: merged.memories,
     blackboards: merged.blackboards,
+    historyProjection: merged.history[0],
     injectedTools: merged.tools,
     toolSources: merged.toolSources,
     injectedToolOwners: merged.toolOwners,

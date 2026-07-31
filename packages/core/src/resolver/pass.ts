@@ -300,6 +300,9 @@ export async function runPromptPass(
     ...(messages ? { messages } : {}),
     ...(config.output ? { schema: config.output } : {}),
     settings,
+    ...(postMerge.historyProjection
+      ? { historyProjection: postMerge.historyProjection }
+      : {}),
   };
   attachPromptTextObservation(resolved, promptInfo);
   if (systemIngressBlocks.length > 0) {

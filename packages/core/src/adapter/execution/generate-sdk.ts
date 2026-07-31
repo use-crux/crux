@@ -123,7 +123,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     args.nativeMessages,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = args.nativeMessages;
+  let nativeMessages = initialMessages.history?.changed
+    ? undefined
+    : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const retryId = args.validationRetry
@@ -288,6 +290,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
     extra: args.extra,
+    history: initialMessages.history,
   });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);

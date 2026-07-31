@@ -41,6 +41,7 @@ import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { ToolSource } from '../tools/tool-source'
 import type { ToolOwnerLabel } from './tool-merge'
+import type { RecentHistoryProjection } from '../request/history/source'
 import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
@@ -157,6 +158,7 @@ export interface Contribution {
   memory?: MemoryEntry
   skill?: SkillEntry
   blackboard?: BlackboardEntry
+  history?: RecentHistoryProjection
   facts?: ContributionFacts
 }
 
@@ -227,6 +229,7 @@ export interface MergedResolution {
   skills: SkillEntry[]
   memories: MemoryEntry[]
   blackboards: BlackboardEntry[]
+  history: RecentHistoryProjection[]
   tools: AnyToolSet
   toolSources: ToolSource[]
   toolOwners: Map<string, ToolOwnerLabel>
@@ -244,6 +247,7 @@ export function emptyMergedResolution(): MergedResolution {
     skills: [],
     memories: [],
     blackboards: [],
+    history: [],
     tools: {},
     toolSources: [],
     toolOwners: new Map(),

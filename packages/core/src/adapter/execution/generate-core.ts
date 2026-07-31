@@ -325,6 +325,7 @@ export async function generateCore<
         : undefined,
       media: dialect.media,
       previousRequestId: lastRequestReceipt?.id,
+      history: initialMessages.history,
     });
     lastRequestReceipt = sealed.receipt;
     return sealed;

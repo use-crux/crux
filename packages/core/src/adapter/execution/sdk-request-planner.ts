@@ -15,6 +15,7 @@ import type { ExecutorRequestStepPlanner } from "../executor-types";
 import type { JsonSchemaObject } from "../structured-output";
 import type { CallArgs } from "../types";
 import type { SdkLoopDialect } from "./dialect-types";
+import type { RequestHistoryContext } from "../../request/history/source";
 
 interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>;
@@ -24,6 +25,7 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly outputSchema?: JsonSchemaObject;
   readonly tools: () => CallArgs["tools"];
   readonly extra?: Record<string, unknown>;
+  readonly history?: RequestHistoryContext;
 }
 
 /** Fail before SDK execution when a loop cannot surface model-call boundaries. */
@@ -87,6 +89,7 @@ export function createSdkRequestStepPlanner<
         : undefined,
       media: options.dialect.media,
       previousRequestId,
+      history: options.history,
     });
     previousRequestId = sealed.receipt.id;
     return Object.freeze({

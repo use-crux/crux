@@ -29,6 +29,10 @@ import {
   createRequestReceipt,
 } from "../receipt/receipt";
 import { requestPlan, type SealedRequestPlan } from "./plan";
+import type { RequestHistoryContext } from "../history/source";
+import type { RequestWarning } from "../receipt/adaptations";
+
+const warnedExactHistory = new Set<string>();
 
 /** Inputs required to seal one exact request. @internal */
 export interface SealRequestInput<
@@ -43,6 +47,7 @@ export interface SealRequestInput<
   readonly countTokens?: RequestTokenCounter<TExtra>;
   readonly media?: ProviderMediaHooks;
   readonly previousRequestId?: string;
+  readonly history?: RequestHistoryContext;
 }
 
 /** Seal one exact request or fail before provider dispatch. @internal */
@@ -81,6 +86,7 @@ export async function sealRequest<
     estimate.breakdown,
     inputTokens,
   );
+  const warnings = requestWarnings(input, inputTokens, budget.optimizeAt);
   if (inputTokens > budget.max) {
     throw tooLargeError(
       input,
@@ -99,6 +105,7 @@ export async function sealRequest<
     breakdown,
     safetyMarginTokens: budget.safetyMargin,
     providerOverheadTokens: budget.providerOverhead,
+    warnings,
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),
@@ -134,6 +141,17 @@ function tooLargeError<TExtra extends Record<string, unknown>>(
       message:
         "The exact representation is the only authorized representation and does not fit.",
     },
+    ...(input.history?.policy === "exact"
+      ? [
+          {
+            id: `${requestId}:history-remedy`,
+            code: "HISTORY_EXACT_REMEDY",
+            contributor: "history",
+            message:
+              "Keep canonical history exact and configure history.recent() for a stateless window or history() for managed adaptation.",
+          },
+        ]
+      : []),
     {
       id: `${requestId}:remedy`,
       code: "REQUEST_REMEDY",
@@ -148,4 +166,35 @@ function tooLargeError<TExtra extends Record<string, unknown>>(
     diagnostics,
     requestId,
   );
+}
+
+function requestWarnings<TExtra extends Record<string, unknown>>(
+  input: SealRequestInput<TExtra>,
+  inputTokens: number,
+  optimizeAt: number,
+): readonly RequestWarning[] {
+  const warnings = [...(input.history?.warnings ?? [])];
+  if (
+    input.history?.policy !== "exact" ||
+    inputTokens <= optimizeAt
+  ) {
+    return warnings;
+  }
+  warnings.push({
+    code: "HISTORY_EXACT_NEAR_LIMIT",
+    message:
+      "Complete exact history crossed the request optimization watermark and may eventually stop fitting; configure history.recent() or history().",
+  });
+  const warningKey = `${input.provider}:${input.model}`;
+  if (
+    !warnedExactHistory.has(warningKey) &&
+    (typeof process === "undefined" ||
+      process.env.NODE_ENV !== "production")
+  ) {
+    warnedExactHistory.add(warningKey);
+    console.warn(
+      `[Crux] Complete exact history for ${input.provider}/${input.model} crossed its request optimization watermark. Configure history.recent() or history() before it stops fitting.`,
+    );
+  }
+  return warnings;
 }

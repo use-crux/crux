@@ -75,6 +75,7 @@ export interface CreateRequestReceiptInput {
   readonly providerOverheadTokens: number;
   readonly retryCount?: number;
   readonly previousRequestId?: string;
+  readonly warnings?: readonly RequestWarning[];
 }
 
 /** Create one immutable JSON-safe request receipt. @internal */
@@ -90,7 +91,7 @@ export function createRequestReceipt(
     maxInputTokens: input.maxInputTokens,
     measurement: input.measurement,
     adaptations: Object.freeze([]),
-    warnings: Object.freeze([]),
+    warnings: Object.freeze([...(input.warnings ?? [])]),
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),

@@ -690,12 +690,17 @@ export type {
   UnsupportedCapabilityIssue,
 } from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";
+export { history } from "./request/history/recent";
+export type { HistoryFactory } from "./request/history/recent";
+export type {
+  RecentHistoryOptions,
+  RecentHistoryProjection,
+} from "./request/history/source";
 
 // Memory
 export {
   memory,
   memoryBlock,
-  recentMessages,
   workingState,
   episodes,
   facts,
