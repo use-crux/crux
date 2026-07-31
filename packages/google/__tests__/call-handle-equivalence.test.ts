@@ -155,11 +155,25 @@ function expectComparable(result: {
     text: result.text,
     object: result.object,
     usage: result.usage,
-    steps: result.steps,
-    finalStep: result.finalStep,
+    steps: result.steps.map(comparableStep),
+    finalStep: comparableStep(result.finalStep),
     roles: result.messages.map((message) => message.role),
     pendingApprovals: result.pendingApprovals?.length ?? 0,
   }
+}
+
+// Request receipts stay comparable across executions except for their
+// generated identifiers; equivalence still covers tokens, budget, and
+// adaptations.
+function comparableStep(step: unknown): unknown {
+  if (typeof step !== 'object' || step === null) return step
+  const record = step as { request?: { id?: string; previousRequestId?: string } }
+  if (typeof record.request !== 'object' || record.request === null) return step
+  const request: Record<string, unknown> = { ...record.request, id: '<request-id>' }
+  if (record.request.previousRequestId !== undefined) {
+    request.previousRequestId = '<previous-request-id>'
+  }
+  return { ...record, request }
 }
 
 function scriptedClient(responses: readonly GenerateContentResponse[]): GoogleGenAI {
