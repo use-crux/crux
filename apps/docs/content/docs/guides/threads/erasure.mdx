@@ -1,0 +1,313 @@
+---
+title: Removal, Redaction, And Deletion
+description: Choose reversible visibility state, irreversible message provenance erasure, or permanent whole-Thread deletion.
+---
+
+Thread erasure has three different meanings. Choose the operation from the
+required outcome, not from the UI wording:
+
+| Operation | Scope | Content retained in storage? | Reversible? | Public application API today? |
+| --- | --- | --- | --- | --- |
+| Removal | One complete causal group | Yes, provenance remains behind structural visibility state | Not provenance erasure; no public restore API | No, reserved for synchronization owners |
+| Redaction | One or more messages | No Thread-owned message provenance | No | `thread.redact()` |
+| Deletion | Whole Thread | Only the permanent deleted identity tombstone | No | `thread.delete()` |
+
+Removal is not a weaker spelling of redaction. Redaction is not a convenient
+way to hide a message. Deletion is not a batch redaction. Each operation
+protects a different invariant.
+
+## Removal Changes Visibility
+
+Removal hides a complete causal group from managed history while retaining its
+canonical provenance. Exact structural reads expose `kind: "removed"` entries
+so the path remains valid:
+
+```ts
+const snapshot = await conversation.read();
+
+for (const entry of snapshot.entries) {
+  if (entry.kind === "removed") {
+    renderRemovedMessage(entry.id);
+  }
+}
+```
+
+A removed public entry retains:
+
+- `kind: "removed"`.
+- The stable message `id`.
+- `parentId` when the message has a parent.
+- `createdAt`.
+
+The stored message provenance still exists. Managed `readHistory()` omits the
+removed group, but an identical stable-ID append can still replay its original
+receipt. That is why removal does not satisfy an erasure request.
+
+Removal applies to the entire causal group. Hiding only a Tool result while
+leaving its assistant call visible would create invalid history.
+
+There is no public `Thread.remove()` method. The removal state is reserved for
+Channel and synchronization ownership where a higher-level record controls
+visibility. Applications should not import internal removal helpers. If your
+product needs reversible local hide or moderation state today, keep that state
+in the application database and filter rendering without claiming the Thread
+content was erased.
+
+### Use removal when
+
+- A synchronization owner needs to withdraw a visible causal group.
+- The original provenance must remain available for reconciliation.
+- Replay identity must continue to refer to the original event.
+
+### Do not use removal when
+
+- A person requests deletion of their message content.
+- Stored metadata or media must be physically erased.
+- Reuse of the stable message ID must be permanently rejected.
+
+## Redaction Erases Message Provenance
+
+Redaction is the public irreversible operation for published messages:
+
+```ts
+await conversation.redact("message-42");
+
+await conversation.redact([
+  "message-43",
+  "message-44",
+]);
+```
+
+The multi-ID form normalizes duplicate IDs and publishes the complete decision
+atomically. If any requested ID is missing, the operation rejects and leaves
+the other requested messages live. Calling `redact()` again with an already
+redacted ID is idempotent.
+
+### What redaction erases
+
+For each redacted Thread node, Crux erases:
+
+- Canonical message content and role.
+- Message metadata.
+- The original `createdAt` value.
+- The content identity used for exact replay checks.
+- Thread-owned asset references.
+- Thread-owned inline media bytes through the configured `AssetStore`.
+
+Redaction does not know how to delete an externally owned asset that entered as
+a caller-owned reference. It erases the reference from Thread provenance, but
+the application must delete the external object at its owning system when the
+compliance policy requires it.
+
+If a Thread node owns assets and the handle no longer has the matching
+`AssetStore`, cleanup fails with `unsupported_capability`. Recreate the handle
+with the original owning Storage bundle and retry.
+
+### What the tombstone retains
+
+An exact structural read returns the minimum public tombstone:
+
+```ts
+{
+  kind: "redacted",
+  id: "message-42",
+  parentId: "message-41",
+}
+```
+
+`parentId` is absent at the root. Internally, Crux also retains only the
+structural group markers needed to prove graph links and legal append
+boundaries. The tombstone carries no role, content, metadata, or timestamp.
+
+Keeping the stable ID is intentional. Removing it would let a later write reuse
+the same identity and make old receipts ambiguous.
+
+## Redaction Poisons Replay
+
+After redaction, the message ID can never publish content again:
+
+```ts
+const original = {
+  id: "private-message",
+  role: "user" as const,
+  content: "Private content",
+};
+
+await conversation.append(original);
+await conversation.redact(original.id);
+
+await conversation.append(original); // rejects with code "redacted"
+```
+
+`edit()` against the redacted ID also rejects with code `redacted`. This is
+replay poisoning: the system remembers that the identity existed and was
+erased, without retaining the original provenance.
+
+Redaction preserves enough structure to branch after a proven causal-group
+end. It does not allow an append after a redacted message that was inside a
+multi-message group:
+
+```ts
+await conversation.append([
+  { id: "group-start", role: "user", content: "Question" },
+  { id: "group-end", role: "assistant", content: "Answer" },
+]);
+
+await conversation.redact(["group-start", "group-end"]);
+
+await conversation.append(
+  { id: "later", role: "user", content: "Continue" },
+  { after: "group-end" },
+);
+```
+
+Using `after: "group-start"` rejects with `invalid_group`. During physical
+redaction cleanup, append-after may temporarily reject with `redacted` until
+the durable tombstone can prove the boundary. Retry after redaction resolves.
+
+### Use redaction when
+
+- One or more messages contain personal, secret, or prohibited provenance.
+- The rest of the Thread should remain usable.
+- The stable IDs must remain poisoned against replay.
+- Structural evidence that an erased event occupied the path is acceptable.
+
+### Do not use redaction when
+
+- The requirement is only to hide content from a view.
+- The entire conversation and all receipts must be removed.
+- Retaining a stable message ID or parent link violates the applicable policy.
+
+For the last case, delete the whole Thread and review whether the remaining
+Thread identity tombstone is permitted.
+
+## Deletion Erases The Whole Thread
+
+`delete()` publishes permanent inaccessibility, then cleans child data:
+
+```ts
+await conversation.delete();
+await conversation.delete(); // idempotent
+```
+
+Deletion removes:
+
+- Every message node, including removed and redacted nodes.
+- All immutable append receipt records.
+- Pending receipt-finalization state.
+- Branch heads and remembered continuations.
+- Thread-owned assets.
+
+The Thread control record remains as a permanent tombstone with
+`state: "deleted"`. It prevents a new handle from recreating history under the
+same Thread ID. After deletion, `append()`, `read()`, `edit()`, `select()`, and
+`redact()` reject with code `deleted`.
+
+Calling `delete()` for an ID with no existing Thread creates the same deleted
+tombstone. Repeated deletion is safe and supports cleanup repair.
+
+## Owner Gating
+
+A durable owner must release the Thread before deletion. Any open owner or
+closed-but-not-deleted owner causes `ThreadInUseError` with code `in_use`.
+
+The required order is:
+
+1. Close or kill every owning Session.
+2. Delete those Sessions.
+3. Delete the Thread.
+
+Standalone Threads currently have no registered Session owners, so ordinary
+`thread()` handles pass this gate. The owner contract exists so future durable
+Sessions cannot leave live heads pointing at deleted history.
+
+Do not catch `ThreadInUseError` and delete records directly. That bypasses the
+ownership proof and can leave a durable owner referencing missing state.
+
+## Deletion Publication And Cleanup
+
+Deletion has two stages:
+
+1. A linearizable control mutation publishes `state: "deleted"`, clears heads,
+   leaves, visibility maps, and pending receipts.
+2. Cleanup deletes nodes, receipts, and Thread-owned assets.
+
+Once stage 1 publishes, concurrent writers fail closed and clean any child
+records they created during the race. Readers see `deleted` even if physical
+cleanup is still running.
+
+If stage 2 fails, `delete()` rejects instead of claiming complete erasure. The
+deleted state remains published, and calling `delete()` again retries cleanup.
+Preserve the same Storage bundle, especially its `AssetStore`, for that repair.
+
+## Choose An Operation For Compliance Work
+
+| Requirement | Choose | Follow-up responsibility |
+| --- | --- | --- |
+| Hide a group but retain provenance for synchronization | Owner-controlled removal | Document that content still exists |
+| Erase selected message provenance and owned inline media | Redaction | Delete caller-owned external assets separately |
+| Erase the conversation's nodes, receipts, branches, and owned assets | Deletion | Release durable owners first |
+| Hide content only in one product view | Application visibility state | Do not describe this as Thread erasure |
+| Erase observability exports, backups, or provider logs | Their owning systems | Thread operations do not control those stores |
+
+Compliance depends on the full data flow. A Thread redaction or deletion does
+not erase:
+
+- Provider-side request retention.
+- Application logs outside Thread Storage.
+- Exported observability records.
+- Database backups or replicas governed by separate retention.
+- Caller-owned media objects.
+- Business records that copied message content.
+
+Maintain a data inventory and invoke each owner's deletion mechanism. The
+Thread operation covers only Thread-owned canonical provenance and assets.
+
+## A Safe Erasure Workflow
+
+1. Resolve the exact Thread and message IDs from trusted application records.
+2. Stop or serialize new writes for the affected scope when policy requires a
+   strict cutoff.
+3. Choose visibility removal, message redaction, or whole-Thread deletion from
+   the required retained evidence.
+4. Run the operation with the original owning Storage bundle.
+5. Treat a rejected cleanup as incomplete and retry it.
+6. Verify with `read()` for redaction or a typed `deleted` failure for deletion.
+7. Delete copies in external systems according to their own contracts.
+8. Store a content-free audit receipt in the compliance system, not in the
+   deleted message.
+
+For redaction verification:
+
+```ts
+await conversation.redact(messageId);
+
+const snapshot = await conversation.read();
+const entry = snapshot.entries.find((item) => item.id === messageId);
+
+if (entry?.kind !== "redacted") {
+  throw new Error("Thread redaction verification failed.");
+}
+```
+
+For deletion verification:
+
+```ts
+import { ThreadError } from "@use-crux/core/thread";
+
+await conversation.delete();
+
+const failure = await conversation.read().catch((error: unknown) => error);
+
+if (!(failure instanceof ThreadError) || failure.code !== "deleted") {
+  throw new Error("Thread deletion verification failed.");
+}
+```
+
+## Related
+
+- Guide: [Threads](/docs/guides/threads)
+- Guide: [Managed conversations](/docs/guides/threads/conversations)
+- Guide: [Branching and alternatives](/docs/guides/threads/branching)
+- Guide: [Asset storage](/docs/guides/storage/asset-storage)
+- Reference: [Thread](/docs/reference/crux-core/thread)

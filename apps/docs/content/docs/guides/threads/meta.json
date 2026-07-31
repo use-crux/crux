@@ -1,0 +1,5 @@
+{
+  "title": "Threads",
+  "description": "Canonical conversation history, managed turns, alternatives, and erasure.",
+  "pages": ["index", "conversations", "branching", "erasure"]
+}

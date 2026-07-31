@@ -11,6 +11,9 @@ import { thread } from "@use-crux/core/thread";
 History is immutable: appends publish new causal groups, edits create sibling
 revisions, and selection moves the active head without rewriting prior nodes.
 
+For the mental model, storage choices, managed-turn lifecycle, branch UI, and
+erasure decisions, start with the [Threads guides](/docs/guides/threads).
+
 ## Create and bind a Thread
 
 ```ts
@@ -131,3 +134,11 @@ Thread failures use stable codes: `invalid_message`, `invalid_group`,
 failures reject with `ThreadCommitError`; a
 successful provider result is never reported as fully accepted when its Thread
 turn could not be committed.
+
+## Related
+
+- Guide: [Threads](/docs/guides/threads)
+- Guide: [Managed conversations](/docs/guides/threads/conversations)
+- Guide: [Branching and alternatives](/docs/guides/threads/branching)
+- Guide: [Removal, redaction, and deletion](/docs/guides/threads/erasure)
+- Reference: [Request history](/docs/reference/crux-core/request-history)
