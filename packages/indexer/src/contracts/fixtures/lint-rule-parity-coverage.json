@@ -194,6 +194,21 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "expand-relations-unknown-type",
+      "positiveFixture": "knowledge-lint-rules.rs",
+      "negativeFixture": "knowledge-lint-rules.rs"
+    },
+    {
+      "ruleId": "knowledge-recipe-producer-conflict",
+      "positiveFixture": "knowledge-lint-rules.rs",
+      "negativeFixture": "knowledge-lint-rules.rs"
+    },
+    {
+      "ruleId": "assertions-unknown-type-selection",
+      "positiveFixture": "knowledge-lint-rules.rs",
+      "negativeFixture": "knowledge-lint-rules.rs"
+    },
+    {
       "ruleId": "runtime.duplicate_target_name",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

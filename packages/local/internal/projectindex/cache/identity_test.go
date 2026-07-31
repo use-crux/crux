@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 60 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Connected Knowledge epoch 60", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 61 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Connected Knowledge lint epoch 61", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -57,6 +57,8 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"independently advanced Thread and context-planning",
 		"Epoch 60",
 		"Connected Knowledge definitions",
+		"Epoch 61",
+		"Connected Knowledge lint findings",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -67,7 +69,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-60", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-61", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -92,6 +94,10 @@ func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T
 
 func TestProjectIndexFactStoreMissesPreConnectedKnowledgeSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 59, "pre-connected-knowledge snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreConnectedKnowledgeLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 60, "pre-connected-knowledge-lint snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {

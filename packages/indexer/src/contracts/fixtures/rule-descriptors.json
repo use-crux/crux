@@ -986,8 +986,8 @@
       "requires": ["definitions", "relations"],
       "fidelity": "safe"
     },
-    {
-      "id": "rag.recipe_step_unresolved_target",
+      {
+        "id": "rag.recipe_step_unresolved_target",
       "source": "builtin",
       "severity": "warning",
       "category": "composition",
@@ -1012,11 +1012,98 @@
         "directive": "// crux-lint-disable-next-line rag.recipe_step_unresolved_target -- reason"
       },
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "runtime.duplicate_target_name",
+        "requires": ["definitions", "relations"],
+        "fidelity": "safe"
+      },
+      {
+        "id": "expand-relations-unknown-type",
+        "source": "builtin",
+        "severity": "warning",
+        "category": "composition",
+        "maturity": "stable",
+        "confidence": "high",
+        "profiles": ["recommended", "strict"],
+        "title": "Relation expansion selects an unknown type",
+        "description": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
+        "rationale": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
+        "impact": "Unknown relation selections make graph expansion narrower than authored code suggests and can hide missing connected-knowledge coverage.",
+        "docsUrl": "/docs/reference/crux-core/index-lints/expand-relations-unknown-type",
+        "fixes": [
+          {
+            "title": "Use a declared relation type",
+            "description": "Rename the selected type or add it to the relation vocabulary in the knowledge pipeline.",
+            "kind": "manual"
+          }
+        ],
+        "suppression": {
+          "supported": true,
+          "scope": "next-line",
+          "directive": "// crux-lint-disable-next-line expand-relations-unknown-type -- reason"
+        },
+        "phase": "index",
+        "requires": ["definitions", "relations"],
+        "fidelity": "safe"
+      },
+      {
+        "id": "knowledge-recipe-producer-conflict",
+        "source": "builtin",
+        "severity": "error",
+        "category": "runtime",
+        "maturity": "stable",
+        "confidence": "high",
+        "profiles": ["recommended", "strict"],
+        "title": "Knowledge recipe has multiple producer steps",
+        "description": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
+        "rationale": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
+        "impact": "Multiple producers make recipe execution ambiguous and mirror a runtime failure before retrieval can produce hits.",
+        "docsUrl": "/docs/reference/crux-core/index-lints/knowledge-recipe-producer-conflict",
+        "fixes": [
+          {
+            "title": "Keep one producer step",
+            "description": "Remove the duplicate retrieve() or globalSearch() step so the recipe has exactly one producer.",
+            "kind": "manual"
+          }
+        ],
+        "suppression": {
+          "supported": true,
+          "scope": "next-line",
+          "directive": "// crux-lint-disable-next-line knowledge-recipe-producer-conflict -- reason"
+        },
+        "phase": "index",
+        "requires": ["definitions", "relations"],
+        "fidelity": "safe"
+      },
+      {
+        "id": "assertions-unknown-type-selection",
+        "source": "builtin",
+        "severity": "warning",
+        "category": "contracts",
+        "maturity": "stable",
+        "confidence": "high",
+        "profiles": ["recommended", "strict"],
+        "title": "Assertion selection names an unknown type",
+        "description": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+        "rationale": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+        "impact": "Unknown assertion selections produce empty or incomplete assertion context even though authored code appears to request a typed subset.",
+        "docsUrl": "/docs/reference/crux-core/index-lints/assertions-unknown-type-selection",
+        "fixes": [
+          {
+            "title": "Use a declared assertion type",
+            "description": "Rename the selected assertion type or add it to the assertion stage types map.",
+            "kind": "manual"
+          }
+        ],
+        "suppression": {
+          "supported": true,
+          "scope": "next-line",
+          "directive": "// crux-lint-disable-next-line assertions-unknown-type-selection -- reason"
+        },
+        "phase": "index",
+        "requires": ["definitions", "relations"],
+        "fidelity": "safe"
+      },
+      {
+        "id": "runtime.duplicate_target_name",
       "source": "builtin",
       "severity": "error",
       "category": "runtime",

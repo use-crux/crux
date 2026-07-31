@@ -27,6 +27,7 @@ package cache
 // snapshot contracts.
 // Epoch 60 adds authored Connected Knowledge definitions, view children, and
 // static relation facts.
+// Epoch 61 adds Connected Knowledge lint findings and descriptors.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 60
+const ProjectIndexSnapshotCacheEpoch = 61
