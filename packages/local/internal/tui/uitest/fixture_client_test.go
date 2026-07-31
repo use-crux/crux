@@ -77,3 +77,23 @@ func TestFixtureClientSessionsAndRunFilters(t *testing.T) {
 		t.Fatalf("filtered runs = %+v, want fixture run", runs)
 	}
 }
+
+func TestFixtureClientStatsAndTimeseries(t *testing.T) {
+	client := NewFixtureClient()
+	stats, err := client.Stats(context.Background())
+	if err != nil {
+		t.Fatalf("Stats returned error: %v", err)
+	}
+	if stats.TotalExecutions != 42 || stats.TotalCost != 1.0122 || stats.AvgCost != 0.0241 {
+		t.Fatalf("Stats = %+v, want non-trivial aggregate fixture", stats)
+	}
+	series, err := client.StatsTimeseries(context.Background(), 4)
+	if err != nil {
+		t.Fatalf("StatsTimeseries returned error: %v", err)
+	}
+	if len(series) != 4 || series[0].Executions == series[len(series)-1].Executions ||
+		series[0].TotalCost == series[len(series)-1].TotalCost ||
+		series[0].AvgDurationMs == series[len(series)-1].AvgDurationMs {
+		t.Fatalf("StatsTimeseries = %+v, want bounded non-trivial series", series)
+	}
+}

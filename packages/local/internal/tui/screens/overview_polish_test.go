@@ -30,14 +30,11 @@ func TestDeltaColorUsesMetricFavorableDirection(t *testing.T) {
 	}
 }
 
-func TestPassRateDeltaDoesNotUseSyntheticSpark(t *testing.T) {
+func TestPassRateHistoryDoesNotUseSyntheticSpark(t *testing.T) {
 	current := 0.88
 	summary := api.InspectOverviewRecord{PassRate: &current}
-	if got := passRateDeltaSeries(summary); len(got) != 0 {
-		t.Fatalf("passRateDeltaSeries() invented history: %v", got)
-	}
-	if got := passRateSpark(summary); len(got) == 0 {
-		t.Fatal("passRateSpark() lost its visual fallback")
+	if got := passRateHistory(summary); len(got) != 0 {
+		t.Fatalf("passRateHistory() invented history: %v", got)
 	}
 }
 

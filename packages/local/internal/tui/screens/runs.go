@@ -108,6 +108,20 @@ func (s *Runs) Focus(kind, id string) {
 	if id == "" {
 		return
 	}
+	if kind == "status-filter" && id == "failures" {
+		s.definitionFilter = ""
+		s.clearRunSelection()
+		s.runList.SetItems(nil)
+		s.runsResource.Cancel()
+		s.runStatusIndex = runStatusFilterIndex(id)
+		s.runWindowIndex = len(runWindows) - 1
+		s.runGroupIndex = 0
+		s.sessionFilter = ""
+		s.modelFilter = ""
+		s.filteringRuns = false
+		s.runQuery = ""
+		return
+	}
 	if kind == "definition" {
 		s.definitionFilter = id
 		s.clearRunSelection()
@@ -137,10 +151,11 @@ func (s *Runs) Focus(kind, id string) {
 }
 
 func (s *Runs) FocusRoot() {
-	if s.definitionFilter == "" {
+	if s.definitionFilter == "" && s.runStatusIndex == 0 {
 		return
 	}
 	s.definitionFilter = ""
+	s.runStatusIndex = 0
 	s.clearRunSelection()
 	s.runList.SetItems(nil)
 	s.runsResource.Cancel()

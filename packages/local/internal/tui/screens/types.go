@@ -28,6 +28,8 @@ type DataClient interface {
 	ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error)
 	ObservabilityRunsPageWithOptions(ctx context.Context, opts api.InspectRunsOptions, definitionID ...string) (api.ObservabilityRunsPage, error)
 	Sessions(ctx context.Context) ([]store.SessionInfo, error)
+	Stats(ctx context.Context) (store.StatsResult, error)
+	StatsTimeseries(ctx context.Context, buckets int) ([]store.TimeseriesBucket, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error)

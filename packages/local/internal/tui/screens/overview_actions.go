@@ -42,6 +42,19 @@ func (o *Overview) Actions(_ context.Context, _ DataClient) []interaction.Action
 			DisabledReason: o.activateDisabledReason(),
 			Run:            o.drill,
 		},
+		{
+			ID:      "overview.failures",
+			Binding: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "runs: failures")),
+			DisabledReason: disabledUnless(
+				o.overviewSummary().RunTabCounts.Failures > 0,
+				"no failed runs",
+			),
+			Run: func() tea.Cmd {
+				return func() tea.Msg {
+					return NavigateRequest{NavID: "runs", Kind: "status-filter", ID: "failures"}
+				}
+			},
+		},
 	}
 }
 

@@ -98,6 +98,23 @@ func (c *DirectClient) Sessions(ctx context.Context) ([]store.SessionInfo, error
 	return c.devtools.Sessions(ctx), nil
 }
 
+// Stats returns the same aggregate read model used by the Stats and cost
+// command surfaces.
+func (c *DirectClient) Stats(ctx context.Context) (store.StatsResult, error) {
+	if c.devtools == nil {
+		return store.StatsResult{}, errNoDevtoolsService
+	}
+	return c.devtools.Stats(ctx), nil
+}
+
+// StatsTimeseries returns bounded buckets from the same stats read model.
+func (c *DirectClient) StatsTimeseries(ctx context.Context, buckets int) ([]store.TimeseriesBucket, error) {
+	if c.devtools == nil {
+		return nil, errNoDevtoolsService
+	}
+	return c.devtools.Timeseries(ctx, buckets), nil
+}
+
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {
 	if c.observability == nil {
 		return api.ObservabilityRunDetail{}, false, errNoObservabilityService

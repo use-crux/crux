@@ -20,8 +20,9 @@ the same alternate port to both commands if 4466 is unavailable.
 After seeding:
 
 - **Overview** shows six operations across support and billing sessions,
-  non-empty pass-rate/cost/latency KPIs, recent runs, derived insights, and
-  live ingest activity.
+  non-empty pass-rate/cost/latency time series from the Stats read model, a
+  Stats-aligned cost trend, all/live/failure run counts, session-aware recent
+  runs, derived insights, and live ingest activity.
 - **Runs** shows six ok/error/suspended operations. The refund regression has
   an at-least-ten-span waterfall with repeated tool calls, retrieval and
   guardrail failures, and terminal error diagnosis.

@@ -35,6 +35,13 @@ func latency(p *float64) string {
 	return fmt.Sprintf("%.0fms", *p)
 }
 
+func score(p *float64) string {
+	if p == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", *p)
+}
+
 func durStr(p *float64) string {
 	if p == nil {
 		return "—"
@@ -120,28 +127,6 @@ func floatsFromInts(vs []int) []float64 {
 	return out
 }
 
-func overviewSparkFromInts(vs []int, fallback int) []float64 {
-	series := floatsFromInts(vs)
-	if len(series) > 0 {
-		return series
-	}
-	if fallback <= 0 {
-		return nil
-	}
-	return gentleSeries(float64(fallback), 14, 0.18)
-}
-
-func passRateSpark(rec api.InspectOverviewRecord) []float64 {
-	return passRateHistory(rec)
-}
-
-func passRateDeltaSeries(rec api.InspectOverviewRecord) []float64 {
-	if len(rec.PassRateHistory) > 0 {
-		return rec.PassRateHistory
-	}
-	return rec.PassRateSpark
-}
-
 func passRateHistory(rec api.InspectOverviewRecord) []float64 {
 	if len(rec.PassRateHistory) > 0 {
 		return rec.PassRateHistory
@@ -149,48 +134,16 @@ func passRateHistory(rec api.InspectOverviewRecord) []float64 {
 	if len(rec.PassRateSpark) > 0 {
 		return rec.PassRateSpark
 	}
-	if rec.PassRate == nil {
-		return nil
-	}
-	shape := []float64{-0.45, -0.30, -0.22, -0.12, -0.04, 0.02, 0.06, 0.10, 0.13, 0.16, 0.18, 0.20, 0.21, 0.22}
-	out := make([]float64, len(shape))
-	for i, d := range shape {
-		out[i] = clampFloat(*rec.PassRate+(d*0.08), 0, 1)
-	}
-	return out
+	return nil
 }
 
-func metricSpark(values []float64, fallback *float64) []float64 {
-	if len(values) > 0 {
-		return values
+func firstFloat(values ...*float64) *float64 {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
 	}
-	if fallback == nil || *fallback == 0 {
-		return nil
-	}
-	return gentleSeries(*fallback, 14, 0.16)
-}
-
-func gentleSeries(final float64, n int, spread float64) []float64 {
-	if n <= 1 {
-		return []float64{final}
-	}
-	start := final * (1 - spread)
-	out := make([]float64, n)
-	for i := range out {
-		t := float64(i) / float64(n-1)
-		out[i] = start + ((final - start) * t)
-	}
-	return out
-}
-
-func clampFloat(v, min, max float64) float64 {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
+	return nil
 }
 
 func truncate(s string, n int) string {

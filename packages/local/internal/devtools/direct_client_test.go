@@ -207,6 +207,27 @@ func TestDirectClientRunsListFiltersSessionsAndRollups(t *testing.T) {
 		sessions[1].SessionID != "session_demo_billing" {
 		t.Fatalf("Sessions = %+v, want support and billing", sessions)
 	}
+
+	stats, err := client.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats error = %v", err)
+	}
+	if stats.TotalExecutions == 0 || stats.TotalCost == 0 || stats.AvgDurationMs == 0 {
+		t.Fatalf("Stats = %+v, want observability-derived aggregates", stats)
+	}
+	series, err := client.StatsTimeseries(ctx, 8)
+	if err != nil {
+		t.Fatalf("StatsTimeseries error = %v", err)
+	}
+	nonEmpty := 0
+	for _, bucket := range series {
+		if bucket.Executions > 0 {
+			nonEmpty++
+		}
+	}
+	if len(series) != 8 || nonEmpty < 3 {
+		t.Fatalf("StatsTimeseries = %+v, want eight buckets with a non-trivial series", series)
+	}
 }
 
 func findAPIDefinition(definitions []api.ProjectDefinition, id string) *api.ProjectDefinition {

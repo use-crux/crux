@@ -13,3 +13,5 @@ Deepen Runs detail with primitive-aware request, PromptText, decision, tool, mem
 Deepen the Index Catalog with schema field trees, complete lint evidence, navigable relation columns, agent and flow summaries, PromptText provenance, per-definition runtime activity, indexing/watch status, kind/file grouping, and consistent `x` exports.
 
 Make the Runs list operationally useful with bounded token/cost rollups, model and abnormal-health columns, child topology, server-side status/session/window filters, model refinement, stable primitive/target/session grouping, real session labels, and aggregate group headers.
+
+Turn Overview into an operational dashboard with Stats-backed pass-rate, cost, and latency series, an honest Stats-derived cost KPI, conditional mean score, run-count jump chips, failure-filter navigation, and session-aware recent runs.

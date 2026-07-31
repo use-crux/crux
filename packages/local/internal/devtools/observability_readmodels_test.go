@@ -119,6 +119,14 @@ func TestObservabilityStatsExcludeIncompleteFromExecutionDenominators(t *testing
 	if stats.TotalCost != 0 || stats.TotalTokens != 0 || stats.AvgCost != 0 {
 		t.Fatalf("usage = cost:%v tokens:%d avg:%v, want incomplete usage excluded", stats.TotalCost, stats.TotalTokens, stats.AvgCost)
 	}
+	series := observabilityTimeseries(ctx, obs, 4)
+	executions := 0
+	for _, bucket := range series {
+		executions += bucket.Executions
+	}
+	if executions != stats.TotalExecutions {
+		t.Fatalf("timeseries executions = %d, want Stats-aligned %d", executions, stats.TotalExecutions)
+	}
 }
 
 func TestObservedInjectionReadModelUsesContextContributionArtifacts(t *testing.T) {

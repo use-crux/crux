@@ -55,9 +55,13 @@ func (o *Overview) renderCompact(size Size) string {
 	} else if snapshot.State == resource.ResourceEmpty || !overviewSummaryHasData(summary) {
 		appendBlock(padRow(" "+shell.TextMuted.Render("No run metrics yet — run `crux eval`, or use your app with `crux dev` running."), size.Width))
 	} else {
+		stats := o.projectedStats()
 		appendBlock(padRow(" "+shell.Text.Render(fmt.Sprintf("insights %d", summary.InsightCount))+"  "+shell.TextDim.Render(fmt.Sprintf("%dH %dM %dL", summary.OpenInsightSeverityCounts["high"], summary.OpenInsightSeverityCounts["medium"], summary.OpenInsightSeverityCounts["low"])), size.Width))
-		appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(summary.PassRate)), size.Width))
-		appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(summary.CostPer100Runs)), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(firstFloat(stats.PassRate, summary.PassRate))), size.Width))
+		if summary.MeanScore != nil {
+			appendBlock(padRow(" "+shell.Text.Render("mean score")+"  "+shell.Teal.Render(score(summary.MeanScore)), size.Width))
+		}
+		appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(stats.CostPer100Runs)), size.Width))
 		appendBlock(padRow(" "+shell.Text.Render("p95 latency")+"  "+shell.Amber.Render(latency(summary.P95LatencyMs)), size.Width))
 	}
 	remaining := max(1, size.Height-len(lines))

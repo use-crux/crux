@@ -19,6 +19,15 @@ var runStatusFilters = []runStatusFilter{
 	{label: "failures", statuses: []string{"error", "fail", "failed"}},
 }
 
+func runStatusFilterIndex(label string) int {
+	for i, filter := range runStatusFilters {
+		if filter.label == label {
+			return i
+		}
+	}
+	return 0
+}
+
 func (s *Runs) activeRunStatusFilter() runStatusFilter {
 	if s.runStatusIndex < 0 || s.runStatusIndex >= len(runStatusFilters) {
 		return runStatusFilters[0]

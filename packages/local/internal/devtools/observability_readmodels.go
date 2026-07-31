@@ -131,9 +131,20 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 		return []store.TimeseriesBucket{}
 	}
 
+	eligible := make([]observability.RunSummary, 0, len(runs))
+	for _, run := range runs {
+		switch normalizedStatus(run.Status) {
+		case "ok", "error", "running":
+			eligible = append(eligible, run)
+		}
+	}
+	if len(eligible) == 0 {
+		return []store.TimeseriesBucket{}
+	}
+
 	minT := int64(math.MaxInt64)
 	maxT := int64(math.MinInt64)
-	for _, run := range runs {
+	for _, run := range eligible {
 		started := parseUnixMillis(run.StartedAt)
 		if started == 0 {
 			continue
@@ -155,7 +166,7 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 		result[i].T = minT + int64(float64(i)*bucketSize)
 	}
 
-	for _, run := range runs {
+	for _, run := range eligible {
 		started := parseUnixMillis(run.StartedAt)
 		if started == 0 {
 			continue
@@ -167,7 +178,7 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 			result[idx].Errors++
 		}
 		result[idx].TotalCost += floatMetric(rawMap(run.Metrics), "costUsd", "cost")
-		if run.DurationMs > 0 {
+		if status := normalizedStatus(run.Status); status == "ok" || status == "error" {
 			durations[idx] = append(durations[idx], run.DurationMs)
 		}
 	}
