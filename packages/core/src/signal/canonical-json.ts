@@ -6,7 +6,6 @@
  */
 
 import type { JsonValue } from "../storage/types";
-import { cloneRuntimeJsonValue } from "../runtime/engine/json-value";
 import { createRuntimeError } from "../runtime/engine/errors";
 
 /** Clone one Signal value while keeping JSON errors payload-safe. */
@@ -15,7 +14,7 @@ export function cloneSignalJson<T extends JsonValue>(
   subject: "match" | "normalized output",
 ): T {
   try {
-    return cloneRuntimeJsonValue(value, "signal value");
+    return cloneSignalJsonValue(value, new WeakSet()) as T;
   } catch {
     return signalPayloadNotJson(subject);
   }
@@ -76,6 +75,59 @@ export function freezeSignalJson<T extends JsonValue>(value: T): T {
   return value;
 }
 
+function cloneSignalJsonValue(
+  value: unknown,
+  seen: WeakSet<object>,
+): JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return invalidSignalJson();
+    return Object.is(value, -0) ? 0 : value;
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return invalidSignalJson();
+    seen.add(value);
+    const clone: JsonValue[] = [];
+    const length = value.length;
+    for (let index = 0; index < length; index += 1) {
+      clone.push(
+        index in value ? cloneSignalJsonValue(value[index], seen) : null,
+      );
+    }
+    seen.delete(value);
+    return clone;
+  }
+  if (value === null || typeof value !== "object") {
+    return invalidSignalJson();
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return invalidSignalJson();
+  }
+  if (seen.has(value)) return invalidSignalJson();
+  seen.add(value);
+  const clone: Record<string, JsonValue> = {};
+  for (const key of Object.keys(value)) {
+    Object.defineProperty(clone, key, {
+      value: cloneSignalJsonValue(
+        (value as Readonly<Record<string, unknown>>)[key],
+        seen,
+      ),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  seen.delete(value);
+  return clone;
+}
+
 function canonicalizeSignalJsonValue(value: JsonValue): JsonValue {
   if (Array.isArray(value)) {
     return value.map(canonicalizeSignalJsonValue);
@@ -86,7 +138,12 @@ function canonicalizeSignalJsonValue(value: JsonValue): JsonValue {
     >;
     const canonical: Record<string, JsonValue> = {};
     for (const key of Object.keys(record).sort()) {
-      canonical[key] = canonicalizeSignalJsonValue(record[key]!);
+      Object.defineProperty(canonical, key, {
+        value: canonicalizeSignalJsonValue(record[key]!),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return canonical;
   }
@@ -104,4 +161,8 @@ function signalPayloadNotJson(
     nextStep:
       "Normalize dates and class instances to plain JSON, and remove functions, non-finite numbers, and cycles.",
   });
+}
+
+function invalidSignalJson(): never {
+  throw new TypeError("Invalid Signal JSON value.");
 }

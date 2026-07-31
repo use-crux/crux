@@ -147,6 +147,66 @@ describe("Signal idempotency", () => {
       expect.objectContaining({ id: accepted.occurrenceId }),
     );
   });
+
+  it("snapshots the idempotency key before asynchronous validation", async () => {
+    const validationStarted = Promise.withResolvers<void>();
+    const releaseValidation = Promise.withResolvers<void>();
+    let validationCalls = 0;
+    const changed = signal({
+      id: "options.snapshot",
+      schema: z.object({ value: z.string() }).transform(async (payload) => {
+        validationCalls += 1;
+        if (validationCalls === 1) {
+          validationStarted.resolve();
+          await releaseValidation.promise;
+        }
+        return payload;
+      }),
+    });
+    const listener = vi.fn();
+    changed.subscribe(listener);
+    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
+    const options = { idempotencyKey: "original-key" };
+
+    const publication = changed.publish({ value: "same" }, options);
+    await validationStarted.promise;
+    options.idempotencyKey = "mutated-key";
+    releaseValidation.resolve();
+    const original = await publication;
+    const replay = await changed.publish(
+      { value: "same" },
+      { idempotencyKey: "original-key" },
+    );
+    await flushScheduledListeners();
+
+    expect(replay).toBe(original);
+    expect(randomUuid).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps idempotency option access failures payload-safe", async () => {
+    const changed = signal({ id: "options.hostile", schema: z.string() });
+    const listener = vi.fn();
+    changed.subscribe(listener);
+    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
+    const options = Object.defineProperty({}, "idempotencyKey", {
+      get() {
+        throw new Error("private-idempotency-option-detail");
+      },
+    });
+
+    const error = await changed
+      .publish("payload", options)
+      .catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(SignalError);
+    expect(error).toMatchObject({ code: "publication_rejected" });
+    expect((error as Error).cause).toBeUndefined();
+    expect(String(error)).not.toContain("private-");
+    expect(JSON.stringify(error)).not.toContain("private-");
+    expect(randomUuid).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
 });
 
 function createControlledAsyncSchema() {

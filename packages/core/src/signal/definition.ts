@@ -18,6 +18,7 @@ import {
 } from "./filter";
 import type { SignalMatch } from "./match";
 import { createProcessLocalSignalState } from "./local-subscriptions";
+import { SignalError } from "./errors";
 import type {
   SignalListener,
   SignalPublishOptions,
@@ -129,14 +130,16 @@ export function signal<
   const TId extends string,
   const TSchema extends SignalSchema,
 >(options: SignalOptions<TId, TSchema>): Signal<TId, TSchema> {
+  const signalId = options.id;
+  const schema = options.schema;
   const local = createProcessLocalSignalState<
     TId,
     InferSignalSchemaOutput<TSchema>
-  >(options.id);
+  >(signalId);
   const definition: Signal<TId, TSchema> = {
     _tag: "Signal",
-    id: options.id,
-    schema: options.schema,
+    id: signalId,
+    schema,
     publish,
     when,
     subscribe: local.subscribe,
@@ -147,12 +150,21 @@ export function signal<
     payload: InferSignalSchemaInput<TSchema>,
     publishOptions?: SignalPublishOptions,
   ): Promise<SignalPublishReceipt<TId>> {
+    let idempotencyKey: string | undefined;
+    try {
+      idempotencyKey = publishOptions?.idempotencyKey;
+    } catch {
+      throw new SignalError(
+        "publication_rejected",
+        `Signal \`${signalId}\` publish options could not be read.`,
+      );
+    }
     const normalizedPayload = await validateSignalPayload(
-      options.id,
-      options.schema,
+      signalId,
+      schema,
       payload,
     );
-    return local.publish(normalizedPayload, publishOptions);
+    return local.publish(normalizedPayload, { idempotencyKey });
   }
 
   function when(

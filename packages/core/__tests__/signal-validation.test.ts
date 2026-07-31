@@ -116,6 +116,32 @@ describe("Signal payload validation", () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it("reads normalized properties once while validating and detaching", async () => {
+    let propertyReads = 0;
+    const statefulOutput = Object.defineProperty({}, "status", {
+      enumerable: true,
+      get() {
+        propertyReads += 1;
+        return propertyReads === 1 ? "first-value" : "private-second-value";
+      },
+    });
+    const statefulSchema: SignalSchema = {
+      "~standard": {
+        version: 1,
+        vendor: "stateful-output-test",
+        validate: () => ({ value: statefulOutput as never }),
+      },
+    };
+    const stateful = signal({ id: "stateful.normalized", schema: statefulSchema });
+    const delivered = Promise.withResolvers<unknown>();
+    stateful.subscribe((occurrence) => delivered.resolve(occurrence.payload));
+
+    await stateful.publish({});
+
+    await expect(delivered.promise).resolves.toEqual({ status: "first-value" });
+    expect(propertyReads).toBe(1);
+  });
+
   it("wraps schema execution failures without exposing private details", async () => {
     const privateDetail = "private-schema-provider-detail";
     const failingSchema: SignalSchema = {
@@ -136,4 +162,102 @@ describe("Signal payload validation", () => {
     expect(String(error)).not.toContain(privateDetail);
     expect(randomUuid).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "result issues",
+      () =>
+        new Proxy(
+          { value: null },
+          {
+            get(target, property, receiver) {
+              if (property === "issues") {
+                throw new Error("private-result-detail");
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          },
+        ),
+    ],
+    [
+      "result value",
+      () =>
+        new Proxy(
+          { value: null, issues: undefined },
+          {
+            get(target, property, receiver) {
+              if (property === "value") {
+                throw new Error("private-result-value-detail");
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          },
+        ),
+    ],
+    [
+      "issues",
+      () => ({
+        issues: new Proxy([{ message: "private-issue-message" }], {
+          get() {
+            throw new Error("private-issues-detail");
+          },
+        }),
+      }),
+    ],
+    [
+      "issue",
+      () => ({
+        issues: [
+          new Proxy(
+            { message: "private-issue-message" },
+            {
+              get() {
+                throw new Error("private-issue-detail");
+              },
+            },
+          ),
+        ],
+      }),
+    ],
+    [
+      "path",
+      () => ({
+        issues: [
+          {
+            message: "private-issue-message",
+            path: new Proxy(["private-path-value"], {
+              get() {
+                throw new Error("private-path-detail");
+              },
+            }),
+          },
+        ],
+      }),
+    ],
+  ])(
+    "safely rejects hostile Standard Schema %s access before acceptance",
+    async (boundary, result) => {
+      const hostileSchema: SignalSchema = {
+        "~standard": {
+          version: 1,
+          vendor: `hostile-${boundary}-test`,
+          validate: () => result() as never,
+        },
+      };
+      const hostile = signal({ id: `hostile.${boundary}`, schema: hostileSchema });
+      const listener = vi.fn();
+      hostile.subscribe(listener);
+      const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
+
+      const error = await hostile.publish({}).catch((cause: unknown) => cause);
+
+      expect(error).toBeInstanceOf(SignalError);
+      expect(error).toMatchObject({ code: "publication_rejected" });
+      expect((error as Error).cause).toBeUndefined();
+      expect(String(error)).not.toContain("private-");
+      expect(JSON.stringify(error)).not.toContain("private-");
+      expect(randomUuid).not.toHaveBeenCalled();
+      expect(listener).not.toHaveBeenCalled();
+    },
+  );
 });

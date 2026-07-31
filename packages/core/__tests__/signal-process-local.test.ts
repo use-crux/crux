@@ -35,6 +35,35 @@ describe("process-local Signal publication", () => {
     unsubscribe();
   });
 
+  it("captures factory id and schema exactly once at construction", async () => {
+    const originalSchema = z.string();
+    let currentId = "factory.original";
+    let currentSchema = originalSchema;
+    let idReads = 0;
+    let schemaReads = 0;
+    const factoryOptions = {
+      get id() {
+        idReads += 1;
+        return currentId;
+      },
+      get schema() {
+        schemaReads += 1;
+        return currentSchema;
+      },
+    };
+    const captured = signal(factoryOptions);
+
+    currentId = "factory.mutated";
+    currentSchema = z.string().refine(() => false);
+    const receipt = await captured.publish("accepted");
+
+    expect(captured.id).toBe("factory.original");
+    expect(captured.schema).toBe(originalSchema);
+    expect(receipt.signalId).toBe("factory.original");
+    expect(idReads).toBe(1);
+    expect(schemaReads).toBe(1);
+  });
+
   it("reports the honest process-local acceptance receipt", async () => {
     const refreshed = signal({ id: "cache.refreshed", schema: z.string() });
 

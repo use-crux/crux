@@ -69,4 +69,33 @@ describe("Signal filter views", () => {
       "zeta",
     ]);
   });
+
+  it("retains an own __proto__ match key as immutable canonical data", () => {
+    const changed = signal({
+      id: "prototype.changed",
+      schema: z.record(z.string(), z.object({ identity: z.string() })),
+    });
+    const authoredMatch: Record<string, { identity: string }> = {};
+    Object.defineProperty(authoredMatch, "__proto__", {
+      value: { identity: "prototype-match" },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+
+    const view = changed.when(authoredMatch);
+    authoredMatch.__proto__!.identity = "mutated";
+
+    expect(Object.hasOwn(view.match, "__proto__")).toBe(true);
+    expect(Object.keys(view.match)).toEqual(["__proto__"]);
+    expect(Object.getOwnPropertyDescriptor(view.match, "__proto__")).toMatchObject({
+      value: { identity: "prototype-match" },
+      enumerable: true,
+    });
+    expect(Object.getPrototypeOf(view.match)).toBe(Object.prototype);
+    expect(Object.isFrozen(view.match.__proto__)).toBe(true);
+    expect(JSON.stringify(view.match)).toBe(
+      '{"__proto__":{"identity":"prototype-match"}}',
+    );
+  });
 });

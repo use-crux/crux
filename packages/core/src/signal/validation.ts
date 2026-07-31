@@ -6,6 +6,7 @@
 
 import { SignalError, SignalValidationError } from "./errors";
 import { cloneSignalJson, freezeSignalJson } from "./canonical-json";
+import type { StandardSchemaV1 } from "../internal/standard-schema";
 import type {
   InferSignalSchemaInput,
   InferSignalSchemaOutput,
@@ -21,19 +22,48 @@ export async function validateSignalPayload<
   schema: TSchema,
   payload: InferSignalSchemaInput<TSchema>,
 ): Promise<InferSignalSchemaOutput<TSchema>> {
-  let result;
+  let result: StandardSchemaV1.Result<InferSignalSchemaOutput<TSchema>>;
   try {
     result = await schema["~standard"].validate(payload);
   } catch {
-    throw new SignalError(
-      "publication_rejected",
-      `Signal \`${signalId}\` schema validation could not complete.`,
-    );
+    return publicationRejected(signalId);
   }
-  if (result.issues !== undefined) {
-    throw new SignalValidationError(result.issues);
+
+  let inspected:
+    | {
+        readonly success: true;
+        readonly value: InferSignalSchemaOutput<TSchema>;
+      }
+    | {
+        readonly success: false;
+        readonly issues: readonly StandardSchemaV1.Issue[];
+      };
+  try {
+    const issues = result.issues;
+    inspected =
+      issues === undefined
+        ? { success: true, value: result.value }
+        : { success: false, issues };
+  } catch {
+    return publicationRejected(signalId);
+  }
+  if (!inspected.success) {
+    let validationError: SignalValidationError;
+    try {
+      validationError = new SignalValidationError(inspected.issues);
+    } catch {
+      return publicationRejected(signalId);
+    }
+    throw validationError;
   }
   return freezeSignalJson(
-    cloneSignalJson(result.value, "normalized output"),
+    cloneSignalJson(inspected.value, "normalized output"),
+  );
+}
+
+function publicationRejected(signalId: string): never {
+  throw new SignalError(
+    "publication_rejected",
+    `Signal \`${signalId}\` schema validation could not complete.`,
   );
 }
