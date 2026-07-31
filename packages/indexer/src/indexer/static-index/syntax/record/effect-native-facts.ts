@@ -63,6 +63,8 @@ function effectProjection(
       ...(match.snippet ? { text: match.snippet.source } : {}),
     }),
     metadata: {
+      exportName: match.variableName,
+      ...(match.exported ? { exported: true } : {}),
       ...(analyzable
         ? {
             runtimeJoin: {

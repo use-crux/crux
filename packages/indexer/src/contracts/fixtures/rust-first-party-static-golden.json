@@ -10,7 +10,7 @@
     "relations": 6,
     "diagnostics": 36,
     "dependencies": 1820,
-    "canonicalBytes": 339990
+    "canonicalBytes": 340383
   },
   "files": [
     {
@@ -1932,8 +1932,8 @@
     },
     {
       "file": "packages/core/__type_tests__/effect.test-d.ts",
-      "sha256": "5184de875f37e8c1c78cb9af8e71fef476e78836692c7e823c111f4c4861f6a3",
-      "bytes": 11360,
+      "sha256": "db5e23416a6de1c8ea250d819a5b786145c997a6ac522f9e28bf23ec164ad464",
+      "bytes": 11521,
       "definitions": 6,
       "relations": 0,
       "diagnostics": 0,
@@ -5361,8 +5361,8 @@
     },
     {
       "file": "packages/indexer/fixtures/effect-static-project/effects.ts",
-      "sha256": "18491d2932b077c5f16b6053b1bcdb2f645d949800290f3b24402a733a126131",
-      "bytes": 8531,
+      "sha256": "5f8406f1b1c77f518db644118685b62cc949a1c542cb0b42e9113c8545afc992",
+      "bytes": 8763,
       "definitions": 5,
       "relations": 0,
       "diagnostics": 0,

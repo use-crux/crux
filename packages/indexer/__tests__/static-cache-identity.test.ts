@@ -48,8 +48,8 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v82");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v81");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v83");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v82");
   });
 
   it("takes the context-planning semantic epoch", () => {

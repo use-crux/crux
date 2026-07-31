@@ -36,6 +36,13 @@ describe("first-party shared static index fixtures", () => {
         expect(effects).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
+              name: "inventory.reserve",
+              metadata: expect.objectContaining({
+                exportName: "reserveInventory",
+                exported: true,
+              }),
+            }),
+            expect.objectContaining({
               name: "payments.charge",
               metadata: expect.objectContaining({
                 facts: {

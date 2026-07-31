@@ -39,6 +39,13 @@ pub(crate) fn effect_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
         "indexPresentation".to_string(),
         json!({ "standalone": true }),
     );
+    metadata.insert(
+        "exportName".to_string(),
+        Value::String(parts.variable_name.to_string()),
+    );
+    if parts.exported {
+        metadata.insert("exported".to_string(), Value::Bool(true));
+    }
     metadata.insert("facts".to_string(), facts);
 
     let mut definition = static_index_definition(NativeDefinitionInput {

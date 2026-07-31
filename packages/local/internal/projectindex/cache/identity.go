@@ -26,6 +26,7 @@ package cache
 // native analysis so duplicate-identity lints survive restart boundaries.
 // Epoch 58 combines the independently versioned Effects and context-planning
 // snapshots so neither parent branch's cached projection can mask the other.
+// Epoch 59 adds Effect export metadata used by generic LSP completion.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 58
+const ProjectIndexSnapshotCacheEpoch = 59

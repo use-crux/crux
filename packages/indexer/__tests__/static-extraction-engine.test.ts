@@ -131,7 +131,7 @@ describe("static extraction engine", () => {
           {
             kind: "syntax-frontend",
             name: "oxc-rust",
-            version: "oxc_parser@0.139.0+crux_native_group3.10",
+            version: "oxc_parser@0.139.0+crux_native_group3.11",
           },
         ]),
       );

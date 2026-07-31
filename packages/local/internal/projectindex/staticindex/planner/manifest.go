@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.10"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.11"
 
 var defaultCallNames = []string{
 	"Agent",
