@@ -5,9 +5,13 @@
  * @module
  */
 
-import type { EffectScopeRef } from "../types";
+import type {
+  EffectReceiptRef,
+  EffectScopeRef,
+} from "../types";
 
 let nextOccurrenceId = 0;
+let nextRecoveryAttemptId = 0;
 const nextIndexByIdentity = new Map<string, number>();
 
 /** Identity allocated before one custom effect executor runs. */
@@ -49,4 +53,21 @@ export function createEffectOccurrence(
     scopePath,
     index,
   });
+}
+
+/** Create the public reference for one allocated receipt. */
+export function createEffectReceiptRef(
+  id: string,
+  effectId: string,
+): EffectReceiptRef {
+  return Object.freeze({
+    kind: "effect.receipt",
+    id,
+    effectId,
+  });
+}
+
+/** Allocate a receipt identifier for one recovery-handler attempt. */
+export function createRecoveryAttemptReceiptId(): string {
+  return `effect-recovery-receipt:${++nextRecoveryAttemptId}`;
 }

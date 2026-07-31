@@ -157,6 +157,19 @@ export function createImplicitRootBoundary(): EffectScopeRef {
   });
 }
 
+/** Close a one-operation root after its effect settles. */
+export function closeImplicitRootBoundary(
+  boundary: EffectScopeRef,
+): void {
+  effectLedger.registerScope({
+    ref: boundary,
+    status: "closed",
+    unitIds: effectLedger
+      .unitsFor(boundary.id)
+      .map((unit) => unit.id),
+  });
+}
+
 function updateBoundaryRecord(
   boundary: EffectBoundaryState,
   status: "rolling_back" | "completed" | "closed",

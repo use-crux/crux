@@ -13,21 +13,28 @@ import type {
   EffectExecutor,
   EffectOptions,
   EffectRecoveryContext,
-  EffectScopeRef,
 } from "../types";
 import { currentScopeStack } from "../../scope/internal";
-import { CruxEffectError } from "../errors";
+import {
+  CruxEffectError,
+  EffectOutcomeUnknownError,
+  summarizeEffectError,
+} from "../errors";
 import {
   assertEffectBoundaryOpen,
+  closeImplicitRootBoundary,
   createImplicitRootBoundary,
   currentEffectBoundary,
 } from "./boundary";
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
-import { createEffectOccurrence } from "./occurrence";
+import {
+  createEffectOccurrence,
+  createEffectReceiptRef,
+} from "./occurrence";
 import {
   registerEffectStackEntry,
-  registerRecoveryUnit,
+  registerCustomRecoveryUnit,
 } from "./recovery-stack";
 
 type CapturedRecovery<TInput, TOutput> = {
@@ -108,7 +115,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       : "irreversible",
     startedAt: Date.now(),
   });
-  const ref = receiptRef(receipt.id, definition.id);
+  const ref = createEffectReceiptRef(receipt.id, definition.id);
   const input = args[0] as TInput;
   let resource: ReturnType<
     NonNullable<EffectOptions<TInput>["resource"]>
@@ -127,9 +134,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       outcome: "failed",
       recovery: "unavailable",
       completedAt: Date.now(),
-      error: summarizeError(failure),
+      error: summarizeEffectError(failure),
     });
-    if (ownsBoundary) closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw failure;
   }
 
@@ -151,9 +158,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         recovery: "unavailable",
         ...(resource === undefined ? {} : { resource }),
         completedAt: Date.now(),
-        error: summarizeError(failure),
+        error: summarizeEffectError(failure),
       });
-      if (ownsBoundary) closeImplicitBoundary(boundary);
+      if (ownsBoundary) closeImplicitRootBoundary(boundary);
       throw failure;
     }
   }
@@ -170,54 +177,21 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       scope: boundary,
     });
     if (options?.recover) {
-      const recovery = options.recover;
-      registerRecoveryUnit({
+      registerCustomRecoveryUnit({
         boundaryId: boundary.id,
         unitId: occurrence.recoveryUnitId,
         idempotencyKey: occurrence.recoveryIdempotencyKey,
         receipt: ref,
+        effectVersion: definition.version,
+        input,
+        output,
+        captured,
         ...(resource === undefined ? {} : { resource }),
-        envelope: Object.freeze({
-          schemaVersion: 1,
-          receiptId: receipt.id,
-          effectId: definition.id,
-          effectVersion: definition.version,
-          input,
-          output,
-          ...(typeof recovery === "function"
-            ? {}
-            : { captured }),
-          createdAt: Date.now(),
-          durable:
-            isOptionalJsonSafe(input) &&
-            isOptionalJsonSafe(output) &&
-            isOptionalJsonSafe(captured),
-        }),
-        execute: async ({
-          envelope,
-          receipt: recoveryReceipt,
-          resource: recoveryResource,
-          idempotencyKey,
-          options: recoverOptions,
-        }) => {
-          const baseContext = {
-            input: envelope.input as TInput,
-            output: envelope.output as TOutput,
-            receipt: recoveryReceipt,
-            resource: recoveryResource,
-            idempotencyKey,
-            conflict: recoverOptions?.conflict ?? "fail",
-            signal: recoverOptions?.signal,
-          };
-          if (typeof recovery === "function") {
-            await recovery(baseContext);
-            return;
-          }
-          await recovery.execute({
-            ...baseContext,
-            captured: envelope.captured,
-          });
-        },
+        durable:
+          isOptionalJsonSafe(input) &&
+          isOptionalJsonSafe(output) &&
+          isOptionalJsonSafe(captured),
+        recover: options.recover,
       });
     }
     effectLedger.transition(receipt.id, {
@@ -231,30 +205,52 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       completedAt: Date.now(),
     });
     registerEffectStackEntry(boundary.id, receipt.id);
-    if (ownsBoundary) closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitRootBoundary(boundary);
     return Object.freeze({
       output,
       receipt: ref,
     });
   } catch (error) {
+    if (error instanceof EffectOutcomeUnknownError) {
+      if (options?.recover) {
+        registerCustomRecoveryUnit({
+          boundaryId: boundary.id,
+          unitId: occurrence.recoveryUnitId,
+          idempotencyKey: occurrence.recoveryIdempotencyKey,
+          receipt: ref,
+          effectVersion: definition.version,
+          input,
+          output: undefined,
+          captured,
+          ...(resource === undefined ? {} : { resource }),
+          durable:
+            isOptionalJsonSafe(input) &&
+            isOptionalJsonSafe(captured),
+          status: "prepared",
+          recover: options.recover,
+        });
+      }
+      effectLedger.transition(receipt.id, {
+        outcome: "unknown",
+        recovery: "ambiguous",
+        ...(options?.recover
+          ? { recoveryUnitId: occurrence.recoveryUnitId }
+          : {}),
+        completedAt: Date.now(),
+        error: summarizeEffectError(error),
+      });
+      registerEffectStackEntry(boundary.id, receipt.id);
+      if (ownsBoundary) closeImplicitRootBoundary(boundary);
+      throw error;
+    }
     effectLedger.transition(receipt.id, {
       outcome: "failed",
       completedAt: Date.now(),
-      error: summarizeError(error),
+      error: summarizeEffectError(error),
     });
-    if (ownsBoundary) closeImplicitBoundary(boundary);
+    if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw error;
   }
-}
-
-function closeImplicitBoundary(boundary: EffectScopeRef): void {
-  effectLedger.registerScope({
-    ref: boundary,
-    status: "closed",
-    unitIds: effectLedger
-      .unitsFor(boundary.id)
-      .map((unit) => unit.id),
-  });
 }
 
 function isOptionalJsonSafe(value: unknown): boolean {
@@ -267,33 +263,4 @@ function preparationError(
   cause: unknown,
 ): CruxEffectError {
   return new CruxEffectError({ code, message, cause });
-}
-
-function receiptRef(id: string, effectId: string) {
-  return Object.freeze({
-    kind: "effect.receipt" as const,
-    id,
-    effectId,
-  });
-}
-
-function summarizeError(error: unknown): {
-  readonly code: string;
-  readonly message: string;
-} {
-  if (error instanceof Error) {
-    return {
-      code: stringCode(error) ?? error.name,
-      message: error.message,
-    };
-  }
-  return {
-    code: "UnknownError",
-    message: String(error),
-  };
-}
-
-function stringCode(error: Error): string | undefined {
-  const value = (error as Error & { readonly code?: unknown }).code;
-  return typeof value === "string" ? value : undefined;
 }

@@ -1,8 +1,15 @@
 /** Compile-time contract for callable custom effect definitions. */
 
 import { expectTypeOf } from "vitest";
-import { effect, recover, rollback } from "../src/effect/index";
+import { reconcileEffect as reconcileEffectFromRoot } from "@use-crux/core";
+import {
+  effect,
+  reconcileEffect,
+  recover,
+  rollback,
+} from "@use-crux/core/effect";
 import type {
+  EffectReceipt,
   EffectReceiptRef,
   EffectDefinition,
   EffectExecutionContext,
@@ -10,10 +17,11 @@ import type {
   EffectScopeRef,
   RecoverableEffectDefinition,
   RecoverableEffectOptions,
+  ReconcileEffect,
   RecoveryUnitResult,
   RollbackOptions,
   RollbackResult,
-} from "../src/effect/index";
+} from "@use-crux/core/effect";
 
 const lookupCustomer = effect(
   "customers.lookup",
@@ -149,3 +157,15 @@ expectTypeOf(
 ).toEqualTypeOf<Promise<RollbackResult>>();
 // @ts-expect-error rollback accepts scope references, not receipt references
 rollback(receiptRef);
+
+expectTypeOf(
+  reconcileEffect(receiptRef, {
+    outcome: "succeeded",
+    output: { revision: 2 },
+    reason: "Provider confirmation",
+  }),
+).toEqualTypeOf<Promise<EffectReceipt>>();
+expectTypeOf(reconcileEffectFromRoot).toEqualTypeOf(
+  reconcileEffect,
+);
+expectTypeOf(reconcileEffect).toMatchTypeOf<ReconcileEffect>();

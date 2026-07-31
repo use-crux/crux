@@ -13,68 +13,32 @@ import type {
   RecoveryUnitLifecycle,
   RecoveryUnitRecord,
 } from "../receipt-types";
+import type { EffectResource } from "../types";
 import type {
-  EffectReceiptRef,
-  EffectResource,
-  RecoverOptions,
-  RecoveryUnitResult,
-} from "../types";
-import type {
+  RecoveryHandlerInvocation,
+  RecoveryOperationResult,
   RecoveryStackEntry,
   RegisteredRecoveryUnit,
+  StoredRecoveryEnvelope,
 } from "./recovery-stack";
-
-/** Settlement shared by callers joining one in-flight recovery. */
-export interface RecoveryOperationResult {
-  readonly result: RecoveryUnitResult;
-  readonly error?: unknown;
-}
-
-/** Ephemeral recovery data retained only inside the in-memory ledger. */
-export interface StoredRecoveryEnvelope {
-  readonly schemaVersion: 1;
-  readonly receiptId: string;
-  /** Effect definition identifier. */
-  readonly effectId: string;
-  /** Effect definition version. */
-  readonly effectVersion: number;
-  /** Original input, retained by reference. */
-  readonly input: unknown;
-  /** Settled output, retained by reference. */
-  readonly output: unknown;
-  /** Captured pre-state, when configured. */
-  readonly captured?: unknown;
-  /** Envelope creation time in epoch milliseconds. */
-  readonly createdAt: number;
-  /** Whether every retained value is JSON-safe. */
-  readonly durable: boolean;
-}
-
-/** Input supplied by the ledger to a registered recovery handler. */
-export interface RecoveryHandlerInvocation {
-  /** Retained recovery data. */
-  readonly envelope: StoredRecoveryEnvelope;
-  /** Original receipt reference. */
-  readonly receipt: EffectReceiptRef;
-  /** Safe projected resource identity. */
-  readonly resource?: EffectResource | readonly EffectResource[];
-  /** Stable unit idempotency key. */
-  readonly idempotencyKey: string;
-  readonly options?: RecoverOptions;
-}
+import {
+  commitLedgerReconciliation,
+  type LedgerReconciliation,
+  type ReconciliationAudit,
+  type ReconciliationLedgerState,
+} from "./reconcile";
 
 /** Fields required to allocate a preparing receipt. */
 export interface EffectReceiptInit {
-  /** Stable receipt identifier. */
   readonly id: string;
-  /** Stable effect identifier. */
   readonly effectId: string;
-  /** Effect contract version. */
   readonly effectVersion: number;
-  /** Owning execution scope identifier. */
   readonly scopeId: string;
-  /** Nearest rollback boundary identifier. */
   readonly boundaryId: string;
+  /** Original receipt when this record describes recovery. */
+  readonly parentReceiptId?: string;
+  /** Recovery unit this record attempts to settle. */
+  readonly recoveryUnitId?: string;
   /** Containing run identifier. */
   readonly runId?: string;
   /** Initial recovery availability. */
@@ -84,15 +48,11 @@ export interface EffectReceiptInit {
 
 /** Monotonic patch applied to an existing receipt. */
 export interface ReceiptTransition {
-  /** Next lifecycle outcome. */
   readonly outcome: Exclude<EffectOutcome, "preparing">;
-  /** Updated recovery availability. */
   readonly recovery?: RecoveryAvailability;
   /** Safe projected resource identity. */
   readonly resource?: EffectResource | readonly EffectResource[];
-  /** Registered recovery unit identifier. */
   readonly recoveryUnitId?: string;
-  /** Terminal completion time. */
   readonly completedAt?: number;
   /** Structured failure summary. */
   readonly error?: {
@@ -105,39 +65,26 @@ export interface ReceiptTransition {
 
 /** Single owner of effect state. */
 export interface EffectLedger {
-  /** Allocate a preparing receipt. */
   createReceipt(init: EffectReceiptInit): EffectReceipt;
-  /** Apply one legal monotonic receipt transition. */
   transition(receiptId: string, patch: ReceiptTransition): EffectReceipt;
-  /** Retain one recovery envelope. */
+  reconcile(command: LedgerReconciliation): EffectReceipt;
   putEnvelope(envelope: StoredRecoveryEnvelope): void;
-  /** Register a scope read model. */
   registerScope(scope: EffectScopeRecord): void;
-  /** Register one recovery unit. */
   registerUnit(boundaryId: string, unit: RegisteredRecoveryUnit): void;
-  /** Append one settled effect or child boundary to the causal stack. */
   appendStackEntry(boundaryId: string, entry: RecoveryStackEntry): void;
-  /** Update a recovery unit lifecycle. */
   markUnit(
     unitId: string,
     status: RecoveryUnitLifecycle,
     recoveryOperation?: Promise<RecoveryOperationResult>,
   ): void;
-  /** Fold a recovery availability update onto one receipt. */
   markReceiptRecovery(receiptId: string, recovery: RecoveryAvailability): void;
-  /** Read one receipt. */
   getReceipt(id: string): EffectReceipt | undefined;
-  /** Read retained recovery data. */
   getEnvelope(receiptId: string): StoredRecoveryEnvelope | undefined;
-  /** Read one registered recovery unit. */
   getUnit(unitId: string): RegisteredRecoveryUnit | undefined;
-  /** Read one scope. */
   getScope(id: string): EffectScopeRecord | undefined;
-  /** Read receipts in execution order for one boundary. */
   receiptsFor(boundaryId: string): readonly EffectReceipt[];
-  /** Read ordered units for one boundary. */
+  reconciliationsFor(receiptId: string): readonly ReconciliationAudit[];
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
-  /** Read the causal recovery stack for one boundary. */
   stackFor(boundaryId: string): readonly RecoveryStackEntry[];
 }
 
@@ -147,6 +94,28 @@ const scopes = new Map<string, EffectScopeRecord>();
 const units = new Map<string, RegisteredRecoveryUnit>();
 const unitIdsByBoundary = new Map<string, string[]>();
 const stacksByBoundary = new Map<string, RecoveryStackEntry[]>();
+const reconciliationAudits = new Map<string, ReconciliationAudit[]>();
+
+const reconciliationState: ReconciliationLedgerState = {
+  getReceipt: (id) => receipts.get(id),
+  getEnvelope: (receiptId) => envelopes.get(receiptId),
+  getUnit: (unitId) => units.get(unitId),
+  commit(change) {
+    for (const receipt of change.receipts) {
+      receipts.set(receipt.id, receipt);
+    }
+    if (change.envelope) {
+      envelopes.set(change.envelope.receiptId, change.envelope);
+    }
+    if (change.unit) units.set(change.unit.id, change.unit);
+    if (change.discardUnit) discardPreparedUnit(change.discardUnit);
+    const audits = reconciliationAudits.get(change.audit.receiptId) ?? [];
+    reconciliationAudits.set(
+      change.audit.receiptId,
+      [...audits, change.audit],
+    );
+  },
+};
 
 const terminalOutcomes = new Set<EffectOutcome>([
   "succeeded",
@@ -170,10 +139,12 @@ export const effectLedger: EffectLedger = {
       effectKind: "custom",
       scopeId: init.scopeId,
       boundaryId: init.boundaryId,
+      ...(init.parentReceiptId === undefined ? {} : { parentReceiptId: init.parentReceiptId }),
       ...(init.runId === undefined ? {} : { runId: init.runId }),
       attemptCount: 1,
       outcome: "preparing",
       recovery: init.recovery,
+      ...(init.recoveryUnitId === undefined ? {} : { recoveryUnitId: init.recoveryUnitId }),
       startedAt: init.startedAt,
     });
     receipts.set(receipt.id, receipt);
@@ -205,6 +176,10 @@ export const effectLedger: EffectLedger = {
     });
     receipts.set(receiptId, next);
     return next;
+  },
+
+  reconcile(command) {
+    return commitLedgerReconciliation(command, reconciliationState);
   },
 
   putEnvelope(envelope) {
@@ -242,10 +217,7 @@ export const effectLedger: EffectLedger = {
     if (!current) {
       throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
     }
-    receipts.set(
-      receiptId,
-      Object.freeze({ ...current, recovery }),
-    );
+    receipts.set(receiptId, Object.freeze({ ...current, recovery }));
   },
 
   getReceipt(id) {
@@ -270,6 +242,10 @@ export const effectLedger: EffectLedger = {
     );
   },
 
+  reconciliationsFor(receiptId) {
+    return reconciliationAudits.get(receiptId) ?? [];
+  },
+
   unitsFor(boundaryId) {
     return (unitIdsByBoundary.get(boundaryId) ?? [])
       .map((id) => units.get(id))
@@ -282,6 +258,26 @@ export const effectLedger: EffectLedger = {
     return stacksByBoundary.get(boundaryId) ?? [];
   },
 };
+
+function discardPreparedUnit(unit: RegisteredRecoveryUnit): void {
+  units.delete(unit.id);
+  unitIdsByBoundary.set(
+    unit.boundaryId,
+    (unitIdsByBoundary.get(unit.boundaryId) ?? []).filter(
+      (id) => id !== unit.id,
+    ),
+  );
+  for (const receiptId of unit.receiptIds) {
+    envelopes.delete(receiptId);
+  }
+  const scope = scopes.get(unit.boundaryId);
+  if (scope) {
+    scopes.set(unit.boundaryId, Object.freeze({
+      ...scope,
+      unitIds: scope.unitIds.filter((id) => id !== unit.id),
+    }));
+  }
+}
 
 function assertTransition(
   from: EffectOutcome,

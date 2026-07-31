@@ -141,6 +141,17 @@ export function planRollback(
     }
     const receipt = receiptsById.get(entry.receiptId);
     if (!receipt) continue;
+    if (receipt.outcome === "unknown") {
+      steps.push({
+        kind: "settle",
+        result: unitResult(
+          receipt,
+          receipt.recoveryUnitId ?? `effect-unit:${receipt.id}`,
+          "ambiguous",
+        ),
+      });
+      continue;
+    }
     if (receipt.outcome !== "succeeded") continue;
     const unit = receipt.recoveryUnitId
       ? unitsById.get(receipt.recoveryUnitId)

@@ -4,12 +4,23 @@
  * @module
  */
 
-import { CruxEffectError } from "./errors";
 import {
-  effectLedger,
+  assertEffectReceiptRef,
+  CruxEffectError,
+  EffectOutcomeUnknownError,
+  effectReceiptNotFound,
+  summarizeEffectError,
+} from "./errors";
+import type { EffectReceipt } from "./receipt-types";
+import {
+  createRecoveryUnitResult,
   type RecoveryOperationResult,
-} from "./internal/ledger";
+} from "./internal/recovery-stack";
+import { effectLedger } from "./internal/ledger";
+import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
+import { reconcileEffectReceipt } from "./internal/reconcile";
 import type {
+  EffectReconciliation,
   EffectReceiptRef,
   RecoverOptions,
   RecoveryUnitResult,
@@ -45,6 +56,28 @@ export async function recover(
 }
 
 /**
+ * Reconcile an effect execution whose external outcome was unknown.
+ *
+ * @param receipt - Ambiguous receipt to settle.
+ * @param resolution - Confirmed outcome and audit reason.
+ * @returns The reconciled immutable receipt.
+ *
+ * @example
+ * ```ts
+ * await reconcileEffect(receipt, {
+ *   outcome: "failed",
+ *   reason: "The provider confirms no change was made",
+ * })
+ * ```
+ */
+export async function reconcileEffect(
+  receipt: EffectReceiptRef,
+  resolution: EffectReconciliation,
+): Promise<EffectReceipt> {
+  return reconcileEffectReceipt(receipt, resolution);
+}
+
+/**
  * Recover one receipt while retaining a raw handler error for boundaries.
  *
  * @internal
@@ -53,13 +86,27 @@ export async function recoverEffectReceiptAttempt(
   receipt: EffectReceiptRef,
   options?: RecoverOptions,
 ): Promise<EffectRecoveryAttempt> {
-  assertReceiptRef(receipt);
+  assertEffectReceiptRef(receipt);
   const storedReceipt = effectLedger.getReceipt(receipt.id);
   if (
     !storedReceipt ||
     storedReceipt.effectId !== receipt.effectId
   ) {
-    throw receiptNotFound(receipt.id);
+    throw effectReceiptNotFound(receipt.id);
+  }
+  if (storedReceipt.outcome === "unknown") {
+    return Object.freeze({
+      result: createRecoveryUnitResult(
+        {
+          id:
+            storedReceipt.recoveryUnitId ??
+            `effect-unit:${storedReceipt.id}`,
+          effectIds: [storedReceipt.effectId],
+        },
+        storedReceipt.resource,
+        "ambiguous",
+      ),
+    });
   }
 
   const unitId = storedReceipt.recoveryUnitId;
@@ -82,7 +129,7 @@ export async function recoverEffectReceiptAttempt(
     });
   }
   if (unit.kind !== "effect") {
-    throw receiptNotFound(receipt.id);
+    throw effectReceiptNotFound(receipt.id);
   }
   if (unit.receiptIds.length !== 1) {
     throw new CruxEffectError({
@@ -94,7 +141,7 @@ export async function recoverEffectReceiptAttempt(
   }
   if (unit.status === "recovered") {
     return Object.freeze({
-      result: unitResult(
+      result: createRecoveryUnitResult(
         unit,
         storedReceipt.resource,
         "already_recovered",
@@ -111,7 +158,7 @@ export async function recoverEffectReceiptAttempt(
   const envelope = effectLedger.getEnvelope(storedReceipt.id);
   if (!envelope) {
     return Object.freeze({
-      result: unitResult(
+      result: createRecoveryUnitResult(
         unit,
         storedReceipt.resource,
         "unavailable",
@@ -121,6 +168,23 @@ export async function recoverEffectReceiptAttempt(
 
   const operation = Promise.resolve().then(
     async (): Promise<EffectRecoveryAttempt> => {
+      const attempt = effectLedger.createReceipt({
+        id: createRecoveryAttemptReceiptId(),
+        effectId: storedReceipt.effectId,
+        effectVersion: storedReceipt.effectVersion,
+        scopeId: storedReceipt.scopeId,
+        boundaryId: storedReceipt.boundaryId,
+        parentReceiptId: storedReceipt.id,
+        recoveryUnitId: unit.id,
+        ...(storedReceipt.runId === undefined
+          ? {}
+          : { runId: storedReceipt.runId }),
+        recovery: "unavailable",
+        startedAt: Date.now(),
+      });
+      effectLedger.transition(attempt.id, {
+        outcome: "running",
+      });
       try {
         await unit.execute({
           envelope,
@@ -133,28 +197,60 @@ export async function recoverEffectReceiptAttempt(
           idempotencyKey: unit.idempotencyKey,
           options,
         });
+        effectLedger.transition(attempt.id, {
+          outcome: "succeeded",
+          completedAt: Date.now(),
+        });
         effectLedger.markUnit(unit.id, "recovered");
         effectLedger.markReceiptRecovery(
           storedReceipt.id,
           "recovered",
         );
         return Object.freeze({
-          result: unitResult(
+          result: createRecoveryUnitResult(
             unit,
             storedReceipt.resource,
             "recovered",
           ),
         });
       } catch (error) {
+        if (error instanceof EffectOutcomeUnknownError) {
+          effectLedger.transition(attempt.id, {
+            outcome: "unknown",
+            recovery: "ambiguous",
+            completedAt: Date.now(),
+            error: summarizeEffectError(error),
+          });
+          effectLedger.markReceiptRecovery(
+            storedReceipt.id,
+            "ambiguous",
+          );
+          return Object.freeze({
+            result: Object.freeze({
+              ...createRecoveryUnitResult(
+                unit,
+                storedReceipt.resource,
+                "ambiguous",
+              ),
+              error: summarizeEffectError(error),
+            }),
+            error,
+          });
+        }
+        effectLedger.transition(attempt.id, {
+          outcome: "failed",
+          completedAt: Date.now(),
+          error: summarizeEffectError(error),
+        });
         effectLedger.markUnit(unit.id, "failed");
         return Object.freeze({
           result: Object.freeze({
-            ...unitResult(
+            ...createRecoveryUnitResult(
               unit,
               storedReceipt.resource,
               "failed",
             ),
-            error: summarizeError(error),
+            error: summarizeEffectError(error),
           }),
           error,
         });
@@ -176,7 +272,7 @@ export async function recoverEffectReceiptForDefinition(
     receipt.kind !== "effect.receipt" ||
     receipt.effectId !== effectId
   ) {
-    throw receiptNotFound(
+    throw effectReceiptNotFound(
       isRecord(receipt) && typeof receipt.id === "string"
         ? receipt.id
         : "unknown",
@@ -185,63 +281,6 @@ export async function recoverEffectReceiptForDefinition(
   return recover(receipt, options);
 }
 
-function assertReceiptRef(receipt: EffectReceiptRef): void {
-  const value: unknown = receipt;
-  if (isRecord(value) && value.kind === "effect.scope") {
-    const id =
-      typeof value.id === "string" ? value.id : "unknown";
-    throw new CruxEffectError({
-      code: "EFFECT_SCOPE_NOT_FOUND",
-      message: `Effect scope \`${id}\` cannot be recovered as a receipt.`,
-    });
-  }
-  if (
-    !isRecord(value) ||
-    value.kind !== "effect.receipt" ||
-    typeof value.id !== "string" ||
-    typeof value.effectId !== "string"
-  ) {
-    throw receiptNotFound("unknown");
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function receiptNotFound(id: string): CruxEffectError {
-  return new CruxEffectError({
-    code: "EFFECT_RECEIPT_NOT_FOUND",
-    message: `Effect receipt \`${id}\` was not found.`,
-  });
-}
-
-function unitResult(
-  unit: {
-    readonly id: string;
-    readonly effectIds: readonly string[];
-  },
-  resource: RecoveryUnitResult["resource"],
-  status: RecoveryUnitResult["status"],
-): RecoveryUnitResult {
-  return Object.freeze({
-    unitId: unit.id,
-    effectIds: unit.effectIds,
-    ...(resource === undefined ? {} : { resource }),
-    status,
-  });
-}
-
-function summarizeError(error: unknown): {
-  readonly code: string;
-  readonly message: string;
-} {
-  if (error instanceof Error) {
-    const code = (error as Error & { readonly code?: unknown }).code;
-    return {
-      code: typeof code === "string" ? code : error.name,
-      message: error.message,
-    };
-  }
-  return { code: "UnknownError", message: String(error) };
 }

@@ -4,7 +4,10 @@
  * @module
  */
 
-import type { RollbackResult } from "./types";
+import type {
+  EffectReceiptRef,
+  RollbackResult,
+} from "./types";
 
 /** Stable public effect diagnostic codes, including reserved future codes. */
 export const EFFECT_ERROR_CODES = [
@@ -37,14 +40,31 @@ export interface EffectErrorInput {
   readonly cause?: unknown;
 }
 
-/** Error thrown when an effect lifecycle contract cannot be honored. */
+/**
+ * Error thrown when an effect lifecycle contract cannot be honored.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await rollback(scope)
+ * } catch (error) {
+ *   if (error instanceof CruxEffectError) {
+ *     console.error(error.code, error.docsUrl)
+ *   }
+ * }
+ * ```
+ */
 export class CruxEffectError extends Error {
   /** Stable machine-readable diagnostic code. */
   readonly code: CruxEffectErrorCode;
   /** Canonical documentation URL for this diagnostic. */
   readonly docsUrl: string;
 
-  /** Create a structured effect diagnostic. */
+  /**
+   * Create a structured effect diagnostic.
+   *
+   * @param input - Stable code, message, and optional original cause.
+   */
   constructor(input: EffectErrorInput) {
     const docsUrl = `https://cruxjs.dev/docs/errors/${input.code}`;
     super(`${input.message}\n\nCode: ${input.code}\nDocs: ${docsUrl}`, {
@@ -61,12 +81,27 @@ export type EffectOutcomeUnknownDetails = Readonly<
   Record<string, unknown>
 >;
 
-/** Explicitly classifies an effect outcome as externally ambiguous. */
+/**
+ * Explicitly classifies an effect outcome as externally ambiguous.
+ *
+ * @example
+ * ```ts
+ * throw new EffectOutcomeUnknownError("Provider timed out", {
+ *   providerOperationId,
+ * })
+ * ```
+ */
 export class EffectOutcomeUnknownError extends CruxEffectError {
   /** Provider-specific diagnostic details retained for reconciliation. */
   readonly details?: EffectOutcomeUnknownDetails;
 
-  /** Create an ambiguous-outcome diagnostic. */
+  /**
+   * Create an ambiguous-outcome diagnostic.
+   *
+   * @param message - Concise description of the unknown outcome.
+   * @param details - Provider identifiers useful during reconciliation.
+   * @param options - Optional original cause.
+   */
   constructor(
     message: string,
     details?: EffectOutcomeUnknownDetails,
@@ -94,14 +129,31 @@ export interface RollbackErrorInput {
   readonly message?: string;
 }
 
-/** Error thrown when rollback cannot complete honestly. */
+/**
+ * Error thrown when rollback cannot complete honestly.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await rollbackOnError(run)
+ * } catch (error) {
+ *   if (error instanceof RollbackError) {
+ *     console.error(error.result?.status)
+ *   }
+ * }
+ * ```
+ */
 export class RollbackError extends CruxEffectError {
   /** Aggregate rollback result, when available. */
   readonly result?: RollbackResult;
   /** Recovery-system error tracked before a result existed. */
   readonly recoveryError?: unknown;
 
-  /** Create an incomplete rollback diagnostic. */
+  /**
+   * Create an incomplete rollback diagnostic.
+   *
+   * @param input - Rollback result, underlying failures, and message.
+   */
   constructor(input: RollbackErrorInput = {}) {
     super({
       code: "EFFECT_ROLLBACK_PARTIAL",
@@ -112,4 +164,53 @@ export class RollbackError extends CruxEffectError {
     this.result = input.result;
     this.recoveryError = input.recoveryError;
   }
+}
+
+/** Convert a thrown value to a receipt-safe error summary. @internal */
+export function summarizeEffectError(error: unknown): {
+  readonly code: string;
+  readonly message: string;
+} {
+  if (error instanceof Error) {
+    const code = (error as Error & { readonly code?: unknown }).code;
+    return {
+      code: typeof code === "string" ? code : error.name,
+      message: error.message,
+    };
+  }
+  return { code: "UnknownError", message: String(error) };
+}
+
+/** Validate an individual-recovery receipt reference. @internal */
+export function assertEffectReceiptRef(
+  value: unknown,
+): asserts value is EffectReceiptRef {
+  if (isRecord(value) && value.kind === "effect.scope") {
+    const id =
+      typeof value.id === "string" ? value.id : "unknown";
+    throw new CruxEffectError({
+      code: "EFFECT_SCOPE_NOT_FOUND",
+      message: `Effect scope \`${id}\` cannot be recovered as a receipt.`,
+    });
+  }
+  if (
+    !isRecord(value) ||
+    value.kind !== "effect.receipt" ||
+    typeof value.id !== "string" ||
+    typeof value.effectId !== "string"
+  ) {
+    throw effectReceiptNotFound("unknown");
+  }
+}
+
+/** Create the canonical unknown-receipt diagnostic. @internal */
+export function effectReceiptNotFound(id: string): CruxEffectError {
+  return new CruxEffectError({
+    code: "EFFECT_RECEIPT_NOT_FOUND",
+    message: `Effect receipt \`${id}\` was not found.`,
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
