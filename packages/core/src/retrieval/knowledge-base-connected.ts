@@ -1,10 +1,9 @@
 /**
  * Connected-knowledge integration for the knowledge base runtime.
  *
- * Owns the graph binding cache and the derive → compile → cleanup passes that
- * run around indexing and removal, so the runtime module stays focused on
- * indexing and retrieval wiring. Every pass is a no-op unless the configured
- * pipeline declares derive stages.
+ * Owns the graph binding cache, view membership maintenance, and the
+ * derive → compile → cleanup passes that run around indexing and removal, so
+ * the runtime module stays focused on indexing and retrieval wiring.
  *
  * @module
  */
@@ -13,6 +12,7 @@ import { indexedNamespacePrefix, indexedSourcePrefix, listIndexedEntries } from 
 import { compileKnowledgeGeneration, deleteKnowledgeClaimsForSource } from '../knowledge/compile'
 import { runDeriveStages } from '../knowledge/derive/runner'
 import { createKnowledgeGraphStore } from '../knowledge/graph-store'
+import { createKnowledgeViewRegistry, type KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { KnowledgeGenerationRetention } from '../knowledge/generation'
 import type { CruxChunk, CruxDocument, IndexingPipeline } from '../indexing'
 import type { JsonObject, RecordStore } from '../storage'
@@ -31,9 +31,11 @@ export interface ConnectedKnowledgeIntegrationConfig {
 export interface ConnectedKnowledgeIntegration {
   /** Return recipe-step graph access when records are configured. */
   binding(): RetrievalKnowledgeBinding | undefined
-  /** Run derive stages over active sources and compile a fresh generation. */
-  afterIndex(): Promise<void>
-  /** Drop a removed source's claims and recompile the graph. */
+  /** Return the per-runtime view registry. */
+  viewRegistry(): KnowledgeViewRegistry
+  /** Update view membership, then run derive stages and compile when configured. */
+  afterIndex(sourceIds?: readonly string[]): Promise<void>
+  /** Drop removed-source view membership and claims, then recompile when configured. */
   afterRemove(sourceId: string): Promise<void>
 }
 
@@ -43,6 +45,7 @@ export function createConnectedKnowledgeIntegration(
 ): ConnectedKnowledgeIntegration {
   const { records, indexerId, namespace } = config
   let graphStore: ReturnType<typeof createKnowledgeGraphStore> | undefined
+  const views = createKnowledgeViewRegistry({ records, indexerId, namespace })
 
   function binding(): RetrievalKnowledgeBinding | undefined {
     if (!records) return undefined
@@ -60,36 +63,44 @@ export function createConnectedKnowledgeIntegration(
     graphStore = undefined
   }
 
-  async function afterIndex(): Promise<void> {
-    if (!records || !hasDeriveStages(config.pipeline)) return
-    for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
-      const source = await activeSource(records, indexerId, namespace, sourceId)
-      if (!source) continue
-      await runDeriveStages({
-        records,
-        indexerId,
-        namespace,
-        stages: config.pipeline.derive,
-        document: source.document,
-        chunks: source.chunks,
-      })
+  async function afterIndex(sourceIds?: readonly string[]): Promise<void> {
+    await views.afterIndex(sourceIds)
+    if (records && hasDeriveStages(config.pipeline)) {
+      for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
+        const source = await activeSource(records, indexerId, namespace, sourceId)
+        if (!source) continue
+        await runDeriveStages({
+          records,
+          indexerId,
+          namespace,
+          stages: config.pipeline.derive,
+          document: source.document,
+          chunks: source.chunks,
+        })
+      }
+      await compile()
     }
-    await compile()
   }
 
   async function afterRemove(sourceId: string): Promise<void> {
-    if (!records || !hasDeriveStages(config.pipeline)) return
-    await deleteKnowledgeClaimsForSource({
-      records,
-      indexerId,
-      namespace,
-      sourceId,
-      stageIds: config.pipeline.derive.map((stage) => stage.id),
-    })
-    await compile()
+    await views.afterRemove(sourceId)
+    if (records && hasDeriveStages(config.pipeline)) {
+      await deleteKnowledgeClaimsForSource({
+        records,
+        indexerId,
+        namespace,
+        sourceId,
+        stageIds: config.pipeline.derive.map((stage) => stage.id),
+      })
+      await compile()
+    }
   }
 
-  return Object.freeze({ binding, afterIndex, afterRemove })
+  function viewRegistry(): KnowledgeViewRegistry {
+    return views
+  }
+
+  return Object.freeze({ binding, viewRegistry, afterIndex, afterRemove })
 }
 
 function hasDeriveStages(pipeline: IndexingPipeline | undefined): pipeline is IndexingPipeline & {

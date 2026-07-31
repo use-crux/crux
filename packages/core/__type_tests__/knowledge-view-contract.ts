@@ -2,6 +2,8 @@
 
 import { expectTypeOf } from 'vitest'
 import type { ViewWhere, WhereClause } from '../src/knowledge/view/where'
+import { z } from 'zod'
+import { knowledgeBase } from '../src/knowledge'
 
 interface Metadata {
   readonly status: 'open' | 'closed'
@@ -52,3 +54,21 @@ const invalidUnknownField: ViewWhere<Metadata> = {
 void invalidArrayField
 void invalidObjectField
 void invalidUnknownField
+
+const schema = z.object({
+  status: z.enum(['open', 'closed']),
+  owner: z.string().optional(),
+  rank: z.number(),
+  tags: z.array(z.string()),
+})
+const kb = knowledgeBase({ id: 'docs', metadataSchema: schema })
+
+kb.view({ id: 'active', where: { status: 'open', owner: ['docs', 'core'], rank: 1 } })
+
+kb.view({
+  id: 'bad',
+  where: {
+    // @ts-expect-error - view predicates are typed by metadataSchema fields.
+    missing: 'value',
+  },
+})

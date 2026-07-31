@@ -18,6 +18,7 @@ import type { Grounding, GroundingConfig } from '../citations'
 import type { MetadataFilter } from './request'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from './types'
 import { createKnowledgeBaseRuntime } from './knowledge-base-runtime'
+import { createKnowledgeBaseView } from './knowledge-base-views'
 import { retrievalRecipe, type RetrievalRecipe, type RetrievalRecipeConfig } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
@@ -28,6 +29,7 @@ import type {
   KnowledgeBaseSource,
 } from './knowledge-base-runtime'
 import type { CorpusSyncResult } from '../indexing'
+import type { KnowledgeBaseViewConfig, KnowledgeView } from '../knowledge/view/view'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -145,6 +147,8 @@ export interface KnowledgeBase<
   remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
   /** Return a tenant-scoped handle with structural key-level isolation. */
   scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase<TMetadataSchema, TModality>
+  /** Return a live connected knowledge view selected by schema-typed metadata. */
+  view(config: KnowledgeBaseViewConfig<TMetadataSchema>): KnowledgeView<TMetadataSchema, TModality>
   /** Return this knowledge base as a retriever. */
   retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>, TModality>
   /** Return this knowledge base as a retrieval recipe. */
@@ -193,6 +197,17 @@ function createKnowledgeBaseHandle<
     remove: runtime.remove,
     scope: (scopeConfig: KnowledgeBaseScopeConfig) =>
       createKnowledgeBaseHandle({ ...config, namespace: scopeConfig.namespace }, false),
+    view: (viewConfig: KnowledgeBaseViewConfig<TMetadataSchema>) =>
+      createKnowledgeBaseView({
+        id: config.id,
+        namespace: config.namespace,
+        metadataSchema: config.metadataSchema,
+        view: viewConfig,
+        records: config.records ?? config.storage?.records,
+        registry: runtime.viewRegistry(),
+        retriever: runtime.retriever,
+        knowledgeBinding: runtime.knowledgeBinding,
+      }),
     retriever: (retrieverConfig?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>) =>
       runtime.retriever(retrieverConfig),
     recipe: <const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(

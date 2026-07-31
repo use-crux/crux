@@ -13,3 +13,5 @@ Export `relate()` and `knowledgeModel()` from the canonical `@use-crux/core/know
 Add built-in `relateReferences()` and `relateEntities({ model })` relation stages for explicit references and generic entity connections.
 
 Validate `knowledgeBase({ metadataSchema })` metadata during ingestion so invalid direct sources are skipped with aggregate diagnostics after valid sources index, while corpus-backed sources report schema failures through per-source sync outcomes.
+
+Add `knowledgeBase().view()` for schema-typed connected knowledge views with live and pinned revisions, view-scoped retrieval, recipes, grounding, and tools.

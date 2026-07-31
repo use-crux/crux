@@ -44,3 +44,12 @@ export {
 } from './refs'
 export type { KnowledgeRef, KnowledgeRefKind } from './refs'
 export type { KnowledgeGraphReader, KnowledgeNeighbor, StructuralRelationType } from './graph-types'
+export type {
+  KnowledgeBaseViewConfig,
+  KnowledgeView,
+  KnowledgeViewInspection,
+  KnowledgeViewRecipeConfig,
+  KnowledgeViewResolution,
+  KnowledgeViewRetrieverConfig,
+} from './view/view'
+export type { ViewWhere, WhereClause } from './view/where'

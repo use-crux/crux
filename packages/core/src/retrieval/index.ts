@@ -28,9 +28,19 @@ export type {
   KnowledgeBaseGroundingConfig,
   KnowledgeBaseInspection,
   KnowledgeBaseRecipeConfig,
+  KnowledgeBaseRetrieverConfig,
   KnowledgeBaseScopeConfig,
+  KnowledgeBaseFilter,
   ScopedKnowledgeBase,
 } from './knowledge-base'
+export type {
+  KnowledgeBaseViewConfig,
+  KnowledgeView,
+  KnowledgeViewInspection,
+  KnowledgeViewRecipeConfig,
+  KnowledgeViewResolution,
+  KnowledgeViewRetrieverConfig,
+} from '../knowledge/view/view'
 export type { RetrievalModel } from './model'
 export type { JudgeRerankerConfig, Reranker } from './reranker'
 export type { MetadataFilter, RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'

@@ -9,8 +9,11 @@ import { describe, expect, it } from "vitest";
  *
  * The baseline is measured with TypeScript 5.9.3. Public type changes must stay
  * within +20%; a large drop means the fixture stopped exercising inference.
+ * Re-recorded after the connected-knowledge public type surface landed: the
+ * prior 424,761 baseline had accumulated drift to 493,055 before that work,
+ * and the knowledge/view/relation types add a further measured 20,697.
  */
-const BASELINE_INSTANTIATIONS = 424_761;
+const BASELINE_INSTANTIATIONS = 513_752;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..", "..");

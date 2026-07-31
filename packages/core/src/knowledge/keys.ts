@@ -114,6 +114,16 @@ export function knowledgeViewIndexKey(
   return `${indexedNamespacePrefix(indexerId, namespace)}view:${viewId}:index:${field}:${value}:${sourceId}`
 }
 
+/** Prefix for every membership index entry for one view. */
+export function knowledgeViewIndexPrefix(indexerId: string, namespace: string, viewId: string): string {
+  return `${indexedNamespacePrefix(indexerId, namespace)}view:${viewId}:index:`
+}
+
+/** Key for a view backfill marker record. */
+export function knowledgeViewBackfillKey(indexerId: string, namespace: string, viewId: string): string {
+  return `${indexedNamespacePrefix(indexerId, namespace)}view:${viewId}:backfill`
+}
+
 /** Key for a view revision record. */
 export function knowledgeViewRevisionKey(
   indexerId: string,
