@@ -100,7 +100,8 @@ func renderBoundedPayload(value any, width int, expanded bool) string {
 		lines = lines[:maxExpandedPayloadLines]
 	}
 	for index := range lines {
-		lines[index] = kit.Fit(" │ "+sanitizeRunsInline(lines[index]), width, "…")
+		safe := sanitizeRunsInline(lines[index])
+		lines[index] = kit.Fit(" │ "+kit.HighlightCode(safe, "json", codeStyles), width, "…")
 	}
 	if truncatedBytes || truncatedLines {
 		lines = append(lines, kit.Fit(" │ … bounded payload · inspect raw for source", width, "…"))

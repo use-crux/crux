@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 )
 
 func TestInspectViewSafelyProjectsUntrustedMetadataAndMalformedPayload(t *testing.T) {
@@ -16,8 +17,9 @@ func TestInspectViewSafelyProjectsUntrustedMetadataAndMalformedPayload(t *testin
 	inspect := NewInspect()
 	inspect.Open(hostile, hostile, raw)
 
-	if inspect.body != string(raw) {
-		t.Fatalf("inspect storage changed malformed payload:\n got %q\nwant %q", inspect.body, raw)
+	wantBody := kit.SanitizeMultiline(string(raw))
+	if inspect.body != wantBody {
+		t.Fatalf("inspect storage was not sanitized before highlighting:\n got %q\nwant %q", inspect.body, wantBody)
 	}
 	view := inspect.View(70, 24)
 	if !utf8.ValidString(view) {

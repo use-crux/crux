@@ -128,7 +128,7 @@ func (b *indexDocumentBuilder) renderSources() {
 		if snippet.Truncated {
 			b.field("status", "truncated by indexer")
 		}
-		b.lines = append(b.lines, strings.Split(sanitizeIndexMultiline(snippet.Source), "\n")...)
+		b.lines = append(b.lines, highlightedIndexSnippet(snippet.Source, snippet.Language)...)
 	}
 
 	if len(definition.SourceRefs) > 0 {
@@ -143,10 +143,18 @@ func (b *indexDocumentBuilder) renderSources() {
 				if ref.Snippet.Truncated {
 					b.field("status", "truncated by indexer")
 				}
-				b.lines = append(b.lines, strings.Split(sanitizeIndexMultiline(ref.Snippet.Source), "\n")...)
+				b.lines = append(b.lines, highlightedIndexSnippet(ref.Snippet.Source, ref.Snippet.Language)...)
 			}
 		}
 	}
+}
+
+func highlightedIndexSnippet(source, language string) []string {
+	safe := sanitizeIndexMultiline(source)
+	if language == "" {
+		language = "TypeScript"
+	}
+	return strings.Split(kit.HighlightCode(safe, language, codeStyles), "\n")
 }
 
 func (b *indexDocumentBuilder) renderDiagnostics() {

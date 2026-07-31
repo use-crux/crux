@@ -17,9 +17,9 @@ func TestNavRailDropsDeadConcepts(t *testing.T) {
 	}
 }
 
-func TestNavRailKeysPreserveEstablishedSlots(t *testing.T) {
+func TestNavRailKeysFollowVisualOrder(t *testing.T) {
 	want := map[string]string{
-		"overview": "1", "insights": "2", "runs": "3", "index": "4", "evals": "5",
+		"overview": "1", "insights": "2", "runs": "3", "evals": "4", "index": "5",
 	}
 	for _, item := range DefaultNav {
 		if item.Key != want[item.ID] {

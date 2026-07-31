@@ -107,3 +107,8 @@ func horizontalBorder(width int) string {
 		Background(ColorBG).
 		Render(strings.Repeat("─", width))
 }
+
+// HorizontalBorder exposes the shared pane rule for layout seams.
+func HorizontalBorder(width int) string {
+	return horizontalBorder(width)
+}

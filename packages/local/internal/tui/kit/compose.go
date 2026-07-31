@@ -53,7 +53,7 @@ func compose(rects []Rect, contents [][]string, dividerStyle lipgloss.Style) []s
 		}
 		out[y] = fitLine(line, w)
 	}
-	return out
+	return strings.Split(ReconcileBorders(strings.Join(out, "\n")), "\n")
 }
 
 func bounds(rects []Rect) (int, int) {

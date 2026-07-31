@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
@@ -97,7 +98,11 @@ func (o *Overview) renderKPIStrip(width int) string {
 	// The body panes' headers carry their own top divider now (see
 	// PaneHeader); skipping the explicit one here avoids a double rule
 	// between the KPI strip and the first body section.
-	return kit.ComposeColumns(rendered...)
+	band := strings.Split(kit.ComposeColumnsOpen(rendered...), "\n")
+	for index := range band {
+		band[index] = theme.SurfaceLine(shell.SurfaceBand, band[index], width)
+	}
+	return strings.Join(band, "\n")
 }
 
 func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor color.Color, spark []float64, sparkColor color.Color) string {
@@ -108,16 +113,14 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor col
 		Render(value)
 	dlt := lipgloss.NewStyle().Foreground(deltaColor).Render(delta)
 
-	// Sparkline as a filled-area braille curve, given the full inner width
-	// of the KPI cell (label/value occupy the rows above).
+	// The shared renderer hides short or flat series instead of inventing a
+	// trend, and uses one data point per block-ramp cell.
 	sk := ""
 	sparkCols := width - 4
 	if sparkCols < 8 {
 		sparkCols = 8
 	}
-	if len(spark) > 0 {
-		sk = kit.SparklineFilled(spark, sparkCols, sparkColor)
-	}
+	sk = kit.Sparkline(spark, sparkCols, sparkColor)
 
 	// 5 rows: blank · label · big value + inline delta · blank · sparkline
 	cell := strings.Join([]string{

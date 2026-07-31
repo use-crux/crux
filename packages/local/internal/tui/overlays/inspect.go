@@ -6,9 +6,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
+
+var inspectCodeStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 
 // Inspect is the in-TUI raw payload overlay for a span. It shows the full
 // JSON payload in a scrollable modal so the user can see args/result/
@@ -18,6 +22,7 @@ type Inspect struct {
 	title    string
 	subtitle string
 	body     string
+	language string
 	lines    []string
 	scroll   int
 }
@@ -27,22 +32,23 @@ func NewInspect() *Inspect { return &Inspect{} }
 
 // Open shows the overlay with the given header + JSON payload.
 func (i *Inspect) Open(title, subtitle string, payload json.RawMessage) {
-	i.openBody(title, subtitle, prettyJSON(payload))
+	i.openBody(title, subtitle, prettyJSON(payload), "json")
 }
 
 // OpenText shows an already-curated human-readable document without treating
 // it as transport JSON.
 func (i *Inspect) OpenText(title, subtitle, body string) {
-	i.openBody(title, subtitle, body)
+	i.openBody(title, subtitle, body, "")
 }
 
-func (i *Inspect) openBody(title, subtitle, body string) {
+func (i *Inspect) openBody(title, subtitle, body, language string) {
 	i.open = true
 	i.title = title
 	i.subtitle = subtitle
 	i.scroll = 0
-	i.body = body
-	i.lines = strings.Split(body, "\n")
+	i.body = kit.SanitizeMultiline(body)
+	i.language = language
+	i.lines = strings.Split(i.body, "\n")
 }
 
 // Close hides the overlay.
@@ -126,7 +132,11 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	rowStyle := lipgloss.NewStyle().Foreground(shell.ColorText)
 	body := make([]string, len(rows))
 	for j, r := range rows {
-		body[j] = padToWidth(" "+rowStyle.Render(r), w)
+		rendered := rowStyle.Render(r)
+		if i.language != "" {
+			rendered = kit.HighlightCode(r, i.language, inspectCodeStyles)
+		}
+		body[j] = padToWidth(" "+rendered, w)
 	}
 
 	footer := " " + shell.TextMuted.Render(
@@ -139,16 +149,10 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	)
 	footer = padToWidth(footer, w)
 
-	border := lipgloss.NewStyle().
-		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
-		Border(lipgloss.RoundedBorder()).
-		Render
-
 	rule := lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w))
 	inner := header + "\n" + rule + "\n" +
 		strings.Join(body, "\n") + "\n" + rule + "\n" + footer
-	return border(inner)
+	return renderModal(inner, w)
 }
 
 func wrapInspectBody(body string, width int) []string {

@@ -108,12 +108,41 @@ func truncateBreadcrumbTail(path []string, width int) []string {
 // breadcrumb divider on top of a pane's own leading divider.
 func FrameScreen(width int, breadcrumb, screen string) string {
 	if startsWithHorizontalRule(screen, width) {
-		lines := strings.Split(breadcrumb, "\n")
-		if len(lines) > 1 {
-			breadcrumb = strings.Join(lines[:len(lines)-1], "\n")
+		// Keep the breadcrumb boundary and discard the duplicate leading screen
+		// rule. Preserve its row budget with a structural continuation row so
+		// pane dividers still reach the status seam.
+		if _, rest, found := strings.Cut(screen, "\n"); found {
+			screen = rest
+		} else {
+			screen = ""
 		}
+		last := screen
+		if index := strings.LastIndexByte(screen, '\n'); index >= 0 {
+			last = screen[index+1:]
+		}
+		screen += "\n" + verticalContinuation(last, width)
 	}
 	return breadcrumb + "\n" + screen
+}
+
+func verticalContinuation(line string, width int) string {
+	cells := []rune(strings.Repeat(" ", width))
+	x := 0
+	for _, glyph := range ansi.Strip(line) {
+		if x >= width {
+			break
+		}
+		if strings.ContainsRune("│┌┐├┤┬┼", glyph) {
+			cells[x] = '│'
+		}
+		x += lipgloss.Width(string(glyph))
+	}
+	plain := string(cells)
+	if !strings.ContainsRune(plain, '│') {
+		return plain
+	}
+	border := lipgloss.NewStyle().Foreground(ColorBorder)
+	return strings.ReplaceAll(plain, "│", border.Render("│"))
 }
 
 func startsWithHorizontalRule(value string, width int) bool {
@@ -122,5 +151,12 @@ func startsWithHorizontalRule(value string, width int) bool {
 	if lipgloss.Width(plain) != width || !strings.ContainsRune(plain, '─') {
 		return false
 	}
-	return strings.Trim(plain, "─│") == ""
+	for _, glyph := range plain {
+		switch glyph {
+		case '─', '│', '┬', '┴', '├', '┤', '┼':
+		default:
+			return false
+		}
+	}
+	return true
 }

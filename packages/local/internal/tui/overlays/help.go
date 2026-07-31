@@ -135,18 +135,12 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 	header := " " + shell.TealBold.Render("? help") + "  " +
 		shell.TextMuted.Render("keybinds · type to filter · esc to close")
 	header = padTo(header, w)
-	body := kit.ComposeColumns(cols...)
-
-	border := lipgloss.NewStyle().
-		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
-		Border(lipgloss.RoundedBorder()).
-		Render
+	body := kit.ComposeColumnsOpen(cols...)
 
 	inner := header + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		body
-	return border(inner)
+	return renderModal(inner, w)
 }
 
 func longestHelpLine(group keyGroup) int {

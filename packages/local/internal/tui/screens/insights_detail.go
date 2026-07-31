@@ -120,7 +120,9 @@ func statCell(label, value, delta string, spark []float64, width int) string {
 	lines := []string{
 		" " + shell.TextMuted.Render(label),
 		" " + shell.Text.Render(value) + " " + shell.Amber.Render(delta),
-		" " + kit.Sparkline(spark, max(1, width-2), shell.ColorAmber),
+	}
+	if trend := kit.Sparkline(spark, max(1, width-2), shell.ColorAmber); trend != "" {
+		lines = append(lines, " "+trend)
 	}
 	return strings.Join(lines, "\n")
 }

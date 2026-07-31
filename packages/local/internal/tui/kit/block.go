@@ -36,6 +36,22 @@ func PadBlock(body string, width, height int) string {
 
 // ComposeColumns joins already rendered legacy columns with kit dividers.
 func ComposeColumns(columns ...string) string {
+	composed := composeColumns(columns...)
+	if composed == "" {
+		return ""
+	}
+	width := lipgloss.Width(strings.Split(composed, "\n")[0])
+	closed := composed + "\n" + adapterStyles.Border.Render(strings.Repeat("─", width))
+	return ReconcileBorders(closed)
+}
+
+// ComposeColumnsOpen joins columns whose surrounding layout supplies the
+// terminating horizontal boundary immediately after the returned block.
+func ComposeColumnsOpen(columns ...string) string {
+	return composeColumns(columns...)
+}
+
+func composeColumns(columns ...string) string {
 	if len(columns) == 0 {
 		return ""
 	}

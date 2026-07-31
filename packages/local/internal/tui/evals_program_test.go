@@ -36,7 +36,7 @@ func (driver *evalsProgramDriver) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch driver.stage {
 	case 0:
 		driver.stage++
-		return driver, tea.Batch(appCommand, key("5"))
+		return driver, tea.Batch(appCommand, key("4"))
 	case 1:
 		if driver.app.workbench.activeNav == "evals" &&
 			strings.Contains(view, "demo.support-quality") &&

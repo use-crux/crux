@@ -69,7 +69,7 @@ func TestFrameScreenRecognizesSegmentedPaneRule(t *testing.T) {
 	framed := ansi.Strip(FrameScreen(width, Breadcrumb(width, []string{"runs"}, ""), screen))
 	lines := strings.Split(framed, "\n")
 
-	if len(lines) < 2 || lines[1] != strings.Repeat("─", 29)+"│"+strings.Repeat("─", 30) {
-		t.Fatalf("segmented pane rule did not replace breadcrumb rule:\n%s", framed)
+	if len(lines) < 3 || lines[1] != strings.Repeat("─", width) || lines[2] != "content" {
+		t.Fatalf("breadcrumb rule did not replace the duplicate segmented pane rule:\n%s", framed)
 	}
 }

@@ -193,18 +193,12 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	}
 	hint := fitToWidth(left+strings.Repeat(" ", pad)+right, w)
 
-	border := lipgloss.NewStyle().
-		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
-		Border(lipgloss.RoundedBorder()).
-		Render
-
 	body := inputRow + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		strings.Join(rows, "\n") + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		hint
-	return border(body)
+	return renderModal(body, w)
 }
 
 func (p *Palette) refilter() {

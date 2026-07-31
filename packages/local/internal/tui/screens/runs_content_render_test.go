@@ -57,12 +57,13 @@ func TestRenderToolPayloadExpandsBoundsAndSanitizes(t *testing.T) {
 	}
 	collapsed := ansi.Strip(renderToolDepth(&node, 72, false))
 	expanded := renderToolDepth(&node, 72, true)
+	expandedPlain := ansi.Strip(expanded)
 	for _, want := range []string{"ARGS · COLLAPSED", "RESULT · COLLAPSED", "preview"} {
 		if !strings.Contains(collapsed, want) {
 			t.Errorf("collapsed tool detail missing %q:\n%s", want, collapsed)
 		}
 	}
-	if strings.Contains(expanded, "\x1b[31m") || !strings.Contains(expanded, `"query": "secret"`) {
+	if strings.Contains(expanded, "\x1b[31m") || !strings.Contains(expandedPlain, `"query": "secret"`) {
 		t.Fatalf("expanded tool payload was not terminal-safe:\n%q", expanded)
 	}
 	if lines := strings.Count(expanded, "\n") + 1; lines > 2*(maxExpandedPayloadLines+5) {

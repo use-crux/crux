@@ -4,7 +4,25 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/theme"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
+
+func renderModal(inner string, width int) string {
+	lines := strings.Split(inner, "\n")
+	for index := range lines {
+		lines[index] = theme.SurfaceLine(shell.SurfaceOverlay, lines[index], width)
+	}
+	background := shell.SurfaceOverlay.GetBackground()
+	modal := lipgloss.NewStyle().
+		Background(background).
+		BorderBackground(background).
+		BorderForeground(shell.ColorBorderBright).
+		Border(lipgloss.RoundedBorder()).
+		Render(strings.Join(lines, "\n"))
+	return kit.ReconcileBorders(modal)
+}
 
 const (
 	modalMinWidth  = 40

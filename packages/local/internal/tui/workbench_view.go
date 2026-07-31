@@ -22,11 +22,8 @@ func (w *Workbench) View() string {
 	}
 
 	root := kit.Rect{W: w.width, H: w.height}
-	regions := kit.SplitV(root, kit.Fill(), kit.Fixed(1))
-	bodyRect, statusRect := regions[0], regions[1]
-	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), w.statusBadge())
 	path, right := w.breadcrumbContent()
-	base := strings.Join(append(w.layoutBody(bodyRect, path, right), statusBar), "\n")
+	base := kit.ReconcileBorders(strings.Join(w.layoutBody(root, path, right), "\n"))
 
 	switch {
 	case w.palette.IsOpen():
@@ -42,12 +39,17 @@ func (w *Workbench) View() string {
 	}
 }
 
-func (w *Workbench) layoutBody(bodyRect kit.Rect, path []string, right string) []string {
-	if kit.Classify(bodyRect.W) == kit.LayoutSingle {
-		return w.layoutScreenColumn(bodyRect, path, right)
+func (w *Workbench) layoutBody(root kit.Rect, path []string, right string) []string {
+	if kit.Classify(root.W) == kit.LayoutSingle {
+		rows := kit.SplitV(root, kit.Fill(), kit.Fixed(1), kit.Fixed(1))
+		return append(
+			w.layoutScreenColumn(rows[0], path, right),
+			shell.HorizontalBorder(rows[1].W),
+			shell.StatusBar(rows[2].W, w.statusKeybinds(), w.statusBadge()),
+		)
 	}
 
-	panes := kit.SplitH(bodyRect, kit.Fixed(shell.NavRailWidth), kit.Fill())
+	panes := kit.SplitH(root, kit.Fixed(shell.NavRailWidth), kit.Fill())
 	rail := shell.NavRail(panes[0].H, w.navWithCounts(), w.activeNav, shell.NavRailFooter{
 		TargetID:         w.devContext.Target.ID,
 		TargetKind:       w.devContext.Target.Kind,
@@ -55,9 +57,15 @@ func (w *Workbench) layoutBody(bodyRect kit.Rect, path []string, right string) [
 		BaselineLabel:    w.devContext.Baseline.Label,
 		BaselineRelative: w.devContext.Baseline.PromotedAtRelative,
 	})
+	rightRows := kit.SplitV(kit.Rect{W: panes[1].W, H: panes[1].H}, kit.Fill(), kit.Fixed(1), kit.Fixed(1))
+	rightColumn := append(
+		w.layoutScreenColumn(rightRows[0], path, right),
+		shell.HorizontalBorder(rightRows[1].W),
+		shell.StatusBar(rightRows[2].W, w.statusKeybinds(), w.statusBadge()),
+	)
 	return kit.ComposeStyled(panes, [][]string{
 		blockLines(rail),
-		w.layoutScreenColumn(panes[1], path, right),
+		rightColumn,
 	}, workbenchStyles)
 }
 
@@ -66,7 +74,9 @@ func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) 
 		return nil
 	}
 	breadcrumb := shell.Breadcrumb(r.W, path, right)
-	screenH := max(0, r.H-len(blockLines(breadcrumb)))
+	// Render one logical row through the shared status seam; PadBlock clips
+	// that structural continuation to the column before the boundary is drawn.
+	screenH := max(0, r.H-len(blockLines(breadcrumb))+1)
 	screenView := w.activeScreen().View(screens.Size{Width: r.W, Height: screenH})
 	framed := shell.FrameScreen(r.W, breadcrumb, screenView)
 	return blockLines(kit.PadBlock(framed, r.W, r.H))
@@ -117,7 +127,10 @@ func blockLines(value string) []string {
 func (w *Workbench) contextMeta() string {
 	parts := make([]string, 0, 5)
 	if w.serverURL != "" {
-		parts = append(parts, osc8Link(w.serverURL, "local "+compactURLLabel(w.serverURL)))
+		// OSC 8 links are decorated with an underline by several terminals even
+		// when the text style does not request one. Keep the persistent local
+		// host label accent-only so underscores remain visually crisp.
+		parts = append(parts, shell.Teal.Render("local "+compactURLLabel(w.serverURL)))
 	}
 	if w.tunnelURL != "" {
 		parts = append(parts, osc8Link(w.tunnelURL, "tunnel "+compactURLLabel(w.tunnelURL)))
@@ -168,7 +181,7 @@ func truncateStr(value string, limit int) string {
 // osc8Link wraps text in the terminal hyperlink protocol while retaining a
 // readable label in terminals that ignore the escape sequence.
 func osc8Link(url, text string) string {
-	return "\x1b]8;;" + url + "\x07" + text + "\x1b]8;;\x07"
+	return "\x1b]8;;" + url + "\x07" + shell.Teal.Render(text) + "\x1b]8;;\x07"
 }
 
 func compactURLLabel(raw string) string {
