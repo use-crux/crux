@@ -4,9 +4,16 @@
  * @module
  */
 
+import type { z } from 'zod'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { RecordStore } from '../../storage'
+import type { AssertionStage } from '../assertions/assertions'
 import type { RelationStage, RelationTypeSpec } from '../relate/relate'
+import {
+  readCachedAssertionClaimCount,
+  replaceAssertionClaimRecords,
+} from './assertion-claims'
+import { runAssertionStage } from './assertion-runner'
 import {
   claimManifestKey,
   claimsSchema,
@@ -49,15 +56,25 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
 
   for (const stage of orderStages(input.stages)) {
     const stageFingerprint = stage.fingerprint()
-    const cached = await readCachedClaimCount({
-      records: input.records,
-      indexerId: input.indexerId,
-      namespace: input.namespace,
-      stage,
-      sourceId: input.document.sourceId,
-      sourceHash,
-      stageFingerprint,
-    })
+    const cached = stage.kind === 'assertion'
+      ? await readCachedAssertionClaimCount({
+        records: input.records,
+        indexerId: input.indexerId,
+        namespace: input.namespace,
+        stage,
+        sourceId: input.document.sourceId,
+        sourceHash,
+        stageFingerprint,
+      })
+      : await readCachedClaimCount({
+        records: input.records,
+        indexerId: input.indexerId,
+        namespace: input.namespace,
+        stage,
+        sourceId: input.document.sourceId,
+        sourceHash,
+        stageFingerprint,
+      })
     if (cached !== undefined) {
       results.push({ stageId: stage.id, status: 'cached', claims: cached, warnings: [] })
       continue
@@ -69,19 +86,36 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
       stageId: stage.id,
       sourceId: input.document.sourceId,
     }))
-    const run = await runOne(input, stage)
-    await replaceClaimRecords({
-      records: input.records,
-      indexerId: input.indexerId,
-      namespace: input.namespace,
-      stage,
-      sourceId: input.document.sourceId,
-      sourceHash,
-      stageFingerprint,
-      previous,
-      claims: run.claims,
-    })
-    results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
+    if (isAssertionStage(stage)) {
+      const run = await runAssertionStage({ document: input.document, chunks: input.chunks, stage })
+      await replaceAssertionClaimRecords({
+        records: input.records,
+        indexerId: input.indexerId,
+        namespace: input.namespace,
+        stage,
+        sourceId: input.document.sourceId,
+        sourceHash,
+        stageFingerprint,
+        previous,
+        claims: run.claims,
+      })
+      results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
+      continue
+    } else {
+      const run = await runOne(input, stage)
+      await replaceClaimRecords({
+        records: input.records,
+        indexerId: input.indexerId,
+        namespace: input.namespace,
+        stage,
+        sourceId: input.document.sourceId,
+        sourceHash,
+        stageFingerprint,
+        previous,
+        claims: run.claims,
+      })
+      results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
+    }
   }
 
   return results
@@ -91,9 +125,7 @@ async function runOne(
   input: RunDeriveStagesInput,
   stage: DeriveStage,
 ): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
-  if (!isRelationStage(stage)) {
-    throw new Error(`Derive ${stage.id} cannot emit claims yet.`)
-  }
+  if (!isRelationStage(stage)) throw new Error(`Derive ${stage.id} cannot emit claims yet.`)
   if (stage.mode === 'run') return runDeterministic(input, stage)
   return runGenerated(input, stage)
 }
@@ -202,6 +234,11 @@ function dependencies(stage: DeriveStage): readonly string[] {
 function isRelationStage(stage: DeriveStage): stage is RelationStage<Record<string, RelationTypeSpec>> {
   const value = stage as DeriveStage & { readonly types?: unknown; readonly mode?: unknown }
   return stage._tag === 'RelationStage' && isRecord(value.types) && (value.mode === 'run' || value.mode === 'model')
+}
+
+function isAssertionStage(stage: DeriveStage): stage is AssertionStage<Record<string, z.ZodType<unknown>>> {
+  const value = stage as DeriveStage & { readonly types?: unknown; readonly mode?: unknown }
+  return stage._tag === 'AssertionStage' && isRecord(value.types) && (value.mode === 'run' || value.mode === 'model')
 }
 
 function addRecords(target: Map<string, ClaimRecord>, records: readonly ClaimRecord[]): void {

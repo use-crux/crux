@@ -7,6 +7,13 @@
  * @module
  */
 
+import type { KnowledgeModel } from '../model'
+
+/** Exactly one production mode: model-backed extraction or deterministic code. */
+export type StageMode<TRunArgs extends readonly unknown[]> =
+  | { readonly model: KnowledgeModel; readonly instructions?: string; readonly run?: never }
+  | { readonly model?: never; readonly instructions?: never; readonly run: (...args: TRunArgs) => void | Promise<void> }
+
 /** Shared identity for a post-chunk derivation stage. */
 export interface BaseDeriveStage {
   /** Stable stage id within an indexing pipeline. */

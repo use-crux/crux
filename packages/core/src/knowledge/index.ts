@@ -8,6 +8,7 @@
  */
 
 export { knowledgeBase } from '../retrieval/knowledge-base'
+export { assertions } from './assertions/assertions'
 export { knowledgeModel } from './model'
 export { relate } from './relate/relate'
 export { relateEntities } from './relate/entities'
@@ -25,6 +26,16 @@ export type {
   ScopedKnowledgeBase,
 } from '../retrieval/knowledge-base'
 export type { AssertionDeriveStage, BaseDeriveStage, DeriveStage, RelationDeriveStage } from './derive/stage'
+export type {
+  AssertionEmitApi,
+  AssertionEmitOptions,
+  AssertionOf,
+  AssertionRun,
+  AssertionRunInput,
+  AssertionStage,
+  AssertionsConfig,
+} from './assertions/assertions'
+export type { AssertionSupport, KnowledgeAssertionRecord } from './assertions/identity'
 export type { KnowledgeModel, KnowledgeModelConfig } from './model'
 export type {
   KnowledgeLocator,

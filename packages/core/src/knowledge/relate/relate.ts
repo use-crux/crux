@@ -9,7 +9,7 @@
 
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import { stableHash } from '../../indexing/hash'
-import type { RelationDeriveStage } from '../derive/stage'
+import type { RelationDeriveStage, StageMode as SharedStageMode } from '../derive/stage'
 import type { KnowledgeModel } from '../model'
 import type { KnowledgeRef, KnowledgeRefKind } from '../refs'
 import { isKnowledgeRefKind } from '../refs'
@@ -57,9 +57,7 @@ export type RelateRun<TTypes extends Record<string, RelationTypeSpec>> = (
 ) => void | Promise<void>
 
 /** Exactly one production mode: model-backed extraction or deterministic code. */
-export type StageMode<TRunArgs extends readonly unknown[]> =
-  | { readonly model: KnowledgeModel; readonly instructions?: string; readonly run?: never }
-  | { readonly model?: never; readonly instructions?: never; readonly run: (...args: TRunArgs) => void | Promise<void> }
+export type StageMode<TRunArgs extends readonly unknown[]> = SharedStageMode<TRunArgs>
 
 /** Configuration for {@link relate}. */
 export type RelateConfig<TTypes extends Record<string, RelationTypeSpec>> = {

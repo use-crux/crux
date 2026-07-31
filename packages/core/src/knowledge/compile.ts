@@ -7,11 +7,12 @@
 import { createGenerationId } from '../indexing/hash'
 import { indexedNamespacePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
 import type { JsonObject, RecordEntry, RecordStore } from '../storage'
+import { compileAssertionRecords, cleanupStaleAssertionRecords } from './assertions/compile'
+import type { KnowledgeAssertionRecord } from './assertions/identity'
 import { createKnowledgeGenerationStore, type KnowledgeGenerationRetention } from './generation'
 import {
   knowledgeAdjacencyInKey,
   knowledgeAdjacencyOutKey,
-  knowledgeClaimsKey,
 } from './keys'
 import {
   createKnowledgeEdgeRecord,
@@ -24,6 +25,7 @@ import {
 import { encodeKnowledgeRef, type KnowledgeRef } from './refs'
 import { buildClaimTargetIndex } from './derive/targets'
 import { isClaimRecord, type ClaimRecord } from './derive/claims'
+export { deleteKnowledgeClaimsForSource } from './derive/cleanup'
 
 /** Input for compiling persisted claims into one graph generation. */
 export interface CompileKnowledgeGenerationInput {
@@ -45,6 +47,8 @@ export interface CompileKnowledgeGenerationResult {
   readonly edges: readonly KnowledgeEdgeRecord[]
   /** Entity records written to the published generation. */
   readonly entities: readonly KnowledgeEntityRecord[]
+  /** Assertion records written to the published generation. */
+  readonly assertions: readonly KnowledgeAssertionRecord[]
   /** Claims that could not resolve into an edge in this compile. */
   readonly pendingClaims: readonly ClaimRecord[]
 }
@@ -80,6 +84,14 @@ export async function compileKnowledgeGeneration(
 
   const generationId = createGenerationId()
   const now = Date.now()
+  const assertions = await compileAssertionRecords({
+    records: input.records,
+    indexerId: input.indexerId,
+    namespace: input.namespace,
+    generationId,
+    now,
+    targets: targetIndex,
+  })
   const edges = [...groups.values()].map((group) => createKnowledgeEdgeRecord({
     type: group.type,
     from: group.from,
@@ -109,33 +121,14 @@ export async function compileKnowledgeGeneration(
   for (const entity of entities) await writer.putEntity(entity)
   await writer.finish()
   await generationStore.publish(generationId, { retention: input.retention })
+  await cleanupStaleAssertionRecords({
+    records: input.records,
+    indexerId: input.indexerId,
+    namespace: input.namespace,
+    generationId,
+  })
 
-  return { generationId, edges, entities, pendingClaims }
-}
-
-/** Delete cached claim records for one removed source. */
-export async function deleteKnowledgeClaimsForSource(input: {
-  readonly records: RecordStore
-  readonly indexerId: string
-  readonly namespace: string
-  readonly sourceId: string
-  readonly stageIds?: readonly string[]
-}): Promise<number> {
-  const prefixes = input.stageIds?.length
-    ? input.stageIds.map((stageId) => knowledgeClaimsKey(input.indexerId, input.namespace, stageId, input.sourceId, ''))
-    : [`${indexedNamespacePrefix(input.indexerId, input.namespace)}claims:`]
-  let deleted = 0
-  for (const prefix of prefixes) {
-    const entries = await listIndexedEntries(input.records, prefix)
-    const selected = input.stageIds?.length
-      ? entries
-      : entries.filter((entry) => entry.key.includes(`:source:${input.sourceId}:`))
-    for (const entry of selected) {
-      await input.records.delete(entry.key)
-      deleted += 1
-    }
-  }
-  return deleted
+  return { generationId, edges, entities, assertions, pendingClaims }
 }
 
 type TargetIndex = Awaited<ReturnType<typeof buildClaimTargetIndex>>
