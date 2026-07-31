@@ -16,86 +16,74 @@ import type { DeriveStage } from './stage'
 
 const MANIFEST_HASH = '__manifest'
 const MAX_DESCRIPTION_LENGTH = 1000
-
 export interface ClaimRecord extends JsonObject {
   readonly _cruxRecordType: 'knowledge-claim'
-  readonly stageId: string
-  readonly stageVersion: number
-  readonly type: string
-  readonly from: string
-  readonly to: string
+  readonly stageId: string, readonly stageVersion: number, readonly type: string
+  readonly direction?: 'directed' | 'symmetric'
+  readonly from: string | KnowledgeLocator, readonly to: string | KnowledgeLocator
   readonly description?: string
-  readonly evidence: readonly string[]
-  readonly provenance: 'exact' | 'derived'
-  readonly sourceId: string
-  readonly claimHash: string
+  readonly evidence: readonly string[], readonly provenance: 'exact' | 'derived'
+  readonly sourceId: string, readonly claimHash: string
+  readonly status?: 'ready' | 'pending'
 }
-
 export interface ClaimManifestRecord extends JsonObject {
   readonly _cruxRecordType: 'knowledge-claim-manifest'
-  readonly sourceHash: string
-  readonly stageFingerprint: string
+  readonly sourceHash: string, readonly stageFingerprint: string
   readonly claimHashes: readonly string[]
 }
-
 export type RawRelationClaim = {
-  readonly type: unknown
-  readonly from: unknown
-  readonly to: unknown
-  readonly description?: unknown
-  readonly evidence?: unknown
-  readonly provenance?: unknown
+  readonly type: unknown, readonly from: unknown, readonly to: unknown
+  readonly description?: unknown, readonly evidence?: unknown, readonly provenance?: unknown
 }
-
+export type KnowledgeLocator = { readonly url: string } | { readonly title: string } | { readonly anchor: string }
+export type RelationClaimEndpoint = KnowledgeRef | KnowledgeLocator
 export type NormalizedRelationClaim = {
-  readonly type: string
-  readonly from: KnowledgeRef
-  readonly to: KnowledgeRef
-  readonly description?: string
-  readonly evidence: readonly KnowledgeRef[]
-  readonly provenance: 'exact' | 'derived'
+  readonly type: string, readonly from: RelationClaimEndpoint, readonly to: RelationClaimEndpoint, readonly description?: string
+  readonly evidence: readonly KnowledgeRef[], readonly provenance: 'exact' | 'derived'
 }
-
 const refSchema: z.ZodType<KnowledgeRef> = z.union([
   z.object({ kind: z.literal('document'), sourceId: z.string() }).strict(),
   z.object({ kind: z.literal('parent'), sourceId: z.string(), parentId: z.string() }).strict(),
   z.object({ kind: z.literal('chunk'), sourceId: z.string(), chunkId: z.string() }).strict(),
   z.object({ kind: z.literal('entity'), entityId: z.string() }).strict(),
 ])
-
+const locatorSchema: z.ZodType<KnowledgeLocator> = z.union([
+  z.object({ url: z.string().min(1) }).strict(),
+  z.object({ title: z.string().min(1) }).strict(),
+  z.object({ anchor: z.string().min(1) }).strict(),
+])
+const endpointSchema = z.union([refSchema, locatorSchema])
 export const claimsSchema = z.object({
-  claims: z.array(
-    z.object({
-      type: z.string(),
-      from: refSchema,
-      to: refSchema,
-      description: z.string().optional(),
-      evidence: z.array(refSchema).min(1),
-      provenance: z.enum(['exact', 'derived']).optional(),
-    }).strict(),
-  ),
+  claims: z.array(z.object({
+    type: z.string(),
+    from: endpointSchema,
+    to: endpointSchema,
+    description: z.string().optional(),
+    evidence: z.array(refSchema).min(1),
+    provenance: z.enum(['exact', 'derived']).optional(),
+  }).strict()),
 }).strict()
-
 export function deriveClaimsSourceHash(document: CruxDocument, chunks: readonly CruxChunk[]): string {
   return computeSourceHashes({
     ...document,
     content: [document.content ?? '', ...chunks.map((chunk) => chunk.content)].join('\n'),
   }).sourceHash
 }
-
-export function claimManifestKey(args: {
-  readonly indexerId: string
-  readonly namespace: string
-  readonly stageId: string
-  readonly sourceId: string
-}): string {
+type ClaimKeyArgs = {
+  readonly indexerId: string, readonly namespace: string, readonly stageId: string, readonly sourceId: string
+}
+type ClaimCacheArgs = {
+  readonly records: RecordStore, readonly indexerId: string, readonly namespace: string
+  readonly stage: DeriveStage, readonly sourceId: string
+}
+export function claimManifestKey(args: ClaimKeyArgs): string {
   return knowledgeClaimsKey(args.indexerId, args.namespace, args.stageId, args.sourceId, MANIFEST_HASH)
 }
 
 export function validateRelationClaims(
   stage: RelationStage<Record<string, RelationTypeSpec>>,
   rawClaims: readonly RawRelationClaim[],
-): { readonly claims: readonly NormalizedRelationClaim[]; readonly errors: readonly string[] } {
+): { readonly claims: readonly NormalizedRelationClaim[], readonly errors: readonly string[] } {
   const claims: NormalizedRelationClaim[] = []
   const errors: string[] = []
   rawClaims.forEach((raw) => {
@@ -109,8 +97,8 @@ export function validateRelationClaims(
     }
     claims.push({
       type,
-      from: raw.from as KnowledgeRef,
-      to: raw.to as KnowledgeRef,
+      from: raw.from as RelationClaimEndpoint,
+      to: raw.to as RelationClaimEndpoint,
       ...(raw.description !== undefined ? { description: raw.description as string } : {}),
       evidence,
       provenance: raw.provenance === 'exact' ? 'exact' : 'derived',
@@ -125,10 +113,12 @@ export function toClaimRecords(
   claims: readonly NormalizedRelationClaim[],
 ): readonly ClaimRecord[] {
   return claims.map((claim) => {
+    const relationStage = stage as DeriveStage & { readonly types?: Record<string, RelationTypeSpec> }
+    const spec = relationStage.types?.[claim.type]
     const normalized = {
       type: claim.type,
-      from: encodeKnowledgeRef(claim.from),
-      to: encodeKnowledgeRef(claim.to),
+      from: encodeClaimEndpoint(claim.from),
+      to: encodeClaimEndpoint(claim.to),
       ...(claim.description !== undefined ? { description: claim.description } : {}),
       evidence: claim.evidence.map(encodeKnowledgeRef),
       provenance: claim.provenance,
@@ -138,6 +128,7 @@ export function toClaimRecords(
       _cruxRecordType: 'knowledge-claim',
       stageId: stage.id,
       stageVersion: stage.version,
+      ...(spec ? { direction: spec.direction } : {}),
       ...normalized,
       sourceId,
       claimHash,
@@ -145,14 +136,8 @@ export function toClaimRecords(
   })
 }
 
-export async function readCachedClaimCount(args: {
-  readonly records: RecordStore
-  readonly indexerId: string
-  readonly namespace: string
-  readonly stage: DeriveStage
-  readonly sourceId: string
-  readonly sourceHash: string
-  readonly stageFingerprint: string
+export async function readCachedClaimCount(args: ClaimCacheArgs & {
+  readonly sourceHash: string, readonly stageFingerprint: string
 }): Promise<number | undefined> {
   const manifest = await readClaimManifest(args.records, claimManifestKey({
     indexerId: args.indexerId,
@@ -173,7 +158,7 @@ export async function readCachedClaimCount(args: {
   const values = args.records.getMany
     ? await args.records.getMany(keys)
     : await Promise.all(keys.map((key) => args.records.get(key)))
-  return values.every((value, index) => isClaimRecord(
+  return values.every((value, index) => isCachedClaimRecord(
     value,
     args.stage,
     args.sourceId,
@@ -183,14 +168,8 @@ export async function readCachedClaimCount(args: {
     : undefined
 }
 
-export async function replaceClaimRecords(args: {
-  readonly records: RecordStore
-  readonly indexerId: string
-  readonly namespace: string
-  readonly stage: DeriveStage
-  readonly sourceId: string
-  readonly sourceHash: string
-  readonly stageFingerprint: string
+export async function replaceClaimRecords(args: ClaimCacheArgs & {
+  readonly sourceHash: string, readonly stageFingerprint: string
   readonly previous: ClaimManifestRecord | undefined
   readonly claims: readonly ClaimRecord[]
 }): Promise<void> {
@@ -219,14 +198,20 @@ export function readClaimManifest(records: RecordStore, key: string): Promise<Cl
   return records.get(key).then((value) => isManifestRecord(value) ? value : undefined)
 }
 
-function deletePreviousClaims(args: {
-  readonly records: RecordStore
-  readonly indexerId: string
-  readonly namespace: string
-  readonly stage: DeriveStage
-  readonly sourceId: string
-  readonly previous: ClaimManifestRecord | undefined
-}): Promise<void> {
+export function isClaimRecord(value: unknown): value is ClaimRecord {
+  return isStoredClaimRecord(value)
+}
+
+export function encodeClaimEndpoint(endpoint: RelationClaimEndpoint): string | KnowledgeLocator {
+  return isKnowledgeRef(endpoint) ? encodeKnowledgeRef(endpoint) : endpoint
+}
+
+export function isKnowledgeLocator(value: unknown): value is KnowledgeLocator {
+  return isRecord(value) && ['url', 'title', 'anchor'].some((key) =>
+    onlyStringField(value, key as 'url' | 'title' | 'anchor'))
+}
+
+function deletePreviousClaims(args: ClaimCacheArgs & { readonly previous: ClaimManifestRecord | undefined }): Promise<void> {
   if (!args.previous) return Promise.resolve()
   const keys = args.previous.claimHashes.map((claimHash) => knowledgeClaimsKey(
     args.indexerId,
@@ -248,10 +233,10 @@ function validateClaim(
   evidence: readonly KnowledgeRef[],
 ): string | undefined {
   if (!spec) return `Derive ${stageId} type ${type}: unknown type`
-  if (!isKnowledgeRef(raw.from) || !spec.from.includes(raw.from.kind as KnowledgeRefKind)) {
+  if (!isValidEndpoint(raw.from, spec.from)) {
     return `Derive ${stageId} type ${type}: invalid from endpoint`
   }
-  if (!isKnowledgeRef(raw.to) || !spec.to.includes(raw.to.kind as KnowledgeRefKind)) {
+  if (!isValidEndpoint(raw.to, spec.to)) {
     return `Derive ${stageId} type ${type}: invalid to endpoint`
   }
   if (evidence.length === 0) return `Derive ${stageId} type ${type}: missing evidence`
@@ -270,6 +255,10 @@ function normalizeEvidence(value: unknown): readonly KnowledgeRef[] {
   return values.filter(isKnowledgeRef)
 }
 
+function isValidEndpoint(value: unknown, kinds: readonly KnowledgeRefKind[]): boolean {
+  return isKnowledgeLocator(value) || (isKnowledgeRef(value) && kinds.includes(value.kind as KnowledgeRefKind))
+}
+
 function isManifestRecord(value: unknown): value is ClaimManifestRecord {
   return isRecord(value) &&
     value._cruxRecordType === 'knowledge-claim-manifest' &&
@@ -279,13 +268,29 @@ function isManifestRecord(value: unknown): value is ClaimManifestRecord {
     value.claimHashes.every((hash) => typeof hash === 'string')
 }
 
-function isClaimRecord(value: unknown, stage: DeriveStage, sourceId: string, claimHash: string): value is ClaimRecord {
-  return isRecord(value) &&
-    value._cruxRecordType === 'knowledge-claim' &&
+function isCachedClaimRecord(value: unknown, stage: DeriveStage, sourceId: string, claimHash: string): value is ClaimRecord {
+  return isStoredClaimRecord(value) &&
     value.stageId === stage.id &&
     value.stageVersion === stage.version &&
     value.sourceId === sourceId &&
     value.claimHash === claimHash
+}
+
+function isStoredClaimRecord(value: unknown): value is ClaimRecord {
+  if (!isRecord(value) || value._cruxRecordType !== 'knowledge-claim') return false
+  return typeof value.stageId === 'string' && typeof value.stageVersion === 'number' &&
+    typeof value.type === 'string' &&
+    (value.direction === undefined || value.direction === 'directed' || value.direction === 'symmetric') &&
+    (typeof value.from === 'string' || isKnowledgeLocator(value.from)) &&
+    (typeof value.to === 'string' || isKnowledgeLocator(value.to)) &&
+    Array.isArray(value.evidence) && value.evidence.every((ref) => typeof ref === 'string') &&
+    (value.provenance === 'exact' || value.provenance === 'derived') &&
+    typeof value.sourceId === 'string' && typeof value.claimHash === 'string' &&
+    (value.status === undefined || value.status === 'ready' || value.status === 'pending')
+}
+
+function onlyStringField(value: Record<string, unknown>, key: 'url' | 'title' | 'anchor'): boolean {
+  return typeof value[key] === 'string' && Object.keys(value).length === 1 && Boolean(value[key].trim())
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

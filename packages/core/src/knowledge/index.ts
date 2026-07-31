@@ -8,6 +8,8 @@
  */
 
 export { knowledgeBase } from '../retrieval/knowledge-base'
+export { knowledgeModel } from './model'
+export { relate } from './relate/relate'
 
 export type {
   KnowledgeBase,
@@ -21,6 +23,17 @@ export type {
   ScopedKnowledgeBase,
 } from '../retrieval/knowledge-base'
 export type { AssertionDeriveStage, BaseDeriveStage, DeriveStage, RelationDeriveStage } from './derive/stage'
+export type { KnowledgeModel, KnowledgeModelConfig } from './model'
+export type {
+  KnowledgeLocator,
+  RelateConfig,
+  RelateEmitApi,
+  RelateEmitOptions,
+  RelateRun,
+  RelateRunInput,
+  RelationStage,
+  RelationTypeSpec,
+} from './relate/relate'
 export {
   decodeKnowledgeRef,
   encodeKnowledgeRef,

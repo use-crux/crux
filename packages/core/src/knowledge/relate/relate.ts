@@ -13,7 +13,6 @@ import type { RelationDeriveStage } from '../derive/stage'
 import type { KnowledgeModel } from '../model'
 import type { KnowledgeRef, KnowledgeRefKind } from '../refs'
 import { isKnowledgeRefKind } from '../refs'
-
 const knowledgeRefKindOrder: readonly KnowledgeRefKind[] = ['chunk', 'document', 'entity', 'parent']
 
 /** A single relation type in a relation vocabulary. */
@@ -37,13 +36,16 @@ export interface RelateEmitOptions {
   readonly provenance?: 'exact' | 'derived'
 }
 
+/** A deferred endpoint locator resolved against indexed records during graph compilation. */
+export type KnowledgeLocator = { readonly url: string } | { readonly title: string } | { readonly anchor: string }
+
 /** Claim emission API supplied to deterministic relation runs. */
 export interface RelateEmitApi<TTypes extends Record<string, RelationTypeSpec>> {
   /** Emit one typed relation claim. */
   emit<TType extends keyof TTypes & string>(
     type: TType,
-    from: KnowledgeRefOfKinds<TTypes[TType]['from'][number]>,
-    to: KnowledgeRefOfKinds<TTypes[TType]['to'][number]>,
+    from: KnowledgeRefOfKinds<TTypes[TType]['from'][number]> | KnowledgeLocator,
+    to: KnowledgeRefOfKinds<TTypes[TType]['to'][number]> | KnowledgeLocator,
     opts?: RelateEmitOptions,
   ): void
 }

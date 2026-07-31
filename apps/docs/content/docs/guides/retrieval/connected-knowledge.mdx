@@ -1,0 +1,188 @@
+---
+title: Connected Knowledge
+description: Add typed relations to a knowledge base and expand retrieval through the resulting graph.
+---
+
+`knowledgeBase()` still starts as plain RAG: index documents, retrieve chunks, and use recipes only when you need extra query-time work.
+
+```ts
+import { knowledgeBase } from "@use-crux/core/knowledge";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+});
+
+const hits = await docs.retriever({ limit: 8 }).retrieve("refund policy");
+```
+
+Add connected knowledge when answers need nearby evidence that may not match the query text directly: cited specs, related product areas, prerequisite guides, or parent/child context.
+
+## Add Pipeline Config
+
+`knowledgeBase()` accepts an explicit indexing pipeline. Plain indexing stays unchanged until you put connected knowledge work in `derive`.
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { knowledgeBase } from "@use-crux/core/knowledge";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  pipeline: indexingPipeline({
+    derive: [productRelations],
+  }),
+});
+```
+
+Keep the pipeline close to the knowledge base when one corpus owns the relation vocabulary. Share the pipeline only when multiple knowledge bases should build the same graph shape.
+
+## Author Relations
+
+Use `relate()` to define a typed relation vocabulary. Each relation declares valid endpoint kinds, direction, and a short description.
+
+Model mode uses `knowledgeModel()` to bind a stable name and fingerprint to a retrieval model surface:
+
+```ts
+import { knowledgeModel, relate } from "@use-crux/core/knowledge";
+
+const extractor = knowledgeModel({
+  name: "product-docs-relations",
+  version: "2026-07-docs",
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+});
+
+const productRelations = relate({
+  id: "product-relations",
+  version: 1,
+  model: extractor,
+  instructions: "Extract explicit citations and product-area mentions.",
+  types: {
+    cites: {
+      from: ["chunk"],
+      to: ["document"],
+      direction: "directed",
+      description: "A chunk cites another source document.",
+    },
+    mentionsArea: {
+      from: ["chunk"],
+      to: ["entity"],
+      direction: "directed",
+      description: "A chunk mentions a product area.",
+    },
+  },
+});
+```
+
+Use deterministic run mode when your app can produce relations from rules, metadata, or parsed content:
+
+```ts
+const productRelations = relate({
+  id: "product-relations",
+  version: 1,
+  types: {
+    mentionsArea: {
+      from: ["chunk"],
+      to: ["entity"],
+      direction: "directed",
+      description: "A chunk mentions a product area.",
+    },
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("Billing")) continue;
+
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      api.emit("mentionsArea", evidence, { kind: "entity", entityId: "billing" }, { evidence });
+    }
+  },
+});
+```
+
+The `api.emit()` call is typed by the vocabulary. A `mentionsArea` relation must start at a `chunk` and end at an `entity`; TypeScript rejects other endpoint kinds.
+
+## Expand Retrieval
+
+Use `expandRelations()` inside `docs.recipe()` after `retrieve()`. The step starts from retrieved chunks, traverses visible graph neighbors, hydrates any added chunk refs, and appends them to the hit list.
+
+```ts
+import { expandRelations, retrieve } from "@use-crux/core/retrieval";
+
+const answerDocs = docs.recipe({
+  id: "docs-answer",
+  steps: [
+    retrieve({ limit: 12 }),
+    expandRelations({
+      types: ["mentionsArea", "hierarchy"],
+      direction: "both",
+      depth: 2,
+      limit: 8,
+    }),
+  ],
+});
+
+const hits = await answerDocs.retrieve("how do billing limits affect teams?");
+```
+
+`expandRelations()` accepts:
+
+| Option      | Default           | Meaning                                          |
+| ----------- | ----------------- | ------------------------------------------------ |
+| `types`     | all visible types | Relation type names to traverse.                 |
+| `direction` | `"both"`          | Traverse outgoing, incoming, or both directions. |
+| `depth`     | `1`               | Maximum semantic hop distance.                   |
+| `limit`     | `20`              | Maximum unique added hits.                       |
+
+Added hits include graph provenance:
+
+```ts
+const expanded = hits.find((hit) => hit.provenance?.graph);
+
+expanded?.provenance?.graph;
+// {
+//   seed: "chunk:guide:c1",
+//   path: ["chunk:guide:c1", "entity:billing", "chunk:limits:c4"],
+//   edges: ["mentionsArea", "mentionsArea"],
+//   distance: 1
+// }
+```
+
+`seed` is the encoded ref that discovered the hit. `path` is the encoded traversal path. `edges` are the relation types followed along the path. `distance` is the semantic hop distance used for ordering and limits.
+
+## What Runs When
+
+Plain `knowledgeBase()` indexing and retrieval behave as before. Passing a pipeline adds the connected knowledge work you configured.
+
+No model calls happen unless a relation vocabulary is configured with an explicit `model` from `knowledgeModel()`. Deterministic `run` relations execute from your code during indexing.
+
+`expandRelations()` runs at query time inside the retrieval recipe. It reads the graph visible to that knowledge base and does not create new relations.
+
+Virtual structural relations are always available from indexed records. Parent/child hierarchy and chunk sequence can be traversed by `expandRelations()` even when you have not authored a relation vocabulary.
+
+## Related
+
+<Cards>
+  <Card
+    title="Retrieval Recipes"
+    description="Compose retrieval, relation expansion, reranking, and compression."
+    href="/docs/guides/retrieval/recipes"
+  />
+  <Card
+    title="Querying"
+    description="Create the base knowledge-base retriever used by recipes."
+    href="/docs/guides/retrieval/querying"
+  />
+  <Card
+    title="Indexing Documents"
+    description="Configure document chunking, embeddings, and indexing lifecycle."
+    href="/docs/guides/retrieval/indexing"
+  />
+</Cards>

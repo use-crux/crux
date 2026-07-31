@@ -1,7 +1,7 @@
 import { indexer } from '../indexing'
 import { retriever } from './define-retriever'
 import { indexedNamespacePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
-import { createKnowledgeGraphStore } from '../knowledge/graph-store'
+import { createConnectedKnowledgeIntegration } from './knowledge-base-connected'
 import type {
   Corpus,
   CorpusSyncResult,
@@ -118,11 +118,18 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     indexedChunks: 0,
     retainedInactiveChunks: 0,
   }
-  let graphStore: ReturnType<typeof createKnowledgeGraphStore> | undefined
+  const connected = createConnectedKnowledgeIntegration({
+    records,
+    indexerId: config.id,
+    namespace: config.namespace,
+    pipeline: config.pipeline,
+    retention,
+  })
 
   async function index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult> {
     const items = await resolveInput(config.source, input)
     const result = await runIndex(items, false)
+    await connected.afterIndex()
     await refreshLifecycleState(lifecycle, config.id, config.namespace, records)
     return result
   }
@@ -130,6 +137,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
   async function reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult> {
     const items = await resolveInput(config.source, input)
     const result = await runIndex(items, true)
+    await connected.afterIndex()
     await refreshLifecycleState(lifecycle, config.id, config.namespace, records)
     return result
   }
@@ -164,6 +172,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     const result = config.corpus
       ? await config.corpus.deleteSource(sourceId)
       : { sourceId, deletedCount: await createIndexer(config, records, vectors).deleteSource(sourceId) }
+    await connected.afterRemove(sourceId)
     await refreshLifecycleState(lifecycle, config.id, config.namespace, records)
     return result
   }
@@ -190,20 +199,6 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     }) as Retriever<TFilter, TModality>
   }
 
-  function knowledgeBinding(): RetrievalKnowledgeBinding | undefined {
-    if (!records) return undefined
-    graphStore ??= createKnowledgeGraphStore({
-      records,
-      indexerId: config.id,
-      namespace: config.namespace,
-    })
-    return {
-      reader: graphStore,
-      namespace: config.namespace,
-      hydrate: graphStore.hydrate,
-    }
-  }
-
   return Object.freeze({
     sourceKind: config.corpus ? 'corpus' : 'direct',
     storage: { records: records !== undefined, vectors: vectors !== undefined },
@@ -219,7 +214,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     reindex,
     remove,
     retriever: createRetriever,
-    knowledgeBinding,
+    knowledgeBinding: connected.binding,
   })
 }
 
@@ -311,4 +306,8 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<KnowledgeBaseIn
 
 function unique(values: readonly string[]): string[] {
   return Array.from(new Set(values))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
