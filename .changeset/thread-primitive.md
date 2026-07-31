@@ -4,6 +4,7 @@
 "@use-crux/local": minor
 "@use-crux/upstash": minor
 "@use-crux/convex": minor
+"@use-crux/otel": minor
 ---
 
 Add linearizable single-key record mutation through native or versioned
