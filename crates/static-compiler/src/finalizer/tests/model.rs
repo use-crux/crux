@@ -213,7 +213,7 @@ fn finalize_merges_duplicate_definitions_by_id() {
 }
 
 #[test]
-fn finalize_reports_duplicate_active_threads_and_conflicting_bindings() {
+fn finalize_reports_thread_conflicts_as_lints_without_duplicate_diagnostics() {
     let output = finalize_static_index_values(
         &[json!({
             "definitions": [
@@ -275,8 +275,17 @@ fn finalize_reports_duplicate_active_threads_and_conflicting_bindings() {
         .iter()
         .map(|diagnostic| diagnostic.code.as_str())
         .collect::<Vec<_>>();
-    assert!(codes.contains(&"thread.duplicate_active"));
-    assert!(codes.contains(&"thread.conflicting_binding"));
+    assert!(!codes.contains(&"thread.duplicate_active"));
+    assert!(!codes.contains(&"thread.conflicting_binding"));
+    let rule_ids = output
+        .model
+        .facts
+        .lint_findings
+        .iter()
+        .map(|finding| finding.rule_id.as_str())
+        .collect::<Vec<_>>();
+    assert!(rule_ids.contains(&"thread.duplicate_active"));
+    assert!(rule_ids.contains(&"thread.conflicting_binding"));
 }
 
 #[test]

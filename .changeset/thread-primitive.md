@@ -1,6 +1,7 @@
 ---
 "@use-crux/core": minor
 "@use-crux/indexer": minor
+"@use-crux/local": minor
 "@use-crux/upstash": minor
 "@use-crux/convex": minor
 ---
@@ -36,3 +37,7 @@ Hydrate persisted media automatically on Thread reads, emit payload-safe
 `thread.operation` evidence for every public operation, expose structural
 tree/group/branch/head data to the Runtime Bridge, and discover authored
 Threads plus Prompt/Agent bindings and binding diagnostics in Project Index.
+
+Surface duplicate active Thread ids and conflicting Thread bindings as
+descriptor-backed Project Index lint findings, including `crux lint` and LSP
+diagnostics, without unresolved-target false positives for valid Thread uses.

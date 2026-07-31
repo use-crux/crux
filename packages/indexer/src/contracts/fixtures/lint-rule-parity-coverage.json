@@ -139,6 +139,16 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "thread.conflicting_binding",
+      "positiveFixture": "thread-native-static.test.ts",
+      "negativeFixture": "thread-native-static.test.ts"
+    },
+    {
+      "ruleId": "thread.duplicate_active",
+      "positiveFixture": "thread-native-static.test.ts",
+      "negativeFixture": "thread-native-static.test.ts"
+    },
+    {
       "ruleId": "memory.long_lived_without_retention",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

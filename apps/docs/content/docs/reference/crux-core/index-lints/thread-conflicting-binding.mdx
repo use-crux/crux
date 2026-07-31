@@ -1,0 +1,44 @@
+---
+title: thread.conflicting_binding
+---
+
+## What it checks
+
+Crux emits this finding when a prompt or agent resolves more than one Thread
+through its `use[]` graph.
+
+## Why it matters
+
+Managed execution needs one unambiguous canonical history to read before the
+model call and one destination for the accepted turn. Multiple Thread targets
+make both choices ambiguous.
+
+## How to fix
+
+Keep exactly one Thread in the prompt or agent use graph:
+
+```ts
+export const answer = prompt({
+  id: "answer",
+  use: [conversation],
+  prompt: "Answer the user",
+});
+```
+
+## When to suppress
+
+Suppress only when static analysis sees mutually exclusive legacy branches
+and runtime tests prove that one Thread binding always remains:
+
+```ts
+// crux-lint-disable-next-line thread.conflicting_binding -- migration branches are mutually exclusive
+export const answer = prompt({ id: "answer", use: migratedThreadUse });
+```
+
+## Rule metadata
+
+- Rule id: `thread.conflicting_binding`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

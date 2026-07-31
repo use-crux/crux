@@ -195,6 +195,26 @@ Pass `--port <port>` in `args` when `crux dev` does not use port 4400. Pass
 `--root <dir>` only for clients that do not send `workspaceFolders` or
 `rootUri`; editor-provided roots take precedence.
 
+Bare clients must complete the standard startup handshake: send `initialize`
+with the project `rootUri` or `workspaceFolders`, wait for its response, then
+send `initialized`. Send `initializationOptions.workspaceTrust: true` to enable
+completion and trusted actions. Keep reading stdout after `initialized`;
+Project Index diagnostics publish when the first ATTACHED or OWN snapshot is
+ready and do not require `textDocument/didOpen`. For ATTACHED mode, the
+project root and `--port` must match the running `crux dev` server exactly.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "rootUri": "file:///absolute/project",
+    "initializationOptions": { "workspaceTrust": true }
+  }
+}
+```
+
 ## Settings
 
 VS Code settings use the names below. Other clients can send the same nested

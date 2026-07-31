@@ -1,7 +1,7 @@
 //! Static Index finalize adapter.
 
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use crate::core::definition_merge::merge_definitions_by_id;
 use crate::core::facts::{
@@ -108,14 +108,19 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
     for value in native_facts.iter().chain(extension_facts.iter()) {
         merge_fact_value(&mut facts, value);
     }
-    append_duplicate_active_thread_diagnostics(&mut facts);
+    let definition_occurrences = facts.definitions.clone();
     facts.definitions = merge_definitions_by_id(facts.definitions);
     append_missing_builtin_rule_descriptors(&mut facts);
     facts.canonicalize();
     let relation_model = resolve_static_index_relation_model(facts, policies);
     let mut facts = with_static_index_source_model(relation_model.facts);
-    append_conflicting_thread_binding_diagnostics(&mut facts);
-    apply_static_index_lint_model(&mut facts, lint_facts, policies, lint_options);
+    apply_static_index_lint_model(
+        &mut facts,
+        lint_facts,
+        policies,
+        lint_options,
+        &definition_occurrences,
+    );
     facts.canonicalize();
     let model = StaticIndexRelationModel {
         facts,
@@ -123,74 +128,6 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
     };
     let counts = fact_counts(&model.facts);
     StaticIndexFinalizeOutput { model, counts }
-}
-
-fn append_duplicate_active_thread_diagnostics(facts: &mut StaticIndexPatchFacts) {
-    let mut definitions_by_id = BTreeMap::<String, Vec<&StaticIndexDefinition>>::new();
-    for definition in &facts.definitions {
-        if definition.kind == "thread" && definition.status.as_deref() == Some("active") {
-            definitions_by_id
-                .entry(definition.id.clone())
-                .or_default()
-                .push(definition);
-        }
-    }
-    for (id, definitions) in definitions_by_id {
-        if definitions.len() < 2 {
-            continue;
-        }
-        facts.diagnostics.push(StaticIndexDiagnostic {
-            id: format!("thread.duplicate_active:{id}"),
-            severity: crate::core::facts::StaticIndexDiagnosticSeverity::Error,
-            code: "thread.duplicate_active".to_string(),
-            message: format!(
-                "Thread definition \"{id}\" is active in more than one source location."
-            ),
-            source: definitions
-                .iter()
-                .find_map(|definition| definition.source.clone()),
-            related_definition_ids: vec![id],
-            suggested_fix: Some(
-                "Give each active thread() definition a unique id or remove the duplicate export."
-                    .to_string(),
-            ),
-        });
-    }
-}
-
-fn append_conflicting_thread_binding_diagnostics(facts: &mut StaticIndexPatchFacts) {
-    let mut threads_by_owner = BTreeMap::<String, BTreeSet<String>>::new();
-    for relation in &facts.relations {
-        if matches!(
-            relation.r#type.as_str(),
-            "prompt.uses_thread" | "agent.uses_thread"
-        ) {
-            threads_by_owner
-                .entry(relation.from.clone())
-                .or_default()
-                .insert(relation.to.clone());
-        }
-    }
-    for (owner, threads) in threads_by_owner {
-        if threads.len() < 2 {
-            continue;
-        }
-        facts.diagnostics.push(StaticIndexDiagnostic {
-            id: format!("thread.conflicting_binding:{owner}"),
-            severity: crate::core::facts::StaticIndexDiagnosticSeverity::Error,
-            code: "thread.conflicting_binding".to_string(),
-            message: format!("Definition \"{owner}\" resolves more than one Thread binding."),
-            source: facts
-                .definitions
-                .iter()
-                .find(|definition| definition.id == owner)
-                .and_then(|definition| definition.source.clone()),
-            related_definition_ids: std::iter::once(owner).chain(threads).collect(),
-            suggested_fix: Some(
-                "Keep exactly one Thread entry in the prompt or agent use graph.".to_string(),
-            ),
-        });
-    }
 }
 
 pub(crate) fn append_missing_builtin_rule_descriptors(facts: &mut StaticIndexPatchFacts) {
