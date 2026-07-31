@@ -1,0 +1,32 @@
+---
+title: EFFECT_OUTCOME_AMBIGUOUS
+description: An effect outcome is unknown or cannot be reconciled safely.
+---
+
+## What failed
+
+An executor or recovery handler raised `EffectOutcomeUnknownError`, or
+`reconcileEffect()` received a settled, mismatched, or otherwise invalid
+receipt.
+
+## Why
+
+The external system may have applied the change even though the response was
+lost. Retrying or recovering without confirmation could duplicate or reverse
+the wrong operation.
+
+## Fix
+
+Do not retry automatically. Use provider logs or an idempotent status endpoint
+to confirm the external outcome, then call `reconcileEffect()` with the exact
+receipt and an audit reason:
+
+```ts
+await reconcileEffect(receipt, {
+  outcome: "failed",
+  reason: "The provider confirms no change was made",
+});
+```
+
+For confirmed success, also provide the known JSON-safe executor output. Only
+ambiguous receipts can be reconciled.

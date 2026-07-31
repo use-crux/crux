@@ -1,0 +1,27 @@
+---
+title: EFFECT_SCOPE_NOT_FOUND
+description: An effect rollback scope reference is missing, malformed, or unavailable.
+---
+
+## What failed
+
+`rollback()` received a value that is not a valid `EffectScopeRef`, or the
+in-process ledger could not match its `id` and `runId`.
+
+This code is also used when a scope ref is passed to receipt-only recovery.
+
+## Fix
+
+Use the exact `boundary.ref` returned inside `rollbackOnError()`:
+
+```ts
+const scope = await rollbackOnError(async (boundary) => {
+  await updateCustomer(input);
+  return boundary.ref;
+});
+
+await rollback(scope);
+```
+
+Do not construct, edit, or mix scope refs from different runs. This release
+stores scopes in process, so a ref cannot be resolved after a restart.

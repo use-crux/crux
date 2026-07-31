@@ -1,0 +1,24 @@
+---
+title: EFFECT_DUPLICATE_ID
+description: Two custom effect definitions use the same id and version.
+---
+
+## What failed
+
+`effect()` found a different definition object with the same `(id, version)`
+identity.
+
+## Why
+
+Effect identity controls receipt and recovery semantics. Allowing two
+implementations to share it would make recovery ambiguous, so Crux rejects the
+second definition.
+
+## Fix
+
+Define the effect once and import that definition wherever it is used. If the
+execution or recovery contract intentionally changed, give the new definition
+a new `version`.
+
+Do not generate effect IDs per call. Use a stable dotted domain name such as
+`"billing.charge"`.

@@ -91,9 +91,11 @@ const verification = evidence.record({
 synchronously. Pass it when linking an artifact from another process or
 destination.
 
-The public subject union reserves an `effect.receipt` shape for the Effects
-API. Receipt construction, graph resolution, recovery, and rollback are not
-part of this Core release; unresolved receipt refs are rejected.
+The public subject union accepts Crux-issued `effect.receipt` refs from the
+[Effects API](/docs/reference/crux-core/effect). Effects automatically author
+receipt-safe intent, change, and recovery evidence. Custom records may use the
+same receipt as an explicit subject; unresolved or malformed receipt refs are
+rejected.
 
 ## Inspect evidence
 

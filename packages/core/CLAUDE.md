@@ -9,6 +9,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for the npm 
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
 - **`/flow`** — `flow()`, `signalFlow()`, `cancelFlow()`, `executeFlow()` (suspendable/resumable)
+- **`/effect`** — `effect()`, receipts, recovery, `rollbackOnError()`, `rollback()`, reconciliation
 - **`/memory`** — `memory()`, `memoryBlock()`, `recentMessages()`, `workingState()`, `episodes()`, `facts()`, `procedures()`
 - **`/embedding`** — `embedding()` (dense or sparse vector primitive)
 - **`/indexing`** — `indexer()` (chunk + embed + write documents to record/vector stores)

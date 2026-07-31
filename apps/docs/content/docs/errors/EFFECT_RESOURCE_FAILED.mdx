@@ -1,0 +1,30 @@
+---
+title: EFFECT_RESOURCE_FAILED
+description: An effect resource projection threw before execution.
+---
+
+## What failed
+
+The `resource(input)` function supplied to `effect()` threw while Crux was
+preparing the receipt.
+
+## Why
+
+Resource projection runs before capture and execution. Crux stops immediately
+so it never changes external state without the intended safe resource identity.
+The executor and recovery capture did not run.
+
+## Fix
+
+Make `resource` a synchronous, total projection of the input. Return only the
+smallest non-secret identity needed for correlation:
+
+```ts
+resource: ({ accountId }) => ({
+  type: "account",
+  id: accountId,
+})
+```
+
+Validate or load missing data before calling the effect. Do not perform network
+or storage work inside `resource`.

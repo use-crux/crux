@@ -1,0 +1,38 @@
+---
+title: EFFECT_RECOVERY_REQUIRED
+description: An irreversible effect was blocked by a required-recovery boundary.
+---
+
+## What failed
+
+An effect without a recovery handler tried to run inside the default
+required-recovery mode of `rollbackOnError()`.
+
+## Why
+
+Crux cannot promise rollback for an irreversible change. It rejects the effect
+before resource projection, capture, or execution. The diagnostic names the
+blocked effect and boundary.
+
+## Fix
+
+Choose the action that matches the domain:
+
+1. **Define a recovery handler** on the effect.
+2. **Move the effect outside** the rollback boundary, usually after the
+   recoverable work succeeds.
+3. Explicitly accept an honest partial rollback with
+   **`{ recovery: "best-effort" }`**.
+
+```ts
+await rollbackOnError(
+  async () => {
+    await updateCustomer(input);
+    await sendNotification(input);
+  },
+  { recovery: "best-effort" },
+);
+```
+
+Best-effort mode does not make an irreversible effect recoverable. If later
+work fails, inspect the `RollbackError.result` unit statuses.

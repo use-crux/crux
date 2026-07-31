@@ -1,0 +1,232 @@
+---
+title: Effects and rollback
+description: Make external state changes explicit, recoverable, and observable with receipts and rollback boundaries.
+---
+
+Effects describe intentional changes to durable or external state: charging a
+customer, publishing a document, or updating a remote record. Define each
+change once with `effect()`, then call it like an ordinary async function.
+Crux creates a receipt for every attempt and can recover completed effects in
+reverse causal order when later work fails.
+
+```ts
+import {
+  effect,
+  rollbackOnError,
+} from "@use-crux/core/effect";
+
+const updateCustomer = effect(
+  "customer.update",
+  async (
+    input: { id: string; name: string },
+    { idempotencyKey },
+  ) => {
+    const previous = await crm.customers.get(input.id);
+    await crm.customers.update(
+      input.id,
+      { name: input.name },
+      { idempotencyKey },
+    );
+    return { previousName: previous.name };
+  },
+  {
+    resource: ({ id }) => ({ type: "customer", id }),
+    recover: async ({ input, output, idempotencyKey }) => {
+      await crm.customers.update(
+        input.id,
+        { name: output.previousName },
+        { idempotencyKey },
+      );
+    },
+  },
+);
+
+await rollbackOnError(async () => {
+  await updateCustomer({ id: "cus_123", name: "Ada" });
+  await publishCustomerProfile("cus_123");
+});
+```
+
+If `publishCustomerProfile()` throws, Crux runs the registered recovery
+handlers in causal LIFO order. When recovery completes, the original callback
+error is rethrown. If recovery is incomplete, Crux throws `RollbackError` with
+the original callback error as `cause` and the honest per-unit result in
+`error.result`.
+
+## Define recovery deliberately
+
+A recoverable effect can derive recovery from its input and output, as above,
+or capture pre-state before making the change:
+
+```ts
+const replaceSettings = effect(
+  "settings.replace",
+  async (
+    input: { accountId: string; settings: Settings },
+    { idempotencyKey },
+  ) => {
+    await api.settings.replace(input.accountId, input.settings, {
+      idempotencyKey,
+    });
+  },
+  {
+    resource: ({ accountId }) => ({
+      type: "account-settings",
+      id: accountId,
+    }),
+    recover: {
+      capture: async ({ input }) =>
+        api.settings.get(input.accountId),
+      execute: async ({ input, captured, idempotencyKey }) => {
+        await api.settings.replace(input.accountId, captured, {
+          idempotencyKey,
+        });
+      },
+    },
+  },
+);
+```
+
+Capture runs before the executor. Resource projection and captured state stay
+inside the in-process ledger; observability and automatic evidence receive only
+the safe resource summary and receipt status.
+
+Use the execution and recovery `idempotencyKey` values when the external API
+supports them. They are stable for that occurrence and intentionally different
+from each other.
+
+## Keep strict rollback boundaries strict
+
+`rollbackOnError()` requires every effect in the boundary to define recovery
+by default. An irreversible effect is rejected before its executor runs, and
+the diagnostic names the effect and boundary.
+
+Choose one of three fixes:
+
+1. Define recovery for the effect.
+2. Move the effect outside the rollback boundary.
+3. Explicitly accept partial rollback with
+   `{ recovery: "best-effort" }`.
+
+```ts
+await rollbackOnError(
+  async () => {
+    await updateCustomer({ id: "cus_123", name: "Ada" });
+    await sendWelcomeEmail("cus_123");
+  },
+  { recovery: "best-effort" },
+);
+```
+
+Best-effort mode does not pretend the email was undone. A later failure
+produces a `RollbackError` whose unit results identify the irreversible work.
+
+## Keep a receipt when you need direct recovery
+
+Calling an effect returns its ordinary output. Use `.run()` when application
+code also needs the receipt:
+
+```ts
+import { recover } from "@use-crux/core/effect";
+
+const execution = await updateCustomer.run({
+  id: "cus_123",
+  name: "Ada",
+});
+
+console.log(execution.output);
+
+const recovery = await recover(execution.receipt, {
+  reason: "The customer cancelled the change",
+});
+```
+
+A recoverable definition also exposes
+`updateCustomer.recover(execution.receipt)`. Recovery is idempotent: after a
+successful recovery, another call reports `already_recovered`.
+
+## Roll back a boundary later
+
+The callback receives a controller. Keep its JSON-safe `ref` to roll back the
+whole boundary after the callback has returned:
+
+```ts
+import { rollback } from "@use-crux/core/effect";
+
+const scope = await rollbackOnError(async (boundary) => {
+  await updateCustomer({ id: "cus_123", name: "Ada" });
+  return boundary.ref;
+});
+
+const result = await rollback(scope, {
+  reason: "The approval was withdrawn",
+});
+```
+
+You can also call `boundary.rollback()` inside the callback. Starting rollback
+makes that boundary terminal, so it admits no new effects.
+
+This release keeps receipts, scope refs, captured state, and recovery handlers
+in process. They do not survive a restart and are not a durable transaction
+log.
+
+## Reconcile an unknown external outcome
+
+When a provider accepts a request but loses the response, throw
+`EffectOutcomeUnknownError` from the executor or recovery handler. Crux records
+the receipt as ambiguous and will not guess or retry it.
+
+The executor context provides `receiptId` before the external call. Retain a
+receipt ref beside the provider operation ID, confirm the actual provider
+outcome, then reconcile it:
+
+```ts
+import {
+  EffectOutcomeUnknownError,
+  reconcileEffect,
+  type EffectReceiptRef,
+} from "@use-crux/core/effect";
+
+let receipt: EffectReceiptRef | undefined;
+
+const chargeCustomer = effect(
+  "billing.charge",
+  async (input: ChargeInput, context) => {
+    receipt = {
+      kind: "effect.receipt",
+      id: context.receiptId,
+      effectId: "billing.charge",
+    };
+    try {
+      return await billing.charge(input, {
+        idempotencyKey: context.idempotencyKey,
+      });
+    } catch (cause) {
+      throw new EffectOutcomeUnknownError(
+        "The provider did not confirm the charge outcome",
+        { providerOperationId: input.operationId },
+        { cause },
+      );
+    }
+  },
+  { recover: refundCharge },
+);
+
+// After independently confirming the provider result:
+if (receipt) {
+  await reconcileEffect(receipt, {
+    outcome: "failed",
+    reason: "The provider confirms that no charge was created",
+  });
+}
+```
+
+Confirming success requires the known JSON-safe output. Confirming failure
+removes the prepared recovery unit. Reconciliation is the only supported exit
+from an unknown outcome.
+
+## Next
+
+- [Effects API reference](/docs/reference/crux-core/effect)
+- [Effects error codes](/docs/errors#effects-codes)
+- [Execution evidence](/docs/guides/observability/execution-evidence)

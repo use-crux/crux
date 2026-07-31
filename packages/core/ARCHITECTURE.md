@@ -219,6 +219,15 @@ packages/core/src/       Published as @use-crux/core
 │   ├── pending.ts      Live root pending-set and drain-to-empty microtask re-check
 │   ├── state.ts        Functional scope state, facet writes, sealing, and reroute policy
 │   └── types.ts        Closed scope kinds, descriptors, policies, outcomes, state, and sealing reasons
+├── effect/             In-process custom effects, receipts, recovery, rollback boundaries, and reconciliation
+│   ├── index.ts        Curated `@use-crux/core/effect` public surface
+│   ├── define-effect.ts   effect() overloads, definition registry, and callable assembly
+│   ├── recover.ts      Individual receipt recovery and ambiguous-outcome reconciliation
+│   ├── rollback-on-error.ts   Automatic/manual boundary lifecycle and error precedence
+│   ├── rollback.ts     Delayed scope rollback entrypoint
+│   ├── errors.ts       Stable Effects code catalog, CruxEffectError, RollbackError, and EffectOutcomeUnknownError
+│   ├── types.ts / receipt-types.ts   Public definition, scope, result, receipt, and recovery contracts
+│   └── internal/       Ledger, pure planner, causal stack, occurrence identity, execution, evidence, and observability
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies
