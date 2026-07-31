@@ -7,7 +7,8 @@
 import { indexedNamespacePrefix, listIndexedEntries } from '../../indexed-knowledge/keys'
 import type { JsonObject, RecordEntry, RecordStore } from '../../storage'
 import { isAssertionClaimRecord, type AssertionClaimRecord } from '../derive/assertion-claims'
-import { knowledgeAssertionsItemKey } from '../keys'
+import { isAssertionRelationClaimRecord, type AssertionRelationClaimRecord } from '../derive/assertion-relation-claims'
+import { knowledgeAssertionsItemKey, knowledgeAssertionsRelationKey } from '../keys'
 import { encodeKnowledgeRef } from '../refs'
 import type { buildClaimTargetIndex } from '../derive/targets'
 import {
@@ -16,6 +17,10 @@ import {
   type AssertionSupport,
   type KnowledgeAssertionRecord,
 } from './identity'
+import {
+  createAssertionRelationId,
+  type AssertionRelationRecord,
+} from './relations'
 
 /** Compile assertion claims into generation-scoped assertion records. Internal. */
 export async function compileAssertionRecords(input: {
@@ -25,10 +30,14 @@ export async function compileAssertionRecords(input: {
   readonly generationId: string
   readonly now: number
   readonly targets: Awaited<ReturnType<typeof buildClaimTargetIndex>>
-}): Promise<readonly KnowledgeAssertionRecord[]> {
+}): Promise<{
+  readonly assertions: readonly KnowledgeAssertionRecord[]
+  readonly relations: readonly AssertionRelationRecord[]
+}> {
   const groups = new Map<string, AssertionGroup>()
-  const entries = await readAssertionClaimEntries(input.records, input.indexerId, input.namespace)
+  const entries = await readClaimEntries(input.records, input.indexerId, input.namespace)
   for (const entry of entries) {
+    if (!isAssertionClaimRecord(entry.value)) continue
     const claim = entry.value as AssertionClaimRecord
     const supports = resolveSupports(claim, input.targets)
     if (supports.length === 0) continue
@@ -50,6 +59,7 @@ export async function compileAssertionRecords(input: {
     type: group.type,
     data: normalizeAssertionData(group.data),
     evidence: [...group.supports.values()].sort(compareSupports),
+    provenance: groupProvenance(group.supports),
     stageId: group.stageId,
     stageVersion: group.stageVersion,
     stageFingerprint: group.stageFingerprint,
@@ -69,7 +79,13 @@ export async function compileAssertionRecords(input: {
     ), assertion as unknown as JsonObject)
   }
 
-  return assertions
+  const relations = await compileAssertionRelationRecords({
+    ...input,
+    assertions,
+    entries,
+  })
+
+  return { assertions, relations }
 }
 
 /** Remove assertion records that do not belong to the current generation. Internal. */
@@ -95,7 +111,7 @@ type AssertionGroup = {
   readonly supports: Map<string, AssertionSupport>
 }
 
-async function readAssertionClaimEntries(
+async function readClaimEntries(
   records: RecordStore,
   indexerId: string,
   namespace: string,
@@ -103,11 +119,74 @@ async function readAssertionClaimEntries(
   const entries = await listIndexedEntries(records, `${indexedNamespacePrefix(indexerId, namespace)}claims:`)
   return entries
     .filter((entry) => isAssertionClaimRecord(entry.value))
+    .concat(entries.filter((entry) => isAssertionRelationClaimRecord(entry.value)))
     .sort((left, right) => left.key.localeCompare(right.key))
 }
 
+async function compileAssertionRelationRecords(input: {
+  readonly records: RecordStore
+  readonly indexerId: string
+  readonly namespace: string
+  readonly generationId: string
+  readonly now: number
+  readonly targets: Awaited<ReturnType<typeof buildClaimTargetIndex>>
+  readonly assertions: readonly KnowledgeAssertionRecord[]
+  readonly entries: readonly RecordEntry[]
+}): Promise<readonly AssertionRelationRecord[]> {
+  const assertionIds = new Set(input.assertions.map((assertion) => assertion.assertionId))
+  const groups = new Map<string, AssertionRelationRecord>()
+  for (const entry of input.entries) {
+    if (!isAssertionRelationClaimRecord(entry.value)) continue
+    const claim = entry.value as AssertionRelationClaimRecord
+    if (!assertionIds.has(claim.from.assertionId) || !assertionIds.has(claim.to.assertionId)) continue
+    const evidence = resolveSupports(claim, input.targets)
+    if (evidence.length === 0) continue
+    const relationId = createAssertionRelationId({
+      stageId: claim.stageId,
+      stageVersion: claim.stageVersion,
+      stageFingerprint: claim.stageFingerprint,
+      type: claim.type,
+      from: claim.from,
+      to: claim.to,
+      evidence,
+    })
+    groups.set(relationId, {
+      _cruxRecordType: 'knowledge-assertion-relation',
+      relationId,
+      type: claim.type,
+      from: claim.from,
+      to: claim.to,
+      evidence,
+      provenance: claim.provenance,
+      stageId: claim.stageId,
+      stageVersion: claim.stageVersion,
+      stageFingerprint: claim.stageFingerprint,
+      generationId: input.generationId,
+      namespace: input.namespace,
+      direction: 'directed',
+      createdAt: input.now,
+      updatedAt: input.now,
+    })
+  }
+  const relations = [...groups.values()].sort((left, right) => left.relationId.localeCompare(right.relationId))
+  for (const relation of relations) {
+    await input.records.put(knowledgeAssertionsRelationKey(
+      input.indexerId,
+      input.namespace,
+      relation.stageId,
+      input.generationId,
+      relation.relationId,
+    ), relation as unknown as JsonObject)
+  }
+  return relations
+}
+
 function resolveSupports(
-  claim: AssertionClaimRecord,
+  claim: {
+    readonly evidence: readonly string[]
+    readonly sourceId: string
+    readonly provenance: AssertionSupport['provenance']
+  },
   targets: Awaited<ReturnType<typeof buildClaimTargetIndex>>,
 ): readonly AssertionSupport[] {
   return claim.evidence.flatMap((encoded) => {
@@ -145,4 +224,8 @@ function supportKey(support: AssertionSupport): string {
 
 function compareSupports(left: AssertionSupport, right: AssertionSupport): number {
   return supportKey(left).localeCompare(supportKey(right))
+}
+
+function groupProvenance(supports: ReadonlyMap<string, AssertionSupport>): AssertionSupport['provenance'] {
+  return [...supports.values()].some((support) => support.provenance === 'derived') ? 'derived' : 'exact'
 }

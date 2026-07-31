@@ -11,6 +11,7 @@ import type { EmbeddingModality } from '../embedding'
 import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
 import { loadViewRevision, type ViewRevision } from '../knowledge/view/revision'
+import { createAssertionSet } from '../knowledge/assertions/set'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
 import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
@@ -180,6 +181,10 @@ function createViewHandle<
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => handle.retriever().asTools(toolConfig),
+    assertions: (stage, options) => createAssertionSet({
+      records: config.records, indexerId: config.id, namespace: config.namespace, stage,
+      ...(options?.types ? { selectedTypes: options.types } : {}), resolveRevision: availableRevision,
+    }),
     inspect: () => ({
       id: registration.viewId,
       namespace: config.namespace,

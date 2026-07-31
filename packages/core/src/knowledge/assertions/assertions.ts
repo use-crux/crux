@@ -15,6 +15,7 @@ import type { KnowledgeModel } from '../model'
 import type { KnowledgeRef } from '../refs'
 import type { AssertionSupport } from './identity'
 import { zodSchemaFingerprintValue } from './identity'
+import type { AssertionIdentityRefInput, AssertionRef, AssertionRelationType } from './relations'
 
 /** Placeholder input supplied to deterministic assertion runs. */
 export interface AssertionRunInput {
@@ -28,6 +29,20 @@ export interface AssertionEmitOptions {
   readonly provenance?: 'exact' | 'derived'
 }
 
+/** Reference accepted by {@link AssertionEmitApi.relate}. */
+export type AssertionRelationEndpoint<TTypes extends Record<string, z.ZodType<unknown>>> =
+  | number
+  | AssertionRef
+  | {
+      [T in keyof TTypes & string]: AssertionIdentityRefInput<T, z.infer<TTypes[T]>>
+    }[keyof TTypes & string]
+
+/** Options attached to an emitted assertion relation. */
+export interface AssertionRelateOptions {
+  readonly evidence: KnowledgeRef | readonly KnowledgeRef[]
+  readonly provenance?: 'exact' | 'derived'
+}
+
 /** Claim emission API supplied to deterministic assertion runs. */
 export interface AssertionEmitApi<TTypes extends Record<string, z.ZodType<unknown>>> {
   /** Emit one typed assertion claim. */
@@ -35,6 +50,13 @@ export interface AssertionEmitApi<TTypes extends Record<string, z.ZodType<unknow
     type: TType,
     data: z.infer<TTypes[TType]>,
     opts: AssertionEmitOptions,
+  ): AssertionRef
+  /** Emit one context-independent relation between assertions. */
+  relate(
+    type: AssertionRelationType,
+    from: AssertionRelationEndpoint<TTypes>,
+    to: AssertionRelationEndpoint<TTypes>,
+    opts: AssertionRelateOptions,
   ): void
 }
 
@@ -50,6 +72,7 @@ export type AssertionOf<
   K extends keyof TTypes = keyof TTypes,
 > = {
   [T in K]: {
+    readonly assertionId: string
     readonly type: T
     readonly data: z.infer<TTypes[T]>
     readonly evidence: readonly AssertionSupport[]

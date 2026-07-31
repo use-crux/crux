@@ -31,6 +31,8 @@ import type {
 } from './knowledge-base-runtime'
 import type { CorpusSyncResult } from '../indexing'
 import type { KnowledgeBaseViewConfig, KnowledgeView } from '../knowledge/view/view'
+import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from '../knowledge/assertions/set'
+import type { AssertionStage } from '../knowledge/assertions/assertions'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -153,6 +155,11 @@ export interface KnowledgeBase<
   scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase<TMetadataSchema, TModality>
   /** Return a live connected knowledge view selected by schema-typed metadata. */
   view(config: KnowledgeBaseViewConfig<TMetadataSchema>): KnowledgeView<TMetadataSchema, TModality>
+  /** Return a lazy set of persisted assertions produced by one assertion stage. */
+  assertions<
+    const TTypes extends Record<string, z.ZodType<unknown>>,
+    const TSelected extends keyof TTypes & string = keyof TTypes & string,
+  >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>): AssertionSet<TTypes, TSelected>
   /** Return this knowledge base as a retriever. */
   retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>, TModality>
   /** Return this knowledge base as a retrieval recipe. */
@@ -212,6 +219,16 @@ function createKnowledgeBaseHandle<
         retriever: runtime.retriever,
         knowledgeBinding: runtime.knowledgeBinding,
       }),
+    assertions: <
+      const TTypes extends Record<string, z.ZodType<unknown>>,
+      const TSelected extends keyof TTypes & string = keyof TTypes & string,
+    >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>) => createAssertionSet({
+      records: config.records ?? config.storage?.records,
+      indexerId: config.id,
+      namespace: config.namespace,
+      stage,
+      ...(options?.types ? { selectedTypes: options.types } : {}),
+    }),
     retriever: (retrieverConfig?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>) =>
       runtime.retriever(retrieverConfig),
     recipe: <const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(

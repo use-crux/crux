@@ -5,7 +5,7 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { indexingPipeline } from '../src/indexing'
-import { assertions, type AssertionStage } from '../src/knowledge'
+import { assertions, knowledgeBase, type AssertionSet, type AssertionStage } from '../src/knowledge'
 import type { AssertionDeriveStage } from '../src/knowledge/derive/stage'
 import type { KnowledgeModel } from '../src/knowledge/model'
 
@@ -26,6 +26,15 @@ const facts = assertions({
       evidence: [{ kind: 'chunk', sourceId: 'guide', chunkId: 'c1' }],
       provenance: 'exact',
     })
+    const newer = api.emit('fact', { value: 'new' }, {
+      evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' },
+    })
+    api.relate('supersedes', newer, { type: 'fact', data: { value: 'old' } }, {
+      evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' },
+    })
+    api.relate('supports', 0, newer, {
+      evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' },
+    })
 
     api.emit(
       // @ts-expect-error Assertion type names are constrained by the authored vocabulary.
@@ -37,6 +46,20 @@ const facts = assertions({
       'fact',
       // @ts-expect-error Assertion data is inferred from the selected schema.
       { value: 1 },
+      { evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' } },
+    )
+    api.relate(
+      // @ts-expect-error Assertion relation type names are closed.
+      'replaces',
+      newer,
+      newer,
+      { evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' } },
+    )
+    api.relate(
+      'supersedes',
+      newer,
+      // @ts-expect-error Canonical assertion relation refs are typed by authored schemas.
+      { type: 'fact', data: { value: 1 } },
       { evidence: { kind: 'chunk', sourceId: 'guide', chunkId: 'c1' } },
     )
   },
@@ -52,6 +75,26 @@ expectTypeOf(facts).toMatchTypeOf<AssertionStage<{
 }>>()
 const assertionDeriveStage: AssertionDeriveStage = facts
 indexingPipeline({ derive: [assertionDeriveStage] })
+
+const kb = knowledgeBase({ id: 'docs' })
+const factSet = kb.assertions(facts, { types: ['fact'] as const })
+expectTypeOf(factSet).toMatchTypeOf<AssertionSet<typeof facts.types, 'fact'>>()
+factSet.resolve({
+  id: 'policy',
+  version: 1,
+  run: ({ assertions: items }, decision) => {
+    const first = items[0]
+    if (first) {
+      expectTypeOf(first.type).toEqualTypeOf<'fact'>()
+      decision.unresolved(first, 'review')
+    }
+  },
+})
+kb.assertions(
+  facts,
+  // @ts-expect-error Assertion set type filters are constrained by the authored vocabulary.
+  { types: ['missing'] as const },
+)
 
 assertions({
   id: 'model-facts',

@@ -9,6 +9,7 @@ import { indexedNamespacePrefix, listIndexedEntries } from '../indexed-knowledge
 import type { JsonObject, RecordEntry, RecordStore } from '../storage'
 import { compileAssertionRecords, cleanupStaleAssertionRecords } from './assertions/compile'
 import type { KnowledgeAssertionRecord } from './assertions/identity'
+import type { AssertionRelationRecord } from './assertions/relations'
 import { createKnowledgeGenerationStore, type KnowledgeGenerationRetention } from './generation'
 import {
   knowledgeAdjacencyInKey,
@@ -49,6 +50,8 @@ export interface CompileKnowledgeGenerationResult {
   readonly entities: readonly KnowledgeEntityRecord[]
   /** Assertion records written to the published generation. */
   readonly assertions: readonly KnowledgeAssertionRecord[]
+  /** Assertion relation records written to the published generation. */
+  readonly assertionRelations: readonly AssertionRelationRecord[]
   /** Claims that could not resolve into an edge in this compile. */
   readonly pendingClaims: readonly ClaimRecord[]
 }
@@ -84,7 +87,7 @@ export async function compileKnowledgeGeneration(
 
   const generationId = createGenerationId()
   const now = Date.now()
-  const assertions = await compileAssertionRecords({
+  const assertionCompile = await compileAssertionRecords({
     records: input.records,
     indexerId: input.indexerId,
     namespace: input.namespace,
@@ -92,6 +95,7 @@ export async function compileKnowledgeGeneration(
     now,
     targets: targetIndex,
   })
+  const { assertions, relations: assertionRelations } = assertionCompile
   const edges = [...groups.values()].map((group) => createKnowledgeEdgeRecord({
     type: group.type,
     from: group.from,
@@ -128,7 +132,7 @@ export async function compileKnowledgeGeneration(
     generationId,
   })
 
-  return { generationId, edges, entities, assertions, pendingClaims }
+  return { generationId, edges, entities, assertions, assertionRelations, pendingClaims }
 }
 
 type TargetIndex = Awaited<ReturnType<typeof buildClaimTargetIndex>>

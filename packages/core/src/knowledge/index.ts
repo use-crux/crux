@@ -29,6 +29,8 @@ export type { AssertionDeriveStage, BaseDeriveStage, DeriveStage, RelationDerive
 export type {
   AssertionEmitApi,
   AssertionEmitOptions,
+  AssertionRelateOptions,
+  AssertionRelationEndpoint,
   AssertionOf,
   AssertionRun,
   AssertionRunInput,
@@ -36,6 +38,28 @@ export type {
   AssertionsConfig,
 } from './assertions/assertions'
 export type { AssertionSupport, KnowledgeAssertionRecord } from './assertions/identity'
+export type {
+  AssertionListOptions,
+  AssertionListPage,
+  AssertionSet,
+  AssertionSetOptions,
+} from './assertions/set'
+export type {
+  AssertionDecisionEvidence,
+  AssertionPolicyDecision,
+  AssertionPolicyInput,
+  AssertionResolutionHandle,
+  AssertionResolutionPolicy,
+  AssertionResolutionResult,
+  AssertionResolutionStatus,
+  AssertionResolutionTrace,
+} from './assertions/resolution'
+export type {
+  AssertionIdentityRefInput,
+  AssertionRef,
+  AssertionRelationRecord,
+  AssertionRelationType,
+} from './assertions/relations'
 export type { KnowledgeModel, KnowledgeModelConfig } from './model'
 export type {
   KnowledgeLocator,

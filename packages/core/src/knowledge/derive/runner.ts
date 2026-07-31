@@ -97,7 +97,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         sourceHash,
         stageFingerprint,
         previous,
-        claims: run.claims,
+        claims: [...run.claims, ...run.relationClaims],
       })
       results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
       continue

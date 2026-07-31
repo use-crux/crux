@@ -13,6 +13,8 @@ import type { retrieve } from '../../retrieval/recipe/steps/built-ins'
 import type { RetrievalStep } from '../../retrieval/recipe/step'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from '../../retrieval/types'
 import type { KnowledgeBaseFilter, KnowledgeBaseGroundingConfig, KnowledgeBaseRetrieverConfig } from '../../retrieval/knowledge-base'
+import type { AssertionStage } from '../assertions/assertions'
+import type { AssertionSet, AssertionSetOptions } from '../assertions/set'
 import type { NormalizedViewWhere, ViewWhere } from './where'
 
 /** Configuration accepted by {@link KnowledgeView.retriever}. */
@@ -78,6 +80,11 @@ export interface KnowledgeView<
   grounding(config?: KnowledgeBaseGroundingConfig | RetrievalRecipeGroundingConfig): Grounding
   /** Return this view as retrieval tools. */
   tools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
+  /** Return a lazy view-bound set of persisted assertions. */
+  assertions<
+    const TTypes extends Record<string, z.ZodType<unknown>>,
+    const TSelected extends keyof TTypes & string = keyof TTypes & string,
+  >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>): AssertionSet<TTypes, TSelected>
   /** Inspect this view handle without forcing a resolve. */
   inspect(): KnowledgeViewInspection
 }

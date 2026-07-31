@@ -8,6 +8,8 @@ import { z } from 'zod'
 import { stableStringify } from '../../indexing/hash'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { AssertionStage } from '../assertions/assertions'
+import { createAssertionIdentity, toAssertionJsonData } from '../assertions/identity'
+import type { AssertionRef } from '../assertions/relations'
 import type { KnowledgeRef } from '../refs'
 import {
   toAssertionClaimRecords,
@@ -15,6 +17,12 @@ import {
   type AssertionClaimRecord,
   type RawAssertionClaim,
 } from './assertion-claims'
+import {
+  toAssertionRelationClaimRecords,
+  validateAssertionRelationClaims,
+  type AssertionRelationClaimRecord,
+  type RawAssertionRelationClaim,
+} from './assertion-relation-claims'
 
 const MAX_PROMPT_CHARS = 12000
 const MAX_CHUNK_CHARS = 1200
@@ -31,7 +39,11 @@ export async function runAssertionStage(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
-}): Promise<{ readonly claims: readonly AssertionClaimRecord[]; readonly warnings: readonly string[] }> {
+}): Promise<{
+  readonly claims: readonly AssertionClaimRecord[]
+  readonly relationClaims: readonly AssertionRelationClaimRecord[]
+  readonly warnings: readonly string[]
+}> {
   return input.stage.mode === 'run'
     ? runDeterministic(input)
     : runGenerated(input)
@@ -41,8 +53,14 @@ async function runDeterministic(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
-}): Promise<{ readonly claims: readonly AssertionClaimRecord[]; readonly warnings: readonly string[] }> {
+}): Promise<{
+  readonly claims: readonly AssertionClaimRecord[]
+  readonly relationClaims: readonly AssertionRelationClaimRecord[]
+  readonly warnings: readonly string[]
+}> {
   const raw: RawAssertionClaim[] = []
+  const rawRelations: RawAssertionRelationClaim[] = []
+  const emitted: AssertionRef[] = []
   const run = input.stage.run
   if (!run) throw new Error(`Derive ${input.stage.id} cannot run.`)
   await run({ document: input.document, chunks: input.chunks }, {
@@ -53,6 +71,12 @@ async function runDeterministic(input: {
         evidence: opts.evidence,
         provenance: opts.provenance,
       })
+      const ref = createEmittedRef(input.stage, type, data)
+      emitted.push(ref)
+      return ref
+    },
+    relate: (type, from, to, opts) => {
+      rawRelations.push({ type, from, to, evidence: opts.evidence, provenance: opts.provenance })
     },
   })
 
@@ -60,8 +84,13 @@ async function runDeterministic(input: {
   if (validated.errors.length > 0) {
     throw new Error(validated.errors[0] ?? `Derive ${input.stage.id} emitted an invalid assertion.`)
   }
+  const relations = validateAssertionRelationClaims(input.stage, rawRelations, input.chunks, { emitted })
+  if (relations.errors.length > 0) {
+    throw new Error(relations.errors[0] ?? `Derive ${input.stage.id} emitted an invalid assertion relation.`)
+  }
   return {
     claims: toAssertionClaimRecords(input.stage, input.document.sourceId, validated.claims),
+    relationClaims: toAssertionRelationClaimRecords(input.stage, input.document.sourceId, relations.claims),
     warnings: [],
   }
 }
@@ -70,7 +99,11 @@ async function runGenerated(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
-}): Promise<{ readonly claims: readonly AssertionClaimRecord[]; readonly warnings: readonly string[] }> {
+}): Promise<{
+  readonly claims: readonly AssertionClaimRecord[]
+  readonly relationClaims: readonly AssertionRelationClaimRecord[]
+  readonly warnings: readonly string[]
+}> {
   const prompt = renderPrompt(input.document, input.chunks, input.stage)
   const first = await readGeneratedAssertionClaims(input.stage, input.chunks, prompt)
   const valid = new Map<string, AssertionClaimRecord>()
@@ -89,7 +122,7 @@ async function runGenerated(input: {
     }
   }
 
-  return { claims: [...valid.values()], warnings }
+  return { claims: [...valid.values()], relationClaims: [], warnings }
 }
 
 async function readGeneratedAssertionClaims(
@@ -145,6 +178,25 @@ function renderPrompt(
 
 function addRecords(target: Map<string, AssertionClaimRecord>, records: readonly AssertionClaimRecord[]): void {
   for (const record of records) target.set(record.claimHash, record)
+}
+
+function createEmittedRef(
+  stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
+  type: string,
+  data: unknown,
+): AssertionRef {
+  const schema = stage.types[type]
+  const parsed = schema?.safeParse(data)
+  const json = parsed?.success ? toAssertionJsonData(parsed.data) : undefined
+  return {
+    assertionId: createAssertionIdentity({
+      stageId: stage.id,
+      stageVersion: stage.version,
+      stageFingerprint: stage.fingerprint(),
+      type,
+      data: json ?? null,
+    }),
+  }
 }
 
 function bound(value: string, max = MAX_PROMPT_CHARS): string {

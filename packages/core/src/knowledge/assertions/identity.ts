@@ -27,6 +27,7 @@ export interface KnowledgeAssertionRecord {
   readonly type: string
   readonly data: JsonValue
   readonly evidence: readonly AssertionSupport[]
+  readonly provenance: KnowledgeEvidenceProvenance
   readonly stageId: string
   readonly stageVersion: number
   readonly stageFingerprint: string

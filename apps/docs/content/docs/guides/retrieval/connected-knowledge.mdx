@@ -240,6 +240,106 @@ const tenantPublished = tenantDocs.view({
 
 The same view id can exist in another namespace without sharing members, graph traversal, or hydrated hits.
 
+## Assertions
+
+Use `assertions()` when indexing should publish typed propositions with evidence supports. Assertion data is described by Zod schemas; evidence must point at indexed chunks.
+
+```ts
+import { z } from "zod";
+import { assertions } from "@use-crux/core/knowledge";
+
+const productFacts = assertions({
+  id: "product-facts",
+  version: 1,
+  types: {
+    limit: z.object({
+      name: z.string(),
+      value: z.string(),
+    }).describe("A documented product limit."),
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("100 projects")) continue;
+
+      api.emit("limit", {
+        name: "project-count",
+        value: "100 projects",
+      }, {
+        evidence: {
+          kind: "chunk",
+          sourceId: chunk.sourceId,
+          chunkId: chunk.chunkId,
+        },
+        provenance: "exact",
+      });
+    }
+  },
+});
+```
+
+Add assertion stages to the same `derive` pipeline as relations:
+
+```ts
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  pipeline: indexingPipeline({
+    derive: [productFacts],
+  }),
+});
+```
+
+Read assertions from either a knowledge base or a view. The `types` option narrows the returned item type:
+
+```ts
+const limits = docs.assertions(productFacts, {
+  types: ["limit"],
+});
+
+const page = await limits.list({ limit: 25 });
+
+for await (const assertion of limits.stream()) {
+  console.log(assertion.data.name, assertion.evidence);
+}
+```
+
+View-bound assertion sets resolve the view first. Supports outside the pinned revision are excluded; assertions with no visible supports are hidden.
+
+Assertion stages can also relate assertions they emit in the same source run, or canonical assertion identities they compute:
+
+```ts
+run: ({ chunks }, api) => {
+  const evidence = {
+    kind: "chunk",
+    sourceId: chunks[0].sourceId,
+    chunkId: chunks[0].chunkId,
+  } as const;
+
+  const current = api.emit("limit", {
+    name: "project-count",
+    value: "100 projects",
+  }, { evidence });
+
+  api.relate("supersedes", current, {
+    type: "limit",
+    data: { name: "project-count", value: "75 projects" },
+  }, { evidence });
+}
+```
+
+Resolve a set to apply explicit assertion relations such as `supersedes` and `conflictsWith`:
+
+```ts
+const resolved = await docs.assertions(productFacts).resolve().result();
+
+resolved.selected;
+resolved.superseded;
+resolved.contested;
+resolved.trace;
+```
+
+Resolution never mutates the source assertions. Assertion relations are separate records, not graph edges, so `expandRelations()` does not traverse assertion supports or assertion relations.
+
 ## What Runs When
 
 Plain `knowledgeBase()` indexing and retrieval behave as before. Passing a pipeline adds the connected knowledge work you configured.

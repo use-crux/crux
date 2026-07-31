@@ -13,6 +13,7 @@ import { toAssertionJsonData } from '../assertions/identity'
 import { knowledgeClaimsKey } from '../keys'
 import { encodeKnowledgeRef, isKnowledgeRef, type KnowledgeRef } from '../refs'
 import { claimManifestKey, readClaimManifest, type ClaimManifestRecord } from './claims'
+import { isAssertionRelationClaimRecord, type AssertionRelationClaimRecord } from './assertion-relation-claims'
 import type { DeriveStage } from './stage'
 
 /** Cached assertion claim emitted from one source. */
@@ -143,7 +144,7 @@ export async function replaceAssertionClaimRecords(args: {
   readonly sourceHash: string
   readonly stageFingerprint: string
   readonly previous: ClaimManifestRecord | undefined
-  readonly claims: readonly AssertionClaimRecord[]
+  readonly claims: readonly (AssertionClaimRecord | AssertionRelationClaimRecord)[]
 }): Promise<void> {
   await deletePreviousClaims(args)
   await Promise.all(args.claims.map((claim) => args.records.put(claimKey(args, claim.claimHash), claim)))
@@ -218,8 +219,8 @@ function isCachedAssertionClaimRecord(
   stage: DeriveStage,
   sourceId: string,
   claimHash: string,
-): value is AssertionClaimRecord {
-  return isStoredAssertionClaimRecord(value) &&
+): value is AssertionClaimRecord | AssertionRelationClaimRecord {
+  return (isStoredAssertionClaimRecord(value) || isAssertionRelationClaimRecord(value)) &&
     value.stageId === stage.id &&
     value.stageVersion === stage.version &&
     value.sourceId === sourceId &&

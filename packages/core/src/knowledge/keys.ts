@@ -102,6 +102,37 @@ export function knowledgeAssertionsItemKey(
   return `${indexedNamespacePrefix(indexerId, namespace)}assertions:${stageId}:gen:${generationId}:item:${assertionId}`
 }
 
+/** Prefix for generation-scoped assertion item records. */
+export function knowledgeAssertionsItemPrefix(
+  indexerId: string,
+  namespace: string,
+  stageId: string,
+  generationId: string,
+): string {
+  return `${indexedNamespacePrefix(indexerId, namespace)}assertions:${stageId}:gen:${generationId}:item:`
+}
+
+/** Key for a generation-scoped assertion relation record. */
+export function knowledgeAssertionsRelationKey(
+  indexerId: string,
+  namespace: string,
+  stageId: string,
+  generationId: string,
+  relationId: string,
+): string {
+  return `${indexedNamespacePrefix(indexerId, namespace)}assertions:${stageId}:gen:${generationId}:relation:${relationId}`
+}
+
+/** Prefix for generation-scoped assertion relation records. */
+export function knowledgeAssertionsRelationPrefix(
+  indexerId: string,
+  namespace: string,
+  stageId: string,
+  generationId: string,
+): string {
+  return `${indexedNamespacePrefix(indexerId, namespace)}assertions:${stageId}:gen:${generationId}:relation:`
+}
+
 /** Key for a view membership index entry. */
 export function knowledgeViewIndexKey(
   indexerId: string,
