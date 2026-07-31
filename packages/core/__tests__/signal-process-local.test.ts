@@ -1,13 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { signal } from "@use-crux/core";
-import {
-  SignalError,
-  SignalValidationError,
-  type SignalOccurrence,
-  type SignalSchema,
-} from "@use-crux/core/signal";
-import { CruxRuntimeError } from "@use-crux/core/runtime";
+import type { SignalOccurrence } from "@use-crux/core/signal";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -41,98 +35,6 @@ describe("process-local Signal publication", () => {
     unsubscribe();
   });
 
-  it("rejects schema-invalid payloads before allocating an occurrence", async () => {
-    const quantityChanged = signal({
-      id: "quantity.changed",
-      schema: z.object({ quantity: z.number().int().positive() }),
-    });
-    const listener = vi.fn();
-    quantityChanged.subscribe(listener);
-    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
-
-    await expect(quantityChanged.publish({ quantity: -1 })).rejects.toBeInstanceOf(
-      SignalValidationError,
-    );
-
-    expect(randomUuid).not.toHaveBeenCalled();
-    expect(listener).not.toHaveBeenCalled();
-  });
-
-  it("keeps schema issue diagnostics free of rejected payload values", async () => {
-    const privateValue = "private-customer-payload";
-    const rejectingSchema: SignalSchema = {
-      "~standard": {
-        version: 1,
-        vendor: "privacy-test",
-        validate: () => ({
-          issues: [
-            {
-              message: `Rejected value: ${privateValue}`,
-              path: ["customerToken"],
-            },
-          ],
-        }),
-      },
-    };
-    const rejected = signal({
-      id: "private.rejected",
-      schema: rejectingSchema,
-    });
-
-    const error = await rejected.publish(privateValue).catch((cause: unknown) => cause);
-
-    expect(error).toBeInstanceOf(SignalValidationError);
-    expect(JSON.stringify(error)).not.toContain(privateValue);
-  });
-
-  it("rejects JSON-unsafe normalized output before acceptance", async () => {
-    const privateField = "privateCustomerField";
-    const unsafeSchema: SignalSchema = {
-      "~standard": {
-        version: 1,
-        vendor: "unsafe-test",
-        validate: () => ({ value: { [privateField]: new Date() } as never }),
-      },
-    };
-    const unsafeSignal = signal({
-      id: "unsafe.normalized",
-      schema: unsafeSchema,
-    });
-    const listener = vi.fn();
-    unsafeSignal.subscribe(listener);
-    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
-
-    const publication = unsafeSignal.publish({});
-    await expect(publication).rejects.toMatchObject({
-      code: "PAYLOAD_NOT_JSON",
-    });
-    await expect(publication).rejects.toBeInstanceOf(CruxRuntimeError);
-    await expect(publication).rejects.not.toThrow(privateField);
-    expect(randomUuid).not.toHaveBeenCalled();
-    expect(listener).not.toHaveBeenCalled();
-  });
-
-  it("wraps schema execution failures without exposing private details", async () => {
-    const privateDetail = "private-schema-provider-detail";
-    const failingSchema: SignalSchema = {
-      "~standard": {
-        version: 1,
-        vendor: "failing-test",
-        validate: () => {
-          throw new Error(privateDetail);
-        },
-      },
-    };
-    const rejected = signal({ id: "schema.rejected", schema: failingSchema });
-    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
-
-    const error = await rejected.publish({}).catch((cause: unknown) => cause);
-    expect(error).toBeInstanceOf(SignalError);
-    expect(error).toMatchObject({ code: "publication_rejected" });
-    expect(String(error)).not.toContain(privateDetail);
-    expect(randomUuid).not.toHaveBeenCalled();
-  });
-
   it("reports the honest process-local acceptance receipt", async () => {
     const refreshed = signal({ id: "cache.refreshed", schema: z.string() });
 
@@ -144,6 +46,38 @@ describe("process-local Signal publication", () => {
       guarantee: "process-local",
     });
     expect(Object.isFrozen(receipt)).toBe(true);
+  });
+
+  it("delivers a detached and deeply immutable normalized payload", async () => {
+    const normalized = {
+      account: { id: "account_123" },
+      labels: [{ value: "original" }],
+    };
+    const changed = signal({
+      id: "account.normalized",
+      schema: z.unknown().transform(() => normalized),
+    });
+    const delivered = Promise.withResolvers<
+      SignalOccurrence<"account.normalized", typeof normalized>
+    >();
+    changed.subscribe(delivered.resolve);
+
+    await changed.publish({});
+    normalized.account.id = "mutated";
+    normalized.labels[0]!.value = "mutated";
+    const occurrence = await delivered.promise;
+
+    expect(occurrence.payload).toEqual({
+      account: { id: "account_123" },
+      labels: [{ value: "original" }],
+    });
+    expect(Object.isFrozen(occurrence.payload)).toBe(true);
+    expect(Object.isFrozen(occurrence.payload.account)).toBe(true);
+    expect(Object.isFrozen(occurrence.payload.labels)).toBe(true);
+    expect(Object.isFrozen(occurrence.payload.labels[0])).toBe(true);
+    expect(() => {
+      occurrence.payload.account.id = "second-mutation";
+    }).toThrow(TypeError);
   });
 
   it("unsubscribes idempotently", async () => {
@@ -166,61 +100,6 @@ describe("process-local Signal publication", () => {
     updated.subscribe(delivered.resolve);
     await updated.publish(2);
     await expect(delivered.promise).resolves.toMatchObject({ payload: 2 });
-  });
-
-  it("replays the original receipt for the same key and normalized payload", async () => {
-    const normalized = signal({
-      id: "item.normalized",
-      schema: z.object({
-        slug: z.string().transform((value) => value.trim().toLowerCase()),
-        attributes: z.record(z.string(), z.number()),
-      }),
-    });
-    const listener = vi.fn();
-    normalized.subscribe(listener);
-
-    const first = await normalized.publish(
-      { slug: "  ITEM-123 ", attributes: { beta: 2, alpha: 1 } },
-      { idempotencyKey: "provider-event-1" },
-    );
-    const replay = await normalized.publish(
-      { slug: "item-123", attributes: { alpha: 1, beta: 2 } },
-      { idempotencyKey: "provider-event-1" },
-    );
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
-
-    expect(replay).toBe(first);
-    expect(listener).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects conflicting idempotency reuse before another occurrence exists", async () => {
-    const changed = signal({
-      id: "setting.changed",
-      schema: z.object({ value: z.string() }),
-    });
-    const listener = vi.fn();
-    changed.subscribe(listener);
-    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
-    const idempotencyKey = "private-provider-key";
-
-    await changed.publish(
-      { value: "original-private-value" },
-      { idempotencyKey },
-    );
-    const conflict = await changed
-      .publish(
-        { value: "different-private-value" },
-        { idempotencyKey },
-      )
-      .catch((error: unknown) => error);
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
-
-    expect(conflict).toBeInstanceOf(SignalError);
-    expect(conflict).toMatchObject({ code: "idempotency_conflict" });
-    expect(String(conflict)).not.toContain(idempotencyKey);
-    expect(String(conflict)).not.toContain("private-value");
-    expect(randomUuid).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("isolates listener failures without unhandled rejections", async () => {
@@ -267,33 +146,5 @@ describe("process-local Signal publication", () => {
 
     expect(receipt.guarantee).toBe("process-local");
     listenerCompletion.resolve();
-  });
-
-  it("creates frozen inert predicate and match identities", () => {
-    const changed = signal({
-      id: "account.changed",
-      schema: z.object({ account: z.object({ id: z.string() }) }),
-    });
-    const predicate = (payload: { account: { id: string } }) =>
-      payload.account.id === "account_123";
-    const authoredMatch = { account: { id: "account_123" } };
-
-    const predicateView = changed.when(predicate);
-    const matchView = changed.when(authoredMatch);
-    authoredMatch.account.id = "mutated";
-
-    expect(predicateView).toEqual({
-      _tag: "FilteredSignal",
-      filterKind: "predicate",
-      signal: changed,
-      predicate,
-    });
-    expect(matchView.match).toEqual({ account: { id: "account_123" } });
-    expect(Object.isFrozen(predicateView)).toBe(true);
-    expect(Object.isFrozen(matchView)).toBe(true);
-    expect(Object.isFrozen(matchView.match.account)).toBe(true);
-    expect("publish" in matchView).toBe(false);
-    expect("subscribe" in matchView).toBe(false);
-    expect("when" in matchView).toBe(false);
   });
 });

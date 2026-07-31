@@ -7,7 +7,11 @@
 import type { Signal } from "./definition";
 import type { SignalMatch } from "./match";
 import type { JsonValue } from "../storage/types";
-import { cloneSignalJson, freezeSignalJson } from "./canonical-json";
+import {
+  canonicalizeSignalJson,
+  cloneSignalJson,
+  freezeSignalJson,
+} from "./canonical-json";
 import type {
   InferSignalSchemaOutput,
   SignalSchema,
@@ -81,7 +85,10 @@ export function matchSignalView<
   match: SignalMatch<InferSignalSchemaOutput<TSchema>>,
 ): MatchSignalView<TId, TSchema> {
   const retainedMatch = freezeSignalJson(
-    cloneSignalJson(match as JsonValue, "match"),
+    canonicalizeSignalJson(
+      cloneSignalJson(match as JsonValue, "match"),
+      "match",
+    ),
   ) as SignalMatch<InferSignalSchemaOutput<TSchema>>;
   return Object.freeze({
     _tag: "FilteredSignal",
