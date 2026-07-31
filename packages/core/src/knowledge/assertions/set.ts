@@ -6,9 +6,17 @@
 
 import type { z } from 'zod'
 import type { JsonObject, RecordStore } from '../../storage'
+import { contextWithFamily } from '../../prompt/context'
+import type { Context } from '../../prompt/context-types'
+import type { InternalPromptInjection } from '../../prompt/internal-injection'
 import { knowledgeCurrentKey, knowledgeAssertionsItemPrefix, knowledgeAssertionsRelationPrefix } from '../keys'
 import type { ViewRevision } from '../view/revision'
 import type { AssertionOf, AssertionStage } from './assertions'
+import {
+  normalizeAssertionContextOptions,
+  renderAssertionSetContext,
+  type AssertionContextOptions,
+} from './context'
 import type { AssertionSupport, KnowledgeAssertionRecord } from './identity'
 import { isAssertionRelationRecord, type AssertionRelationRecord } from './relations'
 import { createAssertionResolution, type AssertionResolutionHandle, type AssertionResolutionPolicy } from './resolution'
@@ -38,12 +46,19 @@ export interface AssertionSet<
   TTypes extends Record<string, z.ZodType<unknown>>,
   TSelected extends keyof TTypes & string = keyof TTypes & string,
 > {
+  readonly _tag: 'AssertionSet'
+  readonly id: string
+  readonly namespace: string
   /** List persisted assertions with cursor pagination. */
   list(options?: AssertionListOptions): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>>
   /** Stream persisted assertions in key order. */
   stream(): AsyncIterable<AssertionOf<TTypes, TSelected>>
   /** Resolve assertion conflicts and supersession without mutating source assertions. */
   resolve(policy?: AssertionResolutionPolicy<TTypes, TSelected>): AssertionResolutionHandle<TTypes, TSelected>
+  /** Render this assertion set as bounded prompt context. */
+  asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>
+  /** Contribute this assertion set as context when used directly in `use`. */
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
 }
 
 interface AssertionSetFactoryConfig<TTypes extends Record<string, z.ZodType<unknown>>, TSelected extends keyof TTypes & string> {
@@ -73,6 +88,14 @@ export function createAssertionSet<
   async function list(options: AssertionListOptions = {}): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>> {
     if (!config.records) throw new Error('knowledgeBase().assertions() requires record storage.')
     const snapshot = await readAssertionSnapshot(config)
+    return listFromSnapshot(snapshot, options)
+  }
+
+  async function listFromSnapshot(
+    snapshot: Awaited<ReturnType<typeof readAssertionSnapshot<TTypes>>>,
+    options: AssertionListOptions = {},
+  ): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>> {
+    if (!config.records) throw new Error('knowledgeBase().assertions() requires record storage.')
     const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
     const items: Array<AssertionOf<TTypes, TSelected>> = []
     let cursor = options.cursor
@@ -101,10 +124,49 @@ export function createAssertionSet<
     }
   }
 
+  async function countFromSnapshot(
+    snapshot: Awaited<ReturnType<typeof readAssertionSnapshot<TTypes>>>,
+    cursor: string,
+  ): Promise<number> {
+    let total = 0
+    let next: string | undefined = cursor
+    do {
+      const page = await listFromSnapshot(snapshot, { cursor: next, limit: 100 })
+      total += page.items.length
+      next = page.cursor
+    } while (next)
+    return total
+  }
+
   const handle: AssertionSet<TTypes, TSelected> = {
+    _tag: 'AssertionSet',
+    id: config.stage.id,
+    namespace: config.namespace,
     list,
     stream,
     resolve: (policy) => createAssertionResolution({ ...config, selectedTypes: config.selectedTypes, policy }),
+    asContext: (options) => {
+      const normalized = normalizeAssertionContextOptions(options)
+      return contextWithFamily({
+        id: `assertions:${config.stage.id}`,
+        description: `Assertion context for ${config.stage.id}`,
+        priority: normalized.priority,
+        system: async () => {
+          const snapshot = await readAssertionSnapshot(config)
+          const page = await listFromSnapshot(snapshot, { limit: normalized.limit + 1 })
+          const items = page.items.slice(0, normalized.limit)
+          const remaining = page.cursor ? await countFromSnapshot(snapshot, page.cursor) : 0
+          return renderAssertionSetContext(items, {
+            stageId: config.stage.id,
+            generationId: snapshot.generationId,
+            selectedTypes: config.selectedTypes ?? Object.keys(config.stage.types),
+            ...(snapshot.revision ? { revisionHash: snapshot.revision.revisionHash } : {}),
+            omitted: page.items.length - items.length + remaining,
+          }, normalized)
+        },
+      }, 'injectable') as Context<z.ZodType<{}>>
+    },
+    inject: async () => ({ contexts: [handle.asContext()] }),
   }
   return Object.freeze(handle)
 }

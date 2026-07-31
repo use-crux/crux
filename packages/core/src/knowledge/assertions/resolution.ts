@@ -6,10 +6,15 @@
 
 import type { z } from 'zod'
 import { stableHash } from '../../indexing/hash'
+import { contextWithFamily } from '../../prompt/context'
+import type { Context } from '../../prompt/context-types'
+import type { InternalPromptInjection } from '../../prompt/internal-injection'
 import type { KnowledgeModel } from '../model'
 import type { AssertionOf, AssertionStage } from './assertions'
+import { normalizeAssertionContextOptions, renderAssertionResolutionContext, type AssertionContextOptions } from './context'
 import type { AssertionSupport } from './identity'
 import type { AssertionRelationRecord } from './relations'
+import { policyFingerprint } from './resolution-fingerprint'
 import { applyModelPolicy } from './resolution-policy'
 import { readAssertionSnapshot, toVisibleAssertion, visibleSupports } from './set'
 
@@ -39,9 +44,13 @@ export interface AssertionResolutionHandle<
   TTypes extends Record<string, z.ZodType<unknown>>,
   TSelected extends keyof TTypes & string = keyof TTypes & string,
 > {
+  readonly _tag: 'AssertionResolution'
+  readonly id: string
   status(): Promise<AssertionResolutionStatus>
   prepare(): Promise<void>
   result(): Promise<AssertionResolutionResult<AssertionOf<TTypes, TSelected>>>
+  asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
 }
 
 /** Inspectable resolution preparation status. */
@@ -137,7 +146,9 @@ export function createAssertionResolution<
     }
   }
 
-  return Object.freeze({
+  const handle: AssertionResolutionHandle<TTypes, TSelected> = {
+    _tag: 'AssertionResolution',
+    id: `${config.stage.id}:resolution`,
     status: async () => ({
       state: prepared ? 'ready' as const : 'idle' as const,
       cached: preparedKey !== undefined && cache.has(preparedKey),
@@ -148,12 +159,20 @@ export function createAssertionResolution<
       if (!prepared) await prepare()
       return prepared as AssertionResolutionResult<AssertionOf<TTypes, TSelected>>
     },
-  })
+    asContext: (options) => {
+      const normalized = normalizeAssertionContextOptions(options)
+      const meta = () => ({ stageId: config.stage.id, ...metadata })
+      return contextWithFamily({
+        id: `assertion-resolution:${config.stage.id}`, description: `Assertion resolution context for ${config.stage.id}`, priority: normalized.priority,
+        system: async () => renderAssertionResolutionContext(await handle.result(), meta(), normalized),
+      }, 'injectable') as Context<z.ZodType<{}>>
+    },
+    inject: async () => ({ contexts: [handle.asContext()] }),
+  }
+  return Object.freeze(handle)
 }
 
-async function readFullSnapshot<TTypes extends Record<string, z.ZodType<unknown>>, TSelected extends keyof TTypes & string>(
-  config: ResolutionFactoryConfig<TTypes, TSelected>,
-) {
+async function readFullSnapshot<TTypes extends Record<string, z.ZodType<unknown>>, TSelected extends keyof TTypes & string>(config: ResolutionFactoryConfig<TTypes, TSelected>) {
   if (!config.records) throw new Error('Assertion resolution requires record storage.')
   const snapshot = await readAssertionSnapshot(config)
   const selected = config.selectedTypes ? new Set<string>(config.selectedTypes) : undefined
@@ -257,11 +276,7 @@ function partition<TItem extends ResolutionItem>(
   return { selected, superseded, contested, unresolved, trace }
 }
 
-function evidenceFor<TItem extends ResolutionItem>(
-  state: ReturnType<typeof createState<TItem>>,
-  id: string,
-  partitionName: AssertionResolutionTrace['partition'],
-): readonly AssertionDecisionEvidence[] {
+function evidenceFor<TItem extends ResolutionItem>(state: ReturnType<typeof createState<TItem>>, id: string, partitionName: AssertionResolutionTrace['partition']): readonly AssertionDecisionEvidence[] {
   if (partitionName === 'unresolved') return state.unresolved.get(id) ?? []
   if (partitionName === 'superseded') return state.superseded.get(id) ?? []
   if (partitionName === 'contested') return state.contested.get(id) ?? []
@@ -272,22 +287,9 @@ function add(map: Map<string, AssertionDecisionEvidence[]>, id: string, evidence
   map.set(id, [...(map.get(id) ?? []), evidence])
 }
 
-function partitionMap<TItem extends ResolutionItem>(
-  state: ReturnType<typeof createState<TItem>>,
-  partitionName: AssertionResolutionTrace['partition'],
-): Map<string, AssertionDecisionEvidence[]> {
+function partitionMap<TItem extends ResolutionItem>(state: ReturnType<typeof createState<TItem>>, partitionName: AssertionResolutionTrace['partition']): Map<string, AssertionDecisionEvidence[]> {
   if (partitionName === 'selected') return state.selected
   if (partitionName === 'superseded') return state.superseded
   if (partitionName === 'contested') return state.contested
   return state.unresolved
-}
-
-function policyFingerprint<TTypes extends Record<string, z.ZodType<unknown>>, TSelected extends keyof TTypes & string>(
-  policy: AssertionResolutionPolicy<TTypes, TSelected> | undefined,
-): unknown {
-  if (!policy) return { mode: 'explicit' }
-  if ('model' in policy && policy.model) {
-    return { id: policy.id, version: policy.version, mode: 'model', model: { name: policy.model.name, fingerprint: policy.model.fingerprint }, instructions: policy.instructions ?? null }
-  }
-  return { id: policy.id, version: policy.version, mode: 'run' }
 }

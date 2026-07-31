@@ -38,6 +38,7 @@ export type {
   AssertionsConfig,
 } from './assertions/assertions'
 export type { AssertionSupport, KnowledgeAssertionRecord } from './assertions/identity'
+export type { AssertionContextOptions } from './assertions/context'
 export type {
   AssertionListOptions,
   AssertionListPage,

@@ -305,6 +305,15 @@ for await (const assertion of limits.stream()) {
 
 View-bound assertion sets resolve the view first. Supports outside the pinned revision are excluded; assertions with no visible supports are hidden.
 
+Assertion sets can also be composed into prompts. The injected context is a compact, bounded summary rather than raw assertion records:
+
+```ts
+const answer = prompt({
+  use: [publishedDocs.assertions(productFacts, { types: ["limit"] })],
+  system: "Answer from the documented product facts.",
+});
+```
+
 Assertion stages can also relate assertions they emit in the same source run, or canonical assertion identities they compute:
 
 ```ts
@@ -336,6 +345,17 @@ resolved.selected;
 resolved.superseded;
 resolved.contested;
 resolved.trace;
+```
+
+You can pass a resolution handle through `use` when a prompt should see the selected partition plus counts for superseded, contested, and unresolved assertions:
+
+```ts
+const resolvedFacts = publishedDocs.assertions(productFacts).resolve();
+
+const answer = prompt({
+  use: [resolvedFacts],
+  system: "Prefer selected facts and account for unresolved items.",
+});
 ```
 
 Resolution never mutates the source assertions. Assertion relations are separate records, not graph edges, so `expandRelations()` does not traverse assertion supports or assertion relations.
