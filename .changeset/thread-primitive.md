@@ -46,3 +46,5 @@ Wire the devtools helpers' `bridge` option so `enableDevtools()` and
 `withDevtools()` connect the Runtime Bridge peer directly, and make
 `crux lint --port` read the running dev server instead of silently
 falling back to a one-shot index.
+
+Evict Project Index facts for source files deleted while the local server was stopped.

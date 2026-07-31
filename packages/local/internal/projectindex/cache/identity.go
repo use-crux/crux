@@ -21,6 +21,7 @@ package cache
 // evidence.record definitions, safe facts, refs, relations, and lints.
 // Epoch 56 adds authored Thread definitions, bindings, and runtime joins.
 // Epoch 57 adds first-class Thread lint findings and descriptors.
+// Epoch 58 prevents snapshots from retaining sources deleted while offline.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 57
+const ProjectIndexSnapshotCacheEpoch = 58
