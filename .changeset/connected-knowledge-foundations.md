@@ -9,3 +9,5 @@ Bind knowledge-base recipes to namespace-scoped graph readers when record storag
 Add the `expandRelations()` retrieval recipe step: additive, visibility-safe graph expansion of retrieved hits with deterministic ordering, bounded fan-out, and per-hit graph provenance.
 
 Export `relate()` and `knowledgeModel()` from the canonical `@use-crux/core/knowledge` entrypoint.
+
+Add built-in `relateReferences()` and `relateEntities({ model })` relation stages for explicit references and generic entity connections.

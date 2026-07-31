@@ -10,6 +10,8 @@
 export { knowledgeBase } from '../retrieval/knowledge-base'
 export { knowledgeModel } from './model'
 export { relate } from './relate/relate'
+export { relateEntities } from './relate/entities'
+export { relateReferences } from './relate/references'
 
 export type {
   KnowledgeBase,

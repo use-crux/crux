@@ -6,6 +6,7 @@ import { expectTypeOf } from 'vitest'
 import { indexingPipeline } from '../src/indexing'
 import type { RelationDeriveStage } from '../src/knowledge/derive/stage'
 import type { KnowledgeModel } from '../src/knowledge/model'
+import { relateEntities, relateReferences } from '../src/knowledge'
 import { relate, type RelationStage } from '../src/knowledge/relate/relate'
 
 declare const model: KnowledgeModel
@@ -121,3 +122,13 @@ relate({
   model,
   run: () => {},
 })
+
+const builtInReferences = relateReferences()
+const builtInEntities = relateEntities({ model })
+
+expectTypeOf(builtInReferences).toMatchTypeOf<RelationDeriveStage>()
+expectTypeOf(builtInEntities).toMatchTypeOf<RelationDeriveStage>()
+indexingPipeline({ derive: [builtInReferences, builtInEntities] })
+
+// @ts-expect-error Entity relation extraction requires an explicit model.
+relateEntities()
