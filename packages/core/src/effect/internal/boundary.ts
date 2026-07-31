@@ -8,6 +8,7 @@
 import {
   createScopeFacetSlot,
   currentScopeFacet,
+  runScope,
   type ExecutionScope,
 } from "../../scope/internal";
 import { CruxEffectError } from "../errors";
@@ -17,6 +18,7 @@ import type {
   RollbackOptions,
 } from "../types";
 import { effectLedger } from "./ledger";
+import { registerNestedBoundaryUnit } from "./recovery-stack";
 import {
   runRollback,
   type RollbackExecution,
@@ -24,13 +26,16 @@ import {
 
 let nextImplicitBoundaryId = 0;
 let nextExplicitBoundaryId = 0;
+const effectBoundaryStates = new Map<string, EffectBoundaryState>();
 
 /** In-process state attached to one explicit effect boundary. */
 export interface EffectBoundaryState {
   /** Public boundary reference. */
   readonly ref: EffectScopeRef;
   /** Recovery guarantee enforced by the boundary. */
-  readonly recovery: NonNullable<RollbackOnErrorOptions["recovery"]>;
+  readonly recovery:
+    | NonNullable<RollbackOnErrorOptions["recovery"]>
+    | "passive";
   /** Effect operations that began inside the boundary and remain unsettled. */
   readonly pending: Set<Promise<unknown>>;
   /** Nearest enclosing effect boundary, when nested. */
@@ -51,23 +56,118 @@ export function createEffectBoundary(
   recovery: EffectBoundaryState["recovery"],
   parent?: EffectBoundaryState,
 ): EffectBoundaryState {
-  return {
-    ref: Object.freeze({
+  return createEffectBoundaryState(
+    Object.freeze({
       kind: "effect.scope",
       id: scope.descriptor.id,
       runId: scope.root.descriptor.id,
     }),
     recovery,
+    parent,
+  );
+}
+
+/** Run work inside a passive in-process rollback boundary. */
+export function runPassiveEffectBoundary<T>(
+  runId: string,
+  run: (boundary: EffectBoundaryState) => Promise<T> | T,
+  existingRef?: EffectScopeRef,
+): Promise<T> {
+  const parent = currentEffectBoundary();
+  const existingScope =
+    existingRef?.kind === "effect.scope" &&
+    existingRef.runId === runId
+      ? effectLedger.getScope(existingRef.id)
+      : undefined;
+  const ref =
+    existingScope?.ref ??
+    Object.freeze({
+      kind: "effect.scope" as const,
+      id: createEffectBoundaryId(),
+      runId,
+    });
+  const operation = runScope(
+    { kind: "effect-boundary", id: ref.id },
+    {},
+    async (scope) => {
+      const boundary = createEffectBoundaryState(
+        ref,
+        "passive",
+        parent,
+        existingScope?.status === "rolling_back" ||
+          existingScope?.status === "completed"
+          ? "completed"
+          : "open",
+      );
+      scope.setFacet(effectBoundaryFacet, boundary);
+      if (boundary.lifecycle === "open") {
+        effectLedger.registerScope({
+          ref: boundary.ref,
+          ...(existingScope?.parentId
+            ? { parentId: existingScope.parentId }
+            : parent === undefined
+              ? {}
+              : { parentId: parent.ref.id }),
+          status: "open",
+          unitIds: effectLedger
+            .unitsFor(boundary.ref.id)
+            .map((unit) => unit.id),
+        });
+      }
+      try {
+        return await run(boundary);
+      } finally {
+        await waitForEffectBoundaryOperations(boundary);
+        const rollback = boundary.rollbackOperation
+          ? await boundary.rollbackOperation.catch(() => undefined)
+          : undefined;
+        if (!boundary.rollbackOperation && boundary.lifecycle === "open") {
+          closeEffectBoundary(boundary);
+        }
+        if (parent) {
+          registerNestedBoundaryUnit(
+            parent.ref.id,
+            boundary.ref,
+            rollback?.result.status === "completed"
+              ? "recovered"
+              : rollback === undefined
+                ? "active"
+                : "failed",
+          );
+        }
+      }
+    },
+  );
+  return trackEffectBoundaryOperation(operation, parent);
+}
+
+function createEffectBoundaryState(
+  ref: EffectScopeRef,
+  recovery: EffectBoundaryState["recovery"],
+  parent?: EffectBoundaryState,
+  lifecycle: EffectBoundaryState["lifecycle"] = "open",
+): EffectBoundaryState {
+  const boundary: EffectBoundaryState = {
+    ref,
+    recovery,
     pending: new Set<Promise<unknown>>(),
     ...(parent === undefined ? {} : { parent }),
-    lifecycle: "open",
+    lifecycle,
   };
+  effectBoundaryStates.set(ref.id, boundary);
+  return boundary;
+}
+
+/** Resolve live in-process state for a public boundary reference. */
+export function effectBoundaryStateFor(ref: EffectScopeRef):
+  | EffectBoundaryState
+  | undefined {
+  const boundary = effectBoundaryStates.get(ref.id);
+  return boundary?.ref.runId === ref.runId ? boundary : undefined;
 }
 
 /** Resolve the nearest explicit effect boundary. */
-export function currentEffectBoundary():
-  | EffectBoundaryState
-  | undefined {
+export function currentEffectBoundary(): EffectBoundaryState | undefined {
   return currentScopeFacet(effectBoundaryFacet);
 }
 
@@ -77,7 +177,10 @@ export function assertEffectBoundaryOpen(
   effectId: string,
 ): void {
   let candidate: EffectBoundaryState | undefined = boundary;
-  while (candidate?.lifecycle === "open") {
+  while (
+    candidate?.lifecycle === "open" &&
+    effectLedger.getScope(candidate.ref.id)?.status === "open"
+  ) {
     candidate = candidate.parent;
   }
   if (!candidate) return;
@@ -116,9 +219,7 @@ export function startEffectBoundaryRollback(
   boundary: EffectBoundaryState,
   options?: RollbackOptions,
 ): Promise<RollbackExecution> {
-  if (boundary.rollbackOperation) {
-    return boundary.rollbackOperation;
-  }
+  if (boundary.rollbackOperation) return boundary.rollbackOperation;
   boundary.lifecycle = "rolling_back";
   updateBoundaryRecord(boundary, "rolling_back");
   const operation = (async () => {
@@ -132,6 +233,24 @@ export function startEffectBoundaryRollback(
   })();
   boundary.rollbackOperation = operation;
   return operation;
+}
+
+/** Reject rollback requests initiated from a descendant boundary. */
+export function assertEffectBoundaryRollbackAllowed(
+  boundary: EffectBoundaryState,
+): void {
+  const active = currentEffectBoundary();
+  let candidate = active;
+  while (candidate && candidate !== boundary) {
+    candidate = candidate.parent;
+  }
+  if (!active || active === boundary || candidate !== boundary) return;
+  throw new CruxEffectError({
+    code: "EFFECT_SCOPE_TERMINAL",
+    message:
+      `Boundary \`${boundary.ref.id}\` cannot start rollback from ` +
+      `descendant boundary \`${active.ref.id}\`.`,
+  });
 }
 
 /** Close a boundary that completed without rollback. */

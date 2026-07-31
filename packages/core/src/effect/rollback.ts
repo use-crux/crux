@@ -5,6 +5,11 @@
  */
 
 import { CruxEffectError } from "./errors";
+import {
+  assertEffectBoundaryRollbackAllowed,
+  effectBoundaryStateFor,
+  startEffectBoundaryRollback,
+} from "./internal/boundary";
 import { effectLedger } from "./internal/ledger";
 import { runRollback } from "./internal/run-rollback";
 import type {
@@ -43,7 +48,31 @@ export async function rollback(
       message: `Effect scope \`${scope.id}\` was not found.`,
     });
   }
-  return (await runRollback(storedScope.ref, options)).result;
+  const liveBoundary = effectBoundaryStateFor(storedScope.ref);
+  if (liveBoundary && liveBoundary.lifecycle !== "completed") {
+    assertEffectBoundaryRollbackAllowed(liveBoundary);
+    return (
+      await startEffectBoundaryRollback(liveBoundary, options)
+    ).result;
+  }
+  effectLedger.registerScope({
+    ...storedScope,
+    status: "rolling_back",
+  });
+  try {
+    return (await runRollback(storedScope.ref, options)).result;
+  } finally {
+    const current = effectLedger.getScope(storedScope.ref.id);
+    if (current) {
+      effectLedger.registerScope({
+        ...current,
+        status: "completed",
+        unitIds: effectLedger
+          .unitsFor(storedScope.ref.id)
+          .map((unit) => unit.id),
+      });
+    }
+  }
 }
 
 function assertEffectScopeRef(

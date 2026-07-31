@@ -229,8 +229,9 @@ running inside. That lifecycle cycle is rejected with
 
 Effect definitions keep the same call semantics inside tools and flow steps.
 The live execution scope records that ancestry, and the nearest rollback
-boundary owns the recovery unit automatically. You do not pass boundary or
-flow IDs into the Effect.
+boundary owns the recovery unit automatically. Flow runs and pipeline, agent,
+and composition roots provide passive boundaries; you do not pass boundary or
+run IDs into the Effect.
 
 Use `tool()` when a model should be able to request a domain change. Call the
 Effect from the tool's `execute` function exactly as you would from application
@@ -260,36 +261,41 @@ await rollbackOnError(async () => {
 });
 ```
 
-Use `flow.step()` when the change is one named stage in a multi-step pipeline.
-Calling the Effect inside the step preserves the flow-step ancestry while the
-surrounding boundary remains responsible for rollback:
+An Effect inside `flow.step()` keeps its flow-step ancestry while the flow run
+owns recovery. Run-like boundaries are passive: failure, suspension,
+cancellation, or expiration does not recover automatically or require every
+Effect to define recovery. Flow, pipeline, agent, and composition results
+expose an `effects` ref for explicit `rollback(result.effects)` later.
+
+## Roll back a flow after review
+
+`FlowScope` exposes `flow.effects` and can start rollback inside the handler
+with `flow.rollback()`. This fits reviewer decisions made before return:
 
 ```ts
-import { flow } from "@use-crux/core";
+const publication = flow("publication", async (flow, input) => {
+  await flow.step("publish", () => publishReport(input));
+  const review = await flow.step("review", () => reviewReport(input));
 
-const customerSync = flow(
-  "customer-sync",
-  async (scope, input: { id: string; name: string }) =>
-    scope.step("update-customer", () => updateCustomer(input)),
-);
-
-await rollbackOnError(async () => {
-  const result = await customerSync.run({
-    id: "cus_123",
-    name: "Ada",
-  });
-
-  if (result.status !== "completed") {
-    throw new Error("Customer sync did not complete");
+  if (!review.approved) {
+    const rollbackResult = await flow.rollback({
+      reason: review.reason ?? "Reviewer rejected publication",
+    });
+    return { status: "rejected" as const, rollbackResult };
   }
 
-  await publishCustomerProfile("cus_123");
+  return { status: "published" as const };
 });
 ```
 
-Flows do not gain a separate Effects API in this release. There is no
-`flow.rollback()` or `result.effects` yet. Use the explicit boundary shown
-above when several tool or flow-step Effects need one rollback plan.
+Starting `flow.rollback()` makes the flow's Effect boundary terminal. The
+handler may finish pure computation and return its rejection result, but any
+later Effect is rejected with `EFFECT_SCOPE_TERMINAL`.
+
+Use `rollback(result.effects)` when review happens after the run completes.
+Both APIs are in-process in this release: the reference resolves only while
+the same process, receipt ledger, and recovery handlers remain alive. Runtime-
+backed recovery after restart belongs to a future release.
 
 ## Related
 

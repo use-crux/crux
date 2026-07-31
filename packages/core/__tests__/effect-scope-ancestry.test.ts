@@ -44,9 +44,11 @@ describe("effect scope ancestry", () => {
     resetEffectDefinitionsForTesting();
   });
 
-  it("attaches an immediate flow step to its nearest effect boundary", async () => {
+  it("attaches an immediate flow step to its flow-run boundary", async () => {
     let executionScope: EffectScopeRef | undefined;
     let executionKey: string | undefined;
+    let flowBoundaryRef: EffectScopeRef | undefined;
+    let outerUnitStatuses: readonly string[] = [];
     const recovery = vi.fn(async () => undefined);
     const update = effect(
       "ancestry.flow-update",
@@ -67,13 +69,19 @@ describe("effect scope ancestry", () => {
         flowId: "flow-ancestry",
       });
       expect(result.status).toBe("completed");
-      await scope.rollback();
+      flowBoundaryRef = result.effects;
+      const rollbackResult = await scope.rollback();
+      outerUnitStatuses = rollbackResult.units.map(
+        (unit) => unit.status,
+      );
     });
 
-    expect(executionScope).toEqual(boundaryRef);
+    expect(executionScope).toEqual(flowBoundaryRef);
+    expect(executionScope).not.toEqual(boundaryRef);
     expect(executionKey).toMatch(
       /flow-step\[flow-step:\d+\]/,
     );
+    expect(outerUnitStatuses).toEqual(["recovered"]);
     expect(recovery).toHaveBeenCalledOnce();
   });
 

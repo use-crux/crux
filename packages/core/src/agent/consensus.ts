@@ -23,6 +23,7 @@ import type {
   PrepareInvocation,
 } from '../request/prepare/invocation'
 import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
+import type { EffectScopeRef } from '../effect'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ export interface ConsensusOptions<
 export interface ConsensusResult<TVote extends string = string> {
   /** Exact identity of the `composition.consensus` operation that produced this result. */
   readonly _meta: OperationResultMeta
+  /** In-process reference to this composition's passive rollback boundary. */
+  readonly effects: EffectScopeRef
   /** The winning vote value. */
   result: TVote
   /** Vote breakdown: { value: count }. */

@@ -5,8 +5,9 @@
  */
 
 import { runScope } from "../scope/internal";
-import { CruxEffectError, RollbackError } from "./errors";
+import { RollbackError } from "./errors";
 import {
+  assertEffectBoundaryRollbackAllowed,
   closeEffectBoundary,
   createEffectBoundary,
   createEffectBoundaryId,
@@ -76,7 +77,7 @@ export async function rollbackOnError<T>(
       const controller: RollbackBoundaryController = Object.freeze({
         ref: boundary.ref,
         rollback: async (rollbackOptions?: RollbackOptions) => {
-          assertNotDescendantRollback(boundary);
+          assertEffectBoundaryRollbackAllowed(boundary);
           return (
             await startEffectBoundaryRollback(
               boundary,
@@ -118,23 +119,6 @@ export async function rollbackOnError<T>(
     },
   );
   return trackEffectBoundaryOperation(operation, parent);
-}
-
-function assertNotDescendantRollback(
-  boundary: EffectBoundaryState,
-): void {
-  const active = currentEffectBoundary();
-  let candidate = active;
-  while (candidate && candidate !== boundary) {
-    candidate = candidate.parent;
-  }
-  if (!active || active === boundary || candidate !== boundary) return;
-  throw new CruxEffectError({
-    code: "EFFECT_SCOPE_TERMINAL",
-    message:
-      `Boundary \`${boundary.ref.id}\` cannot start rollback from ` +
-      `descendant boundary \`${active.ref.id}\`.`,
-  });
 }
 
 function registerWithParent(

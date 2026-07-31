@@ -6,6 +6,7 @@ import { observe } from '../../observability'
 import type { DefinitionRef } from '../../observability'
 import { agentDefinitionRef } from '../../observability/definition-ref'
 import { withOperationResultMeta } from '../../observability/internal/result-meta'
+import { currentEffectBoundary } from '../../effect/internal/boundary'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import { runScope } from '../../scope/kernel'
@@ -79,10 +80,17 @@ async function observeAgentRun<TOutput>(
         ),
       ),
     )
-    const result = withOperationResultMeta(payload, {
-      traceId: agentSpan.traceId,
-      spanId: agentSpan.spanId,
-    })
+    const boundary = currentEffectBoundary()
+    if (!boundary) {
+      throw new TypeError('Agent execution requires a run-like effect boundary.')
+    }
+    const result = withOperationResultMeta(
+      { ...payload, effects: boundary.ref },
+      {
+        traceId: agentSpan.traceId,
+        spanId: agentSpan.spanId,
+      },
+    )
     agentSpan.end({ attributes: { agentId: result.agentId } })
     return result
   } catch (error) {

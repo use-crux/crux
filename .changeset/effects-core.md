@@ -15,3 +15,7 @@ recovery-link, and ambiguity evidence in Devtools Runs.
 Make exported Effect definitions eligible for the language server's generic
 completion candidate pipeline while retaining kind-generic hover titles and
 duplicate-identity diagnostics.
+
+Make flow runs and pipeline, agent, and composition roots passive rollback
+boundaries. Their results expose in-process Effect scope references, and flows
+can explicitly recover completed units through `flow.rollback()`.

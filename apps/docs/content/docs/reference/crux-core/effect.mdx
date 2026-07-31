@@ -176,6 +176,22 @@ const result = await rollback(scope, {
 Rollback is sequential and causal. Repeated and concurrent requests join or
 reuse unit settlement so a successful recovery handler runs once.
 
+## Run-like boundaries
+
+Flow runs and pipeline, agent, and composition roots are passive rollback
+boundaries. Their result types expose `effects: EffectScopeRef`, so completed
+units can be recovered later with `rollback(result.effects)`. A run failure,
+suspension, cancellation, or expiration never starts recovery automatically.
+
+Inside a flow handler, `flow.effects` exposes the same reference and
+`flow.rollback(options?)` starts explicit rollback immediately. Starting it
+makes the boundary terminal, so later Effects reject with
+`EFFECT_SCOPE_TERMINAL`.
+
+Run-like refs are resolvable only while the current process retains the receipt
+ledger and recovery handlers. Runtime-backed delayed recovery is not part of
+this in-process surface.
+
 ## `reconcileEffect()`
 
 Settle an effect execution or recovery attempt whose external outcome is
