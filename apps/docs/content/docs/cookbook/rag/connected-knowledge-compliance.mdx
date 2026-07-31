@@ -1,0 +1,392 @@
+---
+title: Compliance corpus with Connected Knowledge
+description: Build a multi-document policy corpus with typed metadata, views, relations, assertions, and global themes.
+---
+
+This recipe models a small compliance-style corpus for insurance applications.
+It indexes multiple documents, validates typed metadata, creates per-application
+views, extracts requirements, relates conflicts, expands retrieval through
+policy references, and searches global themes.
+
+## Primitives used
+
+- `knowledgeBase()` for indexing, retrieval, views, assertions, communities, and tools
+- `metadataSchema` for application, jurisdiction, status, and effective date
+- `relateReferences()` plus a custom relation vocabulary
+- `assertions()` for typed requirements
+- `view({ where })` for application-scoped reads
+- `globalSearch()` for broad report themes
+
+## Full code
+
+### `lib/compliance/model.ts`
+
+```ts
+import {
+  knowledgeModel,
+  type KnowledgeModel,
+} from "@use-crux/core/knowledge";
+
+declare const retrievalModel: Pick<
+  KnowledgeModel,
+  "generateText" | "generateObject"
+>;
+
+export const knowledgeReporter = knowledgeModel({
+  name: "compliance-reporter",
+  version: "2026-07",
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+});
+```
+
+### `lib/compliance/schema.ts`
+
+```ts
+import { z } from "zod";
+
+export const metadataSchema = z.object({
+  application: z.enum(["auto", "home"]),
+  jurisdiction: z.enum(["CA", "NY"]),
+  status: z.enum(["draft", "published", "archived"]),
+  effectiveDate: z.string(),
+});
+```
+
+### `lib/compliance/knowledge.ts`
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import {
+  assertions,
+  communities,
+  knowledgeBase,
+  relate,
+  relateReferences,
+} from "@use-crux/core/knowledge";
+import { expandRelations, globalSearch, retrieve } from "@use-crux/core/retrieval";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { z } from "zod";
+
+import { knowledgeReporter } from "./model";
+import { metadataSchema } from "./schema";
+
+declare const dense: import("@use-crux/core/embedding").DenseEmbedding;
+
+export const policyRelations = relate({
+  id: "policy-relations",
+  version: 1,
+  types: {
+    affectsApplication: {
+      from: ["chunk"],
+      to: ["entity"],
+      direction: "directed",
+      description: "A chunk names an insurance application affected by a policy.",
+    },
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      if (chunk.content.includes("auto")) {
+        api.emit(
+          "affectsApplication",
+          evidence,
+          { kind: "entity", entityId: "application:auto" },
+          { evidence, provenance: "exact" },
+        );
+      }
+
+      if (chunk.content.includes("home")) {
+        api.emit(
+          "affectsApplication",
+          evidence,
+          { kind: "entity", entityId: "application:home" },
+          { evidence, provenance: "exact" },
+        );
+      }
+    }
+  },
+});
+
+export const requirements = assertions({
+  id: "requirements",
+  version: 1,
+  types: {
+    requirement: z.object({
+      application: z.enum(["auto", "home"]),
+      jurisdiction: z.enum(["CA", "NY"]),
+      rule: z.string(),
+      effectiveDate: z.string(),
+    }),
+  },
+  run: ({ document, chunks }, api) => {
+    const metadata = metadataSchema.parse(document.metadata);
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("must")) continue;
+
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      const current = api.emit(
+        "requirement",
+        {
+          application: metadata.application,
+          jurisdiction: metadata.jurisdiction,
+          rule: chunk.content,
+          effectiveDate: metadata.effectiveDate,
+        },
+        { evidence, provenance: "exact" },
+      );
+
+      if (chunk.content.includes("supersedes 2025 rule")) {
+        const previous = api.emit(
+          "requirement",
+          {
+            application: metadata.application,
+            jurisdiction: metadata.jurisdiction,
+            rule: "Applicant may provide proof after approval.",
+            effectiveDate: "2025-01-01",
+          },
+          { evidence, provenance: "exact" },
+        );
+
+        api.relate(
+          "supersedes",
+          current,
+          previous,
+          { evidence, provenance: "exact" },
+        );
+      }
+    }
+  },
+});
+
+export const compliance = knowledgeBase({
+  id: "compliance",
+  storage: inMemoryStorage(),
+  embeddings: dense,
+  metadataSchema,
+  pipeline: indexingPipeline({
+    derive: [
+      relateReferences(),
+      policyRelations,
+      requirements,
+    ],
+  }),
+  communities: communities({ model: knowledgeReporter }),
+});
+
+export const autoPolicies = compliance.view({
+  id: "auto-policies",
+  where: {
+    application: "auto",
+    status: "published",
+  },
+});
+
+export const autoEvidence = autoPolicies.recipe({
+  id: "auto-policy-evidence",
+  steps: [
+    retrieve({ limit: 8 }),
+    expandRelations({
+      types: ["references", "affectsApplication", "sequence"],
+      direction: "both",
+      depth: 2,
+      limit: 6,
+    }),
+  ],
+});
+
+export const autoThemes = autoPolicies.recipe({
+  id: "auto-policy-themes",
+  steps: [
+    globalSearch({
+      model: knowledgeReporter,
+      detail: "overview",
+      scan: "all",
+      limit: 8,
+    }),
+  ],
+});
+```
+
+### `lib/compliance/index.ts`
+
+```ts
+import { compliance } from "./knowledge";
+
+export async function indexCompliancePolicies() {
+  await compliance.reindex([
+    {
+      namespace: "compliance",
+      sourceId: "auto-ca-2026.md",
+      title: "California Auto 2026",
+      content: [
+        "Auto applicants must provide proof of coverage before approval.",
+        "This supersedes 2025 rule.",
+        "See [General Notices](https://example.test/notices).",
+      ].join("\n\n"),
+      metadata: {
+        application: "auto",
+        jurisdiction: "CA",
+        status: "published",
+        effectiveDate: "2026-01-01",
+      },
+    },
+    {
+      namespace: "compliance",
+      sourceId: "auto-ny-2026.md",
+      title: "New York Auto 2026",
+      content: "Auto applicants must acknowledge renewal notices within 10 days.",
+      metadata: {
+        application: "auto",
+        jurisdiction: "NY",
+        status: "published",
+        effectiveDate: "2026-02-01",
+      },
+    },
+    {
+      namespace: "compliance",
+      sourceId: "home-ca-draft.md",
+      title: "California Home Draft",
+      content: "Home applicants must provide inspection records.",
+      metadata: {
+        application: "home",
+        jurisdiction: "CA",
+        status: "draft",
+        effectiveDate: "2026-03-01",
+      },
+    },
+  ]);
+
+  await compliance.communities?.prepare();
+}
+```
+
+### `lib/compliance/query.ts`
+
+```ts
+import { inspectRequest, prompt, summarizable } from "@use-crux/core";
+
+import {
+  autoEvidence,
+  autoPolicies,
+  autoThemes,
+  requirements,
+} from "./knowledge";
+
+export async function readAutoRequirements() {
+  const resolved = await autoPolicies
+    .assertions(requirements, { types: ["requirement"] })
+    .resolve()
+    .result();
+
+  return {
+    selected: resolved.selected.map((item) => item.data),
+    superseded: resolved.superseded.map((item) => item.data),
+    contested: resolved.contested.map((item) => item.data),
+    unresolved: resolved.unresolved.map((item) => item.data),
+  };
+}
+
+export async function searchAutoEvidence(question: string) {
+  const { hits, trace } = await autoEvidence.retrieveWithTrace(question);
+  return { hits, trace };
+}
+
+export async function searchAutoThemes(question: string) {
+  const { hits, trace } = await autoThemes.retrieveWithTrace(question);
+  return { hits, trace };
+}
+
+export const answerAutoPolicy = prompt({
+  id: "answer-auto-policy",
+  use: [
+    summarizable(
+      autoEvidence.asContext({
+        query: ({ question }) => question as string,
+      }),
+    ),
+    autoPolicies
+      .assertions(requirements, { types: ["requirement"] })
+      .resolve()
+      .asContext({ limit: 20 }),
+    autoThemes.asContext({
+      query: ({ question }) => question as string,
+    }),
+  ],
+  system: "Answer from visible auto policy evidence and resolved requirements.",
+  prompt: ({ input }) => input.question as string,
+});
+
+export async function inspectAnswerReceipt(result: {
+  steps: Array<{ request?: { id: string } }>;
+}) {
+  const request = result.steps[0]?.request;
+  if (!request) return undefined;
+  return inspectRequest(request);
+}
+```
+
+## How it works
+
+1. `metadataSchema` rejects malformed source metadata before those sources enter
+   a view.
+2. `autoPolicies` is a live view over published auto sources only. Draft home
+   documents cannot appear in its retriever, assertions, relations, communities,
+   or global search.
+3. `requirements` publishes typed propositions with chunk evidence. The
+   `supersedes` relation moves the older matching proposition into the
+   superseded partition during resolution.
+4. `autoEvidence` starts with vector retrieval, then traverses references,
+   application relations, and chunk sequence to append nearby evidence.
+5. `autoThemes` scans community reports for broad themes and returns finding
+   hits with citation supports.
+6. Request inspection reports redacted contributor and knowledge receipts, not
+   raw policy text.
+
+## Variations
+
+Use one view per application and jurisdiction:
+
+```ts
+export const caAutoPolicies = compliance.view({
+  id: "ca-auto-policies",
+  where: {
+    application: "auto",
+    jurisdiction: "CA",
+    status: "published",
+  },
+});
+```
+
+Pin a revision before a review workflow:
+
+```ts
+const revision = await caAutoPolicies.resolve();
+const reviewCorpus = caAutoPolicies.at(revision.revisionHash);
+
+const reviewFacts = await reviewCorpus
+  .assertions(requirements)
+  .resolve()
+  .result();
+```
+
+Use `detail: "detailed"` when reviewers need leaf-level findings, and keep
+`detail: "overview"` for first-pass theme discovery.
+
+## Related
+
+<Cards>
+  <Card title="Connected Knowledge" description="Concepts and API guides for the system used in this recipe." href="/docs/guides/knowledge" />
+  <Card title="Retrieval recipes" description="How query steps and hit steps compose." href="/docs/guides/retrieval/recipes" />
+  <Card title="Context planning" description="How summaries, exact references, and receipts fit provider requests." href="/docs/guides/context-planning" />
+</Cards>

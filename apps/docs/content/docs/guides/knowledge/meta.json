@@ -1,0 +1,14 @@
+{
+  "title": "Connected Knowledge",
+  "description": "Typed views, relations, assertions, communities, global search, and planning over knowledge bases.",
+  "pages": [
+    "index",
+    "knowledge-bases",
+    "views",
+    "relations",
+    "assertions",
+    "communities",
+    "global-search",
+    "planning"
+  ]
+}

@@ -1,0 +1,200 @@
+---
+title: Connected Knowledge Model And Refs
+description: knowledgeModel(), KnowledgeModel, KnowledgeRef, KnowledgeRefKind, and reference codecs.
+---
+
+```ts
+import {
+  decodeKnowledgeRef,
+  encodeKnowledgeRef,
+  isKnowledgeRef,
+  isKnowledgeRefKind,
+  knowledgeModel,
+} from "@use-crux/core/knowledge";
+import type {
+  KnowledgeModel,
+  KnowledgeModelConfig,
+  KnowledgeRef,
+  KnowledgeRefKind,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+`knowledgeModel()` binds a retrieval model to stable identity before it is used
+by persisted connected-knowledge configuration. `KnowledgeRef` is the closed
+reference union used by relations, assertions, communities, recipe steps, and
+record-key codecs.
+
+## `knowledgeModel(config)`
+
+Creates a frozen named model binding.
+
+```ts
+function knowledgeModel(config: KnowledgeModelConfig): KnowledgeModel;
+```
+
+### Parameters
+
+```ts
+type KnowledgeModelConfig = RetrievalModel & {
+  readonly name: string;
+} & (
+  | { readonly fingerprint: string; readonly version?: string | number }
+  | { readonly version: string | number; readonly fingerprint?: string }
+);
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `name` | `string` | Required | Must be non-empty after trimming. |
+| `generateText` | `RetrievalModel["generateText"]` | Required | Forwarded unchanged. |
+| `generateObject` | `RetrievalModel["generateObject"]` | Required | Forwarded unchanged. |
+| `fingerprint` | `string` | Stable hash of `{ name, version }` when omitted | Must be non-empty after trimming. |
+| `version` | `string \| number` | Required when `fingerprint` is omitted | String versions must be non-empty. Number versions are accepted as provided. |
+
+### Returns
+
+```ts
+interface KnowledgeModel extends RetrievalModel {
+  readonly name: string;
+  readonly fingerprint: string;
+}
+```
+
+The returned object forwards `generateText(args)` and `generateObject(args)` to
+the configured functions.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| Empty `name` | `Error("Knowledge model name must be non-empty.")` |
+| Missing `version` and `fingerprint` | `Error("Knowledge model requires a version or fingerprint.")` |
+| Empty string `version` | `Error("Knowledge model version must be non-empty.")` |
+| Empty resolved `fingerprint` | `Error("Knowledge model fingerprint must be non-empty.")` |
+
+### Example
+
+```ts
+import { knowledgeModel } from "@use-crux/core/knowledge";
+
+const extractor = knowledgeModel({
+  name: "extractor",
+  version: "2026-07-31",
+  generateText,
+  generateObject,
+});
+```
+
+## `KnowledgeRefKind`
+
+```ts
+type KnowledgeRefKind =
+  | "document"
+  | "parent"
+  | "chunk"
+  | "entity";
+```
+
+## `KnowledgeRef`
+
+```ts
+type KnowledgeRef =
+  | { readonly kind: "document"; readonly sourceId: string }
+  | { readonly kind: "parent"; readonly sourceId: string; readonly parentId: string }
+  | { readonly kind: "chunk"; readonly sourceId: string; readonly chunkId: string }
+  | { readonly kind: "entity"; readonly entityId: string };
+```
+
+Runtime validation only checks object shape, kind, and string fields. It does
+not reject empty string ids.
+
+## `isKnowledgeRefKind(value)`
+
+```ts
+function isKnowledgeRefKind(value: unknown): value is KnowledgeRefKind;
+```
+
+Returns `true` for `"document"`, `"parent"`, `"chunk"`, or `"entity"`.
+
+### Example
+
+```ts
+if (isKnowledgeRefKind(value)) {
+  console.log(value);
+}
+```
+
+## `isKnowledgeRef(value)`
+
+```ts
+function isKnowledgeRef(value: unknown): value is KnowledgeRef;
+```
+
+Returns `true` when `value` is a non-array object with a supported `kind` and
+the required string fields for that kind.
+
+### Example
+
+```ts
+const ref = JSON.parse(input);
+
+if (isKnowledgeRef(ref)) {
+  console.log(encodeKnowledgeRef(ref));
+}
+```
+
+## `encodeKnowledgeRef(ref)`
+
+```ts
+function encodeKnowledgeRef(ref: KnowledgeRef): string;
+```
+
+Encodes refs into canonical record-key segments:
+
+| Ref kind | Encoded form |
+| --- | --- |
+| `document` | `document:<sourceId>` |
+| `parent` | `parent:<sourceId>:<parentId>` |
+| `chunk` | `chunk:<sourceId>:<chunkId>` |
+| `entity` | `entity:<entityId>` |
+
+Segments escape `%` as `%25` and `:` as `%3A`.
+
+### Example
+
+```ts
+const key = encodeKnowledgeRef({
+  kind: "chunk",
+  sourceId: "guide:v1",
+  chunkId: "intro%1",
+});
+
+console.log(key);
+```
+
+## `decodeKnowledgeRef(value)`
+
+```ts
+function decodeKnowledgeRef(value: string): KnowledgeRef | null;
+```
+
+Decodes the canonical representation. Returns `null` when the kind is unknown,
+the segment count is wrong, or a percent escape is not `%25` or `%3A`.
+
+### Example
+
+```ts
+const ref = decodeKnowledgeRef("chunk:guide%3Av1:intro%251");
+
+if (ref?.kind === "chunk") {
+  console.log(ref.sourceId, ref.chunkId);
+}
+```
+
+## Related
+
+- Reference: [Connected Knowledge relations](/docs/reference/crux-core/connected-knowledge-relations)
+- Reference: [Connected Knowledge assertions](/docs/reference/crux-core/connected-knowledge-assertions)
+- Reference: [Connected Knowledge communities](/docs/reference/crux-core/connected-knowledge-communities)

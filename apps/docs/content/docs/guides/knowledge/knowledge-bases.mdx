@@ -1,0 +1,175 @@
+---
+title: Knowledge Bases
+description: Index, reindex, remove, retrieve, ground, scope, and inspect a Connected Knowledge base.
+---
+
+`knowledgeBase()` is the high-level facade for indexing and reading one corpus.
+Use it when one definition should own storage, embeddings, lifecycle, retrieval,
+tools, grounding, views, assertions, communities, and namespace scoping.
+
+Use the lower-level Retrieval APIs when you only need a custom `retriever()` or
+direct `indexer()` control. See [Querying](/docs/guides/retrieval/querying) and
+[Indexing documents](/docs/guides/retrieval/indexing) for those layers.
+
+## Minimal Setup
+
+```ts
+import { embedding } from "@use-crux/core/embedding";
+import { knowledgeBase } from "@use-crux/core/knowledge";
+import { inMemoryStorage } from "@use-crux/core/storage";
+
+const dense = embedding({
+  kind: "dense",
+  name: "demo-dense",
+  dimensions: 2,
+  maxInputTokens: 1000,
+  batch: { maxSize: 8 },
+  embed: async (inputs) =>
+    inputs.map((input) => {
+      const text = input.type === "text" ? input.text.toLowerCase() : "";
+      return text.includes("refund") ? [1, 0] : [0, 1];
+    }),
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage: inMemoryStorage(),
+  embeddings: dense,
+});
+
+await docs.index([
+  {
+    namespace: "docs",
+    sourceId: "refunds.md",
+    content: "Refunds are available within 30 days of purchase.",
+    metadata: { section: "policy" },
+  },
+]);
+
+const hits = await docs.retriever({ limit: 3 }).retrieve("refund window");
+```
+
+`id` is the stable identity used by the indexer, retriever, recipe traces, and
+knowledge records. If you do not pass a corpus, the default namespace is the
+same as `id`.
+
+## Configuration
+
+| Option | Use it for |
+| --- | --- |
+| `storage` | One bundle that supplies records and vectors. |
+| `records` and `vectors` | Explicit store overrides when you do not use a bundle. |
+| `embeddings` | Dense vector indexing and dense retrieval. |
+| `sparseEmbeddings` | Sparse or hybrid retrieval. |
+| `chunking` | Shorthand chunking options for simple document indexing. |
+| `pipeline` | Named indexing pipeline with transforms, chunker, cache identity, and derive stages. |
+| `metadataSchema` | Runtime metadata validation plus typed filters and views. |
+| `lifecycle.retention` | `cleanup` by default, or `retain-inactive` for replaced generations. |
+| `source` | Deferred input used when `index()` or `reindex()` is called without arguments. |
+| `corpus` | Reuse an existing corpus ledger. Its `id` must match the knowledge base id. |
+| `communities` | Community report configuration for broad connected search. |
+
+Pass either `chunking` or `pipeline`, not both:
+
+```ts
+import { chunker, indexingPipeline } from "@use-crux/core/indexing";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  pipeline: indexingPipeline({
+    chunker: chunker.structured({ maxChars: 1200, overlapChars: 150 }),
+  }),
+});
+```
+
+Use [Embeddings](/docs/guides/retrieval/embeddings) and
+[Chunkers](/docs/guides/retrieval/chunkers) for the embedding and chunking
+choices. The Connected Knowledge pages focus on the surfaces built on top.
+
+## Index, Reindex, And Remove
+
+`index()` replaces each source it receives. `reindex()` treats the input as a
+complete source set and removes stale sources. `remove(sourceId)` deletes a
+source from active retrieval immediately.
+
+```ts
+await docs.index([
+  { namespace: "docs", sourceId: "a.md", content: "Alpha" },
+]);
+
+await docs.reindex([
+  { namespace: "docs", sourceId: "b.md", content: "Beta" },
+]);
+
+await docs.remove("b.md");
+```
+
+When `metadataSchema` is configured, invalid metadata is rejected per source.
+Direct indexing can write valid sources and then throw an aggregate metadata
+error for invalid sources. Corpus-backed indexing reports invalid sources as
+failed source outcomes.
+
+## Read Surfaces
+
+A knowledge base exposes the Retrieval surfaces directly:
+
+```ts
+const retriever = docs.retriever({ mode: "dense", limit: 6 });
+const recipe = docs.recipe();
+const tools = docs.tools({ prefix: "docs", include: ["search", "getSource"] });
+const grounded = docs.grounding({
+  query: ({ input }) => input.question as string,
+  citations: { required: true, quotes: "required" },
+});
+```
+
+`recipe()` with no arguments creates a default `retrieve()` recipe. Pass steps
+when retrieval should include relation expansion, reranking, compression, or
+global search.
+
+## Scope By Namespace
+
+Use `scope()` when one definition serves multiple tenants or logical corpora.
+The scoped handle changes storage keys and graph visibility, not just a query
+filter.
+
+```ts
+const tenantDocs = docs.scope({ namespace: "tenant-a" });
+
+await tenantDocs.index([
+  {
+    namespace: "tenant-a",
+    sourceId: "policy.md",
+    content: "Tenant A policy.",
+  },
+]);
+
+const tenantHits = await tenantDocs.retriever().retrieve("policy");
+```
+
+Scoped handles do not expose `scope()` again. Views, assertions, communities,
+relations, and hydrated recipe hits stay inside the scoped namespace.
+
+## Inspect Lifecycle
+
+```ts
+const inspection = docs.inspect();
+
+console.log(inspection.namespace);
+console.log(inspection.capabilities.hybrid);
+console.log(inspection.lifecycle.indexedSources);
+```
+
+`inspect()` reports configured storage, dense and sparse capabilities, filter
+support, source strategy, and lifecycle counters. It does not read retrieved
+content.
+
+## Related
+
+<Cards>
+  <Card title="Retrieval architecture" description="The base RAG layers below knowledge bases." href="/docs/guides/retrieval" />
+  <Card title="Views" description="Typed metadata read surfaces." href="/docs/guides/knowledge/views" />
+  <Card title="Relations" description="Graph derivation and expansion." href="/docs/guides/knowledge/relations" />
+</Cards>

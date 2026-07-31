@@ -1,0 +1,222 @@
+---
+title: Assertions
+description: Publish typed evidence-backed propositions and resolve conflicts without mutating source records.
+---
+
+Use `assertions()` when indexing should extract propositions your application
+can list, stream, resolve, or inject as prompt context. Assertions are useful
+for requirements, limits, dates, exclusions, coverage rules, product facts, and
+other statements where evidence and conflict handling matter.
+
+Use plain retrieval when the model should read source text directly. Use
+assertions when a proposition needs a stable identity and visible evidence.
+
+## Author Assertion Types
+
+Each assertion type is a Zod schema. A stage has a stable id and version, and
+uses exactly one production mode: deterministic `run` or model-backed
+extraction.
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { assertions, knowledgeBase } from "@use-crux/core/knowledge";
+import { z } from "zod";
+
+const policyFacts = assertions({
+  id: "policy-facts",
+  version: 1,
+  types: {
+    requirement: z.object({
+      application: z.string(),
+      jurisdiction: z.string(),
+      text: z.string(),
+    }).describe("A documented policy requirement."),
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("proof of coverage")) continue;
+
+      api.emit(
+        "requirement",
+        {
+          application: "auto",
+          jurisdiction: "CA",
+          text: "Applicant must provide proof of coverage.",
+        },
+        {
+          evidence: {
+            kind: "chunk",
+            sourceId: chunk.sourceId,
+            chunkId: chunk.chunkId,
+          },
+          provenance: "exact",
+        },
+      );
+    }
+  },
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  pipeline: indexingPipeline({
+    derive: [policyFacts],
+  }),
+});
+```
+
+Evidence is required. Supports must resolve to indexed chunks before an
+assertion is published.
+
+## Model-Backed Assertions
+
+Use model mode when the assertion shape cannot be extracted reliably with code.
+
+```ts
+import { assertions, knowledgeModel } from "@use-crux/core/knowledge";
+
+const extractor = knowledgeModel({
+  name: "policy-fact-extractor",
+  version: "2026-07",
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+});
+
+const extractedFacts = assertions({
+  id: "policy-facts",
+  version: 1,
+  model: extractor,
+  instructions: "Extract requirements stated in the source. Do not infer unstated rules.",
+  types: {
+    requirement: z.object({
+      application: z.string(),
+      jurisdiction: z.string(),
+      text: z.string(),
+    }),
+  },
+});
+```
+
+Model-backed assertion stages validate output, retry repair once, drop invalid
+items with warnings, and cache valid claims by source and stage fingerprint.
+
+## Consume Assertion Sets
+
+Read assertions from a knowledge base or a view. The `types` option narrows the
+returned item type.
+
+```ts
+const requirements = docs.assertions(policyFacts, {
+  types: ["requirement"],
+});
+
+const page = await requirements.list({ limit: 25 });
+
+for await (const item of requirements.stream()) {
+  console.log(item.type, item.data.text, item.evidence);
+}
+```
+
+Assertion sets can be used directly in `use`, or converted with `asContext()`.
+The prompt context is bounded and summarized as assertion lines, not raw source
+records.
+
+```ts
+import { prompt } from "@use-crux/core";
+
+const answer = prompt({
+  id: "answer-policy",
+  use: [requirements.asContext({ limit: 20 })],
+  system: "Answer from the documented requirements.",
+  prompt: "Which requirements apply?",
+});
+```
+
+## Relate Assertions
+
+Deterministic assertion runs can emit relations between assertions. Relations
+are separate assertion records, not graph edges. `expandRelations()` does not
+traverse them.
+
+```ts
+const current = api.emit("requirement", {
+  application: "auto",
+  jurisdiction: "CA",
+  text: "Applicant must provide proof of coverage.",
+}, { evidence });
+
+api.relate(
+  "supersedes",
+  current,
+  {
+    type: "requirement",
+    data: {
+      application: "auto",
+      jurisdiction: "CA",
+      text: "Applicant may provide proof after approval.",
+    },
+  },
+  { evidence },
+);
+```
+
+Supported assertion relation types are `supports`, `amends`, `supersedes`,
+`narrows`, and `conflictsWith`.
+
+## Resolve Conflicts
+
+Resolution partitions visible assertions into four groups:
+
+```ts
+const resolved = await docs
+  .assertions(policyFacts)
+  .resolve()
+  .result();
+
+console.log(resolved.selected);
+console.log(resolved.superseded);
+console.log(resolved.contested);
+console.log(resolved.unresolved);
+console.log(resolved.trace);
+```
+
+Explicit `supersedes` relations put the target assertion in `superseded`.
+Explicit `conflictsWith` relations put both sides in `contested`. A custom
+resolution policy can add `selected`, `superseded`, `contested`, or `unresolved`
+decisions.
+
+```ts
+const resolvedRequirements = docs.assertions(policyFacts).resolve({
+  id: "prefer-current",
+  version: 1,
+  run: ({ assertions }, decision) => {
+    for (const assertion of assertions) {
+      decision.select(assertion, "No conflicting relation was found.");
+    }
+  },
+});
+
+const promptWithResolvedFacts = prompt({
+  id: "resolved-policy-answer",
+  use: [resolvedRequirements.asContext()],
+  system: "Prefer selected requirements and mention contested items.",
+});
+```
+
+Resolution is lazy and cached per handle by generation, view revision, selected
+types, and policy fingerprint. It never mutates source assertions.
+
+## Views And Supports
+
+View-bound assertion sets first resolve the view revision. Supports outside the
+visible member set are excluded. Assertions with no visible supports are hidden.
+Assertion relations are visible only when both assertion endpoints remain
+visible and the relation has visible evidence.
+
+## Related
+
+<Cards>
+  <Card title="Views" description="Constrain assertion visibility by metadata membership." href="/docs/guides/knowledge/views" />
+  <Card title="Planning" description="Use assertion sets and resolutions as exact or summarized context." href="/docs/guides/knowledge/planning" />
+  <Card title="Relations" description="Use graph edges for retrieval expansion, not assertion conflict resolution." href="/docs/guides/knowledge/relations" />
+</Cards>

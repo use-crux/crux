@@ -1,0 +1,204 @@
+---
+title: Relations
+description: Derive typed graph edges from indexed sources and expand retrieval through the published graph.
+---
+
+Relations connect chunks, documents, parents, and entities. Use them when the
+best answer needs evidence near the first hits: a cited document, a related
+product area, adjacent requirements, or structural context.
+
+Do not add relation extraction when ordinary retrieval already returns the
+evidence you need. Every relation vocabulary becomes part of indexing behavior
+and should have a stable id, version, and endpoint schema.
+
+## Define A Vocabulary
+
+`relate()` creates a derive stage for an indexing pipeline. Each relation type
+declares allowed endpoint kinds, direction, and a description.
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { knowledgeBase, relate } from "@use-crux/core/knowledge";
+
+const policyRelations = relate({
+  id: "policy-relations",
+  version: 1,
+  types: {
+    cites: {
+      from: ["chunk"],
+      to: ["document"],
+      direction: "directed",
+      description: "A chunk cites another policy document.",
+    },
+    affectsProduct: {
+      from: ["chunk"],
+      to: ["entity"],
+      direction: "directed",
+      description: "A chunk names a product area affected by the policy.",
+    },
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("Billing")) continue;
+
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      api.emit(
+        "affectsProduct",
+        evidence,
+        { kind: "entity", entityId: "billing" },
+        { evidence, provenance: "exact" },
+      );
+    }
+  },
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  pipeline: indexingPipeline({
+    derive: [policyRelations],
+  }),
+});
+```
+
+The emit API is typed by the vocabulary. A relation that says `to: ["entity"]`
+cannot be emitted to a document ref in TypeScript.
+
+## Model Mode
+
+Use model mode only when code cannot reliably extract the relation from parsed
+content, source metadata, or a deterministic rule.
+
+```ts
+import { knowledgeModel, relate } from "@use-crux/core/knowledge";
+
+const extractor = knowledgeModel({
+  name: "policy-relation-extractor",
+  version: "2026-07",
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+});
+
+const extractedRelations = relate({
+  id: "policy-relations",
+  version: 1,
+  model: extractor,
+  instructions: "Extract only explicit policy citations and product-area mentions.",
+  types: {
+    cites: {
+      from: ["chunk"],
+      to: ["document"],
+      direction: "directed",
+      description: "A chunk explicitly cites another policy document.",
+    },
+  },
+});
+```
+
+`knowledgeModel()` gives model-backed work a stable name and fingerprint. If
+you change output-affecting model behavior, change the version or fingerprint.
+
+## Built-In Relation Stages
+
+`relateReferences()` is deterministic. It scans chunk text for Markdown links,
+bare HTTP URLs, and simple cited titles, then emits `references` claims.
+
+```ts
+import { relateReferences } from "@use-crux/core/knowledge";
+
+const pipeline = indexingPipeline({
+  derive: [relateReferences()],
+});
+```
+
+`relateEntities({ model })` extracts generic entity mentions and entity-to-entity
+relationships with a `KnowledgeModel`.
+
+```ts
+import { relateEntities } from "@use-crux/core/knowledge";
+
+const pipeline = indexingPipeline({
+  derive: [relateEntities({ model: extractor })],
+});
+```
+
+If `communities({ model })` is configured without an authored entity mapping,
+Crux adds the same generic entity mapping internally so communities have graph
+input.
+
+## From Claims To Published Graph
+
+Derive stages run after indexing. They persist per-source claims and cache them
+by source content hash plus stage fingerprint. Compilation resolves claim
+endpoints against active indexed records and publishes one graph generation.
+
+Endpoint locators can target `{ url }`, `{ title }`, or `{ anchor }`. If a
+locator cannot resolve, or resolves ambiguously, the claim stays pending. It can
+become ready on a later reindex when the target document is added or clarified.
+
+Graph generations publish atomically. A failed compile does not expose a partial
+graph.
+
+## Expand Retrieval Through Relations
+
+Use `expandRelations()` inside a knowledge-base or view recipe after a producer
+step such as `retrieve()`.
+
+```ts
+import { expandRelations, retrieve } from "@use-crux/core/retrieval";
+
+const answerPolicy = docs.recipe({
+  id: "policy-answer",
+  steps: [
+    retrieve({ limit: 8 }),
+    expandRelations({
+      types: ["affectsProduct", "references", "hierarchy", "sequence"],
+      direction: "both",
+      depth: 2,
+      limit: 8,
+    }),
+  ],
+});
+
+const hits = await answerPolicy.retrieve("billing refund requirements");
+```
+
+`expandRelations()` starts from retrieved evidence hits, traverses visible graph
+neighbors, hydrates chunk refs, and appends new hits. It records graph
+provenance on each added hit:
+
+```ts
+const expanded = hits.find((hit) => hit.provenance?.graph);
+
+console.log(expanded?.provenance?.graph);
+```
+
+The provenance includes the seed ref, traversal path, relation types followed,
+and semantic distance. Finding hits from `globalSearch()` pass through relation
+expansion unchanged with a warning.
+
+## Structural Relations
+
+Two structural relation types are always projected from active indexed records:
+
+| Type | Meaning |
+| --- | --- |
+| `hierarchy` | document to parent, parent to chunk, or document to top-level chunk |
+| `sequence` | previous and next chunks in a source |
+
+These do not require a derive stage. They are read from indexed records at query
+time.
+
+## Related
+
+<Cards>
+  <Card title="Retrieval recipes" description="Where relation expansion fits in a retrieval pipeline." href="/docs/guides/retrieval/recipes" />
+  <Card title="Views" description="Constrain relation expansion to a typed member set." href="/docs/guides/knowledge/views" />
+  <Card title="Communities" description="Build report hierarchies from the visible graph." href="/docs/guides/knowledge/communities" />
+</Cards>
