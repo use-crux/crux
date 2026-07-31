@@ -13,7 +13,7 @@
  *
  * **Resolution & Inspection:**
  * - `.resolve()` — Get SDK-agnostic resolved prompt data (system, prompt, schema, tools)
- * - `.inspect()` — See per-part token breakdown and what was dropped
+ * - `preview()` — Measure a prospective request without executing it
  *
  * **Adapter packages (execution):**
  * - `@use-crux/ai` — Vercel AI SDK adapter (`generate()`, `stream()`)
@@ -1032,6 +1032,16 @@ export type {
   StepToolHistoryEntry,
 } from "./request/prepare/step-context";
 export type { PreparationDecisionInspection } from "./request/prepare/journal";
+export { preview } from "./request/preview/preview";
+export type {
+  RequestPreviewTarget,
+} from "./request/preview/preview";
+export type {
+  PreviewAdaptation,
+  PreviewAdaptationState,
+  RequestPreview,
+  RequestPreviewOptions,
+} from "./request/preview/types";
 export type {
   RequestCompositionErrorCode,
   RequestDiagnostic,
@@ -1044,6 +1054,16 @@ export type {
   RequestInspection,
   RequestReceipt,
 } from "./request/receipt/receipt";
+export {
+  inspectRequest,
+  RequestInspectionUnavailableError,
+} from "./request/receipt/inspection";
+export type {
+  RequestArtifactInspection,
+  RequestCandidateInspection,
+  RequestContributionInspection,
+  RequestSupportReceipt,
+} from "./request/receipt/inspection";
 export type {
   CompositionRequestReceiptNode,
   CompositionRequestReceiptTree,

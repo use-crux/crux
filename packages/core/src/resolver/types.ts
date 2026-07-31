@@ -148,7 +148,7 @@ export interface ResolvedPrompt {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Options passed to `.resolve()` and `.inspect()`.
+ * Options passed to Prompt resolution and compiler inspection.
  *
  * SDK-agnostic — no model reference. Adapters add model and SDK-specific
  * fields in their own options types.
@@ -245,7 +245,7 @@ export interface ExcludedContext {
 }
 
 /**
- * Structured breakdown of the assembled prompt, returned by `.inspect()`.
+ * Structured breakdown of an assembled prompt returned by compiler inspection.
  *
  * Provides per-part text and token counts, dropped contexts, and totals.
  * Uses the same resolution pipeline as `.resolve()` but returns the trace.

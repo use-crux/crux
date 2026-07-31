@@ -60,7 +60,7 @@ import {
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
-  inspectForDevtools,
+  previewForDevtools,
   mergeDirectives,
   resolveToolInputCapabilities,
   withSkillActivationInput,
@@ -500,7 +500,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               schema: resolved.schema,
               tools: lifecycle.tools,
               input: args.input ?? {},
-              ...(await inspectForDevtools(
+              ...(await previewForDevtools(
                 prompt,
                 resolveOpts,
                 lifecycle.tools,

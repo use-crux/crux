@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { AnyToolSet } from '../types'
 import type { ContextEntry } from './context-types'
 import type { Prompt, PromptConfig, PrepareHookArgs } from './prompt-types'
-import type { ResolveOptions, ResolvedPrompt, InspectResult } from '../resolver/types'
+import type { ResolveOptions, ResolvedPrompt } from '../resolver/types'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { captureSource } from '../project-index/source'
 
@@ -18,7 +18,7 @@ export function getPromptDefinitionSource(prompt: object): { file: string; line:
  * Define a typed, composable, SDK-agnostic prompt.
  *
  * This is the primary API for creating prompts. It returns a frozen `Prompt`
- * instance with `.resolve()` and `.inspect()` methods. Execution is handled
+ * instance with `.resolve()`. Execution and observational preview are handled
  * by adapter functions (`generate()`, `stream()`) from adapter subpaths.
  *
  * **Key behaviors:**
@@ -77,7 +77,8 @@ export function prompt<
 
       // Fire onPrepare hook
       if (config.hooks?.onPrepare) {
-        const inspection = pass.inspect()
+        const readInspection = pass.inspect
+        const inspection = readInspection()
         const hookArgs: PrepareHookArgs = {
           promptId: config.id,
           system: pass.args.system,
@@ -89,10 +90,6 @@ export function prompt<
       }
 
       return pass.args
-    },
-
-    async inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult> {
-      return compiled.inspect(opts as ResolveCallOptions)
     },
   })
 

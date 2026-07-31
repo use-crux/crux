@@ -63,7 +63,7 @@ import { sdkHistorySummaryGenerator } from "./history-summary";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
-  inspectForDevtools,
+  previewForDevtools,
   resolveToolInputCapabilities,
   withSkillActivationInput,
 } from "./shared";
@@ -568,7 +568,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
               schema: resolved.schema,
               tools,
               input: args.input ?? {},
-              ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+              ...(await previewForDevtools(prompt, resolveOpts, tools)),
             },
             input: args.input ?? {},
             provider: modelInfo.provider || dialect.id,

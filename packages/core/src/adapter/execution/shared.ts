@@ -18,6 +18,7 @@ import type { StructuredOutputCapabilities } from '../structured-output'
 import type { ToolInputCapabilitiesResolution } from '../tool/session'
 import type { ExecutionResolveOpts } from './types'
 import { systemMessagePrefixPatch } from './system-prefix-patch'
+import { preview } from '../../request/preview/preview'
 
 /** Default maximum model/tool loop steps for both adapter dialects. */
 export const DEFAULT_MAX_STEPS = 10
@@ -102,23 +103,26 @@ export function mergeDirectives(factory: StepDirective, caller: StepDirective | 
 }
 
 /**
- * Collect best-effort prompt inspection metadata for devtools.
+ * Collect best-effort request preview metadata for devtools.
  *
- * Inspection must never block generation: prompt inspection errors are
+ * Preview must never block generation: observational planning errors are
  * swallowed and represented as an empty metadata object.
  */
-export async function inspectForDevtools(
+export async function previewForDevtools(
   prompt: AnyPrompt,
   resolveOpts: ExecutionResolveOpts,
   tools: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown>> {
   try {
-    const inspectResult = await prompt.inspect(resolveOpts as Parameters<AnyPrompt['inspect']>[0])
-    if (tools) {
-      const allToolNames = Object.keys(tools)
-      if (allToolNames.length > 0) inspectResult.tools = allToolNames
-    }
-    return { _inspect: inspectResult }
+    const { input, provider, modelId, ...settings } = resolveOpts
+    const requestPreview = await preview(prompt, {
+      input,
+      provider,
+      model: modelId || "unknown",
+      settings,
+      tools,
+    })
+    return { _preview: requestPreview }
   } catch {
     return {}
   }

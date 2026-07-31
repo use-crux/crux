@@ -51,16 +51,13 @@ describe('prompt', () => {
     expect(resolved.settings.temperature).toBe(0.5)
   })
 
-    it('.inspect() returns InspectResult with token counts', async () => {
+    it('does not expose the removed prompt inspection method', () => {
     const p = makePrompt({
       system: 'You are a bot.',
       prompt: 'Do something.',
     })
 
-    const result = await p.inspect({})
-    expect(result.system.totalTokens).toBeGreaterThan(0)
-    expect(result.system.parts.length).toBeGreaterThanOrEqual(1)
-    expect(result.totalTokens).toBeGreaterThan(0)
+    expect(p).not.toHaveProperty('inspect')
   })
 
     it('onPrepare hook fires on .resolve() with correct args', async () => {

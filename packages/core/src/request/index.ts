@@ -22,6 +22,15 @@ export type {
   RequestReceipt,
   RequestSupportReceipt,
 } from "./receipt/receipt";
+export {
+  inspectRequest,
+  RequestInspectionUnavailableError,
+} from "./receipt/inspection";
+export type {
+  RequestArtifactInspection,
+  RequestCandidateInspection,
+  RequestContributionInspection,
+} from "./receipt/inspection";
 export type {
   CompositionRequestReceiptNode,
   CompositionRequestReceiptTree,
@@ -114,3 +123,13 @@ export type {
   StepToolHistoryEntry,
 } from "./prepare/step-context";
 export type { PreparationDecisionInspection } from "./prepare/journal";
+export {
+  preview,
+  type RequestPreviewTarget,
+} from "./preview/preview";
+export type {
+  PreviewAdaptation,
+  PreviewAdaptationState,
+  RequestPreview,
+  RequestPreviewOptions,
+} from "./preview/types";

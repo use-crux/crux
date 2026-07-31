@@ -35,6 +35,7 @@ import type { GenerateHistorySummary } from "../artifacts/lifecycle";
 import { resolveManagedHistoryPolicy } from "../history/managed-policy";
 import { prepareRepresentationPolicies } from "../representation/prepare";
 import { requestWarnings, tooLargeError } from "./diagnostics";
+import { requestInspectionEvidence } from "../receipt/evidence";
 
 /** Inputs required to seal one exact request. @internal */
 export interface SealRequestInput<
@@ -71,7 +72,8 @@ export async function sealRequest<
 ): Promise<SealedRequestPlan<TExtra>> {
   const requestId = createRequestId();
   const profile = resolveModelCapacityProfile(input.model, input.capacity);
-  let request = input.request;
+  const canonicalRequest = input.request;
+  let request = canonicalRequest;
   let estimate = estimateRequestTokens(request, {
     provider: input.provider,
     ...(input.media ? { media: input.media } : {}),
@@ -85,6 +87,7 @@ export async function sealRequest<
     measurement,
   });
   let adaptations: readonly RequestAdaptation[] = [];
+  let representationSelections: ReadonlyMap<string, number> = new Map();
   const planningWarnings: RequestWarning[] = [];
   let policies = [...(input.representations ?? [])];
   if (input.history?.policy === "managed" && input.history.projection) {
@@ -150,7 +153,7 @@ export async function sealRequest<
       provider: input.provider,
       model: input.model,
       requestId,
-      request,
+      request: canonicalRequest,
       policies,
       inputBudget: input.inputBudget,
       epoch: input.representationEpoch,
@@ -179,6 +182,7 @@ export async function sealRequest<
     inputTokens = selected.inputTokens;
     estimate = selected.estimate;
     adaptations = selected.adaptations;
+    representationSelections = selected.selections;
   } else if (input.countTokens && inputTokens > budget.max) {
     inputTokens = assertAuthoritativeTokenCount(
       await input.countTokens(request),
@@ -219,6 +223,16 @@ export async function sealRequest<
     providerOverheadTokens: budget.providerOverhead,
     warnings,
     adaptations,
+    inspection: requestInspectionEvidence({
+      request: canonicalRequest,
+      policies,
+      selections: representationSelections,
+      adaptations,
+      provider: input.provider,
+      maxInputTokens: budget.max,
+      media: input.media,
+      previousRequestId: input.previousRequestId,
+    }),
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),

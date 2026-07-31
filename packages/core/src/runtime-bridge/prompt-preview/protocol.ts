@@ -93,7 +93,7 @@ export const PromptPreviewCapabilitySchema = z
   })
   .strict();
 
-/** Provider-neutral options forwarded to canonical `Prompt.inspect()`. */
+/** Provider-neutral options forwarded to observational request preview. */
 export const PromptPreviewOptionsSchema = z
   .object({
     provider: ScalarValidStringSchema.min(1).max(128).optional(),

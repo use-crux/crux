@@ -5,52 +5,23 @@
  */
 
 import type { ModelCountingConfidence } from "../capacity/model-profile";
-import type { RequestTokenBreakdown } from "../measure/breakdown";
 import type { RequestAdaptation, RequestWarning } from "./adaptations";
-import { supportRequestReceipt } from "./support";
+import type { RequestTokenBreakdown } from "../measure/breakdown";
 import {
-  preparationDecision,
-  type PreparationDecisionInspection,
-} from "../prepare/journal";
+  requestInspection,
+  retainRequestInspection,
+  type RequestInspection,
+  type RequestInspectionEvidence,
+  type RequestSupportReceipt,
+} from "./inspection";
+
+export type {
+  RequestInspection,
+  RequestSupportReceipt,
+} from "./inspection";
 
 let fallbackRequestId = 0;
 const retryCounts = new WeakMap<RequestReceipt, { value: number }>();
-
-/** Redacted linked support-call facts retained with live inspection. */
-export interface RequestSupportReceipt {
-  /** Support request identity linked from the adaptation. */
-  readonly id: string;
-  /** Concrete support model. */
-  readonly model: string;
-  /** Measured support-call input tokens. */
-  readonly inputTokens: number;
-  /** Effective support-call input maximum. */
-  readonly maxInputTokens: number;
-  /** Support-call measurement confidence. */
-  readonly measurement: ModelCountingConfidence;
-}
-
-/** Retained breakdown-only inspection available for a live request receipt. */
-export interface RequestInspection {
-  /** Request identity shared with the small receipt. */
-  readonly id: string;
-  /** Redacted token attribution by contribution class. */
-  readonly breakdown: RequestTokenBreakdown;
-  /** Measurement confidence used for the fit decision. */
-  readonly measurement: ModelCountingConfidence;
-  /** Confidence-based safety margin reserved from model capacity. */
-  readonly safetyMarginTokens: number;
-  /** Provider framing allowance reserved from model capacity. */
-  readonly providerOverheadTokens: number;
-  /** Number of provider transport retries reported for the sealed request. */
-  readonly retryCount: number;
-  /** Receipted support calls linked from selected adaptations. */
-  readonly supportRequests: readonly RequestSupportReceipt[];
-  /** Accepted content-free preparation decision for this provider call. */
-  readonly preparation?: PreparationDecisionInspection;
-  /** Evidence-retention limitation until durable inspection is wired. */
-  readonly retention: "requires observability retention";
-}
 
 /**
  * Executed-request evidence attached to one provider-call step.
@@ -100,6 +71,7 @@ export interface CreateRequestReceiptInput {
   readonly previousRequestId?: string;
   readonly warnings?: readonly RequestWarning[];
   readonly adaptations?: readonly RequestAdaptation[];
+  readonly inspection?: RequestInspectionEvidence;
 }
 
 /** Create one immutable JSON-safe request receipt. @internal */
@@ -109,6 +81,9 @@ export function createRequestReceipt(
   const id = input.id ?? createRequestId();
   const retryCount = { value: input.retryCount ?? 0 };
   const adaptations = Object.freeze([...(input.adaptations ?? [])]);
+  let inspect = (): RequestInspection => {
+    throw new TypeError("Request receipt inspection is not initialized.");
+  };
   const receipt: RequestReceipt = {
     id,
     model: input.model,
@@ -120,56 +95,25 @@ export function createRequestReceipt(
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),
-    inspect: async () => {
-      const preparation = preparationDecision(receipt);
-      return Object.freeze({
-        id,
-        breakdown: input.breakdown,
-        measurement: input.measurement,
-        safetyMarginTokens: input.safetyMarginTokens,
-        providerOverheadTokens: input.providerOverheadTokens,
-        retryCount: retryCount.value,
-        supportRequests: linkedSupportRequests(adaptations),
-        ...(preparation ? { preparation } : {}),
-        retention: "requires observability retention" as const,
-      });
-    },
+    inspect: async () => inspect(),
   };
+  inspect = retainRequestInspection(id, () =>
+    requestInspection({
+      receipt,
+      breakdown: input.breakdown,
+      measurement: input.measurement,
+      safetyMarginTokens: input.safetyMarginTokens,
+      providerOverheadTokens: input.providerOverheadTokens,
+      retryCount: retryCount.value,
+      evidence: input.inspection,
+    }),
+  );
   Object.defineProperty(receipt, "inspect", {
     enumerable: false,
     value: receipt.inspect,
   });
   retryCounts.set(receipt, retryCount);
   return Object.freeze(receipt);
-}
-
-function linkedSupportRequests(
-  adaptations: readonly RequestAdaptation[],
-): readonly RequestSupportReceipt[] {
-  const ids = new Set(
-    adaptations.flatMap((adaptation) =>
-      adaptation.supportRequestIds ??
-      (adaptation.supportRequestId
-        ? [adaptation.supportRequestId]
-        : []),
-    ),
-  );
-  return Object.freeze(
-    [...ids].flatMap((id) => {
-      const linked = supportRequestReceipt(id);
-      return linked
-        ? [
-            Object.freeze({
-              id: linked.id,
-              model: linked.model,
-              inputTokens: linked.inputTokens,
-              maxInputTokens: linked.maxInputTokens,
-              measurement: linked.measurement,
-            }),
-          ]
-        : [];
-    }),
-  );
 }
 
 /** Record adapter-reported transport retries without mutating the receipt. @internal */

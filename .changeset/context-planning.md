@@ -89,3 +89,17 @@ baseline beneath per-provider-call `prepareStep` decisions. Composition
 results expose a causal tree of ordered child request receipts, and
 operation-narrowed amendment types reject language-only facets for other
 managed operation families.
+
+Add observational `preview()` for Prompt and Agent requests. Preview reports
+`fits`, `over-limit`, or `unknown` with redacted prospective adaptations and
+never executes providers, Tools, representation preparation, publication,
+maintenance, or canonical-state writes. Executed request receipts now retain
+complete redacted contribution, candidate, token, artifact, support-call, and
+linked-request evidence through `receipt.inspect()`; recently serialized
+receipts can be inspected with `inspectRequest()`.
+
+Remove the public `prompt.inspect()` method. Use `preview(prompt, options)`
+before execution, `prompt.resolve()` for resolved Prompt arguments, and
+request-receipt inspection for evidence about the exact request that was sent.
+The context-planning migration guide documents all removed budget, history,
+compaction, and inspection surfaces and their semantic replacements.

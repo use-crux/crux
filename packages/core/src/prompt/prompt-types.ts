@@ -4,7 +4,7 @@
  * cache intent.
  *
  * These types describe the user-facing prompt surface. Resolution output
- * ({@link ResolvedPrompt}, {@link InspectResult}) is owned by `resolver/types.ts`
+ * ({@link ResolvedPrompt}) is owned by `resolver/types.ts`
  * and provider-neutral generation settings by `generation/types.ts`; this module
  * composes them into the authoring API.
  *
@@ -24,7 +24,6 @@ import type {
 } from "../generation/types";
 import type {
   DroppedContext,
-  InspectResult,
   ResolveOptions,
   ResolvedPrompt,
 } from "../resolver/types";
@@ -340,7 +339,7 @@ export interface Prompt<
   readonly outputSchema: TOutput;
   /** `true` if this prompt has an `output` schema (structured mode), `false` otherwise. */
   readonly hasOutput: TOutput extends z.ZodType ? true : false;
-  /** The raw prompt configuration — exposed for adapters and the inspector. */
+  /** The raw prompt configuration — exposed for adapters and preview. */
   readonly config: PromptConfig<TOwnInput, TOutput, TContexts, TTools>;
 
   /**
@@ -357,21 +356,6 @@ export interface Prompt<
    */
   resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt>;
 
-  /**
-   * Inspect the assembled prompt without executing.
-   *
-   * Returns a structured breakdown of every part of the system message
-   * with source attribution and token counts.
-   *
-   * @example
-   * ```ts
-   * const debug = await prompt.inspect({ input: { ... } })
-   * debug.system.parts     // per-context breakdown
-   * debug.totalTokens      // total estimated tokens
-   * debug.droppedContexts  // retained for legacy inspection compatibility
-   * ```
-   */
-  inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult>;
 }
 
 /**

@@ -105,6 +105,72 @@ export async function prepareRepresentationPolicies(input: {
   );
 }
 
+/** Reuse existing derived artifacts without creating or scheduling work. @internal */
+export async function observeRepresentationPolicies(input: {
+  readonly policies: readonly ResolvedRepresentationPolicy[];
+  readonly provider: string;
+  readonly model: string;
+}): Promise<readonly ResolvedRepresentationPolicy[]> {
+  return Promise.all(
+    input.policies.map(async (policy) => {
+      if (!policy.summary) return policy;
+      const model = policy.summary.model ?? input.model;
+      const artifact = await findSourceSummaryArtifact({
+        sourceTexts: policy.summary.sourceTexts,
+        strategy: policy.summary.strategy,
+        provider: input.provider,
+        model: modelIdentity(model),
+      });
+      return artifact ? withSummaryArtifact(policy, artifact) : policy;
+    }),
+  );
+}
+
+/**
+ * Materialize size-only placeholders for unavailable prospective rungs.
+ *
+ * The returned policies contain no publication or validation callbacks and
+ * therefore cannot be dispatched. They exist only for observational fit
+ * classification.
+ *
+ * @internal
+ */
+export function prospectiveRepresentationPolicies(
+  policies: readonly ResolvedRepresentationPolicy[],
+): readonly ResolvedRepresentationPolicy[] {
+  return policies.map((policy) =>
+    Object.freeze({
+      ...policy,
+      rungs: Object.freeze(
+        policy.rungs.map((rung) => {
+          if (rung.available) return rung;
+          if (rung.kind === "summary") {
+            return Object.freeze({
+              ...rung,
+              available: true,
+              text: "[Unprepared summary]",
+              messages:
+                policy.lowerBoundMessages ??
+                Object.freeze([{
+                  role: "assistant" as const,
+                  content: "[Unprepared historical summary]",
+                }]),
+            });
+          }
+          if (rung.kind === "offload") {
+            return Object.freeze({
+              ...rung,
+              available: true,
+              text: "[Unprepared exact-recovery reference]",
+            });
+          }
+          return rung;
+        }),
+      ),
+    }),
+  );
+}
+
 function withSummaryArtifact(
   policy: ResolvedRepresentationPolicy,
   artifact: Awaited<ReturnType<typeof sourceSummaryArtifact>>,

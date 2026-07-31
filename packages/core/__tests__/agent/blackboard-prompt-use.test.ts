@@ -72,9 +72,9 @@ describe('blackboard prompt use integration', () => {
     const board = blackboard({ id: 'thread', schema: boardSchema })
     const assistant = prompt({ use: [board], system: 'Base.' })
 
-    const inspect = await assistant.inspect({})
+    const resolved = await assistant.resolve({})
 
-    expect(inspect.tools).toEqual(
+    expect(Object.keys(resolved.tools ?? {})).toEqual(
       expect.arrayContaining(['readBlackboard', 'writeBlackboard', 'patchBlackboard', 'clearBlackboard']),
     )
   })

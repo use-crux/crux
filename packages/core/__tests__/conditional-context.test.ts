@@ -553,7 +553,9 @@ describe('prompt with conditional contexts', () => {
       system: 'Base.',
     })
 
-    const inspection = await p.inspect({ input: { flag: false } })
+    const inspection = await compilePrompt(p.config).inspect({
+      input: { flag: false },
+    })
     expect(inspection.excludedContexts).toHaveLength(1)
     expect(inspection.excludedContexts[0].source).toBe('context:conditional')
     expect(inspection.excludedContexts[0].reason).toContain('when')
@@ -573,7 +575,9 @@ describe('prompt with conditional contexts', () => {
       system: 'Base.',
     })
 
-    const inspection = await p.inspect({ input: { flag: true } })
+    const inspection = await compilePrompt(p.config).inspect({
+      input: { flag: true },
+    })
     expect(inspection.excludedContexts).toHaveLength(0)
   })
 

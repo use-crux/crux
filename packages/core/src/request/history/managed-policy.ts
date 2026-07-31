@@ -184,14 +184,16 @@ export async function resolveManagedHistoryPolicy(input: {
   });
 }
 
-interface ManagedHistorySplit {
+/** Deterministic causal split shared by execution and preview. @internal */
+export interface ManagedHistorySplit {
   readonly leading: readonly Message[];
   readonly prefix: readonly Message[];
   readonly conversational: readonly Message[];
   readonly recentOnly: readonly Message[];
 }
 
-function splitManagedHistory(
+/** Split exact history into summary prefix and exact suffix. @internal */
+export function splitManagedHistory(
   messages: readonly Message[],
   recent: HistoryOptions["recent"],
   maxInputTokens: number,
@@ -238,7 +240,8 @@ function splitManagedHistory(
   });
 }
 
-function managedSummaryMessages(
+/** Project one persisted summary with its exact suffix. @internal */
+export function managedSummaryMessages(
   split: ManagedHistorySplit,
   artifact: HistorySummaryArtifact,
 ): readonly Message[] {

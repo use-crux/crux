@@ -20,7 +20,7 @@ describe("exact prompt preview dispatch", () => {
     vi.useRealTimers();
   });
 
-  it("advertises a canonical target and inspects only after explicit dispatch", async () => {
+  it("advertises a canonical target and previews only after explicit dispatch", async () => {
     const transform = vi.fn((value: string) => value.trim());
     const render = vi.fn(
       ({ input }: { input: { readonly name: string } }) =>
@@ -86,19 +86,11 @@ describe("exact prompt preview dispatch", () => {
       status: "ready",
       targetId,
       catalogueRevision: capability.catalogueRevision,
-      inspection: {
-        system: {
-          text: "You are concise.",
-          coverage: "complete",
-        },
-        prompt: {
-          text: "Hello, Ada!",
-          segments: [
-            { kind: "static", startUtf16: 0, endUtf16: 7 },
-            { kind: "dynamic", startUtf16: 7, endUtf16: 10 },
-            { kind: "static", startUtf16: 10, endUtf16: 11 },
-          ],
-        },
+      preview: {
+        status: "fits",
+        model: "unknown",
+        measurement: "conservative",
+        adaptations: [],
       },
     });
     expect(result).not.toHaveProperty("runIds");
@@ -200,7 +192,7 @@ describe("exact prompt preview dispatch", () => {
     finish("late");
   });
 
-  it("projects provider adaptation, contexts, budget, and tool names without execution", async () => {
+  it("measures provider adaptation, contexts, budget, and tools without execution", async () => {
     const executeTool = vi.fn(() => "never");
     const kept = context({
       id: "kept",
@@ -250,18 +242,12 @@ describe("exact prompt preview dispatch", () => {
 
     expect(result).toMatchObject({
       status: "ready",
-      inspection: {
-        system: {
-          text: "Base system.\n\nKept context.\n\nProvider tail.",
-        },
-        prompt: { text: "Question." },
-        excludedContexts: [
-          {
-            source: "context:excluded",
-            reason: "when() predicate returned false",
-          },
-        ],
-        tools: ["lookup"],
+      preview: {
+        status: "fits",
+        model: "gpt-test",
+        measurement: "conservative",
+        adaptations: [],
+        inputTokens: expect.any(Number),
       },
     });
     expect(executeTool).not.toHaveBeenCalled();
