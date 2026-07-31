@@ -13,6 +13,11 @@ import {
 import { clearDeliveryRetryTimer, scheduleDeliveryRetry } from './retry'
 import { activeHostLifecycle } from './host-scope'
 import {
+  recordBatchDispositionDiagnostics,
+  recordEvidenceDispositionDiagnostics,
+} from './disposition-diagnostics'
+import { requeueDeliveryRecords, trimDeliveryQueue } from './queue'
+import {
   deliveryDiagnosticsSnapshot,
   initialDeliveryState,
   notifySupersededChange,
@@ -39,14 +44,17 @@ export interface DeliveryEngine {
   errors(): readonly DeliveryDiagnostic[]
   reset(): void
   flush(options?: ObservabilityFlushOptions): Promise<ObservabilityFlushResult>
-  shutdown(options?: ObservabilityFlushOptions): Promise<ObservabilityFlushResult>
+  shutdown(
+    options?: ObservabilityFlushOptions,
+  ): Promise<ObservabilityFlushResult>
 }
 
 /** Create an isolated, bounded, receipt-aware delivery engine. */
 export function createDeliveryEngine(): DeliveryEngine {
   const state = initialDeliveryState()
   const scheduleDispatch = (): void => {
-    if (state.dispatchTimer || state.retryTimer || state.queue.length === 0) return
+    if (state.dispatchTimer || state.retryTimer || state.queue.length === 0)
+      return
     if (state.options.scheduledDelayMs === 0) {
       dispatchQueuedRecords(state, scheduleDispatch)
       return
@@ -74,7 +82,7 @@ export function createDeliveryEngine(): DeliveryEngine {
     deliveryOptions: () => state.options,
     configureDelivery(options) {
       state.options = normalizeDeliveryOptions(options)
-      trimQueue(state)
+      trimDeliveryQueue(state)
       publishDeliveryDiagnostics(state)
     },
     enqueue(record) {
@@ -82,30 +90,45 @@ export function createDeliveryEngine(): DeliveryEngine {
       const item = { record, bytes: queuedRecordBytes(record) }
       state.queue.push(item)
       state.queuedBytes += item.bytes
-      trimQueue(state)
+      trimDeliveryQueue(state)
       scheduleDispatch()
     },
     diagnostics: () => deliveryDiagnosticsSnapshot(state),
     errors: () => state.errors,
     reset: () => resetState(state),
-    flush: (options = {}) => drainDeliveryState(state, dispatch, 'flush', options),
+    flush: (options = {}) =>
+      drainDeliveryState(state, dispatch, 'flush', options),
     async shutdown(options = {}) {
       state.accepting = false
-      const result = await drainDeliveryState(state, dispatch, 'shutdown', options)
+      const result = await drainDeliveryState(
+        state,
+        dispatch,
+        'shutdown',
+        options,
+      )
       if (result.status === 'drained') state.transport = undefined
       return result
     },
   }
 }
 
-function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => void): void {
+function dispatchQueuedRecords(
+  state: DeliveryState,
+  scheduleDispatch: () => void,
+): void {
   clearDispatchTimer(state)
   if (!state.transport) return dropQueueForReconfiguration(state)
-  if (state.queue.length === 0 || state.pendingDeliveries.size >= state.options.maxPendingDeliveries) {
+  if (
+    state.queue.length === 0 ||
+    state.pendingDeliveries.size >= state.options.maxPendingDeliveries
+  ) {
     return
   }
 
-  const items = state.queue.splice(0, Math.min(state.queue.length, state.options.maxBatchSize))
+  const items = state.queue.splice(
+    0,
+    Math.min(state.queue.length, state.options.maxBatchSize),
+  )
   const bytes = items.reduce((sum, item) => sum + item.bytes, 0)
   state.queuedBytes -= bytes
   const records = items.map((item) => item.record)
@@ -147,24 +170,39 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
         state.accepted += result.accepted.length
         state.permanentlyRejected += result.permanentlyRejected.length
         state.reconfiguredDropped += result.retryable.length
+        recordEvidenceDispositionDiagnostics(state, [
+          ...result.permanentRejections,
+          ...result.retryableRejections,
+        ])
         publishDeliveryDiagnostics(state)
         return
       }
       state.accepted += result.accepted.length
       state.permanentlyRejected += result.permanentlyRejected.length
       if (result.permanentlyRejected.length > 0) {
-        recordDeliveryError(
+        recordBatchDispositionDiagnostics(
           state,
-          'permanent_rejection',
-          'collector permanently rejected observability records',
           result.permanentlyRejected,
+          result.permanentRejections,
+          {
+            code: 'permanent_rejection',
+            message: 'collector permanently rejected observability records',
+          },
         )
       }
       if (result.retryable.length > 0) {
         state.retried += result.retryable.length
-        requeueFront(state, result.retryable)
+        requeueDeliveryRecords(state, result.retryable)
         clearDispatchTimer(state)
-        recordDeliveryError(state, 'delivery_retry', 'observability records will be retried', result.retryable)
+        recordBatchDispositionDiagnostics(
+          state,
+          result.retryable,
+          result.retryableRejections,
+          {
+            code: 'delivery_retry',
+            message: 'observability records will be retried',
+          },
+        )
         scheduleDeliveryRetry(
           state,
           state.options,
@@ -190,8 +228,13 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
         return
       }
       state.retried += records.length
-      requeueFront(state, records)
-      recordDeliveryError(state, 'transport_error', sanitizeTransportError(error), records)
+      requeueDeliveryRecords(state, records)
+      recordDeliveryError(
+        state,
+        'transport_error',
+        sanitizeTransportError(error),
+        records,
+      )
       scheduleDeliveryRetry(
         state,
         state.options,
@@ -204,43 +247,20 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
   state.pendingDeliveries.add(delivery)
   state.pendingRecordCount += records.length
   state.pendingBytes += bytes
-  trimQueue(state)
+  trimDeliveryQueue(state)
   deferToHostLifecycle(state, delivery)
 }
 
-function deferToHostLifecycle(state: DeliveryState, delivery: Promise<void>): void {
+function deferToHostLifecycle(
+  state: DeliveryState,
+  delivery: Promise<void>,
+): void {
   try {
     const hostLifecycle = activeHostLifecycle() ?? state.options.hostLifecycle
     hostLifecycle?.defer?.(delivery)
   } catch {
     // Host defer failures never affect delivery; the promise still settles on its own.
   }
-}
-
-function requeueFront(state: DeliveryState, records: readonly CruxGraphRecord[]): void {
-  const items = records.map((record) => ({
-    record,
-    bytes: queuedRecordBytes(record),
-  }))
-  state.queue.unshift(...items)
-  state.queuedBytes += items.reduce((sum, item) => sum + item.bytes, 0)
-  trimQueue(state)
-}
-
-function trimQueue(state: DeliveryState): void {
-  let droppedAny = false
-  while (
-    state.pendingRecordCount + state.queue.length > state.options.maxQueuedRecords ||
-    state.pendingBytes + state.queuedBytes > state.options.maxQueuedBytes
-  ) {
-    const dropped = state.queue.shift()
-    if (!dropped) return
-    state.queuedBytes -= dropped.bytes
-    state.overflowDropped += 1
-    state.overflowDroppedBytes += dropped.bytes
-    droppedAny = true
-  }
-  if (droppedAny) publishDeliveryDiagnostics(state)
 }
 
 function advanceEpoch(state: DeliveryState): void {

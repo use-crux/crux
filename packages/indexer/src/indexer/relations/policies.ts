@@ -42,6 +42,14 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'agent.uses_thread',
+    fromKinds: ['agent'],
+    toKinds: ['thread'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
     type: 'agent.uses_tool',
     fromKinds: ['agent'],
     toKinds: ['tool'],
@@ -768,5 +776,12 @@ export const indexRelationPolicies = [
     presentation: 'both',
     partial: true,
     runtimeJoin: true,
+  },
+  {
+    type: 'evidence.record.declared_in',
+    fromKinds: ['evidence.record'],
+    presentation: 'detail',
+    partial: true,
+    runtimeJoin: false,
   },
 ] as const satisfies readonly IndexRelationPolicy[]

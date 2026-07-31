@@ -50,6 +50,7 @@ import type {
 } from "./types";
 import type { ResultStepFacts } from "../result-accumulator";
 import { initialMessageState } from "./messages";
+import { sdkHistorySummaryGenerator } from "./history-summary";
 import { buildTraceMeta } from "./metadata";
 import {
   finalizeSdkResultEnvelope,
@@ -59,7 +60,7 @@ import {
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
-  inspectForDevtools,
+  previewForDevtools,
   mergeDirectives,
   resolveToolInputCapabilities,
   withSkillActivationInput,
@@ -80,6 +81,25 @@ import {
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import {
+  assertSdkRequestPlanning,
+  createSdkRequestStepPlanner,
+} from "./sdk-request-planner";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
+import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  isThreadReplay,
+  prepareThreadInvocation,
+  validateThreadReplay,
+} from "./thread-history";
+import { attachThreadCommit } from "./thread-result";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -104,22 +124,31 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
 ): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
+  assertSdkRequestPlanning(dialect);
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
+  let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages ?? (args.nativeMessages !== undefined ? [] : undefined),
+  );
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
     args.nativeMessages,
+    threadInvocation.source,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = args.nativeMessages;
+  let nativeMessages =
+    threadInvocation.source || initialMessages.history?.changed
+      ? undefined
+      : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const retryId = args.validationRetry
@@ -157,6 +186,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     safety,
     resolved.schema,
   );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -179,6 +210,14 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    {
+      messages,
+      ...(promptText ? { prompt: promptText } : {}),
+    },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const guardSkillAmendment = createSkillIngressAmendmentGuard({
@@ -196,6 +235,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
+  let representationSelections: ReadonlyMap<string, number> | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -220,8 +261,24 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
-      reresolve: (skillSession) =>
-        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      reresolve: async (skillSession) => {
+        boundaryResolveOpts = withSkillActivationInput(
+          resolveOpts,
+          skillSession,
+        );
+        resolved = await prompt.resolve(boundaryResolveOpts);
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        return resolved;
+      },
       guardSkillAmendment,
     });
     await lifecycle.guardExposure({
@@ -275,6 +332,63 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           safety,
           messages: () => messages,
         });
+  const planStep = createSdkRequestStepPlanner({
+    dialect,
+    prompt,
+    resolveOptions: () => boundaryResolveOpts,
+    resolved: () => resolved,
+    rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
+    configuredActiveTools: args.activeTools,
+    inputBudget: args.inputBudget,
+    prepareStep: args.prepareStep,
+    requestInput: args.input ?? {},
+    signal: args.signal,
+    schema: resolved.schema,
+    outputSchema: structuredPlan?.outputSchema,
+    tools: () =>
+      lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    activeTools: activeToolNames,
+    extra: args.extra,
+    history: initialMessages.history,
+    generateHistorySummary: sdkHistorySummaryGenerator(dialect),
+    prepareRequest: (candidate, selections) => {
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      return guardRepresentedRequest(safety, candidate);
+    },
+    applyRepresentationSelection: async (selections) => {
+      representationSelections = selections;
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      await lifecycle.rearm(resolved);
+    },
+  });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);
   const stepFacts: ResultStepFacts[] = [];
@@ -333,11 +447,22 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       provider: modelInfo.provider,
       model: modelInfo.modelId,
       media: dialect.media,
-      tokenBudget: args.tokenBudget,
     });
+    if (args.prepareStep) {
+      await planStep.prime({
+        model: args.model,
+        modelInfo,
+        system: currentSystem,
+        systemBlocks: currentSystemBlocks,
+        messages:
+          providerMessages ??
+          (promptText ? [{ role: "user", content: promptText }] : []),
+      });
+    }
     return {
       model: args.model,
       modelInfo,
+      planStep,
       system: currentSystem,
       systemBlocks: currentSystemBlocks,
       prompt: promptText,
@@ -353,7 +478,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           { id: call.toolCallId, name: call.toolName, args: call.input },
           call.messages ?? messages,
         ),
-      activeTools: args.activeTools,
+      activeTools: activeToolNames(),
       maxSteps,
       observer: loopObserver,
       ...(stepTransformer !== undefined ? { stepTransformer } : {}),
@@ -361,6 +486,18 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       extra: args.extra,
     };
   };
+
+  function activeToolNames(): readonly string[] | undefined {
+    const visible =
+      lifecycle.descriptors?.map((descriptor) => descriptor.name) ?? [];
+    if (!args.activeTools) {
+      return visible.length > 0 ? visible : undefined;
+    }
+    return visible.filter(
+      (name) =>
+        args.activeTools!.includes(name) || name === OFFLOAD_SUPPORT_TOOL_NAME,
+    );
+  }
 
   try {
     const generated = await sourceSession.withContext(async () =>
@@ -383,7 +520,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               schema: resolved.schema,
               tools: lifecycle.tools,
               input: args.input ?? {},
-              ...(await inspectForDevtools(
+              ...(await previewForDevtools(
                 prompt,
                 resolveOpts,
                 lifecycle.tools,
@@ -396,6 +533,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
           },
           cachedFinalizer,
         ),
@@ -426,6 +566,17 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           } finally {
             stepBudget.dispose();
           }
+        },
+        async (result) => {
+          if (result.threadCommit || result.pendingApprovals) return;
+          await validateThreadReplay(threadInvocation, isThreadReplay(result));
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            result,
+          );
+          return threadCommit
+            ? attachThreadCommit(result, threadCommit)
+            : undefined;
         },
         async (result) => {
           await lifecycle.captureTurn({
@@ -506,7 +657,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           finalResponse = regen.response;
           finalCostUsd = regen.meta.costUsd;
           resultMessages = [...regen.messages];
-          resultStepFacts.push(sdkResponseFacts(regen.response));
+          resultStepFacts.push(
+            ...(regen.stepFacts ?? [sdkResponseFacts(regen.response)]),
+          );
           return { text: regen.response.text, parsed: undefined };
         }
         return { text: finalText, parsed: undefined };

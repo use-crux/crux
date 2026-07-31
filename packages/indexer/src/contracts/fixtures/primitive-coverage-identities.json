@@ -564,6 +564,50 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "evidence.record",
+      "family": "evidence.record",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "evidence-record-native-static.test.ts",
+        "relations": "evidence-record-native-static.test.ts",
+        "sourceRefs": "evidence-record-native-static.test.ts",
+        "diagnostics": "evidence-record-native-static.test.ts",
+        "dependencies": "evidence-record-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "evidence-record-native-static.test.ts",
+        "sourceGraph": "evidence-record-native-static.test.ts",
+        "runtimeMetadata": "evidence-record-native-static.test.ts",
+        "degradedBehavior": "evidence-record-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "evidence-record-native-static.test.ts",
+        "negative": "evidence-record-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "thread",
+      "family": "thread",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "thread-native-static.test.ts",
+        "relations": "thread-native-static.test.ts",
+        "sourceRefs": "thread-native-static.test.ts",
+        "diagnostics": "thread-native-static.test.ts",
+        "dependencies": "thread-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "thread-native-static.test.ts",
+        "sourceGraph": "thread-native-static.test.ts",
+        "runtimeMetadata": "thread-native-static.test.ts",
+        "degradedBehavior": "thread-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "thread-native-static.test.ts",
+        "negative": "thread-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "rag.indexer",
       "family": "rag.indexer",
       "nativeCovered": true,

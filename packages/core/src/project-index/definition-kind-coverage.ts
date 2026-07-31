@@ -134,6 +134,10 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "directly-observed",
     runtimePrimitiveNames: ["task.operation"],
   },
+  thread: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["thread.operation"],
+  },
   "composition.parallel": {
     primary: "directly-observed",
     runtimePrimitiveNames: ["composition.parallel"],
@@ -186,6 +190,11 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "runtime-observed-unjoined",
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["embedding.call"],
+  },
+  "evidence.record": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["evidence.record"],
   },
   "rag.indexer": {
     primary: "runtime-observed-unjoined",

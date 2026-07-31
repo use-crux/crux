@@ -30,6 +30,7 @@ var defaultCallNames = []string{
 	"embedMany",
 	"embedding",
 	"evaluate",
+	"record",
 	"expandParents",
 	"fallback",
 	"fanout",
@@ -77,6 +78,7 @@ var defaultCallNames = []string{
 	"swarm",
 	"task",
 	"textSource",
+	"thread",
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
@@ -107,6 +109,7 @@ var defaultCallInterestNames = []string{
 	"embedMany",
 	"embedding",
 	"evaluate",
+	"record",
 	"expandParents",
 	"fallback",
 	"fanout",
@@ -154,6 +157,7 @@ var defaultCallInterestNames = []string{
 	"swarm",
 	"task",
 	"textSource",
+	"thread",
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
@@ -173,6 +177,9 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 		interest := projectindex.StaticCallInterest{Name: name, Source: "extractor-pattern"}
 		if name == "durableTask" {
 			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/runtime"}
+		}
+		if name == "thread" {
+			interest.ImportFrom = []string{"@use-crux/core/thread"}
 		}
 		if name == "evaluate" || name == "fileSource" || name == "filesSource" || name == "urlSource" || name == "urlsSource" || name == "textSource" {
 			arg := 1
@@ -205,6 +212,7 @@ func defaultHost() json.RawMessage {
 		"context",
 		"embedding",
 		"embedding.call",
+		"evidence.record",
 		"eval",
 		"flow",
 		"injectable",
@@ -219,6 +227,7 @@ func defaultHost() json.RawMessage {
 		"scorer",
 		"skill-registry",
 		"storage",
+		"thread",
 		"tool",
 		"workspace",
 	}

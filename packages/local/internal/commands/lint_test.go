@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
@@ -279,4 +280,23 @@ func lintFindingIDs(findings []api.IndexLintFinding) []string {
 		ids = append(ids, finding.ID)
 	}
 	return ids
+}
+
+func TestLintPromotesExplicitPortToServerMode(t *testing.T) {
+	f := &cli.Factory{Port: 1}
+	root := &cobra.Command{Use: "crux"}
+	root.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
+	lint := NewLintCmd(f)
+	root.AddCommand(lint)
+	root.SetArgs([]string{"lint", "--port", "1"})
+	root.SetErr(&bytes.Buffer{})
+	root.SetOut(&bytes.Buffer{})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("explicit --port should read the running server and fail to connect, not index one-shot")
+	}
+	if !strings.Contains(err.Error(), "cannot connect to crux devtools") {
+		t.Fatalf("expected server connection error, got: %v", err)
+	}
 }

@@ -44,8 +44,13 @@ type Service struct {
 	mutationMu    sync.Mutex
 	manifestStore deploymentManifestReader
 
-	retentionSettings  retentionSettings
-	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
+	retentionSettings     retentionSettings
+	evidenceSettings      evidenceSettings
+	evidenceNow           func() time.Time
+	evidenceReadCleanupAt atomic.Int64
+	// evidenceInspectAfterSummaries coordinates deterministic snapshot tests.
+	evidenceInspectAfterSummaries func()
+	lifecycleRunDetail            func(context.Context, string) (RunDetail, error)
 	// revisionLogRetention bounds the change log; tests shrink it to exercise
 	// catch-up expiry deterministically. Zero uses defaultRevisionLogRetention.
 	revisionLogRetention int
@@ -55,6 +60,8 @@ type Service struct {
 	tokenTimer   *time.Timer
 
 	unknownRecordTypes atomic.Int64
+
+	approvalMigrationConverted int64
 }
 
 type Event struct {
@@ -393,11 +400,38 @@ type RunDetailRequest struct {
 	BasePrompt     *RunDetailRequestBasePrompt     `json:"basePrompt,omitempty"`
 	UserPrompt     *RunDetailPromptTextUserPrompt  `json:"userPrompt,omitempty"`
 	Messages       *RunDetailRequestMessages       `json:"messages,omitempty"`
+	Plan           *RunDetailRequestPlan           `json:"plan,omitempty"`
 	Contributions  []RunDetailRequestContribution  `json:"contributions"`
 	Budget         *RunDetailRequestBudget         `json:"budget,omitempty"`
 	Tools          []RunDetailRequestTool          `json:"tools"`
 	Turns          []RunDetailRequestTurn          `json:"turns,omitempty"`
 	Diagnostics    []string                        `json:"diagnostics,omitempty"`
+}
+
+type RunDetailRequestPlan struct {
+	ArtifactID        string                       `json:"artifactId,omitempty"`
+	RequestID         string                       `json:"requestId"`
+	Model             string                       `json:"model"`
+	InputTokens       *float64                     `json:"inputTokens,omitempty"`
+	MaxInputTokens    *float64                     `json:"maxInputTokens,omitempty"`
+	Measurement       string                       `json:"measurement"`
+	Adaptations       []RunDetailRequestAdaptation `json:"adaptations"`
+	Warnings          []RunDetailRequestWarning    `json:"warnings"`
+	PreviousRequestID string                       `json:"previousRequestId,omitempty"`
+}
+
+type RunDetailRequestAdaptation struct {
+	Contributor       string   `json:"contributor"`
+	Representation    string   `json:"representation"`
+	FullTokens        *float64 `json:"fullTokens,omitempty"`
+	SelectedTokens    *float64 `json:"selectedTokens,omitempty"`
+	SupportRequestID  string   `json:"supportRequestId,omitempty"`
+	SupportRequestIDs []string `json:"supportRequestIds,omitempty"`
+}
+
+type RunDetailRequestWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type RunDetailRequestRepresentative struct {
@@ -447,37 +481,41 @@ type RunDetailRequestMessages struct {
 }
 
 type RunDetailRequestContribution struct {
-	Kind                   string          `json:"kind"`
-	State                  string          `json:"state"`
-	Included               bool            `json:"included"`
-	SourceID               string          `json:"sourceId"`
-	InjectableKind         string          `json:"injectableKind"`
-	Reason                 string          `json:"reason,omitempty"`
-	Branch                 string          `json:"branch,omitempty"`
-	Injects                []string        `json:"injects,omitempty"`
-	Priority               *float64        `json:"priority,omitempty"`
-	SizeBytes              *float64        `json:"sizeBytes,omitempty"`
-	Tokens                 *float64        `json:"tokens,omitempty"`
-	CacheStatus            string          `json:"cacheStatus,omitempty"`
-	CacheKey               string          `json:"cacheKey,omitempty"`
-	CacheAgeMs             *float64        `json:"cacheAgeMs,omitempty"`
-	CacheTTLMS             *float64        `json:"cacheTtlMs,omitempty"`
-	CacheReason            string          `json:"cacheReason,omitempty"`
-	InjectedTools          []string        `json:"injectedTools,omitempty"`
-	Segments               json.RawMessage `json:"segments,omitempty"`
-	StaticTokens           *float64        `json:"staticTokens,omitempty"`
-	DynamicTokens          *float64        `json:"dynamicTokens,omitempty"`
-	FreshnessStatus        string          `json:"freshnessStatus,omitempty"`
-	FreshnessAgeMs         *float64        `json:"freshnessAgeMs,omitempty"`
-	FreshnessMaxAgeMs      *float64        `json:"freshnessMaxAgeMs,omitempty"`
-	FreshnessObservedAt    string          `json:"freshnessObservedAt,omitempty"`
-	FreshnessValidUntil    string          `json:"freshnessValidUntil,omitempty"`
-	FreshnessSourceVersion string          `json:"freshnessSourceVersion,omitempty"`
-	FreshnessReason        string          `json:"freshnessReason,omitempty"`
-	Text                   string          `json:"text,omitempty"`
-	ArtifactID             string          `json:"artifactId,omitempty"`
-	SourceSpanID           string          `json:"sourceSpanId,omitempty"`
-	Order                  int             `json:"order"`
+	Kind                   string                      `json:"kind"`
+	State                  string                      `json:"state"`
+	Included               bool                        `json:"included"`
+	SourceID               string                      `json:"sourceId"`
+	Boundary               string                      `json:"boundary,omitempty"`
+	Representations        []string                    `json:"representations,omitempty"`
+	SelectedRepresentation string                      `json:"selectedRepresentation,omitempty"`
+	Adaptation             *RunDetailRequestAdaptation `json:"adaptation,omitempty"`
+	InjectableKind         string                      `json:"injectableKind"`
+	Reason                 string                      `json:"reason,omitempty"`
+	Branch                 string                      `json:"branch,omitempty"`
+	Injects                []string                    `json:"injects,omitempty"`
+	Priority               *float64                    `json:"priority,omitempty"`
+	SizeBytes              *float64                    `json:"sizeBytes,omitempty"`
+	Tokens                 *float64                    `json:"tokens,omitempty"`
+	CacheStatus            string                      `json:"cacheStatus,omitempty"`
+	CacheKey               string                      `json:"cacheKey,omitempty"`
+	CacheAgeMs             *float64                    `json:"cacheAgeMs,omitempty"`
+	CacheTTLMS             *float64                    `json:"cacheTtlMs,omitempty"`
+	CacheReason            string                      `json:"cacheReason,omitempty"`
+	InjectedTools          []string                    `json:"injectedTools,omitempty"`
+	Segments               json.RawMessage             `json:"segments,omitempty"`
+	StaticTokens           *float64                    `json:"staticTokens,omitempty"`
+	DynamicTokens          *float64                    `json:"dynamicTokens,omitempty"`
+	FreshnessStatus        string                      `json:"freshnessStatus,omitempty"`
+	FreshnessAgeMs         *float64                    `json:"freshnessAgeMs,omitempty"`
+	FreshnessMaxAgeMs      *float64                    `json:"freshnessMaxAgeMs,omitempty"`
+	FreshnessObservedAt    string                      `json:"freshnessObservedAt,omitempty"`
+	FreshnessValidUntil    string                      `json:"freshnessValidUntil,omitempty"`
+	FreshnessSourceVersion string                      `json:"freshnessSourceVersion,omitempty"`
+	FreshnessReason        string                      `json:"freshnessReason,omitempty"`
+	Text                   string                      `json:"text,omitempty"`
+	ArtifactID             string                      `json:"artifactId,omitempty"`
+	SourceSpanID           string                      `json:"sourceSpanId,omitempty"`
+	Order                  int                         `json:"order"`
 }
 
 type RunDetailRequestBudget struct {
@@ -715,15 +753,55 @@ func NewService(db *sql.DB) (*Service, error) {
 	return newService(context.Background(), db, inMemoryMaxOpenConns)
 }
 
+type serviceOptions struct {
+	evidenceNow      func() time.Time
+	evidenceSettings *evidenceSettings
+	warn             func(string)
+}
+
 func newService(ctx context.Context, db *sql.DB, maxOpenConns int) (*Service, error) {
+	return newServiceWithOptions(ctx, db, maxOpenConns, serviceOptions{})
+}
+
+func newServiceWithOptions(
+	ctx context.Context,
+	db *sql.DB,
+	maxOpenConns int,
+	options serviceOptions,
+) (*Service, error) {
 	configureConnectionPool(db, maxOpenConns)
+	retention := retentionSettingsFromEnv()
+	var settings evidenceSettings
+	var warning string
+	var err error
+	if options.evidenceSettings != nil {
+		settings, warning, err = normalizeEvidenceSettings(*options.evidenceSettings)
+	} else {
+		settings, warning, err = evidenceSettingsFromEnv(retention)
+	}
+	if err != nil {
+		return nil, err
+	}
+	now := options.evidenceNow
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	warn := options.warn
+	if warn == nil {
+		warn = func(message string) { slog.Warn(message) }
+	}
+	if warning != "" {
+		warn(warning)
+	}
 	service := &Service{
 		db:                db,
 		events:            NewEventBus(),
 		queryTO:           defaultQueryTimeout,
 		mutationTO:        defaultMutationTimeout,
 		maintenanceTO:     defaultMaintenanceTimeout,
-		retentionSettings: retentionSettingsFromEnv(),
+		retentionSettings: retention,
+		evidenceSettings:  settings,
+		evidenceNow:       now,
 	}
 	service.lifecycleRunDetail = service.RunDetail
 	ctx, cancel := service.maintenanceContext(ctx)
@@ -734,6 +812,12 @@ func newService(ctx context.Context, db *sql.DB, maxOpenConns int) (*Service, er
 	}
 	if err := service.migrate(ctx); err != nil {
 		return nil, fmt.Errorf("migrate observability sqlite: %w", err)
+	}
+	if service.approvalMigrationConverted > 0 {
+		warn(fmt.Sprintf(
+			"approval artifact migration guarded %d retained-out occurrence(s)",
+			service.approvalMigrationConverted,
+		))
 	}
 	return service, nil
 }
@@ -768,7 +852,26 @@ func (s *Service) maintenanceContext(ctx context.Context) (context.Context, cont
 	return contextWithOptionalTimeout(ctx, s.maintenanceTO)
 }
 
+// OpenServiceOptions configures process-level observability service behavior.
+//
+// Now is intended for deterministic process-boundary tests. Production callers
+// should use [OpenService], which uses the current UTC clock.
+type OpenServiceOptions struct {
+	Now func() time.Time
+}
+
+// OpenService opens the durable observability service with production defaults.
 func OpenService(ctx context.Context, path string) (*Service, error) {
+	return OpenServiceWithOptions(ctx, path, OpenServiceOptions{})
+}
+
+// OpenServiceWithOptions opens the durable observability service with explicit
+// process-level options.
+func OpenServiceWithOptions(
+	ctx context.Context,
+	path string,
+	options OpenServiceOptions,
+) (*Service, error) {
 	sqlitePath := path
 	maxOpenConns := inMemoryMaxOpenConns
 	if path != ":memory:" {
@@ -786,12 +889,21 @@ func OpenService(ctx context.Context, path string) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open observability sqlite %q: %w", path, err)
 	}
-	service, err := newService(ctx, db, maxOpenConns)
+	service, err := newServiceWithOptions(
+		ctx,
+		db,
+		maxOpenConns,
+		serviceOptions{evidenceNow: options.Now},
+	)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize observability service: %w", err)
 	}
-	if _, err := service.runRetention(ctx, service.retentionSettings, time.Now().UTC()); err != nil {
+	if _, err := service.runRetention(
+		ctx,
+		service.retentionSettings,
+		service.evidenceNow().UTC(),
+	); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("run observability retention: %w", err)
 	}

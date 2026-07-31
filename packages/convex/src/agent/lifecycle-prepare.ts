@@ -33,10 +33,8 @@ export function promptWithRuntimeUse<TPrompt extends AnyConvexPrompt>(
 export async function resolvePreparedPrompt(
   activePrompt: AnyConvexPrompt,
   input: Record<string, unknown>,
-  tokenBudget: number | undefined,
 ) {
   return await activePrompt.resolve({
     input,
-    tokenBudget,
   } as unknown as ResolveOptions<z.ZodType, readonly ContextEntry[]>)
 }

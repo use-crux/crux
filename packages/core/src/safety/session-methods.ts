@@ -49,6 +49,7 @@ import {
   toolDefinitionGuard,
   toolDescriptionGuard,
   memoryWriteGuard,
+  representationPolicySelection,
   type SafetySession,
   type StructuredSafetyContext,
 } from "./session-bridge";
@@ -116,6 +117,9 @@ interface SessionMethodOptions {
   readonly guardFeedback: FeedbackIngressGuard;
   readonly toolExposureGuards: ToolExposureGuards;
   readonly managedMemoryWriteGuard: ManagedMemoryWriteGuard;
+  readonly selectRepresentationPolicies: (
+    disabledIds: readonly string[],
+  ) => void;
 }
 /** Build the method table after session state and runners are initialized. */
 export function createSafetySessionMethods(
@@ -204,6 +208,7 @@ export function createSafetySessionMethods(
   };
   return {
     enabled: state.enabled,
+    [representationPolicySelection]: state.selectRepresentationPolicies,
     ...createSafetySessionMedia({
       bindings: outputBindings(),
       defaultModel: state.options.model,
@@ -213,10 +218,12 @@ export function createSafetySessionMethods(
     }),
     // An enforce `assert` is the only Safety-owned commit gate today: it holds
     // every streamed byte until resolved and fails the attempt closed on failure.
-    [streamCommitPlan]: {
-      hasAssertGate: state.constraints.some(
-        (constraint) => constraint.severity === "assert",
-      ),
+    get [streamCommitPlan]() {
+      return {
+        hasAssertGate: state.constraints.some(
+          (constraint) => constraint.severity === "assert",
+        ),
+      };
     },
     [modelIngressGuard]: guardIngress,
     [feedbackIngressGuard]: state.guardFeedback,

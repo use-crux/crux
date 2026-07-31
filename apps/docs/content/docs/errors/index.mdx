@@ -50,3 +50,28 @@ Public `defer()` failures use `CruxDeferError` from `@use-crux/core`.
 | [`DEFER_REPLAY_UNSAFE`](/docs/errors/DEFER_REPLAY_UNSAFE)                 | Public `defer()` inside replayable flow execution. |
 | [`DEFER_TARGET_INPUT_REQUIRED`](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) | Named target missing required JSON input.          |
 | [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)                 | Named work could not commit before the response.   |
+
+## Execution evidence codes
+
+`CruxEvidenceError` covers synchronous authoring and inspection failures.
+Crux Local also returns evidence-specific asynchronous delivery dispositions.
+
+| Code | Meaning |
+| --- | --- |
+| [`EVIDENCE_INPUT_INVALID`](/docs/errors/EVIDENCE_INPUT_INVALID) | An evidence input or destination result is structurally invalid. |
+| [`EVIDENCE_SUBJECT_REQUIRED`](/docs/errors/EVIDENCE_SUBJECT_REQUIRED) | No explicit or active execution subject exists. |
+| [`EVIDENCE_SUBJECT_NOT_FOUND`](/docs/errors/EVIDENCE_SUBJECT_NOT_FOUND) | The readable destination cannot resolve the subject. |
+| [`EVIDENCE_KIND_INVALID`](/docs/errors/EVIDENCE_KIND_INVALID) | The evidence kind is invalid or unresolved. |
+| [`EVIDENCE_CONCLUSION_INVALID`](/docs/errors/EVIDENCE_CONCLUSION_INVALID) | The conclusion does not belong to the selected role. |
+| [`EVIDENCE_REFERENCE_INVALID`](/docs/errors/EVIDENCE_REFERENCE_INVALID) | The subject or source cannot become a canonical graph reference. |
+| [`EVIDENCE_SUPERSESSION_INVALID`](/docs/errors/EVIDENCE_SUPERSESSION_INVALID) | The supersession relationship is invalid. |
+| [`EVIDENCE_IDEMPOTENCY_CONFLICT`](/docs/errors/EVIDENCE_IDEMPOTENCY_CONFLICT) | Content differs from the first accepted evidence identity. |
+| [`EVIDENCE_WRITE_QUARANTINED`](/docs/errors/EVIDENCE_WRITE_QUARANTINED) | A closed Eval cell rejected late evidence authoring. |
+| [`EVIDENCE_QUERY_UNAVAILABLE`](/docs/errors/EVIDENCE_QUERY_UNAVAILABLE) | No active collector or readable destination can answer. |
+| [`EVIDENCE_CURSOR_INVALID`](/docs/errors/EVIDENCE_CURSOR_INVALID) | The cursor is invalid, stale, or bound to another query. |
+| [`EVIDENCE_ACCESS_DENIED`](/docs/errors/EVIDENCE_ACCESS_DENIED) | The destination denied evidence inspection. |
+| [`EVIDENCE_INPUT_TOO_LARGE`](/docs/errors/EVIDENCE_INPUT_TOO_LARGE) | A bounded Local evidence request exceeded its input limit. |
+| [`EVIDENCE_QUERY_FAILED`](/docs/errors/EVIDENCE_QUERY_FAILED) | Local could not complete the evidence query. |
+| [`EVIDENCE_STAGING_CAPACITY`](/docs/errors/EVIDENCE_STAGING_CAPACITY) | Durable evidence staging is temporarily full. |
+| [`EVIDENCE_STAGING_CANDIDATE_TOO_LARGE`](/docs/errors/EVIDENCE_STAGING_CANDIDATE_TOO_LARGE) | One evidence payload candidate exceeds the fixed bound. |
+| [`EVIDENCE_PRIVACY_DELETED`](/docs/errors/EVIDENCE_PRIVACY_DELETED) | Delivery references explicitly deleted private state. |

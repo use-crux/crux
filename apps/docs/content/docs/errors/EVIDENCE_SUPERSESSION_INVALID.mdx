@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_SUPERSESSION_INVALID
+description: Evidence supersession is duplicated, cyclic, or identity-incompatible.
+---
+
+## What failed
+
+A successor referenced itself, repeated a predecessor, formed a cycle, or
+targeted evidence from another subject or role.
+
+## Retryability
+
+Not retryable. The supersession set must be corrected.
+
+Diagnostics do not expose the prior evidence graph.
+
+## Fix
+
+Supersede unique earlier refs for the same subject and role. Keep unrelated or
+contradictory claims active instead of using timestamps as replacement order.

@@ -561,36 +561,15 @@ describe('observability emission', () => {
         missingKeys: [],
         unexpectedKeys: [],
       },
-      { kind: 'prompt.input', promptId: 'p', validationStatus: 'not-configured', providedKeys: [] },
-    ])
-  })
-
-    it('emits a prompt.budget artifact with dropped contexts when tokenBudget applies', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    setTokenizer((text) => text.length)
-
-    const low = context({ id: 'low', system: 'AAAA', priority: 10 })
-    const high = context({ id: 'high', system: 'BB', priority: 90 })
-    await resolveCompiled({ system: 'X', use: [low, high] } as AnyConfig, { tokenBudget: 5 }, undefined)
-    await observe.flush()
-
-    const previews = artifactPreviews(transport.records, 'prompt.budget')
-    expect(previews).toHaveLength(1)
-    expect(previews[0]).toMatchObject({
-      kind: 'prompt.budget',
-      totalTokens: 5,
-      dropped: [
-        expect.objectContaining({
-          state: 'dropped-budget',
-          sourceId: 'context:low',
-          reason: 'token budget',
-          tokens: 4,
-        }),
-      ],
-    })
-  })
-})
+      {
+        kind: "prompt.input",
+        promptId: "p",
+        validationStatus: "not-configured",
+        providedKeys: [],
+      },
+    ]);
+  });
+});
 // ─────────────────────────────────────────────────────────────────
 // Input schema collection (definition-time shape walk)
 // ─────────────────────────────────────────────────────────────────

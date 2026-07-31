@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	SchemaVersion = 4
+	SchemaVersion = 5
 )
 
 var deploymentManifestIDPattern = regexp.MustCompile(`^pim_[0-9a-f]{64}$`)
@@ -75,8 +75,9 @@ type SourceHealth struct {
 }
 
 type SourceHealthError struct {
-	Code    string `json:"code"`
-	Message string `json:"message,omitempty"`
+	Code        string   `json:"code"`
+	Message     string   `json:"message,omitempty"`
+	EvidenceIDs []string `json:"evidenceIds,omitempty"`
 }
 
 type Record struct {
@@ -240,7 +241,7 @@ type ArtifactRecord struct {
 	CreatedAt     string          `json:"createdAt"`
 	ContentType   string          `json:"contentType"`
 	Encoding      string          `json:"encoding"`
-	SizeBytes     int64           `json:"sizeBytes,omitempty"`
+	SizeBytes     *int64          `json:"sizeBytes,omitempty"`
 	Hash          string          `json:"hash,omitempty"`
 	Preview       json.RawMessage `json:"preview,omitempty"`
 	URI           string          `json:"uri,omitempty"`
@@ -331,6 +332,7 @@ var primitiveFamilyByName = map[string]string{
 	"handoff.prepare":           "handoff",
 	"delegate.invoke":           "delegate",
 	"workspace.operation":       "workspace",
+	"thread.operation":          "thread",
 	"plan.operation":            "plan",
 	"task.operation":            "task",
 	"indexing.pipeline":         "indexing",
@@ -342,6 +344,7 @@ var primitiveFamilyByName = map[string]string{
 	"feedback.record":           "feedback",
 	"defer.scheduled":           "defer",
 	"defer.run":                 "defer",
+	"evidence.record":           "evidence",
 	"custom.operation":          "custom",
 }
 
@@ -365,9 +368,11 @@ var canonicalEdgeTypes = map[string]struct{}{
 	"feedback.for":       {},
 	"eval.case_of":       {},
 	"derived.from":       {},
+	"evidence.for":       {},
 }
 
 var canonicalArtifactKinds = map[string]struct{}{
+	"approval.decision":    {},
 	"approval.request":     {},
 	"input":                {},
 	"output":               {},
@@ -377,6 +382,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"context.contribution": {},
 	"prompt":               {},
 	"prompt.budget":        {},
+	"request.plan":         {},
 	"tool.args":            {},
 	"tool.request":         {},
 	"tool.result":          {},
@@ -445,6 +451,24 @@ func ValidateRecord(record Record) error {
 		if !isCanonicalOrCustom(edge.EdgeType, canonicalEdgeTypes) {
 			return fmt.Errorf("edge %s has invalid edgeType %q", edge.EdgeID, edge.EdgeType)
 		}
+		if edge.EdgeType == "evidence.for" {
+			if err := validateEvidenceEdgeAttributes(edge.Attributes); err != nil {
+				return err
+			}
+			if err := validateEvidenceGraphNode(edge.From); err != nil {
+				return err
+			}
+			if err := validateEvidenceGraphNode(edge.To); err != nil {
+				return err
+			}
+			var attributes evidenceEdgeAttributes
+			if err := json.Unmarshal(edge.Attributes, &attributes); err != nil {
+				return err
+			}
+			if *attributes.SourceMode == "inline" && edge.From.Kind != "artifact" {
+				return fmt.Errorf("evidence.for inline sourceMode requires artifact source")
+			}
+		}
 	case RecordArtifact:
 		var artifact ArtifactRecord
 		if err := json.Unmarshal(record.Payload, &artifact); err != nil {
@@ -452,6 +476,15 @@ func ValidateRecord(record Record) error {
 		}
 		if !isCanonicalOrCustom(artifact.Kind, canonicalArtifactKinds) {
 			return fmt.Errorf("artifact %s has invalid kind %q", artifact.ArtifactID, artifact.Kind)
+		}
+		if _, err := validateEvidenceSourceArtifact(
+			record.Payload,
+			artifact,
+		); err != nil {
+			return err
+		}
+		if _, err := validateApprovalArtifact(artifact); err != nil {
+			return err
 		}
 	case RecordSpan:
 		var span SpanRecord
@@ -479,7 +512,9 @@ func ValidateRecord(record Record) error {
 		if resumed.ResumedAt == "" || resumed.Reason == "" {
 			return fmt.Errorf("run:resume record %s requires resumedAt and reason", record.RecordID)
 		}
-	case RecordRunEnd, RecordSpanEnd, RecordSpanEvent:
+	case RecordSpanEvent:
+		return validateQualifiedEvidenceEvent(record)
+	case RecordRunEnd, RecordSpanEnd:
 		return nil
 	default:
 		return nil

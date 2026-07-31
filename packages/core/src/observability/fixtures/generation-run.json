@@ -1,7 +1,7 @@
 {
   "records": [
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_b7862451676111a8_1",
       "type": "run:start",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -21,7 +21,7 @@
       "segmentSeq": 1
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_c89e3f639b60b2b2_2",
       "type": "span:start",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -45,7 +45,7 @@
       "segmentSeq": 2
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_4d7b79403627c9b6_3",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -71,7 +71,7 @@
       "segmentSeq": 3
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_ccf410890aa9bfaa_4",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -92,7 +92,7 @@
       "segmentSeq": 4
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_9160416e1794b6ff_5",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -121,7 +121,7 @@
       "segmentSeq": 5
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_4eec8269d07131c0_6",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -145,7 +145,7 @@
       "segmentSeq": 6
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_15b7848b79914e00_7",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -178,7 +178,7 @@
       "segmentSeq": 7
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_080e127174af34dd_8",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -199,7 +199,7 @@
       "segmentSeq": 8
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_55e9a5123cb9077d_9",
       "type": "span:event",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -218,7 +218,7 @@
       "segmentSeq": 9
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_4fa4397ded2ee80c_a",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -239,7 +239,7 @@
       "segmentSeq": 10
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_9c797405918fd24c_b",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -260,7 +260,7 @@
       "segmentSeq": 11
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_30087e99fc7dcf3b_c",
       "type": "span:end",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -283,7 +283,7 @@
       "segmentSeq": 12
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_164c0d7c7e272dd7_d",
       "type": "run:end",
       "runId": "run_d202cd4d27c2073026a950af",

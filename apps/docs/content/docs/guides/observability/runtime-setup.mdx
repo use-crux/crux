@@ -177,9 +177,26 @@ Use `ctx.crux.runAction()` (not raw `ctx.runAction`) so child actions restore Cr
 
 Both can run together: they are complementary sinks over the same graph spine. Do not point production traffic at a developer laptop as the only telemetry path.
 
+## Durable execution-evidence retention
+
+Crux Local persists evidence independently from routine run retention. Set
+`CRUX_EVIDENCE_RETENTION_DAYS` and
+`CRUX_EVIDENCE_PAYLOAD_RETENTION_DAYS` on the Local process only. Both must be
+positive integers; invalid values fail startup. Relationship retention defaults
+to the normalized observability retention age, currently 14 days. Payload
+retention defaults to relationship retention and is clamped when configured
+longer.
+
+Evidence can outlive its producing run, so producer navigation may become
+unavailable while the relationship remains. Payload expiry removes every
+queryable payload copy without changing the relationship's conclusion.
+Serverless hosts still need the bounded final drain above: durable Local
+storage cannot persist records the host never delivered.
+
 ## Related
 
 - [Observability reference: host lifecycle](/docs/reference/crux-core/observability#host-lifecycle-adapters)
 - [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
+- [Execution evidence](/docs/guides/observability/execution-evidence)
 - [Telemetry](/docs/guides/observability/telemetry)
 - [Convex observability](/docs/guides/convex/observability)

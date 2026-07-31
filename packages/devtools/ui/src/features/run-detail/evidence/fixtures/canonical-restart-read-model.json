@@ -1,0 +1,323 @@
+{
+  "subject": {
+    "kind": "execution",
+    "id": "1111111111111111"
+  },
+  "roles": {
+    "intent": {
+      "role": "intent",
+      "status": "redacted",
+      "activeRecordCount": 1,
+      "records": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000001001",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "intent",
+            "evidenceKind": "input",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000001001"
+          },
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "redacted",
+          "payloadUnavailableReason": "retention"
+        }
+      ],
+      "conflicting": false,
+      "truncated": false
+    },
+    "authority": {
+      "role": "authority",
+      "status": "present",
+      "activeRecordCount": 2,
+      "records": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000002003",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "authority",
+            "evidenceKind": "approval.decision",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000002003"
+          },
+          "conclusion": "denied",
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "reference"
+        },
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000002002",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "authority",
+            "evidenceKind": "approval.decision",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000002002"
+          },
+          "conclusion": "allowed",
+          "supersedes": [
+            {
+              "kind": "execution.evidence",
+              "id": "evidence_0000000000002001",
+              "subject": {
+                "kind": "execution",
+                "id": "1111111111111111"
+              },
+              "role": "authority",
+              "evidenceKind": "approval.request",
+              "recordedAt": "2026-07-30T09:00:00Z"
+            }
+          ],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "reference"
+        }
+      ],
+      "history": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000002001",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "authority",
+            "evidenceKind": "approval.request",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000002001"
+          },
+          "conclusion": "inconclusive",
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "reference"
+        }
+      ],
+      "conflicting": true,
+      "truncated": false
+    },
+    "change": {
+      "role": "change",
+      "status": "redacted",
+      "activeRecordCount": 1,
+      "records": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000003001",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "change",
+            "evidenceKind": "memory.diff",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000003001"
+          },
+          "conclusion": "applied",
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "redacted",
+          "payloadUnavailableReason": "policy"
+        }
+      ],
+      "conclusion": "applied",
+      "conflicting": false,
+      "truncated": false
+    },
+    "verification": {
+      "role": "verification",
+      "status": "present",
+      "activeRecordCount": 2,
+      "records": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_4444444444444444",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "verification",
+            "evidenceKind": "score.report",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_3333333333333333"
+          },
+          "conclusion": "passed",
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "reference"
+        },
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000004002",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "verification",
+            "evidenceKind": "score.report",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000004002"
+          },
+          "conclusion": "failed",
+          "supersedes": [
+            {
+              "kind": "execution.evidence",
+              "id": "evidence_0000000000004001",
+              "subject": {
+                "kind": "execution",
+                "id": "1111111111111111"
+              },
+              "role": "verification",
+              "evidenceKind": "score.report",
+              "recordedAt": "2026-07-30T09:00:00Z"
+            }
+          ],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "redacted",
+          "payloadUnavailableReason": "retention"
+        }
+      ],
+      "history": [
+        {
+          "ref": {
+            "kind": "execution.evidence",
+            "id": "evidence_0000000000004001",
+            "subject": {
+              "kind": "execution",
+              "id": "1111111111111111"
+            },
+            "role": "verification",
+            "evidenceKind": "score.report",
+            "recordedAt": "2026-07-30T09:00:00Z"
+          },
+          "source": {
+            "kind": "artifact",
+            "id": "artifact_0000000000004001"
+          },
+          "conclusion": "passed",
+          "supersedes": [],
+          "producer": {
+            "kind": "execution",
+            "id": "1111111111111111"
+          },
+          "acceptedAfterTerminal": {
+            "judgedAgainst": {
+              "kind": "span",
+              "id": "1111111111111111"
+            }
+          },
+          "payloadState": "reference"
+        }
+      ],
+      "conflicting": true,
+      "truncated": false
+    },
+    "recovery": {
+      "role": "recovery",
+      "status": "not-yet-recorded",
+      "activeRecordCount": 0,
+      "records": [],
+      "conflicting": false,
+      "truncated": false
+    }
+  }
+}

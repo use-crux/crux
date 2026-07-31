@@ -1,0 +1,19 @@
+---
+title: EVIDENCE_SUBJECT_NOT_FOUND
+description: The readable destination cannot resolve the requested evidence subject.
+---
+
+## What failed
+
+The destination has no authorized, retained canonical identity for the subject.
+
+## Retryability
+
+Not retryable. The current subject identity cannot be resolved.
+
+The response does not distinguish an unknown subject from an unauthorized one.
+
+## Fix
+
+Use the exact run, span, or artifact identity returned by Crux Local. Confirm
+the relationship has not expired or been privacy-deleted.

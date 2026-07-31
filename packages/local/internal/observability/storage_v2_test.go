@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -474,20 +475,31 @@ func TestServicePersistsBoundedSanitizedSourceHealth(t *testing.T) {
 		OverflowDropped:     3,
 		DeadlineDropped:     1,
 		LastError: &SourceHealthError{
-			Code:    "delivery retry/unsafe",
-			Message: "https://collector.example/private Bearer secret-token\nnext",
+			Code:        "delivery retry/unsafe",
+			Message:     "https://collector.example/private Bearer secret-token\nnext",
+			EvidenceIDs: []string{"evidence_1111111111111111", "evidence_2222222222222222"},
 		},
 	}
 	if err := service.RecordSourceHealth(ctx, health); err != nil {
 		t.Fatal(err)
 	}
 	var accepted, retried, rejected, overflow, deadline int
-	var code, message string
+	var code, message, evidenceIDsJSON string
 	if err := service.db.QueryRowContext(ctx, `
 		SELECT accepted, retried, permanently_rejected, overflow_dropped,
-			deadline_dropped, last_error_code, last_error_message
+			deadline_dropped, last_error_code, last_error_message,
+			last_error_evidence_ids_json
 		FROM observability_source_health WHERE source_id = 'source_storage_health'
-	`).Scan(&accepted, &retried, &rejected, &overflow, &deadline, &code, &message); err != nil {
+	`).Scan(
+		&accepted,
+		&retried,
+		&rejected,
+		&overflow,
+		&deadline,
+		&code,
+		&message,
+		&evidenceIDsJSON,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if accepted != 4 || retried != 2 || rejected != 1 || overflow != 3 || deadline != 1 {
@@ -495,6 +507,40 @@ func TestServicePersistsBoundedSanitizedSourceHealth(t *testing.T) {
 	}
 	if code != "delivery_retry_unsafe" || message != "[url] Bearer [redacted] next" {
 		t.Fatalf("source diagnostic = %q/%q, want sanitized values", code, message)
+	}
+	var evidenceIDs []string
+	if err := json.Unmarshal([]byte(evidenceIDsJSON), &evidenceIDs); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := evidenceIDs, []string{"evidence_1111111111111111", "evidence_2222222222222222"}; !equalStringSlices(got, want) {
+		t.Fatalf("source diagnostic evidence IDs = %#v, want %#v", got, want)
+	}
+}
+
+func TestServiceRejectsUnboundedSourceHealthEvidenceCorrelation(t *testing.T) {
+	service := newTestService(t)
+	for name, evidenceIDs := range map[string][]string{
+		"invalid": {"not-an-evidence-id"},
+		"too many": func() []string {
+			result := make([]string, 17)
+			for index := range result {
+				result[index] = fmt.Sprintf("evidence_%016x", index+1)
+			}
+			return result
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := service.RecordSourceHealth(context.Background(), SourceHealth{
+				SourceID: "source_invalid_correlation",
+				LastError: &SourceHealthError{
+					Code:        "EVIDENCE_IDEMPOTENCY_CONFLICT",
+					EvidenceIDs: evidenceIDs,
+				},
+			})
+			if err == nil {
+				t.Fatalf("accepted %s evidence correlation", name)
+			}
+		})
 	}
 }
 

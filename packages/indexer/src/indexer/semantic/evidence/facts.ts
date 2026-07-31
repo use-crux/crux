@@ -30,6 +30,7 @@ import type { SemanticAnalyzerResult } from "../types";
 import { measureSemanticTiming } from "../instrumentation";
 import { semanticMediaFacts } from "../media-facts";
 import { semanticEmbeddingFacts } from "../../embedding/semantic-facts";
+import { semanticEvidenceRecordFacts } from "../../evidence-record/semantic-facts";
 import { mediaArchitectureLintFindings } from "../media-lints";
 import {
   createTypeScriptSemanticFactInput,
@@ -48,6 +49,7 @@ import {
   semanticToolMapSourceRefs,
 } from "../model";
 import { semanticPromptTextSourceRefs } from "../model/prompt-text-source-refs";
+import { semanticContextPlanningFacts } from "../context-planning/facts";
 import { projectPromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
 
 interface SemanticSchemaIndexFacts {
@@ -164,15 +166,33 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     input.sourceFiles,
     input.view,
   );
+  const evidenceRecords = semanticEvidenceRecordFacts(
+    input.root,
+    input.sourceFiles,
+    input.view,
+  );
+  const contextPlanning = semanticContextPlanningFacts(
+    input.sourceFiles,
+    input.view,
+  );
+  const authored = mergeSemanticAnalyzerResults([
+    result,
+    {
+      definitions: contextPlanning.definitions,
+      sourceRefs: contextPlanning.sourceRefs,
+    },
+  ]);
   const definitions = [
-    ...result.definitions,
+    ...authored.definitions,
     ...media.definitions,
     ...embeddings.definitions,
+    ...evidenceRecords.definitions,
   ];
   const relations = [
-    ...result.relations,
+    ...authored.relations,
     ...media.relations,
     ...embeddings.relations,
+    ...evidenceRecords.relations,
   ];
   const promptTextDiagnostics = projectPromptTextDiagnosticConclusions(
     input.promptTextDiagnosticConclusions?.(result.sourceRefs) ?? [],
@@ -181,15 +201,18 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
   yield* semanticEvidenceBatchesFromFacts({
     definitions,
     sourceRefs: [
-      ...result.sourceRefs,
+      ...authored.sourceRefs,
       ...media.sourceRefs,
       ...embeddings.sourceRefs,
+      ...evidenceRecords.sourceRefs,
     ],
     relations,
     diagnostics: promptTextDiagnostics,
     lintFindings: [
       ...media.lintFindings,
       ...embeddings.lintFindings,
+      ...evidenceRecords.lintFindings,
+      ...contextPlanning.lintFindings,
       ...mediaArchitectureLintFindings(definitions, relations),
     ],
   });

@@ -13,7 +13,7 @@
  */
 
 import type { LanguageModel } from "ai";
-import type { Message } from "@use-crux/core";
+import type { GenerateObjectFn, Message } from "@use-crux/core";
 import type {
   JsonSchemaObject,
   StructuredAttempt,
@@ -24,7 +24,6 @@ import {
   CruxUnsupportedStructuredOutputError,
   decodeStructuredValue,
 } from "@use-crux/core/adapter";
-import type { GenerateObjectFn } from "@use-crux/core/compaction";
 import { resolveModel } from "@use-crux/core/routing";
 import type { SdkGateway } from "./gateway";
 import type { SdkLoopResultLike } from "./sdk-codec";

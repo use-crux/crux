@@ -42,6 +42,9 @@ mod eval {
     pub(crate) mod assertions;
     pub(crate) mod facts;
 }
+mod evidence_record {
+    pub(crate) mod facts;
+}
 mod flow {
     pub(crate) mod facts;
     pub(crate) mod output;
@@ -120,6 +123,9 @@ mod storage {
     pub(crate) mod metadata;
 }
 mod tool {
+    pub(crate) mod facts;
+}
+mod thread {
     pub(crate) mod facts;
 }
 mod workspace {

@@ -8,10 +8,9 @@
 import { expectTypeOf } from 'vitest'
 import { blackboard } from '../src/agent'
 import { createSemanticCache } from '../src/cache'
-import { createSlidingWindow, type GenerateTextFn } from '../src/compaction'
 import { embeddingCache, type DenseEmbedding } from '../src/embedding'
 import { indexer } from '../src/indexing'
-import { memory, recentMessages } from '../src/memory'
+import { memory, memoryBlock } from '../src/memory'
 import { retriever } from '../src/retrieval'
 import { config } from '../src/runtime'
 import { handoff } from '../src/agent'
@@ -135,14 +134,14 @@ createSemanticCache({
 })
 
 config({
-  persistence: {
+  storage: {
     records,
   },
 })
 
 config({
-  persistence: {
-    // @ts-expect-error - runtime persistence rejects unknown storage fields.
+  storage: {
+    // @ts-expect-error - runtime storage rejects unknown storage fields.
     extraRecords: records,
   },
 })
@@ -151,7 +150,7 @@ memory({
   id: 'profile',
   namespace: 'user:1',
   storage: betaStorage,
-  blocks: [recentMessages({ id: 'recent' })],
+  blocks: [memoryBlock({ id: 'profile', kind: 'custom' })],
 })
 
 memory({
@@ -159,7 +158,7 @@ memory({
   namespace: 'user:1',
   records,
   vectors,
-  blocks: [recentMessages({ id: 'recent' })],
+  blocks: [memoryBlock({ id: 'profile', kind: 'custom' })],
 })
 
 memory({
@@ -167,7 +166,7 @@ memory({
   namespace: 'user:1',
   // @ts-expect-error - memory() rejects unknown storage fields.
   extraRecords: records,
-  blocks: [recentMessages({ id: 'recent' })],
+  blocks: [memoryBlock({ id: 'profile', kind: 'custom' })],
 })
 
 blackboard({
@@ -197,24 +196,6 @@ handoff({
   outputSchema: z.object({ brief: z.string() }),
   transform: (input) => ({ brief: input.findings }),
   // @ts-expect-error - handoff() rejects unknown storage fields.
-  extraRecords: records,
-})
-
-const generate: GenerateTextFn = async () => ({ text: 'summary' })
-createSlidingWindow({
-  id: 'chat',
-  windowSize: 3,
-  generate,
-  model: {},
-  storage: { records },
-})
-
-createSlidingWindow({
-  id: 'chat',
-  windowSize: 3,
-  generate,
-  model: {},
-  // @ts-expect-error - compaction rejects unknown storage fields.
   extraRecords: records,
 })
 

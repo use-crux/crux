@@ -64,7 +64,10 @@ describe("exact prompt preview input", () => {
       dispatch(value.id, { number: -0, nested: { value: null } }),
     ).resolves.toMatchObject({
       status: "ready",
-      inspection: { prompt: { text: "true:true" } },
+      preview: {
+        status: "fits",
+        measurement: "conservative",
+      },
     });
   });
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { handoff as cruxHandoff } from '../../src/agent/handoff'
 import { inMemoryRecordStore } from '../../src/storage'
-import type { GenerateTextFn } from '../../src/compaction/types'
+import type { GenerateTextFn } from '../../src/generation/support-types'
 
 const inputSchema = z.object({
   query: z.string(),

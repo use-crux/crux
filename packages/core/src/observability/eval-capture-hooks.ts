@@ -25,9 +25,22 @@ export interface EvalObservabilityCaptureHooks {
 
 let hooks: EvalObservabilityCaptureHooks | undefined
 
-/** Register Eval's optional capture hooks. Last registration wins. */
-export function registerEvalObservabilityCaptureHooks(next: EvalObservabilityCaptureHooks): void {
+/**
+ * Register Eval's optional capture hooks. Last registration wins.
+ *
+ * @returns An idempotent restore callback for scoped tests and runtimes.
+ */
+export function registerEvalObservabilityCaptureHooks(
+  next: EvalObservabilityCaptureHooks,
+): () => void {
+  const previous = hooks
   hooks = next
+  let restored = false
+  return () => {
+    if (restored || hooks !== next) return
+    restored = true
+    hooks = previous
+  }
 }
 
 /** Return the active Eval capture sink, if one is in scope. */

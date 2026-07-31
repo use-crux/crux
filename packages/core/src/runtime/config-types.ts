@@ -15,7 +15,7 @@ import type {
 import type { CruxPlugin } from "./plugin";
 import type { CruxLintConfig as CoreCruxLintConfig } from "../project-index";
 import type { RuntimeBridgeOptions } from "../runtime-bridge";
-import type { RecordStore } from "../storage";
+import type { Storage } from "../storage";
 import type { TokenizerFn } from "../shared/tokenizer";
 import type { RuntimeEngineDefinition } from "./api/runtime-definition";
 import type { CruxHostBinding } from "../scope/types";
@@ -214,16 +214,6 @@ export interface CruxObservabilityConfig {
   readonly delivery?: ObservabilityDeliveryOptions;
 }
 
-export interface CruxPersistenceConfig {
-  /**
-   * Global record store for runtime persistence such as flow suspend/resume.
-   *
-   * Persistence is explicit because Crux cannot infer durability, tenancy,
-   * storage backend, or data-locality policy from source discovery.
-   */
-  readonly records?: RecordStore;
-}
-
 export interface CruxGenerationConfig {
   /** Global middleware wrapping every adapter `generate()` call. */
   readonly middleware?: PromptMiddleware;
@@ -273,8 +263,14 @@ export interface CruxConfig {
    * explicit opt-ins and may change before public launch.
    */
   readonly experimental?: CruxExperimentalConfig;
-  /** Explicit persistence backend choices. */
-  readonly persistence?: CruxPersistenceConfig;
+  /** Standard storage capabilities used by durable Crux primitives. */
+  readonly storage?: Storage;
+  /**
+   * Moved to the standard storage bundle.
+   *
+   * @deprecated Configure `config({ storage: { records } })` instead.
+   */
+  readonly persistence?: never;
   /** Durable Runtime Engine composer for runtime-bound APIs. */
   readonly runtime?: CruxRuntimeConfig;
   /** Explicit platform capability for invocation retention and ambient defer. */

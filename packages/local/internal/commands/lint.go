@@ -48,6 +48,12 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 				fmt.Fprintf(f.Streams().Err, "crux lint: %v\n", err)
 				return domain.ExitError{Code: 2}
 			}
+			// An explicit --port is a request to read the running dev server.
+			// Without this promotion the flag was silently ignored and the
+			// one-shot index could report stale findings.
+			if !opts.server && cmd.InheritedFlags().Changed("port") {
+				opts.server = true
+			}
 			if opts.server {
 				var index api.IndexData
 				if err := f.ClientFor("lint --server").GetJSON(cmd.Context(), "/api/index", &index); err != nil {

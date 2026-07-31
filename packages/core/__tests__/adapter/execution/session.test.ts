@@ -73,11 +73,18 @@ function scriptedCoreStep(texts: readonly string[]) {
 }
 
 function scriptedSdkLoop(texts: readonly string[]) {
-  const calls: Array<{ readonly messages: readonly Message[] | undefined }> = []
-  const queue = [...texts]
-  const dialect: AdapterExecutionDialect<unknown, string, { readonly text: string }, never> = {
-    kind: 'sdk-loop',
-    id: 'mock-sdk',
+  const calls: Array<{ readonly messages: readonly Message[] | undefined }> =
+    [];
+  const queue = [...texts];
+  const dialect: AdapterExecutionDialect<
+    unknown,
+    string,
+    { readonly text: string },
+    never
+  > = {
+    kind: "sdk-loop",
+    id: "mock-sdk",
+    capabilities: { requestPlanning: "per-step" },
     structuredOutput: { capabilities: () => permissiveCapabilities },
     describeModel: (model): ModelInfo => ({ provider: 'mock-sdk', modelId: model }),
     mapSettings: (settings) => ({ ...settings }),
@@ -210,9 +217,14 @@ describe('adapter execution session', () => {
       messages: [{ role: 'assistant' as const, content: 'done' }],
       steps: 1,
       meta: { costUsd: 0.01 },
-    }))
-    const port: LoopRuntimePort<string, { readonly raw: string }, { readonly stream: true }> = {
-      id: 'sdk-executor',
+    }));
+    const port: LoopRuntimePort<
+      string,
+      { readonly raw: string },
+      { readonly stream: true }
+    > = {
+      id: "sdk-executor",
+      capabilities: { requestPlanning: "per-step" },
       describeModel: (model) => ({ ...modelInfo, modelId: model }),
       mapSettings: (settings, info) => ({ ...settings, provider: info.provider }),
       runTextLoop,

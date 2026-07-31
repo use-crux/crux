@@ -697,6 +697,64 @@
       "fidelity": "safe"
     },
     {
+      "id": "thread.conflicting_binding",
+      "source": "builtin",
+      "severity": "error",
+      "category": "runtime",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Definition resolves multiple Thread bindings",
+      "description": "A prompt or agent can bind one canonical Thread history. Resolving multiple Thread targets makes the history source and accepted-turn commit destination ambiguous.",
+      "rationale": "A prompt or agent can bind one canonical Thread history. Resolving multiple Thread targets makes the history source and accepted-turn commit destination ambiguous.",
+      "impact": "Conflicting Thread bindings can make managed execution read from or publish accepted turns to an unintended conversation tree.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/thread-conflicting-binding",
+      "fixes": [
+        {
+          "title": "Keep one Thread binding",
+          "description": "Remove the extra Thread entry from the prompt or agent use graph so managed execution resolves exactly one canonical history.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line thread.conflicting_binding -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "thread.duplicate_active",
+      "source": "builtin",
+      "severity": "error",
+      "category": "runtime",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Thread id is active more than once",
+      "description": "Active Thread ids identify one canonical conversation tree. Reusing an id in multiple active definitions makes storage, runtime evidence, and developer tooling point at an ambiguous Thread.",
+      "rationale": "Active Thread ids identify one canonical conversation tree. Reusing an id in multiple active definitions makes storage, runtime evidence, and developer tooling point at an ambiguous Thread.",
+      "impact": "Duplicate active Thread ids can make unrelated definitions share canonical history or attach tooling to the wrong authored source.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/thread-duplicate-active",
+      "fixes": [
+        {
+          "title": "Give each active Thread a unique id",
+          "description": "Rename one thread() id or remove the duplicate active export so each canonical conversation tree has one authored identity.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line thread.duplicate_active -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
+    },
+    {
       "id": "memory.long_lived_without_retention",
       "source": "builtin",
       "severity": "info",
@@ -1426,6 +1484,64 @@
       "fidelity": "safe"
     },
     {
+      "id": "evidence.invalid-custom-kind",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Evidence kind is invalid",
+      "description": "A canonical evidence.record call uses a literal kind outside the bounded evidence-kind contract.",
+      "rationale": "Inline application evidence requires a valid custom.* kind; references may use canonical or custom kinds.",
+      "impact": "Runtime evidence authoring rejects this call before collector mutation.",
+      "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+      "fixes": [
+        {
+          "title": "Use a valid evidence kind",
+          "description": "Use a bounded custom.* kind for inline data or a canonical kind for an existing artifact reference.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line evidence.invalid-custom-kind -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "evidence.reserved-inline-kind",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Canonical evidence kind is reserved",
+      "description": "A canonical evidence.record call uses a reserved canonical artifact kind for inline evidence.",
+      "rationale": "Canonical artifact kinds describe Crux-owned sources; inline application evidence must use custom.*.",
+      "impact": "Runtime evidence authoring rejects this call before collector mutation.",
+      "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+      "fixes": [
+        {
+          "title": "Use a custom kind",
+          "description": "Rename the inline evidence kind to a bounded custom.* value.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line evidence.reserved-inline-kind -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions"],
+      "fidelity": "safe"
+    },
+    {
       "id": "embedding.unsupported-modality",
       "source": "builtin",
       "severity": "error",
@@ -1507,6 +1623,64 @@
         "supported": true,
         "scope": "next-line",
         "directive": "// crux-lint-disable-next-line embedding.sparse-media -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "context-planning.history-cardinality",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Prompt declares multiple history projections",
+      "description": "A prompt may declare one canonical history projection through history() or history.recent().",
+      "rationale": "One projection must own causal grouping and model-facing history selection.",
+      "impact": "Multiple projections make history ownership and request planning ambiguous.",
+      "docsUrl": "/docs/guides/context-planning/history",
+      "fixes": [
+        {
+          "title": "Keep one history projection",
+          "description": "Remove all but one history() or history.recent() entry from the prompt use array.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line context-planning.history-cardinality -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "context-planning.invalid-wrapper-order",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Representation wrappers are ordered incorrectly",
+      "description": "Representation ladders must follow prefer, summarizable, offloadable, then outermost droppable order.",
+      "rationale": "A monotonic wrapper order gives every contributor one unambiguous degradation path.",
+      "impact": "Invalid topology can weaken capability ownership or fail request composition before dispatch.",
+      "docsUrl": "/docs/guides/context-planning",
+      "fixes": [
+        {
+          "title": "Reorder the representation ladder",
+          "description": "Use each non-terminal wrapper at most once and make droppable the outermost wrapper.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line context-planning.invalid-wrapper-order -- reason"
       },
       "phase": "semantic",
       "requires": ["definitions", "sources"],

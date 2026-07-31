@@ -177,6 +177,28 @@ primitive relations without blocking the first snapshot. The Go service owns sta
 loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit
 neutral index facts/patches.
 
+## Authored execution evidence
+
+The static and semantic indexers discover `evidence.record()` calls when their
+role, custom kind, and subject shape are statically valid. Catalog receives a
+first-class `evidence.record` definition with the authored source location,
+only the necessary evidence role/kind coverage facts, and proven relations to
+local subject definitions. It never retains the authored payload,
+idempotency key, conclusion value, or arbitrary object properties.
+
+Literal canonical evidence kinds are reserved for trusted native producers.
+Application authoring uses `custom.*`; invalid custom literals and canonical
+kind misuse produce source-located diagnostics. Dynamic values remain
+conservative rather than being guessed. The JavaScript and experimental native
+semantic backends produce the same normalized facts, and the generated
+primitive coverage matrix forces every primitive family to be classified.
+
+Catalog shows these definitions separately from observed Local relationships.
+An authored call proves that code can produce a claim; it does not prove that
+the call ran or that its claim is true. See
+[Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+and [Execution evidence](/docs/guides/observability/execution-evidence).
+
 ## Semantic Backend Selection
 
 Semantic Project Index behavior is backend-neutral. The default backend uses the JavaScript

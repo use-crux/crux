@@ -162,6 +162,12 @@ packages/core/src/       Published as @use-crux/core
 │   ├── prompt-types.ts   prompt() config/instance/hooks/result + semantic-cache intent types
 │   ├── type-utils.ts     Prompt/context inference helpers (Simplify, DeepReadonly, MergeContextInputs, MergedInput)
 │   └── types.ts          Curated type barrel over context-types + prompt-types
+├── thread/             Durable conversation history and branch navigation
+│   ├── entry.ts        Structural ContextEntry boundary for exact reads and turn commits
+│   ├── thread.ts       thread() handle and public history/edit/navigation methods
+│   ├── observability.ts Payload-safe thread.operation lifecycle evidence
+│   ├── runtime-bridge.ts Devtools tree/group/branch/head topology projection
+│   └── store/          Canonical immutable events, asset hydration, snapshot reduction, and storage commits
 ├── prompt-text/        Markdown-oriented PromptText authoring + private structured-text kernel
 │   ├── index.ts        Public md tagged template, md.json(), and opaque PromptText contract
 │   ├── internal.ts     Nominal shell registry, immutable interpolation snapshots, stable errors, and resolver-only lowering boundary
@@ -310,13 +316,6 @@ packages/core/src/       Published as @use-crux/core
 │   └── helpers.ts      deriveTaskListStatus(), key conventions
 ├── tasks/
 │   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs and types, incl. TaskCompleteArgs, from plan/)
-├── compaction/
-│   ├── types.ts        GenerateTextFn, GenerateObjectFn (SDK-agnostic)
-│   ├── compact-conversation.ts  Core-owned observed conversation compaction; Convex name-identically re-exports it
-│   ├── summarize.ts    summarizeMessages() — stateless batch LLM summarization
-│   ├── sliding-window.ts  createSlidingWindow() — rolling window with auto-eviction
-│   ├── budget.ts       createBudgetManager() — advisory pressure tracking
-│   └── extract.ts      extractKeyFacts() — structured extraction from conversations
 ├── scoring/
 │   ├── judge.ts        llmJudge() — LLM-as-a-judge with CoT, rubrics, few-shot
 │   ├── metrics.ts      Pre-built judges (relevance, faithfulness, coherence, etc.)
@@ -616,7 +615,7 @@ Resolve context entries (resolver/ — contributor lowering + driver)
   │         contributor `when` — exclusions recorded with source + reason
   ├── children: nested `use` entries / match branches resolve BEFORE the entry itself
   ├── contribute: contexts, tools (collision-checked), constraints, guardrails, metadata,
-  │               memory bindings, skill + blackboard collection, pipeline re-entry
+  │               memory and Thread bindings, skill + blackboard collection, pipeline re-entry
   └── Output: active Context[] + excluded ExcludedContext[] + merged channels
   ↓
 Internal post-merge collectors
@@ -655,7 +654,7 @@ Tool collection (only from active contexts)
   call-site tools are applied later by adapter execution and intentionally win
   ↓
 PromptResolution
-  ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
+  ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings, threadBinding }
   └── inspect() derives InspectResult from this same pass
   ↓
 Adapter execution
@@ -674,6 +673,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ records })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
+- A Thread entry contributes one structural binding and no schema, text, or tools. The resolver rejects duplicate bindings. Adapter execution reads the exact history once before the provider call, commits only the rendered user turn and accepted assistant/tool exchange, and exposes the receipt on the final result. Explicit call-site `messages` shadow both Thread reads and writes.
 
 ### Token-Aware Context Dropping
 
@@ -997,7 +997,7 @@ The plugin system enables composable hook installation. Three key functions:
 **Plugin processing in `config()`**:
 
 1. `config()` creates a runtime config transaction and exits early in `CRUX_INDEX=1` mode.
-2. The planner resolves config-owned runtime state: persistence store, explicit observability
+2. The planner resolves config-owned runtime state: standard storage bundle, explicit observability
    ownership, capture policy, generation middleware, tokenizer, and plugin order.
 3. If the `observability` domain owns the transport (`enabled: false`, custom `transport`, or
    `serverUrl`), user plugins install after those hook fields so plugins see the owned
@@ -1160,7 +1160,7 @@ The Runtime Bridge is the local-dev command plane. It is intentionally separate 
 - Project Index snapshots: runtime -> Go through `POST /api/index/snapshot`.
 - Runtime Bridge: Go -> runtime through typed `command.request` messages and `command.result` / `command.error` replies.
 
-`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `persistence.records` store and any inspectable resources registered by primitives. Memory and blackboard definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. The stable runtime-peer command surface is `store.read`; arbitrary runtime evaluation is intentionally outside the bridge command contract. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
+`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `storage.records` store and any inspectable resources registered by primitives. Memory, blackboard, and Thread definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. Thread resources return payload-safe tree, causal-group, branch-point, and owner-head topology; message content never crosses this inspection contract. The stable runtime-peer command surface is `store.read`; arbitrary runtime evaluation is intentionally outside the bridge command contract. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
 
 Resource Inspection is the product-facing Go service layered above the bridge. Web devtools, the TUI, CLI commands, and future IDE integrations ask Go for capabilities and resources through stable product-shaped calls such as `GET /api/resources/capabilities`, `GET /api/resources/{resourceId}`, and `GET /api/resources/{resourceId}/entries`. The service maps `blackboard:*`, `memory:*`, and `crux.store` requests to bridge `store.read` only when a live peer is available, otherwise it returns structured `unavailable` or `partial` results with reasons such as `bridge_required`, `runtime_unavailable`, `unsupported_resource`, `ambiguous_peer`, or `command_failed`. Clients must not call Convex `/crux/bridge` or construct bridge command envelopes directly. Domain read models can embed this service when that keeps clients simpler: `GET /api/memory/stores/{id}` returns projected memory/blackboard state and an optional `inspection` object. `inspection.status="ok"` plus `source="mixed"` means live entries were joined with the projection; `inspection.status="partial"` plus `source="projection"` means the projection is usable while live runtime inspection is unavailable or failed.
 
@@ -1416,34 +1416,6 @@ Both paths respect `filter` for metadata matching.
 
 `facts()` and `procedures()` share the extractive block path. Capture extracts candidates, applies policy, then proposes them by default; `write.mode` can instead be `auto` for immediate writes or `manual`, where capture extracts nothing automatically and writes happen only through direct methods. Direct `add()`, `find()`, `list()`, `delete()`, and `render()` methods use `MemoryRuntimeOptions` with a required `records` store and optional `storage` and `vectors`.
 
-## Compaction Primitives
-
-### summarizeMessages
-
-Stateless: formats messages into a numbered transcript, sends to an LLM with a structured system prompt requesting preservation of key facts, decisions, and context. Returns the summary with before/after token counts. It opens a canonical `compaction.run` span and attaches a bounded output artifact with summary preview, before/after token counts, compression ratio, focus, and model metadata.
-
-### Sliding Window
-
-Stateful, backed by `RecordStore`. Maintains a running summary under `compact:{id}:summary` and message entries under `compact:{id}:msg:{index}`.
-
-When `push()` exceeds `windowSize`:
-
-1. Collect evicted messages (oldest beyond window)
-2. Emit `onCompactStart` hook with input stats
-3. Call `summarizeMessages()` with evicted messages + existing summary as focus
-4. Replace summary in store, remove evicted message keys
-5. Emit `onCompactEnd` hook with compression stats
-
-`getMessages()` returns `[summaryMessage, ...windowedMessages]` or just `windowedMessages` if no summary exists.
-
-### Budget Manager
-
-Pure synchronous computation — no storage, no LLM calls. Tracks token usage by named source. `check()` computes pressure as `used / limit` and maps to levels via configurable thresholds. It emits the legacy `onBudgetCheck` instrumentation hook and a canonical `prompt.budget` span containing the pressure level, thresholds, source breakdown, used tokens, and available tokens.
-
-### extractKeyFacts
-
-One-shot: sends the full conversation to an LLM with a Zod schema, gets back structured output. No memory, no state — just `generateObject()` with a system prompt.
-
 ## Scoring Primitives
 
 ### LLM Judge
@@ -1649,7 +1621,7 @@ Internally, all four composition utilities route shared lifecycle through `agent
 
 **Cost tracking:** `onCost` callback fires after each agent execution with accumulated `{ inputTokens, outputTokens, totalTokens, abort() }`. `abort()` stops the swarm cleanly. `dryRun: true` returns `{ agentCount, maxPossibleHops }` without executing agents.
 
-**Context summarization:** In `'accumulate'` mode, `summarize: { generate, model, after }` compresses `_previousOutput` via LLM after N handoffs. Uses `GenerateTextFn` from `@use-crux/core/compaction/types`.
+**Context summarization:** In `'accumulate'` mode, `summarize: { generate, model, after }` compresses `_previousOutput` via LLM after N handoffs. Uses `GenerateTextFn` from `@use-crux/core`.
 
 ### Shared Infrastructure
 
@@ -1785,7 +1757,7 @@ Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` imple
 
 The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic object factories bind a specific client and require a model per call; their text factories still bind client and model. The helper factories are generated from the same single-turn provider runtimes that power `createOpenAI()`, `createGoogle()`, and `createAnthropic()`. Google keeps `CachedContent` lifecycle in `@use-crux/google` by passing a narrow cache resolver through runtime dependencies instead of moving provider cache policy into core.
 
-These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, Eval evidence reuse, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@use-crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
+These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, Eval evidence reuse, tools, memory capture, or instrumentation.
 
 ### Result Envelope And Metadata Normalization
 
@@ -1840,13 +1812,7 @@ result = {
 
 `convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared vector index, while dense search requires an explicit `VectorStore` (`convexVectorStore()` throws `unsupported_capability` with migration guidance). `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
-`createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, and capability reporting.
-
-Conversation compaction is Core-owned in `compaction/compact-conversation.ts`.
-`@use-crux/convex` name-identically re-exports `compactConversation()` and its
-argument type for compatibility; it does not own a separate lifecycle or
-result finalizer. The operation takes evicted messages plus an existing summary
-and returns the outer `compaction.run` result while the caller owns persistence.
+`createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, versioned compare-and-set, and capability reporting.
 
 ### Upstash (`upstash/`)
 

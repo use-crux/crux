@@ -1,7 +1,7 @@
 # Crux Local demo fixture
 
 `demo-project` is a deterministic, key-free Crux Local project. It combines
-authored prompt/context/tool/Eval source with replayable schema-V4
+authored prompt/context/tool/Eval source with replayable schema-V5
 observability, a validated Eval V4 run, and a committed Baseline V3.
 
 From the repository root, run:

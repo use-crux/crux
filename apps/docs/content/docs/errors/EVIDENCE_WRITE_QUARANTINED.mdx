@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_WRITE_QUARANTINED
+description: A closed Eval cell rejected a late evidence authoring call.
+---
+
+## What failed
+
+`evidence.record()` reached the admission gate after its owning Eval cell had
+closed.
+
+## Retryability
+
+Not retryable. The closed cell cannot accept another write.
+
+No evidence ID, sequence, span, collector row, or graph record is consumed.
+
+## Fix
+
+Await the producer or record its evidence before the Eval deadline. Review the
+Eval diagnostic for the late task rather than suppressing the rejection.

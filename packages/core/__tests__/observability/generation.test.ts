@@ -246,18 +246,16 @@ describe('generation observability', () => {
     })
   })
 
-    it('links resolved context artifacts to the generation span that consumes them', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    const contextArtifactId = createCruxArtifactId()
-    const budgetArtifactId = createCruxArtifactId()
+  it("links resolved context artifacts to the generation span that consumes them", async () => {
+    const transport = createInMemoryObservabilityTransport();
+    setObservabilityTransport(transport);
+    const contextArtifactId = createCruxArtifactId();
 
     await orchestrateGenerate(
       {
         ...generationSpec('generate'),
         resolved: {
           settings: {},
-          promptBudgetArtifactId: budgetArtifactId,
           systemBlocks: [
             {
               source: 'context:profile',
@@ -283,17 +281,8 @@ describe('generation observability', () => {
         to: { kind: 'span', id: generationStart && 'spanId' in generationStart ? generationStart.spanId : '' },
         attributes: expect.objectContaining({ contextSource: 'context:profile' }),
       }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'edge',
-        edgeType: 'consumed',
-        from: { kind: 'artifact', id: budgetArtifactId },
-        to: { kind: 'span', id: generationStart && 'spanId' in generationStart ? generationStart.spanId : '' },
-        attributes: expect.objectContaining({ primitive: 'prompt.budget' }),
-      }),
-    )
-  })
+    );
+  });
 
     it('includes prepared request tool names in the messages artifact preview', async () => {
     const transport = createInMemoryObservabilityTransport()

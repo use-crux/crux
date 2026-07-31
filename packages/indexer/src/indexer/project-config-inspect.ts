@@ -160,7 +160,7 @@ async function inspectProjectConfigInSession(
       bridge: presence(devtools?.bridge != null),
     },
     persistence: {
-      records: presence(cfg?.persistence?.records != null),
+      store: presence(cfg?.storage?.records != null),
     },
     lint: {
       profile:

@@ -1,3 +1,4 @@
+import type { CruxEvidenceId } from '../../evidence/record-types'
 import type { CruxGraphRecord, CruxRecordId } from '../contract'
 
 interface CruxDeliveryDispositionBase {
@@ -40,6 +41,8 @@ export interface CruxDeliverySourceHealth {
   readonly lastError?: {
     readonly code: string
     readonly message?: string
+    /** Bounded evidence relationships correlated without payload or subject. */
+    readonly evidenceIds?: readonly CruxEvidenceId[]
   }
 }
 
@@ -53,6 +56,17 @@ export interface PartitionedDeliveryReceipt {
   readonly permanentlyRejected: readonly CruxGraphRecord[]
   readonly retryable: readonly CruxGraphRecord[]
   readonly unaccounted: readonly CruxGraphRecord[]
+  readonly permanentRejections: readonly DeliveryDispositionRecord[]
+  readonly retryableRejections: readonly DeliveryDispositionRecord[]
+}
+
+/** Validated rejected disposition paired with its submitted record. @internal */
+export interface DeliveryDispositionRecord {
+  readonly record: CruxGraphRecord
+  readonly disposition: Extract<
+    CruxDeliveryDisposition,
+    { readonly outcome: 'rejected' }
+  >
 }
 
 /** Create a complete accepted receipt for a submitted record array. */
@@ -113,6 +127,8 @@ export function partitionDeliveryReceipt(
   const permanentlyRejected: CruxGraphRecord[] = []
   const retryable: CruxGraphRecord[] = []
   const unaccounted: CruxGraphRecord[] = []
+  const permanentRejections: DeliveryDispositionRecord[] = []
+  const retryableRejections: DeliveryDispositionRecord[] = []
   records.forEach((record, index) => {
     const matches = byIndex.get(index)
     if (matches?.length !== 1 || matches[0]?.recordId !== record.recordId) {
@@ -121,10 +137,22 @@ export function partitionDeliveryReceipt(
     }
     const disposition = matches[0]
     if (disposition.outcome === 'accepted') accepted.push(record)
-    else if (disposition.retryable) retryable.push(record)
-    else permanentlyRejected.push(record)
+    else if (disposition.retryable) {
+      retryable.push(record)
+      retryableRejections.push({ record, disposition })
+    } else {
+      permanentlyRejected.push(record)
+      permanentRejections.push({ record, disposition })
+    }
   })
-  return { accepted, permanentlyRejected, retryable, unaccounted }
+  return {
+    accepted,
+    permanentlyRejected,
+    retryable,
+    unaccounted,
+    permanentRejections,
+    retryableRejections,
+  }
 }
 
 function isDisposition(value: unknown): value is CruxDeliveryDisposition {
@@ -144,6 +172,8 @@ function isDisposition(value: unknown): value is CruxDeliveryDisposition {
     (disposition.outcome === 'accepted' || disposition.outcome === 'rejected') &&
     typeof disposition.code === 'string' &&
     disposition.code.length > 0 &&
+    disposition.code.length <= 128 &&
+    /^[A-Za-z0-9._-]+$/u.test(disposition.code) &&
     typeof disposition.retryable === 'boolean' &&
     (disposition.outcome !== 'accepted' || disposition.retryable === false)
   )

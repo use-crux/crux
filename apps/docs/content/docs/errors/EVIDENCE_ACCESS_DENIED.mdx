@@ -1,0 +1,19 @@
+---
+title: EVIDENCE_ACCESS_DENIED
+description: The readable destination denied evidence inspection.
+---
+
+## What failed
+
+The caller lacks the approved same-user or Devtools session capability.
+
+## Retryability
+
+Not retryable. The caller must use an authorized access context.
+
+The response does not disclose whether evidence or the subject exists.
+
+## Fix
+
+Use headerless loopback access from the local project or an authenticated
+Devtools browser session. `CRUX_DEVTOOLS_TOKEN` is ingest-only.

@@ -1,0 +1,362 @@
+---
+title: Managed Conversations
+description: Read one exact Thread revision, plan the request, invoke the provider, and commit only the accepted turn.
+---
+
+Put a Thread in a Prompt's `use` array when the adapter should manage the
+conversation boundary:
+
+```ts
+import { prompt } from "@use-crux/core";
+import { thread } from "@use-crux/core/thread";
+
+const conversation = thread({ id: "support:ticket-42", storage });
+
+const supportReply = prompt({
+  id: "support-reply",
+  use: [conversation],
+  prompt: ({ input }) => input.message,
+});
+```
+
+Managed execution is a four-stage protocol:
+
+```text
+read exact revision -> plan whole request -> invoke -> commit accepted turn
+```
+
+The stages are separate because they answer different correctness questions.
+The read chooses what history the call observed. Planning chooses a legal
+model-facing representation. Invocation produces candidates. Commit makes only
+the accepted conversation turn durable.
+
+## 1. Read One Exact Revision
+
+Before provider I/O, the adapter reads the selected Thread path once. The read
+returns:
+
+- The exact canonical messages on that path.
+- Their stable Thread message IDs.
+- The observed head.
+- A revision derived from the Thread control state.
+
+The revision covers selection, alternatives, redactions, removals, and deletion
+state. It is more precise than a count or last-message ID.
+
+The adapter also renders the Prompt's current user turn. Input Safety runs at
+the normal model-ingress boundary, and the rendered post-Safety user message is
+the one eligible for commit. Raw `input` is not assumed to be a message:
+
+```ts
+const supportReply = prompt({
+  id: "support-reply",
+  use: [conversation],
+  input: z.object({ ticketId: z.string(), message: z.string() }),
+  prompt: ({ input }) => `[${input.ticketId}] ${input.message}`,
+});
+```
+
+The canonical turn contains the rendered user content, not the source object.
+This keeps stored history aligned with what the provider actually received.
+
+## 2. Plan The Whole Request
+
+The Thread becomes a history source for whole-request planning. The planner
+combines it with the current user turn, system content, context, Tools, schemas,
+media, output reserve, and provider overhead.
+
+The canonical Thread path remains exact. A history policy may authorize a
+different model-facing view for this request:
+
+```ts
+import { history, prompt } from "@use-crux/core";
+
+const boundedReply = prompt({
+  id: "bounded-support-reply",
+  use: [
+    conversation,
+    history.recent({ messages: 12, tokens: 8_000 }),
+  ],
+  prompt: ({ input }) => input.message,
+});
+```
+
+`history.recent()` chooses a causal-group-safe exact suffix. Managed
+`history()` can use a derived summary plus an exact suffix. Neither operation
+rewrites, truncates, or appends to the Thread.
+
+The sealed request plan pins the Thread revision. Before dispatch, and before a
+cached request replay, Crux revalidates that revision. If an edit, selection,
+redaction, removal, deletion, or append changed it in the meantime, execution
+fails with `ThreadError` code `identity_conflict` instead of sending a stale
+plan.
+
+## 3. Invoke And Settle Attempts
+
+The provider may take several physical attempts to produce one accepted
+result. Safety, constraints, structured-output validation, and Tool execution
+can all affect which attempt is accepted.
+
+Those mechanics belong to execution, not canonical history. The Thread is not
+updated for each attempt. It waits for the terminal accepted exchange.
+
+For streaming, token delivery and Thread acceptance are distinct. The stream's
+completion waits for terminal Safety and Thread publication. A caller must not
+treat an early provider stream object as a committed conversation turn.
+
+## 4. Commit The Accepted Turn
+
+After the result has passed terminal policy and composition, Crux publishes one
+causal group after the head observed in stage 1. Publication is the final
+acceptance gate.
+
+If no other writer changed the selected head during provider I/O, the commit is
+`selected` and advances it. If another writer advanced the head, the managed
+turn is published after the head it actually observed and receives status
+`alternative`.
+
+That behavior prevents a subtle history bug. Rebasing onto the newer head would
+claim the provider saw content that arrived after its request began.
+
+## What Gets Committed
+
+One managed turn contains only messages that belong to the accepted
+conversation exchange:
+
+| Content | Committed? | Reason |
+| --- | --- | --- |
+| Rendered current user message after input Safety | Yes | It is the user turn the provider saw |
+| Accepted assistant response | Yes | It is the terminal conversation output |
+| Complete accepted assistant Tool call and matching Tool result | Yes | The Tool exchange is causal conversation history |
+| Final assistant response after Tool use | Yes | It completes the accepted exchange |
+| Prior Thread messages | No new copy | They are already canonical |
+| Authored system prompt | No | It is request instruction, not conversation history |
+| Context, retrieval, or memory rendering | No | They are request contributions |
+| History summary | No | It is a derived model-facing projection |
+| Rejected validation or constraint attempt | No | It was not accepted |
+| Corrective retry feedback | No | It exists only to produce a later candidate |
+| Failed or incomplete Tool exchange | No | It does not form a complete accepted causal group |
+| Provider-native envelope | No | The Thread stores canonical Crux messages |
+
+For a Tool-using turn, a single group may contain several messages:
+
+```text
+rendered user
+assistant Tool call
+Tool result
+final assistant response
+```
+
+`read({ limit: 1 })` may therefore return more than one message. The limit is
+adjusted to keep the group whole.
+
+## Read The Commit Receipt
+
+Successful managed generation exposes a `threadCommit` receipt:
+
+```ts
+const result = await runtime.generate(supportReply, {
+  model,
+  input: { message: "Can I change my plan?" },
+});
+
+const receipt = result.threadCommit;
+
+if (receipt?.status === "alternative") {
+  await notifyBranchAvailable(receipt.messageIds[0]);
+}
+```
+
+`ThreadCommit` contains:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `"selected"` when the append advanced the selected head, otherwise `"alternative"` |
+| `messageIds` | Ordered IDs for every message in the committed causal group |
+| `parentId` | The exact structural parent observed by the append, absent at the root |
+| `selectedHead` | The selected head at publication time; for an alternative this is not the new branch tip |
+| `committedAt` | Canonical timestamp shared by the group's immutable nodes |
+| `replayed` | Whether stable caller IDs resolved to an identical prior append |
+
+Persist the receipt with the application event that caused the turn when you
+need an exact link from business data to Thread messages. Do not infer success
+only from returned text.
+
+Agent execution carries the same receipt on its result payload:
+
+```ts
+const run = await runtime.parallel({
+  id: "support-turn",
+  context: { message: "Can I change my plan?" },
+  agents: { support: supportAgent },
+});
+
+console.log(run.results.support.threadCommit);
+```
+
+## Publication Failure Is An Operation Failure
+
+If provider invocation succeeds but Thread publication fails, managed execution
+rejects with `ThreadCommitError`:
+
+```ts
+import { ThreadCommitError } from "@use-crux/core/thread";
+
+try {
+  await runtime.generate(supportReply, {
+    model,
+    input: { message },
+  });
+} catch (error) {
+  if (error instanceof ThreadCommitError) {
+    await markTurnForReconciliation();
+    return;
+  }
+  throw error;
+}
+```
+
+The provider result is never reported as a completed managed turn when
+publication fails. Success hooks and deferred semantic-cache writes do not run
+ahead of this gate. This avoids an application showing a response that later
+vanishes from canonical history.
+
+Publication cannot be safely cancelled after it begins because a generic
+Storage commit is not abortable. If the provider time budget expires while a
+publication is already in flight, the operation waits for the commit outcome
+instead of reporting a timeout while the write continues in the background.
+
+Treat `ThreadCommitError` like an uncertain database transaction boundary. Use
+stable application identities for reconciliation and inspect storage health
+before retrying provider work.
+
+## Call-Site Messages Shadow The Thread
+
+History sources have strict precedence. The first complete transcript wins:
+
+1. Call-site `messages`.
+2. Prompt-level `messages`.
+3. The active Thread path.
+4. No history.
+
+Arrays are not merged. Passing `messages`, including an empty array, means the
+caller owns the complete transcript for that invocation:
+
+```ts
+await runtime.generate(supportReply, {
+  model,
+  messages: [
+    { role: "user", content: "Use this isolated transcript." },
+  ],
+});
+```
+
+In that call Crux does not read the Thread and does not commit a turn to it.
+Prompt-level `messages` has the same shadowing behavior when call-site messages
+are absent. Observability records a payload-free `thread.history.override`
+event so the skipped binding is visible during debugging.
+
+Use shadowing for deliberate caller-owned replays, previews, or migrations. Do
+not pass `messages` merely to add one extra message to a Thread. Put the current
+turn in the Prompt or append it explicitly.
+
+## History Planning And Thread Revisions
+
+A Thread is a history source. A request-history policy controls how that source
+is projected for a provider. The distinction is important:
+
+```text
+Thread selected path      exact canonical source
+history.recent()          exact suffix for one request
+history()                 derived summary plus exact suffix for one request
+request receipt           evidence of the selected projection
+```
+
+With no history policy, the complete selected Thread path is exact and
+required. If the full request does not fit, Crux throws `REQUEST_TOO_LARGE`
+before dispatch. It never adds an implicit window.
+
+With `history.recent()`, old canonical messages remain in the Thread but are
+not sent in this request. With managed `history()`, summary artifacts are keyed
+to the Thread revision and exact message range. Compatible artifacts may be
+reused, but they never become Thread entries.
+
+Read [History planning](/docs/guides/context-planning/history) for recent
+limits, summary strategies, miss behavior, and request inspection. Read the
+[request-history reference](/docs/reference/crux-core/request-history) for the
+complete source precedence and type contracts.
+
+## Retry Identity And Deterministic Replay
+
+Separate provider retries from application write retries.
+
+Provider validation and constraint retries occur inside one managed execution.
+Rejected candidates and feedback are not committed. Only the accepted turn
+publishes.
+
+Application delivery retries should use stable IDs on direct `append()` or
+`edit()` calls:
+
+```ts
+const input = {
+  id: `message:${delivery.id}`,
+  role: "user" as const,
+  content: delivery.text,
+};
+
+const first = await conversation.append(input);
+const replay = await conversation.append(input);
+
+console.log(first.replayed); // false
+console.log(replay.replayed); // true
+```
+
+An exact replay returns the original publication decision, selected head,
+message IDs, and commit time, with `replayed: true`. This remains true after
+branch navigation.
+
+Identity is content and position sensitive. Reusing a caller ID with changed
+content, role, metadata, batch membership, or parent throws `ThreadError` code
+`identity_conflict`. Partial batch replay also conflicts. These failures are
+intentional because accepting them would make one ID refer to two histories.
+
+Calling the same managed Prompt again is a new conversation turn. A semantic
+cache hit can reuse provider output, but Crux still commits a fresh rendered
+user and assistant pair. Do not expect `threadCommit.replayed` to deduplicate
+separate managed invocations.
+
+## Concurrency During Provider I/O
+
+The read revision is pinned for planning, but the selected head can still
+advance after provider dispatch. The commit uses the earlier observed head:
+
+```ts
+const pending = runtime.generate(supportReply, {
+  model,
+  input: { message: "First concurrent turn" },
+});
+
+await conversation.append({
+  id: "manual-concurrent-turn",
+  role: "user",
+  content: "Second concurrent turn",
+});
+
+const result = await pending;
+
+if (result.threadCommit?.status === "alternative") {
+  console.log("The managed turn was preserved on another branch.");
+}
+```
+
+Actual completion order determines which write remains selected. Product UI
+should surface alternatives instead of assuming the most recent wall-clock
+response is the only one that exists.
+
+## Related
+
+- Guide: [Threads](/docs/guides/threads)
+- Guide: [Branching and alternatives](/docs/guides/threads/branching)
+- Guide: [Removal, redaction, and deletion](/docs/guides/threads/erasure)
+- Guide: [History planning](/docs/guides/context-planning/history)
+- Reference: [Thread](/docs/reference/crux-core/thread)

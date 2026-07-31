@@ -9,6 +9,7 @@
  */
 
 export { createGoogle, googleProviderRuntime } from "./native";
+export { googleModelCapacity } from "./capacity";
 export { fromResponse, googleCodecCachedContent, toParams } from "./codec";
 export type { GoogleCodecOptions } from "./codec";
 export type {

@@ -1,5 +1,7 @@
 import type { CruxGraphRecord } from './contract'
 import type { CruxFeedbackDestination } from '../feedback/types'
+import type { CruxEvidenceQueryDestination } from '../evidence/destination'
+import type { CruxRequestInspectionDestination } from './request-inspection-destination'
 import {
   acceptedDeliveryReceipt,
   type CruxDeliveryAttemptContext,
@@ -13,6 +15,7 @@ export type {
   CruxDeliverySourceHealth,
 } from './delivery/receipt'
 export { acceptedDeliveryReceipt } from './delivery/receipt'
+export type { CruxRequestInspectionDestination } from './request-inspection-destination'
 export {
   createHttpObservabilityTransport,
   type HttpObservabilityTransportOptions,
@@ -20,6 +23,10 @@ export {
 
 /** Receipt-aware boundary for canonical observability graph delivery. */
 export interface CruxObservabilityTransport extends Partial<CruxFeedbackDestination> {
+  /** Optional readable evidence capability owned by this canonical destination. */
+  readonly evidence?: CruxEvidenceQueryDestination
+  /** Optional reader for request plans retained by this destination. */
+  readonly requestInspection?: CruxRequestInspectionDestination
   /**
    * Deliver records and account for every submitted index.
    *

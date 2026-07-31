@@ -24,7 +24,6 @@ interface PreparedThreadCallHandler<R> {
 
 type ThreadTurnArgs = Record<string, unknown> & {
   readonly input: unknown
-  readonly tokenBudget?: number
 }
 
 interface ThreadPrepareState {
@@ -151,9 +150,8 @@ export function withThreadCallArgs(prepared: PreparedAgentCall, callArgs: Record
 
 /** Remove Crux-only prompt controls before forwarding call args to Convex Agent. */
 export function convexCallArgsFromTurnArgs(callArgs: Record<string, unknown>): Record<string, unknown> {
-  const { input: _input, tokenBudget: _tokenBudget, ...convexCallArgs } = callArgs
+  const { input: _input, ...convexCallArgs } = callArgs
   void _input
-  void _tokenBudget
   return convexCallArgs
 }
 

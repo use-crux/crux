@@ -157,7 +157,7 @@ pub(crate) fn resolve_static_index_relation_model(
             );
         }
     }
-    let relations = merge_relations_by_identity(relations);
+    let relations = with_agent_thread_relations(merge_relations_by_identity(relations));
     facts.definitions = with_resolved_relation_read_model_with_ref_targets(
         facts.definitions,
         &relations,
@@ -172,6 +172,51 @@ pub(crate) fn resolve_static_index_relation_model(
 
     let report = relation_report(facts.relations.len(), unresolved, policy_gaps);
     StaticIndexRelationModel { facts, report }
+}
+
+fn with_agent_thread_relations(relations: Vec<StaticIndexRelation>) -> Vec<StaticIndexRelation> {
+    let threads_by_prompt = relations
+        .iter()
+        .filter(|relation| relation.r#type == "prompt.uses_thread")
+        .fold(
+            BTreeMap::<String, Vec<&StaticIndexRelation>>::new(),
+            |mut map, relation| {
+                map.entry(relation.from.clone()).or_default().push(relation);
+                map
+            },
+        );
+    let derived = relations
+        .iter()
+        .filter(|relation| relation.r#type == "agent.uses_prompt")
+        .flat_map(|agent_prompt| {
+            threads_by_prompt
+                .get(&agent_prompt.to)
+                .into_iter()
+                .flatten()
+                .map(move |prompt_thread| StaticIndexRelation {
+                    id: relation_identity(
+                        "agent.uses_thread",
+                        &agent_prompt.from,
+                        &prompt_thread.to,
+                    ),
+                    r#type: "agent.uses_thread".to_string(),
+                    from: agent_prompt.from.clone(),
+                    to: prompt_thread.to.clone(),
+                    fidelity: if agent_prompt.fidelity == StaticIndexFidelity::Resolved
+                        && prompt_thread.fidelity == StaticIndexFidelity::Resolved
+                    {
+                        StaticIndexFidelity::Resolved
+                    } else {
+                        StaticIndexFidelity::Partial
+                    },
+                    source: prompt_thread.source.clone(),
+                    metadata: Some(serde_json::json!({
+                        "viaPromptDefinitionId": agent_prompt.to,
+                    })),
+                })
+        })
+        .collect::<Vec<_>>();
+    merge_relations_by_identity(relations.into_iter().chain(derived))
 }
 
 fn resolved_use_entry_target(

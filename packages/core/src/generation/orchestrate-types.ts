@@ -59,6 +59,11 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   }) => MiddlewareResult
   /** Structured timeout budgets for this managed operation. */
   timeout?: TimeoutOptions
+  /** Internal observability fact when explicit messages shadow a resolved Thread. */
+  threadHistoryOverride?: {
+    readonly threadId: string
+    readonly reason: 'explicit-messages' | 'prompt-messages'
+  }
   /** @internal Adapter-owned release gate for hydrated cached candidates. */
   readonly [cachedCandidateFinalizer]?: CachedCandidateFinalizer
 }
@@ -79,6 +84,7 @@ export type StreamOrchestrationSpec<
   | 'outputMode'
   | 'createCachedStreamResult'
   | 'timeout'
+  | 'threadHistoryOverride'
   | typeof cachedCandidateFinalizer
 > & {
   /**

@@ -8,7 +8,7 @@ import * as convexRoot from '../src'
 import { createCruxConvex, prompt, type ConvexCtxPort } from '../src'
 import { Agent, convexAgent } from '../src/agent'
 import { context } from '../src/context'
-import { memory, recentMessages, workingState } from '../src/memory'
+import { memory, memoryBlock, workingState } from '../src/memory'
 import { skill } from '../src/skill'
 import { tool } from '../src/tools'
 
@@ -19,7 +19,7 @@ const workingStateSchema = z.object({
 const agentMemory = memory({
   id: 'agent-memory',
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 4 }),
+    memoryBlock({ id: 'capture', kind: 'custom' }),
     workingState({ id: 'working', schema: workingStateSchema }),
   ],
 })

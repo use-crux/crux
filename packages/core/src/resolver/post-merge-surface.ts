@@ -11,16 +11,28 @@
 
 import type { z } from 'zod'
 import type { AnyToolSet } from '../types'
-import type { BlackboardEntry, Context, MemoryEntry, SkillEntry } from '../prompt/context-types'
+import type {
+  BlackboardEntry,
+  Context,
+  MemoryEntry,
+  SkillEntry,
+  ThreadHistoryEntry,
+} from '../prompt/context-types'
 import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { ToolSource } from '../tools/tool-source'
-import type { MergedResolution } from './contract'
+import type {
+  MergedResolution,
+  RepresentationOwnership,
+} from './contract'
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
 import type { ToolOwnerLabel } from './tool-merge'
+import type { HistoryProjection } from '../request/history/source'
+import { invalidHistoryComposition } from '../request/history/recent'
+import type { RepresentationEntry } from '../request/representation/ladder-types'
 
 /** Runtime surface ready for system composition and prompt arg projection. */
 export interface PostMergeSurface {
@@ -28,7 +40,14 @@ export interface PostMergeSurface {
   readonly excluded: ExcludedContext[]
   readonly skills: SkillEntry[]
   readonly memories: MemoryEntry[]
+  readonly thread?: ThreadHistoryEntry
   readonly blackboards: BlackboardEntry[]
+  readonly historyProjection: HistoryProjection | undefined
+  readonly representationLadders: readonly RepresentationEntry[]
+  readonly representationOwnership: ReadonlyMap<
+    RepresentationEntry,
+    RepresentationOwnership
+  >
   readonly injectedTools: AnyToolSet
   readonly toolSources: readonly ToolSource[]
   readonly injectedToolOwners: ReadonlyMap<string, ToolOwnerLabel>
@@ -44,6 +63,11 @@ export async function resolvePostMergeSurface(
   input: Record<string, unknown>,
   ports: ResolverPorts,
 ): Promise<PostMergeSurface> {
+  if (merged.history.length > 1) {
+    throw invalidHistoryComposition(
+      "Exactly one history projection may be active after prompt resolution. Remove the duplicate history entry.",
+    )
+  }
   const contexts = [...merged.active]
   let skills = [...merged.skills]
 
@@ -59,7 +83,11 @@ export async function resolvePostMergeSurface(
     excluded: merged.excluded,
     skills,
     memories: merged.memories,
+    ...(merged.thread ? { thread: merged.thread } : {}),
     blackboards: merged.blackboards,
+    historyProjection: merged.history[0],
+    representationLadders: merged.representations,
+    representationOwnership: merged.representationOwnership,
     injectedTools: merged.tools,
     toolSources: merged.toolSources,
     injectedToolOwners: merged.toolOwners,

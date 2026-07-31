@@ -29,6 +29,7 @@ export function hasUnsupportedSemanticProperty(
   bindings: ReadonlyMap<string, NativeSourceBinding>,
 ): boolean {
   return (
+    hasContextPlanningUse(definition) ||
     unsupportedPresentProperties(definition).some((property) =>
       Boolean(propertyInitializer(definition.object, property)),
     ) ||
@@ -120,9 +121,50 @@ function unsupportedPresentProperties(
   definition: NativeDefinition,
 ): readonly string[] {
   switch (definition.kind) {
+    case "agent":
+      return ["inputBudget", "prepareStep"];
+    case "composition.parallel":
+    case "composition.pipeline":
+    case "composition.swarm":
+    case "composition.consensus":
+      return ["prepareInvocation"];
     default:
       return [];
   }
+}
+
+function hasContextPlanningUse(definition: NativeDefinition): boolean {
+  if (definition.kind !== "prompt" && definition.kind !== "context") {
+    return false;
+  }
+  const use = propertyInitializer(definition.object, "use");
+  if (!use) return false;
+  let found = false;
+  const visit = (node: Node): void => {
+    if (found) return;
+    if (isCallExpression(node)) {
+      const target = node.expression;
+      const name = isIdentifier(target)
+        ? target.text
+        : isPropertyAccessExpression(target)
+          ? target.name.text
+          : undefined;
+      if (
+        name === "history" ||
+        name === "recent" ||
+        name === "prefer" ||
+        name === "summarizable" ||
+        name === "offloadable" ||
+        name === "droppable"
+      ) {
+        found = true;
+        return;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(use);
+  return found;
 }
 
 function callbackProperties(definition: NativeDefinition): readonly string[] {

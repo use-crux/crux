@@ -1,0 +1,56 @@
+---
+title: Conversation Threads
+description: Bind an agent to durable conversation history, then use the full Threads guides for lifecycle and branch behavior.
+---
+
+An Agent uses a Thread through its Prompt. Put the Thread in the Prompt's
+`use` array, then run the Agent through an adapter-backed composition:
+
+```ts
+import { agent } from "@use-crux/core/agent";
+import { prompt } from "@use-crux/core";
+import { thread } from "@use-crux/core/thread";
+import { z } from "zod";
+
+const conversation = thread({ id: `support:${ticketId}`, storage });
+
+const supportPrompt = prompt({
+  id: "ticket-support",
+  use: [conversation],
+  input: z.object({ message: z.string() }),
+  prompt: ({ input }) => input.message,
+});
+
+const supportAgent = agent({
+  id: "support-agent",
+  prompt: supportPrompt,
+  model,
+});
+
+const run = await runtime.parallel({
+  id: `support:${ticketId}:turn`,
+  context: { message },
+  agents: { support: supportAgent },
+});
+
+console.log(run.results.support.threadCommit);
+```
+
+The adapter reads one exact Thread revision before the request and publishes
+the accepted turn after that observed head. The Agent result carries the same
+`threadCommit` receipt as direct managed Prompt execution.
+
+Keep exactly one Thread in a Prompt graph. Memory, retrieval, and other context
+entries can sit beside it because they solve different problems. A Thread owns
+exact conversation history. Memory extracts and renders selected state.
+
+Threads currently use one standalone application head. Durable Session-owned
+heads and Session lifecycle binding are future work. Do not create a second
+Thread per request to imitate a Session; keep the stable conversation ID in
+application state instead.
+
+Start with [Threads](/docs/guides/threads), then use
+[Managed conversations](/docs/guides/threads/conversations) for the execution
+lifecycle. Branching and erasure have their own focused guides. The
+[Thread API reference](/docs/reference/crux-core/thread) lists the complete
+contract.

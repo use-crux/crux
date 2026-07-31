@@ -156,6 +156,7 @@ describe('provider runtime RFC contract', () => {
           ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
         }),
         bind: (client: BoundLoopClient) => ({
+          capabilities: { requestPlanning: "per-step" },
           async runTextLoop(request: ExecutorRequest<string>) {
             client.requests.push(request)
             return {

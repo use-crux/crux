@@ -18,6 +18,9 @@ import type { CruxFeedbackDestination } from '../feedback/types'
  * when no leg accepts it, the combined receipt remains retryable unless every
  * leg permanently rejected that index.
  *
+ * At most one leg may expose readable evidence. The returned transport
+ * preserves that capability by identity; it never merges destination views.
+ *
  * @param transports - Transport legs to receive each batch, in call order.
  * @returns A composable transport suitable for `setObservabilityTransport()` or `configureObservability()`.
  *
@@ -40,6 +43,15 @@ export function teeObservabilityTransport(
     )
   }
   const feedbackDestination = feedbackDestinations[0]
+  const evidenceDestinations = transports.filter(
+    (transport) => transport.evidence !== undefined,
+  )
+  if (evidenceDestinations.length > 1) {
+    throw new TypeError(
+      'teeObservabilityTransport() accepts at most one readable evidence destination; compose capture-only legs without evidence.',
+    )
+  }
+  const evidenceDestination = evidenceDestinations[0]?.evidence
   let warnedAboutPartialSendFailure = false
   let warnedAboutPartialFlushFailure = false
   let warnedAboutPartialShutdownFailure = false
@@ -52,6 +64,9 @@ export function teeObservabilityTransport(
           submitFeedback: (submission) =>
             feedbackDestination.submitFeedback(submission),
         }
+      : {}),
+    ...(evidenceDestination !== undefined
+      ? { evidence: evidenceDestination }
       : {}),
     async send(records, context) {
       if (transports.length === 0) return acceptedDeliveryReceipt(records)
@@ -120,6 +135,8 @@ function combineReceipts(
           permanentlyRejected: [],
           retryable: records,
           unaccounted: [],
+          permanentRejections: [],
+          retryableRejections: [],
         },
   )
   const dispositions: CruxDeliveryDisposition[] = records.map((record, index) => {

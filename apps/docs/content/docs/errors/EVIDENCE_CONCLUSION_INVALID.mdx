@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_CONCLUSION_INVALID
+description: The evidence conclusion does not belong to its selected role.
+---
+
+## What failed
+
+The conclusion is outside the closed vocabulary for the relationship role.
+Intent evidence never accepts a conclusion.
+
+## Retryability
+
+Not retryable. The authored conclusion must change.
+
+The diagnostic reports only the code and safe remediation.
+
+## Fix
+
+Use one conclusion documented for `authority`, `change`, `verification`, or
+`recovery`, or omit it when the producer has no conclusion.

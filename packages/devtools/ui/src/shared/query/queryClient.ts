@@ -66,6 +66,12 @@ export const qk = {
       ["observability", "resource", family] as const,
     definitionActivity: (definitionId: string | null | undefined) =>
       ["observability", "definition-activity", definitionId] as const,
+    evidence: (subject: unknown, role: string) =>
+      ["observability", "evidence", subject, role] as const,
+    relatedEvidence: (subjects: readonly unknown[]) =>
+      ["observability", "evidence-related", subjects] as const,
+    evidenceNavigation: (refs: readonly unknown[]) =>
+      ["observability", "evidence-navigation", refs] as const,
   },
   runtime: {
     all: ["runtime"] as const,
@@ -92,6 +98,11 @@ export const qk = {
       ["memory", "store", storeId] as const,
     operations: (since?: number, until?: number, limit?: number) =>
       ["memory", "operations", since, until, limit] as const,
+  },
+  threads: {
+    all: ["threads"] as const,
+    inspection: (threadId: string) =>
+      ["threads", "inspection", threadId] as const,
   },
   workspaces: {
     all: ["workspaces"] as const,

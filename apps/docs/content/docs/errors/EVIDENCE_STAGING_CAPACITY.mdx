@@ -1,0 +1,21 @@
+---
+title: EVIDENCE_STAGING_CAPACITY
+description: Durable Local evidence staging is temporarily at capacity.
+---
+
+## What failed
+
+An artifact arrived before its relationship and could not fit within the
+per-evidence, namespace, or project staging quota.
+
+## Retryability
+
+Retryable. Core delivery owns bounded backoff and retry.
+
+The disposition and aggregate health signal contain no payload, subject,
+evidence ID, or private staging digest.
+
+## Fix
+
+Allow delivery to retry after candidates resolve or expire. Investigate a
+sustained signal as stalled or heavily reordered evidence delivery.

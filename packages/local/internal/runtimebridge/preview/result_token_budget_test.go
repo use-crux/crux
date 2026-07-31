@@ -2,7 +2,7 @@ package preview
 
 import "testing"
 
-func TestDecodeResponseReadyTokenBudgetIsOptionalAndNonnegative(t *testing.T) {
+func TestDecodeResponseReadyInputTokensAreOptionalAndNonnegative(t *testing.T) {
 	base := readyResult("prompt:x", 1, "", []any{})
 	for _, test := range []struct {
 		name   string
@@ -13,14 +13,14 @@ func TestDecodeResponseReadyTokenBudgetIsOptionalAndNonnegative(t *testing.T) {
 		{
 			name: "zero",
 			result: withResult(base, func(result map[string]any) {
-				inspection(result)["tokenBudget"] = 0
+				preview(result)["inputTokens"] = 0
 			}),
 			valid: true,
 		},
 		{
 			name: "negative",
 			result: withResult(base, func(result map[string]any) {
-				inspection(result)["tokenBudget"] = -1
+				preview(result)["inputTokens"] = -1
 			}),
 		},
 	} {

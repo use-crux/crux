@@ -13,8 +13,10 @@ import {
   RuntimePeerHelloSchema,
 } from '../src/runtime-bridge'
 import { clearInspectableResources } from '../src/runtime-bridge/resources'
-import { memory, recentMessages } from '../src/memory'
+import { memory, memoryBlock, recentMessages } from '../src/memory'
+import { enableDevtools } from '../src/observability/devtools'
 import { inMemoryRecordStore } from '../src/storage'
+import { thread } from '../src/thread'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -386,7 +388,7 @@ describe('devtools runtime bridge contract', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 
     const crux = config({
-      persistence: {
+      storage: {
         records: inMemoryRecordStore(),
       },
       devtools: {
@@ -418,7 +420,7 @@ describe('devtools runtime bridge contract', () => {
       id: 'project-memory',
       namespace: 'project-1',
       records: store,
-      blocks: [recentMessages({ id: 'recent' })],
+      blocks: [memoryBlock({ id: 'capture', kind: 'custom' })],
     })
     blackboard({ id: 'thread', schema: z.object({ status: z.string().optional() }), records: store })
 
@@ -460,6 +462,62 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
+  it('returns payload-safe Thread tree, group, branch, and head topology', async () => {
+    const records = inMemoryRecordStore()
+    const conversation = thread({
+      id: 'support/42',
+      storage: { records },
+    })
+    await conversation.append({
+      id: 'root',
+      role: 'user',
+      content: 'PRIVATE_ROOT_SENTINEL',
+    })
+    await conversation.append(
+      { id: 'answer-a', role: 'assistant', content: 'PRIVATE_A_SENTINEL' },
+      { after: 'root' },
+    )
+    await conversation.append(
+      { id: 'answer-b', role: 'assistant', content: 'PRIVATE_B_SENTINEL' },
+      { after: 'root' },
+    )
+
+    const result = await executeRuntimeBridgeCommand(
+      {},
+      {
+        type: 'command.request',
+        commandId: 'cmd_thread',
+        command: 'store.read',
+        payload: {
+          operation: 'get',
+          resource: 'thread:support%2F42',
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
+      schema: 1,
+      threadId: 'support/42',
+      state: 'live',
+      heads: { main: 'answer-a' },
+      tree: expect.arrayContaining([
+        expect.objectContaining({ id: 'answer-a', parentId: 'root', role: 'assistant' }),
+        expect.objectContaining({ id: 'answer-b', parentId: 'root', role: 'assistant' }),
+        expect.objectContaining({ id: 'root', role: 'user' }),
+      ]),
+      branches: [
+        expect.objectContaining({
+          parentId: 'root',
+          groupIds: expect.any(Array),
+        }),
+      ],
+    })
+    expect((result as { groups: unknown[] }).groups).toHaveLength(3)
+    expect(JSON.stringify(result)).not.toMatch(
+      /PRIVATE_ROOT_SENTINEL|PRIVATE_A_SENTINEL|PRIVATE_B_SENTINEL/,
+    )
+  })
+
   it('infers memory resources from trace ids when readable runtime records are available', async () => {
     const store = inMemoryRecordStore()
     await store.put('memory:dynamic:thread-1:block:recent:000001', { role: 'user', content: 'hello' })
@@ -480,5 +538,47 @@ describe('devtools runtime bridge contract', () => {
     ).resolves.toMatchObject({
       entries: [{ key: 'memory:dynamic:thread-1:block:recent:000001' }],
     })
+  })
+})
+
+describe('devtools helper bridge wiring', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = []
+    clearInspectableResources()
+    // Resolve the fire-and-forget index registration deterministically so no
+    // late fetch failure logs during worker teardown.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    )
+  })
+
+  it('starts and disposes the websocket peer from enableDevtools()', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+
+    const disable = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+      bridge: true,
+    })
+
+    const socket = FakeWebSocket.instances[0]
+    expect(socket).toBeDefined()
+    expect(socket?.url).toBe('ws://localhost:4400/ws/runtime')
+
+    disable()
+    expect(socket?.readyState).toBe(3)
+  })
+
+  it('does not connect a peer when bridge is omitted', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+
+    const disable = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    disable()
   })
 })

@@ -17,6 +17,8 @@ crux dev --open
 Use Devtools when you want to:
 
 - inspect the exact messages, contexts, tools, and model settings used by a run;
+- inspect intent, authority, change, verification, and recovery evidence with
+  explicit missing, conflict, history, late, and payload-retention states;
 - browse prompts, agents, tools, flows, and their source relationships in
   Catalog;
 - run and compare Evals and review their evidence; or
@@ -48,3 +50,20 @@ Use Devtools when you want to:
 The Devtools UI is distinct from the terminal TUI and from the VS Code
 extension. They can all connect to the same local process without becoming
 runtime requirements for your application.
+
+## Execution evidence
+
+Run Detail uses Local's canonical evidence read model rather than walking raw
+`evidence.for` rows. The Evidence view keeps domain-native cards, suppresses
+duplicate generic Evidence cards, and lets you navigate
+subject → evidence → retained producer/source. Every role summary is computed
+before payload hydration and pagination, so unselected roles remain truthful.
+
+Catalog shows authored `evidence.record()` definitions, source locations,
+diagnostics, role/kind coverage, and relevant subject relations. When observed
+relationships are available, it links to the corresponding Runs view without
+claiming that authoring proves execution.
+
+See the [execution-evidence guide](/docs/guides/observability/execution-evidence)
+for automatic producers, durable Local requirements, and advanced custom
+authoring.

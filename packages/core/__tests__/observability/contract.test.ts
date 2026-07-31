@@ -52,11 +52,11 @@ describe("Crux observability graph contract", () => {
     );
   });
 
-  it("reads the shared v4 generation run fixture", () => {
+  it("reads the shared v5 generation run fixture", () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture);
 
     expect(parsed.records).toHaveLength(13);
-    expect(parsed.records.every((record) => record.schemaVersion === 4)).toBe(
+    expect(parsed.records.every((record) => record.schemaVersion === 5)).toBe(
       true,
     );
     expect(parsed.records.map((record) => record.type)).toEqual([
@@ -245,6 +245,7 @@ describe("Crux observability graph contract", () => {
         "delegate",
         "plan",
         "task",
+        "thread",
         "workspace",
         "indexing",
         "ingest",
@@ -276,6 +277,7 @@ describe("Crux observability graph contract", () => {
         "mcp.connect",
         "mcp.discover",
         "memory.capture",
+        "thread.operation",
         "workspace.operation",
         "corpus.sync",
         "skill.load",
@@ -288,11 +290,13 @@ describe("Crux observability graph contract", () => {
     expect(CRUX_CANONICAL_ARTIFACT_KINDS).not.toContain("quality.snapshot");
     expect(CRUX_CANONICAL_ARTIFACT_KINDS).toEqual(
       expect.arrayContaining([
+        "approval.decision",
         "approval.request",
         "tool.request",
         "stream.timeline",
         "context.contribution",
         "prompt.budget",
+        "request.plan",
         "validation.feedback",
         "retrieval.hits",
         "citation.report",

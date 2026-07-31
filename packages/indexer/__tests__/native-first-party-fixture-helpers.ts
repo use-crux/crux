@@ -10,6 +10,7 @@ import type { StaticFileExtraction } from "../src/indexer/static/extraction/engi
 import {
   createProvidedStaticSyntaxFrontend,
   createTypeScriptStaticSyntaxFrontend,
+  type StaticSyntaxCallInterest,
 } from "../src/indexer/static-index/syntax";
 import {
   createRustOxcStaticSyntaxFrontend,
@@ -48,6 +49,8 @@ interface NativeFirstPartyFixtureInput {
   }[];
   /** Factory call names the Rust/Oxc frontend should retain for static extraction. */
   readonly callNames: readonly string[];
+  /** Import-aware factory interests used to reject same-name local calls. */
+  readonly callInterests?: readonly StaticSyntaxCallInterest[];
   /** Constructor names the Rust/Oxc frontend should retain for static extraction. */
   readonly constructorNames?: readonly string[];
 }
@@ -70,6 +73,9 @@ export async function extractNativeAndFallback(
   try {
     const frontend = createRustOxcStaticSyntaxFrontend({
       callNames: [...input.callNames],
+      ...(input.callInterests
+        ? { callInterests: [...input.callInterests] }
+        : {}),
       ...(input.constructorNames
         ? { constructorNames: [...input.constructorNames] }
         : {}),

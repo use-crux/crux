@@ -30,6 +30,13 @@ import {
   CruxDeploymentIdentitySchema,
   ProjectDefinitionKindSchema,
 } from "../project-index";
+import { EvidenceEdgeAttributesSchema } from "./evidence-edge-schema";
+import {
+  EvidenceCoverageConflictAttributesSchema,
+  EvidenceCoverageEventAttributesSchema,
+} from "./evidence-coverage-schema";
+import { validateEvidenceSourceArtifact } from "./evidence-source-artifact-schema";
+import { validateApprovalArtifact } from "./approval-artifact";
 
 const nonEmptyString = z.string().min(1);
 const isoTimestamp = z
@@ -179,6 +186,7 @@ export const DefinitionRefRoleSchema = z.enum([
   "invoked-guardrail",
   "invoked-constraint",
   "invoked-task",
+  "invoked-thread",
   "invoked-workspace",
   "invoked-memory",
   "invoked-recipe",
@@ -398,6 +406,23 @@ export const CruxSpanEventRecordSchema = CruxRecordBaseSchema.extend({
   name: nonEmptyString,
   timestamp: isoTimestamp,
   attributes: CruxAttributesSchema.optional(),
+}).superRefine((record, context) => {
+  const schema =
+    record.name === "evidence.coverage"
+      ? EvidenceCoverageEventAttributesSchema
+      : record.name === "evidence.coverage.conflict"
+        ? EvidenceCoverageConflictAttributesSchema
+        : undefined;
+  if (schema === undefined) return;
+  const qualified = schema.safeParse(record.attributes);
+  if (qualified.success) return;
+  for (const issue of qualified.error.issues) {
+    context.addIssue({
+      code: "custom",
+      message: issue.message,
+      path: ["attributes", ...issue.path],
+    });
+  }
 });
 
 export const CruxGraphNodeRefSchema = z.discriminatedUnion("kind", [
@@ -414,6 +439,29 @@ export const CruxEdgeRecordSchema = CruxRecordBaseSchema.extend({
   to: CruxGraphNodeRefSchema,
   createdAt: isoTimestamp,
   attributes: CruxAttributesSchema.optional(),
+}).superRefine((record, context) => {
+  if (record.edgeType !== "evidence.for") return;
+  const qualified = EvidenceEdgeAttributesSchema.safeParse(record.attributes);
+  if (qualified.success) {
+    if (
+      qualified.data.sourceMode === "inline" &&
+      record.from.kind !== "artifact"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Inline evidence requires an artifact source",
+        path: ["from"],
+      });
+    }
+    return;
+  }
+  for (const issue of qualified.error.issues) {
+    context.addIssue({
+      code: "custom",
+      message: issue.message,
+      path: ["attributes", ...issue.path],
+    });
+  }
 });
 
 export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
@@ -429,9 +477,12 @@ export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
   preview: z.unknown().optional(),
   uri: nonEmptyString.optional(),
   attributes: CruxAttributesSchema.optional(),
+}).superRefine((artifact, context) => {
+  validateEvidenceSourceArtifact(artifact, context);
+  validateApprovalArtifact(artifact, context);
 });
 
-const CruxGraphRecordV4Schema = z.discriminatedUnion("type", [
+const CruxGraphRecordV5Schema = z.discriminatedUnion("type", [
   CruxRunStartRecordSchema,
   CruxRunSuspendRecordSchema,
   CruxRunResumeRecordSchema,
@@ -445,10 +496,10 @@ const CruxGraphRecordV4Schema = z.discriminatedUnion("type", [
 ]);
 
 /**
- * Parse current v4 records. Earlier graph versions cannot be assigned truthful
- * operation-family identity and are intentionally rejected.
+ * Parse current v5 records with qualified evidence-edge semantics. Earlier
+ * graph versions are intentionally rejected.
  */
-export const CruxGraphRecordSchema = CruxGraphRecordV4Schema;
+export const CruxGraphRecordSchema = CruxGraphRecordV5Schema;
 
 export const CruxGraphRecordBatchSchema = z.object({
   records: z.array(CruxGraphRecordSchema),

@@ -140,6 +140,39 @@ Validated DefinitionRefs map the primary authored definition to
 `crux.definition.ref` events retain safe source locations; total reference text
 is capped at 8 KiB per span and reports truncation without exporting content.
 
+### Execution evidence events
+
+Qualified execution evidence uses dedicated events and never falls through the
+generic `crux.edge` or span-event projections.
+
+`crux.evidence` has this complete positive allowlist:
+
+- `crux.evidence.id`
+- `crux.evidence.role`
+- `crux.evidence.kind`
+- `crux.evidence.conclusion` when present
+- `crux.evidence.subject_kind`
+
+Canonical evidence kinds retain their closed value. Application-authored
+`custom.*` kinds export only `custom`. `crux.evidence.id` is an opaque
+relationship identifier intended only for exact event correlation with Crux
+Local and delivery diagnostics. Never promote it to a span or Resource
+attribute and never use it as a metric dimension.
+
+Explicit coverage emits `crux.evidence.coverage` with only role and
+`crux.evidence.coverage_status`. Same-scope coverage disagreement emits
+`crux.evidence.coverage.conflict` with only role.
+
+The negative allowlist excludes inline evidence, previews, source and subject
+IDs, edge endpoints, raw resources and paths, recovery envelopes, raw or
+hashed idempotency keys, content digests, evidence-source markers,
+supersession IDs, capture/payload state, payload-unavailability metadata,
+terminal-acceptance metadata, producer attributes, caller/record timestamps,
+raw custom kinds, and arbitrary current or future qualified fields. Producer
+identity is used only to choose the owning OTel span; it is not exported as an
+event attribute. A malformed record or unresolved producer is omitted without
+falling back to the evidence source or subject.
+
 ## Options
 
 ```ts

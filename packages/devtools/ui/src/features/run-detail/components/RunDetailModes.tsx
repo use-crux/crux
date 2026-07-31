@@ -1,13 +1,10 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/shared/components/ui/resizable";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { useObservabilityGraph } from "@/features/observability/hooks/useObservabilityGraph";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { SpanTree } from "@/features/run-detail/components/SpanTree";
 import { SpanDetailPanel } from "@/features/run-detail/components/SpanDetailPanel";
+import { RunDetailInspectLayout } from "@/features/run-detail/components/RunDetailInspectLayout";
 import {
   SpanInspector,
   InspectorRail,
@@ -27,6 +24,8 @@ import { Icon } from "@/devtools/shell/Icon";
 import { SkeletonCard } from "@/shared/components/Skeleton";
 import type { JudgeEventData, Trace } from "@/types";
 import type { RunLens } from "@/features/run-detail/types";
+import type { EvidenceRole } from "@use-crux/core/evidence";
+import { EvidenceSubjectPanel } from "@/features/run-detail/evidence/EvidenceSubjectPanel";
 
 // SpanGraph drags in @xyflow/react (large) + the @xyflow CSS — only
 // Canvas mode renders it, so keep it out of the main run-detail bundle.
@@ -50,6 +49,9 @@ export function CanvasMode({
   summaryNav,
   trace,
   judges,
+  detailTab,
+  evidenceRole,
+  evidenceId,
 }: {
   traceId: string;
   spanId?: string;
@@ -58,6 +60,9 @@ export function CanvasMode({
   summaryNav?: SummaryNav;
   trace: Trace | undefined;
   judges: readonly JudgeEventData[];
+  detailTab?: "evidence";
+  evidenceRole?: EvidenceRole;
+  evidenceId?: string;
 }) {
   const { navigate } = useNavigation();
   const canonical = useObservabilityGraph(traceId);
@@ -73,9 +78,16 @@ export function CanvasMode({
   const handleSelectSpan = useCallback(
     (id: string) => {
       // Selecting a node keeps the current (graph) lens — selection is shared.
-      navigate({ view: "run-detail", traceId, lens: "graph", spanId: id });
+      navigate({
+        view: "run-detail",
+        traceId,
+        lens: "graph",
+        spanId: id,
+        ...(detailTab ? { detailTab } : {}),
+        ...(evidenceRole ? { evidenceRole } : {}),
+      });
     },
-    [navigate, traceId],
+    [navigate, traceId, detailTab, evidenceRole],
   );
   const openInTree = useCallback(() => {
     navigate({
@@ -149,13 +161,23 @@ export function CanvasMode({
         }}
       >
         <div className="min-h-0 flex-1 overflow-hidden">
-          <SpanDetailPanel
+          <EvidenceSubjectPanel
             detail={canonical.runDetail}
             selectedNodeId={selectedSpanId}
-            onSelectSpan={handleSelectSpan}
-            trace={trace}
-            judges={judges}
-          />
+            traceId={traceId}
+            lens="graph"
+            detailTab={detailTab}
+            evidenceRole={evidenceRole}
+            evidenceId={evidenceId}
+          >
+            <SpanDetailPanel
+              detail={canonical.runDetail}
+              selectedNodeId={selectedSpanId}
+              onSelectSpan={handleSelectSpan}
+              trace={trace}
+              judges={judges}
+            />
+          </EvidenceSubjectPanel>
         </div>
         <div
           className="flex-shrink-0 p-2.5"
@@ -186,6 +208,9 @@ export function InspectMode({
   onSelectLens,
   summaryNav,
   triage = false,
+  detailTab,
+  evidenceRole,
+  evidenceId,
 }: {
   traceId: string;
   spanId?: string;
@@ -201,6 +226,9 @@ export function InspectMode({
   summaryNav?: SummaryNav;
   /** Run failed → the tree opens collapsed to the failure path. */
   triage?: boolean;
+  detailTab?: "evidence";
+  evidenceRole?: EvidenceRole;
+  evidenceId?: string;
 }) {
   const { navigate } = useNavigation();
   const canonical = useObservabilityGraph(traceId);
@@ -219,12 +247,20 @@ export function InspectMode({
   // there (design `RunDetailTimeline`); Tree keeps the inspector pinned open.
   const isTimeline = layout === "timeline";
   const [inspectorOpen, setInspectorOpen] = useState(!isTimeline);
+  const isMobile = useIsMobile();
 
   const handleSelectSpan = useCallback(
     (id: string) => {
-      navigate({ view: "run-detail", traceId, lens, spanId: id });
+      navigate({
+        view: "run-detail",
+        traceId,
+        lens,
+        spanId: id,
+        ...(detailTab ? { detailTab } : {}),
+        ...(evidenceRole ? { evidenceRole } : {}),
+      });
     },
-    [navigate, traceId, lens],
+    [navigate, traceId, lens, detailTab, evidenceRole],
   );
 
   if (!tree) {
@@ -237,77 +273,87 @@ export function InspectMode({
     );
   }
 
-  return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      {/* Structure | Detail — resizable */}
-      <div className="min-w-0 flex-1">
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="h-full min-h-0 overflow-hidden"
-        >
-          {/* Structure pane — wider in Timeline so the time axis has room. */}
-          <ResizablePanel
-            defaultSize={isTimeline ? "46%" : "34%"}
-            minSize="18%"
-            maxSize="62%"
-          >
-            <div
-              className="flex h-full min-h-0 flex-col overflow-hidden"
-              style={{ background: "var(--devtools-bg)" }}
-            >
-              {/* Lens switch — heads the Structure pane (design `StructureTree`). */}
-              <div
-                className="flex flex-shrink-0 items-center px-2.5 py-2"
-                style={{ borderBottom: "1px solid var(--devtools-border)" }}
-              >
-                <LensSwitch
-                  active={lens}
-                  onSelect={onSelectLens}
-                  dense
-                  summary={summaryNav}
-                />
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <SpanTree
-                  tree={tree}
-                  selectedId={selectedSpanId}
-                  warningSpanIds={warningSpanIds}
-                  onSelect={handleSelectSpan}
-                  layout={layout}
-                  triage={triage}
-                />
-              </div>
-            </div>
-          </ResizablePanel>
-          <ResizableHandle withHandle className="bg-[var(--devtools-border)]" />
-          <ResizablePanel defaultSize={isTimeline ? "54%" : "66%"}>
-            <div
-              className="h-full w-full overflow-hidden"
-              style={{ background: "var(--devtools-bg)" }}
-            >
-              <SpanDetailPanel
-                detail={canonical.runDetail}
-                selectedNodeId={selectedSpanId}
-                onSelectSpan={handleSelectSpan}
-                trace={trace}
-                judges={judges}
-              />
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+  const structurePane = (
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden"
+      style={{ background: "var(--devtools-bg)" }}
+    >
+      <div
+        className="flex flex-shrink-0 items-center overflow-x-auto px-2.5 py-2"
+        style={{ borderBottom: "1px solid var(--devtools-border)" }}
+      >
+        <LensSwitch
+          active={lens}
+          onSelect={onSelectLens}
+          dense
+          summary={summaryNav}
+        />
       </div>
-      {/* Inspector — constant facts and evidence rail; collapsible */}
-      {inspectorOpen ? (
-        <SpanInspector
-          runDetail={canonical.runDetail}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <SpanTree
+          tree={tree}
+          selectedId={selectedSpanId}
+          warningSpanIds={warningSpanIds}
+          onSelect={handleSelectSpan}
+          layout={layout}
+          triage={triage}
+        />
+      </div>
+    </div>
+  );
+  const detailPane = (
+    <div
+      className="h-full w-full overflow-hidden"
+      style={{ background: "var(--devtools-bg)" }}
+    >
+      <EvidenceSubjectPanel
+        detail={canonical.runDetail}
+        selectedNodeId={selectedSpanId}
+        traceId={traceId}
+        lens={lens}
+        detailTab={detailTab}
+        evidenceRole={evidenceRole}
+        evidenceId={evidenceId}
+      >
+        <SpanDetailPanel
+          detail={canonical.runDetail}
           selectedNodeId={selectedSpanId}
           onSelectSpan={handleSelectSpan}
-          onCollapse={() => setInspectorOpen(false)}
+          trace={trace}
+          judges={judges}
         />
-      ) : (
-        <InspectorRail onExpand={() => setInspectorOpen(true)} />
-      )}
+      </EvidenceSubjectPanel>
     </div>
+  );
+  const inspector = inspectorOpen ? (
+    <SpanInspector
+      runDetail={canonical.runDetail}
+      selectedNodeId={selectedSpanId}
+      onSelectSpan={handleSelectSpan}
+      onOpenEvidence={(role) =>
+        navigate({
+          view: "run-detail",
+          traceId,
+          lens,
+          spanId: selectedSpanId ?? undefined,
+          detailTab: "evidence",
+          evidenceRole: role,
+        })
+      }
+      onCollapse={() => setInspectorOpen(false)}
+    />
+  ) : (
+    <InspectorRail onExpand={() => setInspectorOpen(true)} />
+  );
+
+  return (
+    <RunDetailInspectLayout
+      mobile={isMobile}
+      timeline={isTimeline}
+      structure={structurePane}
+      detail={detailPane}
+      inspector={inspector}
+    />
   );
 }
 

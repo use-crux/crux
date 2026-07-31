@@ -9,6 +9,7 @@ import {
   inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
+  mutateRecord,
   storage,
   StorageError,
 } from "@use-crux/core/storage";
@@ -27,7 +28,7 @@ Crux storage is split into explicit capabilities:
 
 | Interface     | Purpose                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------ |
-| `RecordStore` | JSON records with `get`, `put`, `create`, `delete`, paged `list`, optional `scan`, TTL, filters, and watches |
+| `RecordStore` | JSON records with reads, writes, linearizable single-key mutation, listing, TTL, filters, and watches       |
 | `VectorStore` | Dense, sparse, and hybrid vector indexes with explicit capability claims                                     |
 | `AssetStore`  | Binary and oversized payload storage with `put`, `get`, and `delete`                                         |
 | `Storage`     | A capability bundle: `{ records, vectors?, assets? }`                                                        |
@@ -78,11 +79,34 @@ interface RecordStore<T extends JsonObject = JsonObject> {
     options?: Omit<RecordListOptions, "cursor">,
   ): AsyncIterable<RecordEntry<T>>;
   watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void;
+  mutate?(
+    key: string,
+    fn: (current: T | null) =>
+      | RecordMutation<T>
+      | Promise<RecordMutation<T>>,
+  ): Promise<T | null>;
+  getVersioned?(
+    key: string,
+  ): Promise<{ value: T | null; version: string | null }>;
+  putVersioned?(
+    key: string,
+    value: T | null,
+    expectedVersion: string | null,
+  ): Promise<boolean>;
   capabilities(): RecordStoreCapabilities;
 }
 ```
 
 `put()` accepts `{ ttlMs }`, not `{ ttl }`. `create()` is the atomic insert primitive and returns `false` when an active record already exists.
+Use `mutateRecord()` for portable atomic read-modify-write behavior; it selects
+the adapter's native transaction or bounded versioned-CAS seam:
+
+```ts
+await mutateRecord(records, "counter", (current) => ({
+  type: "put",
+  value: { count: (current?.count ?? 0) + 1 },
+}));
+```
 
 Capability levels are explicit:
 
@@ -92,6 +116,7 @@ type RecordStoreCapabilities = {
   filter: "native" | "scan" | false;
   watch: boolean;
   batch: boolean;
+  mutate: "native" | "cas" | false;
 };
 ```
 

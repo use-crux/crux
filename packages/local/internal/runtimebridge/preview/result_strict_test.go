@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDecodeResponseRejectsIdentityNullCoverageAndUTF16Drift(t *testing.T) {
+func TestDecodeResponseRejectsIdentityNullAndInvalidPreviewValues(t *testing.T) {
 	valid := readyResult("prompt:x", 1, "", []any{})
 	for _, test := range []struct {
 		name      string
@@ -30,23 +30,24 @@ func TestDecodeResponseRejectsIdentityNullCoverageAndUTF16Drift(t *testing.T) {
 		{
 			name: "optional null",
 			result: withResult(valid, func(result map[string]any) {
-				inspection(result)["prompt"] = nil
+				preview(result)["model"] = nil
 			}),
 			commandID: "cmd", targetID: "prompt:x", revision: 1,
 		},
 		{
-			name: "wrong coverage",
+			name: "wrong measurement",
 			result: withResult(valid, func(result map[string]any) {
-				system(result)["coverage"] = "partial"
+				preview(result)["measurement"] = "partial"
 			}),
 			commandID: "cmd", targetID: "prompt:x", revision: 1,
 		},
 		{
-			name: "mid-surrogate boundary",
-			result: readyResult("prompt:x", 1, "😀", []any{
-				map[string]any{
-					"kind": "static", "startUtf16": 0, "endUtf16": 1,
-				},
+			name: "invalid contribution boundary",
+			result: withResult(valid, func(result map[string]any) {
+				result["contributions"] = []any{map[string]any{
+					"id": "context:history", "boundary": "protected",
+					"representations": []any{"full"},
+				}}
 			}),
 			commandID: "cmd", targetID: "prompt:x", revision: 1,
 		},
@@ -118,12 +119,7 @@ func TestDecodeResponseStrictValidationAndErrorVariants(t *testing.T) {
 }
 
 func TestDecodeResponseResultLimitsAtEquality(t *testing.T) {
-	text := strings.Repeat("x", 524_277)
-	exactStrings := readyResult("pp", 1, text, []any{
-		map[string]any{
-			"kind": "static", "startUtf16": 0, "endUtf16": len(text),
-		},
-	})
+	exactStrings := resultWithStringBytes(t, MaxResultStringBytes)
 	if countStringBytes(mustJSON(exactStrings)) != MaxResultStringBytes {
 		t.Fatal("aggregate-string fixture is not exact")
 	}
@@ -132,42 +128,24 @@ func TestDecodeResponseResultLimitsAtEquality(t *testing.T) {
 	); err != nil {
 		t.Fatalf("exact aggregate strings rejected: %v", err)
 	}
-	overflowStrings := readyResult("pp", 1, text+"x", []any{
-		map[string]any{
-			"kind": "static", "startUtf16": 0, "endUtf16": len(text) + 1,
-		},
-	})
+	overflowStrings := resultWithStringBytes(t, MaxResultStringBytes+1)
 	if _, err := DecodeResponse(
 		resultEnvelope("cmd", overflowStrings), "cmd", "pp", 1,
 	); !IsFailure(err, "invalid_response") {
 		t.Fatalf("aggregate overflow error = %v", err)
 	}
 
-	exactSegments := segmentedResult(MaxResultSegments)
+	exactContributions := contributionResult(1024)
 	if _, err := DecodeResponse(
-		resultEnvelope("cmd", exactSegments), "cmd", "prompt:x", 1,
+		resultEnvelope("cmd", exactContributions), "cmd", "prompt:x", 1,
 	); err != nil {
-		t.Fatalf("exact segments rejected: %v", err)
+		t.Fatalf("exact contributions rejected: %v", err)
 	}
-	overflowSegments := segmentedResult(MaxResultSegments + 1)
+	overflowContributions := contributionResult(1025)
 	if _, err := DecodeResponse(
-		resultEnvelope("cmd", overflowSegments), "cmd", "prompt:x", 1,
+		resultEnvelope("cmd", overflowContributions), "cmd", "prompt:x", 1,
 	); !IsFailure(err, "invalid_response") {
-		t.Fatalf("segment overflow error = %v", err)
-	}
-}
-
-func TestDecodeResponseCompactResultBytesAtEquality(t *testing.T) {
-	targetID, result := exactResultSize(t)
-	raw := resultEnvelope("cmd", result)
-	if _, err := DecodeResponse(raw, "cmd", targetID, 1); err != nil {
-		t.Fatalf("exact compact result rejected: %v", err)
-	}
-	result["targetId"] = targetID + "x"
-	if _, err := DecodeResponse(
-		resultEnvelope("cmd", result), "cmd", targetID+"x", 1,
-	); !IsFailure(err, "invalid_response") {
-		t.Fatalf("compact result overflow error = %v", err)
+		t.Fatalf("contribution overflow error = %v", err)
 	}
 }
 
@@ -177,63 +155,50 @@ func readyResult(
 	text string,
 	segments []any,
 ) map[string]any {
-	parts := []any{}
-	if text != "" {
-		parts = append(parts, map[string]any{
-			"source": "s", "text": text, "tokens": 0, "skipped": false,
-			"segments": segments,
-		})
-	}
+	_ = text
+	_ = segments
 	return map[string]any{
 		"status": "ready", "targetId": targetID,
 		"catalogueRevision": revision,
-		"inspection": map[string]any{
-			"system": map[string]any{
-				"text": text, "tokens": 0, "coverage": "complete",
-				"parts": parts,
-			},
-			"totalTokens": 0, "droppedContexts": []any{},
-			"excludedContexts": []any{},
+		"preview": map[string]any{
+			"status": "fits", "measurement": "exact",
+			"adaptations": []any{}, "warnings": []any{},
+			"diagnostics": []any{},
 		},
+		"contributions": []any{},
 	}
 }
 
-func segmentedResult(count int) map[string]any {
-	segments := make([]any, count)
-	for index := range segments {
-		segments[index] = map[string]any{
-			"kind": "static", "startUtf16": index, "endUtf16": index + 1,
+func contributionResult(count int) map[string]any {
+	result := readyResult("prompt:x", 1, "", nil)
+	contributions := make([]any, count)
+	for index := range contributions {
+		contributions[index] = map[string]any{
+			"id": "x", "boundary": "required", "representations": []any{"full"},
 		}
 	}
-	return readyResult("prompt:x", 1, strings.Repeat("x", count), segments)
+	result["contributions"] = contributions
+	return result
 }
 
-func exactResultSize(t *testing.T) (string, map[string]any) {
+func resultWithStringBytes(t *testing.T, total int) map[string]any {
 	t.Helper()
-	count := MaxResultBytes / 12
-	for attempt := 0; attempt < 20; attempt++ {
-		text := strings.Repeat("\x00", count)
-		result := readyResult("p", 1, text, []any{
-			map[string]any{
-				"kind": "static", "startUtf16": 0, "endUtf16": count,
-			},
-		})
-		remaining := MaxResultBytes - len(mustJSON(result))
-		if remaining >= 0 && remaining < 512 {
-			targetID := strings.Repeat("p", remaining+1)
-			result["targetId"] = targetID
-			if len(mustJSON(result)) == MaxResultBytes {
-				return targetID, result
-			}
-		}
-		if remaining < 0 {
-			count += (remaining / 12) - 1
-		} else {
-			count += max(1, (remaining-256)/12)
-		}
+	result := readyResult("pp", 1, "", nil)
+	remaining := total - countStringBytes(mustJSON(result))
+	diagnostics := []any{}
+	for index := 0; remaining > 0; index++ {
+		base := map[string]any{"id": "i", "code": "c", "message": ""}
+		remaining -= 2
+		length := min(remaining, 2048)
+		base["message"] = strings.Repeat("x", length)
+		remaining -= length
+		diagnostics = append(diagnostics, base)
 	}
-	t.Fatal("could not construct exact compact result")
-	return "", nil
+	preview(result)["diagnostics"] = diagnostics
+	if countStringBytes(mustJSON(result)) != total {
+		t.Fatal("could not construct aggregate-string fixture")
+	}
+	return result
 }
 
 func resultEnvelope(commandID string, result map[string]any) []byte {
@@ -259,12 +224,8 @@ func withResult(
 	return cloned
 }
 
-func inspection(result map[string]any) map[string]any {
-	return result["inspection"].(map[string]any)
-}
-
-func system(result map[string]any) map[string]any {
-	return inspection(result)["system"].(map[string]any)
+func preview(result map[string]any) map[string]any {
+	return result["preview"].(map[string]any)
 }
 
 func mustJSON(value any) []byte {

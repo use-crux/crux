@@ -46,12 +46,22 @@ import { IndexSafety } from "./safety-section";
 import { IndexMcpDetail } from "./mcp-detail";
 import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 import { PromptTextSection } from "./prompt-text/section";
+import { IndexEvidence } from "./evidence-section";
+import { ThreadInspector } from "@/features/thread/components/ThreadInspector";
 
 // ── relations block (two columns, full width) ────────────────────────────────
-function CatRelations({ def }: { def: ViewDef }) {
+export function CatRelations({ def }: { def: ViewDef }) {
   const idx = useIndexIndex();
   const select = useIndexSelect();
-  const rels = idx.relationsOf(def.id);
+  const rawRelations = idx.relationsOf(def.id);
+  const rels = {
+    incoming: rawRelations.incoming.filter(
+      (relation) => relation.type !== "evidence.record.declared_in",
+    ),
+    outgoing: rawRelations.outgoing.filter(
+      (relation) => relation.type !== "evidence.record.declared_in",
+    ),
+  };
   if (!rels.incoming.length && !rels.outgoing.length) return null;
   const Col = ({
     title,
@@ -164,6 +174,20 @@ function CatRelations({ def }: { def: ViewDef }) {
   );
 }
 
+function IndexThreadInspector({ def }: { def: ViewDef }) {
+  if (def.kind !== "thread") return null;
+  const threadId =
+    typeof def.runtimeJoin?.threadId === "string"
+      ? def.runtimeJoin.threadId
+      : def.id.replace(/^thread:/, "");
+  return (
+    <>
+      <SectionHead eyebrow="Thread inspector" />
+      <ThreadInspector threadId={threadId} />
+    </>
+  );
+}
+
 // ── per-kind section order (importance → prominence) ─────────────────────────
 const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   hero: IndexHero,
@@ -178,6 +202,8 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   safety: IndexSafety,
   mcp: IndexMcpDetail,
   workspaceSnapshots: IndexWorkspaceSnapshotUsage,
+  evidence: IndexEvidence,
+  threadInspector: IndexThreadInspector,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -334,6 +360,15 @@ export function indexSectionOrder(def: ViewDef): string[] {
       "relations",
       "health",
     ];
+  if (k === "thread")
+    return [
+      "hero",
+      "threadInspector",
+      "relations",
+      "source",
+      "observability",
+      "health",
+    ];
   if (k === "workspace")
     return [
       "hero",
@@ -397,11 +432,14 @@ export function IndexDetail({
     .lintsForDef(def.id)
     .filter((f) => f.primaryDefinitionId === def.id);
   const configuredOrder = indexSectionOrder(def);
+  const evidenceOrder = configuredOrder.includes("evidence")
+    ? configuredOrder
+    : [configuredOrder[0] ?? "hero", "evidence", ...configuredOrder.slice(1)];
   // Runtime coverage is exhaustive and manifest-driven; even static-only and
   // structural kinds need a truthful "no runtime evidence" explanation.
-  const order = configuredOrder.includes("observability")
-    ? configuredOrder
-    : [...configuredOrder, "observability"];
+  const order = evidenceOrder.includes("observability")
+    ? evidenceOrder
+    : [...evidenceOrder, "observability"];
 
   // quick-reference properties band — the at-a-glance health of the entry
   const props: ReactNode[] = [];

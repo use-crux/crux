@@ -80,6 +80,40 @@ function createRedisRecordClient(): RedisRecordClient & { readonly data: Map<str
       }
       return deleted
     },
+    async eval<TResult = unknown>(
+      _script: string,
+      keys: string[],
+      args: unknown[],
+    ): Promise<TResult> {
+      const key = String(keys[0])
+      const current = data.get(key)
+      if (args.length === 0) {
+        if (!current || isExpired(current)) {
+          data.delete(key)
+          return null as TResult
+        }
+        const value = String(current.value)
+        return [value, versionOf(value)] as unknown as TResult
+      }
+      const expectedKind = String(args[0])
+      const expectedVersion = String(args[1])
+      const currentValue =
+        current && !isExpired(current) ? String(current.value) : null
+      if (
+        (expectedKind === 'missing' && currentValue !== null) ||
+        (expectedKind === 'present' &&
+          (currentValue === null ||
+            versionOf(currentValue) !== expectedVersion))
+      ) {
+        return 0 as TResult
+      }
+      if (String(args[2]) === 'delete') {
+        data.delete(key)
+      } else {
+        data.set(key, { value: String(args[3]) })
+      }
+      return 1 as TResult
+    },
     async scan(cursor: string, options?: { match?: string; count?: number }): Promise<[string, string[]]> {
       const keys = [...data.keys()]
         .filter((key) => {
@@ -101,6 +135,10 @@ function createRedisRecordClient(): RedisRecordClient & { readonly data: Map<str
       return 0
     },
   }
+}
+
+function versionOf(value: string): string {
+  return `version:${value}`
 }
 
 interface StoredRedisValue {

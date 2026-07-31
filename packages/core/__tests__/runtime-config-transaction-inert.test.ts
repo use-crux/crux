@@ -35,7 +35,7 @@ describe('runtime config transaction — inert mode', () => {
       {
         env: { CRUX_INDEX: '1' },
         config: {
-          persistence: { records: inMemoryRecordStore() },
+          storage: { records: inMemoryRecordStore() },
           generation: {
             middleware: async (args, next) => next(args),
             tokenizer: (text) => text.length,

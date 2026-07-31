@@ -8,7 +8,10 @@
  */
 
 import { getHooks } from '../runtime/runtime'
-import type { CruxGraphRecord } from './contract'
+import type {
+  CruxGraphRecord,
+  CruxObservabilityRedactionSurface,
+} from './contract'
 import type { ObserveArtifactOptions } from './observe'
 import type { CruxObservabilityArtifactDirection } from './capture-policy-contract'
 import {
@@ -19,6 +22,7 @@ import {
   captureRedactRecord,
   prepareObservabilityRecordForCapture,
   resolveCaptureModes,
+  type ResolvedCaptureModes,
 } from './capture-levels'
 import {
   redactObservabilityArtifactDetailed,
@@ -30,7 +34,6 @@ import {
   markArtifactRedactionEvidence,
   stripObservabilityRedactionMetadata,
 } from './redaction-evidence'
-import type { CruxObservabilityRedactionSurface } from './contract'
 import { normalizeObservabilityRedactionPatterns } from './redaction-patterns'
 
 export { PAYLOAD_ATTRIBUTE_KEYS } from './capture-policy-contract'
@@ -48,6 +51,7 @@ export type {
 
 type ArtifactOptions = ObserveArtifactOptions
 
+/** Result of the last-mile record privacy hook. */
 export type ObservabilityCaptureResult =
   | {
       readonly ok: true
@@ -56,10 +60,16 @@ export type ObservabilityCaptureResult =
     }
   | { readonly ok: false; readonly error?: unknown }
 
+/** Capture-only preparation and its bounded redaction evidence. @internal */
+export interface ObservabilityCaptureModesResult {
+  readonly record: CruxGraphRecord
+  readonly redactionSurfaces: readonly CruxObservabilityRedactionSurface[]
+}
+
 /**
  * Apply the configured capture policy to an artifact before emission.
  *
- * Disabled directions are emitted as `reference` artifacts with deterministic
+ * Disabled directions are emitted as reference artifacts with deterministic
  * size/hash metadata and no inline preview.
  */
 export function applyObservabilityCapturePolicy(
@@ -79,7 +89,7 @@ export function applyObservabilityCapturePolicy(
     )
     return markArtifactRedactionEvidence(captured, redacted.surfaces)
   } catch {
-    return failClosedArtifact(artifact)
+    return failClosedArtifact()
   }
 }
 
@@ -100,47 +110,67 @@ export function applyConfiguredObservabilityCapturePolicy(
       : redacted.value
     return markArtifactRedactionEvidence(captured, redacted.surfaces)
   } catch {
-    return failClosedArtifact(artifact)
+    return failClosedArtifact()
   }
 }
 
 /**
- * Apply capture modes and the optional redaction hook to a graph record.
+ * Apply capture modes, configured patterns, and the optional redaction hook.
  *
- * This is the emit-bound privacy gate. Every consumer downstream of `emit()`
- * receives this result: subscribers, diagnostics channel, transports, and the
- * OTel subscriber.
+ * Prefer the split capture/redaction functions when a producer must apply
+ * data-only path redaction between those two steps.
  */
 export function applyObservabilityCapturePolicyToRecord(
   record: CruxGraphRecord,
 ): ObservabilityCaptureResult {
-  const policy = getHooks().observabilityCapture
+  const captured = applyObservabilityCaptureModesToRecord(record)
+  const privacy = applyObservabilityRedactionToRecord(captured.record)
+  return privacy.ok
+    ? {
+        ...privacy,
+        redactionSurfaces: canonicalizeObservabilityRedactionSurfaces([
+          ...captured.redactionSurfaces,
+          ...privacy.redactionSurfaces,
+        ]),
+      }
+    : privacy
+}
 
+/** Apply capture levels without invoking the user redaction hook. @internal */
+export function applyObservabilityCaptureModesToRecord(
+  record: CruxGraphRecord,
+): ObservabilityCaptureModesResult {
+  const policy = getHooks().observabilityCapture
+  const modes = resolveCaptureModes(policy)
+  const patterns = normalizeObservabilityRedactionPatterns(
+    policy?.redactPatterns,
+  )
+  const marker = consumeObservabilityRedactionMarker(record)
+  const prepared = prepareObservabilityRecordForCapture(marker.record, modes)
+  const patternRedacted = redactObservabilityRecordDetailed(prepared, patterns)
+  return {
+    record: applyCaptureLevelToRecord(patternRedacted.value, modes),
+    redactionSurfaces: canonicalizeObservabilityRedactionSurfaces([
+      ...marker.surfaces,
+      ...patternRedacted.surfaces,
+    ]),
+  }
+}
+
+/** Invoke the configured last-mile record redactor exactly once. @internal */
+export function applyObservabilityRedactionToRecord(
+  record: CruxGraphRecord,
+  modes = resolveCaptureModes(getHooks().observabilityCapture),
+): ObservabilityCaptureResult {
+  const policy = getHooks().observabilityCapture
   try {
-    const patterns = normalizeObservabilityRedactionPatterns(
-      policy?.redactPatterns,
-    )
-    const modes = resolveCaptureModes(policy)
-    const marker = consumeObservabilityRedactionMarker(record)
-    const prepared = prepareObservabilityRecordForCapture(marker.record, modes)
-    const patternRedacted = redactObservabilityRecordDetailed(
-      prepared,
-      patterns,
-    )
-    const policyRecord = applyCaptureLevelToRecord(
-      patternRedacted.value,
-      modes,
-    )
     const redactRecord = captureRedactRecord(modes) ?? policy?.redactRecord
-    const redacted = redactRecord ? redactRecord(policyRecord) : policyRecord
+    const redacted = redactRecord ? redactRecord(record) : record
     return redacted
       ? {
           ok: true,
           record: stripObservabilityRedactionMetadata(redacted),
-          redactionSurfaces: canonicalizeObservabilityRedactionSurfaces([
-            ...marker.surfaces,
-            ...patternRedacted.surfaces,
-          ]),
+          redactionSurfaces: [],
         }
       : { ok: false }
   } catch (error) {
@@ -149,7 +179,7 @@ export function applyObservabilityCapturePolicyToRecord(
 }
 
 /** Return a content-free artifact without rereading a potentially hostile input. */
-function failClosedArtifact(_artifact: ArtifactOptions): ArtifactOptions {
+function failClosedArtifact(): ArtifactOptions {
   return {
     kind: 'custom.redaction-failure',
     contentType: 'application/octet-stream',

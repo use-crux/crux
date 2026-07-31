@@ -19,7 +19,7 @@ import type {
 import type { AgentExecutor, AgentResult } from "./executor";
 import { createCompositionRuntime } from "./composition-runtime";
 import type { CompositionScope } from "./composition-runtime";
-import type { GenerateTextFn } from "../compaction/types";
+import type { GenerateTextFn } from "../generation/support-types";
 import { observe } from "../observability";
 import type { CruxSpanId, OperationResultMeta } from "../observability";
 import type { RetryOptions } from "../generation/retry";
@@ -27,6 +27,11 @@ import {
   sumUsageWhenComplete,
   type ResultStepFacts,
 } from "../adapter/result-accumulator";
+import type {
+  PrepareInvocation,
+  SwarmInvocationContext,
+} from "../request/prepare/invocation";
+import type { CompositionRequestReceiptTree } from "../request/receipt/tree";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -116,6 +121,8 @@ export interface SwarmOptions<
   sessionId?: string;
   /** Execution retry/fallback applied to each agent turn. */
   retry?: RetryOptions;
+  /** Prepare each managed Agent turn before child I/O. */
+  prepareInvocation?: PrepareInvocation<unknown, SwarmInvocationContext>;
   /**
    * Per-agent tool whitelist. Overrides `swarmTools` on the agent config.
    * Only listed tool names are passed to the executor. Transfer tools
@@ -200,6 +207,8 @@ export interface SwarmResult<
   agentCount?: number;
   /** Dry run: maximum possible handoffs. */
   maxPossibleHops?: number;
+  /** Linked provider-request evidence for managed Agent turns. */
+  requestReceipts: CompositionRequestReceiptTree;
 }
 
 /** Cost info passed to the `onCost` callback. */
@@ -431,6 +440,7 @@ export function createSwarm(executor: AgentExecutor) {
       onCost,
       dryRun,
       validationRetry,
+      prepareInvocation,
     } = options;
 
     // Validate
@@ -447,11 +457,12 @@ export function createSwarm(executor: AgentExecutor) {
       agentIds,
       sessionId,
       attributes: { startAgent, maxHandoffs },
+      prepareInvocation: prepareInvocation as PrepareInvocation | undefined,
     });
 
     // Dry run: return estimates without executing
     if (dryRun) {
-      return runtime.run(async () => ({
+      return runtime.run(async (scope) => ({
         output: null as SwarmOutput,
         finalAgentId: startAgent,
         handoffPath: [startAgent],
@@ -460,6 +471,7 @@ export function createSwarm(executor: AgentExecutor) {
         agentResults: [],
         agentCount: Object.keys(agents).length,
         maxPossibleHops: maxHandoffs,
+        requestReceipts: scope.requestReceipts(),
       }));
     }
 
@@ -536,6 +548,18 @@ export function createSwarm(executor: AgentExecutor) {
             validationRetry,
             attributes,
             stepId: `${runtime.compositionId}-${currentAgentId}-${agentIndex}`,
+            invocation: {
+              composition: { id, kind: "swarm" },
+              hop: {
+                index: agentIndex,
+                path: [...handoffPath],
+                ...(previousAgentId ? { fromAgent: previousAgentId } : {}),
+                ...(previousHandoffReason
+                  ? { reason: previousHandoffReason }
+                  : {}),
+              },
+              input: currentInput,
+            },
             ...(previousHandoffSpanId
               ? {
                   triggeredBy: {
@@ -603,6 +627,7 @@ export function createSwarm(executor: AgentExecutor) {
             handoffCount,
             durationMs,
             agentResults,
+            requestReceipts: scope.requestReceipts(),
           };
         }
 
@@ -756,6 +781,7 @@ export function createSwarm(executor: AgentExecutor) {
           handoffCount,
           durationMs,
           agentResults,
+          requestReceipts: scope.requestReceipts(),
         };
       }
     });

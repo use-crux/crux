@@ -92,6 +92,37 @@ func TestServiceRetentionSanitizesLegacyMediaBeforeCaps(t *testing.T) {
 	}
 }
 
+func TestEvidenceSourcePreviewBypassesGenericSanitizerAndCap(t *testing.T) {
+	service := newTestService(t)
+	service.retentionSettings.PreviewMaxBytes = 16
+	record := mustRecord(t, `{
+		"schemaVersion": 5,
+		"recordId": "rec_evidence_artifact",
+		"type": "artifact",
+		"operationId": "run_evidence",
+		"runId": "run_evidence",
+		"segmentId": "seg_evidence",
+		"segmentSeq": 1,
+		"artifactId": "artifact_evidence",
+		"kind": "score.report",
+		"createdAt": "2026-07-29T12:00:00Z",
+		"contentType": "application/json",
+		"encoding": "json",
+		"preview": {"policyUrl":"https://example.com/p"},
+		"attributes": {
+			"evidenceSource": {
+				"evidenceId": "evidence_1111111111111111",
+				"captureState": "available"
+			}
+		}
+	}`)
+
+	got := service.applyRetentionIngestPolicy(record)
+	if string(got.Payload) != string(record.Payload) {
+		t.Fatalf("evidence preview was rewritten:\n%s", got.Payload)
+	}
+}
+
 func insertRetentionRun(t *testing.T, service *Service, runID string, started time.Time) {
 	t.Helper()
 	insertRetentionRunWithStatus(t, service, runID, started, "ok")

@@ -25,9 +25,11 @@ import type {
 export function planRuntimeConfig(
   input: RuntimeConfigTransactionInput,
 ): RuntimeConfigPlan {
+  assertNoLegacyPersistence(input.config);
   const config = Object.freeze({ ...input.config });
   const inert = isIndexMode(input.env);
-  const records = config.persistence?.records;
+  const records = config.storage?.records;
+  const assets = config.storage?.assets;
   const observability = config.observability;
   const hasIdentity =
     observability !== undefined && Object.hasOwn(observability, "identity");
@@ -42,6 +44,7 @@ export function planRuntimeConfig(
 
   const hooksPatch: Partial<CruxHooks> = {
     ...(records ? { records } : {}),
+    ...(assets ? { assets } : {}),
     ...(config.runtime ? { runtimeEngine: config.runtime } : {}),
     ...(config.host ? { hostBinding: config.host } : {}),
     ...(config.generation?.middleware
@@ -81,6 +84,14 @@ export function planRuntimeConfig(
     plugins,
     tokenizer: config.generation?.tokenizer,
   };
+}
+
+function assertNoLegacyPersistence(config: Readonly<CruxConfig>): void {
+  if (Object.hasOwn(config, "persistence")) {
+    throw new Error(
+      "config.persistence has moved to config.storage. Use config({ storage: { records } }).",
+    );
+  }
 }
 
 function isIndexMode(env: RuntimeConfigEnvironment | undefined): boolean {

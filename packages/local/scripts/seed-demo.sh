@@ -6,7 +6,7 @@ readonly DEFAULT_PORT=4466
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="${PWD}"
 readonly FIXTURE_DIR="${SCRIPT_DIR}/../fixtures/demo-project"
-readonly BATCH_PATH="${FIXTURE_DIR}/observability-batch.v4.json"
+readonly BATCH_PATH="${FIXTURE_DIR}/observability-batch.v5.json"
 readonly EVAL_FIXTURE_PATH="${FIXTURE_DIR}/eval-artifacts/eval-run-demo-support-v4.json"
 
 port="${DEFAULT_PORT}"

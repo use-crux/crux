@@ -1,4 +1,6 @@
 export * from './contract'
+export * from './taxonomy'
+export * from './evidence-edge-schema'
 export type {
   OperationResultMeta,
   OperationRunRef,
@@ -8,7 +10,42 @@ export * from './definition-ref'
 export * from './presentation'
 export * from './ids'
 export * from './errors'
-export * from './observe'
+export {
+  __setAlsForTesting,
+  configureObservability,
+  currentObservabilityFeedbackDestination,
+  currentObservabilityRedactPaths,
+  currentObservabilityTransport,
+  hasObservabilitySubscribers,
+  observabilityDeliveryErrors,
+  observabilityDiagnostics,
+  observabilityTelemetryFlushFailures,
+  observe,
+  propagateAttributes,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+  subscribeObservability,
+  type CapturedObservabilityContext,
+  type ConfigureObservabilityOptions,
+  type CruxObservabilitySubscriber,
+  type DeliveryDiagnostic,
+  type EndObservedRunOptions,
+  type EndObservedSpanOptions,
+  type ObservabilityDeliveryOptions,
+  type ObservabilityDiagnostics,
+  type ObservabilityFlushOptions,
+  type ObservabilityFlushResult,
+  type ObserveArtifactOptions,
+  type ObserveChildRunOptions,
+  type ObserveEdgeOptions,
+  type ObserveEventOptions,
+  type ObserveRunOptions,
+  type ObserveSpanOptions,
+  type OpenObservedRun,
+  type OpenObservedSpan,
+  type ResumeObservedRunOptions,
+  type SuspendObservedRunOptions,
+} from './observe'
 export * from './correlators'
 export * from './continuation'
 export * from './capture-policy'

@@ -61,9 +61,9 @@ SDK calls. New Crux Prompt definitions normally use `system`, `prompt`, or
 
 ## Supply Framework-Neutral Generation
 
-Core utilities such as `judge`, `extractKeyFacts`, and `summarizeMessages`
-accept `GenerateObjectFn` or `GenerateTextFn` instead of depending on one SDK.
-Each adapter provides compatible wrappers.
+Core utilities such as `judge` and retrieval recipes accept `GenerateObjectFn`
+or `GenerateTextFn` instead of depending on one SDK. Each adapter provides
+compatible wrappers.
 
 <Tabs items={['Vercel AI SDK', 'OpenAI SDK', 'Google GenAI', 'Anthropic SDK']}>
 <Tab value="Vercel AI SDK">
@@ -80,11 +80,6 @@ const evaluator = judge({
   model,
 });
 
-const result = await summarizeMessages({
-  generate: generateTextFn,
-  model,
-  messages,
-});
 ```
 
 </Tab>
@@ -142,20 +137,6 @@ await generateObject({
 The Vercel AI SDK adapter exports pre-bound functions because the model is
 passed per call. OpenAI, Google, and Anthropic object factories bind the
 client; their text factories bind both client and model.
-
-## Bridge a Full Adapter
-
-When a Core API needs `GenerateObjectFn` but the operation should retain the
-full adapter runtime, bridge an existing adapter `generate()` function:
-
-```ts
-import { createGenerateObjectFnFromGenerate } from "@use-crux/core/compaction";
-import { generate } from "@use-crux/ai";
-
-const generateObject = createGenerateObjectFnFromGenerate(generate, {
-  promptId: "quality.judge",
-});
-```
 
 Managed generation results are finalized before `hooks.onGenerate` runs. The
 hook and caller see the same `generation.call` trace and span identity;

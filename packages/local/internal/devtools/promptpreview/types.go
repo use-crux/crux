@@ -72,7 +72,8 @@ type BrowserResponse struct {
 	Status            string                    `json:"status"`
 	Peer              *BrowserPeer              `json:"peer,omitempty"`
 	CatalogueRevision uint64                    `json:"catalogueRevision,omitempty"`
-	Inspection        json.RawMessage           `json:"inspection,omitempty"`
+	Preview           json.RawMessage           `json:"preview,omitempty"`
+	Contributions     json.RawMessage           `json:"contributions,omitempty"`
 	Issues            []preview.ValidationIssue `json:"issues,omitempty"`
 	OmittedIssueCount int                       `json:"omittedIssueCount,omitempty"`
 	Code              string                    `json:"code,omitempty"`
@@ -87,11 +88,13 @@ func (response BrowserResponse) MarshalJSON() ([]byte, error) {
 			Status            string          `json:"status"`
 			Peer              *BrowserPeer    `json:"peer"`
 			CatalogueRevision uint64          `json:"catalogueRevision"`
-			Inspection        json.RawMessage `json:"inspection"`
+			Preview           json.RawMessage `json:"preview"`
+			Contributions     json.RawMessage `json:"contributions"`
 		}{
 			Status: response.Status, Peer: response.Peer,
 			CatalogueRevision: response.CatalogueRevision,
-			Inspection:        response.Inspection,
+			Preview:           response.Preview,
+			Contributions:     response.Contributions,
 		})
 	case "validation-error":
 		issues := response.Issues

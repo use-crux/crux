@@ -14,7 +14,7 @@ import (
 )
 
 func TestDemoFixtureProducesCollapsibleDuplicateToolGroupThroughIngest(t *testing.T) {
-	body, err := os.ReadFile(filepath.Join("..", "..", "..", "fixtures", "demo-project", "observability-batch.v4.json"))
+	body, err := os.ReadFile(filepath.Join("..", "..", "..", "fixtures", "demo-project", "observability-batch.v5.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

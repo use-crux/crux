@@ -13,6 +13,10 @@ const staticIndexExtractorIds = new Set([
   }),
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'evidence.record',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'rag.indexer',
   }),
   extractorKey({
@@ -94,6 +98,10 @@ const staticIndexExtractorIds = new Set([
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'runtime.task',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'thread',
   }),
 ])
 

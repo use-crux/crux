@@ -355,11 +355,116 @@ func stringMapField(fields map[string]any, key string) string {
 }
 
 func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *ingestStatements, record Record) (err error) {
+	if artifact, marked, err := parseApprovalArtifact(record); err != nil {
+		return fmt.Errorf("decode approval artifact: %w", err)
+	} else if marked {
+		return s.ingestApprovalArtifact(ctx, statements, record, artifact)
+	}
+	if artifact, marker, marked, err := parseEvidenceSourceArtifact(record); err != nil {
+		return fmt.Errorf("decode evidence source artifact: %w", err)
+	} else if marked {
+		if err := validateEvidenceOperationAdmission(
+			ctx,
+			statements,
+			record,
+		); err != nil {
+			return err
+		}
+		if err := validateEvidencePrivacyAdmission(
+			ctx,
+			statements,
+			record,
+		); err != nil {
+			return err
+		}
+		return s.stageEvidenceSourceArtifact(
+			ctx,
+			statements,
+			record,
+			artifact,
+			marker,
+		)
+	}
+
+	var acceptedEvidenceEdge *EdgeRecord
+	if record.Type == RecordEdge {
+		var edge EdgeRecord
+		if err := json.Unmarshal(record.Payload, &edge); err != nil {
+			return fmt.Errorf("decode edge record: %w", err)
+		}
+		if edge.EdgeType == "evidence.for" {
+			if err := validateEvidenceRecordAdmission(
+				ctx,
+				statements,
+				record,
+			); err != nil {
+				return err
+			}
+			if edge.From.Kind == "artifact" {
+				var attributes evidenceEdgeAttributes
+				if err := json.Unmarshal(
+					edge.Attributes,
+					&attributes,
+				); err != nil {
+					return err
+				}
+				if attributes.Role == "authority" {
+					retainedOut, err := retainedOutApprovalArtifact(
+						ctx,
+						statements,
+						edge.From.ID,
+					)
+					if err != nil {
+						return err
+					}
+					if retainedOut {
+						return nil
+					}
+				}
+			}
+			inserted, err := s.reserveEvidenceRelationship(
+				ctx,
+				statements,
+				record,
+				edge,
+			)
+			if err != nil {
+				return err
+			}
+			if !inserted {
+				return nil
+			}
+			acceptedEvidenceEdge = &edge
+		}
+	}
+	if record.Type == RecordSpanEvent {
+		if _, qualified, err := evidencePrivateIdentitiesForRecord(record); err != nil {
+			return err
+		} else if qualified {
+			if err := validateEvidenceOperationAdmission(
+				ctx,
+				statements,
+				record,
+			); err != nil {
+				return err
+			}
+			if err := validateEvidencePrivacyAdmission(
+				ctx,
+				statements,
+				record,
+			); err != nil {
+				return err
+			}
+		}
+	}
 	storedInserted, err := upsertStoredRecord(ctx, statements, record)
 	if err != nil {
 		return err
 	}
 	if !storedInserted {
+		if acceptedEvidenceEdge != nil {
+			return insertEvidenceEdge(ctx, statements, *acceptedEvidenceEdge)
+		}
 		return nil
 	}
 	if err := upsertRunDeployment(ctx, statements, record.RunID, record.Deployment); err != nil {
@@ -452,6 +557,13 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 		if err := upsertSpanEvent(ctx, statements, event); err != nil {
 			return err
 		}
+		if err := s.projectEvidenceCoverageEvent(
+			ctx,
+			statements,
+			event,
+		); err != nil {
+			return err
+		}
 		return updateRunRollups(ctx, statements, rollupDeltaForSpanEvent(event, storedInserted, storedInserted, rollupUsage))
 	case RecordArtifact:
 		var artifact ArtifactRecord
@@ -467,7 +579,11 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 		if err := json.Unmarshal(record.Payload, &edge); err != nil {
 			return fmt.Errorf("decode edge record: %w", err)
 		}
-		if err := upsertEdge(ctx, statements, edge); err != nil {
+		if edge.EdgeType == "evidence.for" {
+			if err := insertEvidenceEdge(ctx, statements, edge); err != nil {
+				return err
+			}
+		} else if err := upsertEdge(ctx, statements, edge); err != nil {
 			return err
 		}
 		return updateRunRollups(ctx, statements, rollupDeltaForEdge(edge, storedInserted, storedInserted))
@@ -817,4 +933,31 @@ func upsertEdge(ctx context.Context, statements *ingestStatements, edge EdgeReco
 			attributes_json = excluded.attributes_json
 	`, edge.EdgeID, edge.RunID, nullIfEmpty(edge.TraceID), edge.EdgeType, edge.From.Kind, edge.From.ID, edge.To.Kind, edge.To.ID, edge.CreatedAt, nullJSON(edge.Attributes))
 	return err
+}
+
+func insertEvidenceEdge(
+	ctx context.Context,
+	statements *ingestStatements,
+	edge EdgeRecord,
+) error {
+	result, err := statements.exec(ctx, `
+		INSERT INTO edges (
+			edge_id, run_id, trace_id, edge_type, from_kind, from_id,
+			to_kind, to_id, created_at, attributes_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(edge_id) DO NOTHING
+	`, edge.EdgeID, edge.RunID, nullIfEmpty(edge.TraceID), edge.EdgeType,
+		edge.From.Kind, edge.From.ID, edge.To.Kind, edge.To.ID, edge.CreatedAt,
+		nullJSON(edge.Attributes))
+	if err != nil {
+		return err
+	}
+	inserted, err := rowsAffected(result)
+	if err != nil {
+		return err
+	}
+	if !inserted {
+		return evidenceConflict()
+	}
+	return nil
 }

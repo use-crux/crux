@@ -1,7 +1,7 @@
 import type { z } from 'zod'
-import type { ContextEntry, Prompt } from '@use-crux/core'
+import type { ContextEntry, InspectResult, Prompt, ResolvedPrompt } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
-import { getHooks } from '@use-crux/core'
+import { compilePrompt, getHooks } from '@use-crux/core'
 import { captureSource } from '@use-crux/core/project-index'
 import type { AgentResolveOptions, AgentResolveResult } from './types'
 
@@ -33,17 +33,20 @@ export async function resolveAgentInstructions<
   opts: AgentResolveOptions<TOwnInput, TContexts>,
 ): Promise<AgentResolveResult> {
   const optsRecord = opts as AgentResolveOptions<TOwnInput, TContexts> & {
-    input?: Record<string, unknown>
-    tokenBudget?: number
-    tools?: readonly string[]
-  }
-  const input = optsRecord.input ?? {}
-  const resolveOpts = { input, tokenBudget: optsRecord.tokenBudget }
+    input?: Record<string, unknown>;
+    tools?: readonly string[];
+  };
+  const input = optsRecord.input ?? {};
+  const resolveOpts = { input };
 
   const source = captureSource()
   type PromptResolveOpts = Parameters<typeof prompt.resolve>[0]
   const resolved = await prompt.resolve(resolveOpts as unknown as PromptResolveOpts)
-  const inspect = await prompt.inspect(resolveOpts as unknown as PromptResolveOpts)
+  const inspect = prompt.config
+    ? await compilePrompt(prompt.config).inspect(
+        resolveOpts as unknown as PromptResolveOpts,
+      )
+    : inspectResolvedPrompt(resolved)
 
   if (optsRecord.tools && optsRecord.tools.length > 0) {
     const existing = inspect.tools ?? []
@@ -63,5 +66,24 @@ export async function resolveAgentInstructions<
     inspect,
     resolveTraceId: readTraceId(hookResult),
     skillSession: readSkillSession(resolved),
+  }
+}
+
+function inspectResolvedPrompt(resolved: ResolvedPrompt): InspectResult {
+  const system = resolved.system ?? ''
+  const prompt = resolved.prompt
+  return {
+    system: {
+      total: system,
+      parts: [],
+      totalTokens: 0,
+    },
+    prompt: prompt === undefined
+      ? undefined
+      : { text: prompt, tokens: 0 },
+    totalTokens: 0,
+    droppedContexts: [],
+    excludedContexts: [],
+    tools: resolved.tools ? Object.keys(resolved.tools) : undefined,
   }
 }

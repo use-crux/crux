@@ -15,6 +15,11 @@ import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../pr
 import { isContributorEntry } from '../prompt/contributor'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
 import { isToolSource } from '../tools/tool-source'
+import {
+  compileRepresentationLadder,
+  isForcedOffload,
+  isRepresentationLadder,
+} from '../request/representation/ladder'
 import type { SchemaContribution } from './contract'
 
 const SCHEMA_CONTRIBUTION_SOURCE: unique symbol = Symbol('crux.schemaContributionSource')
@@ -88,12 +93,34 @@ export function collectSchemaContributions(
       continue
     }
 
+    if (isForcedOffload(entry)) {
+      out.push({ id: undefined, schema: undefined, optional: optionalPath })
+      continue
+    }
+
+    if (isRepresentationLadder(entry)) {
+      out.push(
+        ...collectSchemaContributions(
+          compileRepresentationLadder(entry).primarySources,
+          optionalPath,
+        ),
+      )
+      continue
+    }
+
     if (isToolSource(entry)) {
       out.push({ id: undefined, schema: undefined, optional: optionalPath })
       continue
     }
 
-    if (entry._tag === 'Skill' || entry._tag === 'Memory' || entry._tag === 'Blackboard') {
+    if (
+      entry._tag === 'Skill' ||
+      entry._tag === 'Memory' ||
+      entry._tag === 'Thread' ||
+      entry._tag === 'Blackboard' ||
+      entry._tag === 'HistoryRecent' ||
+      entry._tag === 'HistoryManaged'
+    ) {
       out.push({ id: undefined, schema: undefined, optional: optionalPath })
       continue
     }

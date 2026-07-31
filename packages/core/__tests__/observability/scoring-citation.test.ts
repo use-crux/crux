@@ -63,6 +63,12 @@ describe("scoring and citation observability", () => {
         }),
       }),
     );
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "edge" && record.edgeType === "evidence.for",
+      ),
+    ).toBe(false);
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: "artifact",
@@ -177,5 +183,11 @@ describe("scoring and citation observability", () => {
         }),
       }),
     );
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "edge" && record.edgeType === "evidence.for",
+      ),
+    ).toBe(false);
   });
 });

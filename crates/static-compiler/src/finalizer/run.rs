@@ -108,12 +108,19 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
     for value in native_facts.iter().chain(extension_facts.iter()) {
         merge_fact_value(&mut facts, value);
     }
+    let definition_occurrences = facts.definitions.clone();
     facts.definitions = merge_definitions_by_id(facts.definitions);
     append_missing_builtin_rule_descriptors(&mut facts);
     facts.canonicalize();
     let relation_model = resolve_static_index_relation_model(facts, policies);
     let mut facts = with_static_index_source_model(relation_model.facts);
-    apply_static_index_lint_model(&mut facts, lint_facts, policies, lint_options);
+    apply_static_index_lint_model(
+        &mut facts,
+        lint_facts,
+        policies,
+        lint_options,
+        &definition_occurrences,
+    );
     facts.canonicalize();
     let model = StaticIndexRelationModel {
         facts,

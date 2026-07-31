@@ -191,7 +191,7 @@ export function compressToBudget(
             'Extract only query-relevant verbatim excerpts from retrieved chunks. Preserve sourceId and chunkId.',
           prompt: JSON.stringify({
             query: context.originalQuery,
-            tokenBudget: config.tokens,
+            targetTokens: config.tokens,
             maxCharsPerHit,
             hits: input.hits.map((hit) => ({
               sourceId: hit.source.id,

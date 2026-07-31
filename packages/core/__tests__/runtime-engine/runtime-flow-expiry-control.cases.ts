@@ -116,7 +116,7 @@ describe('name-bound Runtime flow expiry', () => {
       autoStartMaintenance: false,
     })
     const records = inMemoryRecordStore()
-    const crux = config({ runtime, persistence: { records } })
+    const crux = config({ runtime, storage: { records } })
     const review = flow('runtime dual-store expiry', async (scope) => {
       await scope.suspend('approval', { timeout: '0ms' })
       return 'published'

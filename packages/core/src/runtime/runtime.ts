@@ -27,6 +27,7 @@ import type { CapturedObservabilityContext } from "../observability/context";
 import type { CruxPropagationCarrier } from "../observability/continuation";
 import type { ProjectIndexRuntimeTransport } from "../project-index/runtime";
 import type { RecordStore } from "../storage";
+import type { AssetStore } from "../asset";
 import type { RuntimeEngineDefinition } from "./api/runtime-definition";
 import type { CruxHostBinding } from "../scope/types";
 import { getCruxProcessRegistry } from "./process-registry";
@@ -131,6 +132,8 @@ export interface CruxHooks {
   telemetryResumeAttributesHook?: TelemetryResumeAttributesHook;
   /** Global record store for flow state persistence (suspend/resume). */
   records?: RecordStore;
+  /** Asset backing available to exact-recovery references. */
+  assets?: AssetStore;
   /** Durable Runtime Engine composer configured for runtime-bound APIs. */
   runtimeEngine?: RuntimeEngineDefinition;
   /** Explicit host binding configured for invocation retention. */
@@ -277,7 +280,7 @@ export function resetHooks(): void {
  * Resolve the global record store from the runtime, or throw if none is configured.
  *
  * Used internally by plans, tasks, flows, and other primitives that need
- * record persistence. Configure it with `config({ persistence: { records } })`.
+ * record persistence. Configure it with `config({ storage: { records } })`.
  *
  * @throws {Error} If no store has been configured.
  *
@@ -291,7 +294,7 @@ export function resolveRecords(): RecordStore {
   const records = runtimeRegistry.currentHooks.records;
   if (!records) {
     throw new Error(
-      "No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.",
+      "No RecordStore configured. Call config({ storage: { records } }) before using plans, tasks, or flows.",
     );
   }
   return records;

@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 55 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want bundled runtime-rich Eval facts epoch 55", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 60 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined main and runtime-rich Eval epoch 60", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -45,11 +45,21 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"PromptText refactor source-ref metadata",
 		"compiler-owned source classification",
 		"Epoch 55",
+		"authored evidence.record definitions",
+		"Epoch 56",
+		"authored Thread definitions",
+		"context-planning structure",
+		"Epoch 57",
+		"first-class Thread lint findings",
+		"Epoch 58",
+		"sources deleted while offline",
+		"Epoch 59",
+		"independently advanced Thread and context-planning",
+		"Epoch 60",
+		"main's Epoch 59 lineage",
+		"feature branch's colliding Epoch 55 lineage",
 		"runtime-rich Eval execution and timeout facts",
 		"bundled-worker/package-copy boundary",
-		"Epoch 50",
-		"PromptText refactor source-ref metadata",
-		"compiler-owned source classification",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -60,15 +70,35 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-55", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-60", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
 	}
 }
 
-func TestProjectIndexFactStoreMissesPreBundledRuntimeEvalFactsEpoch(t *testing.T) {
-	assertSnapshotEpochMiss(t, 54, "pre-bundled-runtime-Eval-facts snapshot")
+func TestProjectIndexFactStoreMissesPreExecutionEvidenceSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 54, "pre-execution-evidence snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreThreadLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 56, "pre-Thread-lint snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreStaleDeletionSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 57, "pre-stale-deletion snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 55, "pre-context-planning snapshot")
+}
+
+func TestProjectIndexFactStoreMissesFeatureBranchEvalEpoch55(t *testing.T) {
+	assertSnapshotEpochMiss(t, 55, "feature-branch runtime-rich Eval snapshot")
+}
+
+func TestProjectIndexFactStoreMissesMainEpoch59(t *testing.T) {
+	assertSnapshotEpochMiss(t, 59, "main snapshot before combined Eval facts")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {

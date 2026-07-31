@@ -8,10 +8,20 @@ import (
 )
 
 const coreObservabilityFixturesDir = "../../../core/src/observability/fixtures"
+const coreEvidenceFixturesDir = "../../../core/src/evidence/fixtures"
 
 func readCoreObservabilityFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(coreObservabilityFixturesDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func readCoreEvidenceFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(coreEvidenceFixturesDir, name))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,3 +1,4 @@
+import type { CruxEvidenceId } from '../../evidence/record-types'
 import type { CruxGraphRecord, CruxRecordId } from '../contract'
 import { createCruxSegmentId } from '../ids'
 import type { CruxObservabilityTransport } from '../transport'
@@ -11,6 +12,8 @@ export interface DeliveryDiagnostic {
   readonly code: string
   readonly message?: string
   readonly recordIds?: readonly CruxRecordId[]
+  /** Bounded relationship correlation; never a subject, payload, or digest. */
+  readonly evidenceIds?: readonly CruxEvidenceId[]
 }
 
 export interface DeliveryEngineDiagnostics extends CruxDeliverySourceHealth {
@@ -169,11 +172,15 @@ export function recordDeliveryError(
   code: string,
   message?: string,
   records: readonly CruxGraphRecord[] = [],
+  evidenceIds: readonly CruxEvidenceId[] = [],
 ): void {
   const diagnostic: DeliveryDiagnostic = {
     code,
     ...(message ? { message } : {}),
     ...(records.length > 0 ? { recordIds: records.slice(0, 16).map((record) => record.recordId) } : {}),
+    ...(evidenceIds.length > 0
+      ? { evidenceIds: [...new Set(evidenceIds)].slice(0, 16) }
+      : {}),
   }
   state.lastError = diagnostic
   state.deliveryErrorCount += 1
@@ -250,6 +257,9 @@ export function sourceHealthSnapshot(state: DeliveryState): CruxDeliverySourceHe
           lastError: {
             code: state.lastError.code,
             ...(state.lastError.message ? { message: state.lastError.message } : {}),
+            ...(state.lastError.evidenceIds
+              ? { evidenceIds: state.lastError.evidenceIds }
+              : {}),
           },
         }
       : {}),

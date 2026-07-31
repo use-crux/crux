@@ -162,6 +162,48 @@ fn finalization_adds_source_ref_cross_file_dependencies() {
 }
 
 #[test]
+fn definition_occurrence_refs_do_not_create_source_dependencies() {
+    let output = finalize_static_index_values(
+        &[json!({
+            "definitions": [{
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "fidelity": "resolved",
+                "status": "active",
+                "source": { "file": "/repo/src/thread.ts", "line": 1 },
+                "sourceRefs": [
+                    {
+                        "id": "source-ref:thread-definition:thread:conversation:duplicate",
+                        "role": "definition",
+                        "symbol": "duplicateConversation",
+                        "source": { "file": "/repo/src/duplicate.ts", "line": 1 },
+                        "fidelity": "resolved"
+                    },
+                    {
+                        "id": "extension:thread:definition:helper",
+                        "role": "definition",
+                        "symbol": "threadFactory",
+                        "source": { "file": "/repo/src/helper.ts", "line": 1 },
+                        "fidelity": "resolved"
+                    }
+                ]
+            }]
+        })],
+        &[],
+    );
+
+    let source = output
+        .model
+        .facts
+        .sources
+        .iter()
+        .find(|source| source.file == "/repo/src/thread.ts")
+        .expect("Thread source row should exist");
+    assert_eq!(source.dependencies, vec!["/repo/src/helper.ts"]);
+}
+
+#[test]
 fn source_graph_event_uses_worker_fact_id_convention() {
     let output = finalize_static_index_values(
         &[json!({

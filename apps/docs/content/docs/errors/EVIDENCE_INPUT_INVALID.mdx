@@ -1,0 +1,21 @@
+---
+title: EVIDENCE_INPUT_INVALID
+description: Evidence input or a destination response failed strict validation.
+---
+
+## What failed
+
+An evidence record, coverage fact, inspection option, or destination result did
+not satisfy the closed evidence contract.
+
+## Retryability
+
+Not retryable. Retrying the same value cannot make it valid.
+
+Diagnostics are bounded and do not echo payloads, subjects, or idempotency keys.
+
+## Fix
+
+Use a documented role, kind, conclusion, subject, and inspect limit. If the
+failure came from a destination, update it to return the complete canonical
+five-role response.

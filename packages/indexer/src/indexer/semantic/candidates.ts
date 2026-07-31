@@ -76,6 +76,7 @@ export type SemanticDefinitionKind = Extract<
   | "tool"
   | "mcp.server"
   | "agent"
+  | "thread"
   | "flow"
   | "composition.parallel"
   | "composition.pipeline"

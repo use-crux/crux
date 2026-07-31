@@ -1,0 +1,76 @@
+{
+  "records": [
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_evidence_span",
+      "type": "span:start",
+      "operationId": "run_evidence_fixture",
+      "runId": "run_evidence_fixture",
+      "segmentId": "seg_evidence_fixture",
+      "segmentSeq": 1,
+      "spanId": "1111111111111111",
+      "family": "evidence",
+      "primitive": "evidence.record",
+      "name": "record evidence",
+      "startedAt": "2026-07-28T12:00:00.000Z",
+      "status": "running"
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_evidence_edge",
+      "type": "edge",
+      "operationId": "run_evidence_fixture",
+      "runId": "run_evidence_fixture",
+      "segmentId": "seg_evidence_fixture",
+      "segmentSeq": 2,
+      "edgeId": "edge_2222222222222222",
+      "edgeType": "evidence.for",
+      "from": {
+        "kind": "artifact",
+        "id": "artifact_3333333333333333"
+      },
+      "to": {
+        "kind": "span",
+        "id": "1111111111111111"
+      },
+      "createdAt": "2026-07-28T12:00:00.001Z",
+      "attributes": {
+        "evidenceId": "evidence_4444444444444444",
+        "role": "verification",
+        "evidenceKind": "score.report",
+        "conclusion": "passed",
+        "recordedAt": "2026-07-28T12:00:00.001Z",
+        "producer": {
+          "kind": "span",
+          "id": "1111111111111111"
+        },
+        "captureState": "reference",
+        "idempotencyKeyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceMode": "reference",
+        "contentDigestVersion": 1,
+        "contentDigest": "sha256:227022c50c083e0f2707edf8150d233e10779fd3338e502c27d981b8ce4455b1"
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_evidence_coverage",
+      "type": "span:event",
+      "operationId": "run_evidence_fixture",
+      "runId": "run_evidence_fixture",
+      "segmentId": "seg_evidence_fixture",
+      "segmentSeq": 3,
+      "spanId": "1111111111111111",
+      "eventId": "event_evidence_coverage",
+      "name": "evidence.coverage",
+      "timestamp": "2026-07-28T12:00:00.002Z",
+      "attributes": {
+        "subject": {
+          "kind": "span",
+          "id": "1111111111111111"
+        },
+        "role": "recovery",
+        "status": "not-applicable"
+      }
+    }
+  ]
+}

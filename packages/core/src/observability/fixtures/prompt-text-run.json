@@ -1,7 +1,7 @@
 {
   "records": [
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_prompt_text_1",
       "type": "run:start",
       "runId": "run_prompt_text",
@@ -15,7 +15,7 @@
       "status": "running"
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_prompt_text_2",
       "type": "span",
       "runId": "run_prompt_text",
@@ -35,7 +35,7 @@
       "promptId": "writer"
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_prompt_text_3",
       "type": "artifact",
       "runId": "run_prompt_text",
@@ -89,7 +89,7 @@
       }
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_prompt_text_4",
       "type": "edge",
       "runId": "run_prompt_text",
@@ -110,7 +110,7 @@
       "createdAt": "2026-07-29T20:00:00.021Z"
     },
     {
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "recordId": "rec_prompt_text_5",
       "type": "run:end",
       "runId": "run_prompt_text",

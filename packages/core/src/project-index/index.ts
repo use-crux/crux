@@ -15,6 +15,7 @@ import type {
   RagIndexerFacts,
 } from "./embedding-facts";
 import type { EvalFacts } from "./eval-facts";
+import type { EvidenceRecordFacts } from "./evidence-record-facts";
 import {
   PromptTextDiagnosticEvidenceSchema,
   type PromptTextDiagnosticEvidence,
@@ -46,12 +47,14 @@ export type {
   RagIndexerFacts,
 } from "./embedding-facts";
 export * from "./eval-facts";
+export * from "./evidence-record-facts";
 export * from "./definition-kind-coverage";
 export * from "./diagnostic-evidence";
 export * from "./lint-schemas";
 export * from "./lint-types";
 export * from "./manifest";
 export * from "./project-model";
+export * from "./primitive-evidence-coverage";
 export * from "./rule-manifest";
 export * from "./source";
 
@@ -481,6 +484,7 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
 export type ProjectDefinitionKind =
   | "embedding"
   | "embedding.call"
+  | "evidence.record"
   | "prompt"
   | "context"
   | "injectable"
@@ -490,6 +494,7 @@ export type ProjectDefinitionKind =
   | "flow"
   | "flow.step"
   | "task"
+  | "thread"
   | "deferred-work"
   | "composition.parallel"
   | "composition.parallel.branch"
@@ -650,7 +655,13 @@ export interface InjectionMetadataContributionFacts {
 
 export interface InjectionUseFacts {
   variable?: string;
-  relationHint?: "context" | "injectable" | "memory" | "blackboard" | "unknown";
+  relationHint?:
+    | "context"
+    | "injectable"
+    | "memory"
+    | "blackboard"
+    | "thread"
+    | "unknown";
   targetDefinitionId?: string;
   targetKind?: ProjectDefinitionKind;
   targetName?: string;
@@ -1011,6 +1022,7 @@ export interface ScorerFacts {
 export type PrimitiveSpecificFacts =
   | EmbeddingFacts
   | EmbeddingCallFacts
+  | EvidenceRecordFacts
   | RagIndexerFacts
   | PromptFacts
   | ContextFacts
@@ -1263,6 +1275,7 @@ export const ProjectIdentitySchema = z.object({
 export const ProjectDefinitionKindSchema = z.enum([
   "embedding",
   "embedding.call",
+  "evidence.record",
   "prompt",
   "context",
   "injectable",
@@ -1272,6 +1285,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "flow",
   "flow.step",
   "task",
+  "thread",
   "deferred-work",
   "composition.parallel",
   "composition.parallel.branch",

@@ -1,0 +1,21 @@
+---
+title: EVIDENCE_PRIVACY_DELETED
+description: Evidence delivery references explicitly deleted private state.
+---
+
+## What failed
+
+A relationship, marked source artifact, coverage fact, or approval occurrence
+matches a private Local resurrection guard.
+
+## Retryability
+
+Not retryable. Privacy tombstones persist until project deletion.
+
+The fixed diagnostic includes no identity, timestamp, subject kind, payload, or
+deletion details.
+
+## Fix
+
+Do not replay the deleted occurrence. Start a genuinely new project-local
+occurrence with new canonical identities when appropriate.

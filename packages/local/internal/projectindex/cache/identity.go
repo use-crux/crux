@@ -17,9 +17,17 @@ package cache
 // Epoch 52 adds semantic PromptText fragment-join evidence.
 // Epoch 53 adds PromptText diagnostic evidence.
 // Epoch 54 adds PromptText refactor source-ref metadata and compiler-owned
-// source classification across restart boundaries.
-// Epoch 55 restores runtime-rich Eval execution and timeout facts across the
-// bundled-worker/package-copy boundary.
+// source classification across restart boundaries. Epoch 55 adds authored
+// evidence.record definitions, safe facts, refs, relations, and lints.
+// Epoch 56 adds authored Thread definitions, bindings, runtime joins,
+// context-planning structure, hook/budget refs, and conclusive lints.
+// Epoch 57 adds first-class Thread lint findings and descriptors.
+// Epoch 58 prevents snapshots from retaining sources deleted while offline.
+// Epoch 59 combines the independently advanced Thread and context-planning
+// snapshot contracts.
+// Epoch 60 combines main's Epoch 59 lineage with the feature branch's colliding
+// Epoch 55 lineage, which restores runtime-rich Eval execution and timeout facts
+// across the bundled-worker/package-copy boundary.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 55
+const ProjectIndexSnapshotCacheEpoch = 60

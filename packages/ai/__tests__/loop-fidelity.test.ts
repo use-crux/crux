@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
-import { maxSteps, prompt as makePrompt } from "@use-crux/core";
+import { maxSteps, prompt as makePrompt, tool } from "@use-crux/core";
 import { createCruxAi } from "../src";
 import {
   emissionModel as mockModel,
@@ -31,6 +31,87 @@ const objectPrompt = makePrompt({
 });
 
 describe("loop fidelity — real generateText", () => {
+  it("installs a Tool returned by prepareStep before the first SDK call", async () => {
+    const execute = vi.fn(async () => "found it");
+    const lookup = tool({
+      description: "lookup",
+      input: z.object({ q: z.number() }),
+      execute,
+    });
+    const ai = createCruxAi();
+    const model = mockModel([
+      { toolCalls: [{ name: "lookup", args: { q: 1 } }] },
+      { text: "answer after preparation" },
+    ]);
+    const snapshots: unknown[] = [];
+    const prepareStep = vi.fn(
+      (context: {
+        index: number;
+        stats: { run: unknown };
+      }) => {
+        snapshots.push(context.stats.run);
+        return context.index === 0
+          ? { tools: { lookup }, activeTools: ["lookup"] }
+          : undefined;
+      },
+    );
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: "go" },
+      maxSteps: 2,
+      prepareStep,
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(prepareStep).toHaveBeenCalledTimes(2);
+    expect(snapshots[1]).toMatchObject({
+      usage: {
+        inputTokens: 5,
+        outputTokens: 7,
+        totalTokens: 12,
+        coverage: { tokens: "complete", cost: "none" },
+      },
+      modelCalls: { started: 1, succeeded: 1 },
+    });
+    expect(result.text).toBe("answer after preparation");
+  });
+
+  it("installs a later Tool definition before the next SDK call", async () => {
+    const execute = vi.fn(async () => "seed result");
+    const executeLater = vi.fn(async () => "later result");
+    const later = tool({
+      description: "later",
+      input: z.object({}),
+      execute: executeLater,
+    });
+    const ai = createCruxAi();
+    const model = mockModel([
+      { toolCalls: [{ name: "seed", args: { q: 1 } }] },
+      { toolCalls: [{ name: "later", args: {} }] },
+      { text: "done" },
+    ]);
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: "go" },
+      maxSteps: 3,
+      tools: {
+        seed: {
+          description: "seed",
+          inputSchema: z.object({ q: z.number() }),
+          execute,
+        },
+      } as never,
+      prepareStep: ({ index }) =>
+        index === 1 ? { tools: { later }, activeTools: ["later"] } : undefined,
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(executeLater).toHaveBeenCalledOnce();
+    expect(result.text).toBe("done");
+  });
+
   it("loops tool rounds by default, matching every other Crux adapter", async () => {
     const execute = vi.fn(async () => "tool ran");
     const ai = createCruxAi();

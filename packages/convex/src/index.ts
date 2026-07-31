@@ -145,13 +145,6 @@ import type { ConvexContext } from "./store";
 // ─────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────
-// Stateless Conversation Compaction
-// ─────────────────────────────────────────────────────────────────
-
-export { compactConversation } from "@use-crux/core/compaction";
-export type { CompactConversationArgs } from "@use-crux/core/compaction";
-
-// ─────────────────────────────────────────────────────────────────
 // Context Handler Helper
 // ─────────────────────────────────────────────────────────────────
 

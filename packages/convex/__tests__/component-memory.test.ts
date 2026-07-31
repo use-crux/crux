@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { insert as memoryInsert, list as memoryList } from '../src/component/memory'
-import { STORE_DOC_COMPONENT_SPEC, type StoreDocRecord } from '../src/store-doc'
+import {
+  compareAndSet as memoryCompareAndSet,
+  insert as memoryInsert,
+  list as memoryList,
+} from '../src/component/memory'
+import {
+  STORE_DOC_COMPONENT_SPEC,
+  storeDocVersion,
+  type StoreDocRecord,
+  type StoreDocWrite,
+} from '../src/store-doc'
 
 interface TestMemoryListArgs {
   prefix?: string
@@ -32,6 +41,7 @@ interface TestMutationCtx {
     query(table: typeof STORE_DOC_COMPONENT_SPEC.table): TestFirstQueryInitializer
     insert(table: typeof STORE_DOC_COMPONENT_SPEC.table, doc: StoreDocRecord): Promise<string>
     patch(id: unknown, doc: StoreDocRecord): Promise<void>
+    delete(id: unknown): Promise<void>
   }
 }
 
@@ -145,6 +155,51 @@ describe('component memory list contract', () => {
       },
     ])
   })
+
+  it('compares and writes one memory document in the component mutation', async () => {
+    const existing = { ...cruxDoc('memory:counter'), _id: 'doc-1' }
+    const next = {
+      ...cruxDoc('memory:counter'),
+      content: JSON.stringify({ count: 1 }),
+      updatedAt: 3,
+    }
+    const patchedDocs: StoreDocRecord[] = []
+    const deletedIds: unknown[] = []
+    const mutation = memoryCompareAndSet as unknown as TestRegisteredMutation<
+      {
+        key: string
+        expectedVersion: string | null
+        doc: StoreDocRecord | null
+      },
+      boolean
+    >
+    const ctx = createMutationCtx(existing, [], patchedDocs, deletedIds)
+
+    await expect(
+      mutation._handler(ctx, {
+        key: 'memory:counter',
+        expectedVersion: 'stale',
+        doc: next,
+      }),
+    ).resolves.toBe(false)
+    await expect(
+      mutation._handler(ctx, {
+        key: 'memory:counter',
+        expectedVersion: storeDocVersion(existing),
+        doc: next,
+      }),
+    ).resolves.toBe(true)
+
+    expect(patchedDocs).toEqual([
+      {
+        content: next.content,
+        metadata: next.metadata,
+        embedding: undefined,
+        updatedAt: 3,
+      },
+    ])
+    expect(deletedIds).toEqual([])
+  })
 })
 
 function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]): TestQueryCtx {
@@ -206,6 +261,15 @@ function createInsertCtx(
   insertedDocs: StoreDocRecord[],
   patchedDocs: StoreDocRecord[],
 ): TestMutationCtx {
+  return createMutationCtx(existing, insertedDocs, patchedDocs, [])
+}
+
+function createMutationCtx(
+  existing: StoreDocRecord | null,
+  insertedDocs: StoreDocRecord[],
+  patchedDocs: StoreDocRecord[],
+  deletedIds: unknown[],
+): TestMutationCtx {
   return {
     db: {
       query() {
@@ -231,11 +295,14 @@ function createInsertCtx(
       async patch(_id, doc) {
         patchedDocs.push(doc)
       },
+      async delete(id) {
+        deletedIds.push(id)
+      },
     },
   }
 }
 
-function cruxDoc(key: string): StoreDocRecord {
+function cruxDoc(key: string): StoreDocWrite {
   return {
     key,
     content: JSON.stringify({ text: key }),

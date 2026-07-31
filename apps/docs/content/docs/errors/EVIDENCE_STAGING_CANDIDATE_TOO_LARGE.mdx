@@ -1,0 +1,21 @@
+---
+title: EVIDENCE_STAGING_CANDIDATE_TOO_LARGE
+description: One canonical evidence candidate exceeds the fixed Local size bound.
+---
+
+## What failed
+
+The canonical candidate representation exceeded 512 KiB. Occupancy does not
+affect this permanent decision.
+
+## Retryability
+
+Not retryable. The candidate itself is too large.
+
+Local mutates no staging, artifact, relationship, or read-model state and does
+not return candidate content.
+
+## Fix
+
+Reduce the safe inline preview or use reference-level capture. The generic
+observability preview cap does not rewrite marked evidence candidates.

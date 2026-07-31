@@ -156,7 +156,7 @@ It provides three distinct views:
 1. **Static preview** opens projected text without evaluating workspace code.
    Unknown values appear as placeholders.
 2. **Exact preview** opens Devtools and calls the active application's
-   `Prompt.inspect()` only after you explicitly press Preview.
+   observational `preview()` only after you explicitly press Preview.
 3. **Latest Run** opens the newest captured generation for the owning Prompt,
    including PromptText provenance and token attribution when capture policy
    permits it.
@@ -169,7 +169,7 @@ guide](/docs/developer-tools/vscode).
 
 ## Inspect in Code
 
-`.resolve()` returns the final plain strings. `.inspect()` additionally keeps
+`.resolve()` returns the final plain strings. Request inspection additionally keeps
 PromptText segments and token attribution:
 
 ```ts

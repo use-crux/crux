@@ -21,6 +21,7 @@ const exemptArtifactKinds = new Set([
   'corpus.report',
   'security.report',
   'media.report',
+  'request.plan',
 ])
 
 describe('observability privacy capture policy', () => {
@@ -279,7 +280,6 @@ describe('observability privacy capture policy', () => {
         for (const kind of [
           'guardrail.report',
           'constraint.report',
-          'approval.request',
           'validation.feedback',
           'memory.write',
         ] as const) {
@@ -328,10 +328,7 @@ describe('observability privacy capture policy', () => {
     expect(validationFeedback).not.toHaveProperty('hash')
     expect(validationFeedback).not.toHaveProperty('uri')
 
-    for (const kind of [
-      'constraint.report',
-      'approval.request',
-    ] as const) {
+    for (const kind of ['constraint.report'] as const) {
       expect(findArtifact(transport.records, kind)).toMatchObject({
         kind,
         preview: { kind, content: `SAFE-PREVIEW-${kind}` },

@@ -1,18 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { decodePromptPreviewBrowserResponse as decodeBrowserResponse } from "../wire";
+import { decodePromptPreviewBrowserResponse } from "../wire";
 
-const definitionId = "prompt:writer";
-const decodePromptPreviewBrowserResponse = (value: unknown) =>
-  decodeBrowserResponse(value, definitionId);
-
-const segment = (startUtf16: number, endUtf16: number) => ({
-  kind: "static",
-  startUtf16,
-  endUtf16,
-});
-
-const ready = (inspection: Readonly<Record<string, unknown>>) => ({
+const ready = (overrides: Readonly<Record<string, unknown>> = {}) => ({
   status: "ready",
   peer: {
     peerId: "peer",
@@ -20,234 +10,88 @@ const ready = (inspection: Readonly<Record<string, unknown>>) => ({
     environment: "node",
   },
   catalogueRevision: 4,
-  inspection,
-});
-
-const inspection = (
-  overrides: Readonly<Record<string, unknown>> = {},
-): Readonly<Record<string, unknown>> => ({
-  system: {
-    text: "",
-    tokens: 0,
-    coverage: "complete",
-    parts: [],
+  preview: {
+    status: "fits",
+    model: "provider:model",
+    inputTokens: 120,
+    maxInputTokens: 1_000,
+    measurement: "estimated",
+    adaptations: [],
+    warnings: [],
+    diagnostics: [],
   },
-  totalTokens: 0,
-  droppedContexts: [],
-  excludedContexts: [],
+  contributions: [
+    { id: "prompt:writer", boundary: "required", representations: ["full"] },
+    {
+      id: "context:style",
+      boundary: "sticky",
+      representations: ["full", "summary"],
+    },
+    {
+      id: "context:examples",
+      boundary: "elastic",
+      representations: ["full", "omitted"],
+    },
+  ],
   ...overrides,
 });
 
 describe("Prompt preview ready wire", () => {
-  it("requires exact contiguous UTF-16 provenance reconstruction", () => {
+  it("accepts a bounded redacted preview and contribution map", () => {
     expect(
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            prompt: {
-              text: "a😀b",
-              tokens: 0,
-              segments: [segment(0, 1), segment(1, 3), segment(3, 4)],
-            },
-          }),
-        ),
-      ),
+      decodePromptPreviewBrowserResponse(ready(), "prompt:writer"),
     ).toMatchObject({ status: "ready" });
-
-    for (const segments of [
-      [segment(0, 1), segment(2, 4)],
-      [segment(0, 3), segment(2, 4)],
-      [segment(0, 2), segment(2, 4)],
-      [segment(0, 3)],
-    ]) {
-      expect(() =>
-        decodePromptPreviewBrowserResponse(
-          ready(
-            inspection({
-              prompt: { text: "a😀b", tokens: 0, segments },
-            }),
-          ),
-        ),
-      ).toThrow();
-    }
   });
 
-  it("accepts the aggregate segment limit and rejects its overflow", () => {
-    const exactText = "x".repeat(10_000);
-    const exactSegments = Array.from({ length: 10_000 }, (_, index) =>
-      segment(index, index + 1),
-    );
-    expect(
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            prompt: { text: exactText, tokens: 0, segments: exactSegments },
-          }),
-        ),
-      ),
-    ).toMatchObject({ status: "ready" });
-
+  it("rejects unknown boundaries, representations, and wire fields", () => {
     expect(() =>
       decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            prompt: {
-              text: `${exactText}x`,
-              tokens: 0,
-              segments: [...exactSegments, segment(10_000, 10_001)],
+        ready({
+          contributions: [
+            {
+              id: "context:x",
+              boundary: "optional",
+              representations: ["full"],
             },
-          }),
-        ),
+          ],
+        }),
+        "prompt:writer",
+      ),
+    ).toThrow();
+    expect(() =>
+      decodePromptPreviewBrowserResponse(
+        ready({
+          contributions: [
+            {
+              id: "context:x",
+              boundary: "sticky",
+              representations: ["private"],
+            },
+          ],
+        }),
+        "prompt:writer",
+      ),
+    ).toThrow();
+    expect(() =>
+      decodePromptPreviewBrowserResponse(
+        ready({ unexpected: true }),
+        "prompt:writer",
       ),
     ).toThrow();
   });
 
-  it("accepts exact string and array limits and rejects overflow", () => {
-    const stringOverhead =
-      "ready".length + definitionId.length + "partial".length;
-    expect(
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: {
-              text: "x".repeat(1_048_576 - stringOverhead),
-              tokens: 0,
-              coverage: "partial",
-              parts: [],
-            },
-          }),
-        ),
-      ),
-    ).toMatchObject({ status: "ready" });
-    expect(() =>
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: {
-              text: "x".repeat(1_048_577 - stringOverhead),
-              tokens: 0,
-              coverage: "partial",
-              parts: [],
-            },
-          }),
-        ),
-      ),
-    ).toThrow();
-
-    const parts = Array.from({ length: 1_024 }, () => ({
-      source: "s",
-      text: "",
-      tokens: 0,
-      skipped: false,
-      segments: [],
-    }));
-    expect(
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: { text: "", tokens: 0, coverage: "complete", parts },
-          }),
-        ),
-      ),
-    ).toMatchObject({ status: "ready" });
-    expect(() =>
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: {
-              text: "",
-              tokens: 0,
-              coverage: "complete",
-              parts: [...parts, parts[0]],
-            },
-          }),
-        ),
-      ),
-    ).toThrow();
-  });
-
-  it("counts every runtime string and compact result byte", () => {
-    expect(() =>
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: {
-              text: "x".repeat(1_048_576),
-              tokens: 0,
-              coverage: "partial",
-              parts: [],
-            },
-          }),
-        ),
-      ),
-    ).toThrow();
-    const compactRuntime = (text: string) => {
-      const value = inspection({
-        system: {
-          text,
-          tokens: 0,
-          coverage: "partial",
-          parts: [],
-        },
-      });
-      return {
-        status: "ready",
-        targetId: definitionId,
-        catalogueRevision: 4,
-        inspection: value,
-      };
-    };
-    const baseBytes = new TextEncoder().encode(
-      JSON.stringify(compactRuntime("")),
-    ).byteLength;
-    const available = 2_097_152 - baseBytes;
-    const exactText =
-      "\u0000".repeat(Math.floor(available / 6)) + "x".repeat(available % 6);
-    expect(
-      decodePromptPreviewBrowserResponse(
-        ready(compactRuntime(exactText).inspection),
-      ),
-    ).toMatchObject({ status: "ready" });
-    expect(() =>
-      decodePromptPreviewBrowserResponse(
-        ready(compactRuntime(`${exactText}x`).inspection),
-      ),
-    ).toThrow();
-  });
-
-  it("derives system coverage and rejects explicit empty metadata", () => {
-    const part = {
-      source: "system",
-      text: "Hello",
-      tokens: 1,
-      skipped: false,
-      segments: [segment(0, 5)],
+  it("rejects contributor and adaptation cardinality overflow", () => {
+    const contribution = {
+      id: "context:x",
+      boundary: "required",
+      representations: ["full"],
     };
     expect(() =>
       decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            system: {
-              text: "Changed",
-              tokens: 1,
-              coverage: "complete",
-              parts: [part],
-            },
-          }),
-        ),
-      ),
-    ).toThrow();
-    expect(() =>
-      decodePromptPreviewBrowserResponse(
-        ready(
-          inspection({
-            prompt: {
-              text: "x",
-              tokens: 0,
-              segments: [{ ...segment(0, 1), source: "" }],
-            },
-          }),
-        ),
+        ready({
+          contributions: Array.from({ length: 1_025 }, () => contribution),
+        }),
+        "prompt:writer",
       ),
     ).toThrow();
   });

@@ -95,7 +95,7 @@ Prompts declare what they need through the `use` array. Memory, retrieval, guard
 
 ```ts
 import { prompt } from "@use-crux/core";
-import { memory, facts, recentMessages } from "@use-crux/core/memory";
+import { memory, facts } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
 import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { generate, stableModel } from "@use-crux/ai";
@@ -106,10 +106,7 @@ const chat = memory({
   id: "assistant",
   records,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
-    facts({ id: "about-user", embed }),
-  ],
+  blocks: [facts({ id: "about-user", embed })],
 });
 
 const docs = retriever({

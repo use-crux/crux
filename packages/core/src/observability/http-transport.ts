@@ -8,6 +8,8 @@ import {
 } from './delivery/receipt'
 import type { CruxObservabilityTransport } from './transport'
 import { submitHttpFeedback } from '../feedback/http-destination'
+import { createHttpEvidenceDestination } from './http-evidence-destination'
+import { createHttpRequestInspectionDestination } from './request-inspection-destination'
 
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
 const MAX_RECEIPT_MESSAGE_LENGTH = 240
@@ -19,6 +21,10 @@ export interface HttpObservabilityTransportOptions {
   endpoint?: string
   /** Bearer token for scoped observability ingest auth. */
   token?: string
+  /** Evidence inspection endpoint relative to `serverUrl`. */
+  evidenceEndpoint?: string
+  /** Request inspection endpoint relative to `serverUrl`. */
+  requestInspectionEndpoint?: string
   /** Feedback endpoint relative to `serverUrl`. @default '/api/feedback' */
   feedbackEndpoint?: string
   /** Optional write-only feedback token; defaults to the ingest token. */
@@ -47,6 +53,14 @@ export function createHttpObservabilityTransport(
     options.serverUrl ?? 'http://localhost:4400',
     options.feedbackEndpoint ?? '/api/feedback',
   )
+  const evidenceUrl = joinUrl(
+    options.serverUrl ?? 'http://localhost:4400',
+    options.evidenceEndpoint ?? '/api/observability/evidence/inspect',
+  )
+  const requestInspectionUrl = joinUrl(
+    options.serverUrl ?? 'http://localhost:4400',
+    options.requestInspectionEndpoint ?? '/api/observability/requests/inspect',
+  )
   const fetchImpl = options.fetch ?? globalThis.fetch
   const maxRecordsPerRequest = positiveInteger(options.maxRecordsPerRequest, 50)
   const maxRequestBytes = positiveInteger(
@@ -55,10 +69,23 @@ export function createHttpObservabilityTransport(
   )
   const token = normalizeToken(options.token) ?? defaultDevtoolsToken()
   const feedbackToken = normalizeToken(options.feedbackToken) ?? token
-
   return {
     maxRecordsPerRequest,
     maxRequestBytes,
+    evidence: createHttpEvidenceDestination({
+      url: evidenceUrl,
+      // Local evidence reads use the same-user loopback or browser session
+      // boundary. The ingest-only bearer must never be reused for inspection.
+      headers: requestHeaders(undefined, options.headers),
+      timeoutMs: options.timeoutMs ?? 5000,
+      fetchImpl,
+    }),
+    requestInspection: createHttpRequestInspectionDestination({
+      url: requestInspectionUrl,
+      headers: requestHeaders(undefined, options.headers),
+      timeoutMs: options.timeoutMs ?? 5000,
+      fetchImpl,
+    }),
     async send(records, context) {
       if (!fetchImpl) throw new Error('Observability transport is unavailable')
       const payload = serializeDeliveryEnvelope(records, context)

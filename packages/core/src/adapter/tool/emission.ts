@@ -29,6 +29,16 @@ import { redactSensitiveValue } from "../../shared/redaction";
 import { contentText } from "../../content";
 import type { ContentPart } from "../../types/content";
 import type { JsonValue, ToolModelOutput } from "../../types/tool";
+import {
+  emitNativeEvidenceArtifact,
+  nativeEvidenceArtifactRef,
+  recordNativeEvidence,
+} from "../../evidence/internal";
+import {
+  activateOffloadSupport,
+  offloadedToolModelOutput,
+} from "../../request/offload/tool-output";
+import type { ToolOutputOffloadPolicy } from "../../request/representation/ladder-types";
 
 // ─────────────────────────────────────────────────────────────────
 // Tool model output helpers
@@ -41,6 +51,8 @@ export interface ModelOutputCapableTool {
     input: Record<string, unknown>;
     output: unknown;
   }) => ToolModelOutput | Promise<ToolModelOutput>;
+  output?: ToolOutputOffloadPolicy;
+  [activateOffloadSupport]?: () => void;
 }
 
 /**
@@ -58,6 +70,12 @@ export async function createToolModelOutput(args: {
   input: Record<string, unknown>;
   output: unknown;
 }): Promise<ToolModelOutput> {
+  const offloaded = await offloadedToolModelOutput({
+    output: args.output,
+    policy: args.tool.output,
+    activateSupport: args.tool[activateOffloadSupport],
+  });
+  if (offloaded) return offloaded;
   if (args.tool.toModelOutput) {
     return args.tool.toModelOutput({
       toolCallId: args.toolCallId,
@@ -243,6 +261,49 @@ export function emitToolArgsArtifact(
   }
 }
 
+/**
+ * Emit the capture-policy-safe request for one exact canonical tool call.
+ *
+ * @remarks Unlike approval lifecycle artifacts, this artifact is definitionally
+ * consumed by `spanId`, so it can truthfully serve as native intent evidence.
+ * Whole-record privacy suppression removes the artifact, its consumed edge,
+ * and the dependent evidence relationship together.
+ *
+ * @internal
+ */
+export function emitToolCallArgsArtifact(
+  spanId: ReturnType<typeof observe.openSpan>["spanId"],
+  toolName: string,
+  toolCallId: string,
+  args: unknown,
+): void {
+  const artifact = emitNativeEvidenceArtifact({
+    kind: "tool.args",
+    contentType: "application/json",
+    encoding: "json",
+    preview: toJsonValue(redactSensitiveValue(args)),
+    attributes: {
+      toolName,
+      toolCallId,
+      inputSize: measureUnknown(args),
+    },
+  });
+  if (!artifact) return;
+
+  const artifactId = nativeEvidenceArtifactRef(artifact).id;
+  observe.edge({
+    edgeType: "consumed",
+    from: { kind: "artifact", id: artifactId },
+    to: { kind: "span", id: spanId },
+    attributes: { toolName, toolCallId },
+  });
+  recordNativeEvidence({
+    artifact,
+    subject: { kind: "execution", id: spanId },
+    role: "intent",
+  });
+}
+
 /** Emit a `tool.result` artifact produced by the given span. */
 export function emitToolResultArtifact(
   spanId: ReturnType<typeof observe.openSpan>["spanId"],
@@ -354,6 +415,16 @@ export interface InstrumentToolSetOptions {
    * @default 1000
    */
   readonly maxPending?: number;
+  /**
+   * Continue an attempted call opened before SDK-owned approval evaluation.
+   *
+   * @internal The returned span already contains its intent artifact.
+   */
+  readonly takeAttemptedSpan?: (
+    toolName: string,
+    toolCallId: string,
+    input: unknown,
+  ) => ReturnType<typeof openToolCallSpan> | undefined;
 }
 
 const DEFAULT_MAX_PENDING = 1000;
@@ -408,6 +479,7 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
   if (!shouldInstrument) return tools;
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING;
+  const takeAttemptedSpan = options?.takeAttemptedSpan;
   const wrapped = createToolRegistry<unknown>();
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
@@ -464,17 +536,26 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
           toolCallId,
         };
         const start = Date.now();
-        const span = openToolCallSpan(
+        const attemptedSpan = takeAttemptedSpan?.(
           name,
           toolCallId,
           input,
-          definitionRefs,
-          provenance,
         );
-        try {
-          span.withContext(() =>
-            emitToolArgsArtifact(span.spanId, name, toolCallId, input),
+        const span =
+          attemptedSpan ??
+          openToolCallSpan(
+            name,
+            toolCallId,
+            input,
+            definitionRefs,
+            provenance,
           );
+        try {
+          if (attemptedSpan === undefined) {
+            span.withContext(() =>
+              emitToolCallArgsArtifact(span.spanId, name, toolCallId, input),
+            );
+          }
           const result = await span.withContext(() =>
             originalExecute.call(this, input, executionOptions),
           );

@@ -83,7 +83,7 @@ The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, 
 
 ```ts
 import { prompt } from "@use-crux/core";
-import { memory, facts, recentMessages } from "@use-crux/core/memory";
+import { memory, facts } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
 import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { generate } from "@use-crux/ai";
@@ -94,10 +94,7 @@ const chat = memory({
   id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
-    facts({ id: "about-user", embed }),
-  ],
+  blocks: [facts({ id: "about-user", embed })],
 });
 
 const docs = retriever({

@@ -8,7 +8,7 @@
  */
 
 import type { z } from 'zod'
-import type { GenerateObjectFn, GenerateTextFn } from '../compaction/types'
+import type { GenerateObjectFn, GenerateTextFn } from '../generation/support-types'
 
 /** Bound text/object generation contract used by retrieval steps. */
 export interface RetrievalModel {

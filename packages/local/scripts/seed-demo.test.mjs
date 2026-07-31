@@ -12,7 +12,7 @@ const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = join(scriptRoot, "../fixtures/demo-project");
 const seedScript = join(scriptRoot, "seed-demo.sh");
 
-test("seed-demo replays one deterministic V4 batch and installs the Eval matrix", async () => {
+test("seed-demo replays one deterministic V5 batch and installs the Eval matrix", async () => {
   const projectRoot = await copyFixture();
   const requests = [];
   const server = createServer(async (request, response) => {
@@ -58,9 +58,9 @@ test("seed-demo replays one deterministic V4 batch and installs the Eval matrix"
     assert.equal(requests[0].body, requests[1].body);
 
     const batch = JSON.parse(requests[0].body);
-    assert.equal(batch.schemaVersion, 4);
-    assert.ok(batch.records.length >= 30);
-    assert.ok(batch.records.every((record) => record.schemaVersion === 4));
+    assert.equal(batch.schemaVersion, 5);
+    assert.equal(batch.records.length, 50);
+    assert.ok(batch.records.every((record) => record.schemaVersion === 5));
     assert.equal(
       new Set(batch.records.map((record) => record.recordId)).size,
       batch.records.length,

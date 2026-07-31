@@ -12,6 +12,12 @@
 
 import type { z } from 'zod'
 import type { Context, ContextEntry, ConditionalContext, ContributorEntry, MatchSpec } from './context-types'
+import type {
+  DroppableLadder,
+  OffloadableLadder,
+  PreferLadder,
+  SummarizableLadder,
+} from '../request/representation/ladder-types'
 
 /** Flatten intersection types into a single object for clean IDE tooltips. */
 export type Simplify<T> = { [K in keyof T]: T[K] } & {}
@@ -36,6 +42,17 @@ type InferMatchInput<M> = M extends MatchSpec<infer TCases>
   ? Partial<Simplify<UnionToIntersection<BranchInput<TCases[keyof TCases]>>>>
   : {}
 
+type InferRepresentationInput<E> =
+  E extends PreferLadder<infer TSource>
+    ? InferContextInput<TSource>
+    : E extends SummarizableLadder<infer TSource>
+      ? InferContextInput<TSource>
+      : E extends OffloadableLadder<infer TSource>
+        ? InferContextInput<TSource>
+        : E extends DroppableLadder<infer TSource>
+          ? InferContextInput<TSource>
+          : {}
+
 /**
  * Extract inferred type from a ContextEntry.
  *
@@ -56,7 +73,13 @@ type InferContextEntryInput<E> =
           : {}
         : E extends MatchSpec
           ? InferMatchInput<E>
-          : {} // false, null, undefined
+          : E extends
+                | PreferLadder
+                | SummarizableLadder
+                | OffloadableLadder
+                | DroppableLadder
+            ? InferRepresentationInput<E>
+            : {} // false, null, undefined
 
 /**
  * Recursively intersect all context entry input types from a tuple.

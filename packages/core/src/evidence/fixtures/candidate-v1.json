@@ -1,0 +1,151 @@
+{
+  "cases": [
+    {
+      "name": "present-null-preview",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": null
+      },
+      "expectedBytes": 126,
+      "expectedDigest": "sha256:b92953d9cddcdb3e8b75952e16cbae18eade6cb3b5ecda5e258a09523ce745bf"
+    },
+    {
+      "name": "absent-reference-metadata",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "reference"
+      },
+      "expectedBytes": 111,
+      "expectedDigest": "sha256:ebed542bbb6511cf4a6fe164e2cf01e53399260d79a632edc55cb96d16cb2f1f"
+    },
+    {
+      "name": "present-zero-size",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "reference",
+        "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 0
+      },
+      "expectedBytes": 206,
+      "expectedDigest": "sha256:98ee0ed311f7f14d2a3dec5d741526b6e4541a86fe02c80fae46d77b08936d66"
+    },
+    {
+      "name": "integer-like-keys",
+      "candidate": {
+        "preview": {
+          "2": "two",
+          "10": "ten",
+          "a": true
+        },
+        "captureState": "available",
+        "evidenceKind": "score.report",
+        "evidenceId": "evidence_1111111111111111",
+        "version": 1
+      },
+      "expectedBytes": 153,
+      "expectedDigest": "sha256:5237f1b8c007d9ef903a8e449f8ceae24d7d92048d5e7a49f6b102cf9a58bb67"
+    },
+    {
+      "name": "unicode",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": {
+          "separator": "line paragraph ",
+          "café": "☕"
+        }
+      },
+      "expectedBytes": 177,
+      "expectedDigest": "sha256:c02502d8201c94530c6bf2a27b54960f20b088fded786b496fb1ebda3d58ba38"
+    },
+    {
+      "name": "policy-processed-url-and-media",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": {
+          "policyUrl": "[url]",
+          "media": {
+            "kind": "image",
+            "mediaType": "image/png",
+            "sourceCategory": "data"
+          }
+        }
+      },
+      "expectedBytes": 216,
+      "expectedDigest": "sha256:cded4255007bd7269a71b04985671a331dd79fe3f10e798c0fc0b4cca84738ae"
+    },
+    {
+      "name": "numeric-boundaries",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": {
+          "negative": -1,
+          "maxSafeInteger": 9007199254740991,
+          "smallDecimal": 0.000001,
+          "scientific": 1e+21,
+          "zero": 0
+        }
+      },
+      "expectedBytes": 223,
+      "expectedDigest": "sha256:76585fc865b3bbfefc0b1ee650e20646f6ff3eb3ad4993193415e680ba7d1f46"
+    },
+    {
+      "name": "negative-zero",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": {
+          "negativeZero": -0
+        }
+      },
+      "expectedBytes": 140,
+      "expectedDigest": "sha256:4efacdca8bc088eddc0ec7758064d1e58922f092951e8a5c3afa457affe4dd62"
+    },
+    {
+      "name": "control-character-shorthands",
+      "candidate": {
+        "version": 1,
+        "evidenceId": "evidence_1111111111111111",
+        "evidenceKind": "score.report",
+        "captureState": "available",
+        "preview": {
+          "text": "a\bb\fc"
+        }
+      },
+      "expectedBytes": 140,
+      "expectedDigest": "sha256:30c715674d7ed08951f7520e566ce036fe8d071ba329b2052fe8d12e905889f0"
+    }
+  ],
+  "boundary": {
+    "candidate": {
+      "version": 1,
+      "evidenceId": "evidence_1111111111111111",
+      "evidenceKind": "score.report",
+      "captureState": "available",
+      "preview": {
+        "padding": ""
+      }
+    },
+    "baseBytes": 136,
+    "maximumBytes": 524288,
+    "acceptedPaddingBytes": 524152,
+    "oversizedPaddingBytes": 524153
+  }
+}

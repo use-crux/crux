@@ -1,0 +1,20 @@
+---
+title: EVIDENCE_INPUT_TOO_LARGE
+description: A bounded evidence inspection request exceeded its HTTP size limit.
+---
+
+## What failed
+
+The inspection, subject-summary, or navigation request exceeded Local's bounded
+request envelope.
+
+## Retryability
+
+Not retryable. The request must be reduced.
+
+Local rejects it before querying and does not echo submitted identities.
+
+## Fix
+
+Keep inspection cursors within 4,096 characters and batch summary/navigation
+requests within 100 canonical subjects or refs. Split larger work into batches.

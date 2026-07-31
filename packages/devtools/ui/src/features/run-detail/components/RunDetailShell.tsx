@@ -54,6 +54,7 @@ import type {
   InspectRunNarrativeEvent,
   InspectRunSpan,
 } from "@/types";
+import type { EvidenceRole } from "@use-crux/core/evidence";
 
 interface RunDetailProps {
   traceId: string;
@@ -63,6 +64,9 @@ interface RunDetailProps {
   spanId?: string;
   /** Eval/indexing Summary-tab landing (explicit `?summary=1`). */
   summary?: boolean;
+  detailTab?: "evidence";
+  evidenceRole?: EvidenceRole;
+  evidenceId?: string;
 }
 
 function missingRunDetail(traceId: string): InspectRunDetailRecord {
@@ -100,6 +104,9 @@ export function RunDetailShell({
   lens,
   spanId: navSpanId,
   summary,
+  detailTab,
+  evidenceRole,
+  evidenceId,
 }: RunDetailProps) {
   const { navigate } = useNavigation();
   const { toast } = useToast();
@@ -200,8 +207,23 @@ export function RunDetailShell({
 
   const selectLens = useCallback(
     (l: RunLens) =>
-      navigate({ view: "run-detail", traceId, lens: l, spanId: navSpanId }),
-    [navigate, traceId, navSpanId],
+      navigate({
+        view: "run-detail",
+        traceId,
+        lens: l,
+        spanId: navSpanId,
+        ...(detailTab ? { detailTab } : {}),
+        ...(evidenceRole ? { evidenceRole } : {}),
+        ...(evidenceId ? { evidenceId } : {}),
+      }),
+    [
+      navigate,
+      traceId,
+      navSpanId,
+      detailTab,
+      evidenceRole,
+      evidenceId,
+    ],
   );
 
   // Failure-first triage — the failing-span list (full set), the triage flag
@@ -393,6 +415,9 @@ export function RunDetailShell({
                 summaryNav={summaryNav}
                 trace={trace}
                 judges={judgeEvents.filter((j) => j.traceId === traceId)}
+                detailTab={detailTab}
+                evidenceRole={evidenceRole}
+                evidenceId={evidenceId}
               />
             ) : effectiveLens === "story" ? (
               <ReplayMode
@@ -419,6 +444,9 @@ export function RunDetailShell({
                 onSelectLens={selectLens}
                 summaryNav={summaryNav}
                 triage={triage}
+                detailTab={detailTab}
+                evidenceRole={evidenceRole}
+                evidenceId={evidenceId}
               />
             )}
           </SectionBoundary>

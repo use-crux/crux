@@ -121,6 +121,10 @@
       "types": "./src/observability/index.ts",
       "import": "./src/observability/index.ts"
     },
+    "./evidence": {
+      "types": "./src/evidence/index.ts",
+      "import": "./src/evidence/index.ts"
+    },
     "./observability/node": {
       "types": "./src/observability/node.ts",
       "import": "./src/observability/node.ts"
@@ -157,10 +161,6 @@
       "types": "./src/memory/index.ts",
       "import": "./src/memory/index.ts"
     },
-    "./compaction": {
-      "types": "./src/compaction/index.ts",
-      "import": "./src/compaction/index.ts"
-    },
     "./scoring": {
       "types": "./src/scoring/index.ts",
       "import": "./src/scoring/index.ts"
@@ -188,6 +188,14 @@
     "./storage/testing/vitest": {
       "types": "./src/storage/testing/vitest.ts",
       "import": "./src/storage/testing/vitest.ts"
+    },
+    "./thread": {
+      "types": "./src/thread/index.ts",
+      "import": "./src/thread/index.ts"
+    },
+    "./thread/testing/vitest": {
+      "types": "./src/thread/testing/vitest.ts",
+      "import": "./src/thread/testing/vitest.ts"
     },
     "./plan": {
       "types": "./src/plan/index.ts",
@@ -313,6 +321,9 @@
       "observability": [
         "src/observability/index.ts"
       ],
+      "evidence": [
+        "src/evidence/index.ts"
+      ],
       "observability/node": [
         "src/observability/node.ts"
       ],
@@ -336,9 +347,6 @@
       ],
       "memory": [
         "src/memory/index.ts"
-      ],
-      "compaction": [
-        "src/compaction/index.ts"
       ],
       "scoring": [
         "src/scoring/index.ts"
@@ -408,6 +416,7 @@
     "zod": "^4.4.3"
   },
   "scripts": {
+    "generate:evidence-coverage": "node ./scripts/generate-primitive-evidence-coverage.mjs",
     "test": "vitest run",
     "test:observability:serverless": "vitest run __tests__/observability/serverless-freeze.test.ts",
     "typecheck": "node ./scripts/check-no-explicit-any.mjs && tsc -p tsconfig.json --noEmit",

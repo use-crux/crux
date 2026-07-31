@@ -33,7 +33,7 @@ func canonicalManifestJSON(content ManifestContent) ([]byte, error) {
 func validDefinitionKind(value string) bool {
 	return oneOf(
 		value,
-		"prompt", "context", "injectable", "tool", "agent", "embedding", "embedding.call", "flow", "flow.step", "task", "deferred-work",
+		"prompt", "context", "injectable", "tool", "agent", "embedding", "embedding.call", "evidence.record", "flow", "flow.step", "task", "deferred-work",
 		"composition.parallel", "composition.parallel.branch", "composition.pipeline", "composition.pipeline.stage", "composition.swarm", "composition.consensus",
 		"routing.router", "routing.router.route", "routing.split", "routing.split.route", "routing.retry", "routing.retry.target", "routing.cascade", "routing.cascade.tier", "routing.fallback", "routing.fallback.option",
 		"rag.knowledgeBase", "rag.indexer", "rag.recipe", "rag.recipe.step", "rag.pipeline", "rag.pipeline.stage", "rag.reranker", "rag.retriever",

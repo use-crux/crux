@@ -481,6 +481,8 @@ func isRunListDeadlineError(err error) bool {
 func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error) {
 	ctx, cancel := s.mutationContext(ctx)
 	defer cancel()
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 
 	requested := uniqueNonEmptyStrings(ids)
 	if len(requested) == 0 {
@@ -506,14 +508,6 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 			_ = tx.Rollback()
 		}
 	}()
-	// Bump a fresh tombstone revision for each deleted run BEFORE removing
-	// its rows: this is the only durable signal a reconnecting client (or
-	// one that missed the WS push) has that the run is gone, not merely
-	// unchanged. See the comment on deleteRunRows/observability_run_revision_log.
-	revisions, err := bumpRunRevisions(ctx, tx, deletedOperations, s.revisionLogRetentionOrDefault())
-	if err != nil {
-		return nil, fmt.Errorf("advance observability revision for deleted runs: %w", err)
-	}
 	memberRunIDs, err := operationMemberRunIDs(ctx, tx, deletedOperations)
 	if err != nil {
 		return nil, err
@@ -522,6 +516,32 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO operation_tombstones (operation_id) VALUES (?)`, operationID); err != nil {
 			return nil, fmt.Errorf("write operation deletion tombstone: %w", err)
 		}
+	}
+	evidenceAffectedOperations, err :=
+		s.deleteEvidenceForExplicitRunDeletion(
+			ctx,
+			tx,
+			deletedOperations,
+			memberRunIDs,
+		)
+	if err != nil {
+		return nil, fmt.Errorf("delete private execution evidence: %w", err)
+	}
+	revisionOperations := uniqueStrings(append(
+		append([]string{}, deletedOperations...),
+		evidenceAffectedOperations...,
+	))
+	// Bump fresh revisions before removing generic run rows. This is the
+	// durable signal that reconnecting clients must invalidate deleted runs
+	// and any surviving read models changed by evidence privacy cleanup.
+	revisions, err := bumpRunRevisions(
+		ctx,
+		tx,
+		revisionOperations,
+		s.revisionLogRetentionOrDefault(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("advance observability revision for deleted runs: %w", err)
 	}
 	if len(memberRunIDs) > 0 {
 		if err := deleteRunRows(ctx, tx, memberRunIDs); err != nil {
@@ -1564,14 +1584,26 @@ func providerFromModelID(modelID string) string {
 }
 
 func (s *Service) listArtifacts(ctx context.Context, runID string) ([]ArtifactSummary, error) {
+	payloadCutoff := formatEvidenceAcceptanceTime(
+		s.evidenceNow().Add(-s.evidenceSettings.PayloadRetention),
+	)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT artifact_id, run_id, ifnull(trace_id, ''), ifnull(span_id, ''), kind, created_at,
 			content_type, encoding, ifnull(size_bytes, 0), ifnull(hash, ''), ifnull(uri, ''),
-			preview_json, attributes_json
+			CASE WHEN EXISTS (
+				SELECT 1 FROM evidence_relationships relationship
+				WHERE relationship.authorization_namespace = ?
+				  AND relationship.source_mode = 'inline'
+				  AND relationship.source_kind = 'artifact'
+				  AND relationship.source_id = artifacts.artifact_id
+				  AND relationship.payload_state = 'available'
+				  AND relationship.payload_accepted_at <= ?
+			) THEN NULL ELSE preview_json END,
+			attributes_json
 		FROM artifacts
 		WHERE run_id = ?
 		ORDER BY created_at, artifact_id
-	`, runID)
+	`, localEvidenceAuthorizationNamespace, payloadCutoff, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -1617,6 +1649,9 @@ func (s *Service) listEdges(ctx context.Context, runID string) ([]EdgeSummary, e
 }
 
 func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord, error) {
+	payloadCutoff := formatEvidenceAcceptanceTime(
+		s.evidenceNow().Add(-s.evidenceSettings.PayloadRetention),
+	)
 	rows, err := s.db.QueryContext(ctx, `
 		WITH RECURSIVE segment_order(segment_id, depth, path) AS (
 			SELECT segment_id, 0, '|' || segment_id || '|'
@@ -1628,7 +1663,23 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 			JOIN segment_order parent ON child.previous_segment_id = parent.segment_id
 			WHERE child.run_id = ? AND instr(parent.path, '|' || child.segment_id || '|') = 0
 		)
-		SELECT r.record_id, r.run_id, r.operation_id, ifnull(r.trace_id, ''), r.segment_id, r.segment_seq, r.type, r.payload_json, r.received_at
+		SELECT r.record_id, r.run_id, r.operation_id,
+			ifnull(r.trace_id, ''), r.segment_id, r.segment_seq, r.type,
+			CASE
+				WHEN r.type = 'artifact' AND EXISTS (
+					SELECT 1 FROM evidence_relationships relationship
+					WHERE relationship.authorization_namespace = ?
+					  AND relationship.source_mode = 'inline'
+					  AND relationship.source_kind = 'artifact'
+					  AND relationship.source_id =
+					      json_extract(r.payload_json, '$.artifactId')
+					  AND relationship.payload_state = 'available'
+					  AND relationship.payload_accepted_at <= ?
+				)
+				THEN json_remove(r.payload_json, '$.preview')
+				ELSE r.payload_json
+			END,
+			r.received_at
 		FROM records r
 		LEFT JOIN segment_order ordering ON ordering.segment_id = r.segment_id
 		WHERE r.run_id = ?
@@ -1647,7 +1698,7 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 				r.received_at
 			),
 			r.record_id
-	`, runID, runID, runID)
+	`, runID, runID, localEvidenceAuthorizationNamespace, payloadCutoff, runID)
 	if err != nil {
 		return nil, err
 	}

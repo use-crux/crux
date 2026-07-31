@@ -26,6 +26,7 @@ import {
 import { shouldLookup } from './policies'
 import { performLookup } from './lookup'
 import { performWrite } from './write'
+import { deferTerminalResult } from '../runtime/internal/terminal-result-finalizer'
 
 /**
  * Create the semantic response cache plugin.
@@ -110,7 +111,12 @@ export function createSemanticCache<TModality extends EmbeddingModality>(
             return result
           }
 
-          return performWrite(call, result)
+          return deferTerminalResult(
+            next,
+            (finalized) => performWrite(call, finalized),
+          )
+            ? result
+            : performWrite(call, result)
         },
       }
     },

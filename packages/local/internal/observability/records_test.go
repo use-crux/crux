@@ -239,6 +239,118 @@ func TestRoutingStableBetaPrimitiveTaxonomy(t *testing.T) {
 	}
 }
 
+func TestEvidenceEdgeRequiresRoleCorrelatedQualifiedAttributes(t *testing.T) {
+	valid := mustRecord(t, `{
+		"schemaVersion": 5,
+		"recordId": "rec_evidence_edge",
+		"type": "edge",
+		"runId": "run_evidence",
+		"operationId": "run_evidence",
+		"segmentId": "seg_evidence",
+		"segmentSeq": 1,
+		"edgeId": "edge_evidence",
+		"edgeType": "evidence.for",
+		"from": {"kind": "artifact", "id": "artifact_source"},
+		"to": {"kind": "span", "id": "1111111111111111"},
+		"createdAt": "2026-07-28T12:00:00Z",
+		"attributes": {
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"conclusion": "passed",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111"},
+			"captureState": "reference",
+			"sourceMode": "reference"
+		}
+	}`)
+	if err := ValidateRecord(valid); err != nil {
+		t.Fatalf("valid evidence edge failed validation: %v", err)
+	}
+
+	var edge EdgeRecord
+	if err := json.Unmarshal(valid.Payload, &edge); err != nil {
+		t.Fatal(err)
+	}
+	edge.Attributes = json.RawMessage(`{
+		"evidenceId": "evidence_2222222222222222",
+		"role": "change",
+		"evidenceKind": "score.report",
+		"conclusion": "passed",
+		"recordedAt": "2026-07-28T12:00:00Z",
+		"producer": {"kind": "span", "id": "1111111111111111"}
+	}`)
+	invalidPayload, err := json.Marshal(edge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid.Payload = invalidPayload
+	if err := ValidateRecord(valid); err == nil {
+		t.Fatal("expected a mismatched evidence role/conclusion to fail")
+	}
+
+	for name, attributes := range map[string]string{
+		"missing source mode": `{
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111"},
+			"captureState": "reference"
+		}`,
+		"missing capture state": `{
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111"},
+			"sourceMode": "reference"
+		}`,
+		"reference source with available capture": `{
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111"},
+			"captureState": "available",
+			"idempotencyKeyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"sourceMode": "reference",
+			"contentDigestVersion": 1,
+			"contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		}`,
+		"producer extra field": `{
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111", "delegatedBy": "run_private"}
+		}`,
+		"inline source without capture state": `{
+			"evidenceId": "evidence_2222222222222222",
+			"role": "verification",
+			"evidenceKind": "score.report",
+			"recordedAt": "2026-07-28T12:00:00Z",
+			"producer": {"kind": "span", "id": "1111111111111111"},
+			"idempotencyKeyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"sourceMode": "inline",
+			"contentDigestVersion": 1,
+			"contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			edge.Attributes = json.RawMessage(attributes)
+			invalidPayload, err := json.Marshal(edge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			valid.Payload = invalidPayload
+			if err := ValidateRecord(valid); err == nil {
+				t.Fatalf("expected %s to fail", name)
+			}
+		})
+	}
+}
+
 func assertValidFixtureRecord(t *testing.T, record Record, runID string) {
 	t.Helper()
 	if !IsSupportedSchemaVersion(record.SchemaVersion) {

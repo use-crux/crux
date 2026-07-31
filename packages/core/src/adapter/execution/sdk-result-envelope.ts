@@ -19,10 +19,12 @@ import {
   type ResultStepFacts,
 } from "../result-accumulator";
 import type { AdapterExecutionGenerateResultWithoutRunId } from "./types";
+import type { RequestReceipt } from "../../request/receipt/receipt";
 
 /** Convert an observed SDK-loop step into accumulator facts. */
 export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
   return {
+    ...(step.request !== undefined ? { request: step.request } : {}),
     content: step.content ?? [{ type: "text", text: step.text }],
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
     ...(step.toolCalls.length > 0 ? { toolCalls: [...step.toolCalls] } : {}),
@@ -51,6 +53,9 @@ export function sdkResponseFacts(
     ...(response.providerMetadata !== undefined
       ? { providerMetadata: response.providerMetadata }
       : {}),
+    ...(response.transportRetries !== undefined
+      ? { transportRetries: response.transportRetries }
+      : {}),
   };
 }
 
@@ -65,9 +70,13 @@ export function finalizeSdkResultEnvelope<TRawResponse>(args: {
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   readonly stepFacts?: readonly ResultStepFacts[];
   readonly finalStepMode?: "replace" | "append" | "preserve";
+  readonly request?: RequestReceipt;
 }): AdapterExecutionGenerateResultWithoutRunId<TRawResponse> {
   const facts = [...(args.stepFacts ?? [])];
-  const finalFacts = sdkResponseFacts(args.response, args.text);
+  const finalFacts = {
+    ...sdkResponseFacts(args.response, args.text),
+    ...(args.request !== undefined ? { request: args.request } : {}),
+  };
   if (facts.length === 0 || args.finalStepMode === "append") {
     facts.push(finalFacts);
   } else if (args.finalStepMode !== "preserve") {

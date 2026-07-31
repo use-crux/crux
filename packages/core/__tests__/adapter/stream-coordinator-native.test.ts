@@ -54,8 +54,12 @@ function structuredPrompt() {
 }
 
 /** A core-step dialect whose `stream` replays one scripted delta list per call. */
-function scriptedStreamDialect(scripts: readonly (readonly string[])[]) {
+function scriptedStreamDialect(
+  scripts: readonly (readonly string[])[],
+  tokenCounts?: readonly number[],
+) {
   const queue = [...scripts]
+  const counts = [...(tokenCounts ?? [])]
   const calls: Message[][] = []
   const client = { kind: 'core' as const }
   const dialect: AdapterExecutionDialect<
@@ -69,6 +73,9 @@ function scriptedStreamDialect(scripts: readonly (readonly string[])[]) {
     id: 'mock-stream',
     client,
     structuredOutput: { accepts: permissiveCapabilities },
+    ...(tokenCounts
+      ? { countTokens: async () => counts.shift() ?? 1 }
+      : {}),
     mapSettings: (settings) => ({ ...settings }),
     call: async () => {
       throw new Error('not used')
@@ -187,6 +194,7 @@ describe('native structured stream coordinator', () => {
     // Only the accepted (second) attempt's bytes were published.
     expect(text).toBe('{"title":"a","count":2}')
     expect(meta?.object).toEqual({ title: 'a', count: 2 })
+    expect(meta?.request?.previousRequestId).toMatch(/^request_/)
     expect(calls).toHaveLength(2)
     // The retry conversation carried the full rejected answer + corrective feedback.
     const retryContents = calls[1]!
@@ -199,6 +207,29 @@ describe('native structured stream coordinator', () => {
       { source: 'feedback', kind: 'rejected-output', attempt: 1 },
       { source: 'feedback', kind: 'constraint-feedback', attempt: 1 },
     ])
+  })
+
+  it('rejects an oversized corrective attempt before opening its provider stream', async () => {
+    const { dialect, calls } = scriptedStreamDialect(
+      [
+        ['{"title":"a","count":1}'],
+        ['{"title":"unreachable","count":2}'],
+      ],
+      [1, 100],
+    )
+    const result = await createAdapterExecution(dialect).stream({
+      prompt: structuredPrompt(),
+      model: 'm',
+      modelInfo: { provider: 'mock-stream', modelId: 'm' },
+      input: { message: 'go' },
+      inputBudget: { max: 1 },
+      constraints: [countConstraint],
+    })
+
+    await expect(drainStream(result)).rejects.toMatchObject({
+      code: 'REQUEST_TOO_LARGE',
+    })
+    expect(calls).toHaveLength(1)
   })
 
   it('starts no next stream attempt when corrective writeback blocks', async () => {
