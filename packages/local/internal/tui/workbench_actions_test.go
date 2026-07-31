@@ -186,7 +186,7 @@ func TestWorkbenchJumpPrefixShowsSuffixHintAndAcceptsNumericNav(t *testing.T) {
 
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "g", Code: 'g'}))
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "g → o overview · i insights · r runs · p index") {
+	if !strings.Contains(view, "g → o overview · i insights · r runs · e evals · p index") {
 		t.Fatalf("pending jump omitted suffix hint:\n%s", view)
 	}
 
@@ -208,7 +208,7 @@ func TestWorkbenchJumpPrefixHintPrecedesStandingStartupBadge(t *testing.T) {
 
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "g", Code: 'g'}))
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "g → o overview · i insights · r runs · p index") {
+	if !strings.Contains(view, "g → o overview · i insights · r runs · e evals · p index") {
 		t.Fatalf("standing startup badge hid pending jump hint:\n%s", view)
 	}
 }

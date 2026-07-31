@@ -2,19 +2,51 @@ package screens
 
 import (
 	"context"
+	"encoding/json"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-type insightsListLoadedMsg []api.InspectInsightRecord
+type insightsListLoadedMsg struct {
+	requestID uint64
+	value     []api.InspectInsightRecord
+	err       string
+}
 
-func fetchInsightsList(ctx context.Context, c DataClient) tea.Cmd {
+type insightsEvalRunsLoadedMsg struct {
+	requestID uint64
+	value     []json.RawMessage
+	err       string
+}
+
+func (s *Insights) fetchData(ctx context.Context, c DataClient) tea.Cmd {
+	s.insightsRequest++
+	s.evalRunsRequest++
+	return tea.Batch(
+		fetchInsightsList(ctx, c, s.insightsRequest),
+		fetchInsightsEvalRuns(ctx, c, s.evalRunsRequest),
+	)
+}
+
+func fetchInsightsList(ctx context.Context, c DataClient, requestID uint64) tea.Cmd {
 	return func() tea.Msg {
-		recs, err := c.Insights(ctx)
+		value, err := c.Insights(ctx)
+		message := insightsListLoadedMsg{requestID: requestID, value: value}
 		if err != nil {
-			return dataErrMsg(err.Error())
+			message.err = err.Error()
 		}
-		return insightsListLoadedMsg(recs)
+		return message
+	}
+}
+
+func fetchInsightsEvalRuns(ctx context.Context, c DataClient, requestID uint64) tea.Cmd {
+	return func() tea.Msg {
+		value, err := c.EvalRuns(ctx)
+		message := insightsEvalRunsLoadedMsg{requestID: requestID, value: value}
+		if err != nil {
+			message.err = err.Error()
+		}
+		return message
 	}
 }

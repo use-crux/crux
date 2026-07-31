@@ -75,7 +75,7 @@ func TestWorkbenchHelpListsJumpSuffixesAndInsightsActions(t *testing.T) {
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
 	out := w.View()
 	for _, want := range []string{
-		"g o/i/r/p", "jump screens", "act · insights",
+		"g o/i/r/e/p", "jump screens", "act · insights",
 		"next insight", "previous pane", "previous tab",
 		"dismiss", "mark fixed", "linked traces", "export insight",
 	} {

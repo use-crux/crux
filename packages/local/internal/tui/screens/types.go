@@ -7,6 +7,7 @@ package screens
 
 import (
 	"context"
+	"encoding/json"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -30,6 +31,10 @@ type DataClient interface {
 	Sessions(ctx context.Context) ([]store.SessionInfo, error)
 	Stats(ctx context.Context) (store.StatsResult, error)
 	StatsTimeseries(ctx context.Context, buckets int) ([]store.TimeseriesBucket, error)
+	EvalCatalog(ctx context.Context) ([]json.RawMessage, error)
+	EvalRuns(ctx context.Context) ([]json.RawMessage, error)
+	EvalRun(ctx context.Context, id string) (json.RawMessage, error)
+	EvalBaselines(ctx context.Context) ([]json.RawMessage, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error)

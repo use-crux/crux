@@ -53,7 +53,7 @@ func (c *FixtureClient) Insights(context.Context) ([]api.InspectInsightRecord, e
 			Summary:        "docs_agent loops 5-16 iterations with duplicate rag.search calls.",
 			TargetID:       "docs_agent",
 			LinkedTraceIDs: []string{"8af2f1c"},
-			LinkedCaseIDs:  []string{"rag/typed_prompts_definition"},
+			LinkedCaseIDs:  []string{"refund-window"},
 			SuspectedCause: "docs_agent.run\n  retrieve(loop x16) hits=10 dup .94\n    rag.search repeats the same query after novelty drops below 0.2",
 			ProposedFixConfig: &api.InspectInsightFixConfig{
 				YAML: "agent.retrieve.maxIterations: 3\nretrieval.dedupe.embedding: 0.92\nearlyStop.novelDocsRatio: 0.2\n# approx 85% fewer tokens",

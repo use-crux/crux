@@ -12,6 +12,7 @@ var navIDByGoKey = map[string]string{
 	"o": "overview",
 	"i": "insights",
 	"r": "runs",
+	"e": "evals",
 	"p": "index", // `g p` = project index
 }
 
@@ -116,7 +117,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 		},
 		interaction.Action{
 			ID:      "workspace.jump-prefix",
-			Binding: key.NewBinding(key.WithKeys("g"), key.WithHelp("g o/i/r/p", "jump screens")),
+			Binding: key.NewBinding(key.WithKeys("g"), key.WithHelp("g o/i/r/e/p", "jump screens")),
 			Run: func() tea.Cmd {
 				w.pendingPrefix = "g"
 				return nil
@@ -159,7 +160,7 @@ func (w *Workbench) screenKeybinds() []shell.Keybind {
 
 func (w *Workbench) statusKeybinds() []shell.Keybind {
 	if w.pendingPrefix == "g" {
-		return []shell.Keybind{shell.Bind("g →", "o overview · i insights · r runs · p index")}
+		return []shell.Keybind{shell.Bind("g →", "o overview · i insights · r runs · e evals · p index")}
 	}
 	if editor, ok := w.activeScreen().(screens.EditingScreen); ok && editor.Editing() {
 		return w.screenKeybinds()

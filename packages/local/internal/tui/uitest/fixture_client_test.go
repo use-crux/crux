@@ -2,6 +2,7 @@ package uitest
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -95,5 +96,93 @@ func TestFixtureClientStatsAndTimeseries(t *testing.T) {
 		series[0].TotalCost == series[len(series)-1].TotalCost ||
 		series[0].AvgDurationMs == series[len(series)-1].AvgDurationMs {
 		t.Fatalf("StatsTimeseries = %+v, want bounded non-trivial series", series)
+	}
+}
+
+func TestFixtureClientEvalReads(t *testing.T) {
+	client := NewFixtureClient()
+	catalog, err := client.EvalCatalog(context.Background())
+	if err != nil || len(catalog) != 1 {
+		t.Fatalf("EvalCatalog = %s, err = %v", catalog, err)
+	}
+	var manifest struct {
+		ID            string   `json:"id"`
+		Cases         []any    `json:"cases"`
+		Variants      []string `json:"variants"`
+		HostReadiness struct {
+			Status   string   `json:"status"`
+			Remedies []string `json:"remedies"`
+		} `json:"hostReadiness"`
+		SourceKey struct {
+			RelativeFile string `json:"relativeFile"`
+		} `json:"sourceKey"`
+	}
+	if err := json.Unmarshal(catalog[0], &manifest); err != nil {
+		t.Fatalf("EvalCatalog JSON: %v", err)
+	}
+	if manifest.ID != "demo.support-quality" || len(manifest.Cases) != 3 ||
+		len(manifest.Variants) != 2 || manifest.HostReadiness.Status != "setup-required" ||
+		len(manifest.HostReadiness.Remedies) == 0 || manifest.SourceKey.RelativeFile != "evals/support.eval.ts" {
+		t.Fatalf("EvalCatalog manifest = %+v, want complete fixture catalog data", manifest)
+	}
+
+	runs, err := client.EvalRuns(context.Background())
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("EvalRuns = %s, err = %v", runs, err)
+	}
+	var run struct {
+		RunID string `json:"runId"`
+		Cells []struct {
+			Status string `json:"status"`
+			Task   struct {
+				Status string `json:"status"`
+				Reason string `json:"reason"`
+			} `json:"task"`
+		} `json:"cells"`
+	}
+	if err := json.Unmarshal(runs[0], &run); err != nil {
+		t.Fatalf("EvalRuns JSON: %v", err)
+	}
+	statuses := map[string]bool{}
+	reused := false
+	for _, cell := range run.Cells {
+		statuses[cell.Status] = true
+		reused = reused || (cell.Task.Status == "reused" && cell.Task.Reason == "exact_evidence")
+	}
+	if run.RunID != fixtureEvalRunID || len(run.Cells) != 6 ||
+		!statuses["passed"] || !statuses["failed"] || !statuses["skipped"] || !reused {
+		t.Fatalf("Eval run = %+v, want 3x2 mixed matrix with reuse", run)
+	}
+	detail, err := client.EvalRun(context.Background(), fixtureEvalRunID)
+	if err != nil || string(detail) != string(runs[0]) {
+		t.Fatalf("EvalRun = %s, err = %v", detail, err)
+	}
+
+	baselines, err := client.EvalBaselines(context.Background())
+	if err != nil || len(baselines) != 1 {
+		t.Fatalf("EvalBaselines = %s, err = %v", baselines, err)
+	}
+	var baseline struct {
+		RunID         string `json:"runId"`
+		SelectedArm   string `json:"selectedArm"`
+		Compatibility struct {
+			Status string `json:"status"`
+			Cases  []struct {
+				Status string `json:"status"`
+			} `json:"cases"`
+		} `json:"baselineCompatibility"`
+	}
+	if err := json.Unmarshal(baselines[0], &baseline); err != nil {
+		t.Fatalf("EvalBaselines JSON: %v", err)
+	}
+	incompatible := 0
+	for _, item := range baseline.Compatibility.Cases {
+		if item.Status == "incompatible" {
+			incompatible++
+		}
+	}
+	if baseline.RunID != fixtureEvalBaselineRunID || baseline.RunID == run.RunID ||
+		baseline.SelectedArm != "current" || baseline.Compatibility.Status != "incompatible" || incompatible != 1 {
+		t.Fatalf("Eval baseline = %+v, want older baseline run and one incompatible case", baseline)
 	}
 }

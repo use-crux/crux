@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 type indexPhaseCProgramClient struct {
 	*uitest.FixtureClient
+	mu               sync.Mutex
 	runsDefinitionID string
 }
 
@@ -45,11 +47,19 @@ func (c *indexPhaseCProgramClient) DefinitionActivity(_ context.Context, definit
 
 func (c *indexPhaseCProgramClient) ObservabilityRunsPage(_ context.Context, definitionID ...string) (api.ObservabilityRunsPage, error) {
 	if len(definitionID) > 0 {
+		c.mu.Lock()
 		c.runsDefinitionID = definitionID[0]
+		c.mu.Unlock()
 	}
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{{
 		RunID: "run:target", Name: "target run", Status: "ok",
 	}}}, nil
+}
+
+func (c *indexPhaseCProgramClient) selectedRunsDefinitionID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.runsDefinitionID
 }
 
 type indexPhaseCProgramDriver struct {
@@ -92,9 +102,10 @@ func (d *indexPhaseCProgramDriver) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return d, tea.Batch(appCmd, key(tea.KeyPressMsg{Text: "r", Code: 'r'}))
 		}
 	case 3:
-		if d.app.workbench.activeNav == "runs" && d.client.runsDefinitionID != "" {
-			if d.client.runsDefinitionID != "context:target" {
-				return fail("Runs definition filter = %q, want context:target", d.client.runsDefinitionID)
+		runsDefinitionID := d.client.selectedRunsDefinitionID()
+		if d.app.workbench.activeNav == "runs" && runsDefinitionID != "" {
+			if runsDefinitionID != "context:target" {
+				return fail("Runs definition filter = %q, want context:target", runsDefinitionID)
 			}
 			return d, tea.Quit
 		}

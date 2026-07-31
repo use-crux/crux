@@ -12,7 +12,7 @@ const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = join(scriptRoot, "../fixtures/demo-project");
 const seedScript = join(scriptRoot, "seed-demo.sh");
 
-test("seed-demo replays one deterministic V4 batch and installs Eval V4", async () => {
+test("seed-demo replays one deterministic V4 batch and installs the Eval matrix", async () => {
   const projectRoot = await copyFixture();
   const requests = [];
   const server = createServer(async (request, response) => {
@@ -120,6 +120,40 @@ test("seed-demo replays one deterministic V4 batch and installs Eval V4", async 
     );
     assert.equal(evalRun.schemaVersion, 4);
     assert.equal(evalRun.evalId, "demo.support-quality");
+    assert.deepEqual(evalRun.selection.cases, [
+      "refund-window",
+      "unsupported-exception",
+      "account-lockout",
+    ]);
+    assert.deepEqual(evalRun.selection.variants, ["current", "concise"]);
+    assert.equal(evalRun.cells.length, 6);
+    assert.deepEqual(
+      new Set(evalRun.cells.map((cell) => cell.status)),
+      new Set(["passed", "failed", "skipped"]),
+    );
+    assert.ok(
+      evalRun.cells.some(
+        (cell) =>
+          cell.task.status === "reused" &&
+          cell.task.reason === "exact_evidence" &&
+          cell.task.evidenceFingerprint &&
+          cell.task.evidenceRef,
+      ),
+    );
+    assert.ok(
+      evalRun.cells.some(
+        (cell) =>
+          cell.status === "failed" &&
+          cell.runIds.includes("run_demo_support_regression"),
+      ),
+    );
+
+    const baseline = JSON.parse(
+      await readFile(join(projectRoot, "evals/support.baseline.json"), "utf8"),
+    );
+    assert.equal(baseline.runId, evalRun.runId);
+    assert.equal(baseline.selectedArm, "current");
+    assert.equal(baseline.coverage.length, 3);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -173,6 +207,15 @@ test("the committed Baseline uses the current versioned fingerprint contract", a
       .update(JSON.stringify(encodeFingerprintValue(material)))
       .digest("hex"),
   );
+  const expectedFingerprint = fingerprintValue({
+    citations: ["policy-refunds"],
+  });
+  assert.deepEqual(
+    baseline.coverage
+      .filter((entry) => entry.expectedFingerprint !== expectedFingerprint)
+      .map((entry) => entry.caseId),
+    ["unsupported-exception"],
+  );
 });
 
 async function copyFixture() {
@@ -203,6 +246,12 @@ function encodeFingerprintValue(value) {
     ];
   }
   throw new TypeError(`Unsupported Baseline value: ${typeof value}`);
+}
+
+function fingerprintValue(value) {
+  return createHash("sha256")
+    .update(JSON.stringify(encodeFingerprintValue(value)))
+    .digest("hex");
 }
 
 async function listen(server) {

@@ -32,13 +32,17 @@ const (
 // live updates arrive through the bridge interest contract, and all rendering
 // is bounded by the Rects supplied by the kit layout engine.
 type Insights struct {
-	items      []api.InspectInsightRecord
-	selectedID string
-	loaded     bool
-	err        string
-	tab        string
-	focus      insightsFocus
-	list       kit.VList[api.InspectInsightRecord]
+	items           []api.InspectInsightRecord
+	evalRuns        []evalRunItem
+	selectedID      string
+	loaded          bool
+	err             string
+	evalEvidenceErr string
+	insightsRequest uint64
+	evalRunsRequest uint64
+	tab             string
+	focus           insightsFocus
+	list            kit.VList[api.InspectInsightRecord]
 }
 
 func NewInsights() *Insights {
@@ -51,19 +55,38 @@ func NewInsights() *Insights {
 func (s *Insights) ID() string { return "insights" }
 
 func (s *Insights) Interested(domains bridge.Domains) bool {
-	return domains.Has(bridge.DomainInsights)
+	return domains.Has(bridge.DomainInsights) || domains.Has(bridge.DomainEvals)
 }
 
 func (s *Insights) Init(ctx context.Context, client DataClient) tea.Cmd {
-	return fetchInsightsList(ctx, client)
+	return s.fetchData(ctx, client)
 }
 
 func (s *Insights) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
-		s.applyInsights([]api.InspectInsightRecord(m))
+		if m.requestID != s.insightsRequest {
+			return nil
+		}
+		if m.err != "" {
+			s.err = m.err
+			s.loaded = true
+		} else {
+			s.err = ""
+			s.applyInsights(m.value)
+		}
+	case insightsEvalRunsLoadedMsg:
+		if m.requestID != s.evalRunsRequest {
+			return nil
+		}
+		if m.err != "" {
+			s.evalEvidenceErr = m.err
+		} else {
+			s.evalEvidenceErr = ""
+			s.evalRuns = projectEvalRuns(m.value)
+		}
 	case api.InspectEvent:
-		return fetchInsightsList(ctx, client)
+		return s.fetchData(ctx, client)
 	case dataErrMsg:
 		s.err = string(m)
 	case insightStatusMsg:

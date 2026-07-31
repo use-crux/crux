@@ -2,6 +2,7 @@ package screens
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -11,11 +12,17 @@ import (
 type insightsContextClient struct {
 	DataClient
 	listCtx   context.Context
+	evalCtx   context.Context
 	statusCtx context.Context
 }
 
 func (client *insightsContextClient) Insights(ctx context.Context) ([]api.InspectInsightRecord, error) {
 	client.listCtx = ctx
+	return nil, nil
+}
+
+func (client *insightsContextClient) EvalRuns(ctx context.Context) ([]json.RawMessage, error) {
+	client.evalCtx = ctx
 	return nil, nil
 }
 
@@ -30,9 +37,12 @@ func TestInsightsCommandsInheritWorkbenchContext(t *testing.T) {
 	client := &insightsContextClient{}
 	screen := NewInsights()
 
-	screen.Init(root, client)()
+	applyInsightsTestCommand(t, root, screen, screen.Init(root, client), client)
 	if client.listCtx != root {
 		t.Fatal("Insights list fetch did not inherit the Workbench context")
+	}
+	if client.evalCtx != root {
+		t.Fatal("Insights Eval runs fetch did not inherit the Workbench context")
 	}
 
 	screen.applyInsights([]api.InspectInsightRecord{{InsightID: "insight-1"}})
@@ -44,4 +54,25 @@ func TestInsightsCommandsInheritWorkbenchContext(t *testing.T) {
 	if client.statusCtx != root {
 		t.Fatal("Insights status mutation did not inherit the Workbench context")
 	}
+}
+
+func applyInsightsTestCommand(
+	t *testing.T,
+	ctx context.Context,
+	screen *Insights,
+	command tea.Cmd,
+	client DataClient,
+) {
+	t.Helper()
+	if command == nil {
+		return
+	}
+	message := command()
+	if batch, ok := message.(tea.BatchMsg); ok {
+		for _, child := range batch {
+			applyInsightsTestCommand(t, ctx, screen, child, client)
+		}
+		return
+	}
+	applyInsightsTestCommand(t, ctx, screen, screen.Update(ctx, message, client), client)
 }

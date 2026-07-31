@@ -31,6 +31,7 @@ var DefaultNav = []NavItem{
 	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
 	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},
 	{Key: "3", ID: "runs", Label: "Runs", Group: "Inspect", Count: 0, Show: true},
+	{Key: "5", ID: "evals", Label: "Evals", Group: "Evals", Count: 0, Show: true},
 	{Key: "4", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
 }
 

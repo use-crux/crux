@@ -80,7 +80,7 @@ func (s *Insights) renderTabBody(ins api.InspectInsightRecord, width, height int
 	case "traces":
 		return s.renderLinkedIDs("LINKED TRACES", ins.LinkedTraceIDs, width, height)
 	case "cases":
-		return s.renderLinkedIDs("LINKED CASES", ins.LinkedCaseIDs, width, height)
+		return s.renderEvalCases(ins, width, height)
 	case "fix":
 		return s.renderFixTab(ins, width, height)
 	default:

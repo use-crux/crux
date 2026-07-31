@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "baselineFingerprintEpoch": 5,
-  "baselineId": "baseline-demo-support-v1",
+  "baselineId": "baseline-demo-support-v2",
   "evalId": "demo.support-quality",
   "runId": "eval-run-demo-support-v4",
   "selectedArm": "current",
@@ -15,17 +15,41 @@
   "coverage": [
     {
       "caseId": "refund-window",
-      "inputFingerprint": "demo-input-refund-window-v1",
-      "callFingerprint": "demo-call-default-v1",
-      "expectedFingerprint": "demo-expected-policy-refunds-v1",
+      "inputFingerprint": "6b02c251d09fd54d272d6a9d5a79405188a410b9b2346d2bd7fa176a355be7a4",
+      "callFingerprint": "53b41ab0dae62befcb8708620b6d14794a24fedad6c24c03dd01e51fa698ff0b",
+      "expectedFingerprint": "19493d35d701833772de881f3e40f2f23175a9914025f0a5784227b64ae08ddb",
       "trials": [0],
       "outcomes": [{ "trial": 0, "status": "passed" }],
+      "metrics": {}
+    },
+    {
+      "caseId": "unsupported-exception",
+      "inputFingerprint": "6370b64ae420154b717fac84ae394847b41382edd0424dd6def9c1d0f538608b",
+      "callFingerprint": "53b41ab0dae62befcb8708620b6d14794a24fedad6c24c03dd01e51fa698ff0b",
+      "expectedFingerprint": "demo-expected-policy-refunds-v0",
+      "trials": [0],
+      "outcomes": [{ "trial": 0, "status": "passed" }],
+      "metrics": {}
+    },
+    {
+      "caseId": "account-lockout",
+      "inputFingerprint": "094901636dc8670f1fc79b6aaf0618bed152fca9ddfcad88926ba539bae7db30",
+      "callFingerprint": "53b41ab0dae62befcb8708620b6d14794a24fedad6c24c03dd01e51fa698ff0b",
+      "expectedFingerprint": "19493d35d701833772de881f3e40f2f23175a9914025f0a5784227b64ae08ddb",
+      "trials": [0],
+      "outcomes": [{ "trial": 0, "status": "failed" }],
       "metrics": {}
     }
   ],
   "provenance": {
-    "definitionFingerprint": "demo-support-definition-v1",
-    "taskFingerprint": "demo-support-task-v1"
+    "definitionFingerprint": "efb6b8ab0050a034948aba555f3a19b9989ccba8190d9d2f143c8e5b413d8536",
+    "taskFingerprint": "demo-support-task-v2"
   },
-  "snapshotFingerprint": "1bb111c136661e5af3b5c1cee52088035b857f296cf67072b56c87aeb45ee497"
+  "warnings": [
+    {
+      "code": "promoted_failing_run",
+      "message": "The demo Baseline preserves one known failing Current outcome."
+    }
+  ],
+  "snapshotFingerprint": "2245e01287fd924b9f09893f597f51be1dffbc637e9c60ce24d857ccaa40065f"
 }

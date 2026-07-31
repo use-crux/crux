@@ -15,3 +15,5 @@ Deepen the Index Catalog with schema field trees, complete lint evidence, naviga
 Make the Runs list operationally useful with bounded token/cost rollups, model and abnormal-health columns, child topology, server-side status/session/window filters, model refinement, stable primitive/target/session grouping, real session labels, and aggregate group headers.
 
 Turn Overview into an operational dashboard with Stats-backed pass-rate, cost, and latency series, an honest Stats-derived cost KPI, conditional mean score, run-count jump chips, failure-filter navigation, and session-aware recent runs.
+
+Add an Evals workbench with catalog readiness, a navigable Case-by-Variant result grid, reusable-evidence detail, local Runs drill-through, run history, and committed Baseline compatibility. Join Insights Cases to the same persisted Eval evidence, and expand the deterministic Local demo with a mixed 3-by-2 Eval matrix and Baseline.

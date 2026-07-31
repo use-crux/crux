@@ -10,9 +10,12 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/evalfs"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
+	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 	"github.com/use-crux/crux/packages/local/internal/tui"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
@@ -95,7 +98,14 @@ func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, server
 		devAccent(io, "?"), devStrong(io, serverURL))
 	printIngestTokenHint(io, devSrv.IngestToken, devSrv.IngestTokenPath)
 
-	c := devtools.NewDirectClientFromService(devSrv.Devtools).WithObservability(devSrv.Observability)
+	c := devtools.NewDirectClientFromService(devSrv.Devtools).
+		WithObservability(devSrv.Observability).
+		WithEvalReads(
+			evalfs.OpenProject(devSrv.ProjectRoot()),
+			evalserver.NewFreshCollector(devSrv.ProjectRoot(), evalserver.CollectorDeps{
+				FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
+			}),
+		)
 	app := newTUIApp(ctx, serverURL, c, startup)
 	app.SetBrowserOpener(devSrv.LocalURL(), opener)
 	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)

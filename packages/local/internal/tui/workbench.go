@@ -83,6 +83,7 @@ func NewWorkbench(ctx context.Context, client screens.DataClient, rawClient Data
 		"overview": screens.NewOverview(),
 		"insights": screens.NewInsights(),
 		"runs":     screens.NewRuns(),
+		"evals":    screens.NewEvals(),
 		"index":    screens.NewIndex(),
 	}
 	return w

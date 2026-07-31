@@ -15,7 +15,13 @@ export default evaluate({
       input: { question: "Can support invent a refund exception?" },
       expected: { citations: ["policy-refunds"] },
     },
+    {
+      id: "account-lockout",
+      input: { question: "How do I recover access to a locked account?" },
+      expected: { citations: ["policy-refunds"] },
+    },
   ],
+  variants: { concise: {} },
   expect: ({ output, expected, expect }) => {
     expect(output.citations).toContain(expected.citations[0]);
   },

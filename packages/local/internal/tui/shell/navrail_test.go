@@ -17,13 +17,13 @@ func TestNavRailDropsDeadConcepts(t *testing.T) {
 	}
 }
 
-// TestNavRailKeysAreSequential asserts the numeric jump keys run 1..n in
-// visual order so the digits match the rail top-to-bottom.
-func TestNavRailKeysAreSequential(t *testing.T) {
-	for i := range DefaultNav {
-		want := string(rune('1' + i))
-		if DefaultNav[i].Key != want {
-			t.Errorf("DefaultNav[%d] (%s) key = %q, want %q", i, DefaultNav[i].ID, DefaultNav[i].Key, want)
+func TestNavRailKeysPreserveEstablishedSlots(t *testing.T) {
+	want := map[string]string{
+		"overview": "1", "insights": "2", "runs": "3", "index": "4", "evals": "5",
+	}
+	for _, item := range DefaultNav {
+		if item.Key != want[item.ID] {
+			t.Errorf("DefaultNav %s key = %q, want %q", item.ID, item.Key, want[item.ID])
 		}
 	}
 }

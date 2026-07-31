@@ -20,7 +20,7 @@ func runTestProgramAtSize(t testing.TB, model tea.Model, input string, width, he
 	// Full race runs execute several instrumented packages concurrently; keep
 	// this a bounded hang detector without making normal scheduler contention
 	// look like a program deadlock.
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 
 	var output bytes.Buffer

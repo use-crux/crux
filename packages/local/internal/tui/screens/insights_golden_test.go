@@ -103,8 +103,10 @@ func TestInsightsEmptyStateRendersAtEverySupportedWidth(t *testing.T) {
 func fixtureInsights() (*Insights, time.Time) {
 	client := uitest.NewFixtureClient()
 	insights, _ := client.Insights(nil)
+	evalRuns, _ := client.EvalRuns(nil)
 	screen := NewInsights()
 	screen.items = insights
+	screen.evalRuns = projectEvalRuns(evalRuns)
 	if len(insights) > 0 {
 		screen.selectedID = insights[0].InsightID
 	}

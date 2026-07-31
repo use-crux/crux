@@ -346,9 +346,23 @@ capture_screen_set_tmux() {
   settle
   capture_pane_to "$SESSION" "${out_dir}/insights.txt"
 
+  send_key "$SESSION" "]"
+  settle
+  send_key "$SESSION" "]"
+  settle
+  capture_pane_to "$SESSION" "${out_dir}/insights-cases.txt"
+
   send_key "$SESSION" "3"
   settle
   capture_pane_to "$SESSION" "${out_dir}/runs.txt"
+
+  send_key "$SESSION" "5"
+  settle 30000
+  send_key "$SESSION" "Enter"
+  settle
+  send_key "$SESSION" "l"
+  settle
+  capture_pane_to "$SESSION" "${out_dir}/evals.txt"
 
   send_key "$SESSION" "4"
   settle
@@ -421,9 +435,21 @@ Screenshot ${rel_out}/overview.png
 Type "2"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/insights.png
+Type "]"
+Sleep ${settle_sleep}
+Type "]"
+Sleep ${settle_sleep}
+Screenshot ${rel_out}/insights-cases.png
 Type "3"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/runs.png
+Type "5"
+Sleep 30s
+Enter
+Sleep ${settle_sleep}
+Type "l"
+Sleep ${settle_sleep}
+Screenshot ${rel_out}/evals.png
 Type "4"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/index.png
@@ -481,7 +507,7 @@ run_vhs_size() {
     return 1
   fi
 
-  local name names=(overview insights runs index)
+  local name names=(overview insights insights-cases runs evals index)
   if [[ "$size" == "160x45" ]]; then
     names+=(palette help diagnostics)
   fi
@@ -502,7 +528,7 @@ run_vhs_size() {
 
 expected_names_for_size() {
   local size="$1"
-  local names=(overview insights runs index)
+  local names=(overview insights insights-cases runs evals index)
   if [[ "$size" == "160x45" ]]; then
     names+=(palette help diagnostics)
   fi

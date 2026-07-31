@@ -47,6 +47,10 @@ After seeding:
   slow, high-token, costly, repeated-tool, retrieval, guardrail, and error
   evidence crosses its normal derivation thresholds; no insight record is
   written through a fixture-only side channel.
+- **Evals** shows the authored support Eval as a three-Case by two-Variant
+  matrix with passing, failing, skipped, and exact-evidence-reused cells. Its
+  committed Baseline covers all three Cases and deliberately preserves one
+  incompatible Case contract so compatibility evidence is visible.
 
 ## Mechanism and trade-offs
 
@@ -54,9 +58,9 @@ After seeding:
 `/api/observability/records` endpoint. Local validates and persists it in the
 project's normal `.crux/observability.sqlite`; the TUI continues to read the
 same in-process observability and Inspect services as browser Devtools. The
-script installs the versioned Eval run under the normal `.crux/evals/runs`
-boundary before replaying observability, while the Baseline remains beside its
-authored Eval source.
+script installs the versioned six-cell Eval run under the normal
+`.crux/evals/runs` boundary before replaying observability, while the Baseline
+remains beside its authored Eval source.
 
 Stable record IDs make replay idempotent. Recorded timestamps are deliberately
 fixed so repeated seeding cannot conflict with canonical record identity; this

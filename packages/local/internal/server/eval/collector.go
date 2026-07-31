@@ -28,11 +28,21 @@ type Collector struct {
 }
 
 const collectorTTL = 15 * time.Second
+const freshCollectorBurstTTL = 250 * time.Millisecond
 
 // NewCollector creates a cached, discovery-only Eval catalog reader.
 func NewCollector(projectRoot string, deps CollectorDeps) *Collector {
 	collector := &Collector{projectRoot: projectRoot, deps: deps, ttl: collectorTTL}
 	collector.collect = collector.collectFromWorker
+	return collector
+}
+
+// NewFreshCollector creates a discovery reader that refreshes between user
+// interactions while coalescing the catalog and Baseline reads in one UI load.
+// It retains the latest successful snapshot as a fallback when collection fails.
+func NewFreshCollector(projectRoot string, deps CollectorDeps) *Collector {
+	collector := NewCollector(projectRoot, deps)
+	collector.ttl = freshCollectorBurstTTL
 	return collector
 }
 

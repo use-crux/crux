@@ -231,6 +231,9 @@ func (d *DevServer) URL() string {
 	return fmt.Sprintf("http://localhost:%d", d.Port)
 }
 
+// ProjectRoot returns the root used by project-scoped in-process readers.
+func (d *DevServer) ProjectRoot() string { return d.projectRoot }
+
 // LocalURL returns the URL to open locally. When the primary listener is gated
 // (CRUX_HOST exposure), the session token is embedded so the opened link
 // authenticates on first load; otherwise it is the plain loopback URL.
