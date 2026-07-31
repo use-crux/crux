@@ -709,10 +709,6 @@ const research = wrapConvexTool(
 );
 ```
 
-### `compactConversation(args)`
-
-Stateless conversation compaction. Takes evicted messages + existing summary, returns a merged summary. Designed for Convex's action-per-message model.
-
 ### `createComponentSwarm({ component, generate })` — experimental, from `@use-crux/convex/swarm`
 
 Run swarm-style agent routing across Convex action boundaries. This is an experimental durable swarm helper, not the final stable Convex swarm contract. It works like `swarm()` but one turn per scheduled action. You provide your `generate` function — the component handles transfer tools, handoff detection, state persistence, and scheduling.

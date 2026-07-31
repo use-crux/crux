@@ -83,11 +83,6 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/memory"
   />
   <Card
-    title="Compaction"
-    description="createSlidingWindow, createBudgetManager, summarizeMessages, extractKeyFacts."
-    href="/docs/reference/crux-core/compaction"
-  />
-  <Card
     title="Agent"
     description="agent, blackboard, handoff, delegate, compositions."
     href="/docs/reference/crux-core/agent"
@@ -203,12 +198,6 @@ import {
   facts,
   procedures,
 } from "@use-crux/core/memory";
-import {
-  createSlidingWindow,
-  createBudgetManager,
-  extractKeyFacts,
-  summarizeMessages,
-} from "@use-crux/core/compaction";
 import { agent, blackboard, handoff, delegate } from "@use-crux/core/agent";
 import {
   flow,

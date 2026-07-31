@@ -310,10 +310,7 @@ This helper uses the same native chat profile and media codec as
 `createGoogle()`. It accepts exactly one of `prompt` or canonical `messages`,
 uses Google GenAI structured JSON output, and returns `{ object }` while
 preserving provider errors. It does not run Crux prompt resolution, validation
-retry, safety, tools, memory capture, or instrumentation. Use
-`createGenerateObjectFnFromGenerate(generate)` from
-`@use-crux/core/compaction` only when full adapter runtime behavior is needed;
-do not call that bridge from a guardrail attached to the same lifecycle.
+retry, safety, tools, memory capture, or instrumentation.
 
 ### `createGenerateTextFn(client, model)`
 

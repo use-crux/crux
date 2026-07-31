@@ -168,11 +168,6 @@ Third-party `GenerateObjectFn` implementations must now accept exactly one of
 `prompt` or canonical `messages`. The message form is how the classifier
 preserves structured image, audio, video, and file content.
 
-`createGenerateObjectFnFromGenerate(generate)` is different: it bridges
-through a full adapter prompt lifecycle. Do not call that bridge from a
-guardrail attached to the same lifecycle, or the classifier recursively runs
-the policy that invoked it.
-
 ## Calls, disclosure, and portability
 
 Crux's classifier control flow is deterministic and sequential:

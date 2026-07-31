@@ -330,11 +330,9 @@ const evaluator = judge({
 });
 ```
 
-For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.
-
 ### `generateTextFn`
 
-Pre-bound `GenerateTextFn` for `@use-crux/core` APIs (summarization, compaction).
+Pre-bound `GenerateTextFn` for provider-neutral `@use-crux/core` APIs.
 
 **Signature:** `GenerateTextFn`, `(opts: { model, system?, prompt }) => Promise<{ text: string }>`
 

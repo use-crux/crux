@@ -1,6 +1,6 @@
 ---
 title: "@use-crux/convex"
-description: Convex Storage Beta adapters, Convex runtime profile, Convex Agent integration, flow helpers, and conversation compaction.
+description: Convex Storage Beta adapters, Convex runtime profile, Convex Agent integration, and flow helpers.
 ---
 
 Peer dependency: `convex` >=1.0.0
@@ -9,7 +9,6 @@ Optional peer dependency for agent tool bridging: `@convex-dev/agent` >=0.6.1
 
 ```ts
 import {
-  compactConversation,
   createContextHandler,
   createCruxConvex,
   createConvexTransport,
@@ -461,20 +460,6 @@ const research = wrapConvexTool(
   },
 );
 ```
-
-### `compactConversation(args)`
-
-Stateless conversation compaction for Convex actions.
-
-| Field             | Type             | Description                                  |
-| ----------------- | ---------------- | -------------------------------------------- |
-| `evictedMessages` | `Message[]`      | Messages that fell out of the recent window  |
-| `existingSummary` | `string`         | Existing running summary, or an empty string |
-| `generate`        | `GenerateTextFn` | Text generation function                     |
-| `model`           | `unknown`        | Model for summarization                      |
-| `summaryBudget`   | `number?`        | Max summary tokens. Defaults to `1000`       |
-
-**Returns:** `Promise<{ summary: string, tokensBefore: number, tokensAfter: number, ratio: number }>`
 
 ### Usage
 
