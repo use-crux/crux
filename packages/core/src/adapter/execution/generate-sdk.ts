@@ -91,6 +91,7 @@ import {
   selectRepresentationMiddleware,
   selectRepresentationSkills,
 } from "./representation-safety";
+import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -317,7 +318,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     outputSchema: structuredPlan?.outputSchema,
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
-    activeTools: args.activeTools,
+    activeTools: activeToolNames,
     extra: args.extra,
     history: initialMessages.history,
     generateHistorySummary: sdkHistorySummaryGenerator(dialect),
@@ -438,7 +439,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           { id: call.toolCallId, name: call.toolName, args: call.input },
           call.messages ?? messages,
         ),
-      activeTools: args.activeTools,
+      activeTools: activeToolNames(),
       maxSteps,
       observer: loopObserver,
       ...(stepTransformer !== undefined ? { stepTransformer } : {}),
@@ -446,6 +447,19 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       extra: args.extra,
     };
   };
+
+  function activeToolNames(): readonly string[] | undefined {
+    const visible =
+      lifecycle.descriptors?.map((descriptor) => descriptor.name) ?? [];
+    if (!args.activeTools) {
+      return visible.length > 0 ? visible : undefined;
+    }
+    return visible.filter(
+      (name) =>
+        args.activeTools!.includes(name) ||
+        name === OFFLOAD_SUPPORT_TOOL_NAME,
+    );
+  }
 
   try {
     const generated = await sourceSession.withContext(async () =>

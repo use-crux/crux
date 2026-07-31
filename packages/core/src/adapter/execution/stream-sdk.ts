@@ -93,6 +93,7 @@ import {
   selectRepresentationMiddleware,
   selectRepresentationSkills,
 } from "./representation-safety";
+import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -422,7 +423,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     outputSchema: structuredOutputSchema,
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
-    activeTools: args.activeTools,
+    activeTools: activeToolNames,
     extra: args.extra,
     history: initialMessages.history,
     generateHistorySummary: sdkHistorySummaryGenerator(dialect),
@@ -488,7 +489,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         { id: call.toolCallId, name: call.toolName, args: call.input },
         call.messages ?? messages,
       ),
-    activeTools: args.activeTools,
+    activeTools: activeToolNames(),
     maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
     abortSignal: composeAbortSignals(callerSignal, stepBudget.signal),
@@ -505,6 +506,19 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     ...(resolved.schema ? { schema: resolved.schema } : {}),
     ...(structuredOutputSchema ? { outputSchema: structuredOutputSchema } : {}),
   };
+
+  function activeToolNames(): readonly string[] | undefined {
+    const visible =
+      lifecycle.descriptors?.map((descriptor) => descriptor.name) ?? [];
+    if (!args.activeTools) {
+      return visible.length > 0 ? visible : undefined;
+    }
+    return visible.filter(
+      (name) =>
+        args.activeTools!.includes(name) ||
+        name === OFFLOAD_SUPPORT_TOOL_NAME,
+    );
+  }
 
   let handle: WithOperationResultMeta<
     ExecutorProviderStreamHandle<TRawStream>

@@ -23,6 +23,8 @@ import type {
 import type { InspectPart } from "./types";
 import { normalizeSystemContent } from "./system-content";
 import type { RepresentationOwnership } from "./contract";
+import { summarize } from "../request/history/strategies";
+import { OFFLOAD_SUPPORT_TOOL_NAME } from "../request/offload/support-tool";
 
 /** Resolve authored rungs without adding their capabilities to the prompt. */
 export async function resolveRepresentationPolicies(
@@ -57,7 +59,13 @@ export async function resolveRepresentationPolicies(
         ownedPolicyIds: Object.freeze([]),
         ownedSkillIds: Object.freeze([]),
         ownedToolMiddleware: Object.freeze([]),
+        supportToolNames: Object.freeze([OFFLOAD_SUPPORT_TOOL_NAME]),
         omissionEdits: Object.freeze([]),
+        offload: Object.freeze({
+          value: entry.value,
+          options: Object.freeze({}),
+          forced: true,
+        }),
         rungs: Object.freeze([
           Object.freeze({ kind: "offload" as const, available: false }),
         ]),
@@ -85,6 +93,8 @@ export async function resolveRepresentationPolicies(
       ownedSkillIds,
       parts,
     );
+    const offload = findOffloadable(entry);
+    const summary = findSummarizable(entry);
     const rungs = [];
     for (const rung of compiled.rungs) {
       if (!rung.source) {
@@ -153,14 +163,85 @@ export async function resolveRepresentationPolicies(
       ownedToolMiddleware: Object.freeze([
         ...(ownership?.toolMiddleware ?? []),
       ]),
+      ...(offload
+        ? {
+            supportToolNames: Object.freeze([
+              OFFLOAD_SUPPORT_TOOL_NAME,
+            ]),
+            offload: Object.freeze({
+              value:
+                fullTexts.length === 1
+                  ? fullTexts[0]
+                  : Object.freeze([...fullTexts]),
+              options: offload.options,
+              forced: false,
+            }),
+          }
+        : {}),
       ...(ownedSkillIds.length > 0 && skillProjection
         ? { skillProjection }
         : {}),
       omissionEdits: Object.freeze(omissionEdits),
+      ...(summary
+        ? {
+            summary: summaryPolicy(entry, fullTexts),
+          }
+        : {}),
       rungs: Object.freeze(rungs),
     }));
   }
   return Object.freeze(policies);
+}
+
+function summaryPolicy(
+  entry: RepresentationEntry,
+  sourceTexts: readonly string[],
+): NonNullable<ResolvedRepresentationPolicy["summary"]> {
+  const summary = findSummarizable(entry);
+  const strategy = summary?.options.strategy ?? summarize.adaptive();
+  if (
+    strategy._tag !== "SummarizeStrategy" ||
+    strategy.version !== 1
+  ) {
+    throw new TypeError(
+      "summarizable() strategy must be created by summarize.",
+    );
+  }
+  return Object.freeze({
+    sourceTexts: Object.freeze([...sourceTexts]),
+    ...(summary?.options.model !== undefined
+      ? { model: summary.options.model }
+      : {}),
+    strategy,
+  });
+}
+
+function findSummarizable(
+  entry: RepresentationEntry,
+): Extract<RepresentationEntry, { readonly _tag: "summarizable" }> | undefined {
+  let current: unknown = entry;
+  while (current && typeof current === "object" && "_tag" in current) {
+    const node = current as RepresentationEntry;
+    if (node._tag === "summarizable") return node;
+    if (node._tag !== "offloadable" && node._tag !== "droppable") {
+      return undefined;
+    }
+    current = node.source;
+  }
+  return undefined;
+}
+
+function findOffloadable(
+  entry: RepresentationEntry,
+): Extract<RepresentationEntry, { readonly _tag: "offloadable" }> | undefined {
+  let current: unknown = entry;
+  while (current && typeof current === "object" && "_tag" in current) {
+    const node = current as RepresentationEntry;
+    if (node._tag === "offloadable") return node;
+    if (node._tag !== "droppable") return undefined;
+    current = node.source;
+  }
+  return undefined;
 }
 
 function loadedSkillOmissionEdits(

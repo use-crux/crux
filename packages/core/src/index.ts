@@ -721,6 +721,7 @@ export {
   prefer,
   summarizable,
 } from "./request/representation/wrappers";
+export type { OffloadReceipt } from "./request/offload/handle";
 export type {
   DroppableLadder,
   ForcedOffload,

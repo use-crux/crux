@@ -27,7 +27,7 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly schema?: z.ZodType;
   readonly outputSchema?: JsonSchemaObject;
   readonly tools: () => CallArgs["tools"];
-  readonly activeTools?: readonly string[];
+  readonly activeTools: () => readonly string[] | undefined;
   readonly extra?: Record<string, unknown>;
   readonly history?: RequestHistoryContext;
   readonly generateHistorySummary?: GenerateHistorySummary;
@@ -122,11 +122,12 @@ export function createSdkRequestStepPlanner<
       originalToolNames.some(
         (name, index) => name !== selectedToolNames[index],
       );
+    const configuredActiveTools = options.activeTools();
     const activeTools = toolsChanged
-      ? (options.activeTools ?? originalToolNames).filter((name) =>
+      ? (configuredActiveTools ?? originalToolNames).filter((name) =>
           selectedToolNames.includes(name),
         )
-      : options.activeTools;
+      : configuredActiveTools;
     return Object.freeze({
       model: step.model,
       modelInfo: Object.freeze({ ...step.modelInfo }),

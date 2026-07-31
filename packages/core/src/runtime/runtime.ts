@@ -27,6 +27,7 @@ import type { CapturedObservabilityContext } from "../observability/context";
 import type { CruxPropagationCarrier } from "../observability/continuation";
 import type { ProjectIndexRuntimeTransport } from "../project-index/runtime";
 import type { RecordStore } from "../storage";
+import type { AssetStore } from "../asset";
 import type { RuntimeEngineDefinition } from "./api/runtime-definition";
 import type { CruxHostBinding } from "../scope/types";
 import { getCruxProcessRegistry } from "./process-registry";
@@ -131,6 +132,8 @@ export interface CruxHooks {
   telemetryResumeAttributesHook?: TelemetryResumeAttributesHook;
   /** Global record store for flow state persistence (suspend/resume). */
   records?: RecordStore;
+  /** Asset backing available to exact-recovery references. */
+  assets?: AssetStore;
   /** Durable Runtime Engine composer configured for runtime-bound APIs. */
   runtimeEngine?: RuntimeEngineDefinition;
   /** Explicit host binding configured for invocation retention. */

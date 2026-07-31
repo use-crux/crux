@@ -64,3 +64,12 @@ Remove the `@use-crux/core/compaction` subpath and its legacy
 projection and provider-neutral generation function types from
 `@use-crux/core`. The Convex package no longer mirrors
 `compactConversation()`.
+
+Activate generated-summary and exact-recovery rungs for non-history sources.
+`summarizable()` now uses content-addressed derived artifacts, while
+`offloadable()` and forced `offload()` publish opaque owner-scoped references
+with a required, budgeted retrieval Tool. Tool definitions may declare
+`output: offloadable({ aboveTokens })` so large canonical results are retained
+exactly while execution evidence distinguishes the application output from
+the model-facing reference. Persistence configuration may provide an existing
+asset store so already-addressable asset bytes are reused.

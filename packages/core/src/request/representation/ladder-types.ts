@@ -8,6 +8,7 @@ import type { z } from "zod";
 import type { Message } from "../../generation/messages";
 import type { Context } from "../../prompt/context-types";
 import type { ToolMiddleware } from "../../tools/types";
+import type { SummarizeStrategy } from "../history/strategies";
 
 declare const REPRESENTATION_LADDER: unique symbol;
 
@@ -24,8 +25,10 @@ export type RepresentationSourceSchema<TSource extends RepresentationSource> =
 
 /** Options reserved for generated summary representations. */
 export interface SummarizableOptions {
-  /** Optional strategy value activated by managed artifact support. */
-  readonly strategy?: unknown;
+  /** Optional model used for derived-summary support requests. */
+  readonly model?: unknown;
+  /** Versioned summary strategy. */
+  readonly strategy?: SummarizeStrategy;
 }
 
 /** Options reserved for exact-recovery reference representations. */
@@ -144,6 +147,10 @@ export interface ResolvedRepresentationRung {
   readonly supportRequestId?: string;
   /** Every bounded support request that prepared this representation. */
   readonly supportRequestIds?: readonly string[];
+  /** Publish exact backing before this rung can be dispatched. */
+  readonly publish?: () => Promise<void>;
+  /** Revalidate the pinned backing revision before dispatch. */
+  readonly validate?: () => Promise<void>;
 }
 
 /** Resolved redacted policy carried from prompt resolution into planning. @internal */
@@ -157,6 +164,8 @@ export interface ResolvedRepresentationPolicy {
   readonly ownedPolicyIds: readonly string[];
   readonly ownedSkillIds: readonly string[];
   readonly ownedToolMiddleware: readonly ToolMiddleware[];
+  /** Required support Tools retained only by selected offload rungs. */
+  readonly supportToolNames?: readonly string[];
   readonly skillProjection?: {
     readonly source: string;
     readonly fullText: string;
@@ -171,6 +180,18 @@ export interface ResolvedRepresentationPolicy {
   }[];
   /** Lowest safe transcript used only for branch lower-bound measurement. */
   readonly lowerBoundMessages?: readonly Message[];
+  /** Canonical derived-summary policy retained for request-time preparation. */
+  readonly summary?: {
+    readonly sourceTexts: readonly string[];
+    readonly model?: unknown;
+    readonly strategy: SummarizeStrategy;
+  };
+  /** Canonical exact-recovery source retained until request planning. */
+  readonly offload?: {
+    readonly value: unknown;
+    readonly options: Readonly<OffloadableOptions>;
+    readonly forced: boolean;
+  };
   readonly rungs: readonly ResolvedRepresentationRung[];
 }
 

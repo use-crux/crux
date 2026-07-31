@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { ContentPart } from './content'
+import type { ToolOutputOffloadPolicy } from '../request/representation/ladder-types'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[]
@@ -54,6 +55,8 @@ export interface ToolDef<
     options: ToolExecutionOptions<TContext, TRuntimeContext>,
   ) => TOutput | Promise<TOutput>
   toModelOutput?: (args: ToModelOutputArgs<TInput, TOutput>) => ToolModelOutput | Promise<ToolModelOutput>
+  /** Optional exact-recovery policy for large tool outputs. */
+  output?: ToolOutputOffloadPolicy
 }
 
 /** Structural error thrown when a creation tool has not created an entity yet. */

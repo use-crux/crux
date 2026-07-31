@@ -8,6 +8,7 @@ import type { CallArgs } from "../../adapter/types";
 import type { RequestAdaptation } from "../receipt/adaptations";
 import type { ResolvedRepresentationPolicy } from "../representation/ladder-types";
 import { applySkillProjection } from "./skill-projection";
+import { applyRepresentationRung } from "./apply-representation";
 
 /** One complete legal request candidate. @internal */
 export interface RequestCandidate<
@@ -94,14 +95,16 @@ export function buildRequestCandidate<
   const adaptations: RequestAdaptation[] = [];
   const selections = new Map<string, number>();
   const omittedPolicies: ResolvedRepresentationPolicy[] = [];
+  const selectedRungs: ResolvedRepresentationPolicy["rungs"][number][] = [];
   for (let index = 0; index < policies.length; index++) {
     const policy = policies[index]!;
     const selected = fidelity[index] ?? 0;
     const rung = policy.rungs[selected]!;
+    selectedRungs.push(rung);
     selections.set(policy.contributor, selected);
-    if (selected === 0 || rung.kind === "full") continue;
+    if (rung.kind === "full") continue;
     if (rung.kind === "omitted") omittedPolicies.push(policy);
-    request = applyRung(request, policy, rung);
+    request = applyRepresentationRung(request, policy, rung);
     adaptations.push({
       contributor: policy.contributor,
       representation: rung.kind,
@@ -114,6 +117,7 @@ export function buildRequestCandidate<
     });
   }
   request = applySkillProjection(request, omittedPolicies);
+  request = applySupportToolProjection(request, policies, selectedRungs);
   return Object.freeze({
     request,
     fidelity: Object.freeze([...fidelity]),
@@ -139,6 +143,7 @@ export function buildRequestBranchLowerBound<
 ): CallArgs<TExtra> {
   let request = original;
   const omittedPolicies: ResolvedRepresentationPolicy[] = [];
+  const selectedRungs: ResolvedRepresentationPolicy["rungs"][number][] = [];
   for (let index = 0; index < policies.length; index++) {
     const policy = policies[index]!;
     const selected = prefix[index];
@@ -151,148 +156,31 @@ export function buildRequestBranchLowerBound<
             : {}),
         }
       : policy.rungs[selected]!;
-    if (selected === 0 && rung.kind === "full") continue;
+    if (rung.kind === "full") continue;
+    selectedRungs.push(rung);
     if (rung.kind === "omitted") omittedPolicies.push(policy);
-    request = applyRung(request, policy, rung);
+    request = applyRepresentationRung(request, policy, rung);
   }
-  return applySkillProjection(request, omittedPolicies);
+  request = applySkillProjection(request, omittedPolicies);
+  return applySupportToolProjection(request, policies, selectedRungs);
 }
 
-function applyRung<
+function applySupportToolProjection<
   TExtra extends Record<string, unknown>,
 >(
   request: CallArgs<TExtra>,
-  policy: ResolvedRepresentationPolicy,
-  rung: ResolvedRepresentationPolicy["rungs"][number],
+  policies: readonly ResolvedRepresentationPolicy[],
+  selectedRungs: readonly ResolvedRepresentationPolicy["rungs"][number][],
 ): CallArgs<TExtra> {
-  const omitted = rung.kind === "omitted";
-  const replacement = omitted ? "" : (rung.text ?? "");
-  const systemBlocks = request.systemBlocks?.flatMap((block) => {
-    const omissionEdit = omitted
-      ? policy.omissionEdits.find((edit) => edit.source === block.source)
-      : undefined;
-    if (omissionEdit) {
-      return omissionEdit.replacement
-        ? [{ ...block, text: omissionEdit.replacement }]
-        : [];
-    }
-    if (!policy.sources.includes(block.source)) return [block];
-    if (omitted) return [];
-    return [{ ...block, text: replacement }];
-  });
-  let system = systemBlocks
-    ? systemBlocks.map((block) => block.text).join("\n\n")
-    : (request.system ?? "");
-  if (!systemBlocks) {
-    policy.fullTexts.forEach((fullText, index) => {
-      system = replaceJoinedPart(
-        system,
-        fullText,
-        index === 0 ? replacement : "",
-      );
-    });
-    if (omitted) {
-      for (const edit of policy.omissionEdits) {
-        system = replaceJoinedPart(
-          system,
-          edit.fullText,
-          edit.replacement,
-        );
-      }
-    }
-  }
-  const messages = rung.messages
-    ? [...rung.messages]
-    : !systemBlocks && !request.system
-      ? replaceFoldedSystem(
-          request.messages,
-          policy.fullTexts,
-          replacement,
-          omitted ? policy.omissionEdits : [],
-        )
-      : request.messages;
-  const tools =
-    omitted && policy.ownedToolNames.length > 0
-      ? request.tools?.filter(
-          (tool) => !policy.ownedToolNames.includes(tool.name),
-        )
-      : request.tools;
+  const supportNames = new Set(
+    policies.flatMap((policy) => policy.supportToolNames ?? []),
+  );
+  if (supportNames.size === 0) return request;
+  const retain = selectedRungs.some((rung) => rung.kind === "offload");
   return {
     ...request,
-    messages,
-    ...(request.system !== undefined || systemBlocks
-      ? { system }
-      : {}),
-    ...(systemBlocks ? { systemBlocks } : {}),
-    ...(tools ? { tools } : {}),
+    tools: retain
+      ? request.tools
+      : request.tools?.filter((tool) => !supportNames.has(tool.name)),
   };
-}
-
-function replaceFoldedSystem(
-  messages: CallArgs<Record<string, unknown>>["messages"],
-  fullTexts: readonly string[],
-  replacement: string,
-  omissionEdits: ResolvedRepresentationPolicy["omissionEdits"],
-): CallArgs<Record<string, unknown>>["messages"] {
-  let replaced = false;
-  return messages.map((message) => {
-    if (
-      replaced ||
-      message.role !== "system" ||
-      typeof message.content !== "string"
-    ) {
-      return message;
-    }
-    let content = message.content;
-    for (let index = 0; index < fullTexts.length; index++) {
-      const fullText = fullTexts[index]!;
-      if (!content.includes(fullText)) continue;
-      content = replaceJoinedPart(
-        content,
-        fullText,
-        index === 0 ? replacement : "",
-      );
-      replaced = true;
-    }
-    for (const edit of omissionEdits) {
-      content = replaceJoinedPart(
-        content,
-        edit.fullText,
-        edit.replacement,
-      );
-    }
-    return content === message.content ? message : { ...message, content };
-  });
-}
-
-function replaceOnce(
-  value: string,
-  search: string,
-  replacement: string,
-): string {
-  if (!search) return value;
-  const index = value.indexOf(search);
-  if (index < 0) return value;
-  const before = value.slice(0, index);
-  const after = value.slice(index + search.length);
-  return `${before}${replacement}${after}`;
-}
-
-function replaceJoinedPart(
-  value: string,
-  search: string,
-  replacement: string,
-): string {
-  if (!search) return value;
-  if (replacement) return replaceOnce(value, search, replacement);
-  const index = value.indexOf(search);
-  if (index < 0) return value;
-  const end = index + search.length;
-  if (value.slice(end, end + 2) === "\n\n") {
-    return `${value.slice(0, index)}${value.slice(end + 2)}`;
-  }
-  if (value.slice(Math.max(0, index - 2), index) === "\n\n") {
-    return `${value.slice(0, index - 2)}${value.slice(end)}`;
-  }
-  return `${value.slice(0, index)}${value.slice(end)}`;
 }

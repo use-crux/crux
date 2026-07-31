@@ -67,3 +67,4 @@ export type {
   SummarizableOptions,
   ToolOutputOffloadPolicy,
 } from "./representation/ladder-types";
+export type { OffloadReceipt } from "./offload/handle";

@@ -109,22 +109,28 @@ export function emissionModel(
 export function capturingEmissionModel(emissions: readonly MockEmission[]): {
   model: LanguageModel;
   prompts: unknown[][];
+  toolNames: string[][];
 } {
   const queue = [...emissions];
   const prompts: unknown[][] = [];
+  const toolNames: string[][] = [];
   let sequence = 0;
   const model = new MockLanguageModelV3({
     provider: "openai",
     modelId: "gpt-4o",
-    doGenerate: async (options: { prompt: unknown[] }) => {
+    doGenerate: async (options: {
+      prompt: unknown[];
+      tools?: Array<{ name: string }>;
+    }) => {
       prompts.push(options.prompt);
+      toolNames.push(options.tools?.map((entry) => entry.name) ?? []);
       return v3Result(
         queue.shift() ?? { text: "exhausted" },
         sequence++,
       ) as never;
     },
   }) as unknown as LanguageModel;
-  return { model, prompts };
+  return { model, prompts, toolNames };
 }
 
 /**

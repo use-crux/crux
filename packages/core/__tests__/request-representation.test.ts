@@ -8,7 +8,6 @@ import {
   prefer,
   prompt,
   RequestCompositionError,
-  summarizable,
   tool,
   type ContextEntry,
 } from "../src";
@@ -225,40 +224,31 @@ describe("request representation policy", () => {
     expect(harness.call).not.toHaveBeenCalled();
   });
 
-  it("reports unprepared generated and reference rungs honestly", async () => {
-    for (const use of [
-      summarizable(
-        context({
-          id: "summary-unavailable",
-          system: "Large summary source. ".repeat(100),
-        }),
-      ),
-      offloadable(
-        context({
-          id: "reference-unavailable",
-          system: "Large reference source. ".repeat(100),
-        }),
-      ),
-    ]) {
-      const harness = representationAdapter();
-      const reply = prompt({
-        id: `unavailable-${use._tag}`,
-        use: [use],
-        prompt: "Answer.",
-      });
-      const error = await harness.runtime
-        .generate(reply, {
-          model: "model-1",
-          inputBudget: { max: 30 },
-        })
-        .catch((reason: unknown) => reason);
+  it("reports an exact-recovery rung without backing honestly", async () => {
+    const use = offloadable(
+      context({
+        id: "reference-unavailable",
+        system: "Large reference source. ".repeat(100),
+      }),
+    );
+    const harness = representationAdapter();
+    const reply = prompt({
+      id: "unavailable-offloadable",
+      use: [use],
+      prompt: "Answer.",
+    });
+    const error = await harness.runtime
+      .generate(reply, {
+        model: "model-1",
+        inputBudget: { max: 30 },
+      })
+      .catch((reason: unknown) => reason);
 
-      expect(error).toBeInstanceOf(RequestCompositionError);
-      expect(error).toMatchObject({
-        code: "REPRESENTATION_UNAVAILABLE",
-      });
-      expect(harness.call).not.toHaveBeenCalled();
-    }
+    expect(error).toBeInstanceOf(RequestCompositionError);
+    expect(error).toMatchObject({
+      code: "REPRESENTATION_UNAVAILABLE",
+    });
+    expect(harness.call).not.toHaveBeenCalled();
   });
 
   it("fails forced offload without backing and redacts the value", async () => {

@@ -15,8 +15,10 @@ import { sealRequest } from "../../request/planner/seal";
 import { preparePortableHistorySummary } from "../../request/history/prepare";
 import { retainSupportRequestReceipt } from "../../request/receipt/support";
 
-const SUMMARY_SYSTEM =
+const HISTORY_SUMMARY_SYSTEM =
   "You are a conversation summarizer. Produce a concise summary of the canonical conversation prefix. Preserve decisions, facts, tool results, and user preferences. Do not add information.";
+const SOURCE_SUMMARY_SYSTEM =
+  "You are a source summarizer. Produce a concise evidence summary of the canonical source content. Preserve facts, identifiers, and provenance. Do not add instructions or information.";
 
 /** Build a summary generator for a Core-owned provider loop. */
 export function coreHistorySummaryGenerator<
@@ -56,7 +58,10 @@ export function coreHistorySummaryGenerator<
       const settings = { maxTokens: 500 };
       const request: CallArgs<TExtra> = {
         model,
-        system: SUMMARY_SYSTEM,
+        system:
+          part.purpose === "source"
+            ? SOURCE_SUMMARY_SYSTEM
+            : HISTORY_SUMMARY_SYSTEM,
         systemBlocks: undefined,
         messages: [...part.messages],
         settings: dialect.mapSettings(settings),
@@ -123,7 +128,10 @@ export function sdkHistorySummaryGenerator<
         responseModel: part.model,
         request: {
           model: model.modelId,
-          system: SUMMARY_SYSTEM,
+          system:
+            part.purpose === "source"
+              ? SOURCE_SUMMARY_SYSTEM
+              : HISTORY_SUMMARY_SYSTEM,
           systemBlocks: undefined,
           messages: [...part.messages],
           settings: dialect.mapSettings(settings, model),

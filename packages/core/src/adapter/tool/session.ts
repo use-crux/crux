@@ -110,6 +110,15 @@ import type { SkillActivationSession } from "../../skill/session";
 import { createToolRegistry } from "../../tools/tool-registry";
 import { LOAD_SKILL_TOOL_NAME } from "../../skill/tools";
 import {
+  canonicalToolOutput,
+  toolOutputOffloadReceipt,
+  withToolOutputOffloadPolicies,
+} from "../../request/offload/tool-output";
+import {
+  OFFLOAD_SUPPORT_TOOL_NAME,
+  offloadSupportTools,
+} from "../../request/offload/support-tool";
+import {
   createApprovalId,
   createApprovalToken as defaultCreateApprovalToken,
   createApprovalRequestMessage,
@@ -574,6 +583,8 @@ export function createToolLifecycle(
   let armedTools: Record<string, unknown> | undefined;
   let descriptors: ToolDescriptor[] | undefined;
   let exposedDescriptors: readonly ToolDescriptor[] = [];
+  let armedDescriptors: readonly ToolDescriptor[] = [];
+  let dormantSdkOffloadSupport: ToolDescriptor | undefined;
   let exposureCandidates: Array<{
     readonly descriptor: ToolDescriptor;
     readonly provenance: ReturnType<typeof readToolExposureProvenance>;
@@ -599,8 +610,17 @@ export function createToolLifecycle(
     ToolApprovalRequirement
   >();
   const sdkAttempts = new Map<string, SdkAttemptedToolCall>();
+  let currentResolved = options.resolved;
+  let forcedOffloadSupport = false;
+
+  function activateForcedOffloadSupport(): void {
+    if (forcedOffloadSupport) return;
+    forcedOffloadSupport = true;
+    arm(currentResolved);
+  }
 
   function arm(resolved: ResolvedPrompt): void {
+    currentResolved = resolved;
     skillSession = readSkillActivationSession(resolved);
     // Recomputed per arm: a re-resolved prompt (skill load) can contribute
     // a different middleware chain, and rebuilt tools must wear it.
@@ -614,13 +634,23 @@ export function createToolLifecycle(
       resolved.tools,
       options.call?.tools,
     );
-    const merged = createToolRegistry(resolved.tools, callTools);
+    const baseTools = createToolRegistry(resolved.tools, callTools);
+    const includeDormantSupport =
+      options.regime === "sdk" &&
+      Object.keys(baseTools).length > 0 &&
+      !(OFFLOAD_SUPPORT_TOOL_NAME in baseTools) &&
+      !forcedOffloadSupport;
+    const merged =
+      (forcedOffloadSupport || includeDormantSupport) &&
+      !(OFFLOAD_SUPPORT_TOOL_NAME in baseTools)
+        ? createToolRegistry(baseTools, offloadSupportTools())
+        : baseTools;
     // Resolve the profile that lowers tool input schemas. An unverified model
     // (resolver present, semantics unknown) with any authored tool schema fails
     // before provider I/O rather than silently receiving permissive lowering.
     if (
       capabilityResolution.kind === "unverified" &&
-      registryHasAuthoredToolSchema(merged)
+      registryHasAuthoredToolSchema(baseTools)
     ) {
       throw new CruxUnsupportedStructuredOutputError(
         capabilityResolution.providerId,
@@ -638,7 +668,10 @@ export function createToolLifecycle(
     // boundary — so the execution order is: wire args → decode → middleware over
     // canonical z.input → authored safeParse exactly once → execute(safeParse.data).
     const prepared = prepareToolInputPlans(
-      merged,
+      withToolOutputOffloadPolicies(
+        merged,
+        activateForcedOffloadSupport,
+      ),
       toolCapabilities,
       toolInputPlans,
     );
@@ -660,11 +693,23 @@ export function createToolLifecycle(
         toolInputPlans,
         options.regime === "core" ? options.sanitizeToolSchema : undefined,
       ) ?? [];
-    exposureCandidates = canonical.map((descriptor) => ({
+    dormantSdkOffloadSupport = includeDormantSupport
+      ? canonical.find(
+          (descriptor) =>
+            descriptor.name === OFFLOAD_SUPPORT_TOOL_NAME,
+        )
+      : undefined;
+    const exposedCanonical = dormantSdkOffloadSupport
+      ? canonical.filter(
+          (descriptor) =>
+            descriptor.name !== OFFLOAD_SUPPORT_TOOL_NAME,
+        )
+      : canonical;
+    exposureCandidates = exposedCanonical.map((descriptor) => ({
       descriptor,
       provenance: readToolExposureProvenance(wrappedTools[descriptor.name]),
     }));
-    applyExposedDescriptors(canonical);
+    applyExposedDescriptors(exposedCanonical);
   }
 
   arm(options.resolved);
@@ -691,7 +736,13 @@ export function createToolLifecycle(
     exposed: readonly ToolDescriptor[],
   ): void {
     exposedDescriptors = exposed;
-    const retained = new Set(exposed.map((descriptor) => descriptor.name));
+    armedDescriptors =
+      dormantSdkOffloadSupport && exposed.length > 0
+      ? [...exposed, dormantSdkOffloadSupport]
+      : exposed;
+    const retained = new Set(
+      armedDescriptors.map((descriptor) => descriptor.name),
+    );
     wrappedTools = createToolRegistry(
       Object.fromEntries(
         Object.entries(wrappedTools).filter(([name]) => retained.has(name)),
@@ -710,7 +761,7 @@ export function createToolLifecycle(
 
     descriptors = exposed.length > 0 ? [...exposed] : undefined;
     const exposedTools = createToolRegistry<unknown>();
-    for (const descriptor of exposed) {
+    for (const descriptor of armedDescriptors) {
       const tool = wrappedTools[descriptor.name];
       exposedTools[descriptor.name] =
         tool && typeof tool === "object"
@@ -1130,21 +1181,24 @@ export function createToolLifecycle(
             toolCall.id,
           ),
         );
-        const outputSize = measureUnknown(result);
+        const canonicalOutput = canonicalToolOutput(result);
+        const outputSize = measureUnknown(canonicalOutput);
         const modelOutputSize = measureModelOutput(modelOutput);
+        const offloadReceipt =
+          toolOutputOffloadReceipt(convertedModelOutput);
         const content = renderToolModelOutput(modelOutput);
         span.withContext(() => {
           emitToolResultArtifact(
             span.spanId,
             toolCall.name,
             toolCall.id,
-            result,
+            canonicalOutput,
             {
               resultKind: "raw",
               outputSize,
               isError: false,
             },
-            sourceResultPreview(provenance, result),
+            sourceResultPreview(provenance, canonicalOutput),
           );
           emitToolResultArtifact(
             span.spanId,
@@ -1178,11 +1232,12 @@ export function createToolLifecycle(
         return {
           toolCallId: toolCall.id,
           name: toolCall.name,
-          output: result,
+          output: canonicalOutput,
           modelOutput,
           content,
           outputSize,
           modelOutputSize,
+          ...(offloadReceipt ? { offloadReceipt } : {}),
         };
       } catch (err) {
         if (options.abortSignal?.aborted) {
@@ -1658,7 +1713,7 @@ export function createToolLifecycle(
       // schema are left untouched. Undefined when no such tool exists.
       let result: Record<string, JsonSchemaObject> | undefined;
       const exposedByName = new Map(
-        exposedDescriptors.map((descriptor) => [descriptor.name, descriptor]),
+        armedDescriptors.map((descriptor) => [descriptor.name, descriptor]),
       );
       for (const [name, plan] of toolInputPlans) {
         if (!plan.hasAuthoredSchema) continue;

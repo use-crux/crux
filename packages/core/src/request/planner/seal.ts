@@ -15,10 +15,6 @@ import {
 import type { InputBudget } from "../budget/input-budget";
 import { deriveInputBudget } from "../budget/derive";
 import {
-  RequestCompositionError,
-  type RequestDiagnostic,
-} from "../errors";
-import {
   assertAuthoritativeTokenCount,
   type RequestTokenCounter,
 } from "../measure/counter-port";
@@ -37,8 +33,8 @@ import type { RequestRepresentationEpoch } from "./epoch";
 import { selectRepresentedRequest } from "./select";
 import type { GenerateHistorySummary } from "../artifacts/lifecycle";
 import { resolveManagedHistoryPolicy } from "../history/managed-policy";
-
-const warnedExactHistory = new Set<string>();
+import { prepareRepresentationPolicies } from "../representation/prepare";
+import { requestWarnings, tooLargeError } from "./diagnostics";
 
 /** Inputs required to seal one exact request. @internal */
 export interface SealRequestInput<
@@ -90,7 +86,7 @@ export async function sealRequest<
   });
   let adaptations: readonly RequestAdaptation[] = [];
   const planningWarnings: RequestWarning[] = [];
-  const policies = [...(input.representations ?? [])];
+  let policies = [...(input.representations ?? [])];
   if (input.history?.policy === "managed" && input.history.projection) {
     if (input.countTokens) {
       inputTokens = assertAuthoritativeTokenCount(
@@ -126,6 +122,21 @@ export async function sealRequest<
     planningWarnings.push(...managed.warnings);
   }
   if (policies.length > 0) {
+    policies = [
+      ...(await prepareRepresentationPolicies({
+        policies,
+        provider: input.provider,
+        model: input.model,
+        responseModel: input.responseModel,
+        fullInputTokens: inputTokens,
+        max: budget.max,
+        optimizeAt: budget.optimizeAt,
+        generate: input.generateHistorySummary,
+        request,
+      })),
+    ];
+  }
+  if (policies.length > 0) {
     if (input.countTokens) {
       measurement = "exact";
       budget = deriveInputBudget({
@@ -145,7 +156,12 @@ export async function sealRequest<
       epoch: input.representationEpoch,
       media: input.media,
       countTokens: input.countTokens,
-      prepareRequest: input.prepareRequest,
+      prepareRequest: async (candidate, selections) => {
+        await prepareSelectedRepresentations(policies, selections);
+        return input.prepareRequest
+          ? input.prepareRequest(candidate, selections)
+          : candidate;
+      },
       optimizeAt: budget.optimizeAt,
       max: budget.max,
     });
@@ -210,88 +226,15 @@ export async function sealRequest<
   return requestPlan(request, receipt);
 }
 
-function tooLargeError<TExtra extends Record<string, unknown>>(
-  input: SealRequestInput<TExtra>,
-  requestId: string,
-  inputTokens: number,
-  maxInputTokens: number,
-  breakdown: ReturnType<typeof estimateRequestTokens>["breakdown"],
-): RequestCompositionError {
-  const largest = breakdown.contributions.slice(0, 3);
-  const diagnostics: RequestDiagnostic[] = [
-    {
-      id: `${requestId}:input-limit`,
-      code: "REQUEST_INPUT_LIMIT",
-      tokens: inputTokens,
-      message: `Minimum required input is ${inputTokens} tokens; ${maxInputTokens} are available.`,
-    },
-    ...largest.map((entry, index) => ({
-      id: `${requestId}:contributor:${index + 1}`,
-      code: "LARGEST_REQUIRED_CONTRIBUTOR",
-      contributor: entry.contributor,
-      tokens: entry.tokens,
-      message: `${entry.contributor} contributes approximately ${entry.tokens} tokens.`,
-    })),
-    {
-      id: `${requestId}:alternatives`,
-      code: "EXACT_REPRESENTATION_EXHAUSTED",
-      message:
-        "The exact representation is the only authorized representation and does not fit.",
-    },
-    ...(input.history?.policy === "exact"
-      ? [
-          {
-            id: `${requestId}:history-remedy`,
-            code: "HISTORY_EXACT_REMEDY",
-            contributor: "history",
-            message:
-              "Keep canonical history exact and configure history.recent() for a stateless window or history() for managed adaptation.",
-          },
-        ]
-      : []),
-    {
-      id: `${requestId}:remedy`,
-      code: "REQUEST_REMEDY",
-      message:
-        "Increase inputBudget.max, reduce exact input, reserve fewer output tokens, or authorize a lower representation.",
-    },
-  ];
-  const names = largest.map((entry) => entry.contributor).join(", ") || "none";
-  return new RequestCompositionError(
-    "REQUEST_TOO_LARGE",
-    `Request "${requestId}" for model "${input.model}" requires ${inputTokens} input tokens but only ${maxInputTokens} are available. Largest required contributors: ${names}. Exact representation exhausted.`,
-    diagnostics,
-    requestId,
-  );
-}
-
-function requestWarnings<TExtra extends Record<string, unknown>>(
-  input: SealRequestInput<TExtra>,
-  inputTokens: number,
-  optimizeAt: number,
-): readonly RequestWarning[] {
-  const warnings = [...(input.history?.warnings ?? [])];
-  if (
-    input.history?.policy !== "exact" ||
-    inputTokens <= optimizeAt
-  ) {
-    return warnings;
+async function prepareSelectedRepresentations(
+  policies: readonly ResolvedRepresentationPolicy[],
+  selections: ReadonlyMap<string, number>,
+): Promise<void> {
+  for (const policy of policies) {
+    const selected = selections.get(policy.contributor) ?? 0;
+    const rung = policy.rungs[selected];
+    if (!rung?.publish) continue;
+    await rung.publish();
+    await rung.validate?.();
   }
-  warnings.push({
-    code: "HISTORY_EXACT_NEAR_LIMIT",
-    message:
-      "Complete exact history crossed the request optimization watermark and may eventually stop fitting; configure history.recent() or history().",
-  });
-  const warningKey = `${input.provider}:${input.model}`;
-  if (
-    !warnedExactHistory.has(warningKey) &&
-    (typeof process === "undefined" ||
-      process.env.NODE_ENV !== "production")
-  ) {
-    warnedExactHistory.add(warningKey);
-    console.warn(
-      `[Crux] Complete exact history for ${input.provider}/${input.model} crossed its request optimization watermark. Configure history.recent() or history() before it stops fitting.`,
-    );
-  }
-  return warnings;
 }

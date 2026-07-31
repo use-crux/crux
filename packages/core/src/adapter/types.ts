@@ -17,6 +17,7 @@ import type { ToolModelOutput } from "../types/tool";
 import type { CruxFinishReason } from "./normalized-outcome";
 import type { AssistantContentPart } from "../types/content";
 import type { RequestReceipt } from "../request/receipt/receipt";
+import type { OffloadReceipt } from "../request/offload/handle";
 
 // ─────────────────────────────────────────────────────────────────
 // Adapter Response
@@ -178,6 +179,8 @@ export interface ToolResultEntry {
   content: string;
   outputSize: number;
   modelOutputSize: number;
+  /** Exact-recovery publication evidence when the model view is a reference. */
+  offloadReceipt?: OffloadReceipt;
   modelOutputError?: string;
   isError?: boolean;
 }

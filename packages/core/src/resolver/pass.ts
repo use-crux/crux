@@ -74,6 +74,11 @@ import { resolveRepresentationPolicies } from "./representation-policy";
 import { inspectPromptText, resolvePromptText } from "./prompt-content";
 import { attachPromptTextObservation } from "./prompt-text-observation";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
+import {
+  hasOffloadOutputPolicy,
+  OFFLOAD_SUPPORT_TOOL_NAME,
+  offloadSupportTools,
+} from "../request/offload/support-tool";
 import type {
   PromptResolutionPass,
   ProjectionMode,
@@ -353,7 +358,16 @@ export async function runPromptPass(
   ];
   toolMerge.mergeOwned(postMerge.injectedTools, postMerge.injectedToolOwners);
   mergeBlackboardTools(toolMerge, postMerge.blackboards);
+  if (representations.some((policy) => policy.offload)) {
+    toolMerge.merge(offloadSupportTools(), "request support");
+  }
   toolMerge.merge(configTools, "prompt config");
+  if (
+    hasOffloadOutputPolicy(toolMerge.tools) &&
+    !(OFFLOAD_SUPPORT_TOOL_NAME in toolMerge.tools)
+  ) {
+    toolMerge.merge(offloadSupportTools(), "request support");
+  }
 
   if (skillSession !== undefined) {
     (resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession =

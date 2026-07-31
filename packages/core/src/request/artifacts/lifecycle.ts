@@ -36,6 +36,7 @@ export type GenerateHistorySummary = (input: {
   readonly model: unknown;
   readonly strategy: SummarizeStrategy;
   readonly providerNative: boolean;
+  readonly purpose?: "history" | "source";
 }) => Promise<{
   readonly summary: string;
   readonly requestId?: string;
