@@ -41,3 +41,11 @@ Remove the stateful MemoryBlock `recentMessages()` API and the stateful
 stateless exact-history suffix; managed summary artifacts will be provided by
 the context-planning history surface. The Convex memory profile mirrors the
 MemoryBlock removal.
+
+Add type-safe request representation ladders with `prefer()`, `summarizable()`,
+`offloadable()`, and terminal `droppable()` composition. Authored alternatives
+now participate in deterministic two-tier whole-request selection, retain the
+canonical source's capabilities, remain monotonic within a concrete-model
+epoch, and expose every selected alternative or omission in request receipts.
+Generated-summary and exact-recovery rungs fail explicitly until their backing
+artifacts are prepared.

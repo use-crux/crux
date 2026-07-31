@@ -75,6 +75,8 @@ export interface SealedExecutorRequestStep<TModel> {
   readonly systemBlocks: readonly SystemBlock[] | undefined;
   /** Sealed canonical transcript for this semantic step. */
   readonly messages: readonly Message[];
+  /** Tool names the SDK may expose after representation selection. */
+  readonly activeTools?: readonly string[];
   /** Public evidence for the sealed provider request. */
   readonly receipt: RequestReceipt;
 }

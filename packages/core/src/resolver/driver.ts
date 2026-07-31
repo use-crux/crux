@@ -98,6 +98,10 @@ function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.memories.push(...nested.memories)
   out.blackboards.push(...nested.blackboards)
   out.history.push(...nested.history)
+  out.representations.push(...nested.representations)
+  for (const [entry, ownership] of nested.representationOwnership) {
+    out.representationOwnership.set(entry, ownership)
+  }
   out.toolSources.push(...nested.toolSources)
   mergeOwnedToolSet(out.tools, out.toolOwners, nested.tools, nested.toolOwners)
   out.toolMiddleware.push(...nested.toolMiddleware)
@@ -202,10 +206,30 @@ async function runContributor(
 
   const children = gate.children ?? contributor.children?.(input)
   if (children && children.length > 0) {
-    mergeNested(
-      out,
-      await resolveUse(children, input, promptId, ports, depth + 1, seenContextIds, dynamicSourceId, staticEntryIds),
+    const nested = await resolveUse(
+      children,
+      input,
+      promptId,
+      ports,
+      depth + 1,
+      seenContextIds,
+      dynamicSourceId,
+      staticEntryIds,
     )
+    if (contributor.representation) {
+      out.representationOwnership.set(
+        contributor.representation,
+        Object.freeze({
+          contexts: Object.freeze([...nested.active]),
+          skills: Object.freeze([...nested.skills]),
+          toolNames: Object.freeze(Object.keys(nested.tools)),
+          constraints: Object.freeze([...nested.constraints]),
+          guardrails: Object.freeze([...nested.guardrails]),
+          toolMiddleware: Object.freeze([...nested.toolMiddleware]),
+        }),
+      )
+    }
+    mergeNested(out, nested)
   }
 
   const contribution = contributor.contribute ? await contributor.contribute({ input, promptId }) : {}
@@ -216,6 +240,9 @@ async function runContributor(
   if (contribution.skill) out.skills.push(contribution.skill)
   if (contribution.blackboard) out.blackboards.push(contribution.blackboard)
   if (contribution.history) out.history.push(contribution.history)
+  if (contribution.representations) {
+    out.representations.push(...contribution.representations)
+  }
 
   if (contribution.use && contribution.use.length > 0) {
     mergeNested(

@@ -84,6 +84,12 @@ import {
   assertSdkRequestPlanning,
   createSdkRequestStepPlanner,
 } from "./sdk-request-planner";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -163,6 +169,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     safety,
     resolved.schema,
   );
+  selectRepresentationCapabilities(
+    safety,
+    resolved.representations ?? [],
+  );
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -202,6 +213,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
+  let representationSelections: ReadonlyMap<string, number> | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -226,8 +239,22 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
-      reresolve: (skillSession) =>
-        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      reresolve: async (skillSession) => {
+        resolved = await prompt.resolve(
+          withSkillActivationInput(resolveOpts, skillSession),
+        );
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        return resolved;
+      },
       guardSkillAmendment,
     });
     await lifecycle.guardExposure({
@@ -289,8 +316,47 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     outputSchema: structuredPlan?.outputSchema,
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    activeTools: args.activeTools,
     extra: args.extra,
     history: initialMessages.history,
+    representations: () => resolved.representations,
+    prepareRequest: (candidate, selections) => {
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      return guardRepresentedRequest(safety, candidate);
+    },
+    applyRepresentationSelection: async (selections) => {
+      representationSelections = selections;
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      await lifecycle.rearm(resolved);
+    },
   });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);

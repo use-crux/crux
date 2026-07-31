@@ -16,6 +16,8 @@ import type { JsonSchemaObject } from "../structured-output";
 import type { CallArgs } from "../types";
 import type { SdkLoopDialect } from "./dialect-types";
 import type { RequestHistoryContext } from "../../request/history/source";
+import type { ResolvedRepresentationPolicy } from "../../request/representation/ladder-types";
+import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
 
 interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>;
@@ -24,8 +26,18 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly schema?: z.ZodType;
   readonly outputSchema?: JsonSchemaObject;
   readonly tools: () => CallArgs["tools"];
+  readonly activeTools?: readonly string[];
   readonly extra?: Record<string, unknown>;
   readonly history?: RequestHistoryContext;
+  readonly representations: () =>
+    readonly ResolvedRepresentationPolicy[] | undefined;
+  readonly prepareRequest?: (
+    request: CallArgs<Record<string, unknown>>,
+    selections: ReadonlyMap<string, number>,
+  ) => Promise<CallArgs<Record<string, unknown>>>;
+  readonly applyRepresentationSelection?: (
+    selections: ReadonlyMap<string, number>,
+  ) => void | Promise<void>;
 }
 
 /** Fail before SDK execution when a loop cannot surface model-call boundaries. */
@@ -62,12 +74,14 @@ export function createSdkRequestStepPlanner<
   options: SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream>,
 ): ExecutorRequestStepPlanner<TModel> {
   let previousRequestId: string | undefined;
+  const representationEpoch = createRequestRepresentationEpoch();
 
   return async (step) => {
     const mappedSettings = options.dialect.mapSettings(
       options.settings,
       step.modelInfo,
     );
+    const tools = options.tools();
     const sealed = await sealRequest({
       provider: step.modelInfo.provider || options.dialect.id,
       model: step.modelInfo.modelId,
@@ -79,7 +93,7 @@ export function createSdkRequestStepPlanner<
         settings: mappedSettings,
         schema: options.schema,
         outputSchema: options.outputSchema,
-        tools: options.tools(),
+        tools,
         extra: options.extra ?? {},
       },
       settings: options.settings,
@@ -90,14 +104,32 @@ export function createSdkRequestStepPlanner<
       media: options.dialect.media,
       previousRequestId,
       history: options.history,
+      representations: options.representations(),
+      representationEpoch,
+      prepareRequest: options.prepareRequest,
+      applyRepresentationSelection: options.applyRepresentationSelection,
     });
     previousRequestId = sealed.receipt.id;
+    const originalToolNames = tools?.map((tool) => tool.name) ?? [];
+    const selectedToolNames =
+      sealed.request.tools?.map((tool) => tool.name) ?? [];
+    const toolsChanged =
+      originalToolNames.length !== selectedToolNames.length ||
+      originalToolNames.some(
+        (name, index) => name !== selectedToolNames[index],
+      );
+    const activeTools = toolsChanged
+      ? (options.activeTools ?? originalToolNames).filter((name) =>
+          selectedToolNames.includes(name),
+        )
+      : options.activeTools;
     return Object.freeze({
       model: step.model,
       modelInfo: Object.freeze({ ...step.modelInfo }),
       system: sealed.request.system,
       systemBlocks: sealed.request.systemBlocks,
       messages: sealed.request.messages,
+      ...(activeTools ? { activeTools: Object.freeze([...activeTools]) } : {}),
       receipt: sealed.receipt,
     });
   };

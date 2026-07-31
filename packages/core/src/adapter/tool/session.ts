@@ -406,6 +406,9 @@ export interface ToolLifecycle {
    */
   readonly descriptors: readonly ToolDescriptor[] | undefined;
 
+  /** Rebuild prompt-owned tools after request representation selection. @internal */
+  rearm(resolved: ResolvedPrompt): Promise<void>;
+
   /**
    * Evaluate the current provider-visible tool set before transport.
    *
@@ -578,6 +581,7 @@ export function createToolLifecycle(
   let exposureGuards: ToolExposureGuards | undefined;
   let enabled = false;
   let middlewareCount = 0;
+  let preserveArmedIdentity = false;
   const capabilityResolution: ToolInputCapabilitiesResolution =
     options.toolInputCapabilities ??
     (options.structuredOutputCapabilities
@@ -714,7 +718,11 @@ export function createToolLifecycle(
           : tool;
     }
     if (Object.keys(exposedTools).length === 0) {
-      armedTools = undefined;
+      if (preserveArmedIdentity && armedTools) {
+        for (const name of Object.keys(armedTools)) delete armedTools[name];
+      } else {
+        armedTools = undefined;
+      }
       return;
     }
 
@@ -739,9 +747,15 @@ export function createToolLifecycle(
         provider: options.modelIngressProvider,
       });
     }
-    armedTools = instrumentToolSet(executable, {
+    const nextArmedTools = instrumentToolSet(executable, {
       takeAttemptedSpan: consumeSdkAttempt,
     });
+    if (armedTools) {
+      for (const name of Object.keys(armedTools)) delete armedTools[name];
+      Object.assign(armedTools, nextArmedTools);
+    } else {
+      armedTools = nextArmedTools;
+    }
   }
 
   const currentTraceId = (): string | undefined =>
@@ -1657,6 +1671,21 @@ export function createToolLifecycle(
 
     get descriptors() {
       return descriptors;
+    },
+
+    async rearm(resolved) {
+      preserveArmedIdentity = true;
+      try {
+        arm(resolved);
+        if (!exposureGuards) return;
+        const exposed = await exposureEvaluator.evaluate(
+          exposureCandidates,
+          exposureGuards,
+        );
+        applyExposedDescriptors(exposed);
+      } finally {
+        preserveArmedIdentity = false;
+      }
     },
 
     async guardExposure(guards) {

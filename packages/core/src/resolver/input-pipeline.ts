@@ -19,6 +19,11 @@ import type {
   MatchSpec,
   MemoryEntry,
 } from '../prompt/context-types'
+import {
+  compileRepresentationLadder,
+  isForcedOffload,
+  isRepresentationLadder,
+} from '../request/representation/ladder'
 
 const RESOLVER_PRIVATE_INPUT_KEYS = ['_crux_activeSkills'] as const
 
@@ -59,6 +64,15 @@ export function collectDeclaredRawFields(entries: readonly ContextEntry[]): stri
 
 function collectEntryRawFields(entry: ContextEntry, rawFields: Set<string>): void {
   if (!entry) return
+
+  if (isForcedOffload(entry)) return
+
+  if (isRepresentationLadder(entry)) {
+    for (const source of compileRepresentationLadder(entry).primarySources) {
+      collectContextRawFields(source, rawFields)
+    }
+    return
+  }
 
   if (isContextEntry(entry)) {
     collectContextRawFields(entry, rawFields)

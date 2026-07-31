@@ -13,6 +13,9 @@ import type { AnyToolSet } from '../types'
 import type { Context } from '../prompt/context-types'
 import type { Skill } from './types'
 
+/** Internal availability selector used by request representation planning. @internal */
+export const skillAvailabilitySelection: unique symbol = Symbol('crux.skill.availabilitySelection')
+
 /**
  * Serializable skill activation state.
  *
@@ -124,6 +127,8 @@ export interface SkillActivationSession {
   readonly id: string
   /** Skills available in this session, keyed by skill id. */
   readonly available: ReadonlyMap<string, Skill>
+  /** Restrict availability to skills retained by the selected request. @internal */
+  [skillAvailabilitySelection](disabledSkillIds: readonly string[]): void
 
   /** Current active skill ids, in activation order. */
   activeIds(): readonly string[]
@@ -145,4 +150,12 @@ export interface SkillActivationSession {
   newlyActivated(): readonly Skill[]
   /** Mark skill instructions as injected. Defaults to every active skill. */
   markInjected(skillIds?: readonly string[]): void
+}
+
+/** Apply a request-local availability selection to a skill session. @internal */
+export function selectSkillAvailability(
+  session: SkillActivationSession,
+  disabledSkillIds: readonly string[],
+): void {
+  session[skillAvailabilitySelection](disabledSkillIds)
 }

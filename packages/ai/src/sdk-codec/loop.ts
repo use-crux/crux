@@ -225,6 +225,8 @@ export function createLoopCallPlan(
           messages: normalizedMessages,
         });
     requestReceipts.push(planned.receipt);
+    const activeTools =
+      planned.activeTools ?? overrides?.activeTools;
     return {
       model: planned.model,
       system: buildSystemArg(
@@ -232,8 +234,8 @@ export function createLoopCallPlan(
         planned.system,
         planned.modelInfo,
       ),
-      ...(overrides?.activeTools !== undefined
-        ? { activeTools: [...overrides.activeTools] }
+      ...(activeTools !== undefined
+        ? { activeTools: [...activeTools] }
         : {}),
         messages: lowerSealedAiSdkMessages(
           stepMessages as Array<{ role: string; content: unknown }>,

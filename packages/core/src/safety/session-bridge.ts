@@ -100,6 +100,9 @@ export const toolDescriptionGuard: unique symbol = Symbol(
 export const memoryWriteGuard: unique symbol = Symbol(
   "crux.safety.memoryWriteGuard",
 );
+export const representationPolicySelection: unique symbol = Symbol(
+  "crux.safety.representationPolicySelection",
+);
 
 type SafetyInput = Parameters<Safety["guardInput"]>[0];
 type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
@@ -107,6 +110,7 @@ type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
 };
 
 export interface SafetySession extends Safety, SafetySessionMedia {
+  [representationPolicySelection](disabledIds: readonly string[]): void;
   [memoryWriteGuard]: ManagedMemoryWriteGuard;
   [toolDefinitionGuard]: ToolExposureGuards["root"];
   [toolDescriptionGuard]: ToolExposureGuards["descriptions"];
@@ -162,6 +166,14 @@ export interface SafetySession extends Safety, SafetySessionMedia {
   ): Promise<MediaOutputResult>;
   [outputOperationTextGuard](text: string, model?: string): Promise<string>;
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>;
+}
+
+/** @internal Select the safety policies active for one represented request. */
+export function selectSafetySessionRepresentationPolicies(
+  safety: Safety,
+  disabledIds: readonly string[],
+): void {
+  (safety as SafetySession)[representationPolicySelection](disabledIds);
 }
 
 /** @internal Read the managed-memory commit capability for this call. */

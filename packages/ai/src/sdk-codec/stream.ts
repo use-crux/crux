@@ -79,6 +79,9 @@ export async function createStreamCallPlan(
         planned.system,
         planned.modelInfo,
       ),
+      ...(planned.activeTools
+        ? { activeTools: [...planned.activeTools] }
+        : {}),
       messages: lowerSealedAiSdkMessages(
         messages,
         normalizedMessages,

@@ -112,6 +112,9 @@ export async function createStructuredCallPlan(
         planned.system,
         planned.modelInfo,
       ),
+      ...(planned.activeTools
+        ? { activeTools: [...planned.activeTools] }
+        : {}),
       messages: lowerSealedAiSdkMessages(
         messages,
         normalizedMessages,

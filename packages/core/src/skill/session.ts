@@ -23,6 +23,7 @@ import type {
   SkillActivationTarget,
   SkillReferenceResult,
 } from './session-contract'
+import { skillAvailabilitySelection } from './session-contract'
 
 export type {
   SkillActivationPersistence,
@@ -60,14 +61,15 @@ interface CreateSkillActivationSession {
 
 class DefaultSkillActivationSession implements SkillActivationSession {
   readonly id: string
-  readonly available: ReadonlyMap<string, Skill>
 
+  private readonly entries: ReadonlyMap<string, Skill>
   private readonly active = new Set<string>()
   private readonly injected = new Set<string>()
+  private disabled = new Set<string>()
 
   constructor(options: SkillActivationSessionOptions) {
     this.id = options.id ?? `skill-session-${++sessionCounter}`
-    this.available = new Map(options.skills.map((entry) => [entry.id, entry]))
+    this.entries = new Map(options.skills.map((entry) => [entry.id, entry]))
 
     const initial = options.initial
     if (!initial) return
@@ -81,14 +83,26 @@ class DefaultSkillActivationSession implements SkillActivationSession {
     }
   }
 
+  get available(): ReadonlyMap<string, Skill> {
+    return new Map(
+      [...this.entries].filter(([skillId]) => !this.disabled.has(skillId)),
+    )
+  }
+
+  [skillAvailabilitySelection](disabledSkillIds: readonly string[]): void {
+    this.disabled = new Set(disabledSkillIds)
+  }
+
   activeIds(): readonly string[] {
-    return [...this.active]
+    return [...this.active].filter((skillId) => !this.disabled.has(skillId))
   }
 
   snapshot(): SkillActivationSnapshot {
     return {
-      activeSkillIds: [...this.active],
-      injectedSkillIds: [...this.injected].filter((skillId) => this.active.has(skillId)),
+      activeSkillIds: this.activeIds(),
+      injectedSkillIds: [...this.injected].filter(
+        (skillId) => this.active.has(skillId) && !this.disabled.has(skillId),
+      ),
     }
   }
 
@@ -219,7 +233,7 @@ class DefaultSkillActivationSession implements SkillActivationSession {
 
   markInjected(skillIds: readonly string[] = this.activeIds()): void {
     for (const skillId of skillIds) {
-      this.injected.add(skillId)
+      if (!this.disabled.has(skillId)) this.injected.add(skillId)
     }
   }
 }

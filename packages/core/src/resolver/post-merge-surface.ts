@@ -17,12 +17,16 @@ import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { ToolSource } from '../tools/tool-source'
-import type { MergedResolution } from './contract'
+import type {
+  MergedResolution,
+  RepresentationOwnership,
+} from './contract'
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
 import type { ToolOwnerLabel } from './tool-merge'
 import type { RecentHistoryProjection } from '../request/history/source'
 import { invalidHistoryComposition } from '../request/history/recent'
+import type { RepresentationEntry } from '../request/representation/ladder-types'
 
 /** Runtime surface ready for system composition and prompt arg projection. */
 export interface PostMergeSurface {
@@ -32,6 +36,11 @@ export interface PostMergeSurface {
   readonly memories: MemoryEntry[]
   readonly blackboards: BlackboardEntry[]
   readonly historyProjection: RecentHistoryProjection | undefined
+  readonly representationLadders: readonly RepresentationEntry[]
+  readonly representationOwnership: ReadonlyMap<
+    RepresentationEntry,
+    RepresentationOwnership
+  >
   readonly injectedTools: AnyToolSet
   readonly toolSources: readonly ToolSource[]
   readonly injectedToolOwners: ReadonlyMap<string, ToolOwnerLabel>
@@ -69,6 +78,8 @@ export async function resolvePostMergeSurface(
     memories: merged.memories,
     blackboards: merged.blackboards,
     historyProjection: merged.history[0],
+    representationLadders: merged.representations,
+    representationOwnership: merged.representationOwnership,
     injectedTools: merged.tools,
     toolSources: merged.toolSources,
     injectedToolOwners: merged.toolOwners,

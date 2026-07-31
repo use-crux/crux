@@ -696,6 +696,27 @@ export type {
   RecentHistoryOptions,
   RecentHistoryProjection,
 } from "./request/history/source";
+export {
+  droppable,
+  offload,
+  offloadable,
+  prefer,
+  summarizable,
+} from "./request/representation/wrappers";
+export type {
+  DroppableLadder,
+  ForcedOffload,
+  OffloadableLadder,
+  OffloadableOptions,
+  PreferLadder,
+  RepresentationLadder,
+  RepresentationEntry,
+  RepresentationSource,
+  RepresentationSourceSchema,
+  SummarizableLadder,
+  SummarizableOptions,
+  ToolOutputOffloadPolicy,
+} from "./request/representation/ladder-types";
 
 // Memory
 export {

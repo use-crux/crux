@@ -31,6 +31,10 @@ import {
 import { requestPlan, type SealedRequestPlan } from "./plan";
 import type { RequestHistoryContext } from "../history/source";
 import type { RequestWarning } from "../receipt/adaptations";
+import type { RequestAdaptation } from "../receipt/adaptations";
+import type { ResolvedRepresentationPolicy } from "../representation/ladder-types";
+import type { RequestRepresentationEpoch } from "./epoch";
+import { selectRepresentedRequest } from "./select";
 
 const warnedExactHistory = new Set<string>();
 
@@ -48,6 +52,15 @@ export interface SealRequestInput<
   readonly media?: ProviderMediaHooks;
   readonly previousRequestId?: string;
   readonly history?: RequestHistoryContext;
+  readonly representations?: readonly ResolvedRepresentationPolicy[];
+  readonly representationEpoch?: RequestRepresentationEpoch;
+  readonly prepareRequest?: (
+    request: CallArgs<TExtra>,
+    selections: ReadonlyMap<string, number>,
+  ) => Promise<CallArgs<TExtra>>;
+  readonly applyRepresentationSelection?: (
+    selections: ReadonlyMap<string, number>,
+  ) => void | Promise<void>;
 }
 
 /** Seal one exact request or fail before provider dispatch. @internal */
@@ -58,7 +71,8 @@ export async function sealRequest<
 ): Promise<SealedRequestPlan<TExtra>> {
   const requestId = createRequestId();
   const profile = resolveModelCapacityProfile(input.model, input.capacity);
-  const estimate = estimateRequestTokens(input.request, {
+  let request = input.request;
+  let estimate = estimateRequestTokens(request, {
     provider: input.provider,
     ...(input.media ? { media: input.media } : {}),
   });
@@ -70,9 +84,49 @@ export async function sealRequest<
     inputBudget: input.inputBudget,
     measurement,
   });
-  if (input.countTokens && inputTokens > budget.max) {
+  let adaptations: readonly RequestAdaptation[] = [];
+  const policies = input.representations ?? [];
+  if (policies.length > 0) {
+    if (input.countTokens) {
+      measurement = "exact";
+      budget = deriveInputBudget({
+        profile,
+        settings: input.settings,
+        inputBudget: input.inputBudget,
+        measurement,
+      });
+    }
+    const selected = await selectRepresentedRequest({
+      provider: input.provider,
+      model: input.model,
+      requestId,
+      request,
+      policies,
+      inputBudget: input.inputBudget,
+      epoch: input.representationEpoch,
+      media: input.media,
+      countTokens: input.countTokens,
+      prepareRequest: input.prepareRequest,
+      optimizeAt: budget.optimizeAt,
+      max: budget.max,
+    });
+    if (!selected) {
+      throw tooLargeError(
+        input,
+        requestId,
+        inputTokens,
+        budget.max,
+        estimate.breakdown,
+      );
+    }
+    request = selected.request;
+    await input.applyRepresentationSelection?.(selected.selections);
+    inputTokens = selected.inputTokens;
+    estimate = selected.estimate;
+    adaptations = selected.adaptations;
+  } else if (input.countTokens && inputTokens > budget.max) {
     inputTokens = assertAuthoritativeTokenCount(
-      await input.countTokens(input.request),
+      await input.countTokens(request),
     );
     measurement = "exact";
     budget = deriveInputBudget({
@@ -106,11 +160,12 @@ export async function sealRequest<
     safetyMarginTokens: budget.safetyMargin,
     providerOverheadTokens: budget.providerOverhead,
     warnings,
+    adaptations,
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),
   });
-  return requestPlan(input.request, receipt);
+  return requestPlan(request, receipt);
 }
 
 function tooLargeError<TExtra extends Record<string, unknown>>(

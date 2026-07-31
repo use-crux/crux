@@ -22,6 +22,7 @@ import type { AnyToolSet } from "../types";
 import type { InternalInjectableEntry } from "./internal-injection";
 import type { ToolSource } from "../tools/tool-source";
 import type { RecentHistoryProjection } from "../request/history/source";
+import type { RepresentationEntry } from "../request/representation/ladder-types";
 import type { PromptText } from "../prompt-text";
 
 // ─────────────────────────────────────────────────────────────────
@@ -309,6 +310,7 @@ export type ContextEntry =
   | ContributorEntry<z.ZodType>
   | ToolSource
   | RecentHistoryProjection
+  | RepresentationEntry
   | false
   | null
   | undefined;

@@ -14,6 +14,10 @@ export interface RequestAdaptation {
     | "summary"
     | "offload"
     | "omitted";
+  /** Complete-request size at the contributor's full rung. */
+  readonly fullTokens?: number;
+  /** Complete-request size after this adaptation was selected. */
+  readonly selectedTokens?: number;
 }
 
 /** Non-fatal warning produced while planning a request. */

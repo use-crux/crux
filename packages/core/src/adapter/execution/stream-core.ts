@@ -63,6 +63,13 @@ import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-ca
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
 import { sealRequest } from "../../request/planner/seal";
+import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
 import { recordRequestRetryCount } from "../../request/receipt/receipt";
 
 /**
@@ -102,6 +109,7 @@ export async function streamCore<
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
   const initialMessages = initialCoreMessageState(resolved, args.messages);
+  const representationEpoch = createRequestRepresentationEpoch();
   let messages = initialMessages.messages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -124,6 +132,11 @@ export async function streamCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
+  selectRepresentationCapabilities(
+    safety,
+    resolved.representations ?? [],
+  );
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -149,6 +162,7 @@ export async function streamCore<
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
 
   try {
     const lifecycle = createToolLifecycle({
@@ -258,6 +272,44 @@ export async function streamCore<
         media: dialect.media,
         previousRequestId,
         history: initialMessages.history,
+        representations: resolved.representations,
+        representationEpoch,
+        prepareRequest: (candidate, selections) => {
+          selectRepresentationCapabilities(
+            safety,
+            resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationSkills(
+            resolved,
+            resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationMiddleware(
+            resolved,
+            resolved.representations ?? [],
+            selections,
+          );
+          return guardRepresentedRequest(safety, candidate);
+        },
+        applyRepresentationSelection: async (selections) => {
+          selectRepresentationCapabilities(
+            safety,
+            resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationSkills(
+            resolved,
+            resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationMiddleware(
+            resolved,
+            resolved.representations ?? [],
+            selections,
+          );
+          await lifecycle.rearm(resolved);
+        },
       });
     const sealed = await sealStreamRequest(callArgs);
 

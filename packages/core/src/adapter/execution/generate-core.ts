@@ -86,6 +86,13 @@ import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candid
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
 import { sealRequest } from "../../request/planner/seal";
+import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
 import type { SealedRequestPlan } from "../../request/planner/plan";
 import {
   recordRequestRetryCount,
@@ -162,6 +169,7 @@ export async function generateCore<
   let providerResponseOrdinal = 0;
   const stepFacts: ResultStepFacts[] = [];
   let lastRequestReceipt: RequestReceipt | undefined;
+  const representationEpoch = createRequestRepresentationEpoch();
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
   let validationRetries = 0;
@@ -222,6 +230,11 @@ export async function generateCore<
     );
     return normalized;
   };
+  selectRepresentationCapabilities(
+    safety,
+    resolved.representations ?? [],
+  );
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -253,6 +266,8 @@ export async function generateCore<
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
+  let representationSelections: ReadonlyMap<string, number> | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -271,8 +286,22 @@ export async function generateCore<
       abortSignal: args.signal,
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
-      reresolve: (skillSession) =>
-        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      reresolve: async (skillSession) => {
+        resolved = await prompt.resolve(
+          withSkillActivationInput(resolveOpts, skillSession),
+        );
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        return resolved;
+      },
       guardSkillAmendment,
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
@@ -326,6 +355,45 @@ export async function generateCore<
       media: dialect.media,
       previousRequestId: lastRequestReceipt?.id,
       history: initialMessages.history,
+      representations: resolved.representations,
+      representationEpoch,
+      prepareRequest: (candidate, selections) => {
+        selectRepresentationCapabilities(
+          safety,
+          resolved.representations ?? [],
+          selections,
+        );
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          selections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          selections,
+        );
+        return guardRepresentedRequest(safety, candidate);
+      },
+      applyRepresentationSelection: async (selections) => {
+        representationSelections = selections;
+        selectRepresentationCapabilities(
+          safety,
+          resolved.representations ?? [],
+          selections,
+        );
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          selections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          selections,
+        );
+        await lifecycle.rearm(resolved);
+      },
     });
     lastRequestReceipt = sealed.receipt;
     return sealed;

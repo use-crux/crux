@@ -15,6 +15,11 @@ import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../pr
 import { isContributorEntry } from '../prompt/contributor'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
 import { isToolSource } from '../tools/tool-source'
+import {
+  compileRepresentationLadder,
+  isForcedOffload,
+  isRepresentationLadder,
+} from '../request/representation/ladder'
 import type { SchemaContribution } from './contract'
 
 const SCHEMA_CONTRIBUTION_SOURCE: unique symbol = Symbol('crux.schemaContributionSource')
@@ -85,6 +90,21 @@ export function collectSchemaContributions(
       if (entry.inputSchema) {
         out.push(schemaContribution({ id: entry.id, schema: entry.inputSchema, optional: optionalPath }, entry))
       }
+      continue
+    }
+
+    if (isForcedOffload(entry)) {
+      out.push({ id: undefined, schema: undefined, optional: optionalPath })
+      continue
+    }
+
+    if (isRepresentationLadder(entry)) {
+      out.push(
+        ...collectSchemaContributions(
+          compileRepresentationLadder(entry).primarySources,
+          optionalPath,
+        ),
+      )
       continue
     }
 

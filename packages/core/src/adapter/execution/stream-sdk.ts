@@ -86,6 +86,12 @@ import {
   assertSdkRequestPlanning,
   createSdkRequestStepPlanner,
 } from "./sdk-request-planner";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -144,6 +150,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
+  selectRepresentationCapabilities(
+    safety,
+    resolved.representations ?? [],
+  );
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -182,7 +193,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
+  let representationSelections: ReadonlyMap<string, number> | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -207,8 +220,22 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
-      reresolve: (skillSession) =>
-        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      reresolve: async (skillSession) => {
+        resolved = await prompt.resolve(
+          withSkillActivationInput(resolveOpts, skillSession),
+        );
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        return resolved;
+      },
     });
     await lifecycle.guardExposure({
       root: safetySessionToolDefinitionGuard(safety),
@@ -394,8 +421,47 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     outputSchema: structuredOutputSchema,
     tools: () =>
       lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    activeTools: args.activeTools,
     extra: args.extra,
     history: initialMessages.history,
+    representations: () => resolved.representations,
+    prepareRequest: (candidate, selections) => {
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      return guardRepresentedRequest(safety, candidate);
+    },
+    applyRepresentationSelection: async (selections) => {
+      representationSelections = selections;
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      await lifecycle.rearm(resolved);
+    },
   });
 
   const request: ExecutorRequest<TModel> & {

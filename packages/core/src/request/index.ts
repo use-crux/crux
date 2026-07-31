@@ -33,3 +33,24 @@ export type {
   RecentHistoryOptions,
   RecentHistoryProjection,
 } from "./history/source";
+export {
+  droppable,
+  offload,
+  offloadable,
+  prefer,
+  summarizable,
+} from "./representation/wrappers";
+export type {
+  DroppableLadder,
+  ForcedOffload,
+  OffloadableLadder,
+  OffloadableOptions,
+  PreferLadder,
+  RepresentationLadder,
+  RepresentationEntry,
+  RepresentationSource,
+  RepresentationSourceSchema,
+  SummarizableLadder,
+  SummarizableOptions,
+  ToolOutputOffloadPolicy,
+} from "./representation/ladder-types";

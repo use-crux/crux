@@ -70,6 +70,7 @@ import {
   attachSystemIngressCarrier,
 } from "./system-ingress-provenance";
 import { resolveSystemContent } from "./system-content";
+import { resolveRepresentationPolicies } from "./representation-policy";
 import { inspectPromptText, resolvePromptText } from "./prompt-content";
 import { attachPromptTextObservation } from "./prompt-text-observation";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
@@ -229,6 +230,16 @@ export async function runPromptPass(
       promptId: config.id,
     },
   );
+  const representations = await resolveRepresentationPolicies(
+    postMerge.representationLadders,
+    postMerge.representationOwnership,
+    postMerge.skills,
+    (skills) => ports.skills.index(skills),
+    postMerge.contexts,
+    composed.parts,
+    guardedInput,
+    ports.tokenizer.count,
+  );
   let system = composed.system;
   let systemBlocks = composed.blocks;
 
@@ -303,6 +314,7 @@ export async function runPromptPass(
     ...(postMerge.historyProjection
       ? { historyProjection: postMerge.historyProjection }
       : {}),
+    ...(representations.length > 0 ? { representations } : {}),
   };
   attachPromptTextObservation(resolved, promptInfo);
   if (systemIngressBlocks.length > 0) {
