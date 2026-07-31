@@ -117,8 +117,9 @@ owner heads without receiving message content.
 
 ## Errors
 
-Thread failures use stable codes such as `invalid_message`, `invalid_parent`,
-`conflict`, `commit_failed`, `unsupported_capability`, `in_use`, and
-`deleted`. Managed publication failures reject with `ThreadCommitError`; a
+Thread failures use stable codes: `invalid_message`, `invalid_group`,
+`identity_conflict`, `commit_failed`, `not_found`, `redacted`,
+`unsupported_capability`, `in_use`, and `deleted`. Managed publication
+failures reject with `ThreadCommitError`; a
 successful provider result is never reported as fully accepted when its Thread
 turn could not be committed.

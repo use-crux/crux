@@ -81,6 +81,61 @@ func TestGetBlackboardViaBridge(t *testing.T) {
 	}
 }
 
+func TestThreadResourceInspectionSupport(t *testing.T) {
+	if !supportsGet("thread:support-42", "") {
+		t.Fatal("expected Thread topology to support direct get inspection")
+	}
+	if kind := inferredKind("thread:support-42"); kind != "thread" {
+		t.Fatalf("inferred kind = %q, want thread", kind)
+	}
+}
+
+func TestGetThreadViaBridge(t *testing.T) {
+	bridge := &stubRuntimeBridge{
+		peers: []runtimebridge.Peer{storeReadPeer("peer_1", "")},
+		response: runtimebridge.DispatchResponse{
+			PeerID: "peer_1",
+			Result: json.RawMessage(`{
+				"schema": 1,
+				"threadId": "support-42",
+				"state": "live",
+				"heads": {"main": "answer"},
+				"leaves": {},
+				"tree": [],
+				"groups": [],
+				"branches": []
+			}`),
+		},
+	}
+	svc := New(bridge)
+
+	result, err := svc.Get(context.Background(), GetRequest{ResourceID: "thread:support-42"})
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if result.Status != StatusOK || result.Source != SourceRuntimeBridge || result.Kind != "thread" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	var topology struct {
+		Schema   int    `json:"schema"`
+		ThreadID string `json:"threadId"`
+	}
+	if err := json.Unmarshal(result.Value, &topology); err != nil {
+		t.Fatalf("decode Thread topology: %v", err)
+	}
+	if topology.Schema != 1 || topology.ThreadID != "support-42" {
+		t.Fatalf("unexpected Thread topology: %+v", topology)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(bridge.request.Payload, &payload); err != nil {
+		t.Fatalf("decode dispatched payload: %v", err)
+	}
+	if payload["operation"] != "get" || payload["resource"] != "thread:support-42" {
+		t.Fatalf("unexpected dispatched payload: %+v", payload)
+	}
+}
+
 func TestListMemoryViaBridge(t *testing.T) {
 	bridge, closeServer := bridgeWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		var req runtimebridge.CommandRequest
@@ -173,4 +228,22 @@ func writeBridgeResult(w http.ResponseWriter, commandID string, result any) {
 		"result":    result,
 	})
 	_, _ = w.Write(body)
+}
+
+type stubRuntimeBridge struct {
+	peers    []runtimebridge.Peer
+	response runtimebridge.DispatchResponse
+	request  runtimebridge.DispatchRequest
+}
+
+func (bridge *stubRuntimeBridge) Peers() []runtimebridge.Peer {
+	return bridge.peers
+}
+
+func (bridge *stubRuntimeBridge) Dispatch(
+	_ context.Context,
+	request runtimebridge.DispatchRequest,
+) (runtimebridge.DispatchResponse, error) {
+	bridge.request = request
+	return bridge.response, nil
 }
