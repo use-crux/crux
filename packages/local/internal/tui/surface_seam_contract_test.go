@@ -122,6 +122,56 @@ func TestOverlaysHonorRuleStyleContract(t *testing.T) {
 	}
 }
 
+func TestWorkbenchOverlaysHonorRectangleSurfaceAndSeamContracts(t *testing.T) {
+	tests := []struct {
+		name string
+		open func(*Workbench, kit.Rect) string
+	}{
+		{"palette", func(w *Workbench, canvas kit.Rect) string {
+			w.palette.Open()
+			return w.palette.View(canvas.W, canvas.H)
+		}},
+		{"help", func(w *Workbench, canvas kit.Rect) string {
+			w.help.Open()
+			return w.help.View(canvas.W, canvas.H)
+		}},
+		{"inspect", func(w *Workbench, canvas kit.Rect) string {
+			w.inspect.Open("span retrieve", "8af2f1c", json.RawMessage(`{"query":"typed prompts","hits":4}`))
+			return w.inspect.View(canvas.W, canvas.H)
+		}},
+		{"definition-chooser", func(w *Workbench, _ kit.Rect) string {
+			w.definitionChooser.Open([]screens.DefinitionChoice{{ID: "prompt:answer"}, {ID: "agent:support"}})
+			return w.definitionChooser.View()
+		}},
+	}
+	for _, size := range []struct{ width, height int }{{160, 45}, {100, 30}} {
+		canvas := workbenchOverlayCanvas(size.width, size.height)
+		for _, test := range tests {
+			name := fmt.Sprintf("%s-%dx%d", test.name, size.width, size.height)
+			t.Run(name, func(t *testing.T) {
+				workbench := fixtureWorkbenchAtScreen(t, "overview")
+				workbench.Resize(size.width, size.height)
+				base := workbench.View()
+				overlay := test.open(workbench, canvas)
+				overlayLines := strings.Split(overlay, "\n")
+				overlayWidth := lipgloss.Width(overlay)
+				rect := kit.Rect{
+					X: canvas.X + (canvas.W-overlayWidth)/2,
+					Y: (size.height - len(overlayLines)) / 3,
+					W: overlayWidth,
+					H: len(overlayLines),
+				}
+				frame := workbench.View()
+				assertFrameOutsideRectEqual(t, base, frame, rect, test.name)
+				assertDeclaredSurfacesOutsideRect(t, "overview", size.width, size.height, frame, rect)
+				assertRuleStyles(t, frame, firstCellStyle(workbenchStyles.Border.Render("x")).Foreground)
+				assertJunctions(t, name+"-modal", kit.ReconcileBordersStyled(overlay, workbenchStyles))
+				assertJunctionsOutsideRect(t, name, frame, rect)
+			})
+		}
+	}
+}
+
 func TestReconcileBordersHonorsActiveThemeProfile(t *testing.T) {
 	for _, profile := range contractProfiles {
 		t.Run(profile.name, func(t *testing.T) {
@@ -190,6 +240,10 @@ func fixtureWorkbenchAtScreen(t *testing.T, screenID string) *Workbench {
 }
 
 func assertDeclaredSurfaces(t *testing.T, screenID string, width, height int, frame string) {
+	assertDeclaredSurfacesOutsideRect(t, screenID, width, height, frame, kit.Rect{})
+}
+
+func assertDeclaredSurfacesOutsideRect(t *testing.T, screenID string, width, height int, frame string, overlay kit.Rect) {
 	t.Helper()
 	rows := strings.Split(frame, "\n")
 	if len(rows) != height {
@@ -197,21 +251,28 @@ func assertDeclaredSurfaces(t *testing.T, screenID string, width, height int, fr
 	}
 	if kit.Classify(width) != kit.LayoutSingle {
 		for row, line := range rows {
-			assertUniformBackground(t, line, row, 0, shell.NavRailWidth, railBackground, "rail")
+			assertUniformBackgroundOutsideRect(t, line, row, 0, shell.NavRailWidth, railBackground, "rail", overlay)
 		}
 	}
 	if screenID == "overview" && kit.Classify(width) != kit.LayoutSingle {
 		left := shell.NavRailWidth + 1
 		for row := 2; row < 7; row++ {
-			assertUniformBackground(t, rows[row], row, left, width, bandBackground, "KPI band")
+			assertUniformBackgroundOutsideRect(t, rows[row], row, left, width, bandBackground, "KPI band", overlay)
 		}
 	}
 }
 
 func assertUniformBackground(t *testing.T, line string, row, start, end int, want, region string) {
+	assertUniformBackgroundOutsideRect(t, line, row, start, end, want, region, kit.Rect{})
+}
+
+func assertUniformBackgroundOutsideRect(t *testing.T, line string, row, start, end int, want, region string, overlay kit.Rect) {
 	t.Helper()
 	spans := uitest.BackgroundSpans(line)
 	for cell := start; cell < end; cell++ {
+		if cell >= overlay.X && cell < overlay.X+overlay.W && row >= overlay.Y && row < overlay.Y+overlay.H {
+			continue
+		}
 		got := ""
 		for _, span := range spans {
 			if cell >= span.Start && cell < span.End {
@@ -324,6 +385,10 @@ type frameCell struct{ x, y int }
 var junctionExceptions = map[string]map[frameCell]string{}
 
 func assertJunctions(t *testing.T, frameName, frame string) {
+	assertJunctionsOutsideRect(t, frameName, frame, kit.Rect{})
+}
+
+func assertJunctionsOutsideRect(t *testing.T, frameName, frame string, overlay kit.Rect) {
 	t.Helper()
 	grid := plainCellGrid(frame)
 	frameWidth := lipgloss.Width(strings.Split(ansi.Strip(frame), "\n")[0])
@@ -331,6 +396,9 @@ func assertJunctions(t *testing.T, frameName, frame string) {
 		for x, glyph := range row {
 			coord := frameCell{x: x, y: y}
 			if _, allowed := junctionExceptions[frameName][coord]; allowed {
+				continue
+			}
+			if onOverlaySeam(coord, overlay) {
 				continue
 			}
 			switch glyph {
@@ -360,6 +428,17 @@ func assertJunctions(t *testing.T, frameName, frame string) {
 			t.Fatalf("%s has doubled horizontal rules on rows %d and %d:\n%s\n%s", frameName, y-1, y, plain[y-1], plain[y])
 		}
 	}
+}
+
+func onOverlaySeam(cell frameCell, overlay kit.Rect) bool {
+	if overlay.W <= 0 || overlay.H <= 0 {
+		return false
+	}
+	withinX := cell.x >= overlay.X-1 && cell.x <= overlay.X+overlay.W
+	withinY := cell.y >= overlay.Y-1 && cell.y <= overlay.Y+overlay.H
+	nearVerticalEdge := cell.x <= overlay.X || cell.x >= overlay.X+overlay.W-1
+	nearHorizontalEdge := cell.y <= overlay.Y || cell.y >= overlay.Y+overlay.H-1
+	return withinX && withinY && (nearVerticalEdge || nearHorizontalEdge)
 }
 
 func junctionContext(frame string, row int) string {

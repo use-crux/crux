@@ -23,20 +23,25 @@ func (w *Workbench) View() string {
 
 	root := kit.Rect{W: w.width, H: w.height}
 	path, right := w.breadcrumbContent()
-	base := strings.Join(w.layoutBody(root, path, right), "\n")
+	base := kit.ReconcileBordersStyled(strings.Join(w.layoutBody(root, path, right), "\n"), workbenchStyles)
+	overlayCanvas := workbenchOverlayCanvas(w.width, w.height)
 
-	frame := base
+	overlay := ""
 	switch {
 	case w.palette.IsOpen():
-		frame = overlayOnto(base, w.palette.View(w.width, w.height), w.width, w.height)
+		overlay = w.palette.View(overlayCanvas.W, overlayCanvas.H)
 	case w.help.IsOpen():
-		frame = overlayOnto(base, w.help.View(w.width, w.height), w.width, w.height)
+		overlay = w.help.View(overlayCanvas.W, overlayCanvas.H)
 	case w.inspect.IsOpen():
-		frame = overlayOnto(base, w.inspect.View(w.width, w.height), w.width, w.height)
+		overlay = w.inspect.View(overlayCanvas.W, overlayCanvas.H)
 	case w.definitionChooser.IsOpen():
-		frame = overlayOnto(base, w.definitionChooser.View(), w.width, w.height)
+		overlay = w.definitionChooser.View()
 	}
-	return kit.ReconcileBordersStyled(frame, workbenchStyles)
+	if overlay == "" {
+		return base
+	}
+	overlay = kit.ReconcileBordersStyled(overlay, workbenchStyles)
+	return overlayOnto(base, overlay, w.width, w.height)
 }
 
 func (w *Workbench) layoutBody(root kit.Rect, path []string, right string) []string {
@@ -92,27 +97,35 @@ func overlayOnto(base, overlay string, width, height int) string {
 	for _, line := range overlayLines {
 		overlayWidth = max(overlayWidth, lipgloss.Width(line))
 	}
-	left := max(0, (width-overlayWidth)/2)
+	overlayCanvas := workbenchOverlayCanvas(width, height)
+	overlayWidth = min(overlayCanvas.W, overlayWidth)
+	left := overlayCanvas.X + max(0, (overlayCanvas.W-overlayWidth)/2)
 	top := max(0, (height-len(overlayLines))/3)
 	canvasHeight := max(len(baseLines), height)
 	canvas := strings.Split(kit.PadBlock(base, width, canvasHeight), "\n")
-	overlayWidth = min(width, overlayWidth)
 	for row, line := range overlayLines {
 		y := top + row
 		if y >= len(canvas) {
 			break
 		}
-		// A partial base row reads as a path or prose fragment beside a modal.
-		// Make every occupied row opaque across the viewport and isolate SGR at
-		// both seams; rows above and below still show the complete base.
-		right := max(0, width-left-overlayWidth)
-		canvas[y] = ansi.ResetStyle +
-			strings.Repeat(" ", left) +
+		rightStart := left + overlayWidth
+		canvas[y] = kit.Fit(ansi.Cut(canvas[y], 0, left), left, "") +
+			ansi.ResetStyle +
 			kit.Fit(line, overlayWidth, "") +
 			ansi.ResetStyle +
-			strings.Repeat(" ", right)
+			kit.Fit(ansi.Cut(canvas[y], rightStart, width), width-rightStart, "")
 	}
 	return strings.Join(canvas, "\n")
+}
+
+func workbenchOverlayCanvas(width, height int) kit.Rect {
+	canvas := kit.Rect{W: max(0, width), H: max(0, height)}
+	if kit.Classify(width) == kit.LayoutSingle {
+		return canvas
+	}
+	canvas.X = min(width, shell.NavRailWidth+1)
+	canvas.W = max(0, width-canvas.X)
+	return canvas
 }
 
 func blockLines(value string) []string {
