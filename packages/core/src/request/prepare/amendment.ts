@@ -22,6 +22,14 @@ import {
 import type { PreparationResources } from "./resources";
 import { withPreparationResourcesInput } from "./pin-context";
 
+/** Coarse managed operation families used to narrow preparation authority. */
+export type OperationKind =
+  | "language"
+  | "image"
+  | "speech"
+  | "transcription"
+  | "embedding";
+
 /** A top-level contributor selected by object identity or an explicit unique id. */
 export type ContributorSelector =
   | AmendableContextEntry
@@ -54,20 +62,25 @@ export type AmendableContextEntry = Exclude<
  * } satisfies ExecutionAmendment
  * ```
  */
-export interface ExecutionAmendment<TModel = unknown> {
+export interface ExecutionAmendment<
+  TModel = unknown,
+  TOperation extends OperationKind = "language",
+> {
   /** Add or remove top-level contributors for this provider call only. */
   readonly use?: {
     readonly add?: readonly AmendableContextEntry[];
     readonly remove?: readonly ContributorSelector[];
   };
   /** Exact Tool definitions contributed for this provider call only. */
-  readonly tools?: AnyToolSet;
+  readonly tools?: TOperation extends "language" ? AnyToolSet : never;
   /** Tool names exposed after the complete capability graph resolves. */
-  readonly activeTools?: readonly string[];
+  readonly activeTools?: TOperation extends "language"
+    ? readonly string[]
+    : never;
   /** Compatible concrete model for this provider call. */
   readonly model?: TModel;
   /** Whole-request pressure settings for this provider call. */
-  readonly inputBudget?: InputBudget;
+  readonly inputBudget?: TOperation extends "language" ? InputBudget : never;
 }
 
 /** Validated boundary-local execution values. @internal */

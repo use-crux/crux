@@ -1008,7 +1008,18 @@ export type {
   AmendableContextEntry,
   ContributorSelector,
   ExecutionAmendment,
+  OperationKind,
 } from "./request/prepare/amendment";
+export type {
+  ConsensusInvocationContext,
+  InvocationContext,
+  InvocationPreparationStats,
+  InvocationTarget,
+  ParallelInvocationContext,
+  PipelineInvocationContext,
+  PrepareInvocation,
+  SwarmInvocationContext,
+} from "./request/prepare/invocation";
 export type {
   PreparationAttemptStats,
   PreparationCoverage,
@@ -1033,6 +1044,13 @@ export type {
   RequestInspection,
   RequestReceipt,
 } from "./request/receipt/receipt";
+export type {
+  CompositionRequestReceiptNode,
+  CompositionRequestReceiptTree,
+  InvocationRequestReceiptNode,
+  NestedRequestReceiptNode,
+  ReceiptCompositionKind,
+} from "./request/receipt/tree";
 export type {
   RequestTokenBreakdown,
   RequestTokenBreakdownEntry,

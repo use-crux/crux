@@ -281,6 +281,7 @@ export function adapter<
         prepareStep: (options.prepareStep ?? agent.prepareStep) as
           | PrepareStep<string>
           | undefined,
+        activeTools: options.activeTools,
         extra: {} as TExtra,
       };
 
@@ -291,6 +292,11 @@ export function adapter<
         output: result.text,
         durationMs: Date.now() - start,
         usage: result._meta.usage,
+        requests: Object.freeze(
+          result.steps.flatMap((step) =>
+            step.request ? [step.request] : [],
+          ),
+        ),
       };
     };
 

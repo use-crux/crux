@@ -72,6 +72,8 @@ export interface AdapterGenerateBaseOptions<
   inputBudget?: InputBudget;
   /** Boundary-local callback evaluated before every semantic provider call. */
   prepareStep?: PrepareStep<string>;
+  /** Tool names exposed from the invocation baseline. */
+  activeTools?: readonly string[];
   /** Maximum tool loop iterations. Default: 10. */
   maxSteps?: number;
   /** Additional generation settings at call-site (highest precedence). */

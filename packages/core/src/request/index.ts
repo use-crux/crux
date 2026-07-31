@@ -23,6 +23,13 @@ export type {
   RequestSupportReceipt,
 } from "./receipt/receipt";
 export type {
+  CompositionRequestReceiptNode,
+  CompositionRequestReceiptTree,
+  InvocationRequestReceiptNode,
+  NestedRequestReceiptNode,
+  ReceiptCompositionKind,
+} from "./receipt/tree";
+export type {
   RequestTokenBreakdown,
   RequestTokenBreakdownEntry,
 } from "./measure/breakdown";
@@ -83,7 +90,18 @@ export type {
   AmendableContextEntry,
   ContributorSelector,
   ExecutionAmendment,
+  OperationKind,
 } from "./prepare/amendment";
+export type {
+  ConsensusInvocationContext,
+  InvocationContext,
+  InvocationPreparationStats,
+  InvocationTarget,
+  ParallelInvocationContext,
+  PipelineInvocationContext,
+  PrepareInvocation,
+  SwarmInvocationContext,
+} from "./prepare/invocation";
 export type {
   PreparationAttemptStats,
   PreparationCoverage,

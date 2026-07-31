@@ -273,6 +273,7 @@ export function loopRuntimeAdapter<
       validationRetry: options.validationRetry,
       inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
       prepareStep: options.prepareStep ?? agent.prepareStep,
+      activeTools: options.activeTools,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
     } as unknown as ExecutorGenerateOptions<TModel>;
 
@@ -283,6 +284,9 @@ export function loopRuntimeAdapter<
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
       usage: result._meta.usage,
+      requests: Object.freeze(
+        result.steps.flatMap((step) => (step.request ? [step.request] : [])),
+      ),
     };
   };
 

@@ -81,3 +81,11 @@ minimal honest usage statistics, prior request evidence, and declared
 boundary-local contributor, Tool, model, or input-budget amendment. Accepted
 decisions are committed with redacted resource revision evidence before
 dispatch and reused by exact transport retries.
+
+Add `prepareInvocation` to Pipeline, Parallel, Consensus, and Swarm
+compositions. Each managed child receives a fresh composition-typed,
+resource-pinned preparation boundary whose amendment becomes the child
+baseline beneath per-provider-call `prepareStep` decisions. Composition
+results expose a causal tree of ordered child request receipts, and
+operation-narrowed amendment types reject language-only facets for other
+managed operation families.
