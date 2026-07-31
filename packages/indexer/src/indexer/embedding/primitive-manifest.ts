@@ -19,6 +19,7 @@ import { providerEmbeddingFacts } from "./provider-facts";
 import { byteSafeEmbeddingDefinition } from "./safe-definition";
 import { extractEmbeddingCall } from "./static-call";
 import { evidenceRecordPrimitiveContributions } from "../evidence-record/primitive-manifest";
+import { threadPrimitiveContributions } from "../thread/primitive-manifest";
 
 export { authoredEmbeddingPrimitiveManifest } from "./manifest";
 
@@ -28,6 +29,7 @@ export const embeddingPrimitiveManifest = Object.freeze({
   version: "2",
   extractors: [
     ...evidenceRecordPrimitiveContributions.extractors,
+    ...threadPrimitiveContributions.extractors,
     {
       name: "embedding",
       patterns: embeddingFactoryDeclarations.map((factory) => ({

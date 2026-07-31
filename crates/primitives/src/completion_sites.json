@@ -12,8 +12,8 @@
   {"callNames":["agent"],"propertyPath":["tools","*"],"slot":"toolMapMember","acceptedKinds":["tool"],"insertion":"toolMapMember"},
   {"callNames":["agent"],"propertyPath":["handoffs","*"],"slot":"staticId","acceptedKinds":["agent"],"insertion":"staticId","excludeSelf":true},
   {"callNames":["agent"],"propertyPath":["handoffs","*","id"],"slot":"staticId","acceptedKinds":["agent"],"insertion":"staticId","excludeSelf":true},
-  {"callNames":["context"],"propertyPath":["use","*"],"slot":"identifierArrayElement","acceptedKinds":["context","mcp.server"],"insertion":"identifier"},
+  {"callNames":["context"],"propertyPath":["use","*"],"slot":"identifierArrayElement","acceptedKinds":["context","thread","mcp.server"],"insertion":"identifier"},
   {"callNames":["context"],"propertyPath":["tools","*"],"slot":"toolMapMember","acceptedKinds":["tool"],"insertion":"toolMapMember"},
-  {"callNames":["prompt"],"propertyPath":["use","*"],"slot":"identifierArrayElement","acceptedKinds":["context","mcp.server"],"insertion":"identifier"},
+  {"callNames":["prompt"],"propertyPath":["use","*"],"slot":"identifierArrayElement","acceptedKinds":["context","thread","mcp.server"],"insertion":"identifier"},
   {"callNames":["prompt"],"propertyPath":["tools","*"],"slot":"toolMapMember","acceptedKinds":["tool"],"insertion":"toolMapMember"}
 ]

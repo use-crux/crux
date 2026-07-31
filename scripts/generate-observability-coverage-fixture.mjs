@@ -31,6 +31,7 @@ const directRoles = {
   skill: "loaded-skill",
   memory: "invoked-memory",
   workspace: "invoked-workspace",
+  thread: "invoked-thread",
   constraint: "invoked-constraint",
   guardrail: "invoked-guardrail",
   blackboard: "invoked-blackboard",

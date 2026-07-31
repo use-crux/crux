@@ -15,7 +15,7 @@ afterEach(() => {
 describe("flow result correlation", () => {
   it("points a completed record-store result at its exact flow.run span", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
@@ -46,7 +46,7 @@ describe("flow result correlation", () => {
 
   it("points a suspended result at the invocation that reached suspension", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
@@ -82,7 +82,7 @@ describe("flow result correlation", () => {
 
   it("keeps the trace and points a resumed result at its fresh invocation", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
@@ -129,7 +129,7 @@ describe("flow result correlation", () => {
 
   it("points a cancelled result at the invocation that cancelled", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
@@ -159,7 +159,7 @@ describe("flow result correlation", () => {
 
   it("points an expired result at the invocation that observed expiry", async () => {
     const crux = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);

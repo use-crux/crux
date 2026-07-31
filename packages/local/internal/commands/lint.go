@@ -43,6 +43,12 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
   crux lint --fail-on warning
   crux lint --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// An explicit --port is a request to read the running dev server.
+			// Without this promotion the flag was silently ignored and the
+			// one-shot index could report stale findings.
+			if !opts.server && cmd.InheritedFlags().Changed("port") {
+				opts.server = true
+			}
 			if opts.server {
 				var index api.IndexData
 				if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {

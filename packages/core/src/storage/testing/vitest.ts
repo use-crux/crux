@@ -10,6 +10,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { StorageError } from "../errors";
+import { mutateRecord } from "../mutate";
 import type { JsonObject, RecordEntry, RecordStore } from "../types";
 
 export { vectorStoreConformanceSuite } from "./vector";
@@ -180,6 +181,40 @@ export function describeRecordStoreConformance<
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it("reports and honors linearizable single-key mutation support", async () => {
+      const records = await options.prepare();
+      const capability = records.capabilities().mutate;
+
+      expect(capability).not.toBe(false);
+      if (capability === "native") {
+        expect(records.mutate).toBeTypeOf("function");
+      } else {
+        expect(records.getVersioned).toBeTypeOf("function");
+        expect(records.putVersioned).toBeTypeOf("function");
+      }
+
+      const key = "mutation:counter";
+      await records.put(key, { count: 0 } as unknown as T);
+      await Promise.all([
+        mutateRecord(records, key, (current) => ({
+          type: "put",
+          value: {
+            ...current,
+            count: Number(current?.count ?? 0) + 1,
+          } as unknown as T,
+        })),
+        mutateRecord(records, key, (current) => ({
+          type: "put",
+          value: {
+            ...current,
+            count: Number(current?.count ?? 0) + 1,
+          } as unknown as T,
+        })),
+      ]);
+
+      await expect(records.get(key)).resolves.toMatchObject({ count: 2 });
     });
   });
 }

@@ -99,6 +99,10 @@ const staticIndexExtractorIds = new Set([
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'runtime.task',
   }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'thread',
+  }),
 ])
 
 /** Static Index projection coverage for one extractor identity. */

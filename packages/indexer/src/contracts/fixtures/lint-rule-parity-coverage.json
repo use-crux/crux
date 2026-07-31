@@ -137,6 +137,16 @@
       "ruleId": "safety.duplicate_policy_id"
     },
     {
+      "negativeFixture": "thread-native-static.test.ts",
+      "positiveFixture": "thread-native-static.test.ts",
+      "ruleId": "thread.conflicting_binding"
+    },
+    {
+      "negativeFixture": "thread-native-static.test.ts",
+      "positiveFixture": "thread-native-static.test.ts",
+      "ruleId": "thread.duplicate_active"
+    },
+    {
       "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "ruleId": "memory.long_lived_without_retention"

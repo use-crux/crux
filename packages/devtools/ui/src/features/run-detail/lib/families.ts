@@ -13,7 +13,7 @@
  *   Agents        → iris   agent.* · delegate.*
  *   Generation    → warn   generation.* · compaction.*
  *   Capabilities  → ok/—   retrieval.*·embedding.* (ok) · tool.*·cache.* (neutral)
- *   State         → plum   effect.* · memory.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
+ *   State         → plum   effect.* · memory.* · thread.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
  *   Routing       → warn   routing.* · fallback.* · tool.approval
  *   Safety        → danger guardrail.* · constraint.* · security.*
  *   Evaluation    → gold   eval.* · scoring.*
@@ -78,6 +78,7 @@ export function primitiveFamily(
     hasPrefix(p, [
       "memory.",
       "effect.",
+      "thread.",
       "plan.",
       "blackboard.",
       "operation.",

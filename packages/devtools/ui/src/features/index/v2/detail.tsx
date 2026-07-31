@@ -47,9 +47,10 @@ import { IndexMcpDetail } from "./mcp-detail";
 import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 import { PromptTextSection } from "./prompt-text/section";
 import { IndexEvidence } from "./evidence-section";
+import { ThreadInspector } from "@/features/thread/components/ThreadInspector";
 
 // ── relations block (two columns, full width) ────────────────────────────────
-function CatRelations({ def }: { def: ViewDef }) {
+export function CatRelations({ def }: { def: ViewDef }) {
   const idx = useIndexIndex();
   const select = useIndexSelect();
   const rawRelations = idx.relationsOf(def.id);
@@ -173,6 +174,20 @@ function CatRelations({ def }: { def: ViewDef }) {
   );
 }
 
+function IndexThreadInspector({ def }: { def: ViewDef }) {
+  if (def.kind !== "thread") return null;
+  const threadId =
+    typeof def.runtimeJoin?.threadId === "string"
+      ? def.runtimeJoin.threadId
+      : def.id.replace(/^thread:/, "");
+  return (
+    <>
+      <SectionHead eyebrow="Thread inspector" />
+      <ThreadInspector threadId={threadId} />
+    </>
+  );
+}
+
 // ── per-kind section order (importance → prominence) ─────────────────────────
 const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   hero: IndexHero,
@@ -188,6 +203,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   mcp: IndexMcpDetail,
   workspaceSnapshots: IndexWorkspaceSnapshotUsage,
   evidence: IndexEvidence,
+  threadInspector: IndexThreadInspector,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -343,6 +359,15 @@ export function indexSectionOrder(def: ViewDef): string[] {
       "source",
       "observability",
       "relations",
+      "health",
+    ];
+  if (k === "thread")
+    return [
+      "hero",
+      "threadInspector",
+      "relations",
+      "source",
+      "observability",
       "health",
     ];
   if (k === "workspace")

@@ -23,7 +23,7 @@ describe.sequential("offload governance", () => {
     const tenantA = storage.scope(base, "tenant-a");
     const tenantB = storage.scope(base, "tenant-b");
     const installedA = config({
-      persistence: { records: tenantA.records },
+      storage: { records: tenantA.records },
     });
     let support:
       | NonNullable<CallArgs["tools"]>[number]
@@ -63,7 +63,7 @@ describe.sequential("offload governance", () => {
     expect(handle).toMatch(/^offload_[a-f0-9]+$/);
 
     const installedB = config({
-      persistence: { records: tenantB.records },
+      storage: { records: tenantB.records },
     });
     const crossTenant = await support!
       .execute({ handle })
@@ -71,7 +71,7 @@ describe.sequential("offload governance", () => {
     installedB.dispose();
 
     const installedAgain = config({
-      persistence: { records: tenantA.records },
+      storage: { records: tenantA.records },
     });
     const record = (
       await tenantA.records.list("crux:request-offload:v1:")
@@ -112,7 +112,7 @@ describe.sequential("offload governance", () => {
         return created;
       },
     };
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     let calls = 0;
     const spec: AdapterSpec<object, { readonly text: string }> = {
       providerId: "offload-revision-test",
@@ -159,7 +159,7 @@ describe.sequential("offload governance", () => {
     });
     const put = vi.fn(backingAssets.put);
     const installation = config({
-      persistence: {
+      storage: {
         records: inMemoryRecordStore(),
         assets: { ...backingAssets, put },
       },

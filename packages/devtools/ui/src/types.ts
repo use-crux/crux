@@ -2,6 +2,8 @@
  * Client-side types mirroring the devtools protocol.
  */
 
+import type { ThreadRuntimeBridgePayload } from "@use-crux/core/thread";
+
 export type JsonSchema = Record<string, unknown>;
 
 export interface PromptMeta {
@@ -395,7 +397,13 @@ export interface DependencyFacts {
 
 export interface InjectionUseFacts {
   variable?: string;
-  relationHint?: "context" | "injectable" | "memory" | "blackboard" | "unknown";
+  relationHint?:
+    | "context"
+    | "injectable"
+    | "memory"
+    | "blackboard"
+    | "thread"
+    | "unknown";
   targetDefinitionId?: string;
   targetKind?: string;
   targetName?: string;
@@ -3106,6 +3114,18 @@ export interface MemoryInspection {
   kind?: string;
   value?: unknown;
   entries?: readonly MemoryInspectionEntry[];
+  message?: string;
+  reason?: string;
+  docsUrl?: string;
+}
+
+/** Live, payload-safe Thread topology returned through Runtime Bridge. */
+export interface ThreadInspection {
+  status: MemoryInspectionStatus;
+  source?: MemoryInspectionSource;
+  resourceId: string;
+  kind?: "thread" | string;
+  value?: ThreadRuntimeBridgePayload;
   message?: string;
   reason?: string;
   docsUrl?: string;

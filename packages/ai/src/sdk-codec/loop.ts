@@ -228,6 +228,7 @@ export function createLoopCallPlan(
         ? { previousCall: previousUsage ? { usage: previousUsage } : {} }
         : {}),
     });
+    await planned.validate?.();
     syncToolArgs(args, request);
     requestReceipts.push(planned.receipt);
     const activeTools = planned.activeTools ?? overrides?.activeTools;

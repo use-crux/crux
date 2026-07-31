@@ -127,6 +127,7 @@ export interface IndexFacts {
       | "injectable"
       | "memory"
       | "blackboard"
+      | "thread"
       | "unknown";
     targetDefinitionId?: string;
     targetKind?: string;

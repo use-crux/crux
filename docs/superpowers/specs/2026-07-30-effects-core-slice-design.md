@@ -370,6 +370,26 @@ slices are bound by three contracts from that work:
 Binding docs: the whole-request design (Request planning, Executed request
 receipt) and `reference/crux-core/request-evidence`.
 
+## Thread-publication completion gate (RFC #298, landed after this slice)
+
+Canonical thread history (#298 / PR #309) changed execution completion
+ordering: Thread publication is the *terminal acceptance gate*. It runs
+before deferred cache writes, memory capture, and success hooks, and a
+provider success is never reported when publication fails. Consequences for
+Effects:
+
+1. Slice 1 is unaffected in-process: receipts settle synchronously with
+   their executor, not in completion hooks. The full gates on the merged
+   tree are the proof.
+2. Slice 2+ durable receipt writes and any success-linked evidence must
+   slot deliberately relative to that gate, not assume the pre-#298
+   ordering. A provider success followed by failed publication must never
+   read as a settled success to a native provider-call effect.
+3. Slice 2's durable `EffectLedger` port binds against the post-#298
+   `RecordStore` contract (the `persistence` config key is renamed
+   `storage`, and the store contract grew). This slice already uses the
+   `storage` vocabulary and implements no store.
+
 ## Follow-up seams this slice must leave clean
 
 - `EffectLedger` port ready for a `RecordStore` implementation (slice 2).

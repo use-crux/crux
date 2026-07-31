@@ -7,12 +7,140 @@ import {
   type AdapterSpec,
   type CallArgs,
 } from "../src";
+import { inMemoryStorage } from "../src/storage";
+import { thread, ThreadError } from "../src/thread";
 import {
   historyResponse as response,
   managedHistoryMessages as historyMessages,
 } from "./request-history-harness";
 
 describe("history()", () => {
+  it.each(["caller-messages", "thread"] as const)(
+    "plans managed %s history through the shared source contract",
+    async (source) => {
+      const calls: CallArgs[] = [];
+      const runtime = adapter({
+        providerId: `managed-source-${source}`,
+        capacity: () => ({
+          contextWindow: 32_768,
+          defaultOutputReserve: 256,
+          countingConfidence: "estimated" as const,
+        }),
+        async call(_client, args) {
+          calls.push(args);
+          return { raw: { text: "done" }, extracted: response("done") };
+        },
+        async stream() {
+          throw new Error("not used");
+        },
+        appendToolRound: (value) => value,
+        mapSettings: () => ({}),
+      })({});
+      const conversation = thread({
+        id: `managed-source-${source}`,
+        storage: inMemoryStorage(),
+      });
+      if (source === "thread") {
+        await conversation.append(
+          historyMessages.map((message, index) => ({
+            ...message,
+            id: `managed-${index}`,
+          })),
+        );
+      }
+      const reply = prompt({
+        id: `managed-source-${source}`,
+        use:
+          source === "thread"
+            ? [conversation, history({ recent: 2, onMiss: "recent-only" })]
+            : [history({ recent: 2, onMiss: "recent-only" })],
+        prompt: "current question",
+      });
+      const result = await runtime.generate(reply, {
+        model: "managed-source-model",
+        inputBudget: { max: 72, optimizeAt: 60 },
+        ...(source === "caller-messages"
+          ? {
+              messages: [
+                ...historyMessages,
+                { role: "user" as const, content: "current question" },
+              ],
+            }
+          : {}),
+      });
+
+      expect(calls.at(-1)?.messages).toEqual(
+        source === "thread"
+          ? [
+              ...historyMessages.slice(-2),
+              { role: "user", content: "current question" },
+            ]
+          : [{ role: "user", content: "current question" }],
+      );
+      expect(result.steps[0]?.request?.history).toMatchObject({ source });
+    },
+  );
+
+  it("invalidates a sealed Thread revision changed during summary preparation", async () => {
+    const conversation = thread({
+      id: "managed-history-revision-pin",
+      storage: inMemoryStorage(),
+    });
+    await conversation.append(
+      historyMessages.map((message, index) => ({
+        ...message,
+        content:
+          index < 4
+            ? `${message.content} `.repeat(20)
+            : message.content,
+        id: `revision-${index}`,
+      })),
+    );
+    let providerCalls = 0;
+    const runtime = adapter({
+      providerId: "managed-history-revision-pin",
+      capacity: () => ({
+        contextWindow: 32_768,
+        defaultOutputReserve: 256,
+        countingConfidence: "estimated" as const,
+      }),
+      compactHistory: async () => {
+        await conversation.append({
+          id: "concurrent-mutation",
+          role: "user",
+          content: "concurrent mutation",
+        });
+        return {
+          summary: "prepared summary",
+          requestId: "request_thread_revision_summary",
+        };
+      },
+      async call() {
+        providerCalls += 1;
+        return { raw: { text: "done" }, extracted: response("done") };
+      },
+      async stream() {
+        throw new Error("not used");
+      },
+      appendToolRound: (value) => value,
+      mapSettings: () => ({}),
+    })({});
+    const reply = prompt({
+      id: "managed-history-revision-pin",
+      use: [conversation, history({ recent: 2 })],
+      prompt: "current question",
+    });
+
+    const error = await runtime.generate(reply, {
+      model: "revision-model",
+      inputBudget: { max: 150, optimizeAt: 120 },
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({ code: "identity_conflict" });
+    expect(error).toBeInstanceOf(ThreadError);
+    expect(providerCalls).toBe(0);
+  });
+
   it("derives inert defaults and exposes all versioned summary strategies", () => {
     const recent = { messages: 2 };
     const configured = history({ recent });

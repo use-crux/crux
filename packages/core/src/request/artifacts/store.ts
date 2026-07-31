@@ -15,6 +15,12 @@ export interface HistoryArtifactRecord extends JsonObject {
   readonly series: string;
   readonly sourceDigest: string;
   readonly prefixLength: number;
+  readonly threadSource?: string;
+  readonly threadRevision?: string;
+  readonly threadRange?: string;
+  readonly threadOffset?: number;
+  readonly threadStart?: string;
+  readonly threadEnd?: string;
   readonly summary: string;
   readonly createdAt: number;
   readonly governance: {
@@ -29,22 +35,16 @@ export interface HistoryArtifactRecord extends JsonObject {
 }
 
 const memoryArtifacts = new Map<string, HistoryArtifactRecord>();
-const MEMORY_ARTIFACT_TTL_MS =
-  HISTORY_ARTIFACT_GOVERNANCE.retentionMs;
+const MEMORY_ARTIFACT_TTL_MS = HISTORY_ARTIFACT_GOVERNANCE.retentionMs;
 const MEMORY_ARTIFACT_LIMIT = 128;
 
 export async function readHistoryArtifact(
   key: string,
 ): Promise<HistoryArtifactRecord | undefined> {
   const records = configuredRecords();
-  const value = records
-    ? await records.get(key)
-    : memoryArtifacts.get(key);
+  const value = records ? await records.get(key) : memoryArtifacts.get(key);
   if (!isHistoryArtifactRecord(value)) return undefined;
-  if (
-    !records &&
-    Date.now() - value.createdAt >= MEMORY_ARTIFACT_TTL_MS
-  ) {
+  if (!records && Date.now() - value.createdAt >= MEMORY_ARTIFACT_TTL_MS) {
     memoryArtifacts.delete(key);
     return undefined;
   }
@@ -121,9 +121,33 @@ function isHistoryArtifactRecord(
     typeof value.series === "string" &&
     typeof value.sourceDigest === "string" &&
     typeof value.prefixLength === "number" &&
+    validThreadRangeFields(value) &&
     typeof value.summary === "string" &&
     typeof value.createdAt === "number" &&
     isGovernance(value.governance)
+  );
+}
+
+function validThreadRangeFields(value: JsonObject): boolean {
+  const fields = [
+    value.threadSource,
+    value.threadRevision,
+    value.threadRange,
+    value.threadOffset,
+  ];
+  if (fields.every((field) => field === undefined)) {
+    return value.threadStart === undefined && value.threadEnd === undefined;
+  }
+  return (
+    typeof value.threadSource === "string" &&
+    typeof value.threadRevision === "string" &&
+    typeof value.threadRange === "string" &&
+    typeof value.threadOffset === "number" &&
+    Number.isSafeInteger(value.threadOffset) &&
+    value.threadOffset >= 0 &&
+    (value.threadStart === undefined ||
+      typeof value.threadStart === "string") &&
+    (value.threadEnd === undefined || typeof value.threadEnd === "string")
   );
 }
 

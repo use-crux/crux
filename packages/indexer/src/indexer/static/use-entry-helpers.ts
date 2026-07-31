@@ -10,7 +10,7 @@ export function safeUseEntryId(value: string): string {
 
 /** Returns the relation hint implied by a resolved target definition kind. */
 export function relationHintForTarget(kind: ProjectDefinitionKind | undefined): InjectionUseFacts['relationHint'] | undefined {
-  if (kind === 'context' || kind === 'injectable' || kind === 'memory' || kind === 'blackboard') return kind
+  if (kind === 'context' || kind === 'injectable' || kind === 'memory' || kind === 'blackboard' || kind === 'thread') return kind
   return undefined
 }
 

@@ -56,6 +56,14 @@
     "runtimeJoin": true
   },
   {
+    "type": "agent.uses_thread",
+    "fromKinds": ["agent"],
+    "toKinds": ["thread"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
     "type": "agent.uses_routing",
     "fromKinds": ["agent"],
     "toKinds": [
@@ -369,6 +377,14 @@
     "type": "context.uses_memory",
     "fromKinds": ["context"],
     "toKinds": ["memory"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "context.uses_thread",
+    "fromKinds": ["context"],
+    "toKinds": ["thread"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -867,6 +883,14 @@
     "type": "prompt.uses_memory",
     "fromKinds": ["prompt"],
     "toKinds": ["memory"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "prompt.uses_thread",
+    "fromKinds": ["prompt"],
+    "toKinds": ["thread"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true

@@ -140,6 +140,7 @@ export const primitiveSpanNames = {
   'delegate.invoke': 'crux.delegate.invoke',
   'plan.operation': 'crux.plan.operation',
   'task.operation': 'crux.task.operation',
+  'thread.operation': 'crux.thread.operation',
   'workspace.operation': 'crux.workspace.operation',
   'indexing.pipeline': 'crux.indexing.pipeline',
   'ingest.parse': 'crux.ingest.parse',

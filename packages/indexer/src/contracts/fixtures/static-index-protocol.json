@@ -35,7 +35,7 @@
         ],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:rule-descriptors"
         },
         "compilerProjection": {
@@ -103,7 +103,7 @@
         ],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:rule-descriptors"
         },
         "compilerProjection": {
@@ -186,7 +186,7 @@
         ],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:rule-descriptors"
         },
         "compilerProjection": {
@@ -356,7 +356,7 @@
         ],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:rule-descriptors"
         },
         "compilerProjection": {

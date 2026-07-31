@@ -34,6 +34,10 @@ export const stateEvidenceCoverage = {
     name: "guardrail.run",
     participation: "subject",
   }),
+  "thread.operation": row({
+    name: "thread.operation",
+    participation: "subject",
+  }),
   "routing.router": row({
     name: "routing.router",
     participation: "subject",

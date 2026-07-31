@@ -112,6 +112,14 @@ export const injectableUseRelationPolicies = (
         runtimeJoin: true,
       },
       {
+        type: `${owner}.uses_thread`,
+        fromKinds: [owner],
+        toKinds: ["thread"],
+        presentation: "both",
+        partial: true,
+        runtimeJoin: true,
+      },
+      {
         type: `${owner}.uses_tool`,
         fromKinds: [owner],
         toKinds: ["tool"],

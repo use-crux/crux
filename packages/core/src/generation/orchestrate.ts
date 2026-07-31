@@ -22,6 +22,7 @@
 import { observe, type OperationResultMeta, type WithOperationResultMeta } from '../observability'
 import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { getHooks } from '../runtime/runtime'
+import type { MiddlewareResult } from '../runtime/types'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { OrchestrationSpec, StreamOrchestrationSpec } from './orchestrate-types'
 import { getMeta, generationUsageAttributes } from './result-meta'
@@ -33,6 +34,7 @@ import { withBudget } from './timeout'
 import {
   attachStreamObservability,
   emitOperationDeadline,
+  emitThreadHistoryOverride,
   generationAttributes,
   generationInputPreview,
   generationOutputPreview,
@@ -47,6 +49,11 @@ import {
   attachCachedCandidateFinalizer,
   cachedCandidateFinalizer,
 } from '../runtime/internal/cached-candidate-finalizer'
+import {
+  attachTerminalResultCoordinator,
+  createTerminalResultCoordinator,
+  finalizeTerminalResult,
+} from '../runtime/internal/terminal-result-finalizer'
 
 /**
  * Shared generate orchestration. Wraps an adapter's SDK-specific `doGenerate`
@@ -83,14 +90,14 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
 /**
  * Run generation with an internal post-result completion boundary.
  *
- * The completion runs after middleware, hooks, usage, and output evidence, but
- * before `generation.call` closes. It is intentionally not re-exported from
- * the generation barrel; adapter execution uses it for lifecycle work that
- * must inherit the generation observation without extending public options.
+ * The acceptance callback settles the fully composed middleware result before
+ * cache writes, success hooks, usage, and output evidence. The post-output
+ * callback preserves lifecycle work that must observe the output artifact.
  *
  * @param spec - Provider-neutral generation orchestration inputs.
  * @param doGenerate - Adapter-owned generation implementation.
- * @param complete - Internal finalized-result lifecycle callback.
+ * @param accept - Internal accepted-result publication callback.
+ * @param afterOutput - Internal post-output lifecycle callback.
  * @returns The observed result after the completion boundary settles.
  * @internal
  */
@@ -100,7 +107,15 @@ export async function orchestrateGenerateWithCompletion<
 >(
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
-  complete?: (result: WithOperationResultMeta<TResult>) => void | Promise<void>,
+  accept?: (
+    result: WithOperationResultMeta<TResult>,
+  ) =>
+    | WithOperationResultMeta<TResult>
+    | void
+    | Promise<WithOperationResultMeta<TResult> | void>,
+  afterOutput?: (
+    result: WithOperationResultMeta<TResult>,
+  ) => void | Promise<void>,
 ): Promise<WithOperationResultMeta<TResult> & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
@@ -111,7 +126,9 @@ export async function orchestrateGenerateWithCompletion<
   const performance = createGenerationPerformanceTracker()
   try {
     const result = await span.withContext(async () => {
+      const startedAt = Date.now()
       emitOperationDeadline(spec.timeout?.totalMs)
+      emitThreadHistoryOverride(spec.threadHistoryOverride)
       const inputArtifactId = observe.artifact({
         kind: 'messages',
         contentType: 'application/json',
@@ -121,11 +138,22 @@ export async function orchestrateGenerateWithCompletion<
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
 
-      const result = await withBudget(() => orchestrateGenerateInner(spec, doGenerate, operation), {
+      const prepared = await withBudget(() => orchestrateGenerateInner(
+        spec,
+        doGenerate,
+        operation,
+      ), {
         budget: 'total',
         limitMs: spec.timeout?.totalMs,
       })
-      const meta = getMeta(result)
+      const completed = await accept?.(prepared.result) ?? prepared.result
+      const finalized = prepared.terminal
+        ? await finalizeTerminalResult(
+            prepared.terminal,
+            completed as MiddlewareResult,
+          ) as WithOperationResultMeta<TResult>
+        : completed
+      const meta = getMeta(finalized)
       const usageAttributes = generationUsageAttributes(meta)
       if (usageAttributes) {
         observe.event({
@@ -138,15 +166,29 @@ export async function orchestrateGenerateWithCompletion<
         kind: 'output',
         contentType: 'application/json',
         encoding: 'json',
-        preview: generationOutputPreview(result),
+        preview: generationOutputPreview(finalized),
       })
       linkActiveSpanToArtifact('produced', outputArtifactId)
-      await complete?.(result)
-      return result
+      await afterOutput?.(finalized)
+      if (spec.promptConfig.hooks?.onGenerate) {
+        spec.promptConfig.hooks.onGenerate(
+          {
+            promptId: spec.promptId,
+            durationMs: Date.now() - startedAt,
+          },
+          finalized as unknown as Parameters<
+            NonNullable<typeof spec.promptConfig.hooks.onGenerate>
+          >[1],
+        )
+      }
+      return finalized
     })
     span.end({ metrics: performance.metrics(getMeta(result)) })
     return stampCruxRunId(result, span.runId)
   } catch (error) {
+    if (spec.promptConfig.hooks?.onError) {
+      spec.promptConfig.hooks.onError({ promptId: spec.promptId, error })
+    }
     span.error(error)
     throw error
   }
@@ -159,56 +201,44 @@ async function orchestrateGenerateInner<
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
   operation: OperationResultMeta,
-): Promise<WithOperationResultMeta<TResult>> {
+): Promise<{
+  readonly result: WithOperationResultMeta<TResult>
+  readonly terminal?: ReturnType<typeof createTerminalResultCoordinator>
+}> {
   const middleware = getHooks().middleware
-  const start = Date.now()
   maybeWarnMissingSemanticCache(spec)
 
-  try {
-    let result: TResult
-    if (middleware) {
-      const next = createFinalizingMiddlewareNext(doGenerate, operation)
-      const candidateFinalizer = spec[cachedCandidateFinalizer]
-      if (candidateFinalizer) {
-        attachCachedCandidateFinalizer(next, candidateFinalizer)
-      }
-      result = (await middleware(
-        {
-          promptId: spec.promptId,
-          preparedArgs: spec.preparedArgs,
-          operation: 'generate',
-          promptConfig: spec.promptConfig as AnyPromptConfig,
-          input: spec.input,
-          provider: spec.provider,
-          model: spec.model,
-          resolved: spec.resolved,
-          outputMode: spec.outputMode,
-        },
-        next,
-      )) as unknown as TResult
-    } else {
-      result = await doGenerate(spec.preparedArgs)
+  let result: TResult
+  if (middleware) {
+    const next = createFinalizingMiddlewareNext(doGenerate, operation)
+    const terminal = createTerminalResultCoordinator()
+    attachTerminalResultCoordinator(next, terminal)
+    const candidateFinalizer = spec[cachedCandidateFinalizer]
+    if (candidateFinalizer) {
+      attachCachedCandidateFinalizer(next, candidateFinalizer)
     }
-
-    const observedResult = withOperationResultMeta(result, operation)
-    const durationMs = Date.now() - start
-
-    // Fire onGenerate hook — `TResult` is erased at this boundary; the typed
-    // hook signature on `AnyPromptConfig` lives in user-defined prompts.
-    if (spec.promptConfig.hooks?.onGenerate) {
-      spec.promptConfig.hooks.onGenerate(
-        { promptId: spec.promptId, durationMs },
-        observedResult as unknown as Parameters<NonNullable<typeof spec.promptConfig.hooks.onGenerate>>[1],
-      )
+    result = (await middleware(
+      {
+        promptId: spec.promptId,
+        preparedArgs: spec.preparedArgs,
+        operation: 'generate',
+        promptConfig: spec.promptConfig as AnyPromptConfig,
+        input: spec.input,
+        provider: spec.provider,
+        model: spec.model,
+        resolved: spec.resolved,
+        outputMode: spec.outputMode,
+      },
+      next,
+    )) as unknown as TResult
+    return {
+      result: withOperationResultMeta(result, operation),
+      terminal,
     }
-
-    return observedResult
-  } catch (error) {
-    if (spec.promptConfig.hooks?.onError) {
-      spec.promptConfig.hooks.onError({ promptId: spec.promptId, error })
-    }
-    throw error
+  } else {
+    result = await doGenerate(spec.preparedArgs)
   }
+  return { result: withOperationResultMeta(result, operation) }
 }
 
 // orchestrateStream
@@ -239,6 +269,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
   try {
     return await span.withContext(async () => {
       emitOperationDeadline(spec.timeout?.totalMs)
+      emitThreadHistoryOverride(spec.threadHistoryOverride)
       const inputArtifactId = observe.artifact({
         kind: 'messages',
         contentType: 'application/json',

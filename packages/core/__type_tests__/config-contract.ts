@@ -26,7 +26,7 @@ const launchConfig = {
   indexer: {
     trust: { mode: 'first-party-only' },
   },
-  persistence: {
+  storage: {
     records: inMemoryRecordStore(),
   },
   generation: {
@@ -178,7 +178,7 @@ const registriesStayInSource = {
 } satisfies CruxConfig
 
 const storeMustUsePersistenceDomain = {
-  // @ts-expect-error Record storage configuration belongs under `persistence.records`.
+  // @ts-expect-error Record storage configuration belongs under `storage.records`.
   records: inMemoryRecordStore(),
 } satisfies CruxConfig
 
@@ -214,7 +214,7 @@ const devtoolsDoesNotOwnDeliveryPolicy = {
   },
 } satisfies CruxConfig
 
-void crux.config.persistence?.records
+void crux.config.storage?.records
 void crux.config.generation?.middleware
 void crux.config.generation?.tokenizer
 void crux

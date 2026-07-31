@@ -14,7 +14,7 @@
  *
  * export default config({
  *   lint: { profile: 'recommended' },
- *   persistence: {
+ *   storage: {
  *     records: inMemoryRecordStore(),
  *   },
  *   generation: {
@@ -54,7 +54,6 @@ export type {
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
-  CruxPersistenceConfig,
   CruxRuntimeConfig,
 } from "./config-types";
 export type {
@@ -97,7 +96,7 @@ const runtimeRegistry = getCruxProcessRegistry().runtime;
  *
  * export default config({
  *   lint: { profile: 'recommended' },
- *   persistence: { records },
+ *   storage: { records },
  *   generation: { middleware, tokenizer },
  *   observability: { serverUrl: process.env.CRUX_OBSERVABILITY_URL },
  * })

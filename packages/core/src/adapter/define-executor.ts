@@ -287,6 +287,9 @@ export function loopRuntimeAdapter<
       requests: Object.freeze(
         result.steps.flatMap((step) => (step.request ? [step.request] : [])),
       ),
+      ...(result.threadCommit
+        ? { threadCommit: result.threadCommit }
+        : {}),
     };
   };
 

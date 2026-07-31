@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::builder::StaticIndexLintBuilder;
-use crate::facts::{StaticIndexLintFinding, StaticIndexPatchFacts};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
@@ -15,13 +15,27 @@ pub fn append_builtin_lint_findings(
     facts: &mut StaticIndexPatchFacts,
     options: &StaticIndexLintOptions,
 ) {
+    let definition_occurrences = facts.definitions.clone();
+    append_builtin_lint_findings_with_definition_occurrences(
+        facts,
+        options,
+        &definition_occurrences,
+    );
+}
+
+/// Appends built-in findings while retaining pre-merge definition occurrences.
+pub fn append_builtin_lint_findings_with_definition_occurrences(
+    facts: &mut StaticIndexPatchFacts,
+    options: &StaticIndexLintOptions,
+    definition_occurrences: &[StaticIndexDefinition],
+) {
     let mut seen = facts
         .lint_findings
         .iter()
         .map(|finding| finding.id.clone())
         .collect::<BTreeSet<_>>();
     if options.emit_builtin_lints {
-        for finding in builtin_index_lint_findings(facts) {
+        for finding in builtin_index_lint_findings(facts, definition_occurrences) {
             if seen.insert(finding.id.clone()) {
                 facts.lint_findings.push(finding);
             }
@@ -35,14 +49,17 @@ pub fn append_builtin_lint_findings(
     );
 }
 
-fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndexLintFinding> {
+fn builtin_index_lint_findings(
+    facts: &StaticIndexPatchFacts,
+    definition_occurrences: &[StaticIndexDefinition],
+) -> Vec<StaticIndexLintFinding> {
     let builder = StaticIndexLintBuilder::new();
     let by_id = facts
         .definitions
         .iter()
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<BTreeMap<_, _>>();
-    let mut findings = core_lint_findings(&builder, facts, &by_id);
+    let mut findings = core_lint_findings(&builder, facts, definition_occurrences, &by_id);
     findings.extend(runtime_lint_findings(
         &builder,
         facts,

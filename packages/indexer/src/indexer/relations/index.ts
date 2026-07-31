@@ -15,7 +15,7 @@ import {
   relationHintForTarget,
   safeUseEntryId,
 } from "../static/use-entry-helpers";
-import type { StaticFoundDefinition } from "../types";
+import type { StaticFoundDefinition, StaticRelationRef } from "../types";
 import {
   withResolvedRuntimeUseEntryTargets,
   type RuntimeUseTargetRules,
@@ -339,6 +339,8 @@ export function relationDiagnosticsFromReport(
 export interface RelationModelInput {
   /** Static definitions whose relation refs still need binding. */
   readonly found?: readonly StaticFoundDefinition[];
+  /** Relation-only static facts that are not anchored to an emitted definition. */
+  readonly references?: readonly StaticRelationRef[];
   /** Imported definitions keyed by local variable/import name for file-scope binding. */
   readonly importedDefinitions?: ReadonlyMap<string, ProjectDefinition>;
   /** Definitions that should receive relation-derived read-model metadata. */
@@ -382,12 +384,17 @@ export function resolveRelationModel(
   options?: { readonly policies?: RelationPolicyTable },
 ): RelationModel {
   const policies = options?.policies ?? builtInRelationPolicies;
-  const staticBinding = input.found
-    ? bindStaticRelationRefs(input.found, input.importedDefinitions, policies)
-    : emptyStaticRelationBinding();
-  const relations = mergeRelationsByIdentity(
-    staticBinding.relations,
-    input.relations ?? [],
+  const staticBinding =
+    input.found || input.references
+      ? bindStaticRelationRefs(
+          input.found ?? [],
+          input.importedDefinitions,
+          policies,
+          input.references,
+        )
+      : emptyStaticRelationBinding();
+  const relations = projectAgentThreadRelations(
+    mergeRelationsByIdentity(staticBinding.relations, input.relations ?? []),
   );
   const projectPolicyGaps = policyGapsForResolvedRelations(
     input.relations ?? [],
@@ -413,6 +420,40 @@ export function resolveRelationModel(
       policyGaps: mergePolicyGaps(staticBinding.policyGaps, projectPolicyGaps),
     }),
   };
+}
+
+/** Projects an Agent's resolved Prompt Thread binding onto the Agent graph node. */
+export function projectAgentThreadRelations(
+  relations: readonly ProjectRelation[],
+): ProjectRelation[] {
+  const threadsByPrompt = new Map<string, ProjectRelation[]>();
+  for (const relation of relations) {
+    if (relation.type !== "prompt.uses_thread") continue;
+    const promptId = relation.from.replace(/:use:\d+$/u, "");
+    const list = threadsByPrompt.get(promptId) ?? [];
+    list.push(relation);
+    threadsByPrompt.set(promptId, list);
+  }
+  const derived = relations.flatMap((relation) => {
+    if (relation.type !== "agent.uses_prompt") return [];
+    return (threadsByPrompt.get(relation.to) ?? []).map((thread) => ({
+      id: relationIdentity({
+        type: "agent.uses_thread",
+        from: relation.from,
+        to: thread.to,
+      }),
+      type: "agent.uses_thread",
+      from: relation.from,
+      to: thread.to,
+      fidelity:
+        relation.fidelity === "resolved" && thread.fidelity === "resolved"
+          ? "resolved"
+          : "partial",
+      source: thread.source,
+      metadata: { viaPromptDefinitionId: relation.to },
+    }) satisfies ProjectRelation);
+  });
+  return mergeRelationsByIdentity(relations, derived);
 }
 
 /**
@@ -564,6 +605,7 @@ function dependencyKeyForRelation(type: string): string | undefined {
   if (type.endsWith(".uses_tool")) return "tools";
   if (type.endsWith(".uses_memory")) return "memory";
   if (type.endsWith(".uses_blackboard")) return "blackboards";
+  if (type.endsWith(".uses_thread")) return "threads";
   if (type.endsWith(".uses_workspace")) return "workspaces";
   return undefined;
 }
@@ -663,10 +705,12 @@ function isInjectionUseRelation(type: string): boolean {
     type === "prompt.uses_injectable" ||
     type === "prompt.uses_memory" ||
     type === "prompt.uses_blackboard" ||
+    type === "prompt.uses_thread" ||
     type === "context.uses_context" ||
     type === "context.uses_injectable" ||
     type === "context.uses_memory" ||
     type === "context.uses_blackboard" ||
+    type === "context.uses_thread" ||
     type === "injectable.uses_context" ||
     type === "injectable.uses_memory" ||
     type === "injectable.uses_blackboard"
@@ -713,6 +757,7 @@ function bindStaticRelationRefs(
   found: readonly StaticFoundDefinition[],
   importedDefinitions: ReadonlyMap<string, ProjectDefinition> = new Map(),
   policies: RelationPolicyTable,
+  standaloneReferences: readonly StaticRelationRef[] = [],
 ): StaticRelationBinding {
   const byVariable = new Map(
     found.map((item) => [item.variableName, item.definition]),
@@ -723,72 +768,89 @@ function bindStaticRelationRefs(
     string,
     { sampleFact: RelationFactRef; count: number }
   >();
-  for (const item of found) {
-    for (const ref of item.relationRefs) {
-      const fact = {
-        ownerDefinitionId: ref.fromId ?? item.definition.id,
-        refType: ref.type,
-        toVariable: ref.toVariable,
-        toId: ref.toId,
-        source: item.definition.source,
-      } satisfies RelationFactRef;
-      const policy = policies.policyFor(ref.type);
-      if (!policy) {
-        unresolved.push({ reason: "no-policy", fact });
-        const gap = policyGapCounts.get(ref.type);
-        policyGapCounts.set(ref.type, {
-          sampleFact: gap?.sampleFact ?? fact,
-          count: (gap?.count ?? 0) + 1,
-        });
-        continue;
-      }
-      const source = ref.fromVariable
-        ? (byVariable.get(ref.fromVariable) ??
-          importedDefinitions.get(ref.fromVariable))
-        : undefined;
-      if (ref.fromVariable && !ref.fromId && !source) {
-        unresolved.push({ reason: "target-not-found", fact });
-        continue;
-      }
-      const target = ref.toVariable
-        ? (byVariable.get(ref.toVariable) ??
-          importedDefinitions.get(ref.toVariable))
-        : undefined;
-      const targetId =
-        ref.toId ??
-        target?.id ??
-        fallbackRelationTargetId(ref.type, ref.toVariable) ??
-        ref.fallbackToId;
-      const sourceId = ref.fromId ?? source?.id ?? item.definition.id;
-      const type =
-        target?.kind && ref.typeByTargetKind?.[target.kind]
-          ? ref.typeByTargetKind[target.kind]
-          : ref.type;
-      if (!targetId || !type) {
-        unresolved.push({
-          reason: target ? "kind-mismatch" : "no-fallback-id",
-          fact,
-        });
-        continue;
-      }
-      const sourceFidelity = ref.fromId
-        ? item.definition.fidelity
-        : (source?.fidelity ?? item.definition.fidelity);
-      const targetFidelity = ref.toId ? "resolved" : target?.fidelity;
-      const fidelity =
-        sourceFidelity === "resolved" && targetFidelity === "resolved"
-          ? "resolved"
-          : "partial";
-      relations.push(
-        projectRelation({
-          type,
-          from: sourceId,
-          to: targetId,
-          fidelity,
-          source: item.definition.source,
-        }),
-      );
+  const contributions: Array<{
+    readonly item?: StaticFoundDefinition;
+    readonly ref: StaticRelationRef;
+  }> = [
+    ...found.flatMap((item) => item.relationRefs.map((ref) => ({ item, ref }))),
+    ...standaloneReferences.map((ref) => ({ ref })),
+  ];
+  for (const contribution of contributions) {
+    const { ref } = contribution;
+    const item = contribution.item;
+    const ownerDefinitionId = ref.fromId ?? item?.definition.id;
+    if (!ownerDefinitionId) continue;
+    const fact = {
+      ownerDefinitionId,
+      refType: ref.type,
+      toVariable: ref.toVariable,
+      toId: ref.toId,
+      source: ref.source ?? item?.definition.source,
+    } satisfies RelationFactRef;
+    const policy = policies.policyFor(ref.type);
+    if (!policy) {
+      unresolved.push({ reason: "no-policy", fact });
+      const gap = policyGapCounts.get(ref.type);
+      policyGapCounts.set(ref.type, {
+        sampleFact: gap?.sampleFact ?? fact,
+        count: (gap?.count ?? 0) + 1,
+      });
+      continue;
     }
+    const source = ref.fromVariable
+      ? (byVariable.get(ref.fromVariable) ??
+        importedDefinitions.get(ref.fromVariable))
+      : undefined;
+    if (ref.fromVariable && !ref.fromId && !source) {
+      unresolved.push({ reason: "target-not-found", fact });
+      continue;
+    }
+    const target = ref.toVariable
+      ? (byVariable.get(ref.toVariable) ??
+        importedDefinitions.get(ref.toVariable))
+      : undefined;
+    const targetId =
+      ref.toId ??
+      target?.id ??
+      fallbackRelationTargetId(ref.type, ref.toVariable) ??
+      ref.fallbackToId;
+    const sourceId = ref.fromId ?? source?.id ?? item?.definition.id;
+    if (!sourceId) {
+      unresolved.push({ reason: "target-not-found", fact });
+      continue;
+    }
+    const type =
+      target?.kind && ref.typeByTargetKind?.[target.kind]
+        ? ref.typeByTargetKind[target.kind]
+        : ref.type;
+    if (!targetId || !type) {
+      unresolved.push({
+        reason: target ? "kind-mismatch" : "no-fallback-id",
+        fact,
+      });
+      continue;
+    }
+    const sourceFidelity = item
+      ? ref.fromId
+        ? item.definition.fidelity
+        : (source?.fidelity ?? item.definition.fidelity)
+      : ref.fromId
+        ? "resolved"
+        : "partial";
+    const targetFidelity = ref.toId ? "resolved" : target?.fidelity;
+    const fidelity =
+      sourceFidelity === "resolved" && targetFidelity === "resolved"
+        ? "resolved"
+        : "partial";
+    relations.push(
+      projectRelation({
+        type,
+        from: sourceId,
+        to: targetId,
+        fidelity,
+        source: ref.source ?? item?.definition.source,
+      }),
+    );
   }
   return {
     relations,

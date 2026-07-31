@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 59 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Effect LSP export-metadata epoch 59", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 60 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 60", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -48,16 +48,18 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"authored evidence.record definitions",
 		"Epoch 56",
 		"Effect definitions",
-		"duplicate-identity lints",
+		"Thread definitions",
 		"runtime-observability identity",
 		"context-planning structure",
 		"Epoch 57",
 		"distinct same-identity Effect call-site evidence",
-		"native analysis",
+		"first-class Thread lint findings",
 		"Epoch 58",
-		"independently versioned Effects and context-planning snapshots",
+		"sources deleted while offline",
 		"Epoch 59",
-		"Effect export metadata used by generic LSP completion",
+		"Effect export metadata",
+		"Epoch 60",
+		"independently advanced Effect LSP and canonical Thread history",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -68,7 +70,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-59", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-60", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -85,6 +87,14 @@ func TestProjectIndexFactStoreMissesPreEffectDefinitionSnapshotEpoch(t *testing.
 
 func TestProjectIndexFactStoreMissesPreEffectCallSiteSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 56, "pre-Effect-call-site snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreThreadLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 56, "pre-Thread-lint snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreStaleDeletionSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 57, "pre-stale-deletion snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T) {

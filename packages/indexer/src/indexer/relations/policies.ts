@@ -42,6 +42,14 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'agent.uses_thread',
+    fromKinds: ['agent'],
+    toKinds: ['thread'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
     type: 'agent.uses_tool',
     fromKinds: ['agent'],
     toKinds: ['tool'],

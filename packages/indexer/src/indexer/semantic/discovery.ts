@@ -175,6 +175,18 @@ function semanticDefinitionCandidateForCall<
         object,
       };
     }
+    case "thread": {
+      const name =
+        semanticStringLiteralProperty(object, "id", syntax) ??
+        variableName ??
+        "anonymous";
+      return {
+        definitionId: `thread:${safeId(name)}`,
+        kind: "thread",
+        name,
+        object,
+      };
+    }
     case "mcp": {
       const name =
         semanticStringLiteralProperty(object, "id", syntax) ??

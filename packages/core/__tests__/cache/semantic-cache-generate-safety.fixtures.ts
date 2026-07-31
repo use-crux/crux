@@ -13,6 +13,7 @@ import type { TokenUsage } from "../../src/generation/types";
 import type { Storage } from "../../src/storage";
 import { inMemoryStorage } from "../../src/storage";
 import { createSemanticCache } from "../../src/cache";
+import type { CruxPlugin } from "../../src/runtime/plugin";
 import { permissiveCapabilities } from "../adapter/structured-output/capability-fixtures";
 import {
   denseEmbedding,
@@ -60,6 +61,8 @@ export async function generateCachedPair(options: {
   readonly onProviderCall?: () => void;
   /** Scripted Core-route billing facts, one per physical provider call. */
   readonly providerUsages?: readonly (TokenUsage | undefined)[];
+  /** Additional middleware plugins installed outside the semantic cache. */
+  readonly plugins?: readonly CruxPlugin[];
 }): Promise<CachedPair> {
   const storage = options.storage ?? inMemoryStorage();
   installSemanticCachePlugins(
@@ -69,6 +72,7 @@ export async function generateCachedPair(options: {
       ttl: 60_000,
       scope: "global",
     }),
+    ...(options.plugins ?? []),
   );
 
   if (options.regime === "core") {

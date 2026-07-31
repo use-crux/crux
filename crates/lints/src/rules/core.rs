@@ -21,10 +21,12 @@ use crate::helpers::{
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
 use crate::rules::evidence::evidence_record_findings;
 use crate::rules::relation::relation_lint_findings;
+use crate::rules::thread::thread_lint_findings;
 
 pub(crate) fn core_lint_findings(
     builder: &StaticIndexLintBuilder,
     facts: &StaticIndexPatchFacts,
+    definition_occurrences: &[StaticIndexDefinition],
     by_id: &BTreeMap<&str, &StaticIndexDefinition>,
 ) -> Vec<StaticIndexLintFinding> {
     let covered = covered_definition_ids(&facts.relations);
@@ -40,6 +42,12 @@ pub(crate) fn core_lint_findings(
         "cascadeDefinitionId",
     );
     let mut findings = Vec::new();
+    findings.extend(thread_lint_findings(
+        builder,
+        facts,
+        definition_occurrences,
+        by_id,
+    ));
     findings.extend(safety_duplicate_policy_id_findings(
         builder,
         &facts.definitions,

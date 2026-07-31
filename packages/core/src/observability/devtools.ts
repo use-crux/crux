@@ -27,6 +27,7 @@ import type { AnyPrompt } from "../prompt/prompt-types";
 import type { Context } from "../prompt/context-types";
 import type { CruxPlugin, CruxPluginResult } from "../runtime/plugin";
 import type { RuntimeBridgeOptions } from "../runtime-bridge";
+import { connectRuntimeBridge } from "../runtime-bridge";
 import {
   getHooks,
   pushHooksLayer,
@@ -142,6 +143,21 @@ function buildDevtoolsRuntime(
       ? { defaultCorrelators: { sessionId: options.sessionId } }
       : {}),
   });
+  // Connect the Runtime Bridge command plane when requested. Framework
+  // integrations that bind the bridge through `config({ devtools })` keep
+  // working; this covers standalone scripts that only call devtools helpers.
+  const bridgeConnection =
+    options.bridge !== undefined && options.bridge !== false
+      ? connectRuntimeBridge(
+          {
+            devtools: {
+              ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
+              bridge: options.bridge,
+            },
+          },
+          { logger: console },
+        )
+      : undefined;
   const snapshotRegistration = registerIndexSnapshot(options);
   const projectIndexRuntimeTransport = createProjectIndexRuntimeTransport({
     deliver: async (update, { signal }) => {
@@ -180,6 +196,7 @@ function buildDevtoolsRuntime(
     observabilityTransport: transport,
     projectIndexRuntimeTransport,
     dispose() {
+      bridgeConnection?.dispose();
       const flushed = Promise.all([
         observe.flush({ timeoutMs: 2000 }),
         projectIndexRuntimeTransport.flush({ timeoutMs: 2000 }),

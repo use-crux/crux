@@ -25,6 +25,7 @@ import type {
 import type { PromptMiddleware } from "./types";
 import { finalizeMiddlewareResult } from "./internal/middleware-result-finalizer";
 import { inheritCachedCandidateFinalizer } from "./internal/cached-candidate-finalizer";
+import { inheritTerminalResultCoordinator } from "./internal/terminal-result-finalizer";
 
 /**
  * Merge a partial hook patch into a base hook store.
@@ -150,10 +151,13 @@ function chainMiddleware(
 ): PromptMiddleware {
   if (!base) return patch;
   return async (args, next) => {
-    const innerNext = inheritCachedCandidateFinalizer(
+    const innerNext = inheritTerminalResultCoordinator(
       next,
-      async (innerArgs) =>
-        finalizeMiddlewareResult(next, await base(innerArgs, next)),
+      inheritCachedCandidateFinalizer(
+        next,
+        async (innerArgs) =>
+          finalizeMiddlewareResult(next, await base(innerArgs, next)),
+      ),
     );
     return patch(args, innerNext);
   };

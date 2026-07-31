@@ -52,6 +52,10 @@ pub(crate) fn use_entry_for_target(
                     variable == target.name
                         || metadata_value(target, "exportName").and_then(Value::as_str)
                             == Some(variable)
+                        || target.source_refs.iter().any(|source_ref| {
+                            source_ref.role == "definition"
+                                && source_ref.symbol.as_deref() == Some(variable)
+                        })
                         || target.id.ends_with(&format!(":{variable}"))
                 })
     })
@@ -114,11 +118,13 @@ fn injection_relation_type(relation_type: &str) -> bool {
             | "prompt.uses_injectable"
             | "prompt.uses_memory"
             | "prompt.uses_blackboard"
+            | "prompt.uses_thread"
             | "context.uses_context"
             | "context.uses_injectable"
             | "context.uses_tool"
             | "context.uses_memory"
             | "context.uses_blackboard"
+            | "context.uses_thread"
             | "injectable.uses_context"
             | "injectable.uses_tool"
             | "injectable.uses_memory"

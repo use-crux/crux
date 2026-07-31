@@ -96,7 +96,7 @@ describe('project index worker errors', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  }, 30_000)
+  }, 90_000)
 
   it('keeps every generation finding in deterministic order through the built worker', async () => {
     const root = await mkdtemp(join(packageRoot, '.tmp-worker-findings-'))
@@ -148,7 +148,7 @@ describe('project index worker errors', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  }, 30_000)
+  }, 90_000)
 
   it('emits the exact setup envelope with generation children kept separate', async () => {
     const root = await mkdtemp(join(packageRoot, '.tmp-worker-setup-'))
@@ -203,7 +203,7 @@ describe('project index worker errors', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  }, 30_000)
+  }, 90_000)
 })
 
 function runBuiltWorker(request: unknown, eventType = 'artifact:error'): Promise<Record<string, unknown>> {

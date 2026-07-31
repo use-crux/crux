@@ -266,7 +266,7 @@ describe('AI SDK tool model ingress', () => {
 
   it('lowers a forced exact result before the next SDK provider step', async () => {
     const installation = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     })
     const canonical = { exact: 'SDK Tool result' }
     const { model, prompts, toolNames } = capturingEmissionModel([

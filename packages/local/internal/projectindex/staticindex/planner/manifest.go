@@ -79,6 +79,7 @@ var defaultCallNames = []string{
 	"swarm",
 	"task",
 	"textSource",
+	"thread",
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
@@ -158,6 +159,7 @@ var defaultCallInterestNames = []string{
 	"swarm",
 	"task",
 	"textSource",
+	"thread",
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
@@ -183,6 +185,9 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/effect"}
 			interest.ConfigArg = &arg
 			interest.Properties = []string{"version", "recover", "resource"}
+		}
+		if name == "thread" {
+			interest.ImportFrom = []string{"@use-crux/core/thread"}
 		}
 		if name == "evaluate" || name == "fileSource" || name == "filesSource" || name == "urlSource" || name == "urlsSource" || name == "textSource" {
 			arg := 1
@@ -231,6 +236,7 @@ func defaultHost() json.RawMessage {
 		"scorer",
 		"skill-registry",
 		"storage",
+		"thread",
 		"tool",
 		"workspace",
 	}

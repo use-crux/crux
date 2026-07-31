@@ -87,6 +87,7 @@ describe("DefinitionRef wire contract", () => {
       "invoked-constraint",
       "invoked-task",
       "invoked-effect",
+      "invoked-thread",
       "invoked-workspace",
       "invoked-memory",
       "invoked-recipe",

@@ -870,6 +870,76 @@
       "title": "Safety policy id is duplicated"
     },
     {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "A prompt or agent can bind one canonical Thread history. Resolving multiple Thread targets makes the history source and accepted-turn commit destination ambiguous.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/thread-conflicting-binding",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Remove the extra Thread entry from the prompt or agent use graph so managed execution resolves exactly one canonical history.",
+          "kind": "manual",
+          "title": "Keep one Thread binding"
+        }
+      ],
+      "id": "thread.conflicting_binding",
+      "impact": "Conflicting Thread bindings can make managed execution read from or publish accepted turns to an unintended conversation tree.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A prompt or agent can bind one canonical Thread history. Resolving multiple Thread targets makes the history source and accepted-turn commit destination ambiguous.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line thread.conflicting_binding -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Definition resolves multiple Thread bindings"
+    },
+    {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Active Thread ids identify one canonical conversation tree. Reusing an id in multiple active definitions makes storage, runtime evidence, and developer tooling point at an ambiguous Thread.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/thread-duplicate-active",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Rename one thread() id or remove the duplicate active export so each canonical conversation tree has one authored identity.",
+          "kind": "manual",
+          "title": "Give each active Thread a unique id"
+        }
+      ],
+      "id": "thread.duplicate_active",
+      "impact": "Duplicate active Thread ids can make unrelated definitions share canonical history or attach tooling to the wrong authored source.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Active Thread ids identify one canonical conversation tree. Reusing an id in multiple active definitions makes storage, runtime evidence, and developer tooling point at an ambiguous Thread.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line thread.duplicate_active -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Thread id is active more than once"
+    },
+    {
       "category": "memory",
       "confidence": "medium",
       "description": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",

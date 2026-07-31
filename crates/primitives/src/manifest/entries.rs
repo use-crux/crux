@@ -32,6 +32,7 @@ use crate::{
     safety::facts::safety_facts,
     scorer::facts::scorer_facts,
     storage::facts::storage_native_facts,
+    thread::facts::thread_facts,
     tool::facts::tool_native_facts,
     workspace::facts::workspace_facts,
 };
@@ -189,6 +190,17 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &[],
         SCOPED_REFERENCE_FORMS,
         Projector::CallParts(workspace_facts),
+        false,
+    ),
+    first_party(
+        "thread",
+        &["thread"],
+        &[],
+        &["thread"],
+        &["thread:"],
+        &[],
+        LOCAL_REFERENCE_FORMS,
+        Projector::CallParts(thread_facts),
         false,
     ),
     first_party(

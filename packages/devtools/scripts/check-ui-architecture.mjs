@@ -32,7 +32,7 @@ const allowedFeatureImports = new Map([
   ["overview", new Set(["observability"])],
   // Global Search composes the read models users can navigate to directly.
   ["search", new Set(["observability", "index", "evals"])],
-  ["index", new Set(["memory", "plans", "workspaces"])],
+  ["index", new Set(["memory", "plans", "thread", "workspaces"])],
   // Eval catalog rows summarize Baseline status; Review selects discovered Evals.
   ["evals", new Set(["baselines"])],
   ["review", new Set(["evals"])],

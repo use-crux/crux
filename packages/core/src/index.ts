@@ -337,7 +337,6 @@ export type {
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
-  CruxPersistenceConfig,
   CruxRuntimeConfig,
   PromptRegistry,
 } from "./runtime";
@@ -618,6 +617,8 @@ export type {
   ContextSystemResult,
   ContextTextSegment,
   ContextEntry,
+  ThreadHistoryEntry,
+  ThreadTurnCommitInput,
   ConditionalContext,
   MatchCases,
   MatchSpec,

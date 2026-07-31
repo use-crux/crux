@@ -674,6 +674,7 @@ export type DefinitionRefRole =
   | "invoked-constraint"
   | "invoked-task"
   | "invoked-effect"
+  | "invoked-thread"
   | "invoked-workspace"
   | "invoked-memory"
   | "invoked-recipe"
@@ -933,6 +934,19 @@ export interface CruxEffectRunAttributes extends CruxAttributes {
   readonly "crux.effect.recovery": CruxEffectRecoveryAvailability;
 }
 
+/** Payload-free structural evidence for one Thread operation or I/O decision. */
+export interface CruxThreadOperationAttributes {
+  readonly threadId: string;
+  readonly operation:
+    | "append"
+    | "read"
+    | "edit"
+    | "select"
+    | "redact"
+    | "delete"
+    | "history.override";
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
@@ -942,6 +956,7 @@ export type CruxSpanAttributesByPrimitive = {
   "defer.scheduled": CruxDeferScheduledAttributes;
   "defer.run": CruxDeferRunAttributes;
   "effect.run": CruxEffectRunAttributes;
+  "thread.operation": CruxThreadOperationAttributes;
   "custom.operation": CruxAttributes;
 };
 

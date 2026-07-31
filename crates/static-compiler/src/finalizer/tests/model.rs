@@ -266,6 +266,82 @@ fn finalize_lints_distinct_effect_calls_after_identity_merge() {
 }
 
 #[test]
+fn finalize_reports_thread_conflicts_as_lints_without_duplicate_diagnostics() {
+    let output = finalize_static_index_values(
+        &[json!({
+            "definitions": [
+                {
+                    "id": "prompt:writer",
+                    "kind": "prompt",
+                    "name": "writer",
+                    "fidelity": "resolved",
+                    "status": "active"
+                },
+                {
+                    "id": "thread:conversation",
+                    "kind": "thread",
+                    "name": "conversation",
+                    "fidelity": "resolved",
+                    "status": "active",
+                    "source": { "file": "a.ts", "line": 1 }
+                },
+                {
+                    "id": "thread:conversation",
+                    "kind": "thread",
+                    "name": "conversation",
+                    "fidelity": "resolved",
+                    "status": "active",
+                    "source": { "file": "b.ts", "line": 1 }
+                },
+                {
+                    "id": "thread:other",
+                    "kind": "thread",
+                    "name": "other",
+                    "fidelity": "resolved",
+                    "status": "active"
+                }
+            ],
+            "relations": [
+                {
+                    "id": "one",
+                    "type": "prompt.uses_thread",
+                    "from": "prompt:writer",
+                    "to": "thread:conversation",
+                    "fidelity": "resolved"
+                },
+                {
+                    "id": "two",
+                    "type": "prompt.uses_thread",
+                    "from": "prompt:writer",
+                    "to": "thread:other",
+                    "fidelity": "resolved"
+                }
+            ]
+        })],
+        &[],
+    );
+
+    let codes = output
+        .model
+        .facts
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code.as_str())
+        .collect::<Vec<_>>();
+    assert!(!codes.contains(&"thread.duplicate_active"));
+    assert!(!codes.contains(&"thread.conflicting_binding"));
+    let rule_ids = output
+        .model
+        .facts
+        .lint_findings
+        .iter()
+        .map(|finding| finding.rule_id.as_str())
+        .collect::<Vec<_>>();
+    assert!(rule_ids.contains(&"thread.duplicate_active"));
+    assert!(rule_ids.contains(&"thread.conflicting_binding"));
+}
+
+#[test]
 fn finalize_emits_builtin_resource_write_without_read_lint() {
     let output = finalize_static_index_values(
         &[json!({

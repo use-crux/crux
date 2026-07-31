@@ -126,6 +126,9 @@ mod storage {
 mod tool {
     pub(crate) mod facts;
 }
+mod thread {
+    pub(crate) mod facts;
+}
 mod workspace {
     pub(crate) mod facts;
 }

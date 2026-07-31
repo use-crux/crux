@@ -193,6 +193,14 @@
       "types": "./src/storage/testing/vitest.ts",
       "import": "./src/storage/testing/vitest.ts"
     },
+    "./thread": {
+      "types": "./src/thread/index.ts",
+      "import": "./src/thread/index.ts"
+    },
+    "./thread/testing/vitest": {
+      "types": "./src/thread/testing/vitest.ts",
+      "import": "./src/thread/testing/vitest.ts"
+    },
     "./plan": {
       "types": "./src/plan/index.ts",
       "import": "./src/plan/index.ts"

@@ -136,6 +136,10 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "directly-observed",
     runtimePrimitiveNames: ["effect.run"],
   },
+  thread: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["thread.operation"],
+  },
   "composition.parallel": {
     primary: "directly-observed",
     runtimePrimitiveNames: ["composition.parallel"],

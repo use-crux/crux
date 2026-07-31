@@ -25,6 +25,8 @@
     "flow-undeclared-suspend-signal",
     "workspace-write-without-guardrail",
     "safety-duplicate-policy-id",
+    "thread-conflicting-binding",
+    "thread-duplicate-active",
     "memory-long-lived-without-retention",
     "resource-write-without-read",
     "consensus-missing-judge",

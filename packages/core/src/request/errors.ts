@@ -23,6 +23,8 @@ export interface RequestDiagnostic {
   readonly code: string;
   /** Safe contribution class, such as `messages` or `tools`. */
   readonly contributor?: string;
+  /** Canonical history ownership when the diagnostic concerns history. */
+  readonly source?: "caller-messages" | "thread";
   /** Measured tokens attributed to the contribution class. */
   readonly tokens?: number;
   /** Redacted, actionable explanation. */
