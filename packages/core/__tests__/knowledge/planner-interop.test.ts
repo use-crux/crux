@@ -63,7 +63,7 @@ describe.sequential('knowledge planner interop', () => {
 
   it('keys summarizable view artifacts by source versions as well as rendered text', async () => {
     const records = inMemoryRecordStore()
-    const installation = config({ persistence: { records } })
+    const installation = config({ storage: { records } })
     const storage = inMemoryStorage()
     const docs = knowledgeBase({
       id: 'docs',
@@ -108,7 +108,7 @@ describe.sequential('knowledge planner interop', () => {
 
   it('keeps retriever tools for summarized references and removes them only on omission', async () => {
     const records = inMemoryRecordStore()
-    const installation = config({ persistence: { records } })
+    const installation = config({ storage: { records } })
     const docs = knowledgeBase({
       id: 'docs',
       storage: inMemoryStorage(),
