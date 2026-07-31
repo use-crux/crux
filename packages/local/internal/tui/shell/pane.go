@@ -80,7 +80,7 @@ func SelectionBar(c color.Color) string {
 
 // VBorder returns a vertical 1-column border between panes.
 func VBorder(height int) string {
-	line := lipgloss.NewStyle().Foreground(ColorBorder).Render("│")
+	line := lipgloss.NewStyle().Foreground(ColorBorder).Background(ColorBG).Render("│")
 	lines := make([]string, height)
 	for i := range lines {
 		lines[i] = line
@@ -92,10 +92,10 @@ func horizontalBorderDim(width int) string {
 	// Use the subtler `ColorBorder` (#242929) instead of the
 	// `ColorBorderBright` (#343b3b) the function used to render with.
 	// The design's section dividers are barely-there hairlines — the
-	// brighter shade was reading as a heavy rule. Foreground-only;
-	// the line inherits whichever bg the surrounding content uses.
+	// brighter shade was reading as a heavy rule.
 	return lipgloss.NewStyle().
 		Foreground(ColorBorder).
+		Background(ColorBG).
 		Render(strings.Repeat("─", width))
 }
 

@@ -9,6 +9,13 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// CellStyle is the computed ANSI color state for one terminal cell. Empty
+// colors are terminal defaults.
+type CellStyle struct {
+	Foreground string
+	Background string
+}
+
 // BackgroundSpan is one contiguous terminal-cell run with the same active
 // ANSI background. An empty Color is the terminal default background.
 type BackgroundSpan struct {
@@ -17,33 +24,40 @@ type BackgroundSpan struct {
 	Color string
 }
 
-// BackgroundSpans extracts exact background-color runs from one ANSI row.
-func BackgroundSpans(row string) []BackgroundSpan {
-	colors := make([]string, 0, lipgloss.Width(row))
-	background := ""
+// CellStyles extracts the computed foreground and background for every cell in
+// one ANSI row.
+func CellStyles(row string) []CellStyle {
+	styles := make([]CellStyle, 0, lipgloss.Width(row))
+	current := CellStyle{}
 	for offset := 0; offset < len(row); {
 		if row[offset] == '\x1b' {
 			end := ansiSequenceEnd(row, offset)
 			if offset+1 < len(row) && row[offset+1] == '[' && end > offset && row[end-1] == 'm' {
-				background = updateBackground(background, row[offset+2:end-1])
+				current = updateCellStyle(current, row[offset+2:end-1])
 			}
 			offset = end
 			continue
 		}
 		glyph, size := utf8.DecodeRuneInString(row[offset:])
 		for range lipgloss.Width(string(glyph)) {
-			colors = append(colors, background)
+			styles = append(styles, current)
 		}
 		offset += size
 	}
-	if len(colors) == 0 {
+	return styles
+}
+
+// BackgroundSpans extracts exact background-color runs from one ANSI row.
+func BackgroundSpans(row string) []BackgroundSpan {
+	styles := CellStyles(row)
+	if len(styles) == 0 {
 		return nil
 	}
 	spans := make([]BackgroundSpan, 0, 4)
 	start := 0
-	for index := 1; index <= len(colors); index++ {
-		if index == len(colors) || colors[index] != colors[start] {
-			spans = append(spans, BackgroundSpan{Start: start, End: index, Color: colors[start]})
+	for index := 1; index <= len(styles); index++ {
+		if index == len(styles) || styles[index].Background != styles[start].Background {
+			spans = append(spans, BackgroundSpan{Start: start, End: index, Color: styles[start].Background})
 			start = index
 		}
 	}
@@ -76,42 +90,56 @@ func ansiSequenceEnd(value string, start int) int {
 	return len(value)
 }
 
-func updateBackground(current, parameters string) string {
+func updateCellStyle(current CellStyle, parameters string) CellStyle {
 	if parameters == "" {
-		return ""
+		return CellStyle{}
 	}
 	parts := strings.Split(parameters, ";")
 	for index := 0; index < len(parts); index++ {
 		value, _ := strconv.Atoi(parts[index])
 		switch {
-		case value == 0 || value == 49:
-			current = ""
+		case value == 0:
+			current = CellStyle{}
+		case value == 39:
+			current.Foreground = ""
+		case value == 49:
+			current.Background = ""
+		case value >= 30 && value <= 37:
+			current.Foreground = fmt.Sprintf("ansi:%d", value-30)
+		case value >= 90 && value <= 97:
+			current.Foreground = fmt.Sprintf("ansi:%d", value-82)
 		case value >= 40 && value <= 47:
-			current = fmt.Sprintf("ansi:%d", value-40)
+			current.Background = fmt.Sprintf("ansi:%d", value-40)
 		case value >= 100 && value <= 107:
-			current = fmt.Sprintf("ansi:%d", value-92)
-		case (value == 38 || value == 58) && index+1 < len(parts):
-			mode, _ := strconv.Atoi(parts[index+1])
-			if mode == 2 && index+4 < len(parts) {
-				index += 4
-			} else if mode == 5 && index+2 < len(parts) {
-				index += 2
-			}
-		case value == 48 && index+1 < len(parts):
-			mode, _ := strconv.Atoi(parts[index+1])
-			switch mode {
-			case 2:
-				if index+4 < len(parts) {
-					current = "rgb:" + strings.Join(parts[index+2:index+5], ",")
-					index += 4
-				}
-			case 5:
-				if index+2 < len(parts) {
-					current = "index:" + parts[index+2]
-					index += 2
-				}
+			current.Background = fmt.Sprintf("ansi:%d", value-92)
+		case value == 38 || value == 48 || value == 58:
+			color, consumed := extendedColor(parts[index:])
+			index += consumed
+			switch value {
+			case 38:
+				current.Foreground = color
+			case 48:
+				current.Background = color
 			}
 		}
 	}
 	return current
+}
+
+func extendedColor(parts []string) (string, int) {
+	if len(parts) < 2 {
+		return "", 0
+	}
+	mode, _ := strconv.Atoi(parts[1])
+	switch mode {
+	case 2:
+		if len(parts) >= 5 {
+			return "rgb:" + strings.Join(parts[2:5], ","), 4
+		}
+	case 5:
+		if len(parts) >= 3 {
+			return "index:" + parts[2], 2
+		}
+	}
+	return "", 0
 }

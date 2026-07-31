@@ -142,7 +142,7 @@ func (c *definitionChooser) View() string {
 	inner := strings.Join(lines, "\n")
 	return lipgloss.NewStyle().
 		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
+		BorderForeground(shell.ColorBorder).
 		Border(lipgloss.RoundedBorder()).
 		Render(inner)
 }

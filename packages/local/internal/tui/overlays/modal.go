@@ -4,10 +4,13 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
+
+var modalStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 
 func renderModal(inner string, width int) string {
 	lines := strings.Split(inner, "\n")
@@ -18,10 +21,10 @@ func renderModal(inner string, width int) string {
 	modal := lipgloss.NewStyle().
 		Background(background).
 		BorderBackground(background).
-		BorderForeground(shell.ColorBorderBright).
+		BorderForeground(shell.ColorBorder).
 		Border(lipgloss.RoundedBorder()).
 		Render(strings.Join(lines, "\n"))
-	return kit.ReconcileBorders(modal)
+	return kit.ReconcileBordersStyled(modal, modalStyles)
 }
 
 const (

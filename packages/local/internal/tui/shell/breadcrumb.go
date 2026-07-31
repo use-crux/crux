@@ -141,7 +141,7 @@ func verticalContinuation(line string, width int) string {
 	if !strings.ContainsRune(plain, '│') {
 		return plain
 	}
-	border := lipgloss.NewStyle().Foreground(ColorBorder)
+	border := lipgloss.NewStyle().Foreground(ColorBorder).Background(ColorBG)
 	return strings.ReplaceAll(plain, "│", border.Render("│"))
 }
 

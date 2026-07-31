@@ -23,20 +23,20 @@ func (w *Workbench) View() string {
 
 	root := kit.Rect{W: w.width, H: w.height}
 	path, right := w.breadcrumbContent()
-	base := kit.ReconcileBorders(strings.Join(w.layoutBody(root, path, right), "\n"))
+	base := strings.Join(w.layoutBody(root, path, right), "\n")
 
+	frame := base
 	switch {
 	case w.palette.IsOpen():
-		return overlayOnto(base, w.palette.View(w.width, w.height), w.width, w.height)
+		frame = overlayOnto(base, w.palette.View(w.width, w.height), w.width, w.height)
 	case w.help.IsOpen():
-		return overlayOnto(base, w.help.View(w.width, w.height), w.width, w.height)
+		frame = overlayOnto(base, w.help.View(w.width, w.height), w.width, w.height)
 	case w.inspect.IsOpen():
-		return overlayOnto(base, w.inspect.View(w.width, w.height), w.width, w.height)
+		frame = overlayOnto(base, w.inspect.View(w.width, w.height), w.width, w.height)
 	case w.definitionChooser.IsOpen():
-		return overlayOnto(base, w.definitionChooser.View(), w.width, w.height)
-	default:
-		return base
+		frame = overlayOnto(base, w.definitionChooser.View(), w.width, w.height)
 	}
+	return kit.ReconcileBordersStyled(frame, workbenchStyles)
 }
 
 func (w *Workbench) layoutBody(root kit.Rect, path []string, right string) []string {

@@ -15,3 +15,16 @@ func TestBackgroundSpansTracksNestedResetsExactly(t *testing.T) {
 		t.Fatalf("BackgroundSpans() = %#v, want %#v", got, want)
 	}
 }
+
+func TestCellStylesTracksForegroundAndBackgroundResets(t *testing.T) {
+	row := "\x1b[38;2;42;53;47;48;2;11;15;14ma\x1b[39mb\x1b[38;5;238;48;5;234mc\x1b[0md"
+	want := []CellStyle{
+		{Foreground: "rgb:42,53,47", Background: "rgb:11,15,14"},
+		{Background: "rgb:11,15,14"},
+		{Foreground: "index:238", Background: "index:234"},
+		{},
+	}
+	if got := CellStyles(row); !reflect.DeepEqual(got, want) {
+		t.Fatalf("CellStyles() = %#v, want %#v", got, want)
+	}
+}
