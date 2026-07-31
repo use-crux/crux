@@ -7,10 +7,11 @@
  * @module
  */
 
-import type { JsonValue } from '../storage'
-import type { ZodError, ZodType } from 'zod'
+import type { JsonValue } from "../storage";
+import type { StaticSignalSource } from "../signal/source";
+import type { ZodError, ZodType } from "zod";
 
-const NO_PAYLOAD_SIGNAL_TAG = 'crux.flow.no_payload' as const
+const NO_PAYLOAD_SIGNAL_TAG = "crux.flow.no_payload" as const;
 
 /**
  * Marker returned by {@link noPayload}.
@@ -19,24 +20,41 @@ const NO_PAYLOAD_SIGNAL_TAG = 'crux.flow.no_payload' as const
  * payload at `handle.signal()` call sites.
  */
 export interface NoPayloadSignal {
-  readonly _tag: typeof NO_PAYLOAD_SIGNAL_TAG
+  readonly _tag: typeof NO_PAYLOAD_SIGNAL_TAG;
 }
 
 /** Schema-like declaration for one local flow signal. */
-export type FlowSignalSpec<TPayload = unknown> = ZodType<TPayload> | NoPayloadSignal
+export type FlowSignalSpec<TPayload = unknown> =
+  | ZodType<TPayload>
+  | NoPayloadSignal;
 
-/** Local signal declarations keyed by the signal name used in `suspend()`. */
-export type FlowSignalMap = Record<string, FlowSignalSpec>
+/** One local Flow signal contract or static Signal consumer source. */
+export type FlowSignalDeclaration = FlowSignalSpec | StaticSignalSource;
+
+/** Mixed local and static Signal declarations keyed by authored names. */
+export type FlowSignalMap = Readonly<Record<string, FlowSignalDeclaration>>;
+
+/** Static Signal sources declared by one Flow signal map. */
+export type DeclaredFlowSignalSource<TSignals extends FlowSignalMap> = Extract<
+  TSignals[keyof TSignals],
+  StaticSignalSource
+>;
 
 /** Definition-time options accepted by `flow(name, options, handler)`. */
-export interface FlowDefinitionOptions<TSignals extends FlowSignalMap = FlowSignalMap> {
-  /** Local signal contracts shared by `flow.suspend()` and `handle.signal()`. */
-  readonly signals: TSignals
+export interface FlowDefinitionOptions<
+  TSignals extends FlowSignalMap = FlowSignalMap,
+> {
+  /** Local signal contracts and statically deployed Signal wait sources. */
+  readonly signals: TSignals;
 }
 
 /** Infer the payload delivered by a signal declaration. */
 export type FlowSignalPayload<TSpec> =
-  TSpec extends ZodType<infer TPayload> ? TPayload : TSpec extends NoPayloadSignal ? void : never
+  TSpec extends ZodType<infer TPayload>
+    ? TPayload
+    : TSpec extends NoPayloadSignal
+      ? void
+      : never;
 
 /** Options for object-bound flow signal delivery. */
 export interface FlowSignalOptions {
@@ -47,20 +65,23 @@ export interface FlowSignalOptions {
    * `FlowHandle.resume(flowId)`.
    *
    */
-  readonly resume: boolean
+  readonly resume: boolean;
 }
 
 /** Call arguments for payload-bearing versus no-payload signal sends. */
 export type FlowSignalPayloadArgs<TPayload> = [TPayload] extends [void]
   ? [options?: FlowSignalOptions]
-  : [payload: TPayload, options?: FlowSignalOptions]
+  : [payload: TPayload, options?: FlowSignalOptions];
 
 /** Untyped signal sends stay available for flows without a local signal map. */
-export type UntypedSignalPayloadArgs = [payload?: JsonValue, options?: FlowSignalOptions]
+export type UntypedSignalPayloadArgs = [
+  payload?: JsonValue,
+  options?: FlowSignalOptions,
+];
 
 const NO_PAYLOAD_SIGNAL = Object.freeze({
   _tag: NO_PAYLOAD_SIGNAL_TAG,
-}) satisfies NoPayloadSignal
+}) satisfies NoPayloadSignal;
 
 /**
  * Declare that a local flow signal carries no payload.
@@ -81,23 +102,31 @@ const NO_PAYLOAD_SIGNAL = Object.freeze({
  * ```
  */
 export function noPayload(): NoPayloadSignal {
-  return NO_PAYLOAD_SIGNAL
+  return NO_PAYLOAD_SIGNAL;
 }
 
 /** Return true when a signal declaration was created by {@link noPayload}. */
 export function isNoPayloadSignal(value: unknown): value is NoPayloadSignal {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    '_tag' in value &&
+    "_tag" in value &&
     (value as { readonly _tag?: unknown })._tag === NO_PAYLOAD_SIGNAL_TAG
-  )
+  );
 }
 
 /** Return the runtime schema for a signal declaration, if it has one. */
-export function signalSchemaFor(spec: FlowSignalSpec | undefined): ZodType<unknown> | undefined {
-  if (!spec || isNoPayloadSignal(spec)) return undefined
-  return spec as ZodType<unknown>
+export function signalSchemaFor(
+  spec: FlowSignalDeclaration | undefined,
+): ZodType<unknown> | undefined {
+  if (!spec || isNoPayloadSignal(spec)) return undefined;
+  if (
+    "_tag" in spec &&
+    (spec._tag === "Signal" || spec._tag === "FilteredSignal")
+  ) {
+    return undefined;
+  }
+  return spec as ZodType<unknown>;
 }
 
 /**
@@ -107,12 +136,12 @@ export function signalSchemaFor(spec: FlowSignalSpec | undefined): ZodType<unkno
  * signal delivery from flow lifecycle control errors.
  */
 export class InvalidSignalPayloadError extends Error {
-  readonly signalName: string
+  readonly signalName: string;
 
   constructor(signalName: string, detail: string) {
-    super(`Invalid signal payload for "${signalName}": ${detail}`)
-    this.name = 'InvalidSignalPayloadError'
-    this.signalName = signalName
+    super(`Invalid signal payload for "${signalName}": ${detail}`);
+    this.name = "InvalidSignalPayloadError";
+    this.signalName = signalName;
   }
 }
 
@@ -130,41 +159,47 @@ export class InvalidSignalPayloadError extends Error {
  */
 export function validateSignalPayload(
   signalName: string,
-  spec: FlowSignalSpec | undefined,
+  spec: FlowSignalDeclaration | undefined,
   payload: unknown,
 ): unknown {
   if (isNoPayloadSignal(spec)) {
-    if (isEmptySignalPayload(payload)) return payload
-    throw new InvalidSignalPayloadError(signalName, 'expected no payload')
+    if (isEmptySignalPayload(payload)) return payload;
+    throw new InvalidSignalPayloadError(signalName, "expected no payload");
   }
 
-  const schema = signalSchemaFor(spec)
-  if (!schema) return payload
+  const schema = signalSchemaFor(spec);
+  if (!schema) return payload;
 
-  const result = schema.safeParse(payload)
-  if (result.success) return result.data
+  const result = schema.safeParse(payload);
+  if (result.success) return result.data;
 
-  throw new InvalidSignalPayloadError(signalName, formatSignalPayloadIssues(result.error))
+  throw new InvalidSignalPayloadError(
+    signalName,
+    formatSignalPayloadIssues(result.error),
+  );
 }
 
 function isEmptySignalPayload(payload: unknown): boolean {
-  if (payload === undefined || payload === null) return true
-  if (!isPlainRecord(payload)) return false
-  return Object.keys(payload).length === 0
+  if (payload === undefined || payload === null) return true;
+  if (!isPlainRecord(payload)) return false;
+  return Object.keys(payload).length === 0;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function formatSignalPayloadIssues(error: ZodError<unknown>): string {
-  if (error.issues.length === 0) return error.message
-  return error.issues.map(formatSignalPayloadIssue).join('; ')
+  if (error.issues.length === 0) return error.message;
+  return error.issues.map(formatSignalPayloadIssue).join("; ");
 }
 
-function formatSignalPayloadIssue(issue: ZodError<unknown>['issues'][number]): string {
-  const path = issue.path.length > 0 ? ` at ${issue.path.join('.')}` : ''
-  return `${issue.message}${path}`
+function formatSignalPayloadIssue(
+  issue: ZodError<unknown>["issues"][number],
+): string {
+  const path = issue.path.length > 0 ? ` at ${issue.path.join(".")}` : "";
+  return `${issue.message}${path}`;
 }

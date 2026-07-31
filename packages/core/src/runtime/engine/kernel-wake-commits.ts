@@ -8,6 +8,7 @@
  */
 
 import type { LeaseToken, WorkId } from "../ports/ids";
+import type { FlowSnapshot } from "../ports/state";
 import type { RuntimeStoreTransaction } from "../store";
 import type { CruxRuntimeErrorCode } from "./errors";
 import type { RuntimeTargetOutcome, RuntimeWakeResult } from "./kernel-types";
@@ -28,7 +29,8 @@ import type {
 } from "./composites";
 import { classifyRuntimeFailure } from "./retry";
 import { transition, type WorkItem } from "./work";
-
+import { recordSignalDeliveryAttempt } from "../reactive/delivery-state";
+import { runtimeRetrySnapshotForError } from "./target-retry";
 /** Serialized failure details carried into a wake failure composite. */
 export type WakeFailureInput =
   | {
@@ -45,7 +47,6 @@ export type WakeFailureInput =
       /** Message preserved from the original thrown value. */
       readonly message: string;
     };
-
 interface FailWorkOptions {
   readonly runComposite: RuntimeCompositeRunner;
   readonly work: WorkItem;
@@ -55,7 +56,6 @@ interface FailWorkOptions {
   readonly newWorkId: () => WorkId;
   readonly rng?: () => number;
 }
-
 /** Record a target failure if the executor still owns the work lease. */
 export async function failWork(
   options: FailWorkOptions,
@@ -75,10 +75,12 @@ export async function failWork(
       const retryAt = new Date(
         options.now().getTime() + classification.delayMs,
       );
+      const retrySnapshot = runtimeRetrySnapshotForError(options.error);
       await options.runComposite("wake.retry", {
         work: options.work,
         leaseToken: options.leaseToken,
         retryAt,
+        ...(retrySnapshot ? { retrySnapshot } : {}),
       });
       return { status: 200, outcome: "retry-scheduled" };
     }
@@ -119,6 +121,20 @@ interface CompleteWorkOptions {
 export async function completeWork(
   options: CompleteWorkOptions,
 ): Promise<void> {
+  if (
+    options.outcome.status === "suspended" &&
+    options.outcome.suspension.suspends.some(
+      (suspend) => suspend.signalId !== undefined,
+    )
+  ) {
+    await options.runComposite("flow.signal-wait.register", {
+      work: options.work,
+      leaseToken: options.leaseToken,
+      outcome: options.outcome,
+      idempotencyKey: options.idempotencyKey,
+    });
+    return;
+  }
   await options.runComposite("wake.complete", {
     work: options.work,
     leaseToken: options.leaseToken,
@@ -130,11 +146,12 @@ export async function completeWork(
 /** Requeue failed leased work inside a transaction. */
 export async function retryWorkAfterFailureInTransaction(
   tx: RuntimeStoreTransaction,
-  _deps: RuntimeCompositeDeps,
+  deps: RuntimeCompositeDeps,
   input: {
     readonly work: WorkItem;
     readonly leaseToken: LeaseToken;
     readonly retryAt: Date;
+    readonly retrySnapshot?: FlowSnapshot;
   },
 ): Promise<void> {
   const current = await assertLeaseHeldInTransaction(
@@ -147,6 +164,10 @@ export async function retryWorkAfterFailureInTransaction(
     attempt: current.attempt + 1,
     notBefore: input.retryAt,
   });
+  if (input.retrySnapshot) {
+    await tx.state.putSnapshot(input.retrySnapshot);
+  }
+  await recordSignalDeliveryAttempt(tx, current, "pending", deps.now());
   await tx.state.putWork(retryWork);
   await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
     deliverAt: input.retryAt,
@@ -187,6 +208,13 @@ export async function failWorkInTransaction(
           },
         });
 
+  await recordSignalDeliveryAttempt(
+    tx,
+    current,
+    input.failure.kind === "dead-letter" ? "dead-letter" : "failed",
+    deps.now(),
+  );
+
   await putWorkWithIdleAccounting(
     tx,
     { newWorkId: deps.newWorkId, now: deps.now },
@@ -210,6 +238,12 @@ export async function completeWorkInTransaction(
     tx,
     input.work,
     input.leaseToken,
+  );
+  await recordSignalDeliveryAttempt(
+    tx,
+    current,
+    input.outcome.status === "blocked" ? "failed" : "delivered",
+    deps.now(),
   );
   if (input.outcome.status === "suspended") {
     await recordSuspensionInTransaction(tx, deps, input.outcome.suspension);

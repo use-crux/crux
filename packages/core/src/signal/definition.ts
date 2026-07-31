@@ -26,6 +26,7 @@ import type {
   SignalUnsubscribe,
 } from "./publication";
 import { validateSignalPayload } from "./validation";
+import { publishAcceptedSignal } from "./durable-publication";
 
 /** Options for declaring an inert {@link Signal}. */
 export interface SignalOptions<
@@ -41,13 +42,11 @@ export interface SignalOptions<
 /**
  * A typed Signal definition that publishes normalized occurrences.
  *
- * @remarks Definitions are frozen and inert. Process-local publication
- * resolves at acceptance and never waits for listener completion.
+ * @remarks Definitions are frozen and inert. Publication resolves at
+ * acceptance and derives its durable or process-local guarantee from the
+ * active Runtime bindings; it never waits for consumer completion.
  */
-export interface Signal<
-  TId extends string,
-  TSchema extends SignalSchema,
-> {
+export interface Signal<TId extends string, TSchema extends SignalSchema> {
   /** Stable definition discriminant. */
   readonly _tag: "Signal";
   /** Literal application-authored Signal identity. */
@@ -55,9 +54,10 @@ export interface Signal<
   /** Authored Standard Schema retained for publication validation. */
   readonly schema: TSchema;
   /**
-   * Validate and accept one occurrence for process-local delivery.
+   * Validate and accept one Signal occurrence.
    *
-   * @remarks The Promise resolves at acceptance, not listener completion.
+   * @remarks The Promise resolves at acceptance, not listener or durable
+   * consumer completion. Callers cannot select the receipt guarantee.
    * @param payload - Authored schema input to validate and normalize.
    * @param options - Optional retry identity for idempotent publication.
    * @returns A receipt describing the actual acceptance guarantee.
@@ -164,7 +164,12 @@ export function signal<
       schema,
       payload,
     );
-    return local.publish(normalizedPayload, { idempotencyKey });
+    return publishAcceptedSignal({
+      signalId,
+      payload: normalizedPayload,
+      options: { idempotencyKey },
+      local,
+    });
   }
 
   function when(

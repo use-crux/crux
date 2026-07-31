@@ -8,17 +8,17 @@
  * @module
  */
 
-import type { CruxEngineCapabilities } from '../ports'
-import type { RuntimeStoreAdapter } from '../store'
-import { MAX_WAKE_ENVELOPE_BYTES } from '../engine/envelope'
-import type { RuntimeWakeDeliver } from '../engine/outbox'
-import { inMemoryRuntimeStore } from '../adapters/memory'
-import type { InMemoryRuntimeStore } from '../adapters/memory'
+import type { CruxEngineCapabilities } from "../ports";
+import type { RuntimeStoreAdapter } from "../store";
+import { MAX_WAKE_ENVELOPE_BYTES } from "../engine/envelope";
+import type { RuntimeWakeDeliver } from "../engine/outbox";
+import { inMemoryRuntimeStore } from "../adapters/memory";
+import type { InMemoryRuntimeStore } from "../adapters/memory";
 import type {
   InProcessRuntimeEngineDefinition,
   RuntimeWakeFactoryInput,
-} from '../api/runtime-definition'
-import type { RuntimeRetentionConfig } from '../engine/retention'
+} from "../api/runtime-definition";
+import type { RuntimeRetentionConfig } from "../engine/retention";
 
 /** Options for the in-process Node runtime composer. */
 export interface NodeRuntimeOptions<
@@ -28,45 +28,52 @@ export interface NodeRuntimeOptions<
    * Store backing runtime records.
    *
    * Omit this for the process-local in-memory reference store. Supplying a
-   * durable store lets long-lived Node processes share Runtime Engine state.
+   * durable store that passes Runtime reactive conformance lets Node processes
+   * share restart-safe Runtime Engine state.
    */
-  readonly store?: TStore
+  readonly store?: TStore;
   /** Runtime namespace. Defaults to `local`. */
-  readonly namespace?: string
+  readonly namespace?: string;
   /** Maintenance interval in milliseconds. Defaults to one second. */
-  readonly maintenanceIntervalMs?: number
+  readonly maintenanceIntervalMs?: number;
   /** Start the maintenance interval when `createRuntime()` resolves this composer. */
-  readonly autoStartMaintenance?: boolean
+  readonly autoStartMaintenance?: boolean;
   /** Retention policy for terminal Runtime Engine records. */
-  readonly retention?: RuntimeRetentionConfig
+  readonly retention?: RuntimeRetentionConfig;
 }
 
-/** Create the default in-process runtime using the in-memory reference store. */
+/**
+ * Create the default in-process runtime using the in-memory reference store.
+ *
+ * @remarks The default store is process-local and cannot activate durable
+ * Signal bindings. Pass a conformant durable store when restart recovery is
+ * required.
+ */
 export function node(
-  options?: Omit<NodeRuntimeOptions<InMemoryRuntimeStore>, 'store'>,
-): InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
+  options?: Omit<NodeRuntimeOptions<InMemoryRuntimeStore>, "store">,
+): InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>;
 
 /** Create an in-process runtime using a caller-supplied store adapter. */
 export function node<TStore extends RuntimeStoreAdapter>(
   options: NodeRuntimeOptions<TStore> & { readonly store: TStore },
-): InProcessRuntimeEngineDefinition<TStore>
+): InProcessRuntimeEngineDefinition<TStore>;
 
 export function node<TStore extends RuntimeStoreAdapter>(
   options?: NodeRuntimeOptions<TStore>,
 ): InProcessRuntimeEngineDefinition<TStore | InMemoryRuntimeStore> {
   return Object.freeze({
-    kind: 'in-process' as const,
-    id: 'node',
+    kind: "in-process" as const,
+    id: "node",
     store: options?.store ?? inMemoryRuntimeStore(),
     capabilities: NODE_RUNTIME_CAPABILITIES,
-    namespace: options?.namespace ?? 'local',
+    namespace: options?.namespace ?? "local",
     maintenance: {
       intervalMs: options?.maintenanceIntervalMs ?? 1_000,
       autoStart: options?.autoStartMaintenance ?? true,
     },
     ...(options?.retention ? { retention: options.retention } : {}),
     createWake: createMicrotaskWake,
-  })
+  });
 }
 
 const NODE_RUNTIME_CAPABILITIES: CruxEngineCapabilities = Object.freeze({
@@ -82,11 +89,11 @@ const NODE_RUNTIME_CAPABILITIES: CruxEngineCapabilities = Object.freeze({
   live: Object.freeze({ available: false }),
   setup: Object.freeze({ canCheck: false, canApply: false }),
   deployment: Object.freeze({
-    serverless: 'unsupported',
-    edge: 'unsupported',
-    multiProcess: 'unsupported',
+    serverless: "unsupported",
+    edge: "unsupported",
+    multiProcess: "unsupported",
   }),
-})
+});
 
 function createMicrotaskWake(
   input: RuntimeWakeFactoryInput,
@@ -94,15 +101,15 @@ function createMicrotaskWake(
   return (envelope) =>
     new Promise<void>((resolve, reject) => {
       enqueueMicrotask(() => {
-        void input.kernel.handleWake(envelope).then(() => resolve(), reject)
-      })
-    })
+        void input.kernel.handleWake(envelope).then(() => resolve(), reject);
+      });
+    });
 }
 
 function enqueueMicrotask(callback: () => void): void {
-  if (typeof queueMicrotask === 'function') {
-    queueMicrotask(callback)
-    return
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(callback);
+    return;
   }
-  void Promise.resolve().then(callback)
+  void Promise.resolve().then(callback);
 }

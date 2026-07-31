@@ -7,6 +7,11 @@ import type {
   RuntimeDeferredScope,
 } from "../../ports/deferred";
 import type { WorkItem } from "../../engine/work";
+import type {
+  SignalDeliveryRecord,
+  SignalOccurrenceRecord,
+  SignalSubscriptionRecord,
+} from "../../reactive/records";
 import type { RuntimeOutboxItem, RuntimeTimerRecord } from "../../store";
 
 export type MemoryWriteRecorder = () => void;
@@ -44,6 +49,10 @@ export interface MemoryRuntimeData {
   deferredScopes: Map<string, RuntimeDeferredScope>;
   deferredIntents: Map<string, RuntimeDeferredIntent>;
   results: Map<string, MemoryRuntimeResultRecord>;
+  signalOccurrences: Map<string, SignalOccurrenceRecord>;
+  signalIdempotency: Map<string, string>;
+  signalDeliveries: Map<string, SignalDeliveryRecord>;
+  signalSubscriptions: Map<string, SignalSubscriptionRecord>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -67,6 +76,10 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     deferredScopes: new Map(),
     deferredIntents: new Map(),
     results: new Map(),
+    signalOccurrences: new Map(),
+    signalIdempotency: new Map(),
+    signalDeliveries: new Map(),
+    signalSubscriptions: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -98,6 +111,10 @@ export function cloneMemoryRuntimeData(
         { ...result, createdAt: new Date(result.createdAt) },
       ]),
     ),
+    signalOccurrences: new Map(data.signalOccurrences),
+    signalIdempotency: new Map(data.signalIdempotency),
+    signalDeliveries: new Map(data.signalDeliveries),
+    signalSubscriptions: new Map(data.signalSubscriptions),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -113,7 +130,7 @@ export function replaceMemoryRuntimeData(
   target.work = source.work;
   target.snapshots = source.snapshots;
   target.idempotency = source.idempotency;
-  target.leases = source.leases;
+  // Leases are outside RuntimeStoreTransaction and may change concurrently.
   target.events.splice(0, target.events.length, ...source.events);
   target.eventsByDuplicateKey = source.eventsByDuplicateKey;
   target.waiters = source.waiters;
@@ -124,9 +141,12 @@ export function replaceMemoryRuntimeData(
   target.deferredScopes = source.deferredScopes;
   target.deferredIntents = source.deferredIntents;
   target.results = source.results;
+  target.signalOccurrences = source.signalOccurrences;
+  target.signalIdempotency = source.signalIdempotency;
+  target.signalDeliveries = source.signalDeliveries;
+  target.signalSubscriptions = source.signalSubscriptions;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
-  target.nextLeaseId = source.nextLeaseId;
   target.nextTimerId = source.nextTimerId;
   target.nextOutboxId = source.nextOutboxId;
 }

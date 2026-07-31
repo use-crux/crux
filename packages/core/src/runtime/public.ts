@@ -292,6 +292,13 @@ export type {
   WaiterPort,
 } from "./ports/waiters";
 export type { RuntimeWork } from "./ports/work";
+export type {
+  ReactiveConsumerRef,
+  RuntimeSignalStorePort,
+  SignalDeliveryRecord,
+  SignalOccurrenceRecord,
+  SignalSubscriptionRecord,
+} from "./reactive/records";
 export type * from "./store";
 
 export {

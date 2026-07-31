@@ -1,6 +1,6 @@
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
-import { signal } from "@use-crux/core";
+import { flow, signal } from "@use-crux/core";
 import type {
   InferSignalSchemaInput,
   InferSignalSchemaOutput,
@@ -107,19 +107,17 @@ expectTypeOf(invalidNestedValueRejected).toEqualTypeOf<false>();
 
 const normalizedPayloadSchema = z
   .object({ count: z.string() })
-  .transform(({ count }) => ({ count: Number(count), normalized: true as const }));
+  .transform(({ count }) => ({
+    count: Number(count),
+    normalized: true as const,
+  }));
 
 expectTypeOf<
   [
     InferSignalSchemaInput<typeof normalizedPayloadSchema>,
     InferSignalSchemaOutput<typeof normalizedPayloadSchema>,
   ]
->().toEqualTypeOf<
-  [
-    { count: string },
-    { count: number; normalized: true },
-  ]
->();
+>().toEqualTypeOf<[{ count: string }, { count: number; normalized: true }]>();
 
 const normalizedSignal = signal({
   id: "counter.normalized",
@@ -137,3 +135,57 @@ normalizedSignal.subscribe((occurrence) => {
   }>();
 });
 normalizedSignal.when((payload) => payload.count > 0 && payload.normalized);
+
+const orderRelease = flow(
+  "order release",
+  { signals: { orderSubmitted } },
+  async (scope) => {
+    const occurrence = await scope.waitFor(orderSubmitted);
+    expectTypeOf(occurrence).toEqualTypeOf<
+      SignalOccurrence<"order.submitted", { orderId: string }>
+    >();
+
+    const undeclared = signal({
+      id: "order.cancelled",
+      schema: z.object({ orderId: z.string() }),
+    });
+    // @ts-expect-error Flow waits accept only static Signal sources declared by this Flow.
+    await scope.waitFor(undeclared);
+  },
+);
+void orderRelease;
+
+const mixedSignalFlow = flow(
+  "mixed signal flow",
+  {
+    signals: {
+      approval: z.object({ approved: z.boolean() }),
+      orderSubmitted,
+      matchingOrder: matchView,
+    },
+  },
+  async (scope) => {
+    expectTypeOf(await scope.suspend("approval")).toEqualTypeOf<{
+      approved: boolean;
+    }>();
+    expectTypeOf(await scope.waitFor(orderSubmitted)).toEqualTypeOf<
+      SignalOccurrence<"order.submitted", { orderId: string }>
+    >();
+    expectTypeOf(await scope.waitFor(matchView)).toEqualTypeOf<
+      SignalOccurrence<"order.submitted", { orderId: string }>
+    >();
+    const ordinaryEvent = await scope.waitFor<{ approvedBy: string }>(
+      "release.approved",
+      { match: { orderId: "order_123" } },
+    );
+    expectTypeOf(ordinaryEvent).toEqualTypeOf<{ approvedBy: string }>();
+    // @ts-expect-error Static Signal sources are not local suspend keys.
+    await scope.suspend("orderSubmitted");
+  },
+);
+
+await mixedSignalFlow.signal("flow_123", "approval", { approved: true });
+// @ts-expect-error Static Signal sources are not local handle.signal delivery keys.
+await mixedSignalFlow.signal("flow_123", "orderSubmitted", {
+  orderId: "order_123",
+});

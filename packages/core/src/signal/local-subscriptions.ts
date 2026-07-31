@@ -14,6 +14,7 @@ import type {
 } from "./publication";
 import { canonicalSignalJson } from "./canonical-json";
 import { SignalError } from "./errors";
+import { createSignalOccurrenceId } from "./identity";
 
 interface IdempotentPublication<TId extends string> {
   readonly canonicalPayload: string;
@@ -25,10 +26,18 @@ export interface ProcessLocalSignalState<
   TId extends string,
   TPayload extends JsonValue,
 > {
-  publish(
+  replay(
     payload: TPayload,
     options?: SignalPublishOptions,
+  ): SignalPublishReceipt<TId> | undefined;
+  publish(
+    payload: TPayload,
+    options?: SignalPublishOptions & {
+      readonly occurrenceId?: string;
+      readonly acceptedAt?: Date;
+    },
   ): SignalPublishReceipt<TId>;
+  notify(occurrence: SignalOccurrence<TId, TPayload>): void;
   subscribe(listener: SignalListener<TId, TPayload>): SignalUnsubscribe;
 }
 
@@ -38,30 +47,33 @@ export function createProcessLocalSignalState<
   TPayload extends JsonValue,
 >(signalId: TId): ProcessLocalSignalState<TId, TPayload> {
   const listeners = new Set<SignalListener<TId, TPayload>>();
-  const idempotentPublications = new Map<
-    string,
-    IdempotentPublication<TId>
-  >();
+  const idempotentPublications = new Map<string, IdempotentPublication<TId>>();
+  const replay = (
+    payload: TPayload,
+    options?: SignalPublishOptions,
+  ): SignalPublishReceipt<TId> | undefined => {
+    const idempotencyKey = options?.idempotencyKey;
+    if (idempotencyKey === undefined) return undefined;
+    const existing = idempotentPublications.get(idempotencyKey);
+    if (existing === undefined) return undefined;
+    if (existing.canonicalPayload === canonicalSignalJson(payload)) {
+      return existing.receipt;
+    }
+    throw new SignalError(
+      "idempotency_conflict",
+      `Signal \`${signalId}\` rejected idempotency reuse with different normalized payload data.`,
+    );
+  };
 
   return {
+    replay,
     publish(payload, options) {
       const canonicalPayload = canonicalSignalJson(payload);
       const idempotencyKey = options?.idempotencyKey;
-      const existing =
-        idempotencyKey === undefined
-          ? undefined
-          : idempotentPublications.get(idempotencyKey);
-      if (existing !== undefined) {
-        if (existing.canonicalPayload === canonicalPayload) {
-          return existing.receipt;
-        }
-        throw new SignalError(
-          "idempotency_conflict",
-          `Signal \`${signalId}\` rejected idempotency reuse with different normalized payload data.`,
-        );
-      }
-      const acceptedAt = new Date();
-      const occurrenceId = createOccurrenceId();
+      const existing = replay(payload, options);
+      if (existing !== undefined) return existing;
+      const acceptedAt = options?.acceptedAt ?? new Date();
+      const occurrenceId = options?.occurrenceId ?? createSignalOccurrenceId();
       const receipt: SignalPublishReceipt<TId> = Object.freeze({
         occurrenceId,
         signalId,
@@ -82,6 +94,9 @@ export function createProcessLocalSignalState<
       }
       scheduleListeners([...listeners], occurrence);
       return receipt;
+    },
+    notify(occurrence) {
+      scheduleListeners([...listeners], occurrence);
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -109,10 +124,9 @@ function scheduleListeners<TId extends string, TPayload extends JsonValue>(
   }
 }
 
-function reportListenerFailure<
-  TId extends string,
-  TPayload extends JsonValue,
->(occurrence: SignalOccurrence<TId, TPayload>): void {
+function reportListenerFailure<TId extends string, TPayload extends JsonValue>(
+  occurrence: SignalOccurrence<TId, TPayload>,
+): void {
   try {
     console.error(
       "[crux] process-local Signal listener failed after publication acceptance.",
@@ -125,13 +139,4 @@ function reportListenerFailure<
   } catch {
     // Diagnostics are fail-open and cannot change accepted publication.
   }
-}
-
-let fallbackOccurrenceId = 0;
-
-function createOccurrenceId(): string {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  if (uuid) return `signal_occurrence_${uuid}`;
-  fallbackOccurrenceId += 1;
-  return `signal_occurrence_${Date.now().toString(36)}_${fallbackOccurrenceId.toString(36)}`;
 }

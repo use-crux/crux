@@ -14,6 +14,7 @@ import {
 } from "@use-crux/core/runtime";
 import {
   createTestRuntime,
+  runReactiveCompositeAdapterTests,
   runRuntimeEngineAdapterTests,
   runStoreAdapterTests,
 } from "@use-crux/core/runtime/testing";
@@ -31,6 +32,7 @@ describe("@use-crux/core runtime store public surface", () => {
     expect(typeof runtimeRequiredError).toBe("function");
     expect(typeof runStoreAdapterTests).toBe("function");
     expect(typeof runRuntimeEngineAdapterTests).toBe("function");
+    expect(typeof runReactiveCompositeAdapterTests).toBe("function");
     expect(typeof createTestRuntime).toBe("function");
     expect(runtimePublic.RUNTIME_RESULT_MAX_BYTES).toBe(1024 * 1024);
     expect(runtimePublic.RUNTIME_RESULT_MEDIA_TYPE).toBe(

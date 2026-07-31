@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import type { RuntimeTargetId, WorkId } from '../ports'
+import type { FlowSnapshot, RuntimeTargetId, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import { makeConformanceWorkItem } from './store-fixtures'
 import {
@@ -82,17 +82,36 @@ function wakeBlockMissingTargetCase(): StoreCompositeRollbackCase {
 
 function wakeRetryCase(): StoreCompositeRollbackCase {
   const work = leasedWork()
+  const snapshot: FlowSnapshot = {
+    flowId: FLOW_ID,
+    workId: work.workId,
+    targetId: work.targetId,
+    namespace: work.namespace,
+    status: 'suspended',
+    input: {},
+    continuation: { segment: 'before-retry' },
+    completedSteps: {},
+    fingerprint: [],
+    pendingSuspends: [],
+    updatedAt: NOW,
+  }
   return {
     kind: 'wake.retry',
     writesBeforeFailure: 1,
     prepare: async (store) => {
       await store.state.putWork(work)
+      await store.state.putSnapshot(snapshot)
     },
     run: async (store) => {
       await runComposite(store, 'wake.retry', {
         work,
         leaseToken: LEASE_TOKEN,
         retryAt: LATER,
+        retrySnapshot: {
+          ...snapshot,
+          continuation: { segment: 'after-retry' },
+          updatedAt: LATER,
+        },
       })
     },
     verifyRollback: async (store) => {
@@ -102,6 +121,11 @@ function wakeRetryCase(): StoreCompositeRollbackCase {
       await expect(
         store.outbox.list({ namespace: work.namespace, state: 'pending' }),
       ).resolves.toEqual([])
+      await expect(
+        store.state.getSnapshot(FLOW_ID, { namespace: work.namespace }),
+      ).resolves.toMatchObject({
+        continuation: { segment: 'before-retry' },
+      })
     },
   }
 }

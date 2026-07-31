@@ -1,5 +1,5 @@
 /**
- * Typed Signal definitions and process-local publication contracts.
+ * Typed Signal definitions and process-local or durable publication contracts.
  *
  * @module
  */
@@ -25,5 +25,6 @@ export type {
   SignalPublishReceipt,
   SignalUnsubscribe,
 } from "./publication";
+export type { SignalOccurrenceFor, StaticSignalSource } from "./source";
 export { SignalError, SignalValidationError } from "./errors";
 export type { SignalErrorCode } from "./errors";

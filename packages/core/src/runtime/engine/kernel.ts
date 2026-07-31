@@ -7,13 +7,13 @@
  * @module
  */
 
-import { emitEvent, recordSuspension } from './kernel-events'
-import { cancelWork } from './kernel-cancellation'
-import { enqueueTask } from './kernel-tasks'
-import { retryWork } from './kernel-retry'
-import { scanTimers, scheduleTimer } from './kernel-timers'
-import { maintenanceTick } from './maintenance'
-import type { WakeEnvelope } from './envelope'
+import { emitEvent, recordSuspension } from "./kernel-events";
+import { cancelWork } from "./kernel-cancellation";
+import { enqueueTask } from "./kernel-tasks";
+import { retryWork } from "./kernel-retry";
+import { scanTimers, scheduleTimer } from "./kernel-timers";
+import { maintenanceTick } from "./maintenance";
+import type { WakeEnvelope } from "./envelope";
 import type {
   EmitEventInput,
   EnqueueTaskInput,
@@ -27,18 +27,19 @@ import type {
   MaintenanceTickOptions,
   ScanTimersOptions,
   ScheduleTimerInput,
-} from './kernel-types'
-import { handleWake } from './kernel-wake'
-import { resolveRuntimeRetentionConfig } from './retention'
-import { runDefaultRuntimeComposite } from './composites'
+} from "./kernel-types";
+import { handleWake } from "./kernel-wake";
+import { resolveRuntimeRetentionConfig } from "./retention";
+import { runDefaultRuntimeComposite } from "./composites";
 import type {
   AbandonDeferredScopeInput,
   FinalizeDeferredScopeInput,
   RenewDeferredScopeLeaseInput,
   StageDeferredIntentInput,
-} from './kernel-deferred'
+} from "./kernel-deferred";
+import type { SignalPublishCompositeInput } from "./composites/signal";
 
-const DEFAULT_LEASE_TTL_MS = 60_000
+const DEFAULT_LEASE_TTL_MS = 60_000;
 
 export type {
   CancelWorkInput,
@@ -67,28 +68,32 @@ export type {
   RuntimeTargetMap,
   RuntimeTargetOutcome,
   RuntimeWakeResult,
-} from './kernel-types'
+} from "./kernel-types";
 
-export { wakeEnvelopeForWork } from './kernel-shared'
+export { wakeEnvelopeForWork } from "./kernel-shared";
+export type {
+  SignalPublishCompositeInput,
+  SignalPublishCompositeResult,
+} from "./composites/signal";
 
 /** Create a runtime kernel from store, target registry, and deterministic hooks. */
 export function createRuntimeKernel(
   options: RuntimeKernelOptions,
 ): RuntimeKernel {
-  const now = options.now ?? (() => new Date())
-  const verifyWake = options.verifyWake ?? (() => true)
-  const leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS
+  const now = options.now ?? (() => new Date());
+  const verifyWake = options.verifyWake ?? (() => true);
+  const leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
   const retention = resolveRuntimeRetentionConfig(options.retention, {
     redeliveryHorizonMs: options.redeliveryHorizonMs,
-  })
+  });
   const compositeDeps = {
     now,
     newWorkId: options.newWorkId,
-  }
+  };
   const runComposite =
     options.store.runComposite ??
     ((kind, input) =>
-      runDefaultRuntimeComposite(options.store, compositeDeps, kind, input))
+      runDefaultRuntimeComposite(options.store, compositeDeps, kind, input));
   const deps = Object.freeze({
     store: options.store,
     runComposite,
@@ -100,17 +105,19 @@ export function createRuntimeKernel(
     leaseTtlMs,
     leaseExtension: options.leaseExtension,
     retention,
-  })
+  });
 
   return Object.freeze({
+    publishSignal: (input: SignalPublishCompositeInput) =>
+      runComposite("signal.publish", input),
     stageDeferredIntent: (input: StageDeferredIntentInput) =>
-      runComposite('defer.stage', input),
+      runComposite("defer.stage", input),
     finalizeDeferredScope: (input: FinalizeDeferredScopeInput) =>
-      runComposite('defer.finalize', input),
+      runComposite("defer.finalize", input),
     abandonDeferredScope: (input: AbandonDeferredScopeInput) =>
-      runComposite('defer.abandon', input),
+      runComposite("defer.abandon", input),
     renewDeferredScopeLease: (input: RenewDeferredScopeLeaseInput) =>
-      runComposite('defer.renew', input),
+      runComposite("defer.renew", input),
     enqueueTask: (input: EnqueueTaskInput) => enqueueTask(deps, input),
     recordSuspension: (input: RecordSuspensionInput) =>
       recordSuspension(deps, input),
@@ -122,5 +129,5 @@ export function createRuntimeKernel(
     maintenanceTick: (options?: MaintenanceTickOptions) =>
       maintenanceTick(deps, options),
     handleWake: (envelope: WakeEnvelope) => handleWake(deps, envelope),
-  })
+  });
 }

@@ -24,9 +24,13 @@
  */
 
 // Types and error classes (decomposed from scope.ts)
-export { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
-export { FlowSerializationError } from './serialization'
-export type { FlowPersistenceBoundary } from './serialization'
+export {
+  FlowSuspendedError,
+  FlowCancelledError,
+  FlowExpiredError,
+} from "./types";
+export { FlowSerializationError } from "./serialization";
+export type { FlowPersistenceBoundary } from "./serialization";
 export type {
   FlowHandle,
   FlowResumeOptions,
@@ -36,24 +40,33 @@ export type {
   FlowUntilIdleOptions,
   FlowWaitForEvent,
   FlowWaitForOptions,
+  FlowWaitForSignalOptions,
   FlowResult,
   FlowSnapshot,
   FlowSummary,
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-} from './types'
-export { InvalidSignalPayloadError, noPayload } from './signals'
+} from "./types";
+export { InvalidSignalPayloadError, noPayload } from "./signals";
 export type {
+  DeclaredFlowSignalSource,
   FlowDefinitionOptions,
+  FlowSignalDeclaration,
   FlowSignalMap,
   FlowSignalPayload,
   FlowSignalSpec,
   NoPayloadSignal,
-} from './signals'
+} from "./signals";
 
 // Lifecycle utilities (decomposed from scope.ts)
-export { createFlowId, signalFlow, cancelFlow, getFlowSnapshot, listFlows } from './lifecycle'
+export {
+  createFlowId,
+  signalFlow,
+  cancelFlow,
+  getFlowSnapshot,
+  listFlows,
+} from "./lifecycle";
 
 // Flow execution engine
-export { flow } from './scope'
+export { flow } from "./scope";

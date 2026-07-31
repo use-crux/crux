@@ -27,6 +27,7 @@ import type {
   RuntimePruneResult,
 } from "./ports/retention";
 import type { RuntimeResultPayloadPort } from "./results/types";
+import type { RuntimeSignalStorePort } from "./reactive/records";
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = "scheduled" | "fired" | "cancelled";
@@ -225,12 +226,26 @@ export interface RuntimeStoreTransaction {
   readonly outbox: RuntimeOutboxPort;
   /** Durable invocation scopes and their staged named work. */
   readonly deferred: RuntimeDeferredStorePort;
+  /**
+   * Optional durable Signal occurrence, delivery, and subscription storage.
+   *
+   * @remarks Existing adapters may omit this port. Durable Signal profiles
+   * then fail capability preflight before allocating Flow work.
+   */
+  readonly signals?: RuntimeSignalStorePort;
 }
 
 /** Durable record store used by Runtime Engine kernels. */
 export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
   /** Stable adapter id used in conformance output. */
   readonly id: string;
+  /**
+   * Whether records survive process loss on the configured substrate.
+   *
+   * @remarks Omission is treated as unproven by durable reactive profiles so
+   * existing adapters remain source-compatible without gaining new guarantees.
+   */
+  readonly durability?: "durable" | "process-local";
   /** Durable leases for concurrent workers. */
   readonly leases: LeasePort;
   /** Optional private content-addressed result storage capability. */

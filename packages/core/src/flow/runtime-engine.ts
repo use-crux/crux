@@ -47,6 +47,25 @@ export interface RuntimeFlowExecution {
   outcome?: RuntimeTargetOutcome;
 }
 
+/** Rotate retry-owned Flow state without disturbing its delivered bindings. @internal */
+export function runtimeFlowRetrySnapshot(
+  execution: RuntimeFlowExecution,
+  options: {
+    readonly completedSteps: Record<
+      string,
+      { readonly output: JsonValue; readonly durationMs: number }
+    >;
+    readonly continuation: JsonValue;
+  },
+): RuntimeFlowSnapshot {
+  return {
+    ...execution.snapshot,
+    completedSteps: runtimeCompletedSteps(options.completedSteps),
+    continuation: options.continuation,
+    updatedAt: execution.runtime.now(),
+  };
+}
+
 /** Shared state between a resolved runtime and its flow target closure. */
 export interface RuntimeFlowTargetRef {
   /** Resolved runtime instance. */
