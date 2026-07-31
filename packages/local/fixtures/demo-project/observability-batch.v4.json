@@ -223,7 +223,7 @@
     {
       "schemaVersion": 4, "recordId": "demo_invoice_run_start", "type": "run:start",
       "runId": "run_demo_invoice_summary", "operationId": "run_demo_invoice_summary", "segmentId": "segment_demo_invoice_summary", "segmentSeq": 1,
-      "traceId": "44444444444444444444444444444444", "sessionId": "session_demo_support", "name": "Invoice summary · grounded", "rootPrimitive": "generation.call",
+      "traceId": "44444444444444444444444444444444", "sessionId": "session_demo_billing", "name": "Invoice summary · grounded", "rootPrimitive": "generation.call",
       "startedAt": "2026-07-30T09:12:00.000Z", "status": "running"
     },
     {
@@ -243,7 +243,7 @@
     {
       "schemaVersion": 4, "recordId": "demo_account_run_start", "type": "run:start",
       "runId": "run_demo_account_lookup", "operationId": "run_demo_account_lookup", "segmentId": "segment_demo_account_lookup", "segmentSeq": 1,
-      "traceId": "55555555555555555555555555555555", "sessionId": "session_demo_support", "name": "Account lookup · timeout", "rootPrimitive": "generation.call",
+      "traceId": "55555555555555555555555555555555", "sessionId": "session_demo_billing", "name": "Account lookup · timeout", "rootPrimitive": "generation.call",
       "startedAt": "2026-07-30T09:15:00.000Z", "status": "running"
     },
     {
@@ -423,18 +423,20 @@
       "segmentId": "segment_demo_refund_flow_research", "segmentSeq": 2,
       "traceId": "66666666666666666666666666666666", "spanId": "6666666666666671",
       "family": "generation", "primitive": "generation.call", "name": "Research refund policy",
-      "startedAt": "2026-07-30T09:20:00.510Z", "endedAt": "2026-07-30T09:20:02.200Z", "durationMs": 1690, "status": "ok",
+      "startedAt": "2026-07-30T09:20:00.510Z", "endedAt": "2026-07-30T09:20:02.200Z", "durationMs": 1690, "status": "error",
       "model": "gpt-4o-mini", "provider": "openai",
       "metrics": { "inputTokens": 960, "cacheReadTokens": 240, "outputTokens": 110, "totalTokens": 1070, "costUsd": 0.006 },
-      "attributes": { "finishReason": "stop" }
+      "attributes": { "finishReason": "error" },
+      "error": { "message": "Policy source was unavailable", "category": "retrieval_error", "code": "policy_source_unavailable", "phase": "execute", "retryable": true }
     },
     {
       "schemaVersion": 4, "recordId": "demo_flow_child_end", "type": "run:end",
       "runId": "run_demo_refund_flow_research", "operationId": "run_demo_refund_flow",
       "segmentId": "segment_demo_refund_flow_research", "segmentSeq": 3,
       "traceId": "66666666666666666666666666666666",
-      "endedAt": "2026-07-30T09:20:02.210Z", "durationMs": 1710, "status": "ok",
-      "metrics": { "inputTokens": 960, "outputTokens": 110, "totalTokens": 1070, "costUsd": 0.006 }
+      "endedAt": "2026-07-30T09:20:02.210Z", "durationMs": 1710, "status": "error",
+      "metrics": { "inputTokens": 960, "outputTokens": 110, "totalTokens": 1070, "costUsd": 0.006 },
+      "error": { "message": "Research member could not load policy evidence", "category": "retrieval_error", "code": "policy_source_unavailable", "phase": "execute", "retryable": true }
     }
   ]
 }

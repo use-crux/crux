@@ -49,6 +49,12 @@ type Runs struct {
 	filteringRuns    bool
 	runQuery         string
 	runStatusIndex   int
+	runWindowIndex   int
+	runGroupIndex    int
+	sessionFilter    string
+	modelFilter      string
+	knownModels      []string
+	sessions         map[string]bool
 	expandedRows     map[string]bool
 	expandedPayloads map[string]bool
 	showAllSpans     bool
@@ -77,9 +83,15 @@ func NewRuns() *Runs {
 		spanList: kit.NewListPane(func(row RunRow) string {
 			return row.ID
 		}),
-		spanDocument: kit.NewDocumentPane(),
+		spanDocument:   kit.NewDocumentPane(),
+		runWindowIndex: len(runWindows) - 1,
 	}
-	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
+	r.runList.SetRowHeight(func(run api.ObservabilityRunSummary) int {
+		if r.isRunGroupStart(run) {
+			return 4
+		}
+		return 2
+	})
 	r.runList.SetFocused(true)
 	r.spanList.SetRowHeight(func(RunRow) int { return 1 })
 	return r
@@ -115,6 +127,10 @@ func (s *Runs) Focus(kind, id string) {
 	s.filteringRuns = false
 	s.runQuery = ""
 	s.runStatusIndex = 0
+	s.runWindowIndex = len(runWindows) - 1
+	s.runGroupIndex = 0
+	s.sessionFilter = ""
+	s.modelFilter = ""
 	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
 	s.runList.Select(id)
@@ -201,6 +217,7 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if !snapshot.HasValue {
 			return nil
 		}
+		s.rememberRunModels(snapshot.Value)
 		selectedID := s.SelectedRunID()
 		if s.routedRun != nil {
 			s.ensureSelectedRunVisible(selectedID)
@@ -221,6 +238,8 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 	case runDetailLoadedMsg:
 		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
+	case runsSessionsLoadedMsg:
+		s.sessions = m.sessions
 	case runExportedMsg:
 		s.exportState = runExportState{runID: m.runID, message: "exported " + sanitizeRunsInline(m.path)}
 	case runExportErrMsg:
@@ -318,7 +337,11 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	listSnapshot := s.runsResource.Snapshot()
 	if listSnapshot.HasValue {
 		count := len(s.runSummaries())
-		right = fmt.Sprintf("%d %s · last 1h", count, kit.Pluralize(count, "run"))
+		window := "all time"
+		if s.activeRunWindow().label != "all" {
+			window = "last " + s.activeRunWindow().label
+		}
+		right = fmt.Sprintf("%d %s · %s", count, kit.Pluralize(count, "run"), window)
 	}
 	if exported := s.currentRunExportState(); exported != "" {
 		right = exported

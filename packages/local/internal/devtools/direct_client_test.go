@@ -3,7 +3,9 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
@@ -137,6 +139,73 @@ func TestDirectClientIndexDepthMethodsStayInProcess(t *testing.T) {
 	}
 	if status.State != "idle" {
 		t.Fatalf("ProjectIndexWatchStatus = %+v, want service idle state", status)
+	}
+}
+
+func TestDirectClientRunsListFiltersSessionsAndRollups(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	raw, err := os.ReadFile("../../fixtures/demo-project/observability-batch.v4.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch observability.Batch
+	if err := json.Unmarshal(raw, &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	client := NewDirectClientFromService(NewService(state, nil).WithObservability(obs)).WithObservability(obs)
+	page, err := client.ObservabilityRunsPageWithOptions(ctx, api.InspectRunsOptions{
+		Session: []string{"session_demo_billing"},
+		Status:  []string{"error"},
+		Since:   time.Date(2026, 7, 30, 9, 13, 0, 0, time.UTC).UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("filtered Runs page error = %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != "run_demo_account_lookup" {
+		t.Fatalf("filtered Runs page = %+v, want billing failure", page.Rows)
+	}
+
+	full, err := client.ObservabilityRunsPage(ctx)
+	if err != nil {
+		t.Fatalf("rollup Runs page error = %v", err)
+	}
+	var flow *api.ObservabilityRunSummary
+	for index := range full.Rows {
+		if full.Rows[index].RunID == "run_demo_refund_flow" {
+			flow = &full.Rows[index]
+			break
+		}
+	}
+	if flow == nil || flow.FailedChildCount != 1 {
+		t.Fatalf("flow topology = %+v, want one failed child", flow)
+	}
+	var metrics map[string]float64
+	if err := json.Unmarshal(flow.Metrics, &metrics); err != nil {
+		t.Fatalf("flow metrics = %s: %v", flow.Metrics, err)
+	}
+	if metrics["totalTokens"] == 0 || metrics["costUsd"] == 0 {
+		t.Fatalf("flow rollups = %+v, want tokens and cost", metrics)
+	}
+
+	sessions, err := client.Sessions(ctx)
+	if err != nil {
+		t.Fatalf("Sessions error = %v", err)
+	}
+	if len(sessions) != 2 ||
+		sessions[0].SessionID != "session_demo_support" ||
+		sessions[1].SessionID != "session_demo_billing" {
+		t.Fatalf("Sessions = %+v, want support and billing", sessions)
 	}
 }
 

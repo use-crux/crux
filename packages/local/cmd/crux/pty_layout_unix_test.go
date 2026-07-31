@@ -44,7 +44,7 @@ func TestPTYDevRendersSupportedTerminalWidths(t *testing.T) {
 			if err := session.write([]byte("3")); err != nil {
 				t.Fatalf("navigate to Runs: %v", err)
 			}
-			session.waitFor(t, "last 1h", 10*time.Second)
+			session.waitFor(t, "all time", 10*time.Second)
 			if err := session.write([]byte("q")); err != nil {
 				t.Fatalf("quit crux dev: %v", err)
 			}

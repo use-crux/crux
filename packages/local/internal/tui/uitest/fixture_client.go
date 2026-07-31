@@ -2,10 +2,13 @@ package uitest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // FixtureClient serves deterministic Inspect data for TUI render tests.
@@ -99,29 +102,101 @@ func (c *FixtureClient) fixtureRuns() []api.InspectRunRecord {
 	score := 0.88
 	return []api.InspectRunRecord{
 		{
-			Tag:        "InspectRunRecord",
-			TraceID:    "8af2f1c",
-			TargetID:   "docs_agent",
-			Status:     "failed",
-			StartedAt:  c.Now.Add(-14 * time.Minute).UnixMilli(),
-			DurationMs: &duration,
-			Model:      "gpt-5",
-			TokenCount: 18_400,
-			Cost:       &cost,
-			Score:      &score,
-			SpanCount:  24,
+			Tag:           "InspectRunRecord",
+			OperationID:   "8af2f1c",
+			TraceID:       "8af2f1c",
+			TargetID:      "docs_agent",
+			RootPrimitive: "agent.run",
+			Kind:          "agent",
+			Status:        "failed",
+			StartedAt:     c.Now.Add(-14 * time.Minute).UnixMilli(),
+			DurationMs:    &duration,
+			Model:         "gpt-5",
+			TokenCount:    18_400,
+			Cost:          &cost,
+			Score:         &score,
+			SpanCount:     24,
+			SessionID:     "session_docs",
 		},
 	}
 }
 
-func (c *FixtureClient) RunsWithOptions(ctx context.Context, _ api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
-	return c.Runs(ctx)
+func (c *FixtureClient) RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
+	runs, err := c.Runs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filtered := runs[:0]
+	for _, run := range runs {
+		if len(opts.Status) > 0 && !containsFixtureValue(opts.Status, run.Status) {
+			continue
+		}
+		if len(opts.Model) > 0 && !containsFixtureValue(opts.Model, run.Model) {
+			continue
+		}
+		if len(opts.Session) > 0 && !containsFixtureValue(opts.Session, run.SessionID) {
+			continue
+		}
+		if opts.Since > 0 && run.StartedAt < opts.Since {
+			continue
+		}
+		if opts.Until > 0 && run.StartedAt > opts.Until {
+			continue
+		}
+		filtered = append(filtered, run)
+	}
+	return filtered, nil
 }
 func (c *FixtureClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
 	return nil, nil
 }
 func (c *FixtureClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
-	return api.ObservabilityRunsPage{}, nil
+	runs := c.fixtureRuns()
+	rows := make([]api.ObservabilityRunSummary, 0, len(runs))
+	for _, run := range runs {
+		rows = append(rows, inspectRunSummary(run))
+	}
+	return api.ObservabilityRunsPage{Rows: rows}, nil
+}
+func (c *FixtureClient) ObservabilityRunsPageWithOptions(
+	ctx context.Context,
+	opts api.InspectRunsOptions,
+	definitionID ...string,
+) (api.ObservabilityRunsPage, error) {
+	page, err := c.ObservabilityRunsPage(ctx, definitionID...)
+	if err != nil {
+		return page, err
+	}
+	rows := page.Rows[:0]
+	for _, run := range page.Rows {
+		startedAt := parseFixtureTime(run.StartedAt)
+		if len(opts.Status) > 0 && !containsFixtureValue(opts.Status, run.Status) {
+			continue
+		}
+		if len(opts.Model) > 0 && !containsFixtureValue(opts.Model, run.Model) {
+			continue
+		}
+		if len(opts.Session) > 0 && !containsFixtureValue(opts.Session, run.SessionID) {
+			continue
+		}
+		if opts.Since > 0 && startedAt < opts.Since {
+			continue
+		}
+		if opts.Until > 0 && startedAt > opts.Until {
+			continue
+		}
+		rows = append(rows, run)
+	}
+	page.Rows = rows
+	return page, nil
+}
+func (c *FixtureClient) Sessions(context.Context) ([]store.SessionInfo, error) {
+	return []store.SessionInfo{{
+		SessionID:      "session_docs",
+		TraceCount:     1,
+		StartedAt:      c.Now.Add(-14 * time.Minute).UnixMilli(),
+		LastActivityAt: c.Now.UnixMilli(),
+	}}, nil
 }
 func (c *FixtureClient) ObservabilityRunDetail(_ context.Context, traceID string) (api.ObservabilityRunDetail, bool, error) {
 	if traceID != "8af2f1c" {
@@ -167,4 +242,66 @@ func (c *FixtureClient) CreateInsightSilence(context.Context, api.InspectInsight
 }
 func (c *FixtureClient) DeleteInsightSilence(context.Context, string) (api.InspectInsightSilenceRecord, error) {
 	return api.InspectInsightSilenceRecord{}, errors.New("fixture client is read-only")
+}
+
+func inspectRunSummary(run api.InspectRunRecord) api.ObservabilityRunSummary {
+	metricValues := map[string]any{}
+	if run.TokenCount > 0 {
+		metricValues["totalTokens"] = run.TokenCount
+	}
+	if run.Cost != nil {
+		metricValues["costUsd"] = *run.Cost
+	}
+	var metrics json.RawMessage
+	if len(metricValues) > 0 {
+		metrics, _ = json.Marshal(metricValues)
+	}
+	return api.ObservabilityRunSummary{
+		RunID:         firstFixtureValue(run.OperationID, run.TraceID),
+		OperationID:   firstFixtureValue(run.OperationID, run.TraceID),
+		TraceID:       run.TraceID,
+		SessionID:     run.SessionID,
+		Name:          run.TargetID,
+		RootPrimitive: run.RootPrimitive,
+		Status:        run.Status,
+		StartedAt:     time.UnixMilli(run.StartedAt).UTC().Format(time.RFC3339Nano),
+		DurationMs:    valueOrZero(run.DurationMs),
+		Model:         run.Model,
+		Provider:      run.Provider,
+		SpanCount:     run.SpanCount,
+		Metrics:       metrics,
+	}
+}
+
+func parseFixtureTime(value string) int64 {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return 0
+	}
+	return parsed.UnixMilli()
+}
+
+func containsFixtureValue(values []string, candidate string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstFixtureValue(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func valueOrZero[T int | float64](value *T) T {
+	if value == nil {
+		return 0
+	}
+	return *value
 }

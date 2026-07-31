@@ -3,6 +3,7 @@ package uitest
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
@@ -51,5 +52,28 @@ func TestFixtureClientIndexDepthJoins(t *testing.T) {
 	}
 	if status.State != "idle" {
 		t.Fatalf("ProjectIndexWatchStatus = %+v, want idle", status)
+	}
+}
+
+func TestFixtureClientSessionsAndRunFilters(t *testing.T) {
+	client := NewFixtureClient()
+	sessions, err := client.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions returned error: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].SessionID != "session_docs" || sessions[0].TraceCount != 1 {
+		t.Fatalf("Sessions = %+v, want session_docs", sessions)
+	}
+	runs, err := client.RunsWithOptions(context.Background(), api.InspectRunsOptions{
+		Session: []string{"session_docs"},
+		Status:  []string{"failed"},
+		Model:   []string{"gpt-5"},
+		Since:   client.Now.Add(-time.Hour).UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("RunsWithOptions returned error: %v", err)
+	}
+	if len(runs) != 1 || runs[0].OperationID != "8af2f1c" {
+		t.Fatalf("filtered runs = %+v, want fixture run", runs)
 	}
 }

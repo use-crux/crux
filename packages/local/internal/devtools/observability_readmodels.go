@@ -327,7 +327,10 @@ func observabilitySessions(ctx context.Context, obs *observability.Service) []st
 	}
 	grouped := make(map[string]*store.SessionInfo)
 	for _, run := range runs {
-		sessionID := stringMetric(rawMap(run.Attributes), "sessionId", "sessionID")
+		sessionID := run.SessionID
+		if sessionID == "" {
+			sessionID = stringMetric(rawMap(run.Attributes), "sessionId", "sessionID")
+		}
 		if sessionID == "" {
 			sessionID = "default"
 		}

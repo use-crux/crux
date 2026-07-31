@@ -66,7 +66,7 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 	}
 
 	sessions := service.Sessions(ctx)
-	if len(sessions) != 1 || sessions[0].SessionID != "default" || sessions[0].TraceCount != 1 {
+	if len(sessions) != 1 || sessions[0].SessionID != "session_support_001" || sessions[0].TraceCount != 1 {
 		t.Fatalf("sessions = %#v", sessions)
 	}
 }

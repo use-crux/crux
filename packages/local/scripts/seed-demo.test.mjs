@@ -81,6 +81,26 @@ test("seed-demo replays one deterministic V4 batch and installs Eval V4", async 
           .map((record) => record.runId),
       ).size >= 5,
     );
+    assert.deepEqual(
+      new Set(
+        batch.records
+          .filter(
+            (record) =>
+              record.type === "run:start" &&
+              record.runId === record.operationId,
+          )
+          .map((record) => record.sessionId),
+      ),
+      new Set(["session_demo_support", "session_demo_billing"]),
+    );
+    assert.ok(
+      batch.records.some(
+        (record) =>
+          record.recordId === "demo_flow_child_end" &&
+          record.operationId === "run_demo_refund_flow" &&
+          record.status === "error",
+      ),
+    );
     assert.ok(
       batch.records.filter(
         (record) =>

@@ -2,11 +2,13 @@ package devtools
 
 import (
 	"context"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // Typed accessors over the in-process Inspect and devtools services.
@@ -45,10 +47,33 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.InspectRuns
 
 // ObservabilityRunsPage loads the revisioned Runs read-model page.
 func (c *DirectClient) ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error) {
+	return c.ObservabilityRunsPageWithOptions(ctx, api.InspectRunsOptions{}, definitionID...)
+}
+
+// ObservabilityRunsPageWithOptions applies list filters before the bounded
+// canonical page is enriched with usage rollups.
+func (c *DirectClient) ObservabilityRunsPageWithOptions(
+	ctx context.Context,
+	filters api.InspectRunsOptions,
+	definitionID ...string,
+) (api.ObservabilityRunsPage, error) {
 	if c.observability == nil {
 		return api.ObservabilityRunsPage{}, errNoObservabilityService
 	}
-	opts := observability.RunListOptions{}
+	opts := observability.RunListOptions{
+		Limit:                   100,
+		IncludeExpensiveRollups: true,
+		Status:                  filters.Status,
+	}
+	if filters.Since > 0 {
+		opts.Since = time.UnixMilli(filters.Since).UTC().Format(time.RFC3339Nano)
+	}
+	if filters.Until > 0 {
+		opts.Until = time.UnixMilli(filters.Until).UTC().Format(time.RFC3339Nano)
+	}
+	if len(filters.Session) == 1 {
+		opts.SessionID = filters.Session[0]
+	}
 	if len(definitionID) > 0 {
 		opts.DefinitionID = definitionID[0]
 	}
@@ -63,6 +88,14 @@ func (c *DirectClient) ObservabilityRunsPage(ctx context.Context, definitionID .
 func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
 	page, err := c.ObservabilityRunsPage(ctx)
 	return page.Rows, err
+}
+
+// Sessions returns the in-process session summaries used by Runs grouping.
+func (c *DirectClient) Sessions(ctx context.Context) ([]store.SessionInfo, error) {
+	if c.devtools == nil {
+		return nil, errNoDevtoolsService
+	}
+	return c.devtools.Sessions(ctx), nil
 }
 
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {

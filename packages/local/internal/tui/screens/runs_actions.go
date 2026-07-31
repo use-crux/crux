@@ -59,6 +59,22 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 	payloadReason := disabledUnless(s.currentActivity() != nil && s.currentActivity().Primitive == "tool.call", "select a tool.call span")
 	memberReason := disabledUnless(s.firstMemberRun() != nil, "run has no child members")
 	triageReason := disabledUnless(s.diagnosis != nil && runStatusFailed(s.diagnosis.Summary.Status), "run is not failed")
+	listFocusReason := disabledUnless(s.focus == focusRuns, "focus the run list")
+	modelReason := listFocusReason
+	if modelReason == "" {
+		modelReason = disabledUnless(len(s.knownModels) > 0, "no models in the current page")
+	}
+	sessionReason := listFocusReason
+	if sessionReason == "" && s.sessionFilter == "" {
+		selected, _, ok := s.runList.Selected()
+		sessionReason = disabledUnless(
+			s.activeRunGroup().label == "session" &&
+				ok &&
+				selected.SessionID != "" &&
+				s.sessions[selected.SessionID],
+			"group by session and select a known session",
+		)
+	}
 	activateReason := ""
 	switch s.focus {
 	case focusRuns:
@@ -162,9 +178,33 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:             "runs.status-filter",
-			Binding:        key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "status filter")),
-			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to filter"),
+			Binding:        key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "status: "+s.activeRunStatusFilter().label)),
+			DisabledReason: listFocusReason,
 			Run:            func() tea.Cmd { return s.cycleRunStatusFilter(ctx, client) },
+		},
+		{
+			ID:             "runs.window-filter",
+			Binding:        key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "window: "+s.activeRunWindow().label)),
+			DisabledReason: listFocusReason,
+			Run:            func() tea.Cmd { return s.cycleRunWindow(ctx, client) },
+		},
+		{
+			ID:             "runs.group",
+			Binding:        key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "group: "+s.activeRunGroup().label)),
+			DisabledReason: listFocusReason,
+			Run:            func() tea.Cmd { return s.cycleRunGroup(ctx, client) },
+		},
+		{
+			ID:             "runs.model-filter",
+			Binding:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "model: "+shortRunModel(firstNonEmpty(s.modelFilter, "all")))),
+			DisabledReason: modelReason,
+			Run:            func() tea.Cmd { return s.cycleRunModel(ctx, client) },
+		},
+		{
+			ID:             "runs.session-filter",
+			Binding:        key.NewBinding(key.WithKeys("s"), key.WithHelp("s", selectedSessionActionLabel(s.sessionFilter))),
+			DisabledReason: sessionReason,
+			Run:            func() tea.Cmd { return s.toggleSelectedSessionFilter(ctx, client) },
 		},
 		{
 			ID:             "runs.failure-next",

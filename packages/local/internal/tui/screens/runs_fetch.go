@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
@@ -13,6 +14,9 @@ import (
 
 type runsListLoadedMsg resource.ResourceResult[[]api.ObservabilityRunSummary]
 type runDetailLoadedMsg resource.ResourceResult[api.ObservabilityRunDetail]
+type runsSessionsLoadedMsg struct {
+	sessions map[string]bool
+}
 
 func (m runsListLoadedMsg) ResourceOwner() resource.ResourceOwner {
 	return resource.ResourceResult[[]api.ObservabilityRunSummary](m).Token.Owner
@@ -40,17 +44,38 @@ func (s *Runs) fetchRunsListAtRevision(parent context.Context, c DataClient, rev
 	snapshot := s.runsResource.Snapshot()
 	owner := runsListOwnerForDefinition(s.definitionFilter)
 	ctx, token := s.runsResource.Begin(parent, owner, maxRevisionFloor(snapshot.Token.Revision, revision))
-	return fetchRunsList(ctx, c, token)
+	return fetchRunsList(ctx, c, token, s.inspectRunsOptions(runsListNow()))
 }
 
-func fetchRunsList(ctx context.Context, c DataClient, token resource.RequestToken) tea.Cmd {
+func fetchRunsList(
+	ctx context.Context,
+	c DataClient,
+	token resource.RequestToken,
+	filters api.InspectRunsOptions,
+) tea.Cmd {
 	return func() tea.Msg {
-		page, err := c.ObservabilityRunsPage(ctx, token.Owner.RecordID)
+		var page api.ObservabilityRunsPage
+		var err error
+		if inspectRunsOptionsEmpty(filters) {
+			page, err = c.ObservabilityRunsPage(ctx, token.Owner.RecordID)
+		} else {
+			page, err = c.ObservabilityRunsPageWithOptions(ctx, filters, token.Owner.RecordID)
+		}
 		if err != nil {
 			return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
 				Token: token,
 				Err:   err,
 			})
+		}
+		if !inspectRunsOptionsEmpty(filters) {
+			inspectRows, inspectErr := c.RunsWithOptions(ctx, filters)
+			if inspectErr != nil {
+				return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
+					Token: token,
+					Err:   inspectErr,
+				})
+			}
+			page.Rows = runsAllowedByInspect(page.Rows, inspectRows)
 		}
 		token.Revision = maxRunRevision(uint64Revision(page.Revision), page.Rows)
 		return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
@@ -58,6 +83,52 @@ func fetchRunsList(ctx context.Context, c DataClient, token resource.RequestToke
 			Value: page.Rows,
 		})
 	}
+}
+
+func runsAllowedByInspect(
+	runs []api.ObservabilityRunSummary,
+	inspectRows []api.InspectRunRecord,
+) []api.ObservabilityRunSummary {
+	allowed := make(map[string]bool, len(inspectRows))
+	for _, run := range inspectRows {
+		id := firstNonEmpty(run.OperationID, run.TraceID)
+		if id != "" {
+			allowed[id] = true
+		}
+	}
+	filtered := runs[:0]
+	for _, run := range runs {
+		if allowed[firstNonEmpty(run.OperationID, run.RunID)] {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered
+}
+
+func fetchRunsSessions(ctx context.Context, c DataClient) tea.Cmd {
+	if c == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		sessions, err := c.Sessions(ctx)
+		if err != nil {
+			return runsSessionsLoadedMsg{}
+		}
+		return runsSessionsLoadedMsg{sessions: sessionSet(sessions)}
+	}
+}
+
+func sessionSet(sessions []store.SessionInfo) map[string]bool {
+	if len(sessions) == 0 {
+		return nil
+	}
+	result := make(map[string]bool, len(sessions))
+	for _, session := range sessions {
+		if session.SessionID != "" {
+			result[session.SessionID] = true
+		}
+	}
+	return result
 }
 
 func uint64Revision(revision int64) uint64 {

@@ -91,10 +91,10 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
 	out := stripANSI(viewRunsForTest(screen, Size{Width: 100, Height: 24}))
 
-	if !strings.Contains(out, "failed docs run") {
-		t.Fatalf("failed filter lost the error-status row:\n%s", out)
+	if !strings.Contains(out, "active docs run") {
+		t.Fatalf("live filter lost the running-status row:\n%s", out)
 	}
-	for _, hidden := range []string{"successful docs run", "active docs run"} {
+	for _, hidden := range []string{"successful docs run", "failed docs run"} {
 		if strings.Contains(out, hidden) {
 			t.Fatalf("status filter rendered hidden %q row:\n%s", hidden, out)
 		}

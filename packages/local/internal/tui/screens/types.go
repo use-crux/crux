@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
@@ -25,6 +26,8 @@ type DataClient interface {
 	Runs(ctx context.Context) ([]api.InspectRunRecord, error)
 	RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error)
 	ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error)
+	ObservabilityRunsPageWithOptions(ctx context.Context, opts api.InspectRunsOptions, definitionID ...string) (api.ObservabilityRunsPage, error)
+	Sessions(ctx context.Context) ([]store.SessionInfo, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error)

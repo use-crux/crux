@@ -34,6 +34,27 @@ func TestDemoFixtureProducesCollapsibleDuplicateToolGroupThroughIngest(t *testin
 	if err := service.Ingest(context.Background(), batch); err != nil {
 		t.Fatal(err)
 	}
+	page, err := service.RunsPage(context.Background(), observability.RunListOptions{
+		Limit:                   100,
+		IncludeExpensiveRollups: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := map[string]bool{}
+	var flow *observability.RunSummary
+	for index := range page.Rows {
+		sessions[page.Rows[index].SessionID] = true
+		if page.Rows[index].RunID == "run_demo_refund_flow" {
+			flow = &page.Rows[index]
+		}
+	}
+	if !sessions["session_demo_support"] || !sessions["session_demo_billing"] {
+		t.Fatalf("fixture sessions = %+v, want support and billing", sessions)
+	}
+	if flow == nil || flow.FailedChildCount != 1 {
+		t.Fatalf("fixture flow topology = %+v, want one failed child", flow)
+	}
 	detail, err := service.RunDetail(context.Background(), "run_demo_support_regression")
 	if err != nil {
 		t.Fatal(err)

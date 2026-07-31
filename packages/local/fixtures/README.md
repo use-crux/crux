@@ -19,8 +19,9 @@ the same alternate port to both commands if 4466 is unavailable.
 
 After seeding:
 
-- **Overview** shows six operations, non-empty pass-rate/cost/latency KPIs, recent
-  runs, derived insights, and live ingest activity.
+- **Overview** shows six operations across support and billing sessions,
+  non-empty pass-rate/cost/latency KPIs, recent runs, derived insights, and
+  live ingest activity.
 - **Runs** shows six ok/error/suspended operations. The refund regression has
   an at-least-ten-span waterfall with repeated tool calls, retrieval and
   guardrail failures, and terminal error diagnosis.
@@ -29,8 +30,12 @@ After seeding:
   segments, turn decisions, full tool arguments/results, sanitized image
   metadata, memory-capture disposition, redaction evidence, and timing/token
   splits.
-- The refund-resolution flow shows ordered steps plus a real child member run;
-  the member row drills into the child through the normal Runs read model.
+- The refund-resolution flow shows ordered steps plus a real failed child
+  member run; the Runs list surfaces its non-trivial child topology and the
+  member row drills into the child through the normal Runs read model.
+- Runs can group the same ingested operations by primitive, target, or the real
+  `session_demo_support` / `session_demo_billing` labels. Group headers use the
+  bounded list rollups for failure, token, cost, and duration summaries.
 - **Index** shows authored contexts, tools, prompts, an agent, an ordered flow,
   Eval Cases, and the Eval. The support prompt exercises input/output schema
   trees, PromptText sources, relations in both directions, and a three-run

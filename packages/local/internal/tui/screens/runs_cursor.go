@@ -94,8 +94,70 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
-	s.runStatusIndex = (s.runStatusIndex + 1) % (len(runStatusFilters) + 1)
-	return s.ensureFilteredRunSelection(ctx, c)
+	s.runStatusIndex = (s.runStatusIndex + 1) % len(runStatusFilters)
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) cycleRunWindow(ctx context.Context, c DataClient) tea.Cmd {
+	s.runWindowIndex = (s.runWindowIndex + 1) % len(runWindows)
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) cycleRunGroup(ctx context.Context, c DataClient) tea.Cmd {
+	selectedID := s.SelectedRunID()
+	s.runGroupIndex = (s.runGroupIndex + 1) % len(runGroups)
+	s.runList.SetItems(s.filteredRuns())
+	if selectedID != "" {
+		s.runList.Select(selectedID)
+	}
+	if s.activeRunGroup().label == "session" {
+		return fetchRunsSessions(ctx, c)
+	}
+	return nil
+}
+
+func (s *Runs) cycleRunModel(ctx context.Context, c DataClient) tea.Cmd {
+	if len(s.knownModels) == 0 {
+		return nil
+	}
+	if s.modelFilter == "" {
+		s.modelFilter = s.knownModels[0]
+	} else {
+		next := 0
+		for index, model := range s.knownModels {
+			if model == s.modelFilter {
+				next = index + 1
+				break
+			}
+		}
+		if next < len(s.knownModels) {
+			s.modelFilter = s.knownModels[next]
+		} else {
+			s.modelFilter = ""
+		}
+	}
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) toggleSelectedSessionFilter(ctx context.Context, c DataClient) tea.Cmd {
+	if s.sessionFilter != "" {
+		s.sessionFilter = ""
+		return s.refreshFilteredRuns(ctx, c)
+	}
+	selected, _, ok := s.runList.Selected()
+	if !ok || selected.SessionID == "" {
+		return nil
+	}
+	s.sessionFilter = selected.SessionID
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) refreshFilteredRuns(ctx context.Context, c DataClient) tea.Cmd {
+	local := s.ensureFilteredRunSelection(ctx, c)
+	if c == nil {
+		return local
+	}
+	return tea.Batch(local, s.fetchRunsList(ctx, c))
 }
 
 func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea.Cmd {

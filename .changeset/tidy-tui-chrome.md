@@ -11,3 +11,5 @@ Render modal rows against a symmetric opaque backdrop so Index detail text canno
 Deepen Runs detail with primitive-aware request, PromptText, decision, tool, memory, media, flow, timing, cost, and member-run evidence; add failure-path triage with `e`/`E` stepping and bounded terminal-safe payload expansion.
 
 Deepen the Index Catalog with schema field trees, complete lint evidence, navigable relation columns, agent and flow summaries, PromptText provenance, per-definition runtime activity, indexing/watch status, kind/file grouping, and consistent `x` exports.
+
+Make the Runs list operationally useful with bounded token/cost rollups, model and abnormal-health columns, child topology, server-side status/session/window filters, model refinement, stable primitive/target/session grouping, real session labels, and aggregate group headers.
