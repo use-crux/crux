@@ -225,6 +225,28 @@ Confirming success requires the known JSON-safe output. Confirming failure
 removes the prepared recovery unit. Reconciliation is the only supported exit
 from an unknown outcome.
 
+## Inspect Effects in Devtools
+
+Run `crux dev`, then open **Library → Index** to inspect Effects discovered from
+source. For a statically analyzable Effect, the Catalog identifies its authored
+ID and version and shows whether recovery, capture, and resource projection are
+configured. A dynamic ID is shown as an unanalyzable binding instead of being
+given an invented identity, and a non-literal option stays unknown. These are
+static source facts, not inferred runtime behavior. Re-index after changing an
+Effect definition.
+
+Open **Runs** to inspect what happened at runtime. An Effect span card shows its
+resource, outcome, recovery state, and receipt ID. Recovery attempts link back
+to the original Effect through `recovery.of`; when recovery succeeds, the
+original card is marked **Recovered**. The run header summarizes the evidence
+as `N effects · M recoverable · K ambiguous`, making unknown external outcomes
+visible without implying that recovery ran.
+
+The two views deliberately answer different questions: the Catalog explains
+what the current source declares, while Runs preserve the evidence emitted by
+a particular execution. Devtools is read-only for Effects; use the Effects API
+to recover, roll back, or reconcile a receipt.
+
 ## Next
 
 - [Effects API reference](/docs/reference/crux-core/effect)

@@ -345,6 +345,31 @@ first failure teaches the escape hatch. Each public code gets an
 - Hand-formatted; do not run bare prettier.
 - No workplan-phase references in source or comments; describe conditions.
 
+## Request-planning integration constraints (RFC #300, landed after this slice)
+
+Whole-request context planning (#300 / PR #307) landed on main after this
+slice's base. Slice 1 is compliant by construction — effect recovery invokes
+user recovery handlers and never rebuilds provider requests — but later
+slices are bound by three contracts from that work:
+
+1. **Sealed plans are the replay unit.** Effect recovery/rollback must never
+   re-plan, re-run `prepareStep`/`prepareInvocation`, or rebuild a request
+   for an already-accepted boundary; durable recovery resumes from the
+   decision journal.
+2. **Link, do not duplicate, request evidence.** The decision journal commits
+   before dispatch and the observability spine carries `request.plan`
+   artifacts (sealed + completed revisions). Effect receipts issued around
+   provider calls must link to the request id rather than duplicating
+   request facts. `RequestReceipt.inspect().retryCount` is the authoritative
+   provider attempt count — effects consume it, never re-count.
+3. **Tool results are two-sided when offloaded.** Receipts and recovery
+   state referencing tool outcomes must record the canonical `output`, never
+   the model-facing `modelOutput` preview, which is a request-time
+   representation and unstable for recovery.
+
+Binding docs: the whole-request design (Request planning, Executed request
+receipt) and `reference/crux-core/request-evidence`.
+
 ## Follow-up seams this slice must leave clean
 
 - `EffectLedger` port ready for a `RecordStore` implementation (slice 2).

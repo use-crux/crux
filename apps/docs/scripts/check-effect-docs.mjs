@@ -47,6 +47,11 @@ for (const required of [
   "rollbackOnError",
   'recovery: "best-effort"',
   "reconcileEffect",
+  "## Inspect Effects in Devtools",
+  "unanalyzable binding",
+  "recovery.of",
+  "effects ·",
+  "Devtools is read-only for Effects",
 ]) {
   if (!guide.includes(required)) {
     throw new Error(`Effects guide is missing ${JSON.stringify(required)}`);
