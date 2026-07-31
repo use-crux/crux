@@ -25,7 +25,7 @@ Here is what is new in Crux 0.6:
 - [**MCP tool sources:**](#mcp-tool-sources) The new `@use-crux/mcp` package adds Streamable HTTP and stdio servers as portable tools on every adapter.
 - [**Runtime-hosted Evals:**](#runtime-hosted-evals) Strict offline planning, pre-spend cost ceilings, and a first-party `@use-crux/cloudflare` Durable Object host.
 - [**Media Safety:**](#media-safety) `boundary.input.media()`, `boundary.output.media()`, and a declarative `guardrail.media()` attachment policy.
-- [**Memory capture modes (Breaking):**](#memory-capture-modes-are-honored) `afterResponse` and `detached` no longer block the response. Convex vector storage is removed.
+- [**Memory capture modes (Breaking):**](#memory-capture-modes-are-honored) Non-blocking capture modes are finally honored instead of silently awaiting. Convex vector storage is removed.
 - [**Flow cancellation:**](#flow-cancellation) `handle.cancel(flowId)` behaves the same with and without a Runtime Engine.
 - [**Namespace inference (Breaking):**](#namespace-inference) Serverless production without a resolvable namespace throws `NAMESPACE_AMBIGUOUS` instead of silently writing to `local`.
 - [**`defer()` with zero host setup:**](#defer-with-zero-host-setup) Lazy execution scopes at every Crux primitive boundary, plus explicit `config({ host })` retention bindings.
@@ -104,7 +104,7 @@ Two cases fail closed on purpose, because guessing would produce a false pass:
 
 A Baseline is a complete historical run and selected arm that you explicitly accepted. Nothing is promoted automatically, so a comparison always tells you what it is comparing against.
 
-`--max-cost` now fails closed on conservative per-call USD ceilings. Managed tasks, routing trees, bounded tool loops, and judges estimate from `experimental.eval.pricing`. If a path has no model key, you get the missing key and a remedy before any billable work, not an overrun afterwards.
+`--max-cost` now fails closed on conservative per-call USD ceilings. Managed tasks, routing trees, bounded tool loops, and judges estimate from `experimental.eval.pricing`. If a path has no model key, you get the missing key and a remedy before any billable work, not an overrun afterward.
 
 Read the [Evals guide](/docs/guides/evals) for Variants, scorers, and Gates.
 
@@ -322,7 +322,7 @@ Crux is pre-launch and prefers one mental model over compatibility aliases, so t
 Behavior changes to account for:
 
 - A production `serverless()` composition without a resolvable namespace now throws `NAMESPACE_AMBIGUOUS`. Check this before deploying, not after.
-- `capture.mode: 'afterResponse'` and `'detached'` are now genuinely non-blocking. If your code relied on memory being written before the response returned, set `'inline'` explicitly.
+- `capture.mode: 'detached'` no longer blocks the response, and `'afterResponse'` no longer blocks once a `capture.waitUntil` hook is configured. Without that hook, `'afterResponse'` still awaits capture as the serverless-safe fallback. If your code relied on memory being written before the response returned, set `'inline'` explicitly.
 - Extractive blocks with `write: { mode: 'manual' }` no longer extract during capture.
 - The `@use-crux/ai` root no longer downloads HTTPS transcription input implicitly. Portable callers must pass materialized audio; Node callers import `transcribe` or `createAiSdkTranscribe` from `@use-crux/ai/transcription/node` to keep the bounded, DNS-pinned download.
 - Older observability storage resets in place for schema v4. Run lookup and deletion now require an operation or member-run ID rather than a W3C trace ID.
