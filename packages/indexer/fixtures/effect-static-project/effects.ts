@@ -6,7 +6,7 @@ export const reserveInventory = effect("inventory.reserve", execute);
 
 export const chargePayment = effect("payments.charge", execute, {
   version: 2,
-  resource: (input) => ({ kind: "payment", id: input.id }),
+  resource: (input) => ({ type: "payment", id: input.id }),
   recover: async () => undefined,
 });
 

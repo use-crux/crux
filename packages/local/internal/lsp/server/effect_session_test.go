@@ -169,7 +169,7 @@ func (w *effectSessionWorkspace) Start(ctx context.Context, _ []protocol.Workspa
 		Metadata: json.RawMessage(`{"exportName":"chargePayment","exported":true}`),
 		Source:   &api.SourceLoc{File: w.file, Line: 7, Column: &chargeStartColumn},
 		SourceSnippet: &api.SourceSnippet{
-			Source: "effect(\"payments.charge\", execute, {\n  version: 2,\n  resource: (input) => ({ kind: \"payment\", id: input.id }),\n  recover: async () => undefined,\n})",
+			Source: "effect(\"payments.charge\", execute, {\n  version: 2,\n  resource: (input) => ({ type: \"payment\", id: input.id }),\n  recover: async () => undefined,\n})",
 			Range: api.SourceRange{
 				File: w.file, StartLine: 7, EndLine: &chargeEndLine,
 				StartColumn: &chargeStartColumn, EndColumn: &chargeEndColumn,

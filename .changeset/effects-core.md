@@ -2,6 +2,7 @@
 "@use-crux/core": minor
 "@use-crux/indexer": minor
 "@use-crux/local": minor
+"@use-crux/otel": minor
 ---
 
 Add the `@use-crux/core/effect` surface for typed in-process effects, immutable
@@ -23,3 +24,6 @@ can explicitly recover completed units through `flow.rollback()`.
 Add an internal audit-first native Effect contract so first-party domains can
 contribute receipts, evidence, and Effect facets on their existing spans while
 reporting unavailable or irreversible recovery honestly.
+
+Export Effect spans through the OpenTelemetry adapter with the canonical
+`crux.effect.run` span name.
