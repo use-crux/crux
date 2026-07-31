@@ -24,6 +24,7 @@
 // from @use-crux/ai or another embedding provider for retrieval/indexing.
 
 export { createAnthropic, anthropicProviderRuntime } from './native'
+export { anthropicModelCapacity } from './capacity'
 export { fromResponse, toParams } from './codec'
 export type { AnthropicCodecOptions } from './codec'
 export type { AnthropicRerankerConfig, AnthropicRetrievalModelConfig } from './native'

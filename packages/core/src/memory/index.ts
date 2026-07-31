@@ -32,7 +32,6 @@ export type {
 export {
   memory,
   memoryBlock,
-  recentMessages,
   workingState,
   episodes,
   facts,

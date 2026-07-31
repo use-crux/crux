@@ -116,14 +116,6 @@ export function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefine
       },
     })
   }
-  if (resolved?.promptBudgetArtifactId && !seen.has(resolved.promptBudgetArtifactId)) {
-    observe.edge({
-      edgeType: 'consumed',
-      from: { kind: 'artifact', id: resolved.promptBudgetArtifactId },
-      to: { kind: 'span', id: spanId },
-      attributes: { primitive: 'prompt.budget' },
-    })
-  }
 }
 
 export function generationOutputPreview(result: unknown): Record<string, unknown> {

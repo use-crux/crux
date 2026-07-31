@@ -1597,5 +1597,63 @@
     "phase": "semantic",
     "requires": ["definitions", "sources"],
     "fidelity": "safe"
+  },
+  {
+    "id": "context-planning.history-cardinality",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Prompt declares multiple history projections",
+    "description": "A prompt may declare one canonical history projection through history() or history.recent().",
+    "rationale": "One projection must own causal grouping and model-facing history selection.",
+    "impact": "Multiple projections make history ownership and request planning ambiguous.",
+    "docsUrl": "/docs/guides/context-planning/history",
+    "fixes": [
+      {
+        "title": "Keep one history projection",
+        "description": "Remove all but one history() or history.recent() entry from the prompt use array.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line context-planning.history-cardinality -- reason"
+    },
+    "phase": "semantic",
+    "requires": ["definitions", "sources"],
+    "fidelity": "safe"
+  },
+  {
+    "id": "context-planning.invalid-wrapper-order",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Representation wrappers are ordered incorrectly",
+    "description": "Representation ladders must follow prefer, summarizable, offloadable, then outermost droppable order.",
+    "rationale": "A monotonic wrapper order gives every contributor one unambiguous degradation path.",
+    "impact": "Invalid topology can weaken capability ownership or fail request composition before dispatch.",
+    "docsUrl": "/docs/guides/context-planning",
+    "fixes": [
+      {
+        "title": "Reorder the representation ladder",
+        "description": "Use each non-terminal wrapper at most once and make droppable the outermost wrapper.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line context-planning.invalid-wrapper-order -- reason"
+    },
+    "phase": "semantic",
+    "requires": ["definitions", "sources"],
+    "fidelity": "safe"
   }
 ]

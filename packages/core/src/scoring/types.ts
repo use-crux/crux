@@ -5,7 +5,7 @@
  */
 
 import type { z } from 'zod'
-import type { GenerateObjectFn } from '../compaction/types'
+import type { GenerateObjectFn } from '../generation/support-types'
 import type { OperationResultMeta } from '../observability'
 
 // ── Judge Configuration ─────────────────────────────────────────────

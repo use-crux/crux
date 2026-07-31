@@ -28,6 +28,7 @@ import type {
   StructuredAttempt,
 } from "../executor-types";
 import type { StructuredOutputCapabilities } from "../structured-output";
+import type { ResultStepFacts } from "../result-accumulator";
 import { repairJsonText } from "../../generation/repair-json";
 import { responseContent, textFromAssistantContent } from "../assistant-output";
 import { transformCanonicalStep } from "../step-transform";
@@ -203,7 +204,10 @@ export function fakeLoopRuntime(
 
   const runtime: LoopRuntimePort<string, FakeRawResponse, FakeRawStream> = {
     id: "fake",
-    capabilities: { stepTransform: "before-client-tools" },
+    capabilities: {
+      requestPlanning: "per-step",
+      stepTransform: "before-client-tools",
+    },
     structuredOutput: { capabilities: () => FAKE_STRUCTURED_CAPABILITIES },
 
     describeModel(model: string): ModelInfo {
@@ -223,9 +227,11 @@ export function fakeLoopRuntime(
       if (script instanceof Error) throw script;
 
       let system = request.system;
+      let systemBlocks = request.systemBlocks;
       let tools = request.tools;
       let activeTools = request.activeTools;
       let messages: Message[] = [...(request.messages ?? [])];
+      const reportedStepFacts: ResultStepFacts[] = [];
       if (messages.length === 0 && request.prompt) {
         messages = [{ role: "user", content: request.prompt }];
       }
@@ -243,6 +249,16 @@ export function fakeLoopRuntime(
       for (let index = 0; index < script.length; index++) {
         if (steps >= request.maxSteps) break;
         steps++;
+        const planned = await request.planStep!({
+          model: request.model,
+          modelInfo: request.modelInfo,
+          system,
+          systemBlocks,
+          messages,
+        });
+        system = planned.system;
+        systemBlocks = planned.systemBlocks;
+        messages = [...planned.messages];
         const emission = script[index]!;
         const toolCalls = (emission.toolCalls ?? []).map((tc, j) => ({
           id: tc.id ?? `tc_${index}_${j}`,
@@ -267,6 +283,19 @@ export function fakeLoopRuntime(
             text: textFromAssistantContent(content),
           };
         }
+        if (request.observer === undefined) {
+          reportedStepFacts.push({
+            request: planned.receipt,
+            content: responseContent(lastResponse),
+            usage: lastResponse.usage,
+            ...(lastResponse.toolCalls
+              ? { toolCalls: lastResponse.toolCalls }
+              : {}),
+            finishReason: lastResponse.finishReason,
+            responseId: lastResponse.responseId,
+            modelId: lastResponse.actualModelId,
+          });
+        }
 
         if (toolCalls.length === 0) {
           messages = [
@@ -274,6 +303,7 @@ export function fakeLoopRuntime(
             { role: "assistant", content: lastResponse.text },
           ];
           await request.observer?.onStepEnd({
+            request: planned.receipt,
             index: steps - 1,
             text: lastResponse.text,
             content: lastResponse.content,
@@ -361,6 +391,7 @@ export function fakeLoopRuntime(
         ];
 
         const directive: StepDirective = (await request.observer?.onStepEnd({
+          request: planned.receipt,
           index: steps - 1,
           text: lastResponse.text,
           content: lastResponse.content,
@@ -372,7 +403,13 @@ export function fakeLoopRuntime(
 
         if (directive.kind === "stop") break;
         if (directive.kind === "amend") {
-          if (directive.system !== undefined) system = directive.system;
+          if (
+            directive.system !== undefined ||
+            directive.systemBlocks !== undefined
+          ) {
+            system = directive.system;
+            systemBlocks = directive.systemBlocks;
+          }
           if (directive[systemMessagePrefixPatch] !== undefined) {
             messages = applySystemMessagePrefixPatch(
               messages,
@@ -392,6 +429,9 @@ export function fakeLoopRuntime(
         response: lastResponse,
         messages,
         steps,
+        ...(reportedStepFacts.length > 0
+          ? { stepFacts: reportedStepFacts }
+          : {}),
         meta: config.costUsd !== undefined ? { costUsd: config.costUsd } : {},
       };
     },
@@ -400,6 +440,17 @@ export function fakeLoopRuntime(
       request,
     ): Promise<StructuredAttempt<FakeRawResponse>> {
       calls.runStructuredAttempt.push(request);
+      const planned = await request.planStep!({
+        model: request.model,
+        modelInfo: request.modelInfo,
+        system: request.system,
+        systemBlocks: request.systemBlocks,
+        messages:
+          request.messages ??
+          (request.prompt
+            ? [{ role: "user" as const, content: request.prompt }]
+            : []),
+      });
       const scripted = structured.shift() ?? "{}";
       if (scripted instanceof Error) throw scripted;
 
@@ -417,6 +468,7 @@ export function fakeLoopRuntime(
       } catch (error) {
         return {
           status: "invalid",
+          request: planned.receipt,
           rawText: guardedText,
           error: new ZodError([
             {
@@ -429,6 +481,7 @@ export function fakeLoopRuntime(
       }
       return {
         status: "ok",
+        request: planned.receipt,
         raw: {
           kind: "fake-structured",
           text: repaired,
@@ -449,6 +502,17 @@ export function fakeLoopRuntime(
 
     async runStream(request): Promise<ExecutorProviderStreamHandle<FakeRawStream>> {
       calls.runStream.push(request);
+      const planned = await request.planStep!({
+        model: request.model,
+        modelInfo: request.modelInfo,
+        system: request.system,
+        systemBlocks: request.systemBlocks,
+        messages:
+          request.messages ??
+          (request.prompt
+            ? [{ role: "user" as const, content: request.prompt }]
+            : []),
+      });
       const scripted = streams.shift() ?? ["fake ", "stream"];
 
       // Drive the safety streaming sub-protocol exactly as a real port must:
@@ -484,6 +548,7 @@ export function fakeLoopRuntime(
       return {
         raw: { kind: "fake-stream", chunks, text },
         completion: async () => ({
+          requestReceipts: [planned.receipt],
           text,
           ...(structured ? { object: wireValue } : {}),
           usage: FAKE_USAGE,

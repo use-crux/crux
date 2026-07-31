@@ -1,0 +1,216 @@
+---
+title: Input budgets
+description: Set soft and strict limits for each complete provider request.
+---
+
+```ts
+const result = await generate(supportReply, {
+  model,
+  input: { ticketId: "ticket_4821" },
+  inputBudget: {
+    optimizeAt: 24_000,
+    max: 30_000,
+  },
+});
+```
+
+`inputBudget` controls input pressure for one provider call. It measures the
+complete request, not only the system prompt. It never authorizes a context
+reduction by itself.
+
+## When to set a budget
+
+Set `inputBudget` when you need one of these controls:
+
+- A preferred operating size below the model's context limit.
+- A strict product limit below the model-derived maximum.
+- A stable boundary for tests and previews across model families.
+
+Leave it unset when the model-derived maximum and output reserve match your
+product. Do not use it as a total Agent-run token allowance. Tool rounds each
+receive their own request budget.
+
+## Soft and strict limits
+
+| Field | Effect |
+| --- | --- |
+| `optimizeAt` | Soft watermark. When a legal candidate fits below it, Crux selects the highest-fidelity candidate in that tier. |
+| `max` | Strict maximum. If no legal complete candidate fits, Crux rejects before provider dispatch. |
+
+If no candidate crosses `optimizeAt`, the planner may select the
+highest-fidelity legal candidate between `optimizeAt` and `max`. The soft
+watermark does not turn required context into an error.
+
+```ts
+inputBudget: {
+  optimizeAt: 20_000,
+  max: 28_000,
+}
+```
+
+Both values must be positive safe integers, and `optimizeAt` must be less than
+or equal to `max`. Invalid values throw `TypeError` before planning begins.
+
+## What counts toward input
+
+Crux measures these request parts together:
+
+- System blocks and authored context.
+- Caller-owned conversation messages.
+- Tool definitions and JSON schemas.
+- Structured-output schemas.
+- Media and provider framing.
+- Required support Tools for exact references.
+- Provider overhead, counting margin, and output reserve.
+
+This is why carrying a previous system-only limit forward unchanged can be too
+strict. The new limit describes the provider's complete input.
+
+## Model-derived maximum
+
+When you omit `max`, Crux derives a safe value from the concrete model:
+
+```text
+context window
+- output reserve
+- provider and schema overhead
+- counting safety margin
+```
+
+If you set `max`, the effective maximum is the smaller of your value and the
+model-derived value. A large caller value cannot overrule model capacity.
+
+When you omit an output limit, the adapter profile supplies a default output
+reserve. Set the adapter's normal `maxTokens` or `maxOutputTokens` option when
+you need a different response limit. There is no separate response-headroom
+setting.
+
+## Agent defaults and invocation overrides
+
+Put a reusable budget on the Agent:
+
+```ts
+const responder = agent({
+  id: "support-responder",
+  prompt: supportReply,
+  model,
+  inputBudget: { optimizeAt: 18_000, max: 28_000 },
+});
+```
+
+Override only the field that changes for one call:
+
+```ts
+await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { max: 22_000 },
+});
+```
+
+Crux merges definition and invocation budgets per field. The example keeps
+`optimizeAt: 18_000` and changes `max` to `22_000`.
+
+Use `prepareStep` for a boundary-local change after a Tool result:
+
+```ts
+const responder = agent({
+  id: "tool-heavy-support",
+  prompt: supportReply,
+  model,
+  inputBudget: { optimizeAt: 18_000, max: 28_000 },
+  prepareStep: ({ reason }) =>
+    reason === "tool-result"
+      ? { inputBudget: { max: 24_000 } }
+      : undefined,
+});
+```
+
+Changing the budget begins a new model epoch and replans from canonical
+sources. A transport retry reuses its existing sealed request.
+
+## Budgets do not authorize loss
+
+This request fails if the exact catalog does not fit:
+
+```ts
+const reply = prompt({
+  id: "catalog-support",
+  use: [fullCatalog],
+  prompt: "Answer the customer.",
+});
+```
+
+Add a representation policy to authorize a specific fallback:
+
+```ts
+const reply = prompt({
+  id: "catalog-support",
+  use: [prefer(fullCatalog, catalogIndex)],
+  prompt: "Answer the customer.",
+});
+```
+
+Use [representation ladders](/docs/guides/context-planning/representations)
+to choose which changes are acceptable. Do not lower `max` and expect Crux to
+guess what can be dropped.
+
+## Measurement confidence
+
+Receipts and previews report one of these confidence levels:
+
+| Value | Meaning |
+| --- | --- |
+| `exact` | An authoritative complete-request count determined fit. |
+| `estimated` | Adapter and Core estimates determined fit. |
+| `conservative` | Unknown model or missing counting support required a larger safety margin. |
+| `incomplete` | Preview could not measure a runtime-only source or unprepared artifact. |
+
+Adapters may implement an asynchronous authoritative `countTokens` port. Crux
+uses it only when the exact count can change selection or prevent an exact
+request from being rejected. Capacity lookup itself is synchronous and does
+not call the provider.
+
+## Preview a budget change
+
+```ts
+const result = await preview(responder, {
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { optimizeAt: 16_000, max: 20_000 },
+});
+
+console.log({
+  status: result.status,
+  inputTokens: result.inputTokens,
+  maxInputTokens: result.maxInputTokens,
+  adaptations: result.adaptations,
+});
+```
+
+Use preview before changing production limits. `over-limit` is a normal result,
+not an exception. `unknown` means runtime data or missing artifact preparation
+prevents a complete answer.
+
+## Handle strict-limit failures
+
+```ts
+try {
+  await generate(responder, options);
+} catch (error) {
+  if (error instanceof RequestCompositionError &&
+      error.code === "REQUEST_TOO_LARGE") {
+    console.error(error.diagnostics);
+  }
+  throw error;
+}
+```
+
+The provider has not been called. The diagnostics identify safe contribution
+classes and counts, then suggest increasing `max`, reducing exact input,
+reserving less output, or authorizing another representation.
+
+## Related
+
+- Guide: [Representation ladders](/docs/guides/context-planning/representations)
+- Guide: [Receipts and preview](/docs/guides/context-planning/receipts-preview)
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Adapter reference: [Adapters](/docs/reference/adapters)

@@ -1,16 +1,15 @@
 ---
 title: Chat with memory
-description: Compose recent messages, working state, episodes, and proposed facts for a practical chat agent.
+description: Compose planned history, working state, episodes, and proposed facts for a practical chat agent.
 ---
 
 This recipe shows the default memory shape for a useful assistant. It keeps a short recent window, tracks typed task state, records notable events, and proposes long-term facts instead of silently changing the user's profile.
 
 ```ts
-import { prompt } from "@use-crux/core";
+import { history, prompt } from "@use-crux/core";
 import { generate } from "@use-crux/ai";
 import {
   memory,
-  recentMessages,
   workingState,
   episodes,
   facts,
@@ -22,7 +21,6 @@ const assistantMemory = memory({
   records,
   namespace: ({ input }) => `user:${input.userId}:thread:${input.threadId}`,
   blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
     workingState({
       id: "state",
       schema: z.object({
@@ -48,7 +46,7 @@ const chatInput = z.object({
 
 const chatPrompt = prompt({
   id: "chat",
-  use: [assistantMemory],
+  use: [history.recent({ messages: 12 }), assistantMemory],
   input: chatInput,
   system: "Answer clearly. Use memory only when it is relevant.",
   prompt: ({ input }) => input.message,

@@ -138,13 +138,14 @@ Resolution composes:
 3. Active uncached Contexts in `use` order.
 4. Nested entries before their owning Context within the same cache tier.
 
-Priority controls token-budget dropping in the uncached tail, not normal
-ordering. The Prompt-owned text and cached prefix are always retained. If that
-stable prefix alone exceeds `tokenBudget`, inspection and the `prompt.budget`
-artifact report `prefixOverflow: true`.
+Priority orders explicitly authorized representation alternatives; it never
+authorizes dropping an exact Context. The Prompt-owned text and every plain
+Context remain exact and required. If no complete authorized representation
+fits `inputBudget.max`, planning fails before provider dispatch.
 
-Excluded Contexts contribute nothing. Budget-dropped Contexts still contribute
-their tools.
+Excluded conditional Contexts contribute nothing. Representation changes retain
+the contributor's owned capabilities unless an explicitly droppable
+contributor is omitted.
 
 ## Prompt and Message Modes
 

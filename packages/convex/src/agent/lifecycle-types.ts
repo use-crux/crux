@@ -66,7 +66,6 @@ type CruxOwnedConvexArgKey = 'model' | 'system' | 'prompt' | 'messages' | 'tools
 export type ConvexAgentCallArgs<TPrompt extends AnyConvexPrompt, TConvexArgs extends object = ConvexGenerateTextArgs> =
   Omit<TConvexArgs, CruxOwnedConvexArgKey> & {
     readonly input: PromptInput<TPrompt>
-    readonly tokenBudget?: number
   }
 
 /** Messages exposed to a profile-backed agent `prepare()` callback. */
@@ -94,7 +93,6 @@ export interface ConvexAgentPrepareResult<TPrompt extends AnyConvexPrompt> {
   readonly use?: readonly ContextEntry[]
   readonly prompt?: AnyConvexPrompt
   readonly tools?: Record<string, unknown>
-  readonly tokenBudget?: number
   readonly captureMessages?: readonly ConvexAgentContextMessage[]
 }
 
@@ -178,11 +176,9 @@ interface ProfileBackedAgentLifecycleCommonConfig<TPrompt extends AnyConvexPromp
   readonly name?: string
   /** Crux prompt resolved for each turn. */
   readonly prompt: TPrompt
-  /** Default token budget for prompt resolution. */
-  readonly tokenBudget?: number
   /** Extra tools added to every turn after prompt-resolved tools. */
   readonly tools?: Record<string, unknown>
-  /** Per-turn hook that can override prompt input, contexts, tools, and budget. */
+  /** Per-turn hook that can override prompt input, contexts, and tools. */
   readonly prepare?: (
     args: ConvexAgentPrepareArgs<TPrompt>,
   ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>

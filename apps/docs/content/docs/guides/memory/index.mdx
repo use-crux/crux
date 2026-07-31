@@ -1,12 +1,12 @@
 ---
 title: Memory
-description: Compose reusable memory blocks for recent context, working state, episodes, facts, procedures, and custom agent memory.
+description: Compose reusable working state, episodes, facts, procedures, and custom agent memory.
 ---
 
 Every request to your agent starts from a blank slate: the model forgets the conversation, the task in progress, and everything it learned about the user. A useful agent needs several kinds of state, from the last few messages to a typed scratchpad, searchable events, durable facts, and learned operating procedures. Crux keeps those concerns separate as blocks, then composes them with `memory()`. Start with the two most common blocks:
 
 ```ts
-import { memory, recentMessages, workingState } from "@use-crux/core/memory";
+import { memory, workingState } from "@use-crux/core/memory";
 import { z } from "zod";
 
 const userMemory = memory({
@@ -14,7 +14,6 @@ const userMemory = memory({
   records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
     workingState({
       id: "state",
       schema: z.object({
@@ -65,11 +64,13 @@ Catalog and Runs answer different questions about capture:
 
 A configured `deferred` mode can therefore appear as `inline-fallback` in Runs. That means no retained host accepted the work, so Crux preserved the capture by running and awaiting it inline. `eval-captured` means Eval recorded the deferred intent without running memory hooks.
 
-Capture lifecycle evidence is deliberately payload-free. It retains the authored memory id, lifecycle enums, counts, duration, and an optional stable failure code—not messages, tool payloads, namespaces, raw errors, or stacks. Storage work remains visible in nested `memory.write` spans under `memory.capture`.
+Capture lifecycle evidence is deliberately payload-free. It retains the authored memory id, lifecycle enums, counts, duration, and an optional stable failure code. It does not retain messages, tool payloads, namespaces, raw errors, or stacks. Storage work remains visible in nested `memory.write` spans under `memory.capture`.
 
 ## How to Think About Blocks
 
-`recentMessages()` is short-term continuity. It keeps the last N messages so the next response has enough local context without dragging in the full transcript.
+Conversation history is canonical request input rather than mutable memory.
+Use `history.recent()` or managed `history()` from `@use-crux/core` to project
+it without giving a MemoryBlock ownership of the transcript.
 
 `workingState()` is task state. It is one typed value, validated by Zod, that the application or agent can overwrite as the task progresses.
 
@@ -91,7 +92,6 @@ import {
   facts,
   memory,
   procedures,
-  recentMessages,
   workingState,
 } from "@use-crux/core/memory";
 import { z } from "zod";
@@ -103,7 +103,6 @@ const userMemory = memory({
   capture: { mode: "deferred" },
   budget: { maxTokens: 1200 },
   blocks: [
-    recentMessages({ id: "recent", maxMessages: 12, priority: 80 }),
     workingState({
       id: "state",
       priority: 90,

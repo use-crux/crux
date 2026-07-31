@@ -66,7 +66,7 @@ describe("exact prompt preview protocol", () => {
     ).toThrow();
   });
 
-  it("accepts exact scalar and numeric request bounds and rejects overflow", () => {
+  it("accepts exact scalar request bounds and rejects overflow", () => {
     const request = {
       type: "command.request",
       commandId: "c".repeat(128),
@@ -78,7 +78,6 @@ describe("exact prompt preview protocol", () => {
         options: {
           provider: "p".repeat(128),
           modelId: "m".repeat(256),
-          tokenBudget: 1_000_000,
         },
       },
       deadlineMs: 30_000,
@@ -107,16 +106,6 @@ describe("exact prompt preview protocol", () => {
           options: {
             ...request.payload.options,
             modelId: `${request.payload.options.modelId}m`,
-          },
-        },
-      },
-      {
-        ...request,
-        payload: {
-          ...request.payload,
-          options: {
-            ...request.payload.options,
-            tokenBudget: 1_000_001,
           },
         },
       },

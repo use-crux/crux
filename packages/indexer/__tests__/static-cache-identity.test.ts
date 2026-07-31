@@ -52,8 +52,8 @@ describe("static cache identity", () => {
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v81");
   });
 
-  it("takes the combined PromptText and execution-evidence epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v39");
+  it("takes the context-planning semantic epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v40");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

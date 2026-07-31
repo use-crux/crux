@@ -82,7 +82,11 @@ func (s *Service) Dispatch(
 		if json.Unmarshal(response.Result, &result) != nil {
 			return browserError("invalid_response", nil)
 		}
-		inspection, err := json.Marshal(result.Inspection)
+		projectedPreview, err := json.Marshal(result.Preview)
+		if err != nil {
+			return browserError("internal_error", nil)
+		}
+		contributions, err := json.Marshal(result.Contributions)
 		if err != nil {
 			return browserError("internal_error", nil)
 		}
@@ -93,7 +97,8 @@ func (s *Service) Dispatch(
 				Environment: response.PeerEnvironment,
 			},
 			CatalogueRevision: response.CatalogueRevision,
-			Inspection:        inspection,
+			Preview:           projectedPreview,
+			Contributions:     contributions,
 		}
 	case "validation-error":
 		var result preview.ValidationResult

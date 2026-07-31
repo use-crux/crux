@@ -19,6 +19,7 @@ export type ToolOwnerLabel =
   | `context[${number}]`
   | `contributor:${string}`
   | `blackboard:${string}`
+  | 'request support'
   | 'prompt config'
 
 /**

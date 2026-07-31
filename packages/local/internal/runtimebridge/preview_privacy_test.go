@@ -26,10 +26,9 @@ func TestPreviewEventsAndLogsExcludeSensitivePayloads(t *testing.T) {
 		}
 		result := `{"type":"command.result","commandId":"` + request.CommandID + `","result":{
 			"status":"ready","targetId":"prompt:secret-target","catalogueRevision":1,
-			"inspection":{"system":{"text":"private-output","tokens":1,"coverage":"complete",
-			"parts":[{"source":"private-source","text":"private-output","tokens":1,
-			"skipped":false,"segments":[{"kind":"static","startUtf16":0,"endUtf16":14}]}]},
-			"totalTokens":1,"droppedContexts":[],"excludedContexts":[]}}}`
+			"preview":{"status":"fits","model":"private-output","measurement":"exact",
+			"adaptations":[],"warnings":[],"diagnostics":[{"id":"private-source",
+			"code":"private","message":"private-output"}]},"contributions":[]}}`
 		return service.HandlePeerMessage(peer.PeerID, []byte(result))
 	})
 

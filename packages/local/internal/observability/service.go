@@ -400,11 +400,38 @@ type RunDetailRequest struct {
 	BasePrompt     *RunDetailRequestBasePrompt     `json:"basePrompt,omitempty"`
 	UserPrompt     *RunDetailPromptTextUserPrompt  `json:"userPrompt,omitempty"`
 	Messages       *RunDetailRequestMessages       `json:"messages,omitempty"`
+	Plan           *RunDetailRequestPlan           `json:"plan,omitempty"`
 	Contributions  []RunDetailRequestContribution  `json:"contributions"`
 	Budget         *RunDetailRequestBudget         `json:"budget,omitempty"`
 	Tools          []RunDetailRequestTool          `json:"tools"`
 	Turns          []RunDetailRequestTurn          `json:"turns,omitempty"`
 	Diagnostics    []string                        `json:"diagnostics,omitempty"`
+}
+
+type RunDetailRequestPlan struct {
+	ArtifactID        string                       `json:"artifactId,omitempty"`
+	RequestID         string                       `json:"requestId"`
+	Model             string                       `json:"model"`
+	InputTokens       *float64                     `json:"inputTokens,omitempty"`
+	MaxInputTokens    *float64                     `json:"maxInputTokens,omitempty"`
+	Measurement       string                       `json:"measurement"`
+	Adaptations       []RunDetailRequestAdaptation `json:"adaptations"`
+	Warnings          []RunDetailRequestWarning    `json:"warnings"`
+	PreviousRequestID string                       `json:"previousRequestId,omitempty"`
+}
+
+type RunDetailRequestAdaptation struct {
+	Contributor       string   `json:"contributor"`
+	Representation    string   `json:"representation"`
+	FullTokens        *float64 `json:"fullTokens,omitempty"`
+	SelectedTokens    *float64 `json:"selectedTokens,omitempty"`
+	SupportRequestID  string   `json:"supportRequestId,omitempty"`
+	SupportRequestIDs []string `json:"supportRequestIds,omitempty"`
+}
+
+type RunDetailRequestWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type RunDetailRequestRepresentative struct {
@@ -454,37 +481,41 @@ type RunDetailRequestMessages struct {
 }
 
 type RunDetailRequestContribution struct {
-	Kind                   string          `json:"kind"`
-	State                  string          `json:"state"`
-	Included               bool            `json:"included"`
-	SourceID               string          `json:"sourceId"`
-	InjectableKind         string          `json:"injectableKind"`
-	Reason                 string          `json:"reason,omitempty"`
-	Branch                 string          `json:"branch,omitempty"`
-	Injects                []string        `json:"injects,omitempty"`
-	Priority               *float64        `json:"priority,omitempty"`
-	SizeBytes              *float64        `json:"sizeBytes,omitempty"`
-	Tokens                 *float64        `json:"tokens,omitempty"`
-	CacheStatus            string          `json:"cacheStatus,omitempty"`
-	CacheKey               string          `json:"cacheKey,omitempty"`
-	CacheAgeMs             *float64        `json:"cacheAgeMs,omitempty"`
-	CacheTTLMS             *float64        `json:"cacheTtlMs,omitempty"`
-	CacheReason            string          `json:"cacheReason,omitempty"`
-	InjectedTools          []string        `json:"injectedTools,omitempty"`
-	Segments               json.RawMessage `json:"segments,omitempty"`
-	StaticTokens           *float64        `json:"staticTokens,omitempty"`
-	DynamicTokens          *float64        `json:"dynamicTokens,omitempty"`
-	FreshnessStatus        string          `json:"freshnessStatus,omitempty"`
-	FreshnessAgeMs         *float64        `json:"freshnessAgeMs,omitempty"`
-	FreshnessMaxAgeMs      *float64        `json:"freshnessMaxAgeMs,omitempty"`
-	FreshnessObservedAt    string          `json:"freshnessObservedAt,omitempty"`
-	FreshnessValidUntil    string          `json:"freshnessValidUntil,omitempty"`
-	FreshnessSourceVersion string          `json:"freshnessSourceVersion,omitempty"`
-	FreshnessReason        string          `json:"freshnessReason,omitempty"`
-	Text                   string          `json:"text,omitempty"`
-	ArtifactID             string          `json:"artifactId,omitempty"`
-	SourceSpanID           string          `json:"sourceSpanId,omitempty"`
-	Order                  int             `json:"order"`
+	Kind                   string                      `json:"kind"`
+	State                  string                      `json:"state"`
+	Included               bool                        `json:"included"`
+	SourceID               string                      `json:"sourceId"`
+	Boundary               string                      `json:"boundary,omitempty"`
+	Representations        []string                    `json:"representations,omitempty"`
+	SelectedRepresentation string                      `json:"selectedRepresentation,omitempty"`
+	Adaptation             *RunDetailRequestAdaptation `json:"adaptation,omitempty"`
+	InjectableKind         string                      `json:"injectableKind"`
+	Reason                 string                      `json:"reason,omitempty"`
+	Branch                 string                      `json:"branch,omitempty"`
+	Injects                []string                    `json:"injects,omitempty"`
+	Priority               *float64                    `json:"priority,omitempty"`
+	SizeBytes              *float64                    `json:"sizeBytes,omitempty"`
+	Tokens                 *float64                    `json:"tokens,omitempty"`
+	CacheStatus            string                      `json:"cacheStatus,omitempty"`
+	CacheKey               string                      `json:"cacheKey,omitempty"`
+	CacheAgeMs             *float64                    `json:"cacheAgeMs,omitempty"`
+	CacheTTLMS             *float64                    `json:"cacheTtlMs,omitempty"`
+	CacheReason            string                      `json:"cacheReason,omitempty"`
+	InjectedTools          []string                    `json:"injectedTools,omitempty"`
+	Segments               json.RawMessage             `json:"segments,omitempty"`
+	StaticTokens           *float64                    `json:"staticTokens,omitempty"`
+	DynamicTokens          *float64                    `json:"dynamicTokens,omitempty"`
+	FreshnessStatus        string                      `json:"freshnessStatus,omitempty"`
+	FreshnessAgeMs         *float64                    `json:"freshnessAgeMs,omitempty"`
+	FreshnessMaxAgeMs      *float64                    `json:"freshnessMaxAgeMs,omitempty"`
+	FreshnessObservedAt    string                      `json:"freshnessObservedAt,omitempty"`
+	FreshnessValidUntil    string                      `json:"freshnessValidUntil,omitempty"`
+	FreshnessSourceVersion string                      `json:"freshnessSourceVersion,omitempty"`
+	FreshnessReason        string                      `json:"freshnessReason,omitempty"`
+	Text                   string                      `json:"text,omitempty"`
+	ArtifactID             string                      `json:"artifactId,omitempty"`
+	SourceSpanID           string                      `json:"sourceSpanId,omitempty"`
+	Order                  int                         `json:"order"`
 }
 
 type RunDetailRequestBudget struct {

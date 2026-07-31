@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { createCruxConvex, prompt, type ConvexCtxPort } from '../src'
 import { convexAgent } from '../src/agent'
-import { inMemoryRecordStore, memory, memoryBlock, recentMessages } from '../src/memory'
+import { inMemoryRecordStore, memory, memoryBlock } from '../src/memory'
 import { convexRuntimeRecords, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../src/runtime'
 import { context } from '../src/context'
 import { tool } from '../src/tools'
@@ -781,7 +781,19 @@ describe('Convex profile runtime', () => {
       return {} as never
     } as never)
 
-    const captureMemory = memory({ id: 'capture-mem', blocks: [recentMessages({ id: 'recent' })] })
+    const captureMemory = memory({
+      id: 'capture-mem',
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          captureTurn: async (turn, context) => {
+            await context.records.put('captured-turn', {
+              messages: turn.messages.map((message) => message.content),
+            })
+          },
+        }),
+      ],
+    })
     const basePrompt = prompt({
       id: 'capture-agent',
       input: z.object({}),

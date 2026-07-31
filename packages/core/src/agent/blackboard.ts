@@ -13,7 +13,7 @@ import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import { inMemoryRecordStore } from '../storage'
-import { contextWithFamily } from '../prompt/context'
+import { contextWithFullPromptInput } from '../prompt/context'
 import { observe } from '../observability'
 import { blackboardDefinitionRef } from '../observability/definition-ref'
 import { registerInspectableResource } from '../runtime-bridge/resources'
@@ -22,6 +22,12 @@ import {
   nativeEvidenceArtifactRef,
   recordNativeEvidence,
 } from '../evidence/internal'
+import {
+  CONTROL_RESOURCE_RUNTIME,
+  CONTROL_RESOURCE_TYPE,
+  type ControlReadable,
+} from '../request/prepare/resources'
+import { readPinnedPreparationResource } from '../request/prepare/pin-context'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -72,7 +78,7 @@ export interface BlackboardConfig<T extends z.ZodObject<z.ZodRawShape>> {
 }
 
 /** A blackboard instance with field-level read/write + context/tool bridges. */
-export interface Blackboard<T> {
+export interface Blackboard<T> extends ControlReadable<Partial<T>> {
   /** Discriminant tag for prompt `use` integration. */
   readonly _tag: 'Blackboard'
   /** The unique identifier for this blackboard. */
@@ -339,6 +345,11 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
   const board: Blackboard<State> = {
     _tag: 'Blackboard',
     id: config.id,
+    [CONTROL_RESOURCE_TYPE]: (value) => value,
+    [CONTROL_RESOURCE_RUNTIME]: {
+      kind: 'blackboard',
+      read: getAll,
+    },
 
     get: async <K extends keyof State & string>(field: K): Promise<State[K] | undefined> => {
       return observe.span(
@@ -442,12 +453,13 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     asContext(options?: BlackboardContextOptions): Context<z.ZodType<{}>> {
       const priority = options?.priority ?? 70
 
-      return contextWithFamily({
+      return contextWithFullPromptInput({
         id: `blackboard:${config.id}`,
         description: `Blackboard: ${config.id}`,
         priority,
-        system: async () => {
-          const state = await rawGetAll()
+        system: async ({ input }) => {
+          const pinned = readPinnedPreparationResource(input, board)
+          const state = pinned ? await pinned : await rawGetAll()
           if (!state || Object.keys(state).length === 0) return ''
           return `## Shared Blackboard (${config.id})\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\``
         },

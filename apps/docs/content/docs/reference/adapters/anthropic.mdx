@@ -24,6 +24,33 @@ import {
   guide](/docs/guides/prompts/execution).
 </Callout>
 
+## Request capacity and counting
+
+The adapter exposes `adapter.capacity(model)` and the standalone
+`anthropicModelCapacity(model)` helper. Both return a frozen profile without
+provider I/O.
+
+```ts
+import { anthropicModelCapacity } from "@use-crux/anthropic";
+
+const profile = anthropicModelCapacity(modelId);
+```
+
+Known prefix profiles cover the instant and 2-series families, the 2.1 family,
+the 3-series family including 3.5 and 3.7, and the 4-series Opus, Sonnet, and
+Haiku families. Versioned aliases inherit the matching family profile. Their
+context windows range from 100,000 to 200,000 tokens, with an output reserve
+chosen for that family.
+
+Unknown identifiers use a conservative 100,000-token window with an
+8,192-token default output reserve. Known profiles report
+`countingConfidence: "estimated"`; the fallback reports `"conservative"`.
+
+The adapter does not call a provider counting endpoint. Crux estimates the
+complete request and exposes the applied confidence and margin through request
+inspection. Set `inputBudget` when your application needs a stricter input
+boundary.
+
 ### `createAnthropic(client)`
 
 Create an adapter bound to an Anthropic client.
@@ -239,10 +266,7 @@ This helper uses the same native chat profile and media codec as
 `createAnthropic()`. It accepts exactly one of `prompt` or canonical
 `messages`, uses Anthropic's structured parse surface, and returns `{ object }`
 while preserving provider errors. It does not run Crux prompt resolution,
-validation retry, safety, tools, memory capture, or instrumentation. Use
-`createGenerateObjectFnFromGenerate(generate)` from
-`@use-crux/core/compaction` only when full adapter runtime behavior is needed;
-do not call that bridge from a guardrail attached to the same lifecycle.
+validation retry, safety, tools, memory capture, or instrumentation.
 
 ### `createGenerateTextFn(client, model)`
 

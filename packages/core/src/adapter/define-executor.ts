@@ -38,6 +38,8 @@ import type {
   ExecutorStreamOptions,
   ExecutorStreamResult,
 } from "./executor-contracts";
+import { mergeInputBudget } from "../request/budget/input-budget";
+import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 
 export type {
   CruxExecutor,
@@ -166,7 +168,8 @@ export function loopRuntimeAdapter<
       nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
-      tokenBudget: opts.tokenBudget,
+      inputBudget: opts.inputBudget,
+      prepareStep: opts.prepareStep,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -240,7 +243,8 @@ export function loopRuntimeAdapter<
       nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
-      tokenBudget: opts.tokenBudget,
+      inputBudget: opts.inputBudget,
+      prepareStep: opts.prepareStep,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -267,6 +271,9 @@ export function loopRuntimeAdapter<
       routing: agentRoutingContext(agent, getExecutionContext()),
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
+      inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
+      prepareStep: options.prepareStep ?? agent.prepareStep,
+      activeTools: options.activeTools,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
     } as unknown as ExecutorGenerateOptions<TModel>;
 
@@ -277,6 +284,9 @@ export function loopRuntimeAdapter<
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
       usage: result._meta.usage,
+      requests: Object.freeze(
+        result.steps.flatMap((step) => (step.request ? [step.request] : [])),
+      ),
     };
   };
 
@@ -284,6 +294,13 @@ export function loopRuntimeAdapter<
 
   return Object.freeze({
     executorId: port.id,
+    capacity: (model: TModel) => {
+      const info = port.describeModel(model);
+      return resolveModelCapacityProfile(
+        info.modelId,
+        port.capacity ? () => port.capacity!(info) : undefined,
+      );
+    },
     generate,
     stream: streamFn,
     parallel: compositions.parallel,

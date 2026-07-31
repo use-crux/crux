@@ -20,6 +20,7 @@
  */
 
 export { createOpenAI, openaiProviderRuntime } from "./native";
+export { openAIModelCapacity } from "./capacity";
 export { fromResponse, toParams } from "./codec";
 export type { OpenAICodecOptions } from "./codec";
 export type {

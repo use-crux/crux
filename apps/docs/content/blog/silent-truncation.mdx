@@ -23,29 +23,34 @@ When a prompt doesn't fit, something must be cut. Dropping is unavoidable. But *
 
 Try this on your own stack: if your prompt had to lose 500 tokens right now, what would go? If you can't answer, the answer is "whatever happens to be in the wrong place." One day that will be the compliance disclaimer instead of the third example.
 
-## Declaring a drop order
+## Declaring a representation ladder
 
-A deliberate policy inverts this. Every piece of context declares how expendable it is:
+A deliberate policy inverts this. Context stays exact and required unless its author explicitly declares a lower-fidelity representation:
 
 ```ts
-import { prompt, context } from '@use-crux/core'
+import { context, droppable, prefer, prompt } from '@use-crux/core'
 import { generate } from '@use-crux/ai'
 
 const rules = context({ id: 'rules', priority: 100, system: CRITICAL_RULES })
 const guidelines = context({ id: 'guidelines', priority: 50, system: STYLE_GUIDE })
+const compactGuidelines = context({ id: 'guidelines-compact', system: STYLE_SUMMARY })
 const examples = context({ id: 'examples', priority: 20, system: FEW_SHOT })
 
 const reply = prompt({
-  use: [rules, examples, guidelines],
+  use: [rules, prefer(guidelines, compactGuidelines), droppable(examples)],
   system: 'You are a support assistant.',
 })
 
-const result = await generate(reply, { model, input, tokenBudget: 2000 })
+const result = await generate(reply, {
+  model,
+  input,
+  inputBudget: { optimizeAt: 1800, max: 2000 },
+})
 ```
 
-Under pressure, Crux drops the lowest-priority contexts first until the total fits. `examples` goes, then `guidelines`. `rules` outlives both, regardless of the order they appear in `use`.
+Under pressure, Crux may omit `examples` or use the compact authored guidelines. `rules` has no lossy representation, so it remains exact and required regardless of where it appears in `use`. If no complete legal candidate fits the strict maximum, Crux fails before provider dispatch instead of truncating.
 
-Two things are never dropped: the prompt's own system text, and provider-cached prefixes. Evicting a cached prefix would poison the cache and cost more than it saves. That points at a useful interaction between the two mechanisms. Stable blocks marked `cache: true` join a protected prefix *and* earn provider cache discounts, while volatile blocks compete by priority in the droppable tail. Structure prompts as a stable cached head plus a volatile prioritized tail and you get graceful degradation and cheaper tokens from the same declaration.
+`priority` orders legal fidelity choices; it does not make a plain context droppable. Capabilities stay attached when a contributor switches to an authored alternative, summary, or exact-recovery reference. An outer `droppable()` is different: it authorizes removal of the whole contributor, including capabilities owned by it. That distinction keeps prose pressure from silently changing what the model can do.
 
 ## Excluded, dropped, or stale?
 
@@ -54,10 +59,10 @@ Once dropping is deliberate, it pays to distinguish the ways context can legitim
 | The context is missing because... | Mechanism | The fix lives in |
 | --- | --- | --- |
 | It wasn't relevant to this request | Conditional exclusion (`when`/`match`), evaluated before resolution | Your predicate |
-| It was relevant but didn't fit | Budget dropping: resolved, then cut by priority | Your priorities or budget |
+| It was relevant but a lower-fidelity form was selected | Request planning: resolved, measured, then selected from an authorized ladder | Your ladder, priorities, or budget |
 | It was present but outdated | Freshness rejection | Your sync/refresh path |
 
-The distinction is not academic, because the mechanisms behave differently. An excluded context's resolver never runs: no wasted work, no tools contributed. A budget-dropped context *was* resolved, and any tools it contributes survive the drop. Dropping prose shouldn't silently disarm capabilities.
+The distinction is not academic, because the mechanisms behave differently. An excluded context's resolver never runs: no wasted work, no tools contributed. Request planning happens after resolution and measures the complete provider request. Representation changes keep owned capabilities sticky; complete omission is possible only when `droppable()` explicitly authorizes removing the whole contribution.
 
 Collapsing all of these into one undifferentiated "not in the prompt" is why truncation debugging is guesswork. Keeping them separate makes it a lookup.
 
@@ -65,18 +70,31 @@ Collapsing all of these into one undifferentiated "not in the prompt" is why tru
 
 Dropping can be acceptable. Silent dropping never is. Every drop should leave a record with a reason, before and after the call.
 
-Before the call, inspect the arbitration for any input:
+Before the call, preview the arbitration for any input without executing a provider or preparing new artifacts:
 
 ```ts
-const inspection = reply.inspect({ input, tokenBudget: 2000 })
+import { preview } from '@use-crux/core'
 
-inspection.droppedContexts   // [{ id: 'examples', reason: 'budget', ... }]
-inspection.excludedContexts  // predicate-excluded, with which predicate
+const prospective = await preview(reply, {
+  model,
+  input,
+  inputBudget: { optimizeAt: 1800, max: 2000 },
+})
+
+console.log(prospective.status, prospective.adaptations)
 ```
 
-After the call, the same evidence lands in the trace. In Crux devtools, a turn's Explain view lists every withheld candidate under "Checked but not sent" (dropped for budget, predicate false, stale rejected) next to what was sent, with token counts.
+After the call, the executed receipt carries the exact decision:
 
-The debugging session for "the assistant ignored the style guide" becomes: open the turn, see `guidelines — dropped (budget)`, done.
+```ts
+const receipt = result.steps[0].request
+console.log(receipt.adaptations)
+const inspection = await receipt.inspect()
+```
+
+The same redacted evidence lands in the trace. In Crux devtools, a turn's Context and Explain views list what was sent, which representation was selected, and every withheld candidate with token counts and reason states.
+
+The debugging session for "the assistant ignored the style guide" becomes: open the turn and find `guidelines: authored alternative`.
 
 ## Getting the counts right
 
@@ -94,7 +112,7 @@ config({
 
 And leave headroom for output. The budget governs input; generation needs its own reserve. A prompt that consumes the whole window leaves the model nothing to answer with, and some providers fail that request in ways that look like model errors rather than budget errors.
 
-For conversation history specifically, budget-dropping is the wrong tool. Evicting the oldest messages wholesale loses the thread. That is what compaction is for: summarize the old turns into a compact block, keep the recent ones verbatim, and let the summary compete for budget as one unit. Use budgets for *composition* pressure and compaction for *history* pressure.
+For conversation history specifically, arbitrary budget dropping is the wrong tool. Use `history.recent()` for a causal-group-safe exact suffix, or managed `history()` to derive a summary while preserving recent turns verbatim. Canonical messages remain unchanged either way. Use representation ladders for *composition* pressure and history policies for *transcript* pressure.
 
 ## Then pin it in CI
 
@@ -125,6 +143,6 @@ When next quarter's "add more examples" PR pushes the worst case over budget in 
 
 Silent truncation isn't really a context-window problem. Windows keep growing; prompts grow faster. It's an accountability problem: prompts get cut by code that doesn't record what it cut.
 
-Declare the drop order. Record every drop with its reason. Assert the invariants you can't afford to lose. The window can stay finite. The mystery shouldn't.
+Declare the legal representation ladder. Record every adaptation with its reason. Assert the invariants you can't afford to lose. The window can stay finite. The mystery shouldn't.
 
-Token budgets, priorities, and caching: [cruxjs.dev/docs/guides/contexts](https://cruxjs.dev/docs/guides/contexts). Crux is open source and alpha.
+Whole-request budgets and representation ladders: [cruxjs.dev/docs/guides/context-planning](https://cruxjs.dev/docs/guides/context-planning). Crux is open source and alpha.

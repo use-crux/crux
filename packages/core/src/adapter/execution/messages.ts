@@ -14,6 +14,18 @@ import type { AssistantContentPart } from "../../types/content";
 import { replaceTextSlots } from "./stream-content";
 import type { AdapterResponse } from "../types";
 import { responseContent } from "../assistant-output";
+import {
+  invalidHistoryComposition,
+  projectRecentHistory,
+} from "../../request/history/recent";
+import type {
+  HistoryProjection,
+  ManagedHistoryProjection,
+  RecentHistoryProjection,
+  RequestHistoryContext,
+} from "../../request/history/source";
+import { callerOwnedHistorySource } from "../../request/history/source";
+import type { RequestWarning } from "../../request/receipt/adaptations";
 
 /** Internal ownership of the canonical messages selected for initial delivery. */
 export type InitialMessageSource =
@@ -28,6 +40,7 @@ export interface InitialMessageState {
   readonly messages: Message[];
   readonly promptText: string | undefined;
   readonly source: InitialMessageSource;
+  readonly history: RequestHistoryContext | undefined;
 }
 
 /**
@@ -63,30 +76,80 @@ export function initialMessageState(
   resolved: {
     readonly prompt?: string;
     readonly messages?: readonly unknown[];
+    readonly historyProjection?: HistoryProjection;
   },
   messages?: Message[],
   nativeMessages?: readonly unknown[],
 ): InitialMessageState {
   const history: Message[] = [...(messages ?? [])];
+  const callerMessagesPresent = history.length > 0;
+  if (
+    resolved.historyProjection &&
+    !callerMessagesPresent &&
+    !resolved.messages &&
+    (!nativeMessages || nativeMessages.length === 0)
+  ) {
+    throw invalidHistoryComposition(
+      "The history projection has no history source. Supply caller-owned messages or remove the projection.",
+    );
+  }
   if (nativeMessages && nativeMessages.length > 0) {
+    if (resolved.historyProjection && history.length === 0) {
+      throw invalidHistoryComposition(
+        "History projection requires canonical caller-owned messages; provider-native history cannot be projected before normalization.",
+      );
+    }
+    const selected = applyHistoryProjection(
+      history,
+      resolved.historyProjection,
+    );
     return {
-      messages: history,
+      messages: selected.messages,
       promptText: undefined,
       source: "native-history",
+      history:
+        history.length > 0
+          ? {
+              source: "caller-messages",
+              policy: historyPolicy(resolved.historyProjection),
+              ...(managedProjection(resolved.historyProjection)
+                ? { projection: resolved.historyProjection }
+                : {}),
+              warnings: selected.warnings,
+              changed: selected.messages.length !== history.length,
+            }
+          : undefined,
     };
   }
   let promptText: string | undefined;
-  let source: InitialMessageSource = history.length
+  let source: InitialMessageSource = callerMessagesPresent
     ? "explicit-history"
     : "empty";
-  if (history.length === 0 && resolved.prompt) {
+  if (!callerMessagesPresent && resolved.prompt) {
     promptText = resolved.prompt;
     source = "resolved-prompt";
-  } else if (history.length === 0 && resolved.messages) {
+  } else if (!callerMessagesPresent && resolved.messages) {
     history.push(...(resolved.messages as Message[]));
     source = "resolved-messages";
   }
-  return { messages: history, promptText, source };
+  const selected = applyHistoryProjection(history, resolved.historyProjection);
+  return {
+    messages: selected.messages,
+    promptText,
+    source,
+    history:
+      source === "explicit-history" || source === "resolved-messages"
+        ? {
+            source: "caller-messages",
+            policy: historyPolicy(resolved.historyProjection),
+            ...(managedProjection(resolved.historyProjection)
+              ? { projection: resolved.historyProjection }
+              : {}),
+            warnings: selected.warnings,
+            changed: selected.messages.length !== history.length,
+          }
+        : undefined,
+  };
 }
 
 /**
@@ -99,21 +162,78 @@ export function initialCoreMessageState(
   resolved: {
     readonly prompt?: string;
     readonly messages?: readonly unknown[];
+    readonly historyProjection?: HistoryProjection;
   },
   messages?: Message[],
 ): InitialMessageState {
   const history: Message[] = [...(messages ?? [])];
-  let source: InitialMessageSource = history.length
+  const callerMessagesPresent = history.length > 0;
+  if (
+    resolved.historyProjection &&
+    !callerMessagesPresent &&
+    !resolved.messages
+  ) {
+    throw invalidHistoryComposition(
+      "The history projection has no history source. Supply caller-owned messages or remove the projection.",
+    );
+  }
+  let source: InitialMessageSource = callerMessagesPresent
     ? "explicit-history"
     : "empty";
-  if (history.length === 0 && resolved.prompt) {
+  if (!callerMessagesPresent && resolved.prompt) {
     history.push({ role: "user", content: resolved.prompt });
     source = "resolved-prompt";
-  } else if (history.length === 0 && resolved.messages) {
+  } else if (!callerMessagesPresent && resolved.messages) {
     history.push(...(resolved.messages as Message[]));
     source = "resolved-messages";
   }
-  return { messages: history, promptText: undefined, source };
+  const selected = applyHistoryProjection(history, resolved.historyProjection);
+  return {
+    messages: selected.messages,
+    promptText: undefined,
+    source,
+    history:
+      source === "explicit-history" || source === "resolved-messages"
+        ? {
+            source: "caller-messages",
+            policy: historyPolicy(resolved.historyProjection),
+            ...(managedProjection(resolved.historyProjection)
+              ? { projection: resolved.historyProjection }
+              : {}),
+            warnings: selected.warnings,
+            changed: selected.messages.length !== history.length,
+          }
+        : undefined,
+  };
+}
+
+function applyHistoryProjection(
+  messages: readonly Message[],
+  projection: HistoryProjection | undefined,
+): {
+  readonly messages: Message[];
+  readonly warnings: readonly RequestWarning[];
+} {
+  if (!projection || projection._tag === "HistoryManaged") {
+    return { messages: [...messages], warnings: [] };
+  }
+  return projectRecentHistory(
+    callerOwnedHistorySource(messages),
+    projection,
+  );
+}
+
+function managedProjection(
+  projection: HistoryProjection | undefined,
+): projection is ManagedHistoryProjection {
+  return projection?._tag === "HistoryManaged";
+}
+
+function historyPolicy(
+  projection: HistoryProjection | undefined,
+): RequestHistoryContext["policy"] {
+  if (!projection) return "exact";
+  return projection._tag === "HistoryManaged" ? "managed" : "recent";
 }
 
 /**

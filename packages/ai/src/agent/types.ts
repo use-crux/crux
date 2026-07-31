@@ -12,9 +12,7 @@ import type { SkillActivationSession } from '@use-crux/core/skill'
  */
 export type AgentResolveOptions<TOwnInput extends z.ZodType, TContexts extends readonly ContextEntry[]> = {
   /** The AI SDK language model instance returned to the agent framework. */
-  model: LanguageModelV3
-  /** Optional token budget for system message composition. */
-  tokenBudget?: number
+  model: LanguageModelV3;
   /**
    * Tool names registered with the agent framework.
    *

@@ -21,6 +21,8 @@ import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { AnyToolSet } from "../types";
 import type { InternalInjectableEntry } from "./internal-injection";
 import type { ToolSource } from "../tools/tool-source";
+import type { HistoryProjection } from "../request/history/source";
+import type { RepresentationEntry } from "../request/representation/ladder-types";
 import type { PromptText } from "../prompt-text";
 
 // ─────────────────────────────────────────────────────────────────
@@ -307,6 +309,8 @@ export type ContextEntry =
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
   | ToolSource
+  | HistoryProjection
+  | RepresentationEntry
   | false
   | null
   | undefined;

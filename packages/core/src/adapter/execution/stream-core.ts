@@ -62,6 +62,27 @@ import { withDefaultResolverPorts } from "../../resolver/ports";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
+import { sealRequest } from "../../request/planner/seal";
+import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
+import { coreHistorySummaryGenerator } from "./history-summary";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
+import { recordRequestRetryCount } from "../../request/receipt/receipt";
+import {
+  createPrepareStepState,
+  recordPrepareStepOutcome,
+  runPrepareStep,
+} from "../../request/prepare/step";
+import { resolveExecutionAmendment } from "../../request/prepare/amendment";
+import {
+  createPreparationResources,
+  preparationResourceReads,
+} from "../../request/prepare/resources";
+import { commitPreparationDecision } from "../../request/prepare/journal";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -95,12 +116,13 @@ export async function streamCore<
     input: args.input,
     provider: args.provider ?? modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
   const initialMessages = initialCoreMessageState(resolved, args.messages);
+  const representationEpoch = createRequestRepresentationEpoch();
+  const prepareStepState = createPrepareStepState();
   let messages = initialMessages.messages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -123,6 +145,8 @@ export async function streamCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -148,6 +172,7 @@ export async function streamCore<
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
 
   try {
     const lifecycle = createToolLifecycle({
@@ -240,6 +265,145 @@ export async function streamCore<
       tools,
       extra: (args.extra ?? {}) as TExtra,
     };
+    const generateHistorySummary = coreHistorySummaryGenerator(
+      dialect,
+      (supportRequest) =>
+        dialect.call(dialect.client, supportRequest, {
+          signal: args.signal,
+        }),
+    );
+    let lastStreamReceipt:
+      | import("../../request/receipt/receipt").RequestReceipt
+      | undefined;
+    const sealStreamRequest = async (
+      request: CallArgs<TExtra>,
+      previousRequestId?: string,
+    ) => {
+      const resources = args.prepareStep
+        ? createPreparationResources({
+            entries: prompt.contexts,
+            requestInput: args.input ?? {},
+            promptId: prompt.id,
+          })
+        : undefined;
+      const amendment = resources
+        ? await runPrepareStep({
+            callback: args.prepareStep,
+            state: prepareStepState,
+            requestInput: args.input ?? {},
+            reason: previousRequestId ? "validation-retry" : "initial",
+            previousReceipt: lastStreamReceipt,
+            messages: request.messages,
+            resources,
+            signal: args.signal,
+          })
+        : undefined;
+      const boundary = resources
+        ? await resolveExecutionAmendment({
+            prompt,
+            resolveOptions: resolveOpts,
+            baseline: resolved,
+            amendment,
+            model: modelInfo.modelId,
+            inputBudget: args.inputBudget,
+            baselineActiveTools: args.activeTools,
+            resources,
+          })
+        : {
+            resolved,
+            model: modelInfo.modelId,
+            inputBudget: args.inputBudget,
+            activeTools: args.activeTools,
+          };
+      if (resources) await lifecycle.rearm(boundary.resolved);
+      const boundaryRequest: CallArgs<TExtra> = {
+        ...request,
+        model: boundary.model,
+        system:
+          boundary.resolved === resolved
+            ? currentSystem
+            : boundary.resolved.system,
+        systemBlocks:
+          boundary.resolved === resolved
+            ? currentSystemBlocks
+            : boundary.resolved.systemBlocks,
+        schema: boundary.resolved.schema,
+        settings:
+          boundary.resolved === resolved
+            ? mappedSettings
+            : dialect.mapSettings(boundary.resolved.settings),
+        tools: selectStreamDescriptors(
+          lifecycle.descriptors,
+          boundary.activeTools,
+        ),
+      };
+      const next = await sealRequest({
+        provider: modelInfo.provider,
+        model: boundary.model,
+        request: boundaryRequest,
+        settings: boundary.resolved.settings,
+        inputBudget: boundary.inputBudget,
+        capacity: dialect.capacity,
+        countTokens: dialect.countTokens
+          ? (candidate) => dialect.countTokens!(dialect.client, candidate)
+          : undefined,
+        media: dialect.media,
+        previousRequestId,
+        history: initialMessages.history,
+        generateHistorySummary,
+        representations: boundary.resolved.representations,
+        representationEpoch,
+        prepareRequest: (candidate, selections) => {
+          selectRepresentationCapabilities(
+            safety,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationSkills(
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationMiddleware(
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          return guardRepresentedRequest(safety, candidate);
+        },
+        applyRepresentationSelection: async (selections) => {
+          selectRepresentationCapabilities(
+            safety,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationSkills(
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          selectRepresentationMiddleware(
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
+            selections,
+          );
+          await lifecycle.rearm(boundary.resolved);
+        },
+      });
+      if (resources) {
+        commitPreparationDecision({
+          receipt: next.receipt,
+          requestId: next.receipt.id,
+          stepIndex: prepareStepState.index - 1,
+          reason: previousRequestId ? "validation-retry" : "initial",
+          amendment,
+          resources: preparationResourceReads(resources),
+        });
+      }
+      lastStreamReceipt = next.receipt;
+      return next;
+    };
+    const sealed = await sealStreamRequest(callArgs);
 
     // Resolved BEFORE the provider stream is observed: `token.chunk` telemetry must
     // know whether these deltas belong to an attempt a gate can still discard.
@@ -281,11 +445,10 @@ export async function streamCore<
             provider: modelInfo.provider,
             model: modelInfo.modelId,
             media: dialect.media,
-            tokenBudget: args.tokenBudget,
           });
           const providerHandle = await withBudget(
             (signal) =>
-              dialect.stream(dialect.client, callArgs, {
+              dialect.stream(dialect.client, sealed.request, {
                 signal: composeAbortSignals(callerSignal, signal),
               }),
             {
@@ -300,7 +463,24 @@ export async function streamCore<
             });
           });
           providerRawStream = providerHandle.raw ?? providerHandle.rawStream;
-          return providerHandle;
+          return {
+            ...providerHandle,
+            completion: async () => {
+              const completion = await providerHandle.completion();
+              recordPrepareStepOutcome(prepareStepState, {
+                usage: completion?.usage,
+                transportRetries: completion?.transportRetries,
+              });
+              recordRequestRetryCount(
+                sealed.receipt,
+                completion?.transportRetries,
+              );
+              return {
+                ...completion,
+                request: sealed.receipt,
+              };
+            },
+          };
         },
       ),
     );
@@ -321,6 +501,8 @@ export async function streamCore<
             handle,
             providerRawStream,
             callArgs,
+            initialRequest: sealed.receipt,
+            sealAttempt: sealStreamRequest,
             safety,
             ...(resolved.schema ? { schema: resolved.schema } : {}),
             messages,
@@ -482,4 +664,17 @@ export async function streamCore<
     await sourceSession.close();
     throw error;
   }
+}
+
+function selectStreamDescriptors(
+  descriptors:
+    | readonly NonNullable<CallArgs<Record<string, unknown>>["tools"]>[number][]
+    | undefined,
+  activeTools: readonly string[] | undefined,
+): CallArgs<Record<string, unknown>>["tools"] {
+  if (!descriptors) return undefined;
+  const selected = activeTools
+    ? descriptors.filter((descriptor) => activeTools.includes(descriptor.name))
+    : descriptors;
+  return selected.length > 0 ? [...selected] : undefined;
 }

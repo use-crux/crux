@@ -15,6 +15,8 @@ import { compileStructuredOutput } from "../structured-output";
 import type { ExecutorRequest } from "../executor-types";
 import type { FakeLoopEmission } from "./fake-loop-runtime";
 import { stepTransformConformance } from "./loop-runtime-step-transform-conformance";
+import { createRequestReceipt } from "../../request/receipt/receipt";
+import { tokenBreakdown } from "../../request/measure/breakdown";
 
 /**
  * How a conformance run programs "model behavior" for the runtime under test.
@@ -53,6 +55,18 @@ function baseRequest<TModel>(
   return {
     model,
     modelInfo: runtime.describeModel(model),
+    planStep: async (step) => ({
+      ...step,
+      receipt: createRequestReceipt({
+        model: step.modelInfo.modelId,
+        inputTokens: 0,
+        maxInputTokens: 1,
+        measurement: "estimated",
+        breakdown: tokenBreakdown([]),
+        safetyMarginTokens: 0,
+        providerOverheadTokens: 0,
+      }),
+    }),
     system: "You are a conformance test.",
     systemBlocks: undefined,
     prompt: "run the conformance scenario",
@@ -313,9 +327,9 @@ export async function loopRuntimePortConformance<TModel>(
   //    Zod schema.
   {
     const schema = z.object({ ok: z.boolean() });
-    const wireSchema = (
-      port: LoopRuntimePort<unknown>,
-      modelRef: unknown,
+    const wireSchema = <TModelRef>(
+      port: LoopRuntimePort<TModelRef>,
+      modelRef: TModelRef,
     ) => {
       const caps = port.structuredOutput?.capabilities(
         port.describeModel(modelRef),

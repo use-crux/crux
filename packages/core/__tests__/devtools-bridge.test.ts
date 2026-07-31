@@ -13,7 +13,7 @@ import {
   RuntimePeerHelloSchema,
 } from '../src/runtime-bridge'
 import { clearInspectableResources } from '../src/runtime-bridge/resources'
-import { memory, recentMessages } from '../src/memory'
+import { memory, memoryBlock } from '../src/memory'
 import { inMemoryRecordStore } from '../src/storage'
 
 class FakeWebSocket {
@@ -418,7 +418,7 @@ describe('devtools runtime bridge contract', () => {
       id: 'project-memory',
       namespace: 'project-1',
       records: store,
-      blocks: [recentMessages({ id: 'recent' })],
+      blocks: [memoryBlock({ id: 'capture', kind: 'custom' })],
     })
     blackboard({ id: 'thread', schema: z.object({ status: z.string().optional() }), records: store })
 

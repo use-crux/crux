@@ -125,14 +125,20 @@ function createSafetySession(
     applicability,
   });
 
-  const constraints = constraintsForMode(registry.bindings, "enforce");
-  const reportConstraints = constraintsForMode(registry.bindings, "report");
+  const allConstraints = constraintsForMode(registry.bindings, "enforce");
+  const allReportConstraints = constraintsForMode(
+    registry.bindings,
+    "report",
+  );
+  const constraints = [...allConstraints];
+  const reportConstraints = [...allReportConstraints];
   const guardrailBindings = enabledGuardrailBindings(registry.bindings);
   const disabledGuardEntries = disabledBindingEntries(registry.bindings);
   const dormantGuardEntries = dormantBindingEntries(registry.bindings);
-  const memoryWriteBindings = guardrailBindings.filter(
+  const allMemoryWriteBindings = guardrailBindings.filter(
     (binding) => binding.boundary.id === "memory.write",
   );
+  const memoryWriteBindings = [...allMemoryWriteBindings];
 
   // Phase dispatch is keyed, not branched — the phase vocabulary can grow
   // (tool-args, tool-result, context-inject) without session surgery.
@@ -146,9 +152,40 @@ function createSafetySession(
     list.push(binding);
     bindingsByPhase.set(phase, list);
   }
+  const activeBindingsByPhase = new Map(
+    [...bindingsByPhase].map(([phase, bindings]) => [phase, [...bindings]]),
+  );
   const phaseBindings = (
     phase: "input" | "output",
-  ): readonly GuardrailBinding[] => bindingsByPhase.get(phase) ?? [];
+  ): readonly GuardrailBinding[] => activeBindingsByPhase.get(phase) ?? [];
+  const selectRepresentationPolicies = (disabledIds: readonly string[]) => {
+    const disabled = new Set(disabledIds);
+    for (const [phase, bindings] of bindingsByPhase) {
+      const active = activeBindingsByPhase.get(phase)!;
+      active.splice(
+        0,
+        active.length,
+        ...bindings.filter((binding) => !disabled.has(binding.policy.id)),
+      );
+    }
+    constraints.splice(
+      0,
+      constraints.length,
+      ...allConstraints.filter((policy) => !disabled.has(policy.id)),
+    );
+    reportConstraints.splice(
+      0,
+      reportConstraints.length,
+      ...allReportConstraints.filter((policy) => !disabled.has(policy.id)),
+    );
+    memoryWriteBindings.splice(
+      0,
+      memoryWriteBindings.length,
+      ...allMemoryWriteBindings.filter(
+        (binding) => !disabled.has(binding.policy.id),
+      ),
+    );
+  };
 
   const enabled =
     constraints.length > 0 ||
@@ -347,6 +384,7 @@ function createSafetySession(
     guardFeedback,
     toolExposureGuards,
     managedMemoryWriteGuard,
+    selectRepresentationPolicies,
   });
   return createScopedSafetySession(options.promptId, session);
 }

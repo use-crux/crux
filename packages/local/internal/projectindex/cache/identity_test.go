@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 57 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Effect-call-site epoch 57", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 58 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want merged Effects/context-planning epoch 58", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -50,9 +50,12 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Effect definitions",
 		"duplicate-identity lints",
 		"runtime-observability identity",
+		"context-planning structure",
 		"Epoch 57",
 		"distinct same-identity Effect call-site evidence",
 		"native analysis",
+		"Epoch 58",
+		"independently versioned Effects and context-planning snapshots",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -63,7 +66,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-57", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-58", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -80,6 +83,14 @@ func TestProjectIndexFactStoreMissesPreEffectDefinitionSnapshotEpoch(t *testing.
 
 func TestProjectIndexFactStoreMissesPreEffectCallSiteSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 56, "pre-Effect-call-site snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 55, "pre-context-planning snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreMergedSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 57, "pre-merged Effects/context-planning snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {

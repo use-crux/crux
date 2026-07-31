@@ -41,88 +41,75 @@ export const PromptPreviewValidationResultSchema = z
   })
   .strict();
 
-/** Half-open UTF-16 provenance relative to its containing text. */
-export const PromptPreviewSegmentSchema = z
+const RequestWarningSchema = z
   .object({
-    kind: z.enum(["static", "dynamic", "unknown"]),
-    startUtf16: z.number().int().nonnegative(),
-    endUtf16: z.number().int().nonnegative(),
-    source: ScalarValidStringSchema.min(1).max(512).optional(),
-    observedAt: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(Number.MAX_SAFE_INTEGER)
-      .optional(),
-    sourceVersion: ScalarValidStringSchema.min(1).max(256).optional(),
+    code: ScalarValidStringSchema.min(1).max(128),
+    message: ScalarValidStringSchema.max(2048),
   })
   .strict();
 
-const PromptPreviewPartSchema = z
+const RequestDiagnosticSchema = z
   .object({
-    source: ScalarValidStringSchema.min(1).max(512),
-    text: ScalarValidStringSchema,
-    tokens: z.number().int().nonnegative(),
-    skipped: z.boolean(),
-    segments: z.array(PromptPreviewSegmentSchema),
-    staticTokens: z.number().int().nonnegative().optional(),
-    dynamicTokens: z.number().int().nonnegative().optional(),
+    id: ScalarValidStringSchema.min(1).max(512),
+    code: ScalarValidStringSchema.min(1).max(128),
+    contributor: ScalarValidStringSchema.max(512).optional(),
+    tokens: z.number().int().nonnegative().optional(),
+    message: ScalarValidStringSchema.max(2048),
   })
   .strict();
 
-const PromptPreviewDroppedContextSchema = z
+const PreviewAdaptationSchema = z
   .object({
-    source: ScalarValidStringSchema.min(1).max(512),
-    text: ScalarValidStringSchema,
-    tokens: z.number().int().nonnegative(),
-    priority: z.number().finite(),
-    segments: z.array(PromptPreviewSegmentSchema),
+    contributor: ScalarValidStringSchema.min(1).max(512),
+    representation: z.enum([
+      "authored",
+      "summary",
+      "offload",
+      "omitted",
+    ]),
+    state: z.enum(["selected", "unprepared"]),
+    fullTokens: z.number().int().nonnegative().optional(),
+    selectedTokens: z.number().int().nonnegative().optional(),
   })
   .strict();
 
-const PromptPreviewExcludedContextSchema = z
+const PreviewContributionSchema = z
   .object({
-    source: ScalarValidStringSchema.min(1).max(512),
-    reason: ScalarValidStringSchema.max(1024),
+    id: ScalarValidStringSchema.min(1).max(512),
+    boundary: z.enum(["required", "sticky", "elastic"]),
+    representations: z
+      .array(
+        z.enum(["full", "authored", "summary", "offload", "omitted"]),
+      )
+      .min(1)
+      .max(5),
   })
   .strict();
 
-/** Exact, bounded projection of canonical `Prompt.inspect()`. */
+/** Exact, bounded projection of observational request preview. */
 export const PromptPreviewReadyResultSchema = z
   .object({
     status: z.literal("ready"),
     targetId: ScalarValidStringSchema.min(1).max(512),
     catalogueRevision: PromptPreviewCatalogueRevisionSchema,
-    inspection: z
+    preview: z
       .object({
-        system: z
-          .object({
-            text: ScalarValidStringSchema,
-            tokens: z.number().int().nonnegative(),
-            coverage: z.enum(["complete", "partial"]),
-            parts: z.array(PromptPreviewPartSchema).max(1024),
-          })
-          .strict(),
-        prompt: z
-          .object({
-            text: ScalarValidStringSchema,
-            tokens: z.number().int().nonnegative(),
-            segments: z.array(PromptPreviewSegmentSchema),
-            staticTokens: z.number().int().nonnegative().optional(),
-            dynamicTokens: z.number().int().nonnegative().optional(),
-          })
-          .strict()
-          .optional(),
-        totalTokens: z.number().int().nonnegative(),
-        droppedContexts: z.array(PromptPreviewDroppedContextSchema).max(1024),
-        excludedContexts: z.array(PromptPreviewExcludedContextSchema).max(1024),
-        tokenBudget: z.number().int().nonnegative().optional(),
-        tools: z
-          .array(ScalarValidStringSchema.min(1).max(512))
-          .max(1024)
-          .optional(),
+        status: z.enum(["fits", "over-limit", "unknown"]),
+        model: ScalarValidStringSchema.max(512).optional(),
+        inputTokens: z.number().int().nonnegative().optional(),
+        maxInputTokens: z.number().int().nonnegative().optional(),
+        measurement: z.enum([
+          "exact",
+          "estimated",
+          "conservative",
+          "incomplete",
+        ]),
+        adaptations: z.array(PreviewAdaptationSchema).max(1024),
+        warnings: z.array(RequestWarningSchema).max(1024),
+        diagnostics: z.array(RequestDiagnosticSchema).max(1024),
       })
       .strict(),
+    contributions: z.array(PreviewContributionSchema).max(1024),
   })
   .strict();
 

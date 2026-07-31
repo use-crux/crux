@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { judge as createJudge } from '../../src/scoring/judge'
-import type { GenerateObjectFn } from '../../src/compaction/types'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 
 /** Mock generate that returns a fixed score and reasoning. */
 function mockGenerateWith(score: number, reasoning = 'Test reasoning'): GenerateObjectFn {

@@ -43,7 +43,6 @@
         "./cost": "portable-web",
         "./flow": "portable-web",
         "./memory": "portable-web",
-        "./compaction": "portable-web",
         "./scoring": "portable-web",
         "./transcription": "portable-web",
         "./transcription/node": "node-only",

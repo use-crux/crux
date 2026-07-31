@@ -44,6 +44,7 @@ import { buildTraceMeta } from "./metadata";
 import { createStructuredCompletion } from "./structured-completion";
 import { finalizeSdkResultEnvelope } from "./sdk-result-envelope";
 import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
+import type { RequestReceipt } from "../../request/receipt/receipt";
 
 /** Inputs shared by the SDK-loop structured retry helper. */
 interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
@@ -91,6 +92,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   let currentMessages = request.messages ? [...request.messages] : [];
   let currentPrompt = request.prompt;
   let lastText = "";
+  let lastRequestReceipt: RequestReceipt | undefined;
   let lastRaw: TRawResponse | undefined;
   let lastResponse: AdapterResponse = {
     text: "",
@@ -132,6 +134,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   });
 
   const first = await attemptOnce(buildAttemptRequest());
+  lastRequestReceipt = first.request;
   if (first.status === "ok") {
     lastRaw = first.raw;
     lastResponse = first.response;
@@ -170,12 +173,14 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       // The candidate being corrected is superseded: record it as an empty
       // step. The winning candidate becomes the final step via the envelope.
       stepFacts.push({
+        ...(lastRequestReceipt ? { request: lastRequestReceipt } : {}),
         content: [],
         finishReason: undefined,
         responseId: undefined,
         modelId: undefined,
       });
       const regen = await attemptOnce(buildAttemptRequest());
+      lastRequestReceipt = regen.request;
       if (regen.status === "ok") {
         lastRaw = regen.raw;
         lastResponse = regen.response;
@@ -218,6 +223,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     }),
     messages: resultMessages,
     stepFacts,
+    request: lastRequestReceipt,
     finalStepMode: stepFacts.length < steps ? "append" : "replace",
   });
   return attachCachedStructuredCandidate(envelope, result.canonicalInput);

@@ -95,7 +95,7 @@ describe("PromptText system resolution", () => {
     });
   });
 
-  it("applies context budgets after lowering", async () => {
+  it("keeps exact context after lowering", async () => {
     const fakes = createResolverFakes({
       tokenizer: staticTokenizer((text) => text.length),
     });
@@ -122,16 +122,10 @@ X
         use: [drop, keep],
       }),
       { ports: fakes.ports },
-    ).resolve({ tokenBudget: 7 });
+    ).resolve();
 
-    expect(pass.args.system).toBe("X\n\nBB");
-    expect(pass.inspect().droppedContexts).toEqual([
-      expect.objectContaining({
-        source: "context:drop",
-        text: "AAAA",
-        tokens: 4,
-      }),
-    ]);
+    expect(pass.args.system).toBe("X\n\nAAAA\n\nBB");
+    expect(pass.inspect().droppedContexts).toEqual([]);
   });
 
   it("treats direct prompt text as a stable provider-cache prefix", async () => {

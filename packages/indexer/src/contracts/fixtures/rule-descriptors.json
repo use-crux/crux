@@ -1,1603 +1,1994 @@
 {
   "descriptors": [
     {
-      "id": "definition.missing_eval_coverage",
-      "source": "builtin",
-      "severity": "info",
       "category": "evals",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Definition has no eval coverage",
       "description": "Eval coverage lets you compare authored AI behavior against known cases and catch regressions before prompts, agents, flows, or pipelines drift.",
-      "rationale": "Eval coverage lets you compare authored AI behavior against known cases and catch regressions before prompts, agents, flows, or pipelines drift.",
-      "impact": "Uncovered definitions can regress silently when prompts, models, tools, or orchestration logic changes.",
       "docsUrl": "/docs/reference/crux-core/index-lints/definition-missing-eval-coverage",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Add eval coverage",
           "description": "Add an Eval that covers this definition so regressions can be detected.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Add eval coverage"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line definition.missing_eval_coverage -- reason"
-      },
+      "id": "definition.missing_eval_coverage",
+      "impact": "Uncovered definitions can regress silently when prompts, models, tools, or orchestration logic changes.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Eval coverage lets you compare authored AI behavior against known cases and catch regressions before prompts, agents, flows, or pipelines drift.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line definition.missing_eval_coverage -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Definition has no eval coverage"
     },
     {
-      "id": "agent.unobservable_handoff",
-      "source": "builtin",
-      "severity": "warning",
       "category": "observability",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Agent handoff target is not index-visible",
       "description": "Index-visible handoff targets let you inspect the handoff path, connect parent and delegated work, and trust the trace tree when agents transfer control.",
-      "rationale": "Index-visible handoff targets let you inspect the handoff path, connect parent and delegated work, and trust the trace tree when agents transfer control.",
-      "impact": "A handoff to an unindexed or missing agent can appear as an orphaned tool call, missing branch, or disconnected trace segment.",
       "docsUrl": "/docs/reference/crux-core/index-lints/agent-unobservable-handoff",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Make the handoff target visible",
           "description": "Define and export the target agent with a stable id, or update the handoff id so it points at a index-visible agent.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Make the handoff target visible"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line agent.unobservable_handoff -- reason"
-      },
+      "id": "agent.unobservable_handoff",
+      "impact": "A handoff to an unindexed or missing agent can appear as an orphaned tool call, missing branch, or disconnected trace segment.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Index-visible handoff targets let you inspect the handoff path, connect parent and delegated work, and trust the trace tree when agents transfer control.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line agent.unobservable_handoff -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Agent handoff target is not index-visible"
     },
     {
-      "id": "prompt.missing_input_schema",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Prompt has no input schema",
       "description": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
-      "rationale": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
-      "impact": "Untyped prompt inputs are harder to validate, replay, compare, and safely refactor as the prompt evolves.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-missing-input-schema",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare prompt input",
           "description": "Add an input schema to the prompt so calls, eval cases, and traces share one inspectable contract.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare prompt input"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.missing_input_schema -- reason"
-      },
+      "id": "prompt.missing_input_schema",
+      "impact": "Untyped prompt inputs are harder to validate, replay, compare, and safely refactor as the prompt evolves.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.missing_input_schema -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt has no input schema"
     },
     {
-      "id": "prompt.missing_output_schema",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["strict"],
-      "title": "Prompt has no output schema",
       "description": "Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.",
-      "rationale": "Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.",
-      "impact": "Unstructured prompt outputs can make downstream code, replay, and regression checks depend on ad hoc parsing.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-missing-output-schema",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare prompt output",
           "description": "Add an output schema when this prompt is expected to produce structured data or feed downstream logic.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare prompt output"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.missing_output_schema -- reason"
-      },
+      "id": "prompt.missing_output_schema",
+      "impact": "Unstructured prompt outputs can make downstream code, replay, and regression checks depend on ad hoc parsing.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "strict"
+      ],
+      "rationale": "Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.missing_output_schema -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt has no output schema"
     },
     {
-      "id": "prompt.hidden_required_input",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Prompt has injected required input",
       "description": "Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.",
-      "rationale": "Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.",
-      "impact": "Callers can miss a required field because the requirement is hidden behind prompt composition instead of declared on the prompt itself.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-hidden-required-input",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Make the requirement visible",
           "description": "Either add the field to the prompt input schema, make the injected source optional, or document why the injected requirement is intentionally hidden.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Make the requirement visible"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.hidden_required_input -- reason"
-      },
+      "id": "prompt.hidden_required_input",
+      "impact": "Callers can miss a required field because the requirement is hidden behind prompt composition instead of declared on the prompt itself.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.hidden_required_input -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt has injected required input"
     },
     {
-      "id": "prompt.conflicting_injected_input",
-      "source": "builtin",
-      "severity": "warning",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Prompt has conflicting injected input",
       "description": "When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.",
-      "rationale": "When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.",
-      "impact": "Prompt calls can validate differently depending on composition order, and generated devtools or replay forms may show a misleading contract.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-conflicting-injected-input",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Align contributed schemas",
           "description": "Rename one field, make the schemas compatible, or move the shared field into the prompt input schema so every injected source agrees on the contract.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Align contributed schemas"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.conflicting_injected_input -- reason"
-      },
+      "id": "prompt.conflicting_injected_input",
+      "impact": "Prompt calls can validate differently depending on composition order, and generated devtools or replay forms may show a misleading contract.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.conflicting_injected_input -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt has conflicting injected input"
     },
     {
-      "id": "prompt.conditional_required_input",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Prompt has conditionally required input",
       "description": "A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.",
-      "rationale": "A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.",
-      "impact": "Eval cases and callers can miss branch-specific input unless the conditional requirement is visible in the Project Index.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-conditional-required-input",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Document the branch requirement",
           "description": "Keep the global field optional, but document or model the branch where it is required. If the branch always runs, remove the conditional wrapper.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Document the branch requirement"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.conditional_required_input -- reason"
-      },
+      "id": "prompt.conditional_required_input",
+      "impact": "Eval cases and callers can miss branch-specific input unless the conditional requirement is visible in the Project Index.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.conditional_required_input -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt has conditionally required input"
     },
     {
-      "id": "context.missing_input_schema",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Dynamic context has no resolved input schema",
       "description": "Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.",
-      "rationale": "Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.",
-      "impact": "Dynamic context without a resolved input contract can hide missing fields until runtime and make context windows harder to debug.",
       "docsUrl": "/docs/reference/crux-core/index-lints/context-missing-input-schema",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare resolvable context input",
           "description": "Use an inline or import-safe schema for the context input so Crux can project the contract into the index.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare resolvable context input"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line context.missing_input_schema -- reason"
-      },
+      "id": "context.missing_input_schema",
+      "impact": "Dynamic context without a resolved input contract can hide missing fields until runtime and make context windows harder to debug.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line context.missing_input_schema -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Dynamic context has no resolved input schema"
     },
     {
-      "id": "injection.dynamic_dependency",
-      "source": "builtin",
-      "severity": "info",
       "category": "observability",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Injection dependency is runtime-dependent",
       "description": "Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.",
-      "rationale": "Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.",
-      "impact": "Devtools, eval coverage, and static linting may under-report the contexts, memory, or injectables that can affect this definition.",
       "docsUrl": "/docs/reference/crux-core/index-lints/injection-dynamic-dependency",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare static use when possible",
           "description": "Move stable dependencies into a static use array or keep the dynamic path intentional and documented with a suppression reason.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare static use when possible"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line injection.dynamic_dependency -- reason"
-      },
+      "id": "injection.dynamic_dependency",
+      "impact": "Devtools, eval coverage, and static linting may under-report the contexts, memory, or injectables that can affect this definition.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line injection.dynamic_dependency -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Injection dependency is runtime-dependent"
     },
     {
-      "id": "injection.dynamic_tools",
-      "source": "builtin",
-      "severity": "info",
       "category": "observability",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Injected tools are runtime-dependent",
       "description": "Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.",
-      "rationale": "Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.",
-      "impact": "A prompt or context may gain tools that are absent from the static Project Index, making safety review, replay, and eval setup less precise.",
       "docsUrl": "/docs/reference/crux-core/index-lints/injection-dynamic-tools",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Expose stable tool names",
           "description": "Prefer static tool maps or named tool contributors where possible. Suppress only when the runtime-selected tool set is intentional.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Expose stable tool names"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line injection.dynamic_tools -- reason"
-      },
+      "id": "injection.dynamic_tools",
+      "impact": "A prompt or context may gain tools that are absent from the static Project Index, making safety review, replay, and eval setup less precise.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line injection.dynamic_tools -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Injected tools are runtime-dependent"
     },
     {
-      "id": "prompt.indirect_tool_surface",
-      "source": "builtin",
-      "severity": "info",
       "category": "observability",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["strict"],
-      "title": "Prompt receives tools through injection",
       "description": "Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.",
-      "rationale": "Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.",
-      "impact": "Authors can miss model-facing tools because the prompt does not declare them directly, especially when the tool source is multiple injection hops away.",
       "docsUrl": "/docs/reference/crux-core/index-lints/prompt-indirect-tool-surface",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Review the indirect tool source",
           "description": "Keep the indirect tool surface intentional, document the injected source, or move stable tools closer to the prompt when direct visibility matters.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Review the indirect tool source"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line prompt.indirect_tool_surface -- reason"
-      },
+      "id": "prompt.indirect_tool_surface",
+      "impact": "Authors can miss model-facing tools because the prompt does not declare them directly, especially when the tool source is multiple injection hops away.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "strict"
+      ],
+      "rationale": "Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line prompt.indirect_tool_surface -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt receives tools through injection"
     },
     {
-      "id": "injectable.unused",
-      "source": "builtin",
-      "severity": "info",
       "category": "composition",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["experimental"],
-      "title": "Injectable is not used by the indexed graph",
       "description": "An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.",
-      "rationale": "An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.",
-      "impact": "Unused injectables can make prompt composition harder to scan and can hide stale schema or tool contracts.",
       "docsUrl": "/docs/reference/crux-core/index-lints/injectable-unused",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use, remove, or suppress",
           "description": "Wire the injectable into a static use path, remove it if it is stale, or suppress the finding when it is intentionally consumed dynamically or externally.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use, remove, or suppress"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line injectable.unused -- reason"
-      },
+      "id": "injectable.unused",
+      "impact": "Unused injectables can make prompt composition harder to scan and can hide stale schema or tool contracts.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "experimental"
+      ],
+      "rationale": "An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line injectable.unused -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Injectable is not used by the indexed graph"
     },
     {
-      "id": "context.unused",
-      "source": "builtin",
-      "severity": "info",
       "category": "composition",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["experimental"],
-      "title": "Context is not used by the indexed graph",
       "description": "A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.",
-      "rationale": "A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.",
-      "impact": "Unused contexts can keep stale prompt text, schema requirements, or tool surfaces alive without clear consumers.",
       "docsUrl": "/docs/reference/crux-core/index-lints/context-unused",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use, remove, or suppress",
           "description": "Wire the context into a static use path, remove it if it is stale, or suppress the finding when dynamic or external composition is intentional.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use, remove, or suppress"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line context.unused -- reason"
-      },
+      "id": "context.unused",
+      "impact": "Unused contexts can keep stale prompt text, schema requirements, or tool surfaces alive without clear consumers.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "experimental"
+      ],
+      "rationale": "A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line context.unused -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Context is not used by the indexed graph"
     },
     {
-      "id": "injection.unresolved_target",
-      "source": "builtin",
-      "severity": "warning",
       "category": "observability",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Injection target is unresolved",
       "description": "A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.",
-      "rationale": "A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.",
-      "impact": "Devtools and lints may under-report what affects the prompt or context because a visible use target could not be linked.",
       "docsUrl": "/docs/reference/crux-core/index-lints/injection-unresolved-target",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Make the target resolvable",
           "description": "Export or inline the target definition, avoid opaque aliases for static use entries, or intentionally mark the dependency as dynamic.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Make the target resolvable"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line injection.unresolved_target -- reason"
-      },
+      "id": "injection.unresolved_target",
+      "impact": "Devtools and lints may under-report what affects the prompt or context because a visible use target could not be linked.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line injection.unresolved_target -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Injection target is unresolved"
     },
     {
-      "id": "injection.deep_schema_chain",
-      "source": "builtin",
-      "severity": "info",
       "category": "composition",
-      "maturity": "preview",
       "confidence": "high",
-      "profiles": ["strict"],
-      "title": "Injected input comes from a deep chain",
       "description": "Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.",
-      "rationale": "Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.",
-      "impact": "A prompt can appear simple while relying on fields contributed several composition hops away, making refactors and replay setup more fragile.",
       "docsUrl": "/docs/reference/crux-core/index-lints/injection-deep-schema-chain",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Flatten or document the chain",
           "description": "Move important input requirements closer to the prompt, reduce composition depth, or document why the deep injection path is intentional.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Flatten or document the chain"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line injection.deep_schema_chain -- reason"
-      },
+      "id": "injection.deep_schema_chain",
+      "impact": "A prompt can appear simple while relying on fields contributed several composition hops away, making refactors and replay setup more fragile.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "strict"
+      ],
+      "rationale": "Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line injection.deep_schema_chain -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Injected input comes from a deep chain"
     },
     {
-      "id": "flow.untyped_args",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Flow args are not inspectable",
       "description": "Flow argument schemas document the durable or immediate entry contract and make flow starts, resumes, and eval cases inspectable.",
-      "rationale": "Flow argument schemas document the durable or immediate entry contract and make flow starts, resumes, and eval cases inspectable.",
-      "impact": "Untyped flow arguments can make resumed work and flow evals depend on undocumented input shapes.",
       "docsUrl": "/docs/reference/crux-core/index-lints/flow-untyped-args",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare flow args",
           "description": "Add an import-safe args schema or Convex validator object so Crux can project the flow input contract.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare flow args"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.untyped_args -- reason"
-      },
+      "id": "flow.untyped_args",
+      "impact": "Untyped flow arguments can make resumed work and flow evals depend on undocumented input shapes.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Flow argument schemas document the durable or immediate entry contract and make flow starts, resumes, and eval cases inspectable.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.untyped_args -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Flow args are not inspectable"
     },
     {
-      "id": "tool.missing_input_schema",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Tool has no input schema",
       "description": "Tool input schemas make model-emitted arguments inspectable, validateable, and easier for your team to debug across traces, evals, and generated devtools UI.",
-      "rationale": "Tool input schemas make model-emitted arguments inspectable, validateable, and easier for your team to debug across traces, evals, and generated devtools UI.",
-      "impact": "Untyped tool calls are harder to validate, inspect, replay, and explain when an agent makes a bad call.",
       "docsUrl": "/docs/reference/crux-core/index-lints/tool-missing-input-schema",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare tool parameters",
           "description": "Add a Zod or JSON-schema-compatible input schema to the tool parameters so arguments are validated and inspectable.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare tool parameters"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line tool.missing_input_schema -- reason"
-      },
+      "id": "tool.missing_input_schema",
+      "impact": "Untyped tool calls are harder to validate, inspect, replay, and explain when an agent makes a bad call.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Tool input schemas make model-emitted arguments inspectable, validateable, and easier for your team to debug across traces, evals, and generated devtools UI.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line tool.missing_input_schema -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Tool has no input schema"
     },
     {
-      "id": "tool.output_not_inspectable",
-      "source": "builtin",
-      "severity": "info",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["strict"],
-      "title": "Tool output is not model-inspectable",
       "description": "A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.",
-      "rationale": "A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.",
-      "impact": "Raw tool outputs can be hard to inspect or compare when the application result differs from what the model receives.",
       "docsUrl": "/docs/reference/crux-core/index-lints/tool-output-not-inspectable",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare model output mapping",
           "description": "Add a toModelOutput adapter when the tool result needs a stable, inspectable model-facing representation.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare model output mapping"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line tool.output_not_inspectable -- reason"
-      },
+      "id": "tool.output_not_inspectable",
+      "impact": "Raw tool outputs can be hard to inspect or compare when the application result differs from what the model receives.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "strict"
+      ],
+      "rationale": "A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line tool.output_not_inspectable -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Tool output is not model-inspectable"
     },
     {
-      "id": "flow.suspension_without_coverage",
-      "source": "builtin",
-      "severity": "warning",
       "category": "evals",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Suspending flow has no eval coverage",
       "description": "Suspension paths cross time, approval, and runtime boundaries, so you need regression coverage for resume behavior and stale pending work.",
-      "rationale": "Suspension paths cross time, approval, and runtime boundaries, so you need regression coverage for resume behavior and stale pending work.",
-      "impact": "A broken suspend/resume path can strand user work or continue with stale state after approval.",
       "docsUrl": "/docs/reference/crux-core/index-lints/flow-suspension-without-coverage",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Cover suspend and resume",
           "description": "Add a flow eval that exercises the suspend/resume path, including the expected approval or signal.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Cover suspend and resume"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.suspension_without_coverage -- reason"
-      },
+      "id": "flow.suspension_without_coverage",
+      "impact": "A broken suspend/resume path can strand user work or continue with stale state after approval.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Suspension paths cross time, approval, and runtime boundaries, so you need regression coverage for resume behavior and stale pending work.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.suspension_without_coverage -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Suspending flow has no eval coverage"
     },
     {
-      "id": "flow.duplicate_step_label",
-      "source": "builtin",
-      "severity": "error",
       "category": "runtime",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Flow repeats a step label",
       "description": "Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.",
-      "rationale": "Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.",
-      "impact": "A repeated step label can return the wrong cached output or fail at runtime before the flow reaches later work.",
       "docsUrl": "/docs/reference/crux-core/index-lints/flow-duplicate-step-label",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use unique step labels",
           "description": "Give each flow.step() call a distinct literal label, and encode loop iteration or branch meaning in the label only when it is stable across resumes.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use unique step labels"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.duplicate_step_label -- reason"
-      },
+      "id": "flow.duplicate_step_label",
+      "impact": "A repeated step label can return the wrong cached output or fail at runtime before the flow reaches later work.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.duplicate_step_label -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Flow repeats a step label"
     },
     {
-      "id": "flow.duplicate_suspend_name",
-      "source": "builtin",
-      "severity": "warning",
       "category": "runtime",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Flow repeats a suspend name",
       "description": "Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.",
-      "rationale": "Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.",
-      "impact": "A repeated suspend name can make approvals ambiguous and can strand a later wait behind an already-used signal name.",
       "docsUrl": "/docs/reference/crux-core/index-lints/flow-duplicate-suspend-name",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use unique suspend names",
           "description": "Give each suspend point a distinct literal name, or split repeated waits into separate flows until scoped/repeating signal attempts are supported.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use unique suspend names"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.duplicate_suspend_name -- reason"
-      },
+      "id": "flow.duplicate_suspend_name",
+      "impact": "A repeated suspend name can make approvals ambiguous and can strand a later wait behind an already-used signal name.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.duplicate_suspend_name -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Flow repeats a suspend name"
     },
     {
-      "id": "flow.undeclared_suspend_signal",
-      "source": "builtin",
-      "severity": "warning",
       "category": "contracts",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Flow suspends on an undeclared signal",
       "description": "A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.",
-      "rationale": "A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.",
-      "impact": "A flow may suspend at a signal that callers cannot discover or type-check through the flow handle.",
       "docsUrl": "/docs/reference/crux-core/index-lints/flow-undeclared-suspend-signal",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Declare or rename the signal",
           "description": "Add the suspend name to the flow signals map, or rename the suspend call to one of the declared signal keys.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Declare or rename the signal"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.undeclared_suspend_signal -- reason"
-      },
+      "id": "flow.undeclared_suspend_signal",
+      "impact": "A flow may suspend at a signal that callers cannot discover or type-check through the flow handle.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.undeclared_suspend_signal -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Flow suspends on an undeclared signal"
     },
     {
-      "id": "workspace.write_without_guardrail",
-      "source": "builtin",
-      "severity": "warning",
       "category": "safety",
-      "maturity": "preview",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Writable workspace has no guardrail",
       "description": "Writable workspaces can mutate drafts, files, and artifacts; guardrails help you keep those mutations policy-checked, auditable, and observable.",
-      "rationale": "Writable workspaces can mutate drafts, files, and artifacts; guardrails help you keep those mutations policy-checked, auditable, and observable.",
-      "impact": "Unprotected workspace writes can damage user content or make file mutations difficult to audit after the fact.",
       "docsUrl": "/docs/reference/crux-core/index-lints/workspace-write-without-guardrail",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Attach a guardrail",
           "description": "Attach a guardrail to the workspace or its write/delete tools so mutations are inspectable and policy-checked.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Attach a guardrail"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line workspace.write_without_guardrail -- reason"
-      },
+      "id": "workspace.write_without_guardrail",
+      "impact": "Unprotected workspace writes can damage user content or make file mutations difficult to audit after the fact.",
+      "maturity": "preview",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Writable workspaces can mutate drafts, files, and artifacts; guardrails help you keep those mutations policy-checked, auditable, and observable.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line workspace.write_without_guardrail -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Writable workspace has no guardrail"
     },
     {
-      "id": "effect.duplicate_identity",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "preview",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Effect identity is defined more than once",
       "description": "Distinct effect() call sites declare the same literal id and version.",
-      "rationale": "Effect receipt and recovery identity is the (id, version) pair and must resolve to one definition.",
-      "impact": "Runtime registration rejects conflicting definitions and Catalog/runtime joins become ambiguous.",
       "docsUrl": "/docs/reference/crux-core/index-lints/effect-duplicate-identity",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Make the Effect identity unique",
           "description": "Change the id or version, or re-export the existing Effect definition instead of calling effect() again.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Make the Effect identity unique"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line effect.duplicate_identity -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "safety.duplicate_policy_id",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "safety",
+      "id": "effect.duplicate_identity",
+      "impact": "Runtime registration rejects conflicting definitions and Catalog/runtime joins become ambiguous.",
       "maturity": "preview",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Safety policy id is duplicated",
-      "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
-      "rationale": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
-      "impact": "Duplicate policy ids can make Devtools, observability, and Eval assertions point at the wrong safety policy.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/safety-duplicate-policy-id",
-      "fixes": [
-        {
-          "title": "Rename one policy",
-          "description": "Give each guardrail, constraint, and tool policy a unique id within the project safety surface.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line safety.duplicate_policy_id -- reason"
-      },
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "memory.long_lived_without_retention",
-      "source": "builtin",
-      "severity": "info",
-      "category": "memory",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Long-lived memory has no retention policy",
-      "description": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
-      "rationale": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
-      "impact": "Memory without a visible retention policy can silently grow, preserve stale context, or keep user data longer than intended.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/memory-long-lived-without-retention",
-      "fixes": [
-        {
-          "title": "Declare memory retention",
-          "description": "Add an eviction or retention policy to long-lived memory so cleanup behavior is inspectable.",
-          "kind": "manual"
-        }
+      "profiles": [
+        "recommended",
+        "strict"
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line memory.long_lived_without_retention -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "resource.write_without_read",
-      "source": "builtin",
-      "severity": "info",
-      "category": "observability",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "State resource is written but never read",
-      "description": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
-      "rationale": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
-      "impact": "Written-but-unread state can make agents appear to remember or persist work that is never actually used by prompts, tools, flows, or later runs.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/resource-write-without-read",
-      "fixes": [
-        {
-          "title": "Connect or document the read path",
-          "description": "Add a index-visible read path for this resource, or suppress the rule with a reason when the write is intentionally output-only.",
-          "kind": "manual"
-        }
+      "rationale": "Effect receipt and recovery identity is the (id, version) pair and must resolve to one definition.",
+      "requires": [
+        "definitions",
+        "sources"
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line resource.write_without_read -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "consensus.missing_judge",
-      "source": "builtin",
-      "severity": "info",
-      "category": "composition",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Consensus has no visible judge or scorer",
-      "description": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
-      "rationale": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
-      "impact": "Without a visible judge or scorer, consensus behavior can look arbitrary in traces and may be hard to test or tune.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/consensus-missing-judge",
-      "fixes": [
-        {
-          "title": "Attach a judge or scorer",
-          "description": "Add a index-visible judge agent or scorer to the consensus composition so the decision policy is inspectable.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line consensus.missing_judge -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "shared_blackboard_without_policy",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "memory",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Shared blackboard has no conflict policy",
-      "description": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
-      "rationale": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
-      "impact": "Concurrent agent writes can overwrite or contradict each other without an explicit policy for resolving shared state.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/shared-blackboard-without-policy",
-      "fixes": [
-        {
-          "title": "Declare a conflict policy",
-          "description": "Declare a blackboard conflict policy, such as consensus, judge, or last-writer-wins, when multiple agents can write shared state.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line shared_blackboard_without_policy -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "routing.missing_stable_id",
-      "source": "builtin",
-      "severity": "info",
-      "category": "composition",
-      "maturity": "stable",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Routing primitive has no stable id",
-      "description": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
-      "rationale": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
-      "impact": "Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/routing-missing-stable-id",
-      "fixes": [
-        {
-          "title": "Add a routing id",
-          "description": "Add id to router(), split(), retry(), cascade(), or fallback() options so authored routing and runtime spans share a stable join key.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line routing.missing_stable_id -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "routing.router_missing_default",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "composition",
-      "maturity": "stable",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Router has no default route",
-      "description": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
-      "rationale": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
-      "impact": "A classifier returning an unexpected key can produce confusing route decisions and incomplete route coverage in traces.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/routing-router-missing-default",
-      "fixes": [
-        {
-          "title": "Add default route",
-          "description": "Add a default entry to the router routes map and point it at the safest fallback model or policy.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line routing.router_missing_default -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "routing.unresolved_target",
-      "source": "builtin",
-      "severity": "info",
-      "category": "observability",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Routing target is not index-visible",
-      "description": "Route, split route, retry target, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
-      "rationale": "Route, split route, retry target, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
-      "impact": "Unresolved route targets appear as plain model references, which limits architecture views, impact analysis, and runtime span joins.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/routing-unresolved-target",
-      "fixes": [
-        {
-          "title": "Make target visible",
-          "description": "Reference an exported Crux definition or routing primitive, or keep raw model targets intentional and suppress this rule with a reason.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line routing.unresolved_target -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "routing.cascade_unreachable_tier",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "composition",
-      "maturity": "stable",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Cascade tier makes later tiers unreachable",
-      "description": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
-      "rationale": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
-      "impact": "Expensive backup tiers may look configured but never run, making quality escalation and cost expectations misleading.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/routing-cascade-unreachable-tier",
-      "fixes": [
-        {
-          "title": "Add evaluator or reorder tiers",
-          "description": "Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line routing.cascade_unreachable_tier -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "rag.recipe_step_unresolved_target",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "composition",
-      "maturity": "stable",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "RAG recipe step target is unresolved",
-      "description": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
-      "rationale": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
-      "impact": "The recipe may still run, but the Project Index cannot show or validate the step dependency that authored code appears to reference.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/rag-recipe-step-unresolved-target",
-      "fixes": [
-        {
-          "title": "Export or define the step target",
-          "description": "Reference an indexed retriever, scorer, or reranker definition from the recipe step, or suppress this rule if the dependency is intentionally external.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line rag.recipe_step_unresolved_target -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "runtime.duplicate_target_name",
-      "source": "builtin",
       "severity": "error",
-      "category": "runtime",
-      "maturity": "stable",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line effect.duplicate_identity -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Effect identity is defined more than once"
+    },
+    {
+      "category": "safety",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Runtime target name is duplicated",
-      "description": "Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.",
-      "rationale": "Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.",
-      "impact": "Duplicate target names make generated runtime artifacts ambiguous and can block or misroute pending durable work.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/runtime-duplicate-target-name",
+      "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/safety-duplicate-policy-id",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Rename one runtime target",
+          "description": "Give each guardrail, constraint, and tool policy a unique id within the project safety surface.",
+          "kind": "manual",
+          "title": "Rename one policy"
+        }
+      ],
+      "id": "safety.duplicate_policy_id",
+      "impact": "Duplicate policy ids can make Devtools, observability, and Eval assertions point at the wrong safety policy.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line safety.duplicate_policy_id -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Safety policy id is duplicated"
+    },
+    {
+      "category": "memory",
+      "confidence": "medium",
+      "description": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/memory-long-lived-without-retention",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add an eviction or retention policy to long-lived memory so cleanup behavior is inspectable.",
+          "kind": "manual",
+          "title": "Declare memory retention"
+        }
+      ],
+      "id": "memory.long_lived_without_retention",
+      "impact": "Memory without a visible retention policy can silently grow, preserve stale context, or keep user data longer than intended.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line memory.long_lived_without_retention -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Long-lived memory has no retention policy"
+    },
+    {
+      "category": "observability",
+      "confidence": "medium",
+      "description": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/resource-write-without-read",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a index-visible read path for this resource, or suppress the rule with a reason when the write is intentionally output-only.",
+          "kind": "manual",
+          "title": "Connect or document the read path"
+        }
+      ],
+      "id": "resource.write_without_read",
+      "impact": "Written-but-unread state can make agents appear to remember or persist work that is never actually used by prompts, tools, flows, or later runs.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line resource.write_without_read -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "State resource is written but never read"
+    },
+    {
+      "category": "composition",
+      "confidence": "medium",
+      "description": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/consensus-missing-judge",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a index-visible judge agent or scorer to the consensus composition so the decision policy is inspectable.",
+          "kind": "manual",
+          "title": "Attach a judge or scorer"
+        }
+      ],
+      "id": "consensus.missing_judge",
+      "impact": "Without a visible judge or scorer, consensus behavior can look arbitrary in traces and may be hard to test or tune.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line consensus.missing_judge -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Consensus has no visible judge or scorer"
+    },
+    {
+      "category": "memory",
+      "confidence": "medium",
+      "description": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/shared-blackboard-without-policy",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Declare a blackboard conflict policy, such as consensus, judge, or last-writer-wins, when multiple agents can write shared state.",
+          "kind": "manual",
+          "title": "Declare a conflict policy"
+        }
+      ],
+      "id": "shared_blackboard_without_policy",
+      "impact": "Concurrent agent writes can overwrite or contradict each other without an explicit policy for resolving shared state.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line shared_blackboard_without_policy -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Shared blackboard has no conflict policy"
+    },
+    {
+      "category": "composition",
+      "confidence": "high",
+      "description": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-missing-stable-id",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add id to router(), split(), retry(), cascade(), or fallback() options so authored routing and runtime spans share a stable join key.",
+          "kind": "manual",
+          "title": "Add a routing id"
+        }
+      ],
+      "id": "routing.missing_stable_id",
+      "impact": "Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line routing.missing_stable_id -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Routing primitive has no stable id"
+    },
+    {
+      "category": "composition",
+      "confidence": "high",
+      "description": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-router-missing-default",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a default entry to the router routes map and point it at the safest fallback model or policy.",
+          "kind": "manual",
+          "title": "Add default route"
+        }
+      ],
+      "id": "routing.router_missing_default",
+      "impact": "A classifier returning an unexpected key can produce confusing route decisions and incomplete route coverage in traces.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line routing.router_missing_default -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Router has no default route"
+    },
+    {
+      "category": "observability",
+      "confidence": "medium",
+      "description": "Route, split route, retry target, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-unresolved-target",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Reference an exported Crux definition or routing primitive, or keep raw model targets intentional and suppress this rule with a reason.",
+          "kind": "manual",
+          "title": "Make target visible"
+        }
+      ],
+      "id": "routing.unresolved_target",
+      "impact": "Unresolved route targets appear as plain model references, which limits architecture views, impact analysis, and runtime span joins.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Route, split route, retry target, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "info",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line routing.unresolved_target -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Routing target is not index-visible"
+    },
+    {
+      "category": "composition",
+      "confidence": "high",
+      "description": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-cascade-unreachable-tier",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.",
+          "kind": "manual",
+          "title": "Add evaluator or reorder tiers"
+        }
+      ],
+      "id": "routing.cascade_unreachable_tier",
+      "impact": "Expensive backup tiers may look configured but never run, making quality escalation and cost expectations misleading.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line routing.cascade_unreachable_tier -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Cascade tier makes later tiers unreachable"
+    },
+    {
+      "category": "composition",
+      "confidence": "high",
+      "description": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/rag-recipe-step-unresolved-target",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Reference an indexed retriever, scorer, or reranker definition from the recipe step, or suppress this rule if the dependency is intentionally external.",
+          "kind": "manual",
+          "title": "Export or define the step target"
+        }
+      ],
+      "id": "rag.recipe_step_unresolved_target",
+      "impact": "The recipe may still run, but the Project Index cannot show or validate the step dependency that authored code appears to reference.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line rag.recipe_step_unresolved_target -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "RAG recipe step target is unresolved"
+    },
+    {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/runtime-duplicate-target-name",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "command": "crux runtime generate",
           "description": "Give each flow() or durableTask() declaration a distinct literal name, then run crux runtime generate.",
           "kind": "manual",
-          "command": "crux runtime generate"
+          "title": "Rename one runtime target"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.duplicate_target_name -- reason"
-      },
+      "id": "runtime.duplicate_target_name",
+      "impact": "Duplicate target names make generated runtime artifacts ambiguous and can block or misroute pending durable work.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.duplicate_target_name -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Runtime target name is duplicated"
     },
     {
-      "id": "runtime.non_literal_target_name",
-      "source": "builtin",
-      "severity": "error",
       "category": "runtime",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Runtime target name is not literal",
       "description": "Runtime artifacts need a durable target name that can be discovered before deployment. Dynamic names cannot be matched to pending work in a fresh process.",
-      "rationale": "Runtime artifacts need a durable target name that can be discovered before deployment. Dynamic names cannot be matched to pending work in a fresh process.",
-      "impact": "Generated manifests cannot safely include the target, so future wakes may fail with TARGET_NOT_FOUND.",
       "docsUrl": "/docs/reference/crux-core/index-lints/runtime-non-literal-target-name",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use a literal durable name",
+          "command": "crux runtime generate",
           "description": "Change flow(name, ...) or durableTask(name, ...) to a literal string name and regenerate runtime artifacts.",
           "kind": "manual",
-          "command": "crux runtime generate"
+          "title": "Use a literal durable name"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.non_literal_target_name -- reason"
-      },
+      "id": "runtime.non_literal_target_name",
+      "impact": "Generated manifests cannot safely include the target, so future wakes may fail with TARGET_NOT_FOUND.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Runtime artifacts need a durable target name that can be discovered before deployment. Dynamic names cannot be matched to pending work in a fresh process.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.non_literal_target_name -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Runtime target name is not literal"
     },
     {
-      "id": "runtime.target_not_exported",
-      "source": "builtin",
-      "severity": "error",
       "category": "runtime",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Runtime target is not exported",
       "description": "Serverless and host-bound runtime entries import targets by named export. Local or nested targets cannot be woken in a later process.",
-      "rationale": "Serverless and host-bound runtime entries import targets by named export. Local or nested targets cannot be woken in a later process.",
-      "impact": "The target is visible to local analysis but cannot be wired into generated runtime entry files.",
       "docsUrl": "/docs/reference/crux-core/index-lints/runtime-target-not-exported",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Export the target declaration",
+          "command": "crux runtime generate",
           "description": "Move the target to a top-level exported const/function declaration, then run crux runtime generate.",
           "kind": "manual",
-          "command": "crux runtime generate"
+          "title": "Export the target declaration"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.target_not_exported -- reason"
-      },
+      "id": "runtime.target_not_exported",
+      "impact": "The target is visible to local analysis but cannot be wired into generated runtime entry files.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Serverless and host-bound runtime entries import targets by named export. Local or nested targets cannot be woken in a later process.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.target_not_exported -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Runtime target is not exported"
     },
     {
-      "id": "runtime.closure_defer",
-      "source": "builtin",
-      "severity": "error",
       "category": "runtime",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Durable defer target is an inline closure",
       "description": "Durable background work must name a durable task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.",
-      "rationale": "Durable background work must name a durable task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.",
-      "impact": "The deferred work cannot be represented in generated runtime artifacts or resumed after process exit.",
       "docsUrl": "/docs/reference/crux-core/index-lints/runtime-closure-defer",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use a named durable task",
           "description": "Move the closure into an exported durableTask() from @use-crux/core/runtime, or use request-scoped defer(callback) when RFC #135 lands.",
+          "docsUrl": "https://github.com/use-crux/crux/issues/135",
           "kind": "manual",
-          "docsUrl": "https://github.com/use-crux/crux/issues/135"
+          "title": "Use a named durable task"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.closure_defer -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "defer.replay_unsafe",
-      "source": "builtin",
-      "severity": "error",
-      "category": "runtime",
-      "maturity": "preview",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Public defer used in replayable code",
-      "description": "Public defer() is invocation-scoped and cannot be replayed safely inside a flow body or step.",
-      "rationale": "A replay could schedule the same request-scoped or durable work more than once.",
-      "impact": "Replayed execution can duplicate background work.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/defer-replay-unsafe",
-      "fixes": [
-        {
-          "title": "Use flow.defer",
-          "description": "Schedule replay-safe durable work through flow.defer().",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line defer.replay_unsafe -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "defer.floating_named_promise",
-      "source": "builtin",
-      "severity": "error",
-      "category": "runtime",
-      "maturity": "preview",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Named defer promise is not consumed",
-      "description": "Named defer() must be awaited, returned, or included in recognized promise composition.",
-      "rationale": "The promise is the durable commit barrier for the scheduled intent.",
-      "impact": "The host may commit before durable scheduling has succeeded.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/defer-floating-named-promise",
-      "fixes": [
-        {
-          "title": "Await the promise",
-          "description": "Await or return the named defer() promise.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line defer.floating_named_promise -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "runtime.missing_runtime_config",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "runtime",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Runtime-bound API used without runtime config",
-      "description": "Name-bound, time-bound, event-bound, and background APIs need a configured Runtime Engine. Without one, only object-bound flow APIs can keep working.",
-      "rationale": "Name-bound, time-bound, event-bound, and background APIs need a configured Runtime Engine. Without one, only object-bound flow APIs can keep working.",
-      "impact": "The API will throw RUNTIME_REQUIRED when it executes in a project without runtime configuration.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/runtime-missing-runtime-config",
-      "fixes": [
-        {
-          "title": "Configure a runtime",
-          "description": "Add a runtime entry to crux.config.ts, for example runtime: node() for local development.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.missing_runtime_config -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "flow.nondeterministic_code",
-      "source": "builtin",
-      "severity": "warning",
-      "category": "runtime",
-      "maturity": "preview",
-      "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Flow body contains nondeterministic code",
-      "description": "Flow bodies can replay after suspension. Calls like Date.now() and Math.random() outside flow.step() can produce different replay fingerprints or decisions.",
-      "rationale": "Flow bodies can replay after suspension. Calls like Date.now() and Math.random() outside flow.step() can produce different replay fingerprints or decisions.",
-      "impact": "A resumed flow may diverge from its original execution or block with REPLAY_DIVERGED.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/flow-nondeterministic-code",
-      "fixes": [
-        {
-          "title": "Move nondeterminism into a step",
-          "description": "Wrap nondeterministic reads in flow.step() so the first value is cached and replay can reuse it.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line flow.nondeterministic_code -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "runtime.non_serializable_payload",
-      "source": "builtin",
-      "severity": "error",
-      "category": "runtime",
+      "id": "runtime.closure_defer",
+      "impact": "The deferred work cannot be represented in generated runtime artifacts or resumed after process exit.",
       "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Durable background work must name a durable task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.closure_defer -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Durable defer target is an inline closure"
+    },
+    {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Public defer() is invocation-scoped and cannot be replayed safely inside a flow body or step.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/defer-replay-unsafe",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Schedule replay-safe durable work through flow.defer().",
+          "kind": "manual",
+          "title": "Use flow.defer"
+        }
+      ],
+      "id": "defer.replay_unsafe",
+      "impact": "Replayed execution can duplicate background work.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A replay could schedule the same request-scoped or durable work more than once.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line defer.replay_unsafe -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Public defer used in replayable code"
+    },
+    {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Named defer() must be awaited, returned, or included in recognized promise composition.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/defer-floating-named-promise",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Await or return the named defer() promise.",
+          "kind": "manual",
+          "title": "Await the promise"
+        }
+      ],
+      "id": "defer.floating_named_promise",
+      "impact": "The host may commit before durable scheduling has succeeded.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "The promise is the durable commit barrier for the scheduled intent.",
+      "requires": [
+        "definitions"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line defer.floating_named_promise -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Named defer promise is not consumed"
+    },
+    {
+      "category": "runtime",
       "confidence": "medium",
-      "profiles": ["recommended", "strict"],
-      "title": "Durable runtime payload is not JSON-serializable",
+      "description": "Name-bound, time-bound, event-bound, and background APIs need a configured Runtime Engine. Without one, only object-bound flow APIs can keep working.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/runtime-missing-runtime-config",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a runtime entry to crux.config.ts, for example runtime: node() for local development.",
+          "kind": "manual",
+          "title": "Configure a runtime"
+        }
+      ],
+      "id": "runtime.missing_runtime_config",
+      "impact": "The API will throw RUNTIME_REQUIRED when it executes in a project without runtime configuration.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Name-bound, time-bound, event-bound, and background APIs need a configured Runtime Engine. Without one, only object-bound flow APIs can keep working.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.missing_runtime_config -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Runtime-bound API used without runtime config"
+    },
+    {
+      "category": "runtime",
+      "confidence": "medium",
+      "description": "Flow bodies can replay after suspension. Calls like Date.now() and Math.random() outside flow.step() can produce different replay fingerprints or decisions.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/flow-nondeterministic-code",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Wrap nondeterministic reads in flow.step() so the first value is cached and replay can reuse it.",
+          "kind": "manual",
+          "title": "Move nondeterminism into a step"
+        }
+      ],
+      "id": "flow.nondeterministic_code",
+      "impact": "A resumed flow may diverge from its original execution or block with REPLAY_DIVERGED.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Flow bodies can replay after suspension. Calls like Date.now() and Math.random() outside flow.step() can produce different replay fingerprints or decisions.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line flow.nondeterministic_code -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Flow body contains nondeterministic code"
+    },
+    {
+      "category": "runtime",
+      "confidence": "medium",
       "description": "Durable runtime boundaries persist payloads as JSON so they can be replayed, inspected, and delivered across adapters.",
-      "rationale": "Durable runtime boundaries persist payloads as JSON so they can be replayed, inspected, and delivered across adapters.",
-      "impact": "Functions, Maps, Sets, class instances, and other non-JSON values fail at runtime with PAYLOAD_NOT_JSON.",
       "docsUrl": "/docs/reference/crux-core/index-lints/runtime-non-serializable-payload",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Pass JSON data",
           "description": "Replace the payload with plain JSON data, or store complex data elsewhere and pass a reference.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Pass JSON data"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line runtime.non_serializable_payload -- reason"
-      },
+      "id": "runtime.non_serializable_payload",
+      "impact": "Functions, Maps, Sets, class instances, and other non-JSON values fail at runtime with PAYLOAD_NOT_JSON.",
+      "maturity": "stable",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Durable runtime boundaries persist payloads as JSON so they can be replayed, inspected, and delivered across adapters.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line runtime.non_serializable_payload -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Durable runtime payload is not JSON-serializable"
     },
     {
-      "id": "media.unsupported-capability",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Media capability is unsupported",
       "description": "Resolved adapter and model capability evidence proves that the authored media operation, modality, or option is unsupported.",
-      "rationale": "Conclusive capability mismatches should fail during review instead of at provider I/O.",
-      "impact": "The authored model operation will fail before producing a usable media result.",
       "docsUrl": "/docs/guides/multimodal#capabilities",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Choose a supported capability",
           "description": "Use an adapter/model that supports the authored operation and modalities, or remove the unsupported option.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Choose a supported capability"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.unsupported-capability -- reason"
-      },
+      "id": "media.unsupported-capability",
+      "impact": "The authored model operation will fail before producing a usable media result.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Conclusive capability mismatches should fail during review instead of at provider I/O.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.unsupported-capability -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Media capability is unsupported"
     },
     {
-      "id": "media.invalid-provider-file",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Provider file belongs to another adapter",
       "description": "Resolved source evidence identifies a provider-file asset passed to a different provider adapter.",
-      "rationale": "Provider file identifiers are scoped to the provider that created them.",
-      "impact": "The destination provider cannot read the file and the model call will fail.",
       "docsUrl": "/docs/guides/multimodal#provider-files",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Hydrate or upload the file",
           "description": "Hydrate the asset and upload it through the destination provider before invoking the media operation.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Hydrate or upload the file"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.invalid-provider-file -- reason"
-      },
+      "id": "media.invalid-provider-file",
+      "impact": "The destination provider cannot read the file and the model call will fail.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Provider file identifiers are scoped to the provider that created them.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.invalid-provider-file -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Provider file belongs to another adapter"
     },
     {
-      "id": "media.asset-ref-not-hydrated",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "AssetRef is not hydrated",
       "description": "Resolved source evidence proves an opaque AssetRef is passed directly to a model operation.",
-      "rationale": "AssetRef is a persistence reference, not model-readable media.",
-      "impact": "The model cannot consume the reference and the operation will fail before provider I/O.",
       "docsUrl": "/docs/guides/multimodal#asset-refs",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Hydrate the asset",
           "description": "Call the owning AssetStore get operation and pass the resulting Asset to the model.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Hydrate the asset"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.asset-ref-not-hydrated -- reason"
-      },
+      "id": "media.asset-ref-not-hydrated",
+      "impact": "The model cannot consume the reference and the operation will fail before provider I/O.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "AssetRef is a persistence reference, not model-readable media.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.asset-ref-not-hydrated -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "AssetRef is not hydrated"
     },
     {
-      "id": "media.missing-derivation",
-      "source": "builtin",
-      "severity": "warning",
       "category": "quality",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Media ingest has no text derivation",
       "description": "Indexed media ingest evidence has no required describe or transcribe derivation binding.",
-      "rationale": "Retrieval requires derived text for media that is not directly searchable.",
-      "impact": "The ingested media may be stored without searchable semantic content.",
       "docsUrl": "/docs/guides/multimodal#ingest",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Bind a derivation",
           "description": "Attach an explicit describe or transcribe operation to the media ingest source.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Bind a derivation"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.missing-derivation -- reason"
-      },
+      "id": "media.missing-derivation",
+      "impact": "The ingested media may be stored without searchable semantic content.",
+      "maturity": "experimental",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Retrieval requires derived text for media that is not directly searchable.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.missing-derivation -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Media ingest has no text derivation"
     },
     {
-      "id": "media.missing-attribution",
-      "source": "builtin",
-      "severity": "warning",
       "category": "quality",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Derived media text loses attribution",
       "description": "Available page or time attribution is not preserved on derived searchable text.",
-      "rationale": "Attribution connects retrieved text to the source frame that supports it.",
-      "impact": "Retrieved evidence cannot be traced back to its page or time range.",
       "docsUrl": "/docs/guides/multimodal#attribution",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Preserve attribution",
           "description": "Carry available page or time attribution from the ingest derivation into indexed text records.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Preserve attribution"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.missing-attribution -- reason"
-      },
+      "id": "media.missing-attribution",
+      "impact": "Retrieved evidence cannot be traced back to its page or time range.",
+      "maturity": "experimental",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Attribution connects retrieved text to the source frame that supports it.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.missing-attribution -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Derived media text loses attribution"
     },
     {
-      "id": "media.output-discarded",
-      "source": "builtin",
-      "severity": "warning",
       "category": "quality",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Media output is discarded",
       "description": "A proven media output is bound while canonical content and messages are unread in the compiler-visible module graph.",
-      "rationale": "Generated media is useful only when the canonical result is consumed or persisted explicitly.",
-      "impact": "The operation spends provider time and cost but its media result is lost.",
       "docsUrl": "/docs/guides/multimodal#results",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Consume the result",
           "description": "Read content or messages, or explicitly persist the generated Asset with an AssetStore.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Consume the result"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.output-discarded -- reason"
-      },
+      "id": "media.output-discarded",
+      "impact": "The operation spends provider time and cost but its media result is lost.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "media.raw-retention",
-      "source": "builtin",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Generated media is useful only when the canonical result is consumed or persisted explicitly.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
       "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.output-discarded -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Media output is discarded"
+    },
+    {
       "category": "observability",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Raw media is routed to retained metadata",
       "description": "Resolved architecture evidence proves raw media is explicitly routed to observability or vector metadata.",
-      "rationale": "Ordinary observability and vector metadata must retain bounded descriptors rather than media payloads.",
-      "impact": "Raw media or bearer references may leak into durable telemetry or retrieval metadata.",
       "docsUrl": "/docs/guides/multimodal#privacy",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Store a safe descriptor",
           "description": "Remove raw media from retained metadata and project only bounded modality, size, and MIME facts.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Store a safe descriptor"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line media.raw-retention -- reason"
-      },
+      "id": "media.raw-retention",
+      "impact": "Raw media or bearer references may leak into durable telemetry or retrieval metadata.",
+      "maturity": "experimental",
       "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Ordinary observability and vector metadata must retain bounded descriptors rather than media payloads.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line media.raw-retention -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Raw media is routed to retained metadata"
     },
     {
-      "id": "evidence.invalid-custom-kind",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Evidence kind is invalid",
       "description": "A canonical evidence.record call uses a literal kind outside the bounded evidence-kind contract.",
-      "rationale": "Inline application evidence requires a valid custom.* kind; references may use canonical or custom kinds.",
-      "impact": "Runtime evidence authoring rejects this call before collector mutation.",
       "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use a valid evidence kind",
           "description": "Use a bounded custom.* kind for inline data or a canonical kind for an existing artifact reference.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use a valid evidence kind"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line evidence.invalid-custom-kind -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions"],
-      "fidelity": "safe"
-    },
-    {
-      "id": "evidence.reserved-inline-kind",
-      "source": "builtin",
-      "severity": "error",
-      "category": "contracts",
-      "maturity": "experimental",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Canonical evidence kind is reserved",
-      "description": "A canonical evidence.record call uses a reserved canonical artifact kind for inline evidence.",
-      "rationale": "Canonical artifact kinds describe Crux-owned sources; inline application evidence must use custom.*.",
+      "id": "evidence.invalid-custom-kind",
       "impact": "Runtime evidence authoring rejects this call before collector mutation.",
-      "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
-      "fixes": [
-        {
-          "title": "Use a custom kind",
-          "description": "Rename the inline evidence kind to a bounded custom.* value.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line evidence.reserved-inline-kind -- reason"
-      },
+      "maturity": "experimental",
       "phase": "index",
-      "requires": ["definitions"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Inline application evidence requires a valid custom.* kind; references may use canonical or custom kinds.",
+      "requires": [
+        "definitions"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line evidence.invalid-custom-kind -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Evidence kind is invalid"
     },
     {
-      "id": "embedding.unsupported-modality",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Embedding does not support the authored modality",
+      "description": "A canonical evidence.record call uses a reserved canonical artifact kind for inline evidence.",
+      "docsUrl": "https://cruxjs.dev/docs/reference/evidence",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Rename the inline evidence kind to a bounded custom.* value.",
+          "kind": "manual",
+          "title": "Use a custom kind"
+        }
+      ],
+      "id": "evidence.reserved-inline-kind",
+      "impact": "Runtime evidence authoring rejects this call before collector mutation.",
+      "maturity": "experimental",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Canonical artifact kinds describe Crux-owned sources; inline application evidence must use custom.*.",
+      "requires": [
+        "definitions"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line evidence.reserved-inline-kind -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Canonical evidence kind is reserved"
+    },
+    {
+      "category": "contracts",
+      "confidence": "high",
       "description": "Resolved embedding and consumer-call evidence proves that media input uses a modality the dense embedding does not declare.",
-      "rationale": "A text-only or narrower embedding cannot produce comparable vectors for unsupported media.",
-      "impact": "The embedding, indexing, knowledge-base, or retrieval call will fail before producing a usable vector.",
       "docsUrl": "/docs/reference/crux-core/index-lints/embedding-unsupported-modality",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Choose a compatible embedding",
           "description": "Use an embedding that declares the authored modality, or pass text input instead.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Choose a compatible embedding"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line embedding.unsupported-modality -- reason"
-      },
+      "id": "embedding.unsupported-modality",
+      "impact": "The embedding, indexing, knowledge-base, or retrieval call will fail before producing a usable vector.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A text-only or narrower embedding cannot produce comparable vectors for unsupported media.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line embedding.unsupported-modality -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Embedding does not support the authored modality"
     },
     {
-      "id": "embedding.namespace-identity-mismatch",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Namespace uses incompatible embedding identities",
       "description": "Resolved consumers share a namespace and vector storage but use different exact dense or sparse embedding identities.",
-      "rationale": "Similarity search is meaningful only when every vector in a namespace belongs to one embedding space.",
-      "impact": "Indexing or retrieval will reject the mixed space, or an existing mixed store will fail loudly at search time.",
       "docsUrl": "/docs/reference/crux-core/index-lints/embedding-namespace-identity-mismatch",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Align the namespace embedding",
           "description": "Use matching dense and sparse embedding identities for the namespace, or choose a distinct namespace.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Align the namespace embedding"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line embedding.namespace-identity-mismatch -- reason"
-      },
+      "id": "embedding.namespace-identity-mismatch",
+      "impact": "Indexing or retrieval will reject the mixed space, or an existing mixed store will fail loudly at search time.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Similarity search is meaningful only when every vector in a namespace belongs to one embedding space.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line embedding.namespace-identity-mismatch -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Namespace uses incompatible embedding identities"
     },
     {
-      "id": "embedding.sparse-media",
-      "source": "builtin",
-      "severity": "error",
       "category": "contracts",
-      "maturity": "experimental",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Sparse embedding is combined with media",
       "description": "Resolved source evidence proves that media is declared, embedded, queried, or indexed through a sparse-only branch.",
-      "rationale": "Sparse embeddings are text-only and cannot make media chunks searchable.",
-      "impact": "The media input cannot produce a sparse vector and sparse-only indexed media is unreachable.",
       "docsUrl": "/docs/reference/crux-core/index-lints/embedding-sparse-media",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use a dense media embedding",
           "description": "Route media through a compatible dense embedding and reserve sparse embeddings for text.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use a dense media embedding"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line embedding.sparse-media -- reason"
-      },
+      "id": "embedding.sparse-media",
+      "impact": "The media input cannot produce a sparse vector and sparse-only indexed media is unreachable.",
+      "maturity": "experimental",
       "phase": "semantic",
-      "requires": ["definitions", "sources"],
-      "fidelity": "safe"
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Sparse embeddings are text-only and cannot make media chunks searchable.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line embedding.sparse-media -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Sparse embedding is combined with media"
+    },
+    {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "A prompt may declare one canonical history projection through history() or history.recent().",
+      "docsUrl": "/docs/guides/context-planning/history",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Remove all but one history() or history.recent() entry from the prompt use array.",
+          "kind": "manual",
+          "title": "Keep one history projection"
+        }
+      ],
+      "id": "context-planning.history-cardinality",
+      "impact": "Multiple projections make history ownership and request planning ambiguous.",
+      "maturity": "preview",
+      "phase": "semantic",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "One projection must own causal grouping and model-facing history selection.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line context-planning.history-cardinality -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Prompt declares multiple history projections"
+    },
+    {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "Representation ladders must follow prefer, summarizable, offloadable, then outermost droppable order.",
+      "docsUrl": "/docs/guides/context-planning",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Use each non-terminal wrapper at most once and make droppable the outermost wrapper.",
+          "kind": "manual",
+          "title": "Reorder the representation ladder"
+        }
+      ],
+      "id": "context-planning.invalid-wrapper-order",
+      "impact": "Invalid topology can weaken capability ownership or fail request composition before dispatch.",
+      "maturity": "preview",
+      "phase": "semantic",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A monotonic wrapper order gives every contributor one unambiguous degradation path.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line context-planning.invalid-wrapper-order -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Representation wrappers are ordered incorrectly"
     }
   ]
 }

@@ -13,7 +13,7 @@ The Vercel AI SDK is very good at what it owns: calling models, streaming, tool 
 
 That is the right call, because "memory" is not one feature. The last twelve messages, the current task state, and what you learned about the user last month are different kinds of state with different lifetimes and write policies. Flatten them into one vector store and you get an assistant that remembers a user's dog's name but forgets what it was doing.
 
-This post adds each kind to an AI SDK app using [Crux](https://cruxjs.dev) memory blocks. Crux composes *over* the AI SDK. The AI SDK still makes every model call.
+This post adds each kind to an AI SDK app using [Crux](https://cruxjs.dev). Conversation history stays caller-owned; typed memory blocks hold task state and longer-lived knowledge. Crux composes *over* the AI SDK, which still makes every model call.
 
 ## Setup
 
@@ -25,25 +25,17 @@ Crux's `generate()` wraps AI SDK generation with prompt resolution around it. An
 
 ## Remembering the conversation
 
-The minimum viable memory is short-term continuity. One composed memory, one block:
+The minimum viable memory is short-term continuity. Keep the complete transcript in your application, then declare the exact suffix each request may project:
 
 ```ts
-import { memory, recentMessages } from '@use-crux/core/memory'
-import { prompt } from '@use-crux/core'
+import { history, prompt } from '@use-crux/core'
 import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-const chat = memory({
-  id: 'assistant',
-  records,                                          // your record store
-  namespace: ({ input }) => `user:${input.userId}`, // isolation per user
-  blocks: [recentMessages({ id: 'recent', maxMessages: 12 })],
-})
-
 const assistant = prompt({
   id: 'assistant',
-  use: [chat],
+  use: [history.recent({ messages: 12 })],
   input: z.object({ userId: z.string(), message: z.string() }),
   system: 'Use memory when relevant. Do not invent preferences.',
   prompt: ({ input }) => input.message,
@@ -52,16 +44,17 @@ const assistant = prompt({
 const result = await generate(assistant, {
   model: openai('gpt-4o'),
   input: { userId, message },
+  messages, // the complete caller-owned transcript
 })
 ```
 
-Each call renders the block into prompt context before generation. After the model finishes, the adapter submits one completed turn to memory. Streaming uses the same lifecycle after tokens have already streamed. The default `deferred` mode uses the configured host binding to retain capture; without one, Crux waits inline so memory is never silently lost. Explicit `inline` capture can delay completion, but it never blocks token delivery.
+`history.recent()` is stateless. It keeps the newest causal message groups without splitting a Tool call from its result, and retains leading system directives. Its message cap is soft when the newest indivisible group is larger. Crux never mutates or silently truncates the canonical `messages`; your application remains responsible for storing the completed turn.
 
-Note the `namespace` function. Cross-user memory leakage is the classic memory bug. Making isolation a declared property of the composition, rather than a `WHERE` clause you remember to add, removes that failure mode structurally.
+That separation matters: transcript ownership and learned memory have different write policies. Conversation history is evidence the caller already owns. Facts and task state below are derived or application-written records with explicit namespaces and capture behavior.
 
 ## Remembering the task
 
-`recentMessages` degrades the way transcripts degrade: important details scroll out of the window. For "what are we doing right now," use one typed value the app overwrites as the task progresses:
+An exact recent suffix still has a horizon: important details eventually move outside it. For "what are we doing right now," use one typed value the app overwrites as the task progresses:
 
 ```ts
 import { workingState } from '@use-crux/core/memory'
@@ -129,36 +122,68 @@ The rule of thumb: facts are *conclusions*, episodes are *events*, procedures ar
 
 Memory competes with everything else in the prompt for finite space. Most memory tutorials skip this. It is where the production bugs live.
 
-Crux makes the arbitration explicit. Blocks have priorities, and the composed memory has a token budget:
+Crux makes the arbitration explicit across the complete provider request. Keep task state required, cap exact recent history deliberately, and authorize omission only for recall that the request can safely lose:
 
 ```ts
-const chat = memory({
-  id: 'assistant',
+import { context, droppable, history, prompt } from '@use-crux/core'
+import { facts, memory, workingState } from '@use-crux/core/memory'
+
+const taskMemory = memory({
+  id: 'task-state',
   records,
   namespace: ({ input }) => `user:${input.userId}`,
-  capture: { mode: 'deferred' },
-  budget: { maxTokens: 1200 },
-  blocks: [
-    workingState({ id: 'state', priority: 90, schema }),
-    recentMessages({ id: 'recent', maxMessages: 12, priority: 80 }),
-    facts({ id: 'about-user', embed, write: { mode: 'propose' }, render, priority: 60 }),
-  ],
+  blocks: [workingState({ id: 'state', schema })],
+})
+
+const userFacts = memory({
+  id: 'user-facts',
+  records,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [facts({ id: 'about-user', embed, write: { mode: 'propose' }, render })],
+})
+
+const optionalFacts = context({
+  id: 'optional-user-facts',
+  use: [userFacts],
+})
+
+const assistant = prompt({
+  id: 'assistant',
+  use: [history.recent({ messages: 12 }), taskMemory, droppable(optionalFacts)],
+  input: schema,
+  prompt: ({ input }) => input.message,
+})
+
+const result = await generate(assistant, {
+  model,
+  input,
+  messages,
+  inputBudget: { optimizeAt: 6000, max: 8000 },
 })
 ```
 
-Under pressure, working state survives, then recent messages, then facts. A declared policy, not an accident of concatenation order.
+The budget includes messages, system content, Tool schemas, media, provider overhead, and output reserve. Task state remains exact and required. The history policy selects a causal exact suffix. Only `droppable(optionalFacts)` authorizes complete omission, and every omission appears in the executed request receipt.
 
 `capture.mode` defaults to `deferred`. Configure retention once through `config({ host })`; when the active environment cannot retain work, Crux captures inline and emits one development warning. Use `inline` when you need read-your-writes semantics. After retained generation returns, `flush()` waits for previously accepted capture and reports its first unobserved failure.
 
 ## How do I debug it?
 
-Because memory is composed blocks rather than string glue, it is inspectable:
+Observe prospective request fit without executing the model or mutating memory:
 
 ```ts
-assistant.inspect({ input })  // what each block rendered, kept, or trimmed
+import { preview } from '@use-crux/core'
+
+const prospective = await preview(assistant, {
+  model,
+  input,
+  messages,
+  inputBudget: { optimizeAt: 6000, max: 8000 },
+})
+
+console.log(prospective.status, prospective.adaptations)
 ```
 
-At runtime, every memory read and write shows up in the devtools trace per turn: which entries were recalled, what was extracted, what was proposed versus written. "Why does it think my name is Dave" becomes a lookup instead of an afternoon of `console.log`.
+After execution, `result.steps[0].request.inspect()` returns the redacted contributor, candidate, token, artifact, and linked-request evidence for the exact provider call. At runtime, memory reads and writes also show up in the devtools trace per turn: which entries were recalled, what was extracted, what was proposed versus written. "Why does it think my name is Dave" becomes a lookup instead of an afternoon of `console.log`.
 
 ## Common pitfalls
 

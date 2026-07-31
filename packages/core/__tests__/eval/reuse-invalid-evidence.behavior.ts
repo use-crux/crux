@@ -12,15 +12,15 @@ export function reuseInvalidEvidenceBehavior(): void {
     ["corrupt", { nope: true }],
     [
       "old epoch",
-      { schemaVersion: 1, taskEvidenceCacheEpoch: 10, status: "complete" },
+      { schemaVersion: 1, taskEvidenceCacheEpoch: 11, status: "complete" },
     ],
     [
       "error",
-      { schemaVersion: 1, taskEvidenceCacheEpoch: 11, status: "error" },
+      { schemaVersion: 1, taskEvidenceCacheEpoch: 12, status: "error" },
     ],
     [
       "partial",
-      { schemaVersion: 1, taskEvidenceCacheEpoch: 11, status: "partial" },
+      { schemaVersion: 1, taskEvidenceCacheEpoch: 12, status: "partial" },
     ],
   ])("treats a %s entry as a miss", async (_label, invalidEntry) => {
     const evidenceStore = memoryEvidenceStore();

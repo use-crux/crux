@@ -24,6 +24,36 @@ import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/openai";
   see the [Execution guide](/docs/guides/prompts/execution).
 </Callout>
 
+## Request capacity and counting
+
+The adapter exposes `adapter.capacity(model)` and the standalone
+`openAIModelCapacity(model)` helper. Capacity lookup is synchronous and never
+calls the provider.
+
+```ts
+import { openAIModelCapacity } from "@use-crux/openai";
+
+const profile = openAIModelCapacity("gpt-4o-mini");
+```
+
+| Known model-id prefix | Context window | Default output reserve |
+| --- | ---: | ---: |
+| `gpt-5` | 400,000 | 128,000 |
+| `gpt-4.1` | 1,047,576 | 32,768 |
+| `gpt-4o` | 128,000 | 16,384 |
+| `gpt-4-turbo` | 128,000 | 4,096 |
+| `gpt-4` | 8,192 | 4,096 |
+| `gpt-3.5-turbo` | 16,385 | 4,096 |
+| `o1`, `o3`, `o4` | 200,000 | 100,000 |
+
+Prefix matching includes dated aliases. Unknown identifiers use a conservative
+16,384-token window with a 4,096-token reserve. Known profiles report
+`countingConfidence: "estimated"`; the fallback reports `"conservative"`.
+
+The adapter does not call a token-count endpoint. Crux estimates the complete
+request and applies the margin reported by request inspection. Use
+`inputBudget` when you need a smaller product limit or earlier optimization.
+
 ### `createOpenAI(client)`
 
 Create an adapter bound to an OpenAI client.
@@ -264,9 +294,7 @@ This helper uses the same native chat profile and media codec as
 `createOpenAI()`. It accepts exactly one of `prompt` or canonical `messages`,
 uses OpenAI's structured parse surface, and returns `{ object }`. It does not
 run Crux prompt resolution, validation retry, safety, tools, memory capture, or
-instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from
-`@use-crux/core/compaction` only when full adapter runtime behavior is needed;
-do not call that bridge from a guardrail attached to the same lifecycle.
+instrumentation.
 
 ### `createGenerateTextFn(client, model)`
 

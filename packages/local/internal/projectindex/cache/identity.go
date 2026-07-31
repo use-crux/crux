@@ -20,9 +20,12 @@ package cache
 // source classification across restart boundaries. Epoch 55 adds authored
 // evidence.record definitions, safe facts, refs, relations, and lints.
 // Epoch 56 adds Effect definitions, call-site evidence, duplicate-identity
-// lints, and runtime-observability identity across restart boundaries.
+// lints, runtime-observability identity, context-planning structure, hook and
+// budget refs, and conclusive context-planning lints.
 // Epoch 57 preserves distinct same-identity Effect call-site evidence through
 // native analysis so duplicate-identity lints survive restart boundaries.
+// Epoch 58 combines the independently versioned Effects and context-planning
+// snapshots so neither parent branch's cached projection can mask the other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 57
+const ProjectIndexSnapshotCacheEpoch = 58
