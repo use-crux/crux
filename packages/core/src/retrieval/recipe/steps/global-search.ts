@@ -81,7 +81,14 @@ export function globalSearch(config: GlobalSearchConfig): RetrievalStep<'queries
           inputChars: batches.reduce((sum, batch) => sum + batch.inputChars, 0),
           calls: batches.length,
         }
-        if (preflight.calls > GLOBAL_SEARCH_MAX_CALLS) {
+        const admission = context.request.admit?.({
+          kind: 'global-search',
+          ...preflight,
+        })
+        if (admission === false) {
+          throw new Error('globalSearch() was rejected by the request admission hook before map calls.')
+        }
+        if (!context.request.admit && preflight.calls > GLOBAL_SEARCH_MAX_CALLS) {
           throw new Error(
             `globalSearch() estimated ${preflight.calls} map calls for ${preflight.reports} reports, above the ${GLOBAL_SEARCH_MAX_CALLS} call ceiling. Remedies: use detail: 'overview', use scan: 'adaptive', or search a narrower view.`,
           )

@@ -8,6 +8,10 @@
 
 import { grounding } from '../../citations'
 import type { Grounding, GroundingConfig } from '../../citations'
+import { contextWithFamily } from '../../prompt/context'
+import { contributor } from '../../prompt/contributor'
+import type { ContextEntry } from '../../prompt/context-types'
+import { KNOWLEDGE_TRACE_METADATA_KEY } from '../../request/receipt/knowledge'
 import type { RetrievalModel } from '../model'
 import type { EmbeddingModality } from '../../embedding'
 import type { ExactFilter } from '../../storage'
@@ -51,10 +55,19 @@ export interface RetrievalRecipe {
     query: RetrieveInput,
     options?: RetrieveOptions,
   ): Promise<{ hits: RetrieverHit[]; trace: import('./trace').RecipeTrace }>
+  asContext(options: RetrievalRecipeContextOptions): ContextEntry
   asRetriever(): Retriever<ExactFilter, EmbeddingModality> & Retriever
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   asGrounding(config?: RetrievalRecipeGroundingConfig): Grounding
   inspect(): { id: string; stepCount: number; retrieverIds: readonly string[] }
+}
+
+/** Options for rendering a retrieval recipe as prompt context. */
+export interface RetrievalRecipeContextOptions {
+  readonly priority?: number
+  readonly query: string | ((input: Record<string, unknown>) => string)
+  readonly limit?: number
+  readonly renderContext?: (hits: RetrieverHit[], meta: { query: string; recipeId: string; namespace: string }) => string
 }
 
 /** Grounding options for {@link RetrievalRecipe.asGrounding}. */
@@ -98,6 +111,8 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     run: retrieve,
     retrieve,
     retrieveWithTrace,
+    asContext: (options: RetrievalRecipeContextOptions) =>
+      recipeContext(config.id, sources[0].retriever.namespace, retrieveWithTrace, options),
     asRetriever: () => recipeRetriever,
     asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
@@ -114,6 +129,43 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
       retrieverIds: sources.map((source) => source.retriever.id),
     }),
   })
+}
+
+function recipeContext(
+  recipeId: string,
+  namespace: string,
+  retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'],
+  options: RetrievalRecipeContextOptions,
+): ContextEntry {
+  return contributor({
+    id: `retrieval-recipe:${recipeId}`,
+    contribute: async ({ input }) => {
+      const query = typeof options.query === 'function' ? options.query(input) : options.query
+      const { hits, trace } = await retrieveWithTrace(query, { limit: options.limit })
+      const rendered = (options.renderContext ?? defaultRenderRecipeContext)(
+        hits,
+        { query, recipeId, namespace },
+      )
+      return {
+        contexts: [contextWithFamily({
+          id: `retrieval-recipe-context:${recipeId}`,
+          priority: options.priority ?? 50,
+          system: rendered,
+        }, 'retriever')],
+        metadata: { [KNOWLEDGE_TRACE_METADATA_KEY]: [trace] },
+      }
+    },
+  })
+}
+
+function defaultRenderRecipeContext(
+  hits: readonly RetrieverHit[],
+  meta: { query: string; recipeId: string; namespace: string },
+): string {
+  const lines = hits.map((hit) => hit.kind === 'finding'
+    ? `- [${hit.citation.findingTarget}] (score: ${hit.score.toFixed(2)}) ${hit.content}`
+    : `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
+  return `## Retrieved Context (${meta.namespace}/${meta.recipeId}: ${meta.query})\n${lines.join('\n')}`
 }
 
 function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly NormalizedRecipeSource[]): void {

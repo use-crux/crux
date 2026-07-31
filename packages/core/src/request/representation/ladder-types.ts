@@ -183,6 +183,8 @@ export interface ResolvedRepresentationPolicy {
   /** Canonical derived-summary policy retained for request-time preparation. */
   readonly summary?: {
     readonly sourceTexts: readonly string[];
+    /** Content-free source revision digests included in derived artifact identity. */
+    readonly sourceDigests?: readonly string[];
     readonly model?: unknown;
     readonly strategy: SummarizeStrategy;
   };

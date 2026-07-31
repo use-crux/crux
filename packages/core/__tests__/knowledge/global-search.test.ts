@@ -40,6 +40,26 @@ describe('globalSearch()', () => {
     })
   })
 
+  it('consults an injected admission hook before map calls', async () => {
+    const storage = inMemoryStorage()
+    const model = countingModel()
+    const docs = knowledgeBase({ id: ns, storage, communities: communities({ model }) })
+    await docs.index([chunk('alpha', 'a1', 'Alpha works with Beta.')])
+    await docs.communities?.prepare()
+    const admit = vi.fn(() => false)
+
+    const recipe = docs.recipe({ steps: [globalSearch({ model, detail: 'detailed' })] })
+    await expect(recipe.retrieve({ query: 'alpha', admit } as never)).rejects.toThrow(/admission hook/)
+
+    expect(admit).toHaveBeenCalledOnce()
+    expect(admit).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'global-search',
+      reports: 1,
+      calls: 1,
+    }))
+    expect(model.searchCalls()).toBe(0)
+  })
+
   it('selects overview and detailed report levels deterministically', async () => {
     const storage = inMemoryStorage()
     const model = countingModel()

@@ -6,6 +6,7 @@
 
 import type { ModelCountingConfidence } from "../capacity/model-profile";
 import type { RequestTokenBreakdown } from "../measure/breakdown";
+import type { RequestKnowledgeInspection } from "./knowledge";
 import {
   preparationDecision,
   type PreparationDecisionInspection,
@@ -99,6 +100,8 @@ export interface RequestInspection {
   readonly retryCount: number;
   /** Derived artifact and cache evidence. */
   readonly artifacts: readonly RequestArtifactInspection[];
+  /** Connected-knowledge receipt projections, present when a recipe contributed. */
+  readonly knowledge?: readonly RequestKnowledgeInspection[];
   /** Required support Tool identities in the selected request family. */
   readonly supportTools: readonly string[];
   /** Receipted support calls linked from selected adaptations. */
@@ -116,6 +119,7 @@ export interface RequestInspectionEvidence {
   readonly contributions?: readonly RequestContributionInspection[];
   readonly candidates?: readonly RequestCandidateInspection[];
   readonly artifacts?: readonly RequestArtifactInspection[];
+  readonly knowledge?: readonly RequestKnowledgeInspection[];
   readonly supportTools?: readonly string[];
   readonly linkedRequestIds?: readonly string[];
 }
@@ -221,6 +225,7 @@ export function requestInspection(input: {
     }),
     retryCount: input.retryCount,
     artifacts: freezeArray(input.evidence?.artifacts),
+    knowledge: freezeArray(input.evidence?.knowledge),
     supportTools: Object.freeze([...(input.evidence?.supportTools ?? [])]),
     supportRequests,
     linkedRequestIds: Object.freeze([

@@ -418,6 +418,38 @@ const answer = prompt({
 
 Resolution never mutates the source assertions. Assertion relations are separate records, not graph edges, so `expandRelations()` does not traverse assertion supports or assertion relations.
 
+## Planning and budgets
+
+Knowledge contexts stay exact unless you wrap them. Use representation wrappers to authorize smaller forms under `inputBudget`; retrieval still chooses evidence by relevance before the request is composed.
+
+```ts
+import { inspectRequest, prompt, summarizable } from "@use-crux/core";
+
+const published = docs.view({
+  id: "published-docs",
+  where: { status: "published" },
+});
+
+const viewContext = published.retriever({ limit: 8 }).asContext({
+  query: "billing limits",
+});
+
+const answer = prompt({
+  use: [summarizable(viewContext)],
+  system: "Answer from published documentation.",
+});
+
+const result = await runtime.generate(answer, {
+  inputBudget: { optimizeAt: 18_000, max: 24_000 },
+});
+
+const receipt = await inspectRequest(result.steps[0].request);
+receipt.contributions;
+receipt.knowledge;
+```
+
+Generated summaries use request artifacts keyed by the selected source revisions, strategy, and summary configuration. Retriever-owned search/navigation tools remain available for exact, reference, and summary representations; only `droppable()` omission removes them.
+
 ## Communities
 
 Use `communities()` when a knowledge base should materialize a browsable topic map over its connected graph. Communities cluster visible entities, attach every visible chunk to exactly one leaf, and publish structured reports you can read from the knowledge base or from a view.

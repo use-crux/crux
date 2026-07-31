@@ -37,6 +37,7 @@ export interface SourceSummaryArtifact {
 /** Read one valid content-addressed source summary without preparing it. @internal */
 export async function findSourceSummaryArtifact(input: {
   readonly sourceTexts: readonly string[];
+  readonly sourceDigests?: readonly string[];
   readonly strategy: SummarizeStrategy;
   readonly provider: string;
   readonly model: string;
@@ -48,6 +49,7 @@ export async function findSourceSummaryArtifact(input: {
 /** Read or prepare one content-addressed source summary. @internal */
 export async function sourceSummaryArtifact(input: {
   readonly sourceTexts: readonly string[];
+  readonly sourceDigests?: readonly string[];
   readonly strategy: SummarizeStrategy;
   readonly provider: string;
   readonly model: string;
@@ -123,6 +125,7 @@ async function prepareSourceSummary(
 
 function sourceIdentity(input: {
   readonly sourceTexts: readonly string[];
+  readonly sourceDigests?: readonly string[];
   readonly strategy: SummarizeStrategy;
   readonly provider: string;
   readonly model: string;
@@ -134,6 +137,9 @@ function sourceIdentity(input: {
   const sourceDigest = digest(input.sourceTexts);
   const id = digest({
     sourceDigest,
+    ...(input.sourceDigests && input.sourceDigests.length > 0
+      ? { sourceDigests: input.sourceDigests }
+      : {}),
     strategy: `${input.strategy.kind}:v${input.strategy.version}`,
     provider: input.provider,
     model: input.model,

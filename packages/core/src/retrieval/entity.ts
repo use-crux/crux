@@ -60,16 +60,30 @@ export function createRetrieverEntity<
       query?: string | ((input: Record<string, unknown>) => string)
       limit?: number
       renderContext?: (hits: RetrieverHit[], meta: { query: string; mode: RetrieverMode; namespace: string }) => string
+      /** Attach the retriever's tools so representation planning keeps them. Defaults to the inject mode. */
+      tools?: boolean
     }): Context<z.ZodType<{}>> {
       const querySource = options?.query ?? args.defaultContext?.query
       const priority = options?.priority ?? args.defaultContext?.priority ?? 50
       const limit = options?.limit ?? args.defaultContext?.limit ?? 5
       const renderContext = options?.renderContext ?? args.defaultContext?.renderContext ?? defaultRenderContext
+      const injectMode = args.defaultInject ?? (querySource ? 'context' : 'tool')
+      const wantsTools = options?.tools ?? injectMode !== 'context'
+      const tools = !wantsTools || args.defaultTools === false
+        ? undefined
+        : createRetrieverTools({
+            id: args.id,
+            namespace: args.namespace,
+            retrieve: retrieve as Retriever['retrieve'],
+            getSource: args.getSource,
+            config: args.defaultTools,
+          })
 
       return contextWithFullPromptInput({
         id: `retriever:${args.id}`,
         description: `Retriever context for ${args.id}`,
         priority,
+        ...(tools && Object.keys(tools).length > 0 ? { tools } : {}),
         system: async ({ input }) => {
           const query = resolveQuery(querySource, input)
           if (!query) {
@@ -198,11 +212,14 @@ function retrieverHitFreshness(hit: RetrieverHit): Pick<ContextTextSegment, 'obs
   if (hit.kind === 'finding') return {}
   return {
     ...(typeof hit.metadata.observedAt === 'number' ? { observedAt: hit.metadata.observedAt } : {}),
-    ...(typeof hit.metadata.sourceVersion === 'string' ? { sourceVersion: hit.metadata.sourceVersion } : {}),
+    ...(typeof hit.metadata.viewRevision === 'string' ? { sourceVersion: hit.metadata.viewRevision }
+      : typeof hit.metadata.sourceVersion === 'string' ? { sourceVersion: hit.metadata.sourceVersion } : {}),
   }
 }
 
 function hasRetrieverHitFreshness(hit: RetrieverHit): boolean {
   if (hit.kind === 'finding') return false
-  return typeof hit.metadata.observedAt === 'number' || typeof hit.metadata.sourceVersion === 'string'
+  return typeof hit.metadata.observedAt === 'number' ||
+    typeof hit.metadata.sourceVersion === 'string' ||
+    typeof hit.metadata.viewRevision === 'string'
 }
