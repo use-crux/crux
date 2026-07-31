@@ -378,7 +378,9 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "evidence.reserved-inline-kind",
             "embedding.unsupported-modality",
             "embedding.namespace-identity-mismatch",
-            "embedding.sparse-media"
+            "embedding.sparse-media",
+            "context-planning.history-cardinality",
+            "context-planning.invalid-wrapper-order"
         ]
     );
 

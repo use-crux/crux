@@ -8,7 +8,7 @@ import {
   wireString,
   type WireObject,
 } from "./common";
-import { decodeReadyInspection } from "./ready";
+import { decodeReadyPreview } from "./ready";
 
 const MAX_RESULT_STRING_BYTES = 1_048_576;
 const MAX_RESULT_BYTES = 2_097_152;
@@ -58,19 +58,29 @@ export function decodePromptPreviewBrowserResponse(
 }
 
 function decodeReady(object: WireObject, definitionId: string): void {
-  exactWireKeys(object, ["status", "peer", "catalogueRevision", "inspection"]);
+  exactWireKeys(object, [
+    "status",
+    "peer",
+    "catalogueRevision",
+    "preview",
+    "contributions",
+  ]);
   positiveSafeInteger(object.catalogueRevision);
   const peer = wireObject(object.peer);
   exactWireKeys(peer, ["peerId", "runtimeName", "environment"]);
   wireString(peer.peerId, 1, 128);
   wireString(peer.runtimeName, 1, 256);
   wireEnvironment(peer.environment);
-  decodeReadyInspection(wireObject(object.inspection));
+  decodeReadyPreview({
+    preview: object.preview,
+    contributions: object.contributions,
+  });
   const runtimeResult = {
     status: "ready",
     targetId: definitionId,
     catalogueRevision: object.catalogueRevision,
-    inspection: object.inspection,
+    preview: object.preview,
+    contributions: object.contributions,
   };
   if (
     countStringBytes(runtimeResult) > MAX_RESULT_STRING_BYTES ||

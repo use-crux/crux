@@ -5,6 +5,10 @@ import { promptDefinitionRef } from "../../src/observability/definition-ref";
 import { context, when } from "../../src/prompt/context";
 import { prompt } from "../../src/prompt/prompt";
 import { md } from "../../src/prompt-text";
+import {
+  droppable,
+  summarizable,
+} from "../../src/request/representation/wrappers";
 import { configure } from "../../src/runtime/configure";
 import {
   executeRuntimeBridgeCommand,
@@ -209,11 +213,13 @@ describe("exact prompt preview dispatch", () => {
       () => false,
       context({ id: "excluded", system: "Excluded context." }),
     );
+    const sticky = context({ id: "sticky", system: "Sticky context." });
+    const elastic = context({ id: "elastic", system: "Elastic context." });
     const target = prompt({
       id: "full-projection",
       system: "Base system.",
       prompt: "Question.",
-      use: [kept, excluded],
+      use: [kept, summarizable(sticky), droppable(elastic), excluded],
       adapt: {
         openai: { appendSystem: "Provider tail." },
       },
@@ -249,6 +255,11 @@ describe("exact prompt preview dispatch", () => {
         adaptations: [],
         inputTokens: expect.any(Number),
       },
+      contributions: expect.arrayContaining([
+        expect.objectContaining({ id: "context:kept", boundary: "required" }),
+        expect.objectContaining({ id: "sticky", boundary: "sticky" }),
+        expect.objectContaining({ id: "elastic", boundary: "elastic" }),
+      ]),
     });
     expect(executeTool).not.toHaveBeenCalled();
   });

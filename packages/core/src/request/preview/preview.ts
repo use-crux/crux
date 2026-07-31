@@ -29,6 +29,11 @@ import {
   selectPreviewCandidate,
 } from "./candidates";
 import type { RequestPreview, RequestPreviewOptions } from "./types";
+import {
+  requestPreviewContributions,
+  retainRequestPreviewContributions,
+  type RequestPreviewContribution,
+} from "./contributions";
 
 /** A Prompt or Agent definition accepted by {@link preview}. */
 export type RequestPreviewTarget = AnyPrompt | AnyAgent;
@@ -130,6 +135,10 @@ export async function preview(
     if (managed.policy) policies = [managed.policy, ...policies];
     warnings.push(...managed.warnings);
   }
+  const contributions = requestPreviewContributions(
+    resolved.systemBlocks,
+    policies,
+  );
   const available = selectPreviewCandidate(
     request,
     policies,
@@ -140,20 +149,23 @@ export async function preview(
   const incompleteRuntimeSource =
     (resolved.toolSources?.length ?? 0) > 0;
   if (available && !incompleteRuntimeSource) {
-    return result({
-      status: "fits",
-      model,
-      inputTokens: available.inputTokens,
-      maxInputTokens: budget.max,
-      measurement,
-      adaptations: previewAdaptations(
-        available,
-        policies,
-        available.inputTokens,
-      ),
-      warnings,
-      diagnostics: [],
-    });
+    return result(
+      {
+        status: "fits",
+        model,
+        inputTokens: available.inputTokens,
+        maxInputTokens: budget.max,
+        measurement,
+        adaptations: previewAdaptations(
+          available,
+          policies,
+          available.inputTokens,
+        ),
+        warnings,
+        diagnostics: [],
+      },
+      contributions,
+    );
   }
   const prospectivePolicies = prospectiveRepresentationPolicies(policies);
   const prospective = selectPreviewCandidate(
@@ -165,29 +177,32 @@ export async function preview(
   );
   if (prospective || incompleteRuntimeSource) {
     const candidate = prospective ?? available;
-    return result({
-      status: "unknown",
-      model,
-      ...(candidate ? { inputTokens: candidate.inputTokens } : {}),
-      maxInputTokens: budget.max,
-      measurement: "incomplete",
-      adaptations: candidate
-        ? previewAdaptations(
-            candidate,
-            policies,
-            candidate.inputTokens,
-          )
-        : [],
-      warnings,
-      diagnostics: incompleteRuntimeSource
-        ? [{
-            id: "preview:runtime-source",
-            code: "PREVIEW_RUNTIME_SOURCE",
-            message:
-              "A runtime-only Tool source prevents complete pre-execution measurement.",
-          }]
-        : [],
-    });
+    return result(
+      {
+        status: "unknown",
+        model,
+        ...(candidate ? { inputTokens: candidate.inputTokens } : {}),
+        maxInputTokens: budget.max,
+        measurement: "incomplete",
+        adaptations: candidate
+          ? previewAdaptations(
+              candidate,
+              policies,
+              candidate.inputTokens,
+            )
+          : [],
+        warnings,
+        diagnostics: incompleteRuntimeSource
+          ? [{
+              id: "preview:runtime-source",
+              code: "PREVIEW_RUNTIME_SOURCE",
+              message:
+                "A runtime-only Tool source prevents complete pre-execution measurement.",
+            }]
+          : [],
+      },
+      contributions,
+    );
   }
   const minimum = minimumPreviewCandidate(
     request,
@@ -195,24 +210,27 @@ export async function preview(
     provider,
   );
   const measured = minimum?.inputTokens ?? exact.inputTokens;
-  return result({
-    status: "over-limit",
-    model,
-    inputTokens: measured,
-    maxInputTokens: budget.max,
-    measurement,
-    adaptations: minimum
-      ? previewAdaptations(minimum, policies, measured)
-      : [],
-    warnings,
-    diagnostics: [{
-      id: "preview:input-limit",
-      code: "REQUEST_INPUT_LIMIT",
-      tokens: measured,
-      message:
-        `Minimum prospective input is ${measured} tokens; ${budget.max} are available.`,
-    }],
-  });
+  return result(
+    {
+      status: "over-limit",
+      model,
+      inputTokens: measured,
+      maxInputTokens: budget.max,
+      measurement,
+      adaptations: minimum
+        ? previewAdaptations(minimum, policies, measured)
+        : [],
+      warnings,
+      diagnostics: [{
+        id: "preview:input-limit",
+        code: "REQUEST_INPUT_LIMIT",
+        tokens: measured,
+        message:
+          `Minimum prospective input is ${measured} tokens; ${budget.max} are available.`,
+      }],
+    },
+    contributions,
+  );
 }
 
 function normalizeTarget(
@@ -255,11 +273,16 @@ function modelIdentity(model: unknown): string | undefined {
   return undefined;
 }
 
-function result(input: RequestPreview): RequestPreview {
-  return Object.freeze({
+function result(
+  input: RequestPreview,
+  contributions: readonly RequestPreviewContribution[],
+): RequestPreview {
+  const preview = Object.freeze({
     ...input,
     adaptations: Object.freeze([...input.adaptations]),
     warnings: Object.freeze([...input.warnings]),
     diagnostics: Object.freeze([...input.diagnostics]),
   });
+  retainRequestPreviewContributions(preview, contributions);
+  return preview;
 }

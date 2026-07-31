@@ -46,12 +46,15 @@ func TestPromptPreviewDispatchRouteRequiresExplicitSameOriginAndStripsBridgeEnve
 				"status":"ready",
 				"targetId":"prompt:writer",
 				"catalogueRevision":4,
-				"inspection":{
-					"system":{"text":"","tokens":0,"coverage":"complete","parts":[]},
-					"totalTokens":0,
-					"droppedContexts":[],
-					"excludedContexts":[]
-				}
+				"preview":{
+					"status":"fits","model":"test-model","inputTokens":12,
+					"maxInputTokens":100,"measurement":"exact",
+					"adaptations":[],"warnings":[],"diagnostics":[]
+				},
+				"contributions":[{
+					"id":"context:history","boundary":"sticky",
+					"representations":["full","summary"]
+				}]
 			}
 		}`, request.CommandID)
 		go func() {
@@ -89,7 +92,9 @@ func TestPromptPreviewDispatchRouteRequiresExplicitSameOriginAndStripsBridgeEnve
 	}
 	if result.Status != "ready" || result.Peer == nil ||
 		result.Peer.PeerID != "peer-a" || result.Peer.RuntimeName != "App" ||
-		result.CatalogueRevision != 4 {
+		result.CatalogueRevision != 4 ||
+		!contains(string(result.Preview), `"status":"fits"`) ||
+		!contains(string(result.Contributions), `"boundary":"sticky"`) {
 		t.Fatalf("result = %#v", result)
 	}
 	for _, forbidden := range []string{"commandId", "targetId", "runIds", "traceIds"} {

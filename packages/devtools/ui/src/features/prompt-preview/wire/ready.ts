@@ -1,172 +1,119 @@
 import {
   exactWireKeys,
-  finiteNumber,
   nonnegativeSafeInteger,
   wireObject,
   wireString,
   type WireObject,
 } from "./common";
 
-const MAX_SEGMENTS = 10_000;
 const MAX_ITEMS = 1_024;
+const representations = new Set([
+  "full",
+  "authored",
+  "summary",
+  "offload",
+  "omitted",
+]);
 
-interface Bounds {
-  segments: number;
-}
-
-/** Validate the complete bounded inspection payload of one ready response. */
-export function decodeReadyInspection(value: WireObject): void {
-  const bounds: Bounds = { segments: 0 };
-  exactWireKeys(
-    value,
-    ["system", "totalTokens", "droppedContexts", "excludedContexts"],
-    ["prompt", "tokenBudget", "tools"],
-  );
-  nonnegativeSafeInteger(value.totalTokens);
-  if (value.tokenBudget !== undefined) {
-    nonnegativeSafeInteger(value.tokenBudget);
-  }
-  decodeSystem(wireObject(value.system), bounds);
-  if (value.prompt !== undefined) {
-    decodePrompt(wireObject(value.prompt), bounds);
-  }
-  decodeDropped(value.droppedContexts, bounds);
-  decodeExcluded(value.excludedContexts, bounds);
-  if (value.tools !== undefined) {
-    const tools = boundedArray(value.tools, "tools");
-    tools.forEach((tool) => boundedString(tool, 1, 512));
-  }
-}
-
-function decodeSystem(value: WireObject, bounds: Bounds): void {
-  exactWireKeys(value, ["text", "tokens", "coverage", "parts"]);
-  const text = boundedString(value.text, 0, 1_048_576);
-  nonnegativeSafeInteger(value.tokens);
-  if (value.coverage !== "complete" && value.coverage !== "partial") {
-    throw new Error("invalid coverage");
-  }
-  const included: string[] = [];
-  boundedArray(value.parts, "parts").forEach((part) => {
-    const object = wireObject(part);
-    exactWireKeys(
-      object,
-      ["source", "text", "tokens", "skipped", "segments"],
-      ["staticTokens", "dynamicTokens"],
-    );
-    boundedString(object.source, 1, 512);
-    const partText = boundedString(object.text, 0, 1_048_576);
-    nonnegativeSafeInteger(object.tokens);
-    if (typeof object.skipped !== "boolean") throw new Error("invalid skipped");
-    if (!object.skipped && partText !== "") included.push(partText);
-    optionalCount(object.staticTokens);
-    optionalCount(object.dynamicTokens);
-    decodeSegments(object.segments, partText, bounds);
-  });
-  const coverage = included.join("\n\n") === text ? "complete" : "partial";
-  if (value.coverage !== coverage) throw new Error("invalid system coverage");
-}
-
-function decodePrompt(value: WireObject, bounds: Bounds): void {
-  exactWireKeys(
-    value,
-    ["text", "tokens", "segments"],
-    ["staticTokens", "dynamicTokens"],
-  );
-  const text = boundedString(value.text, 0, 1_048_576);
-  nonnegativeSafeInteger(value.tokens);
-  optionalCount(value.staticTokens);
-  optionalCount(value.dynamicTokens);
-  decodeSegments(value.segments, text, bounds);
-}
-
-function decodeDropped(value: unknown, bounds: Bounds): void {
-  boundedArray(value, "dropped contexts").forEach((item) => {
-    const object = wireObject(item);
-    exactWireKeys(object, ["source", "text", "tokens", "priority", "segments"]);
-    boundedString(object.source, 1, 512);
-    const text = boundedString(object.text, 0, 1_048_576);
-    nonnegativeSafeInteger(object.tokens);
-    finiteNumber(object.priority);
-    decodeSegments(object.segments, text, bounds);
-  });
-}
-
-function decodeExcluded(value: unknown, bounds: Bounds): void {
-  boundedArray(value, "excluded contexts").forEach((item) => {
-    const object = wireObject(item);
-    exactWireKeys(object, ["source", "reason"]);
-    boundedString(object.source, 1, 512);
-    boundedString(object.reason, 0, 1024);
-  });
-}
-
-function decodeSegments(value: unknown, text: string, bounds: Bounds): void {
-  if (!Array.isArray(value)) throw new Error("invalid segments");
-  bounds.segments += value.length;
-  if (bounds.segments > MAX_SEGMENTS) throw new Error("segment limit");
-  let cursor = 0;
-  value.forEach((segment) => {
-    const object = wireObject(segment);
-    exactWireKeys(
-      object,
-      ["kind", "startUtf16", "endUtf16"],
-      ["source", "observedAt", "sourceVersion"],
-    );
-    if (!["static", "dynamic", "unknown"].includes(String(object.kind))) {
-      throw new Error("invalid segment kind");
-    }
-    const start = nonnegativeSafeInteger(object.startUtf16);
-    const end = nonnegativeSafeInteger(object.endUtf16);
+/** Validate one complete redacted request-preview result. */
+export function decodeReadyPreview(value: WireObject): void {
+  exactWireKeys(value, ["preview", "contributions"]);
+  decodePreview(wireObject(value.preview));
+  boundedArray(value.contributions).forEach((entry) => {
+    const contribution = wireObject(entry);
+    exactWireKeys(contribution, ["id", "boundary", "representations"]);
+    wireString(contribution.id, 1, 512);
     if (
-      start !== cursor ||
-      end <= start ||
-      end > text.length ||
-      !isUtf16Boundary(text, start) ||
-      !isUtf16Boundary(text, end)
+      !["required", "sticky", "elastic"].includes(String(contribution.boundary))
     ) {
-      throw new Error("invalid segment range");
+      throw new Error("invalid contribution boundary");
     }
-    if (object.source !== undefined) {
-      boundedString(object.source, 1, 512);
+    const rungs = boundedArray(contribution.representations, 5);
+    if (
+      rungs.length === 0 ||
+      rungs.some((rung) => !representations.has(String(rung)))
+    ) {
+      throw new Error("invalid contribution representations");
     }
-    if (object.observedAt !== undefined) {
-      nonnegativeSafeInteger(object.observedAt);
-    }
-    if (object.sourceVersion !== undefined) {
-      boundedString(object.sourceVersion, 1, 256);
-    }
-    cursor = end;
   });
-  if (cursor !== text.length) throw new Error("incomplete segments");
 }
 
-function boundedArray(value: unknown, name: string): readonly unknown[] {
-  if (!Array.isArray(value) || value.length > MAX_ITEMS) {
-    throw new Error(`invalid ${name}`);
+function decodePreview(value: WireObject): void {
+  exactWireKeys(
+    value,
+    ["status", "measurement", "adaptations", "warnings", "diagnostics"],
+    ["model", "inputTokens", "maxInputTokens"],
+  );
+  if (!["fits", "over-limit", "unknown"].includes(String(value.status))) {
+    throw new Error("invalid preview status");
+  }
+  if (
+    !["exact", "estimated", "conservative", "incomplete"].includes(
+      String(value.measurement),
+    )
+  ) {
+    throw new Error("invalid preview measurement");
+  }
+  if (value.model !== undefined) wireString(value.model, 0, 512);
+  if (value.inputTokens !== undefined)
+    nonnegativeSafeInteger(value.inputTokens);
+  if (value.maxInputTokens !== undefined)
+    nonnegativeSafeInteger(value.maxInputTokens);
+  boundedArray(value.adaptations).forEach(decodeAdaptation);
+  boundedArray(value.warnings).forEach(decodeWarning);
+  boundedArray(value.diagnostics).forEach(decodeDiagnostic);
+}
+
+function decodeAdaptation(value: unknown): void {
+  const adaptation = wireObject(value);
+  exactWireKeys(
+    adaptation,
+    ["contributor", "representation", "state"],
+    ["fullTokens", "selectedTokens"],
+  );
+  wireString(adaptation.contributor, 1, 512);
+  if (
+    !["authored", "summary", "offload", "omitted"].includes(
+      String(adaptation.representation),
+    )
+  ) {
+    throw new Error("invalid adaptation representation");
+  }
+  if (adaptation.state !== "selected" && adaptation.state !== "unprepared") {
+    throw new Error("invalid adaptation state");
+  }
+  if (adaptation.fullTokens !== undefined)
+    nonnegativeSafeInteger(adaptation.fullTokens);
+  if (adaptation.selectedTokens !== undefined)
+    nonnegativeSafeInteger(adaptation.selectedTokens);
+}
+
+function decodeWarning(value: unknown): void {
+  const warning = wireObject(value);
+  exactWireKeys(warning, ["code", "message"]);
+  wireString(warning.code, 1, 128);
+  wireString(warning.message, 0, 2_048);
+}
+
+function decodeDiagnostic(value: unknown): void {
+  const diagnostic = wireObject(value);
+  exactWireKeys(
+    diagnostic,
+    ["id", "code", "message"],
+    ["contributor", "tokens"],
+  );
+  wireString(diagnostic.id, 1, 512);
+  wireString(diagnostic.code, 1, 128);
+  wireString(diagnostic.message, 0, 2_048);
+  if (diagnostic.contributor !== undefined)
+    wireString(diagnostic.contributor, 1, 512);
+  if (diagnostic.tokens !== undefined)
+    nonnegativeSafeInteger(diagnostic.tokens);
+}
+
+function boundedArray(value: unknown, maximum = MAX_ITEMS): readonly unknown[] {
+  if (!Array.isArray(value) || value.length > maximum) {
+    throw new Error("invalid preview collection");
   }
   return value;
-}
-
-function boundedString(
-  value: unknown,
-  minimum: number,
-  maximum: number,
-): string {
-  return wireString(value, minimum, maximum);
-}
-
-function optionalCount(value: unknown): void {
-  if (value !== undefined) nonnegativeSafeInteger(value);
-}
-
-function isUtf16Boundary(value: string, offset: number): boolean {
-  if (offset <= 0 || offset >= value.length) return true;
-  const previous = value.charCodeAt(offset - 1);
-  const current = value.charCodeAt(offset);
-  return !(
-    previous >= 0xd800 &&
-    previous <= 0xdbff &&
-    current >= 0xdc00 &&
-    current <= 0xdfff
-  );
 }

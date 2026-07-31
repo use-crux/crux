@@ -73,6 +73,19 @@ const PreviewAdaptationSchema = z
   })
   .strict();
 
+const PreviewContributionSchema = z
+  .object({
+    id: ScalarValidStringSchema.min(1).max(512),
+    boundary: z.enum(["required", "sticky", "elastic"]),
+    representations: z
+      .array(
+        z.enum(["full", "authored", "summary", "offload", "omitted"]),
+      )
+      .min(1)
+      .max(5),
+  })
+  .strict();
+
 /** Exact, bounded projection of observational request preview. */
 export const PromptPreviewReadyResultSchema = z
   .object({
@@ -96,6 +109,7 @@ export const PromptPreviewReadyResultSchema = z
         diagnostics: z.array(RequestDiagnosticSchema).max(1024),
       })
       .strict(),
+    contributions: z.array(PreviewContributionSchema).max(1024),
   })
   .strict();
 

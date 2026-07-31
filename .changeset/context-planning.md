@@ -5,6 +5,8 @@
 "@use-crux/openai": minor
 "@use-crux/anthropic": minor
 "@use-crux/google": minor
+"@use-crux/indexer": minor
+"@use-crux/local": minor
 ---
 
 Add provider-neutral model capacity profiles, conservative unknown-model
@@ -103,3 +105,11 @@ before execution, `prompt.resolve()` for resolved Prompt arguments, and
 request-receipt inspection for evidence about the exact request that was sent.
 The context-planning migration guide documents all removed budget, history,
 compaction, and inspection surfaces and their semantic replacements.
+
+Project authored history ownership, representation-ladder boundaries,
+definition and invocation budgets, and preparation hooks into the Project
+Index with matching TypeScript and native semantic output. Local request
+preview responses now expose the redacted fit result and required, sticky, or
+elastic contribution map used by Devtools, with restart-safe cache invalidation
+and conclusive diagnostics for duplicate history projections or invalid wrapper
+order.

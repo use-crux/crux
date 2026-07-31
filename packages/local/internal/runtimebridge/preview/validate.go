@@ -66,9 +66,7 @@ func DecodeDispatch(commandID, targetID, environment string, revision uint64, pa
 	}
 	if decoded.Options != nil {
 		if invalidOptionalString(decoded.Options.Provider, 128) ||
-			invalidOptionalString(decoded.Options.ModelID, 256) ||
-			(decoded.Options.TokenBudget != nil &&
-				(*decoded.Options.TokenBudget < 0 || *decoded.Options.TokenBudget > 1_000_000)) {
+			invalidOptionalString(decoded.Options.ModelID, 256) {
 			return Payload{}, NewFailure("invalid_request")
 		}
 	}
@@ -109,7 +107,7 @@ func validatePayloadOptionals(data []byte) error {
 	if err := json.Unmarshal(fields.Options, &options); err != nil {
 		return err
 	}
-	for _, name := range []string{"provider", "modelId", "tokenBudget"} {
+	for _, name := range []string{"provider", "modelId"} {
 		if isJSONNull(options[name]) {
 			return fmt.Errorf("%s must be omitted", name)
 		}

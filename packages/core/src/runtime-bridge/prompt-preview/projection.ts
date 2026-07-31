@@ -5,6 +5,7 @@
  */
 
 import type { RequestPreview } from "../../request/preview/types";
+import { inspectRequestPreviewContributions } from "../../request/preview/contributions";
 import {
   PromptPreviewReadyResultSchema,
   type PromptPreviewResult,
@@ -31,6 +32,7 @@ export function projectRequestPreview(
     targetId,
     catalogueRevision,
     preview,
+    contributions: inspectRequestPreviewContributions(preview),
   });
   if (
     stringBytes(result) > PROMPT_PREVIEW_MAX_STRING_AGGREGATE_BYTES ||
