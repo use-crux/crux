@@ -14,8 +14,42 @@ import { canonicalEvidenceJson } from "../evidence/canonical-json";
 const TEXT_ENCODER = new TextEncoder();
 
 /** Hash one normalized persisted message. */
-export function threadMessageIdentity(message: PersistedMessage): string {
-  return sha256Hex(TEXT_ENCODER.encode(canonicalEvidenceJson(message)));
+export function threadMessageIdentity(
+  message: PersistedMessage,
+  ownedAssetRefs: readonly string[] = [],
+): string {
+  return sha256Hex(
+    TEXT_ENCODER.encode(canonicalEvidenceJson(
+      projectAssetIdentity(message, new Set(ownedAssetRefs)),
+    )),
+  );
+}
+
+function projectAssetIdentity(
+  message: PersistedMessage,
+  ownedAssetRefs: ReadonlySet<string>,
+): PersistedMessage {
+  if (typeof message.content === "string") return message;
+  return {
+    ...message,
+    content: message.content.map((part) => {
+      if (
+        !("source" in part) ||
+        part.source.type !== "asset-ref" ||
+        !ownedAssetRefs.has(part.source.ref.uri) ||
+        !part.source.info?.sha256
+      ) {
+        return part;
+      }
+      return {
+        ...part,
+        source: {
+          ...part.source,
+          ref: { uri: `sha256:${part.source.info.sha256}` },
+        },
+      };
+    }),
+  } as PersistedMessage;
 }
 
 /** Hash structural causal-group identity from ordered canonical inputs. */

@@ -61,7 +61,13 @@ export async function readThread(
   );
   const entries = await Promise.all(
     page.nodes.map((node) =>
-      nodeToEntry(storage, node, variants.get(node.id))),
+      nodeToEntry(
+        storage,
+        node,
+        variants.get(node.id),
+        control.redactions[node.id] === true,
+        control.removals[node.id] === true,
+      )),
   );
   return frozenSnapshot(threadId, head, entries, page.cursor);
 }
@@ -120,15 +126,17 @@ async function nodeToEntry(
   storage: Storage,
   node: ThreadNodeRecord,
   variant: ThreadVariantInfo | undefined,
+  redacted: boolean,
+  removed: boolean,
 ): Promise<ThreadEntry> {
   const structural = {
     id: node.id,
     ...(node.parentId ? { parentId: node.parentId } : {}),
   };
-  if (node.state === "redacted") {
+  if (redacted || node.state === "redacted") {
     return Object.freeze({ kind: "redacted", ...structural });
   }
-  if (node.state === "removed") {
+  if (removed || node.state === "removed") {
     return Object.freeze({
       kind: "removed",
       ...structural,
@@ -137,7 +145,7 @@ async function nodeToEntry(
   }
   const [message] = await decodePersistedMessages({
     storage,
-    messages: [node.message!],
+    messages: [node.message],
   });
   if (!message) {
     throw new ThreadError("commit_failed", "Stored Thread message could not be decoded.");

@@ -16,6 +16,7 @@ export interface ThreadGroupMember {
   readonly id: string;
   readonly message: PersistedMessage;
   readonly identity: string;
+  readonly assetRefs: readonly string[];
   readonly seq: number;
   readonly groupEnd: boolean;
 }
@@ -27,6 +28,7 @@ export function deriveThreadGroup(
     readonly id: string;
     readonly message: PersistedMessage;
     readonly identity: string;
+    readonly assetRefs: readonly string[];
   }[],
 ): { readonly id: string; readonly members: readonly ThreadGroupMember[] } {
   validateToolLifecycle(messages.map((entry) => entry.message));

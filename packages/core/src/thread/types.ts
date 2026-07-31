@@ -144,4 +144,8 @@ export interface Thread {
   edit(messageId: string, patch: ThreadEditPatch): Promise<ThreadCommit>;
   /** Select an existing sibling or ancestor with its remembered continuation. */
   select(messageId: string): Promise<ThreadSnapshot>;
+  /** Irreversibly erase provenance for one or more published messages. */
+  redact(messageId: string | readonly string[]): Promise<void>;
+  /** Permanently delete an unowned Thread and all of its durable records. */
+  delete(): Promise<void>;
 }

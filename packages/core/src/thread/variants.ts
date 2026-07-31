@@ -108,8 +108,10 @@ function compareSibling(
   left: ThreadNodeRecord,
   right: ThreadNodeRecord,
 ): number {
-  if (left.createdAt < right.createdAt) return -1;
-  if (left.createdAt > right.createdAt) return 1;
+  const leftCreatedAt = left.state === "redacted" ? "" : left.createdAt;
+  const rightCreatedAt = right.state === "redacted" ? "" : right.createdAt;
+  if (leftCreatedAt < rightCreatedAt) return -1;
+  if (leftCreatedAt > rightCreatedAt) return 1;
   if (left.id < right.id) return -1;
   if (left.id > right.id) return 1;
   return 0;

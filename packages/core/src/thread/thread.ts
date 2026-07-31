@@ -9,9 +9,15 @@
 
 import { resolveRecords } from "../runtime/runtime";
 import type { Storage } from "../storage";
+import {
+  deleteThread,
+  emptyThreadOwnerRegistry,
+  type ThreadOwnerRegistry,
+} from "./delete";
 import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
 import { commitThreadTurn, readThreadHistory } from "./entry";
+import { redactThreadMessages } from "./redact";
 import { commitThreadEdit } from "./store/alternatives";
 import { commitThreadAppend } from "./store/commit";
 import { readThread } from "./store/read";
@@ -32,6 +38,14 @@ import type { Thread, ThreadOptions } from "./types";
  * ```
  */
 export function thread(options: ThreadOptions): Thread {
+  return createThreadHandle(options, emptyThreadOwnerRegistry);
+}
+
+/** Create a Thread handle with an internal durable-owner registry seam. */
+export function createThreadHandle(
+  options: ThreadOptions,
+  ownerRegistry: ThreadOwnerRegistry,
+): Thread {
   assertThreadId(options.id);
   let resolved: Storage | undefined;
   const resolveStorage = (): Storage => {
@@ -68,6 +82,10 @@ export function thread(options: ThreadOptions): Thread {
     commitThreadEdit(resolveStorage(), options.id, messageId, patch);
   const select: Thread["select"] = (messageId) =>
     selectThread(resolveStorage(), options.id, messageId);
+  const redact: Thread["redact"] = (messageId) =>
+    redactThreadMessages(resolveStorage(), options.id, messageId);
+  const deleteHandle: Thread["delete"] = () =>
+    deleteThread(resolveStorage(), options.id, ownerRegistry);
   return Object.freeze({
     _tag: "Thread",
     id: options.id,
@@ -77,5 +95,7 @@ export function thread(options: ThreadOptions): Thread {
     commitTurn,
     edit,
     select,
+    redact,
+    delete: deleteHandle,
   });
 }

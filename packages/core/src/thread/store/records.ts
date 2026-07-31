@@ -18,26 +18,42 @@ export interface ThreadControlRecord extends JsonObject {
   readonly state: "live" | "deleted";
   readonly heads: Readonly<Record<string, string>>;
   readonly leaves: Readonly<Record<string, string>>;
+  readonly redactions: Readonly<Record<string, true>>;
+  readonly removals: Readonly<Record<string, true>>;
   readonly pendingReceipts: Readonly<Record<string, ThreadReceiptRecord>>;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
-/** One immutable structural and canonical-message record. */
-export interface ThreadNodeRecord extends JsonObject {
+interface ThreadNodeBase extends JsonObject {
   readonly schema: 1;
   readonly id: string;
   readonly parentId: string | null;
   readonly groupId: string;
   readonly seq: number;
   readonly groupEnd: boolean;
+}
+
+/** One live or visibility-removed canonical-message record. */
+export interface ThreadLiveNodeRecord extends ThreadNodeBase {
   readonly createdAt: string;
-  readonly state: "live" | "removed" | "redacted";
-  readonly message?: PersistedMessage & JsonObject;
-  readonly identity?: string;
+  readonly state: "live" | "removed";
+  readonly message: PersistedMessage & JsonObject;
+  readonly identity: string;
+  readonly assetRefs: readonly string[];
   readonly editOf?: string;
   readonly revisionOf?: string;
 }
+
+/** Minimal irreversible provenance tombstone. */
+export interface ThreadRedactedNodeRecord extends ThreadNodeBase {
+  readonly state: "redacted";
+}
+
+/** One structural Thread node in live or erased form. */
+export type ThreadNodeRecord =
+  | ThreadLiveNodeRecord
+  | ThreadRedactedNodeRecord;
 
 /** Immutable original receipt for one published append group. */
 export interface ThreadReceiptRecord extends JsonObject {
@@ -53,29 +69,39 @@ export interface ThreadReceiptRecord extends JsonObject {
 export function parseThreadControlRecord(
   value: JsonObject,
 ): ThreadControlRecord {
+  const redactions = value.redactions ?? {};
+  const removals = value.removals ?? {};
   if (
     value.schema !== 1 ||
     (value.state !== "live" && value.state !== "deleted") ||
     !isStringRecord(value.heads) ||
     !isStringRecord(value.leaves) ||
+    !isTrueRecord(redactions) ||
+    !isTrueRecord(removals) ||
     !isReceiptRecord(value.pendingReceipts) ||
     !isTimestamp(value.createdAt) ||
     !isTimestamp(value.updatedAt)
   ) {
     throw corruptRecord("control");
   }
-  return value as ThreadControlRecord;
+  return { ...value, redactions, removals } as ThreadControlRecord;
 }
 
 /** Validate and narrow an untrusted immutable node record. */
 export function parseThreadNodeRecord(value: JsonObject): ThreadNodeRecord {
   const state = value.state;
+  const assetRefs = value.assetRefs ?? [];
   const livePayload =
     state === "live" || state === "removed"
       ? typeof value.identity === "string" &&
+        isStringArray(assetRefs) &&
+        isTimestamp(value.createdAt) &&
         value.message !== undefined &&
         isPersistedMessages([value.message])
-      : value.identity === undefined && value.message === undefined;
+      : value.identity === undefined &&
+        value.message === undefined &&
+        value.assetRefs === undefined &&
+        value.createdAt === undefined;
   if (
     value.schema !== 1 ||
     typeof value.id !== "string" ||
@@ -84,7 +110,6 @@ export function parseThreadNodeRecord(value: JsonObject): ThreadNodeRecord {
     !Number.isInteger(value.seq) ||
     Number(value.seq) < 0 ||
     typeof value.groupEnd !== "boolean" ||
-    !isTimestamp(value.createdAt) ||
     (state !== "live" && state !== "removed" && state !== "redacted") ||
     !livePayload ||
     (value.editOf !== undefined && typeof value.editOf !== "string") ||
@@ -92,7 +117,21 @@ export function parseThreadNodeRecord(value: JsonObject): ThreadNodeRecord {
   ) {
     throw corruptRecord("node");
   }
-  return value as ThreadNodeRecord;
+  if (state === "live" || state === "removed") {
+    return { ...value, assetRefs } as unknown as ThreadNodeRecord;
+  }
+  return value as unknown as ThreadNodeRecord;
+}
+
+function isTrueRecord(
+  value: unknown,
+): value is Readonly<Record<string, true>> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => entry === true)
+  );
 }
 
 /** Validate and narrow an untrusted immutable append receipt. */

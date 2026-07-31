@@ -53,10 +53,12 @@ export function describeThreadConformance(
         "_tag",
         "append",
         "commitTurn",
+        "delete",
         "edit",
         "id",
         "read",
         "readHistory",
+        "redact",
         "select",
       ]);
       expect(Object.isFrozen(commit)).toBe(true);

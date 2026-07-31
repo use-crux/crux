@@ -66,16 +66,34 @@ async function persistReceiptRecord(
   record: ThreadReceiptRecord,
 ): Promise<void> {
   const key = threadReceiptKey(threadId, firstMessageId);
-  if (await storage.records.create(key, record)) return;
-  const current = await storage.records.get(key);
-  if (
-    !current ||
-    !sameReceipt(parseThreadReceiptRecord(current), record)
-  ) {
-    throw new ThreadCommitError(
-      `Thread "${threadId}" stores a conflicting append receipt for "${firstMessageId}".`,
-    );
+  if (!(await storage.records.create(key, record))) {
+    const current = await storage.records.get(key);
+    if (
+      !current ||
+      !sameReceipt(parseThreadReceiptRecord(current), record)
+    ) {
+      throw new ThreadCommitError(
+        `Thread "${threadId}" stores a conflicting append receipt for "${firstMessageId}".`,
+      );
+    }
   }
+  await fenceDeletedThread(storage, threadId, key);
+}
+
+async function fenceDeletedThread(
+  storage: Storage,
+  threadId: string,
+  receiptKey: string,
+): Promise<void> {
+  const rawControl = await storage.records.get(threadControlKey(threadId));
+  if (
+    !rawControl ||
+    parseThreadControlRecord(rawControl).state !== "deleted"
+  ) {
+    return;
+  }
+  await storage.records.delete(receiptKey);
+  throw new ThreadError("deleted", `Thread "${threadId}" has been deleted.`);
 }
 
 /** Load the immutable original receipt for an exact append replay. */

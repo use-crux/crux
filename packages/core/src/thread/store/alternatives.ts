@@ -18,9 +18,18 @@ import type {
   ThreadCommit,
   ThreadEditPatch,
 } from "../types";
+import {
+  cleanupPreparedThreadEdit,
+  redactedEditTarget,
+} from "./edit-cleanup";
+import {
+  branchAfterCommonParent,
+  editReceipt,
+  rememberedLeafForTarget,
+} from "./edit-navigation";
 import { threadControlKey } from "./keys";
 import {
-  createImmutableThreadNodes,
+  createImmutableThreadNodesWithOwnership,
   createThreadNodes,
   prepareThreadMessages,
 } from "./nodes";
@@ -33,6 +42,7 @@ import {
   parseThreadControlRecord,
   parseThreadNodeRecord,
   type ThreadControlRecord,
+  type ThreadLiveNodeRecord,
   type ThreadNodeRecord,
 } from "./records";
 
@@ -60,94 +70,127 @@ export async function commitThreadEdit(
   if (!observedHead) throw targetNotFound(threadId, messageId);
   const targetPath = await loadThreadPath(storage, threadId, messageId);
 
-  const prepared = await prepareThreadMessages(storage, [{
+  const prepared = await prepareThreadMessages(storage, threadId, [{
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     role: "user",
     content: patch.content,
     ...(patch.metadata ? { metadata: patch.metadata } : {}),
   }]);
-  const group = deriveThreadGroup(target.parentId, prepared);
-  const createdAt = new Date().toISOString();
-  const requested = createThreadNodes(
-    group.members,
-    target.parentId,
-    group.id,
-    createdAt,
-  ).map((node) => ({ ...node, editOf: target.id }));
-  const existed = await getThreadNodeRecord(storage, threadId, requested[0]!.id);
-  const nodes = await createImmutableThreadNodes(
-    storage,
-    threadId,
-    requested,
-  );
-  const replacement = nodes[0]!;
-  if (
-    existed &&
-    await isNodePublished(
+  let ownedReplacement: ThreadLiveNodeRecord | undefined;
+  let targetRedacted = false;
+  try {
+    const group = deriveThreadGroup(target.parentId, prepared);
+    const createdAt = new Date().toISOString();
+    const requested = createThreadNodes(
+      group.members,
+      target.parentId,
+      group.id,
+      createdAt,
+    ).map((node) => ({ ...node, editOf: target.id }));
+    const creation = await createImmutableThreadNodesWithOwnership(
       storage,
       threadId,
-      observedControl,
-      replacement.id,
-    )
-  ) {
-    return editReceipt(replacement, target.parentId, true);
-  }
-
-  let replayed = false;
-  try {
-    await mutateRecord(
-      storage.records,
+      requested,
+    );
+    const replacement = creation.nodes[0]!;
+    if (creation.created[0]) ownedReplacement = replacement;
+    const latestControlRaw = await storage.records.get(
       threadControlKey(threadId),
-      async (current) => {
-        if (!current) throw targetNotFound(threadId, messageId);
-        const control = parseThreadControlRecord(current);
-        assertLive(control, threadId);
-        if (!(await isNodePublished(storage, threadId, control, messageId))) {
-          throw targetNotFound(threadId, messageId);
-        }
-        if (
-          await isNodePublished(
+    );
+    const latestControl = latestControlRaw
+      ? parseThreadControlRecord(latestControlRaw)
+      : null;
+    if (latestControl?.redactions[messageId]) {
+      targetRedacted = true;
+      throw redactedEditTarget(threadId, messageId);
+    }
+    if (
+      !creation.created[0] &&
+      await isNodePublished(
+        storage,
+        threadId,
+        observedControl,
+        replacement.id,
+      )
+    ) {
+      return editReceipt(replacement, target.parentId, true);
+    }
+
+    let replayed = false;
+    try {
+      await mutateRecord(
+        storage.records,
+        threadControlKey(threadId),
+        async (current) => {
+          if (!current) throw targetNotFound(threadId, messageId);
+          const control = parseThreadControlRecord(current);
+          assertLive(control, threadId);
+          if (control.redactions[messageId]) {
+            throw redactedEditTarget(threadId, messageId);
+          }
+          if (!(await isNodePublished(storage, threadId, control, messageId))) {
+            throw targetNotFound(threadId, messageId);
+          }
+          if (
+            await isNodePublished(
+              storage,
+              threadId,
+              control,
+              replacement.id,
+            )
+          ) {
+            replayed = true;
+            return { type: "none" };
+          }
+          const currentHead = control.heads[OWNER];
+          if (!currentHead) throw targetNotFound(threadId, messageId);
+          const currentPath = await loadThreadPath(
+            storage,
+            threadId,
+            currentHead,
+          );
+          const currentBranch = branchAfterCommonParent(
+            currentPath,
+            targetPath,
+          );
+          const originalLeaf = await rememberedLeafForTarget(
             storage,
             threadId,
             control,
-            replacement.id,
-          )
-        ) {
-          replayed = true;
-          return { type: "none" };
-        }
-        const currentHead = control.heads[OWNER];
-        if (!currentHead) throw targetNotFound(threadId, messageId);
-        const currentPath = await loadThreadPath(storage, threadId, currentHead);
-        const currentBranch = branchAfterCommonParent(currentPath, targetPath);
-        const originalLeaf = await rememberedLeafForTarget(
-          storage,
-          threadId,
-          control,
-          currentHead,
-          currentPath,
-          targetPath,
-          target.id,
-        );
-        const leaves = {
-          ...control.leaves,
-          ...(currentBranch ? { [currentBranch.id]: currentHead } : {}),
-          [target.id]: originalLeaf,
-        };
-        const now = new Date().toISOString();
-        const next: ThreadControlRecord = {
-          ...control,
-          heads: { ...control.heads, [OWNER]: replacement.id },
-          leaves,
-          updatedAt: now,
-        };
-        return { type: "put", value: next };
-      },
+            currentHead,
+            currentPath,
+            targetPath,
+            target.id,
+          );
+          const leaves = {
+            ...control.leaves,
+            ...(currentBranch ? { [currentBranch.id]: currentHead } : {}),
+            [target.id]: originalLeaf,
+          };
+          const now = new Date().toISOString();
+          const next: ThreadControlRecord = {
+            ...control,
+            heads: { ...control.heads, [OWNER]: replacement.id },
+            leaves,
+            updatedAt: now,
+          };
+          return { type: "put", value: next };
+        },
+      );
+    } catch (error) {
+      const mapped = mapEditError(threadId, error);
+      if (mapped.code === "redacted") targetRedacted = true;
+      throw mapped;
+    }
+    return editReceipt(replacement, target.parentId, replayed);
+  } finally {
+    await cleanupPreparedThreadEdit(
+      storage,
+      threadId,
+      prepared,
+      targetRedacted ? ownedReplacement : undefined,
     );
-  } catch (error) {
-    throw mapEditError(threadId, error);
   }
-  return editReceipt(replacement, target.parentId, replayed);
 }
 
 async function loadEditTarget(
@@ -161,11 +204,8 @@ async function loadEditTarget(
     throw targetNotFound(threadId, messageId);
   }
   const target = parseThreadNodeRecord(raw);
-  if (target.state === "redacted") {
-    throw new ThreadError(
-      "redacted",
-      `Edit target "${messageId}" in Thread "${threadId}" has been redacted.`,
-    );
+  if (control.redactions[messageId] || target.state === "redacted") {
+    throw redactedEditTarget(threadId, messageId);
   }
   if (
     target.state !== "live" ||
@@ -179,66 +219,6 @@ async function loadEditTarget(
     );
   }
   return target;
-}
-
-function branchAfterCommonParent(
-  currentPath: readonly ThreadNodeRecord[],
-  targetPath: readonly ThreadNodeRecord[],
-): ThreadNodeRecord | undefined {
-  const targetParentPath = targetPath.slice(0, -1);
-  let index = 0;
-  while (
-    index < currentPath.length &&
-    index < targetParentPath.length &&
-    currentPath[index]!.id === targetParentPath[index]!.id
-  ) {
-    index += 1;
-  }
-  return currentPath[index];
-}
-
-async function rememberedLeafForTarget(
-  storage: Storage,
-  threadId: string,
-  control: ThreadControlRecord,
-  currentHead: string,
-  currentPath: readonly ThreadNodeRecord[],
-  targetPath: readonly ThreadNodeRecord[],
-  targetId: string,
-): Promise<string> {
-  if (currentPath.some((node) => node.id === targetId)) return currentHead;
-  let remembered = targetId;
-  let bestBranchDepth = -2;
-  let bestLeafDepth = -1;
-  for (const [branchId, leafId] of Object.entries(control.leaves)) {
-    const leafPath = await loadThreadPath(storage, threadId, leafId);
-    if (!leafPath.some((node) => node.id === targetId)) continue;
-    const branchDepth = targetPath.findIndex((node) => node.id === branchId);
-    if (
-      branchDepth > bestBranchDepth ||
-      (branchDepth === bestBranchDepth && leafPath.length > bestLeafDepth)
-    ) {
-      remembered = leafId;
-      bestBranchDepth = branchDepth;
-      bestLeafDepth = leafPath.length;
-    }
-  }
-  return remembered;
-}
-
-function editReceipt(
-  replacement: ThreadNodeRecord,
-  parentId: string | null,
-  replayed: boolean,
-): ThreadCommit {
-  return Object.freeze({
-    status: "selected",
-    messageIds: Object.freeze([replacement.id]),
-    ...(parentId ? { parentId } : {}),
-    selectedHead: replacement.id,
-    committedAt: replacement.createdAt,
-    replayed,
-  });
 }
 
 function ensureMutationCapability(storage: Storage, threadId: string): void {

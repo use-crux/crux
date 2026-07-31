@@ -24,3 +24,9 @@ and accepted assistant/tool exchange atomically, and exposes the receipt as
 `threadCommit`. Explicit call-site messages shadow Thread I/O, streams await
 publication before final completion, and publication failures reject with
 `ThreadCommitError`.
+
+Add irreversible atomic message redaction, structural causal-group removal,
+and owner-safe whole-Thread deletion. Redaction permanently poisons replay and
+editing while erasing Thread-owned assets; deletion rejects while any durable
+owner remains, publishes inaccessibility before cleanup, and erases nodes,
+append receipts, pending receipt state, and assets.

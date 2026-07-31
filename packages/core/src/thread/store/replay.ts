@@ -25,6 +25,7 @@ export interface ReplayMessage {
   readonly id: string;
   readonly message: PersistedMessage;
   readonly identity: string;
+  readonly assetRefs: readonly string[];
 }
 
 /** Return the original receipt shape when an append is an exact replay. */
@@ -35,6 +36,12 @@ export async function replayThreadAppend(
   messages: readonly ReplayMessage[],
   after: string | null | undefined,
 ): Promise<ThreadCommit | null> {
+  if (
+    control &&
+    messages.some(({ id }) => control.redactions[id] === true)
+  ) {
+    throw redacted();
+  }
   const stored = await Promise.all(
     messages.map(async ({ id }) => {
       const value = await storage.records.get(threadNodeKey(threadId, id));
@@ -52,6 +59,7 @@ export async function replayThreadAppend(
     throw identityConflict();
   }
   for (const [index, node] of nodes.entries()) {
+    if (node.state === "redacted") throw redacted();
     const expectedParent = index === 0 ? first.parentId : nodes[index - 1]!.id;
     const prepared = messages[index]!;
     if (
@@ -61,7 +69,6 @@ export async function replayThreadAppend(
       node.groupId !== first.groupId ||
       node.seq !== index ||
       node.groupEnd !== (index === nodes.length - 1) ||
-      node.state !== "live" ||
       node.editOf !== undefined ||
       node.revisionOf !== undefined
     ) {
@@ -94,5 +101,12 @@ function identityConflict(): ThreadError {
   return new ThreadError(
     "identity_conflict",
     "Thread message ids are already reserved for different content or position.",
+  );
+}
+
+function redacted(): ThreadError {
+  return new ThreadError(
+    "redacted",
+    "Redacted Thread message ids cannot be replayed.",
   );
 }

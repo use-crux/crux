@@ -11,6 +11,7 @@ import { expect, it } from "vitest";
 import type { Storage } from "../../storage";
 import { ThreadError } from "../errors";
 import { thread } from "../thread";
+import { registerThreadErasureConformance } from "./erasure-conformance";
 import { registerThreadReceiptConformance } from "./receipt-conformance";
 
 interface AlternativesEdgeConformanceOptions {
@@ -233,4 +234,5 @@ export function registerThreadAlternativesEdgeConformance(
   });
 
   registerThreadReceiptConformance(options);
+  registerThreadErasureConformance(options);
 }

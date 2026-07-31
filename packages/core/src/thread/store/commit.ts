@@ -20,18 +20,22 @@ import type {
   ThreadCommit,
   ThreadMessageInput,
 } from "../types";
-import { threadControlKey, threadNodeKey } from "./keys";
+import { assertThreadAppendBoundary } from "./boundary";
+import { threadControlKey } from "./keys";
 import {
+  cleanupUnreferencedThreadAssets,
   createImmutableThreadNodes,
   createThreadNodes,
   prepareThreadMessages,
 } from "./nodes";
 import {
   parseThreadControlRecord,
-  parseThreadNodeRecord,
   type ThreadControlRecord,
-  type ThreadReceiptRecord,
 } from "./records";
+import {
+  advanceRememberedLeaves,
+  receiptMatchesNodes,
+} from "./publication";
 import {
   finalizeThreadReceipt,
   readPersistedThreadReceiptRecord,
@@ -69,183 +73,154 @@ export async function commitThreadAppend(
   const rawControl = await storage.records.get(threadControlKey(threadId));
   const observedControl = rawControl ? parseThreadControlRecord(rawControl) : null;
   assertLive(observedControl, threadId);
-  const prepared = await prepareThreadMessages(storage, messages);
-  const hasExpectedHead = Object.hasOwn(options, "expectedHead");
-  const parentId = hasExpectedHead
-    ? options.expectedHead ?? null
-    : options.after ?? observedControl?.heads[OWNER] ?? null;
-  const replay = await replayThreadAppend(
-    storage,
-    threadId,
-    observedControl,
-    prepared,
-    hasExpectedHead ? options.expectedHead ?? null : options.after,
-  );
-  if (replay) return replay;
-  if (parentId) {
-    await assertAppendBoundary(storage, threadId, observedControl, parentId);
-  }
-
-  const group = deriveThreadGroup(parentId, prepared);
-  const createdAt = new Date().toISOString();
-  const nodes = await createImmutableThreadNodes(
-    storage,
-    threadId,
-    createThreadNodes(group.members, parentId, group.id, createdAt),
-  );
-
-  const leafId = nodes.at(-1)!.id;
-  const firstId = nodes[0]!.id;
-  let decision: CommitDecision | undefined;
+  assertInputsNotRedacted(observedControl, messages);
+  const prepared = await prepareThreadMessages(storage, threadId, messages);
   try {
-    await mutateRecord(storage.records, threadControlKey(threadId), async (current) => {
-      const control = current ? parseThreadControlRecord(current) : null;
-      assertLive(control, threadId);
-      if (control && (await isNodePublished(storage, threadId, control, leafId))) {
-        const receipt =
-          control.pendingReceipts[firstId] ??
-          await readPersistedThreadReceiptRecord(
-            storage,
-            threadId,
-            firstId,
-          );
-        if (!receiptMatchesNodes(receipt, nodes, parentId)) {
-          throw new ThreadCommitError(
-            `Thread "${threadId}" cannot recover the original append receipt for "${firstId}".`,
-          );
-        }
-        decision = {
-          status: receipt.status,
-          selectedHead: receipt.selectedHead,
-          replayed: true,
-        };
-        return { type: "none" };
-      }
-
-      const now = new Date().toISOString();
-      const currentHead = control?.heads[OWNER];
-      const selected = currentHead === (parentId ?? undefined);
-      const leaves = advanceRememberedLeaves(
-        control?.leaves ?? {},
+    const currentRaw = await storage.records.get(threadControlKey(threadId));
+    const currentControl = currentRaw
+      ? parseThreadControlRecord(currentRaw)
+      : null;
+    assertLive(currentControl, threadId);
+    assertInputsNotRedacted(currentControl, messages);
+    const hasExpectedHead = Object.hasOwn(options, "expectedHead");
+    const parentId = hasExpectedHead
+      ? options.expectedHead ?? null
+      : options.after ?? observedControl?.heads[OWNER] ?? null;
+    const replay = await replayThreadAppend(
+      storage,
+      threadId,
+      currentControl,
+      prepared,
+      hasExpectedHead ? options.expectedHead ?? null : options.after,
+    );
+    if (replay) return replay;
+    if (parentId) {
+      await assertThreadAppendBoundary(
+        storage,
+        threadId,
+        currentControl,
         parentId,
-        leafId,
       );
-      const status = selected ? "selected" : "alternative";
-      const selectedHead = selected ? leafId : currentHead ?? leafId;
-      const pendingReceipt = toThreadReceiptRecord({
-        status,
-        messageIds: Object.freeze(nodes.map((node) => node.id)),
-        ...(parentId ? { parentId } : {}),
-        selectedHead,
-        committedAt: nodes[0]!.createdAt,
-        replayed: false,
-      });
-      const next: ThreadControlRecord = {
-        schema: 1,
-        state: "live",
-        heads: {
-          ...(control?.heads ?? {}),
-          ...(selected ? { [OWNER]: leafId } : {}),
-        },
-        leaves: {
-          ...leaves.value,
-          ...(!selected && !leaves.advanced
-            ? { [firstId]: leafId }
-            : {}),
-        },
-        pendingReceipts: {
-          ...(control?.pendingReceipts ?? {}),
-          [firstId]: pendingReceipt,
-        },
-        createdAt: control?.createdAt ?? now,
-        updatedAt: now,
-      };
-      decision = {
-        status,
-        selectedHead,
-        replayed: false,
-      };
-      return { type: "put", value: next };
-    });
-  } catch (error) {
-    throw mapCommitError(threadId, error);
-  }
+    }
 
-  if (!decision) {
-    throw new ThreadCommitError(
-      `Thread "${threadId}" commit completed without a publication decision.`,
+    const group = deriveThreadGroup(parentId, prepared);
+    const createdAt = new Date().toISOString();
+    const nodes = await createImmutableThreadNodes(
+      storage,
+      threadId,
+      createThreadNodes(group.members, parentId, group.id, createdAt),
     );
-  }
-  await assertReadYourWrites(storage, threadId, leafId);
-  const receipt: ThreadCommit = {
-    status: decision.status,
-    messageIds: Object.freeze(nodes.map((node) => node.id)),
-    ...(parentId ? { parentId } : {}),
-    selectedHead: decision.selectedHead,
-    committedAt: nodes[0]!.createdAt,
-    replayed: decision.replayed,
-  };
-  const frozen = Object.freeze(receipt);
-  try {
-    await finalizeThreadReceipt(storage, threadId, frozen);
-  } catch (error) {
-    throw mapCommitError(threadId, error);
-  }
-  return frozen;
-}
 
-function receiptMatchesNodes(
-  receipt: ThreadReceiptRecord | null,
-  nodes: readonly { readonly id: string; readonly createdAt: string }[],
-  parentId: string | null,
-): receipt is ThreadReceiptRecord {
-  return (
-    receipt !== null &&
-    receipt.committedAt === nodes[0]!.createdAt &&
-    receipt.parentId === parentId &&
-    receipt.messageIds.length === nodes.length &&
-    receipt.messageIds.every((id, index) => id === nodes[index]!.id)
-  );
-}
+    const leafId = nodes.at(-1)!.id;
+    const firstId = nodes[0]!.id;
+    let decision: CommitDecision | undefined;
+    try {
+      await mutateRecord(
+        storage.records,
+        threadControlKey(threadId),
+        async (current) => {
+          const control = current ? parseThreadControlRecord(current) : null;
+          assertLive(control, threadId);
+          if (
+            control &&
+            (await isNodePublished(storage, threadId, control, leafId))
+          ) {
+            const receipt =
+              control.pendingReceipts[firstId] ??
+              (await readPersistedThreadReceiptRecord(
+                storage,
+                threadId,
+                firstId,
+              ));
+            if (!receiptMatchesNodes(receipt, nodes, parentId)) {
+              throw new ThreadCommitError(
+                `Thread "${threadId}" cannot recover the original append receipt for "${firstId}".`,
+              );
+            }
+            decision = {
+              status: receipt.status,
+              selectedHead: receipt.selectedHead,
+              replayed: true,
+            };
+            return { type: "none" };
+          }
 
-function advanceRememberedLeaves(
-  leaves: Readonly<Record<string, string>>,
-  parentId: string | null,
-  leafId: string,
-): {
-  readonly value: Readonly<Record<string, string>>;
-  readonly advanced: boolean;
-} {
-  if (!parentId) return { value: leaves, advanced: false };
-  let advanced = false;
-  const value = Object.fromEntries(
-    Object.entries(leaves).map(([branch, rememberedLeaf]) => {
-      if (rememberedLeaf !== parentId) return [branch, rememberedLeaf];
-      advanced = true;
-      return [branch, leafId];
-    }),
-  );
-  return { value, advanced };
-}
+          const now = new Date().toISOString();
+          const currentHead = control?.heads[OWNER];
+          const selected = currentHead === (parentId ?? undefined);
+          const leaves = advanceRememberedLeaves(
+            control?.leaves ?? {},
+            parentId,
+            leafId,
+          );
+          const status = selected ? "selected" : "alternative";
+          const selectedHead = selected ? leafId : currentHead ?? leafId;
+          const pendingReceipt = toThreadReceiptRecord({
+            status,
+            messageIds: Object.freeze(nodes.map((node) => node.id)),
+            ...(parentId ? { parentId } : {}),
+            selectedHead,
+            committedAt: nodes[0]!.createdAt,
+            replayed: false,
+          });
+          const next: ThreadControlRecord = {
+            schema: 1,
+            state: "live",
+            heads: {
+              ...(control?.heads ?? {}),
+              ...(selected ? { [OWNER]: leafId } : {}),
+            },
+            leaves: {
+              ...leaves.value,
+              ...(!selected && !leaves.advanced ? { [firstId]: leafId } : {}),
+            },
+            redactions: control?.redactions ?? {},
+            removals: control?.removals ?? {},
+            pendingReceipts: {
+              ...(control?.pendingReceipts ?? {}),
+              [firstId]: pendingReceipt,
+            },
+            createdAt: control?.createdAt ?? now,
+            updatedAt: now,
+          };
+          decision = {
+            status,
+            selectedHead,
+            replayed: false,
+          };
+          return { type: "put", value: next };
+        },
+      );
+    } catch (error) {
+      throw mapCommitError(threadId, error);
+    }
 
-async function assertAppendBoundary(
-  storage: Storage,
-  threadId: string,
-  control: ThreadControlRecord | null,
-  messageId: string,
-): Promise<void> {
-  if (!control || !(await isNodePublished(storage, threadId, control, messageId))) {
-    throw new ThreadError(
-      "not_found",
-      `Append target "${messageId}" is not published in Thread "${threadId}".`,
-    );
-  }
-  const raw = await storage.records.get(threadNodeKey(threadId, messageId));
-  const node = raw ? parseThreadNodeRecord(raw) : null;
-  if (!node?.groupEnd) {
-    throw new ThreadError(
-      "invalid_group",
-      `Append target "${messageId}" splits a causal group; target its final message instead.`,
+    if (!decision) {
+      throw new ThreadCommitError(
+        `Thread "${threadId}" commit completed without a publication decision.`,
+      );
+    }
+    await assertReadYourWrites(storage, threadId, leafId);
+    const receipt: ThreadCommit = {
+      status: decision.status,
+      messageIds: Object.freeze(nodes.map((node) => node.id)),
+      ...(parentId ? { parentId } : {}),
+      selectedHead: decision.selectedHead,
+      committedAt: nodes[0]!.createdAt,
+      replayed: decision.replayed,
+    };
+    const frozen = Object.freeze(receipt);
+    try {
+      await finalizeThreadReceipt(storage, threadId, frozen);
+    } catch (error) {
+      throw mapCommitError(threadId, error);
+    }
+    return frozen;
+  } finally {
+    await cleanupUnreferencedThreadAssets(
+      storage,
+      threadId,
+      prepared.flatMap(({ assetRefs }) => assetRefs.map((uri) => ({ uri }))),
     );
   }
 }
@@ -284,6 +259,21 @@ function assertLive(
 ): void {
   if (control?.state === "deleted") {
     throw new ThreadError("deleted", `Thread "${threadId}" has been deleted.`);
+  }
+}
+
+function assertInputsNotRedacted(
+  control: ThreadControlRecord | null,
+  messages: readonly ThreadMessageInput[],
+): void {
+  if (
+    control &&
+    messages.some(({ id }) => id !== undefined && control.redactions[id])
+  ) {
+    throw new ThreadError(
+      "redacted",
+      "Redacted Thread message ids cannot be replayed.",
+    );
   }
 }
 
