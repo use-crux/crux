@@ -5,6 +5,8 @@ import { isPolicyTerminal } from "../../safety/errors";
 import { compileStructuredOutput } from "../structured-output";
 import type { ExecutorRequest } from "../executor-types";
 import type { LoopRuntimePort } from "../loop-runtime-port";
+import { createRequestReceipt } from "../../request/receipt/receipt";
+import { tokenBreakdown } from "../../request/measure/breakdown";
 import type {
   ConformanceViolation,
   LoopRuntimeConformanceHarness,
@@ -213,6 +215,18 @@ function request<TModel>(
   return {
     model,
     modelInfo: runtime.describeModel(model),
+    planStep: async (step) => ({
+      ...step,
+      receipt: createRequestReceipt({
+        model: step.modelInfo.modelId,
+        inputTokens: 0,
+        maxInputTokens: 1,
+        measurement: "estimated",
+        breakdown: tokenBreakdown([]),
+        safetyMarginTokens: 0,
+        providerOverheadTokens: 0,
+      }),
+    }),
     system: undefined,
     systemBlocks: undefined,
     prompt: "run step transform conformance",

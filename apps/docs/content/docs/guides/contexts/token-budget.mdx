@@ -1,121 +1,71 @@
 ---
-title: Token Management
-description: Token-aware rendering and automatic context dropping under budget pressure.
+title: Request budgets
+description: Measure complete provider requests and authorize explicit representation ladders.
 ---
 
-Assembled prompts can outgrow the model's context window or your cost budget.
-Set `tokenBudget` and Crux drops the least important contexts first: it
-preserves the prompt's own system text and any provider-cache prefix, then
-drops the lowest-priority uncached contexts until the total fits.
+Assembled requests can outgrow a model's context window or a product's cost
+target. Set `inputBudget` on an Agent or invocation:
 
-```ts title="generate.ts"
-import { prompt, context } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-
-const critical = context({ priority: 100, system: '## Critical Rules' })  // dropped last in the uncached tail
-const guidelines = context({ priority: 50, system: '## Guidelines\n...' })
-const examples = context({ priority: 20, system: '## Examples\n...' })    // dropped first
-
-const myPrompt = prompt({
-  use: [critical, examples, guidelines],
-  system: 'You are an assistant.',
-})
-
-const result = await generate(myPrompt, {
+```ts
+const result = await generate(reply, {
   model,
-  input: { ... },
-  tokenBudget: 2000,
-})
-```
-
-<Callout type="info">
-  Use `.inspect()` to see exactly which contexts were kept, dropped, and why.
-  See [Type System](/docs/guides/advanced/type-system) for the full inspection
-  API.
-</Callout>
-
-## How it works
-
-1. **Conditional contexts are evaluated first**: `when` predicates, `when()` wrappers, and `match()` specs are resolved. Excluded contexts are never even resolved.
-2. The prompt's own system text is always included.
-3. Cached contexts (`cache: true`) form a stable prefix after the prompt's own system text and are never budget-dropped.
-4. Uncached context contributions stay in `use` order for rendering, then the lowest-priority uncached contexts are dropped until the total fits within budget.
-5. Use `.inspect()` to see exactly what was dropped, excluded, and why
-
-## Conditional exclusion vs token-budget dropping
-
-These are two different mechanisms with different semantics:
-
-|                        | Conditional exclusion (`when`/`match`) | Token-budget dropping            |
-| ---------------------- | -------------------------------------- | -------------------------------- |
-| **When evaluated**     | Before resolution                      | After resolution                 |
-| **systemFn called?**   | No                                     | Yes (then dropped)               |
-| **Tools contributed?** | No                                     | Yes (tools always survive drops) |
-| **Inspect status**     | `excludedContexts[]`                   | `droppedContexts[]`              |
-| **Use case**           | Input-dependent composition            | Token pressure management        |
-
-Use `when`/`match` when a context is irrelevant to the current request (wrong mode, missing data, feature disabled). Use priority for graceful degradation under token pressure.
-
-```ts
-// Conditional: don't include research context if there's no research data
-const research = context({
-  input: z.object({ synthesis: z.string().optional() }),
-  when: ({ input }) => !!input.synthesis, // excluded when no data
-  priority: 40, // AND droppable under pressure unless it uses cache: true
-  system: ({ input }) => `## Research\n${input.synthesis}`,
-});
-```
-
-## Custom tokenizer
-
-The default tokenizer estimates tokens as `chars / 4`. For accurate counts, provide a real tokenizer via `config()`:
-
-```ts
-config({
-  generation: {
-    tokenizer: (text) => encode(text).length,
+  input,
+  inputBudget: {
+    optimizeAt: 24_000,
+    max: 30_000,
   },
 });
 ```
 
-Or standalone: `setTokenizer((text) => encode(text).length)`
+Crux measures the complete request: system content, messages, Tools and schemas,
+media, output reserve, and provider framing. `optimizeAt` is soft; `max` is
+strict. If no authorized complete candidate fits, execution fails before the
+provider is called.
 
-## Context Caching
-
-Contexts with expensive async resolvers can use `memo` to skip redundant resolver calls. Stable blocks can also set `cache: true` to request provider-level token caching and join the stable prefix.
+Context `priority` orders explicitly authorized fidelity decisions. It does not
+make a plain context droppable. Define the legal ladder:
 
 ```ts
-const brand = context({
-  id: "brand-voice",
-  system: async ({ input }) => fetchBrandProfile(input.orgId),
-  memo: { ttl: 300_000 }, // 5min resolver memoization
-  cache: true, // provider cache hint
+import {
+  context,
+  droppable,
+  offloadable,
+  prefer,
+  summarizable,
+} from "@use-crux/core";
+
+const complete = context({
+  id: "reference",
+  priority: 80,
+  system: loadCompleteReference,
+});
+const compact = context({
+  id: "reference-index",
+  system: loadReferenceIndex,
+});
+
+const reference = droppable(
+  offloadable(
+    summarizable(
+      prefer(complete, compact),
+    ),
+  ),
+);
+```
+
+The order is full → authored alternative → generated summary → exact-recovery
+reference → omission. Every selected deviation is present in the request
+receipt.
+
+Use `preview()` to observe prospective fit without executing:
+
+```ts
+const result = await preview(reply, {
+  model,
+  input,
+  inputBudget: { max: 30_000 },
 });
 ```
 
-See the **[Context Caching guide](/docs/guides/contexts/caching)** for full details on resolver memoization, provider behavior, and observability.
-
-## Next steps
-
-<Cards>
-  <Card
-    title="Context Caching"
-    description="Separate resolver memoization from provider prefix caching."
-    href="/docs/guides/contexts/caching"
-  />
-  <Card
-    title="Compaction"
-    description="Tools for keeping long conversations within token limits."
-    href="/docs/guides/compaction"
-  />
-  <Card
-    title="Prompts"
-    description="Inspect the complete composed request before execution."
-    href="/docs/guides/prompts#inspect-before-you-run"
-  />
-  <Card
-    title="API Reference"
-    description="Exact context priority, cache-tier, and merge semantics."
-    href="/docs/reference/crux-core/contexts"
-  />
-</Cards>
+See [Input budgets](/docs/guides/context-planning/budgets) and
+[Receipts and preview](/docs/guides/context-planning/receipts-preview).

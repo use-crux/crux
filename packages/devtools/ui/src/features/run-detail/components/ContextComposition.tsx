@@ -86,6 +86,10 @@ interface Contrib {
   dynamicTokens?: number;
   /** Backend compose order (B4 `request.contributions[].order`); stabilizes the bar. */
   order?: number;
+  boundary?: "required" | "sticky" | "elastic";
+  representations?: readonly string[];
+  selectedRepresentation?: string;
+  adaptation?: CruxRunDetailRequest["contributions"][number]["adaptation"];
 }
 
 const INJ_COLOR: Record<string, string> = {
@@ -228,6 +232,7 @@ interface ComposedRequest {
   requestMode: string;
   representative?: CruxRunDetailRequest["representative"];
   turns?: CruxRunDetailRequest["turns"];
+  plan?: CruxRunDetailRequest["plan"];
 }
 
 function contribFromRequestPreview(
@@ -250,6 +255,10 @@ function contribFromRequestPreview(
     staticTokens: c.staticTokens,
     dynamicTokens: c.dynamicTokens,
     order: c.order,
+    boundary: c.boundary,
+    representations: c.representations,
+    selectedRepresentation: c.selectedRepresentation,
+    adaptation: c.adaptation,
   };
 }
 
@@ -313,6 +322,7 @@ function buildFromRequest(
     requestMode: request.mode,
     representative: request.representative,
     turns: request.turns,
+    plan: request.plan,
   };
 }
 
@@ -357,6 +367,10 @@ function fmtSize(c: { sizeBytes?: number; tokens?: number }): string {
     return `${(c.sizeBytes / 1024).toFixed(c.sizeBytes >= 1024 ? 1 : 2)} kB`;
   if (c.tokens != null) return `${fmtTokens(c.tokens)} tok`;
   return "";
+}
+
+function representationLabel(value: string): string {
+  return value === "authored" ? "authored alternative" : value;
 }
 
 /** Real static-vs-dynamic rendering from backend B1 `segments`: static spans plain,
@@ -530,6 +544,31 @@ function ContributionRow({
             )}
             <Icon name="link" size={10} color="var(--devtools-fg-faint)" />
             <StateBadge state={c.state} />
+            {c.boundary && (
+              <span
+                className="rounded-[3px] px-1.5 py-px font-mono text-[9px]"
+                style={{
+                  color: "var(--devtools-iris)",
+                  background: "var(--devtools-iris-soft)",
+                }}
+              >
+                {c.boundary}
+              </span>
+            )}
+            {c.selectedRepresentation && (
+              <span
+                className="rounded-[3px] px-1.5 py-px font-mono text-[9px]"
+                style={{
+                  color:
+                    c.selectedRepresentation === "omitted"
+                      ? "var(--devtools-danger)"
+                      : "var(--devtools-warn)",
+                  background: "var(--devtools-bg-muted)",
+                }}
+              >
+                full → {representationLabel(c.selectedRepresentation)}
+              </span>
+            )}
           </div>
           {(c.injects || c.reason) && (
             <div
@@ -552,6 +591,16 @@ function ContributionRow({
               )}
             </div>
           )}
+          {c.adaptation?.fullTokens != null &&
+            c.adaptation.selectedTokens != null && (
+              <div
+                className="mt-1 font-mono text-[9.5px]"
+                style={{ color: "var(--devtools-fg-faint)" }}
+              >
+                {fmtTokens(c.adaptation.fullTokens)} →{" "}
+                {fmtTokens(c.adaptation.selectedTokens)} tokens
+              </div>
+            )}
         </div>
         <div
           className="flex shrink-0 flex-col items-end gap-0.5 font-mono text-[10px]"
@@ -820,6 +869,33 @@ export function ContextComposition({
             )}
           </div>
         )}
+
+      {req?.plan && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-[8px] px-3 py-2 font-mono text-[10.5px]"
+          style={{
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-crux-line)",
+            color: "var(--devtools-fg-muted)",
+          }}
+        >
+          <Icon name="trace" size={12} color="var(--devtools-crux)" />
+          <span style={{ color: "var(--devtools-fg)" }}>
+            request {req.plan.requestId}
+          </span>
+          <span>· {req.plan.model}</span>
+          {req.plan.inputTokens != null && req.plan.maxInputTokens != null && (
+            <span>
+              · {fmtTokens(req.plan.inputTokens)} /{" "}
+              {fmtTokens(req.plan.maxInputTokens)} tokens
+            </span>
+          )}
+          <span>· {req.plan.measurement}</span>
+          {req.plan.previousRequestId && (
+            <span>· follows {req.plan.previousRequestId}</span>
+          )}
+        </div>
+      )}
 
       {/* budget — §9 lists the token budget as Context-pane substance (a slim
           inline indicator, not the v15-rail dashboard widget). */}

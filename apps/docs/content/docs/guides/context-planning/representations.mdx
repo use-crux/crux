@@ -1,0 +1,277 @@
+---
+title: Representation ladders
+description: Authorize exact alternatives, summaries, references, and omission in a fixed fidelity order.
+---
+
+```ts
+import {
+  droppable,
+  offloadable,
+  prefer,
+  summarizable,
+} from "@use-crux/core";
+
+const catalog = droppable(
+  offloadable(
+    summarizable(
+      prefer(fullCatalog, catalogIndex),
+    ),
+  ),
+);
+```
+
+A representation ladder belongs to one canonical source. It lists the only
+model-facing forms Crux may select under input pressure.
+
+## Choose the lowest acceptable rung
+
+| Last rung you authorize | Use when | What remains exact |
+| --- | --- | --- |
+| `prefer()` | You maintain a reviewed shorter source. | The selected authored source and all owned capabilities. |
+| `summarizable()` | Descriptive content may lose detail. | Canonical source, owned capabilities, and summary provenance. |
+| `offloadable()` | The model may read a preview and recover the exact value through a Tool. | Canonical value, retrieval contract, and owned capabilities. |
+| `droppable()` | The request remains correct without the contributor. | Canonical source outside the request. Owned capabilities are omitted too. |
+
+Do not add every wrapper by default. End the ladder at the lowest fidelity your
+product can safely accept.
+
+## Start with an authored alternative
+
+```ts
+const fullCatalog = context({
+  id: "product-catalog",
+  system: loadProductCatalog,
+});
+
+const catalogIndex = context({
+  id: "product-catalog-index",
+  system: loadProductCatalogIndex,
+});
+
+const catalog = prefer(fullCatalog, catalogIndex);
+```
+
+Use `prefer()` when the compact representation is maintained and reviewed with
+the full source. Alternatives must share the primary source's input schema.
+The primary keeps identity, priority, Tools, Skills, middleware, safety policy,
+and other capabilities.
+
+Do not use `prefer()` as execution fallback. Model routing `fallback()` handles
+provider failure. `prefer()` handles request input pressure before dispatch.
+
+If an alternative declares a different capability set, definition preflight
+throws `RequestCompositionError` with code `INVALID_COMPOSITION`.
+
+## Add generated summary
+
+```ts
+const catalog = summarizable(
+  prefer(fullCatalog, catalogIndex),
+  {
+    model: summaryModel,
+    strategy: summarize.hierarchical(),
+  },
+);
+```
+
+Use a summary for retrieval documents, event history, decision logs, and other
+descriptive content. Do not summarize instructions, approval rules, Tool
+schemas, structured-output schemas, or safety contracts. Provide an authored
+alternative for those exact sources.
+
+An array forms one atomic summary unit:
+
+```ts
+const incidentEvidence = summarizable([
+  incidentTimeline,
+  deploymentNotes,
+]);
+```
+
+The array's capabilities are the union of its members. A name collision is an
+invalid composition.
+
+Construction does not run the summary model. Crux uses a valid
+content-addressed artifact, prepares one according to the miss policy, selects
+another authorized rung, or throws
+`RequestCompositionError: REPRESENTATION_UNAVAILABLE`.
+
+## Add exact recovery
+
+```ts
+const catalog = offloadable(
+  summarizable(prefer(fullCatalog, catalogIndex)),
+  { aboveTokens: 4_000 },
+);
+```
+
+Use exact recovery for logs, large JSON values, file bodies, or records where a
+summary is insufficient. The model sees a bounded type-aware preview and an
+opaque handle. Crux injects a required, budgeted retrieval Tool.
+
+The reference rung is unavailable when backing publication, authorization,
+residency, retention, content type, or Tool access cannot be satisfied. Crux
+does not replace exact recovery with a hidden model call.
+
+`aboveTokens` avoids selecting a reference for small values. It is a preference
+threshold, not a separate request budget.
+
+## Authorize omission last
+
+```ts
+const replyExamples = droppable(
+  summarizable(exampleReplies),
+);
+```
+
+Use `droppable()` for optional examples, decorative style guidance, or
+supplemental evidence. Do not use it for any contributor whose absence changes
+correctness, authorization, or safety.
+
+Omission removes the contributor's content and its owned Tools, Skills,
+middleware, constraints, guardrails, and approval rules. Other representation
+changes preserve those capabilities.
+
+`droppable()` does not make source resolution optional. A failed source still
+fails. Use `when()` or `match()` for conditional inclusion.
+
+## Follow the grammar
+
+Legal structure follows one direction:
+
+```text
+source
+prefer(source, alternatives...)
+summarizable(source, options?)
+offloadable(source, options?)
+droppable(source)
+```
+
+The complete valid ladder is:
+
+```ts
+droppable(
+  offloadable(
+    summarizable(
+      prefer(fullCatalog, catalogIndex),
+    ),
+  ),
+)
+```
+
+TypeScript rejects reversed, nested, or ambiguous ladders:
+
+```ts
+// @ts-expect-error droppable() is terminal.
+summarizable(droppable(fullCatalog));
+
+// @ts-expect-error prefer() cannot be nested.
+prefer(prefer(fullCatalog, catalogIndex), emergencyIndex);
+
+// @ts-expect-error offloadable() cannot move back to a summary rung.
+summarizable(offloadable(fullCatalog));
+
+// @ts-expect-error summarizable() cannot be nested.
+summarizable(summarizable(fullCatalog));
+
+// @ts-expect-error droppable() cannot be nested.
+droppable(droppable(fullCatalog));
+
+// @ts-expect-error prefer() alternatives must be exact sources.
+prefer(fullCatalog, summarizable(catalogIndex));
+
+// @ts-expect-error offloadable() cannot wrap a terminal ladder.
+offloadable(droppable(fullCatalog));
+
+// @ts-expect-error offloadable() cannot be nested.
+offloadable(offloadable(fullCatalog));
+```
+
+Dynamic JavaScript receives the same checks at definition and request
+preflight. Runtime failures use `INVALID_COMPOSITION`.
+
+## Understand capability stickiness
+
+Suppose `fullCatalog` contributes a `lookupSku` Tool. Selecting
+`catalogIndex`, a generated summary, or an exact reference keeps `lookupSku`
+available. Only complete omission removes it.
+
+```ts
+const fullCatalog = context({
+  id: "product-catalog",
+  tools: { lookupSku },
+  system: loadProductCatalog,
+});
+```
+
+This rule applies to capabilities resolved from nested contributors and loaded
+Skills. Crux selects representations and capabilities as one atomic graph, so a
+smaller text rung cannot silently lose a required Tool.
+
+If `activeTools` explicitly selects a Tool, any candidate that omits that Tool
+is illegal. Required support Tools remain active while their feature is active.
+
+## Force offload for one value
+
+Use `offload()` when a specific value must become an exact reference:
+
+```ts
+const fetchAuditLog = tool({
+  description: "Fetch the complete deployment audit log",
+  parameters: auditLogInput,
+  execute: async ({ deploymentId }) =>
+    offload(await readAuditLog(deploymentId)),
+});
+```
+
+Forced offload fails before the next provider call when exact backing is
+unavailable. The application still receives the canonical output.
+
+Use a Tool output policy when only large results should offload:
+
+```ts
+const fetchAuditLog = tool({
+  description: "Fetch the complete deployment audit log",
+  parameters: auditLogInput,
+  output: offloadable({ aboveTokens: 4_000 }),
+  execute: ({ deploymentId }) => readAuditLog(deploymentId),
+});
+```
+
+`offloadable({ aboveTokens })` in `output` is a Tool output policy, not a Prompt
+ladder. TypeScript rejects it in `use`:
+
+```ts
+// @ts-expect-error Tool output policy is not a prompt ladder.
+prompt({ use: [offloadable({ aboveTokens: 4_000 })] });
+```
+
+Execution evidence distinguishes canonical `output`, model-facing
+`modelOutput`, and the offload receipt.
+
+## See which rung was selected
+
+```ts
+const result = await generate(responder, options);
+const receipt = result.steps[0].request;
+
+for (const adaptation of receipt.adaptations) {
+  console.log(adaptation.contributor, adaptation.representation);
+}
+```
+
+The exact full request has no adaptation entry. Authored alternatives,
+summaries, references, and omissions each produce one. Full inspection shows
+every considered candidate and its rejection reason.
+
+Fidelity is monotonic while the concrete model and input-budget policy remain
+the same. A later Tool step does not automatically expand a contributor when
+temporary headroom appears. A model or budget change starts a new epoch and
+replans from canonical sources.
+
+## Related
+
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Guide: [Input budgets](/docs/guides/context-planning/budgets)
+- Guide: [History planning](/docs/guides/context-planning/history)
+- Guide: [Receipts and preview](/docs/guides/context-planning/receipts-preview)

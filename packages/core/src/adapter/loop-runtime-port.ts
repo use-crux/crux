@@ -27,6 +27,11 @@ import type { AdapterSpec } from "./spec";
 import type { ProviderMediaHooks } from "./native-chat/media-hooks";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
+import type { ModelCapacityProfile } from "../request/capacity/model-profile";
+import type {
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+} from "../request/history/source";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -98,8 +103,16 @@ export interface LoopRuntimePort<
   /** Runtime identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
   readonly id: string;
 
+  /** Resolve capacity facts for an extracted provider/model identity. */
+  readonly capacity?: (model: ModelInfo) => ModelCapacityProfile | undefined;
+
   /** Explicit timing guarantees implemented by this loop-owning runtime. */
   readonly capabilities?: {
+    /**
+     * The runtime exposes an awaited pre-dispatch boundary for every semantic
+     * provider call and invokes `request.planStep` at that boundary.
+     */
+    readonly requestPlanning?: "per-step";
     /** The runtime applies `request.stepTransformer` before SDK/Crux client tools. */
     readonly stepTransform?: "before-client-tools";
     /**
@@ -116,6 +129,16 @@ export interface LoopRuntimePort<
 
   /** Materialize an inert prompt tool source for one SDK-loop invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /**
+   * Prepare one managed-history summary for an SDK-owned loop.
+   *
+   * The input flag is authoritative: `providerNative: false` requires the
+   * portable lowering rather than an SDK or provider compaction shortcut.
+   */
+  compactHistory?(
+    input: ProviderHistorySummaryInput,
+  ): Promise<ProviderHistorySummaryResult>;
 
   /** @internal Guard client-tool output through the runtime's native dialect. */
   readonly [toolModelIngressDialect]?: ToolModelIngressDialect;

@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
+import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core'
 import { anthropicHelpers } from './native'
 
 /**

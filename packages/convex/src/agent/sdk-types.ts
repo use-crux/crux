@@ -52,8 +52,6 @@ export interface CreateAgentOptions {
   model?: unknown
   /** Prompt input used when resolving a Crux prompt definition. */
   input?: Record<string, unknown>
-  /** Token budget forwarded to prompt resolution. */
-  tokenBudget?: number
   /** Additional Convex Agent tools merged after tools inferred from the definition. */
   tools?: Record<string, unknown>
 }
@@ -122,8 +120,6 @@ export interface ConvexAgentBaseConfig<
   name?: string
   /** Crux prompt resolved for each turn. */
   prompt: TPrompt
-  /** Default token budget for prompt resolution. */
-  tokenBudget?: number
   /** Extra tools added to every turn after prompt-resolved tools. */
   tools?: ToolRecord
   /** Crux-owned lifecycle controls. Prefer this namespace for new code. */

@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { compilePrompt, createResolverFakes, prompt } from '@use-crux/core'
 import type {
   CompiledPrompt,
+  AdapterGenerateOptions,
   InspectResult,
   PromptResolution,
   PromptResolutionPipeline,
@@ -29,14 +30,26 @@ expectTypeOf(compiled).toEqualTypeOf<CompiledPrompt>()
 expectTypeOf(compiled.inputSchema).toEqualTypeOf<z.ZodType | undefined>()
 
 const resolveOptions = {
-  input: { question: 'What is Crux?' },
-  provider: 'openai',
-  modelId: 'gpt-4.1',
-  tokenBudget: 8_000,
+  input: { question: "What is Crux?" },
+  provider: "openai",
+  modelId: "gpt-4.1",
   temperature: 0.2,
 } satisfies ResolveCallOptions
 
-const resolution = await compiled.resolve(resolveOptions)
-expectTypeOf(resolution).toEqualTypeOf<PromptResolution>()
-expectTypeOf(resolution.args).toEqualTypeOf<ResolvedPrompt>()
-expectTypeOf(resolution.inspect()).toEqualTypeOf<InspectResult>()
+const removedNarrowBudget = {
+  // @ts-expect-error whole-request inputBudget replaces resolver-only budgeting
+  tokenBudget: 8_000,
+} satisfies ResolveCallOptions;
+void removedNarrowBudget;
+
+const removedAdapterBudget = {
+  model: "model-id",
+  // @ts-expect-error managed calls use whole-request inputBudget
+  tokenBudget: 8_000,
+} satisfies AdapterGenerateOptions;
+void removedAdapterBudget;
+
+const resolution = await compiled.resolve(resolveOptions);
+expectTypeOf(resolution).toEqualTypeOf<PromptResolution>();
+expectTypeOf(resolution.args).toEqualTypeOf<ResolvedPrompt>();
+expectTypeOf(resolution.inspect()).toEqualTypeOf<InspectResult>();

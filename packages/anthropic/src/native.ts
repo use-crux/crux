@@ -30,6 +30,7 @@ import { anthropicResponseMeta, anthropicResponseText } from "./response";
 import type { AnthropicParsedMessage } from "./response";
 import { AnthropicChatStream, createAnthropicStreamCapture } from "./stream";
 import type { AnthropicExtra, AnthropicRequest } from "./types";
+import { anthropicModelCapacity } from "./capacity";
 import { materializeAnthropicToolSource } from "./mcp-materializer";
 
 /** Configuration for `anthropic.retrievalModel()`. */
@@ -49,6 +50,7 @@ const anthropic = defineSingleTurnProviderBundle({
   id: "anthropic",
   bind: bindAnthropic,
   profile: {
+    capacity: anthropicModelCapacity,
     materializeToolSource: materializeAnthropicToolSource,
     request: anthropicRequest,
     response: {

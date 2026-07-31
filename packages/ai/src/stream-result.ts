@@ -197,7 +197,18 @@ function completionFromMeta(
 ) {
   const accumulator = createResultAccumulator();
   const text = meta?.text ?? "";
+  for (const receipt of meta?.requestReceipts?.slice(0, -1) ?? []) {
+    accumulator.addStep({
+      request: receipt,
+      content: [],
+      finishReason: undefined,
+      responseId: undefined,
+      modelId: undefined,
+    });
+  }
+  const finalRequest = meta?.requestReceipts?.at(-1);
   accumulator.addStep({
+    ...(finalRequest !== undefined ? { request: finalRequest } : {}),
     content: meta?.content ?? [{ type: "text", text }],
     ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
     ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
@@ -239,6 +250,7 @@ const COMPLETION_ENVELOPE_FIELDS = new Set([
   "messages",
   "warnings",
   "providerMetadata",
+  "requestReceipts",
   // Consumed by the envelope as the logical total; not a `_meta` fact.
   "logicalTotals",
 ]);

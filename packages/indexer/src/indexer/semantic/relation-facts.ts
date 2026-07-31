@@ -150,6 +150,9 @@ function semanticInjectionUseRelationType(
       return `${ownerKind}.uses_memory`;
     case "blackboard":
       return `${ownerKind}.uses_blackboard`;
+    case "thread":
+      if (ownerKind === "injectable") return undefined;
+      return `${ownerKind}.uses_thread`;
     case "mcp.server":
       if (ownerKind === "injectable") return undefined;
       return `${ownerKind}.uses_mcp_server`;

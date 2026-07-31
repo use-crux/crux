@@ -10,7 +10,7 @@
 
 import type { JsonObject, RecordListOptions, RecordPage } from '../storage'
 
-export type InspectableResourceKind = 'store' | 'memory' | 'blackboard' | 'workspace' | 'retriever' | 'custom'
+export type InspectableResourceKind = 'store' | 'memory' | 'blackboard' | 'workspace' | 'retriever' | 'thread' | 'custom'
 
 export type InspectableResourceOperation = 'get' | 'list'
 

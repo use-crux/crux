@@ -5,8 +5,10 @@
  *
  * 11: effective Eval/Case timeout policy now participates in exact evidence
  * identity, so evidence from the policy-unaware epoch must not be reused.
+ * 12: accepted preparation amendments and pinned control-resource revisions
+ * participate in provider-call decisions, invalidating earlier task evidence.
  */
-export const TASK_EVIDENCE_CACHE_EPOCH = 11;
+export const TASK_EVIDENCE_CACHE_EPOCH = 12;
 
 /** Bump when managed external-scorer result identity changes. */
 export const SCORER_RESULT_CACHE_EPOCH = 3;

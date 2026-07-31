@@ -79,13 +79,8 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Memory"
-    description="memory, memoryBlock, recentMessages, workingState, episodes, facts, procedures."
+    description="memory, memoryBlock, workingState, episodes, facts, procedures."
     href="/docs/reference/crux-core/memory"
-  />
-  <Card
-    title="Compaction"
-    description="createSlidingWindow, createBudgetManager, summarizeMessages, extractKeyFacts."
-    href="/docs/reference/crux-core/compaction"
   />
   <Card
     title="Agent"
@@ -203,12 +198,6 @@ import {
   facts,
   procedures,
 } from "@use-crux/core/memory";
-import {
-  createSlidingWindow,
-  createBudgetManager,
-  extractKeyFacts,
-  summarizeMessages,
-} from "@use-crux/core/compaction";
 import { agent, blackboard, handoff, delegate } from "@use-crux/core/agent";
 import {
   flow,
@@ -268,7 +257,7 @@ import type {
 ## Tooling Config
 
 Use `config()` for Crux project policy and explicit runtime behavior: Project Index lint,
-Indexer extensions, experimental indexer flags, persistence, generation hooks, devtools,
+Indexer extensions, experimental indexer flags, storage, generation hooks, devtools,
 observability, and plugins. Prompts, contexts, tools, agents, flows, registries, and skills remain
 normal TypeScript exports discovered from source.
 
@@ -322,7 +311,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
-| `persistence.records`         | `RecordStore`              | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `storage`                     | `Storage`                  | Standard records, vectors, and assets bundle used by durable primitives.             |
 | `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
 | `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
 | `generation.autoEscape`       | `boolean`                  | Auto-escape top-level XML-like user input fields. Defaults to `true`.                |

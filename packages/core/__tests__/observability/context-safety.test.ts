@@ -7,7 +7,6 @@ import { contributor } from '../../src/prompt/contributor'
 import { memory, memoryBlock } from '../../src/memory'
 import type {
   CruxContextContributionPreview,
-  CruxPromptBudgetPreview,
   CruxPromptInputPreview,
   DefinitionRef,
 } from '../../src/observability/contract'
@@ -38,16 +37,6 @@ function isContextContributionPreview(value: unknown): value is CruxContextContr
     typeof value.state === 'string' &&
     typeof value.included === 'boolean' &&
     typeof value.injectableKind === 'string'
-  )
-}
-
-function isPromptBudgetPreview(value: unknown): value is CruxPromptBudgetPreview {
-  return (
-    isObjectRecord(value) &&
-    value.kind === 'prompt.budget' &&
-    typeof value.usedTokens === 'number' &&
-    typeof value.totalTokens === 'number' &&
-    Array.isArray(value.dropped)
   )
 }
 
@@ -167,15 +156,18 @@ describe('canonical context and safety observability', () => {
       id: 'context-contributions',
       input: z.object({ includeGated: z.boolean().optional(), mode: z.string() }),
       use: [low, high, gated, branch] as const,
-      system: 'Base.',
-    })
+      system: "Base.",
+    });
 
-    await p.resolve({ input: { includeGated: false, mode: 'unknown', workspaceName: 'Acme' }, tokenBudget: 5 })
-    await observe.flush()
+    await p.resolve({
+      input: { includeGated: false, mode: "unknown", workspaceName: "Acme" },
+    });
+    await observe.flush();
 
-    const contextContributions = artifactPreviews(transport.records, 'context.contribution').filter(
-      isContextContributionPreview,
-    )
+    const contextContributions = artifactPreviews(
+      transport.records,
+      "context.contribution",
+    ).filter(isContextContributionPreview);
     expect(contextContributions).toContainEqual(
       expect.objectContaining({
         state: 'checked-not-included',
@@ -212,20 +204,13 @@ describe('canonical context and safety observability', () => {
       }),
     )
 
-    const budget = artifactPreviews(transport.records, 'prompt.budget').find(isPromptBudgetPreview)
-    expect(budget).toEqual(
+    expect(contextContributions).toContainEqual(
       expect.objectContaining({
-        totalTokens: 5,
-        dropped: expect.arrayContaining([
-          expect.objectContaining({
-            state: 'dropped-budget',
-            included: false,
-            sourceId: 'context:low',
-            reason: 'token budget',
-            priority: 1,
-            injectedTools: ['lowSearch'],
-          }),
-        ]),
+        state: "active",
+        included: true,
+        sourceId: "context:low",
+        priority: 1,
+        injectedTools: ["lowSearch"],
       }),
     )
   })

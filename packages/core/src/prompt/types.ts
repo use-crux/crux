@@ -26,6 +26,8 @@ export type {
   ContributorEntry,
   SkillEntry,
   MemoryEntry,
+  ThreadHistoryEntry,
+  ThreadTurnCommitInput,
   BlackboardEntry,
   ContextTree,
 } from './context-types'

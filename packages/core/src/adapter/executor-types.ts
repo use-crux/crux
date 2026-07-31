@@ -25,6 +25,7 @@ import {
   type SystemMessagePrefixPatch,
 } from "./execution/system-prefix-patch";
 import type { JsonSchemaObject } from "./structured-output";
+import type { RequestReceipt } from "../request/receipt/receipt";
 
 export type {
   ExecutorProviderStreamHandle,
@@ -36,6 +37,66 @@ export type {
 // ─────────────────────────────────────────────────────────────────
 // Request
 // ─────────────────────────────────────────────────────────────────
+
+/**
+ * Runtime-owned facts available immediately before one SDK-managed model call.
+ *
+ * Loop-owning runtimes surface this boundary after their SDK has assembled the
+ * current transcript and before provider I/O. Core uses it to measure and seal
+ * the exact semantic request.
+ */
+export interface ExecutorRequestStepInput<TModel> {
+  /** Concrete SDK model selected for this semantic step. */
+  readonly model: TModel;
+  /** Provider-neutral identity for {@link model}. */
+  readonly modelInfo: ModelInfo;
+  /** Canonical system text the SDK is about to send. */
+  readonly system: string | undefined;
+  /** Attributed canonical system blocks the SDK is about to send. */
+  readonly systemBlocks: readonly SystemBlock[] | undefined;
+  /** Canonical transcript the SDK is about to send. */
+  readonly messages: readonly Message[];
+  /** Outcome from the immediately preceding semantic provider call. */
+  readonly previousCall?: {
+    /** Provider-reported usage, absent when unknown. */
+    readonly usage?: {
+      /** Provider-reported input tokens. */
+      readonly inputTokens?: number;
+      /** Provider-reported output tokens. */
+      readonly outputTokens?: number;
+    };
+  };
+}
+
+/**
+ * One Core-sealed SDK request step returned to a loop-owning runtime.
+ *
+ * The runtime lowers these immutable canonical fields to its SDK and attaches
+ * {@link receipt} to the corresponding completed step.
+ */
+export interface SealedExecutorRequestStep<TModel> {
+  /** Concrete SDK model approved for this semantic step. */
+  readonly model: TModel;
+  /** Provider-neutral identity for {@link model}. */
+  readonly modelInfo: ModelInfo;
+  /** Sealed system text for this semantic step. */
+  readonly system: string | undefined;
+  /** Sealed attributed system blocks for this semantic step. */
+  readonly systemBlocks: readonly SystemBlock[] | undefined;
+  /** Sealed canonical transcript for this semantic step. */
+  readonly messages: readonly Message[];
+  /** Tool names the SDK may expose after representation selection. */
+  readonly activeTools?: readonly string[];
+  /** Public evidence for the sealed provider request. */
+  readonly receipt: RequestReceipt;
+  /** Revalidate canonical source ownership immediately before provider I/O. */
+  readonly validate?: () => Promise<void>;
+}
+
+/** Core-owned planner callback invoked before each SDK-managed model call. */
+export type ExecutorRequestStepPlanner<TModel> = (
+  input: ExecutorRequestStepInput<TModel>,
+) => Promise<SealedExecutorRequestStep<TModel>>;
 
 /**
  * A fully prepared generation request handed from `loopRuntimeAdapter()` to an
@@ -55,6 +116,13 @@ export interface ExecutorRequest<TModel> {
   readonly model: TModel;
   /** Provider/model identity, from `describeModel()` — use for provider quirks. */
   readonly modelInfo: ModelInfo;
+  /**
+   * Measure and seal one semantic provider request before dispatch.
+   *
+   * Loop-owning runtimes must invoke this exactly once for every model-call
+   * opportunity and must not dispatch when it rejects.
+   */
+  readonly planStep?: ExecutorRequestStepPlanner<TModel>;
   /** Assembled system prompt text, when the prompt declares one. */
   readonly system: string | undefined;
   /**
@@ -199,6 +267,8 @@ export interface StructuredRequest<TModel> extends ExecutorRequest<TModel> {
 
 /** One completed step of an executor-driven loop, as reported to core. */
 export interface ExecutorStep {
+  /** Sealed request evidence for this provider-call step. */
+  readonly request?: RequestReceipt;
   /** Zero-based step index. Refunded steps do not advance the index seen by budgets. */
   readonly index: number;
   /** Assistant text produced in this step (may be empty for pure tool steps). */
@@ -412,6 +482,8 @@ export type ExecutorOutcome<TRawResponse> =
 export type StructuredAttempt<TRawResponse> =
   | {
       readonly status: "ok";
+      /** Sealed request evidence for this provider call. */
+      readonly request?: RequestReceipt;
       /** The SDK's own result object (e.g. `GenerateObjectResult`). */
       readonly raw: TRawResponse;
       /** Canonical extraction of the response. */
@@ -426,6 +498,8 @@ export type StructuredAttempt<TRawResponse> =
     }
   | {
       readonly status: "invalid";
+      /** Sealed request evidence for this provider call. */
+      readonly request?: RequestReceipt;
       /** The model's raw text that failed validation (best effort). */
       readonly rawText: string;
       /** Why validation failed. */

@@ -77,6 +77,18 @@ export function convexComponentDocumentPort<TCtx extends ConvexCtxPort = ConvexC
     async delete(key) {
       await ctx.runMutation(fns.remove, { key })
     },
+    compareAndSet(key, expectedVersion, doc) {
+      if (!fns.compareAndSet) {
+        throw new Error(
+          'The installed Crux Convex component does not expose memory.compareAndSet. Redeploy the current @use-crux/convex component.',
+        )
+      }
+      return ctx.runMutation<boolean>(fns.compareAndSet, {
+        key,
+        expectedVersion,
+        doc,
+      })
+    },
   }
 }
 

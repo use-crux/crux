@@ -5,7 +5,7 @@
  */
 
 import type { z } from "zod";
-import type { GenerateObjectFn, GenerateTextFn } from "../../compaction";
+import type { GenerateObjectFn, GenerateTextFn } from "../../generation/support-types";
 import type { Message } from "../../generation/messages";
 import {
   compileStructuredOutput,

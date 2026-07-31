@@ -150,12 +150,14 @@ describe("Prompt preview workflow concurrency", () => {
           environment: "node",
         },
         catalogueRevision: 1,
-        inspection: {
-          system: { text: "", tokens: 0, coverage: "complete", parts: [] },
-          totalTokens: 0,
-          droppedContexts: [],
-          excludedContexts: [],
+        preview: {
+          status: "fits",
+          measurement: "exact",
+          adaptations: [],
+          warnings: [],
+          diagnostics: [],
         },
+        contributions: [],
       }),
     );
     await pending;

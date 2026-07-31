@@ -24,6 +24,7 @@ import type {
   JsonSchemaObject,
   StructuredOutputCapabilities,
 } from "../structured-output";
+import type { ModelCapacityResolver } from "../../request/capacity/model-profile";
 
 /** Native call surface selected from canonical Crux call arguments. */
 export type NativeCallMode = "text" | "structured";
@@ -189,6 +190,9 @@ export interface NativeChatProfile<
 
   /** Materialize an inert tool source for one provider invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /** Resolve whole-request capacity facts for a concrete provider model. */
+  readonly capacity?: ModelCapacityResolver;
 
   /** Build a provider-native request from canonical Crux call arguments. */
   request(

@@ -179,7 +179,8 @@ function projectOptions(options: Record<string, unknown>): JsonProjection {
     options.toolApproval !== undefined ||
     options.runtimeContext !== undefined ||
     options.toolsContext !== undefined ||
-    options.onStepFinish !== undefined
+    options.onStepFinish !== undefined ||
+    options.prepareStep !== undefined
   ) {
     return unavailable("untracked_external_dependency");
   }
@@ -201,6 +202,7 @@ function projectOptions(options: Record<string, unknown>): JsonProjection {
     "runtimeContext",
     "toolsContext",
     "onStepFinish",
+    "prepareStep",
   ]) {
     delete rest[key];
   }

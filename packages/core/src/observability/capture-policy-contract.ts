@@ -158,6 +158,7 @@ export const ARTIFACT_CAPTURE_DECISIONS = {
   'context.contribution': 'input',
   prompt: 'input',
   'prompt.budget': 'input',
+  'request.plan': 'exempt',
   'tool.args': 'safety',
   'tool.request': 'input',
   output: 'output',

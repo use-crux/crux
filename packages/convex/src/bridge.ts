@@ -58,7 +58,7 @@ export interface CruxConvexBridgeSetupOptions {
    *
    * Convex storage usually needs the current function ctx, so real Convex apps
    * should pass `storage: (ctx) => convexStorage({ ctx, component })` unless
-   * the Crux config already contains readable `persistence.records`.
+   * the Crux config already contains readable `storage.records`.
    */
   storage?: (ctx: unknown) => Storage | Promise<Storage>
   /**
@@ -140,7 +140,7 @@ async function resolveBridgeRecords(
     return createDefaultConvexStorage(ctx, { component: options.component })
       .records
   }
-  return crux.config.persistence?.records
+  return crux.config.storage?.records
 }
 
 function convexBridgeManifest(
@@ -152,7 +152,7 @@ function convexBridgeManifest(
   const endpointUrl = options.url ?? requestUrl
   const manifest = getRuntimeBridgeManifest(
     {
-      records: crux.config.persistence?.records,
+      records: crux.config.storage?.records,
       devtools: endpointUrl
         ? {
             ...crux.config.devtools,

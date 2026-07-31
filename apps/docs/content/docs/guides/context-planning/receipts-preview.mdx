@@ -1,0 +1,222 @@
+---
+title: Receipts and preview
+description: Compare prospective fit with redacted evidence from executed requests.
+---
+
+```ts
+const planned = await preview(responder, {
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { max: 24_000 },
+});
+
+console.log(planned.status, planned.adaptations);
+```
+
+Use `preview()` before execution and `RequestReceipt` after execution. Preview
+answers whether an initial request can fit without performing the request.
+Receipts describe the exact request Crux sealed and sent.
+
+## Choose the evidence surface
+
+| Need | Surface |
+| --- | --- |
+| Check prospective fit without provider execution | `preview()` |
+| Log a small executed-request summary | Enumerable `RequestReceipt` fields |
+| Debug selection, counting, or support calls | `receipt.inspect()` |
+| Inspect a serialized or cross-process receipt | `inspectRequest()` |
+| See contribution boundaries across a Run | Devtools Runs Context view |
+
+Do not use preview as an executable request plan. Do not depend on full
+inspection as durable application state unless your observability destination
+retains it.
+
+## Preview a Prompt
+
+A Prompt needs a concrete model in its options:
+
+```ts
+const planned = await preview(supportReply, {
+  model,
+  input: { ticketId: "ticket_4821" },
+  messages,
+  tools: { searchKnowledge },
+  inputBudget: { optimizeAt: 18_000, max: 24_000 },
+});
+```
+
+An Agent may supply its configured model:
+
+```ts
+const planned = await preview(responder, {
+  input: { ticketId: "ticket_4821" },
+});
+```
+
+Without a model on either surface, preview throws `TypeError` with the message
+`Request preview requires options.model or an Agent model.`
+
+## Interpret preview status
+
+```ts
+switch (planned.status) {
+  case "fits":
+    console.log(`Ready at ${planned.inputTokens} tokens`);
+    break;
+  case "over-limit":
+    console.error(planned.diagnostics);
+    break;
+  case "unknown":
+    console.warn("Runtime data or artifact preparation can change fit");
+    break;
+}
+```
+
+| Status | Meaning | Next action |
+| --- | --- | --- |
+| `fits` | A ready complete candidate fits. | Inspect prospective adaptations or execute. |
+| `over-limit` | No complete legal candidate fits. | Change exact input, output reserve, budget, or authorized ladder. |
+| `unknown` | Runtime Tool sources or unprepared summary/reference rungs prevent a complete answer. | Execute in a controlled environment or prepare the missing source. |
+
+`over-limit` is a normal result and does not throw. Invalid input and invalid
+composition still throw.
+
+## Understand preview boundaries
+
+Preview may resolve read-only Prompt sources, read canonical history, reuse an
+existing artifact, and estimate the complete request. It does not:
+
+- Generate a summary.
+- Publish an exact-recovery value.
+- Execute a Tool or provider generation.
+- Run `prepareStep` or `prepareInvocation`.
+- Schedule background maintenance.
+- Write or reserve canonical state.
+
+An unavailable prospective adaptation uses `state: "unprepared"` and makes the
+result incomplete when fit depends on it.
+
+## Read the small receipt
+
+```ts
+const result = await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+});
+
+const receipt = result.steps[0].request;
+
+logger.info({
+  requestId: receipt.id,
+  model: receipt.model,
+  inputTokens: receipt.inputTokens,
+  maxInputTokens: receipt.maxInputTokens,
+  measurement: receipt.measurement,
+  adaptations: receipt.adaptations,
+  warnings: receipt.warnings,
+});
+```
+
+The common exact request has `adaptations: []`. Later Tool rounds have their
+own receipts. `previousRequestId` links semantic provider calls within the same
+managed loop.
+
+Receipts are JSON-safe. The `inspect` method is non-enumerable, so serialization
+keeps only the small evidence shape:
+
+```ts
+const serialized = JSON.stringify(receipt);
+```
+
+## Inspect full redacted evidence
+
+```ts
+const inspection = await receipt.inspect();
+
+console.table(inspection.contributions);
+console.table(inspection.candidates);
+console.table(inspection.breakdown.contributions);
+```
+
+Full inspection includes:
+
+- Required, sticky, and elastic contributor boundaries.
+- Authorized representation rungs and candidate rejection reasons.
+- Largest-first token attribution by safe contribution class.
+- Counting confidence, safety margin, and provider overhead.
+- Summary and offload artifact facts.
+- Required support Tools and linked support call receipts.
+- Accepted preparation decision counts and resource revision hashes.
+- Linked request identities and adapter-reported transport retries.
+
+It never includes prompt text, message content, Tool arguments or results,
+resource values, schemas, provider bodies, or raw errors.
+
+## Inspect after serialization
+
+```ts
+import { inspectRequest } from "@use-crux/core";
+
+const serialized = JSON.parse(JSON.stringify(receipt));
+const inspection = await inspectRequest(serialized);
+```
+
+`inspectRequest()` accepts a live receipt, `{ id }`, or the id string. Use it
+for JSON transport and for another process when your configured observability
+destination retains `request.plan` evidence.
+
+The process-local buffer retains at most 256 requests for five minutes. After
+expiry or eviction, lookup throws `RequestInspectionUnavailableError` with
+code `REQUEST_INSPECTION_UNAVAILABLE`. The small receipt remains valid.
+
+```ts
+try {
+  await inspectRequest(serialized);
+} catch (error) {
+  if (error instanceof RequestInspectionUnavailableError) {
+    console.warn(error.code);
+  }
+}
+```
+
+## Use Devtools for a Run
+
+The Runs Context panel renders the same content-free contribution map:
+
+- Required contributors have only their full representation.
+- Sticky contributors retain capabilities across smaller representations.
+- Elastic contributors may be omitted when their ladder authorizes it.
+- The budget header shows selected input size, strict maximum, and omissions.
+
+Use the panel to answer why the model received an authored alternative or why
+an optional contributor disappeared. Use receipt inspection in automated tests
+or server-side diagnostics.
+
+## Test without matching content
+
+Assert safe identities and decisions instead of source text:
+
+```ts
+expect(receipt.adaptations).toEqual([
+  expect.objectContaining({
+    contributor: "reply-examples",
+    representation: "omitted",
+  }),
+]);
+
+const inspection = await receipt.inspect();
+expect(inspection.candidates).toContainEqual(
+  expect.objectContaining({
+    contributor: "reply-examples",
+    selected: true,
+  }),
+);
+```
+
+This keeps tests aligned with the public privacy contract.
+
+## Related
+
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Guide: [Input budgets](/docs/guides/context-planning/budgets)
+- Guide: [Representation ladders](/docs/guides/context-planning/representations)
+- Guide: [Adaptive hooks](/docs/guides/context-planning/hooks)
+- Guide: [Devtools](/docs/guides/observability/devtools)

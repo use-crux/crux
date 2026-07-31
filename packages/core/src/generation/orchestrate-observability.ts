@@ -13,6 +13,7 @@
 import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import { readPromptTextObservation } from '../resolver/prompt-text-observation'
+import { emitThreadHistoryOverrideEvidence } from '../thread/observability'
 import type { OrchestrationSpec } from './orchestrate-types'
 import { normalizeBudgetMs, type TimeoutOptions } from './timeout'
 import type { GenerationPerformanceTracker } from './performance-metrics'
@@ -56,6 +57,14 @@ export function emitOperationDeadline(totalMs: TimeoutOptions['totalMs']): void 
       deadlineAt: new Date(Date.now() + normalized).toISOString(),
     },
   })
+}
+
+/** Record that call-site messages intentionally shadowed resolved Thread I/O. */
+export function emitThreadHistoryOverride(
+  override: OrchestrationSpec["threadHistoryOverride"],
+): void {
+  if (!override) return
+  emitThreadHistoryOverrideEvidence(override.threadId, override.reason)
 }
 
 function normalizeTotalTimeoutMs(totalMs: number | null | undefined): number | undefined {
@@ -114,14 +123,6 @@ export function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefine
         source: block.source,
         contextSource: block.source,
       },
-    })
-  }
-  if (resolved?.promptBudgetArtifactId && !seen.has(resolved.promptBudgetArtifactId)) {
-    observe.edge({
-      edgeType: 'consumed',
-      from: { kind: 'artifact', id: resolved.promptBudgetArtifactId },
-      to: { kind: 'span', id: spanId },
-      attributes: { primitive: 'prompt.budget' },
     })
   }
 }

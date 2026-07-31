@@ -10,6 +10,7 @@
 
 export { StorageError } from "./errors";
 export { storage } from "./bundle";
+export { mutateRecord } from "./mutate";
 export {
   inMemoryRecordStore,
   inMemoryStorage,
@@ -41,6 +42,7 @@ export type {
   RecordEntry,
   RecordEvent,
   RecordListOptions,
+  RecordMutation,
   RecordPage,
   RecordStore,
   RecordStoreCapabilities,
@@ -56,3 +58,4 @@ export type {
   VectorStoreCapabilities,
 } from "./types";
 export type { StorageErrorCode, StorageErrorOptions } from "./errors";
+export type { MutateRecordOptions } from "./mutate";

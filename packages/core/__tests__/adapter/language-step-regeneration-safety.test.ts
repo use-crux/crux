@@ -88,6 +88,10 @@ describe("language step Safety — constraint regeneration", () => {
       { kind: "step", stepIndex: 1, partIndex: 0 },
     ]);
     expect(result.steps.map((step) => step.text)).toEqual(["", "safe ship"]);
+    expect(result.steps[0]?.request).toBeDefined();
+    expect(result.steps[1]?.request?.previousRequestId).toBe(
+      result.steps[0]?.request?.id,
+    );
     expect(result.finalStep.text).toBe("safe ship");
     expect(result.text).toBe("safe ship");
     expect(result.messages.at(-1)).toEqual({
@@ -123,6 +127,10 @@ describe("language step Safety — constraint regeneration", () => {
 
     expect(seen).toEqual(["draft", "unsafe ship"]);
     expect(result.steps.map((step) => step.text)).toEqual(["", "safe ship"]);
+    expect(result.steps[0]?.request).toBeDefined();
+    expect(result.steps[1]?.request?.previousRequestId).toBe(
+      result.steps[0]?.request?.id,
+    );
     expect(result.finalStep.text).toBe("safe ship");
     expect(result.text).toBe("safe ship");
     expect(JSON.stringify(fake.calls.runTextLoop[1]?.messages)).toContain(

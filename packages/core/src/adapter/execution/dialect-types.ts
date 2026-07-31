@@ -22,6 +22,11 @@ import type {
 } from "../types";
 import type { CruxProviderError } from "../normalized-outcome";
 import type { ToolSourceMaterializer } from "../../tools/tool-source";
+import type { ModelCapacityResolver } from "../../request/capacity/model-profile";
+import type {
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+} from "../../request/history/source";
 
 /** Per-call context passed to provider wire hooks. */
 export interface CoreStepCallContext {
@@ -76,6 +81,21 @@ export interface CoreStepDialect<
 
   /** Dialect-owned source dispatch and connection boundary. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /** Resolve capacity facts for a concrete provider model. */
+  readonly capacity?: ModelCapacityResolver;
+
+  /** Authoritatively count one complete canonical provider request. */
+  countTokens?(
+    client: TClient,
+    args: CallArgs<TExtra>,
+  ): Promise<number>;
+
+  /** Optionally lower history through a provider-native compaction facility. */
+  compactHistory?(
+    client: TClient,
+    input: ProviderHistorySummaryInput,
+  ): Promise<ProviderHistorySummaryResult>;
 
   /** Convert canonical generation settings to provider-native parameters. */
   mapSettings(settings: GenerationSettings): Record<string, unknown>;

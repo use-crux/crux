@@ -1,4 +1,8 @@
-import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
+import type {
+  ProjectDefinition,
+  ProjectDefinitionKind,
+  SourceLocation,
+} from '@use-crux/core/project-index'
 import type { SemanticSourceProfileFile } from './semantic/source-profile'
 
 /**
@@ -39,6 +43,8 @@ export interface StaticRelationRef {
   toId?: string
   /** Target definition id to use only when `toVariable` cannot bind to a known definition. */
   fallbackToId?: string
+  /** Exact authored source for relation-only compatibility facts. */
+  source?: SourceLocation
 }
 
 /**

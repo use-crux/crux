@@ -39,6 +39,7 @@ import { createOpenAITranscriptionOperation } from "./transcription";
 import { createOpenAISpeechOperation } from "./speech";
 import { createOpenAISpeechStreamingOperation } from "./speech-streaming";
 import { materializeOpenAIToolSource } from "./mcp-materializer";
+import { openAIModelCapacity } from "./capacity";
 
 /** Configuration for `openai.retrievalModel()`. */
 export interface OpenAIRetrievalModelConfig {
@@ -57,6 +58,7 @@ const openAI = defineSingleTurnProviderBundle({
   id: "openai",
   bind: bindOpenAI,
   profile: {
+    capacity: openAIModelCapacity,
     materializeToolSource: materializeOpenAIToolSource,
     request: openAIRequest,
     response: {

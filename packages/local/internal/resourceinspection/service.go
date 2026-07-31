@@ -157,6 +157,12 @@ func normalizeBridgeResult(resourceID string, raw json.RawMessage) (ResourceResu
 			return errorResult(resourceID, ReasonCommandFailed, fmt.Sprintf("Bridge returned an unreadable store.read result: %v", err)), nil
 		}
 	}
+	// Custom Thread reads predate the generic store envelope and return their
+	// payload-safe topology directly. Preserve that established bridge contract
+	// while presenting the same ResourceResult shape as ordinary get reads.
+	if strings.HasPrefix(resourceID, "thread:") && len(body.Value) == 0 {
+		body.Value = append(json.RawMessage(nil), raw...)
+	}
 	entries := make([]ResourceEntry, 0, len(body.Entries))
 	for _, entry := range body.Entries {
 		entries = append(entries, ResourceEntry{Key: entry.Key, Value: entry.Value})
@@ -188,7 +194,7 @@ func (s *Service) storeReadPeers() []runtimebridge.Peer {
 }
 
 func supportsGet(resourceID, key string) bool {
-	if strings.HasPrefix(resourceID, "blackboard:") {
+	if strings.HasPrefix(resourceID, "blackboard:") || strings.HasPrefix(resourceID, "thread:") {
 		return true
 	}
 	if resourceID == "crux.store" && key != "" {
@@ -207,6 +213,8 @@ func inferredKind(resourceID string) string {
 		return "blackboard"
 	case strings.HasPrefix(resourceID, "memory:"):
 		return "memory"
+	case strings.HasPrefix(resourceID, "thread:"):
+		return "thread"
 	case resourceID == "crux.store":
 		return "store"
 	default:

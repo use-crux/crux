@@ -1,0 +1,210 @@
+---
+title: Context planning
+description: Fit complete provider requests without silently changing canonical context.
+---
+
+```ts
+const result = await generate(supportReply, {
+  model,
+  input: { ticketId: "ticket_4821" },
+  inputBudget: { optimizeAt: 24_000, max: 30_000 },
+});
+
+console.log(result.steps[0].request.adaptations);
+```
+
+Crux plans every language-model request after it resolves the concrete model
+and before it calls the provider. The planner measures messages, Tools and
+schemas, media, output reserve, and provider overhead as one request.
+
+Plain context stays exact and required. Crux selects a shorter representation
+only when you authorize it on that contributor. If no legal complete request
+fits, execution fails before provider dispatch.
+
+## When to use context planning
+
+Use the planning APIs when any of these conditions applies:
+
+- Conversations or retrieved documents grow over time.
+- Tool schemas and Tool results consume a meaningful part of the context window.
+- You need a product-specific operating target below the model limit.
+- You need evidence of what changed before a provider call.
+
+You do not need representation wrappers for small, fixed requests. The planner
+still measures those requests and emits an exact receipt with
+`adaptations: []`.
+
+## Start with the canonical request
+
+Define the full source first:
+
+```ts
+const productCatalog = context({
+  id: "product-catalog",
+  system: loadProductCatalog,
+});
+
+const supportReply = prompt({
+  id: "support-reply",
+  use: [productCatalog],
+  prompt: ({ input }) => `Resolve ticket ${input.ticketId}.`,
+});
+```
+
+If this request becomes too large, Crux does not infer which content may be
+lost. It throws `RequestCompositionError` with code `REQUEST_TOO_LARGE`.
+
+## Authorize only safe changes
+
+Add the smallest ladder your product can accept:
+
+```ts
+import {
+  droppable,
+  offloadable,
+  prefer,
+  summarizable,
+} from "@use-crux/core";
+
+const catalogIndex = context({
+  id: "product-catalog-index",
+  system: loadProductCatalogIndex,
+});
+
+const plannedCatalog = droppable(
+  offloadable(
+    summarizable(
+      prefer(productCatalog, catalogIndex),
+    ),
+  ),
+);
+```
+
+The fixed order is:
+
+```text
+full -> authored alternative -> generated summary -> exact reference -> omitted
+```
+
+Start with `prefer()` when you can maintain a reviewed compact source. Add
+`summarizable()` for descriptive content that may lose detail. Add
+`offloadable()` when exact recovery matters. Add `droppable()` only when the
+whole contributor and its capabilities are optional.
+
+## Pick a history policy
+
+| Need | Use |
+| --- | --- |
+| Complete transcript must stay exact | Caller-owned `messages` with no projection |
+| Recent exact turns are sufficient | `history.recent()` |
+| Older turns may become a derived summary | `history()` |
+
+```ts
+const conversationalReply = prompt({
+  id: "conversational-support",
+  use: [history({ recent: { messages: 12 } })],
+  prompt: "Continue the conversation.",
+});
+```
+
+History projection never mutates the canonical transcript. See
+[History planning](/docs/guides/context-planning/history) for causal grouping,
+artifact misses, and source precedence.
+
+Use a [Thread](/docs/guides/threads) when the application should persist that
+canonical transcript and keep concurrent or edited continuations as branches.
+
+## Set pressure independently
+
+`inputBudget` does not authorize loss. It tells the planner when to prefer an
+authorized smaller candidate and when to reject:
+
+```ts
+const responder = agent({
+  id: "support-responder",
+  prompt: conversationalReply,
+  model,
+  inputBudget: { optimizeAt: 18_000, max: 24_000 },
+});
+```
+
+`optimizeAt` is soft. `max` is strict. Both apply independently to each
+provider call, including later Tool rounds.
+
+## Inspect before and after execution
+
+Use `preview()` for prospective fit:
+
+```ts
+const planned = await preview(responder, {
+  input: { ticketId: "ticket_4821" },
+});
+
+if (planned.status !== "fits") {
+  console.log(planned.status, planned.diagnostics);
+}
+```
+
+Use the request receipt for the exact executed call:
+
+```ts
+const result = await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+});
+
+const receipt = result.steps[0].request;
+const inspection = await receipt.inspect();
+
+console.table(inspection.contributions);
+console.table(inspection.breakdown.contributions);
+```
+
+Preview never prepares missing artifacts or executes a provider. Receipt
+inspection reports only redacted identities, sizes, decisions, and links. It
+does not retain authored prompt, message, Tool-result, or resource content.
+
+## Adapt at real execution boundaries
+
+Use `prepareStep` when the next provider call depends on Tool history, usage,
+or declared structured state. Use `prepareInvocation` when a composition child
+needs a different baseline.
+
+```ts
+const responder = agent({
+  id: "adaptive-support",
+  prompt: conversationalReply,
+  model,
+  prepareStep: ({ reason }) =>
+    reason === "validation-retry"
+      ? { model: reviewModel }
+      : undefined,
+});
+```
+
+Static configuration is easier to test and should remain your default. Hooks
+cannot replace canonical messages or bypass capability, safety, and output
+validation.
+
+## Failure behavior
+
+Planning failures happen before the provider is called:
+
+| Error | Meaning |
+| --- | --- |
+| `RequestCompositionError: REQUEST_TOO_LARGE` | No complete legal candidate fits. |
+| `RequestCompositionError: REPRESENTATION_UNAVAILABLE` | A required summary, reference, or support capability is unavailable. |
+| `RequestCompositionError: INVALID_COMPOSITION` | A ladder, history policy, capability graph, or amendment is invalid. |
+| `PreparationError` | A preparation callback failed, timed out, or was cancelled. |
+| `ResourceReadError` | A preparation resource read was abnormal. |
+
+Errors and diagnostics are content-free. They include safe identities, counts,
+and remedies instead of source text.
+
+<Cards>
+  <Card title="Representation ladders" href="/docs/guides/context-planning/representations" description="Choose authored, summary, reference, and omission rungs." />
+  <Card title="History" href="/docs/guides/context-planning/history" description="Choose exact, recent, or managed transcript projection." />
+  <Card title="Input budgets" href="/docs/guides/context-planning/budgets" description="Set soft and strict complete-request pressure." />
+  <Card title="Adaptive hooks" href="/docs/guides/context-planning/hooks" description="Prepare provider calls and composition children." />
+  <Card title="Receipts and preview" href="/docs/guides/context-planning/receipts-preview" description="Inspect prospective and executed request evidence." />
+  <Card title="API reference" href="/docs/reference/crux-core/request-planning" description="Read every request-planning contract and field." />
+</Cards>

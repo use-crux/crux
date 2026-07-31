@@ -26,9 +26,9 @@ describe('OpenAI media token budgeting', () => {
     const adapter = createOpenAI(client({ create }))
 
     if (mode === 'generate') {
-      await adapter.generate(mediaPrompt, { model: 'gpt-4o', messages, tokenBudget: 10_000 })
+      await adapter.generate(mediaPrompt, { model: 'gpt-4o', messages, inputBudget: { max: 10_000 } })
     } else {
-      await adapter.stream(mediaPrompt, { model: 'gpt-4o', messages, tokenBudget: 10_000 })
+      await adapter.stream(mediaPrompt, { model: 'gpt-4o', messages, inputBudget: { max: 10_000 } })
     }
     await observe.flush()
 
@@ -39,7 +39,6 @@ describe('OpenAI media token budgeting', () => {
         estimatedInputTokens: expect.any(Number),
         estimatedMediaTokens: expect.any(Number),
         estimateUsedFallback: true,
-        tokenBudget: 10_000,
       }),
     }))
     const serialized = JSON.stringify(transport.records)

@@ -134,6 +134,10 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "directly-observed",
     runtimePrimitiveNames: ["task.operation"],
   },
+  thread: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["thread.operation"],
+  },
   "composition.parallel": {
     primary: "directly-observed",
     runtimePrimitiveNames: ["composition.parallel"],

@@ -25,6 +25,11 @@ export interface RedisRecordClient {
   get<T = string | JsonObject>(key: string): Promise<T | null>
   set(key: string, value: string, opts?: { px?: number; nx?: true }): Promise<'OK' | null>
   del(...keys: string[]): Promise<number>
+  eval<TResult = unknown>(
+    script: string,
+    keys: string[],
+    args: unknown[],
+  ): Promise<TResult>
   scan(cursor: string, options?: { match?: string; count?: number }): Promise<readonly [string | number, string[]]>
   publish(channel: string, message: string): Promise<number>
 }
@@ -120,6 +125,32 @@ export function upstashRedisRecordStore<T extends JsonObject = JsonObject>(
       await redis.del(recordKey(key))
       await publish({ type: 'delete', key, timestamp: Date.now() })
     },
+    async getVersioned(key) {
+      assertKey(key)
+      return readVersionedValue<T>(redis, recordKey(key))
+    },
+    async putVersioned(key, value, expectedVersion) {
+      assertKey(key)
+      const stored = value === null ? null : (cloneJsonObject(value) as T)
+      const committed = await compareAndSet(
+        redis,
+        recordKey(key),
+        expectedVersion,
+        stored,
+      )
+      if (!committed) return false
+      await publish(
+        stored === null
+          ? { type: 'delete', key, timestamp: Date.now() }
+          : {
+              type: 'put',
+              key,
+              value: cloneJsonObject(stored) as T,
+              timestamp: Date.now(),
+            },
+      )
+      return true
+    },
     list,
     async *scan(prefixQuery, options) {
       let cursor: string | undefined
@@ -134,6 +165,7 @@ export function upstashRedisRecordStore<T extends JsonObject = JsonObject>(
       filter: 'scan',
       watch: Boolean(subscriber),
       batch: false,
+      mutate: 'cas',
     }),
     ...(subscriber
       ? {
@@ -160,6 +192,71 @@ export function upstashRedisRecordStore<T extends JsonObject = JsonObject>(
       : {}),
   }
   return store
+}
+
+const COMPARE_AND_SET_SCRIPT = `
+local current = redis.call("GET", KEYS[1])
+if ARGV[1] == "missing" then
+  if current then return 0 end
+elseif not current or redis.sha1hex(current) ~= ARGV[2] then
+  return 0
+end
+if ARGV[3] == "delete" then
+  redis.call("DEL", KEYS[1])
+else
+  redis.call("SET", KEYS[1], ARGV[4])
+end
+return 1
+`
+
+const VERSIONED_READ_SCRIPT = `
+local current = redis.call("GET", KEYS[1])
+if not current then return nil end
+return {current, redis.sha1hex(current)}
+`
+
+async function readVersionedValue<T extends JsonObject>(
+  redis: RedisRecordClient,
+  key: string,
+): Promise<{ readonly value: T | null; readonly version: string | null }> {
+  try {
+    const result = await redis.eval<readonly [string, string] | null>(
+      VERSIONED_READ_SCRIPT,
+      [key],
+      [],
+    )
+    if (result === null) return { value: null, version: null }
+    const [raw, version] = result
+    return {
+      value: cloneJsonObject(JSON.parse(raw) as unknown) as T,
+      version,
+    }
+  } catch (cause) {
+    throw new StorageError('backend_error', 'Upstash Redis versioned read failed.', { cause })
+  }
+}
+
+async function compareAndSet<T extends JsonObject>(
+  redis: RedisRecordClient,
+  key: string,
+  expectedVersion: string | null,
+  value: T | null,
+): Promise<boolean> {
+  try {
+    const result = await redis.eval<number>(
+      COMPARE_AND_SET_SCRIPT,
+      [key],
+      [
+        expectedVersion === null ? 'missing' : 'present',
+        expectedVersion ?? '',
+        value === null ? 'delete' : 'put',
+        value === null ? '' : JSON.stringify(value),
+      ],
+    )
+    return result === 1
+  } catch (cause) {
+    throw new StorageError('backend_error', 'Upstash Redis compare-and-set failed.', { cause })
+  }
 }
 
 async function scanKeys(

@@ -161,27 +161,25 @@ preserved. A top-level value for which `JSON.stringify` returns `undefined`, a
 cycle, or bigint fails with a stable Crux error. `md.json()` is not a sanitizer,
 redactor, canonical key sorter, or security escape hatch.
 
-## Inspection
+## Resolution and request evidence
 
-`.resolve()` exposes plain `system` and `prompt` strings. `.inspect()` retains
-structural provenance when available:
+`.resolve()` exposes plain `system` and `prompt` strings. `preview()` reports
+content-free whole-request fit and prospective adaptations:
 
 ```ts
-const inspection = await answer.inspect({
+import { preview } from "@use-crux/core";
+
+const result = await preview(answer, {
   input: { question: "How do I rotate credentials?" },
+  model,
 });
 
-inspection.prompt?.text;
-inspection.prompt?.segments;
-inspection.prompt?.staticTokens;
-inspection.prompt?.dynamicTokens;
-inspection.system.parts[0]?.segments;
+result.status;
+result.adaptations;
 ```
 
-Segments distinguish authored literal text from interpolated scalars, JSON,
-nested fragments, and sequences. Concatenating their text reproduces the exact
-resolved value. Ordinary prompt strings keep the legacy `{ text, tokens }`
-shape without inferred segments.
+Executed request receipts retain redacted contribution, candidate, and token
+evidence without copying PromptText content.
 
 ## Project Index Evidence
 
@@ -223,7 +221,7 @@ const registry = configure({
 registry.dispose();
 ```
 
-Only explicit Preview or Retry dispatch invokes `Prompt.inspect()`. Inspection
+Only explicit Preview or Retry dispatch invokes `preview()`. Request evidence
 does not generate with a provider, invoke tools, create an ordinary Run, or
 emit observability records. Authored callbacks are trusted application code and
 may perform their own side effects.

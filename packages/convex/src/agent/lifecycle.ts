@@ -80,19 +80,14 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       : undefined
     const input = await inputWithPersistedSkills(toInputRecord(prepared?.input ?? args.input))
     const activePrompt = promptWithRuntimeUse(prepared?.prompt ?? config.prompt, prepared?.use)
-    const resolved = await resolvePreparedPrompt(
-      activePrompt,
-      input,
-      prepared?.tokenBudget ?? args.tokenBudget ?? config.tokenBudget,
-    )
+    const resolved = await resolvePreparedPrompt(activePrompt, input)
     const convexToolSet = {
       ...toDriverToolRecord(config.driver, resolved.tools as Record<string, unknown> | undefined),
       ...toDriverToolRecord(config.driver, config.tools),
       ...toDriverToolRecord(config.driver, prepared?.tools),
     }
-    const { input: _input, tokenBudget: _tokenBudget, ...rest } = args
+    const { input: _input, ...rest } = args
     void _input
-    void _tokenBudget
 
     const callArgs = await prepareAgentCallArgsForNativeMedia(ctx, {
       ...rest,

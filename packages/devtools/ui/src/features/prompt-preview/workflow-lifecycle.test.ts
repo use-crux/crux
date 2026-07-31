@@ -119,17 +119,14 @@ describe("Prompt preview workflow lifecycle", () => {
               environment: "node",
             },
             catalogueRevision: revision,
-            inspection: {
-              system: {
-                text: "",
-                tokens: 0,
-                coverage: "complete",
-                parts: [],
-              },
-              totalTokens: 0,
-              droppedContexts: [],
-              excludedContexts: [],
+            preview: {
+              status: "fits",
+              measurement: "exact",
+              adaptations: [],
+              warnings: [],
+              diagnostics: [],
             },
+            contributions: [],
           });
         }
         return Response.json({

@@ -518,6 +518,7 @@ type SemanticKind =
   | "consensus"
   | "trace"
   | "memory"
+  | "thread"
   | "embed"
   | "security"
   | "other";
@@ -572,6 +573,9 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
     case "memory":
     case "blackboard":
       return "memory";
+    case "thread.operation":
+    case "thread":
+      return "thread";
     case "embedding.call":
     case "embed":
       return "embed";
@@ -593,6 +597,7 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
   if (p.startsWith("retrieval.")) return "retrieval";
   if (p.startsWith("embedding.")) return "embed";
   if (p.startsWith("memory.") || p.startsWith("blackboard")) return "memory";
+  if (p.startsWith("thread.")) return "thread";
   if (p.startsWith("generation.")) return "generate";
   if (p.startsWith("tool.")) return "tool";
   if (p.startsWith("agent.")) return "agent";
@@ -633,6 +638,7 @@ function kindHexColor(k: SemanticKind): string {
       return "var(--devtools-ok)";
     case "score":
     case "memory":
+    case "thread":
       return "var(--devtools-iris)";
     case "embed":
     case "security":

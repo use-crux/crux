@@ -268,6 +268,80 @@ func TestProjectRunDetailBuildsExactGenerationRequest(t *testing.T) {
 	}
 }
 
+func TestProjectRunDetailProjectsExecutedPlanningContributions(t *testing.T) {
+	started := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	graph := Graph{
+		Run: RunSummary{
+			RunID: "run_planned_request", TraceID: "trace_planned_request",
+			Name: "planned request", RootPrimitive: "generation.call", Status: "ok",
+			StartedAt: started.Format(time.RFC3339Nano), EndedAt: started.Add(time.Second).Format(time.RFC3339Nano), DurationMs: 1000,
+		},
+		Spans: []SpanSummary{{
+			RunID: "run_planned_request", TraceID: "trace_planned_request", SpanID: "span_planned_generation",
+			Family: "generation", Primitive: "generation.call", Name: "planned request", Status: "ok",
+			StartedAt: started.Format(time.RFC3339Nano), EndedAt: started.Add(time.Second).Format(time.RFC3339Nano), DurationMs: 1000,
+		}},
+		Artifacts: []ArtifactSummary{
+			requestMessagesArtifact("run_planned_request", "trace_planned_request", "artifact_planned_messages", "span_planned_generation", started, "Base prompt.", "context:style-full", "artifact_style_full"),
+			requestContextArtifact("run_planned_request", "trace_planned_request", "artifact_style_full", "span_planned_generation", started, "context:style-full", "private full style"),
+			requestContextArtifact("run_planned_request", "trace_planned_request", "artifact_style_compact", "span_planned_generation", started, "context:style-compact", "private compact style"),
+			requestContextArtifact("run_planned_request", "trace_planned_request", "artifact_reply_examples", "span_planned_generation", started, "context:reply-examples", "private examples"),
+			{
+				ArtifactID: "artifact_request_plan_sealed", RunID: "run_planned_request", TraceID: "trace_planned_request", SpanID: "span_planned_generation",
+				Kind: "request.plan", CreatedAt: started.Add(500 * time.Microsecond).Format(time.RFC3339Nano), ContentType: "application/json", Encoding: "json",
+				Preview: json.RawMessage(`{
+					"kind":"request.plan","stage":"sealed",
+					"receipt":{"id":"request_sealed_revision","model":"model-1","inputTokens":900,"maxInputTokens":1200,"measurement":"estimated","adaptations":[],"warnings":[]},
+					"inspection":{"id":"request_sealed_revision","contributions":[],"candidates":[],"breakdown":{"total":900,"attribution":"estimated","contributions":[]},"measurement":"estimated","counting":{},"retryCount":0,"artifacts":[],"supportTools":[],"supportRequests":[],"linkedRequestIds":[],"retention":"requires observability retention"}
+				}`),
+			},
+			{
+				ArtifactID: "artifact_request_plan", RunID: "run_planned_request", TraceID: "trace_planned_request", SpanID: "span_planned_generation",
+				Kind: "request.plan", CreatedAt: started.Add(time.Millisecond).Format(time.RFC3339Nano), ContentType: "application/json", Encoding: "json",
+				Preview: json.RawMessage(`{
+					"kind":"request.plan","stage":"completed",
+					"receipt":{"id":"request_planned","model":"model-1","inputTokens":800,"maxInputTokens":1200,"measurement":"estimated","adaptations":[
+						{"contributor":"style-full","representation":"authored","fullTokens":1800,"selectedTokens":1000},
+						{"contributor":"reply-examples","representation":"omitted","fullTokens":1600,"selectedTokens":800}
+					],"warnings":[]},
+					"inspection":{"id":"request_planned","contributions":[
+						{"id":"prompt","sources":["prompt"],"priority":0,"boundary":"required","representations":["full"]},
+						{"id":"style-full","sources":["context:style-full","context:style-compact"],"priority":0,"boundary":"sticky","representations":["full","authored"]},
+						{"id":"reply-examples","sources":["context:reply-examples"],"priority":0,"boundary":"elastic","representations":["full","omitted"]}
+					],"candidates":[],"breakdown":{"total":800,"attribution":"estimated","contributions":[]},"measurement":"estimated","counting":{},"retryCount":0,"artifacts":[],"supportTools":[],"supportRequests":[],"linkedRequestIds":[],"retention":"requires observability retention"}
+				}`),
+			},
+		},
+	}
+
+	detail := ProjectRunDetail(graph, ProjectionOptions{Now: started.Add(2 * time.Second)})
+	request := detail.Root.Request
+	if request == nil || request.Plan == nil || request.Plan.RequestID != "request_planned" {
+		t.Fatalf("request plan = %#v", request)
+	}
+	if len(request.Contributions) != 3 {
+		t.Fatalf("contributions = %#v, want three planned owners", request.Contributions)
+	}
+	required := request.Contributions[0]
+	if required.SourceID != "prompt" || required.Boundary != "required" || required.SelectedRepresentation != "full" || required.State != "active" {
+		t.Fatalf("required contribution = %#v", required)
+	}
+	style := request.Contributions[1]
+	if style.SourceID != "style-full" || style.Boundary != "sticky" || style.SelectedRepresentation != "authored" || style.State != "active" {
+		t.Fatalf("style contribution = %#v", style)
+	}
+	examples := request.Contributions[2]
+	if examples.SourceID != "reply-examples" || examples.Boundary != "elastic" || examples.SelectedRepresentation != "omitted" || examples.State != "dropped-budget" {
+		t.Fatalf("example contribution = %#v", examples)
+	}
+	if request.Budget == nil || request.Budget.DroppedCount != 1 || request.Budget.UsedTokens == nil || *request.Budget.UsedTokens != 800 {
+		t.Fatalf("planned budget = %#v", request.Budget)
+	}
+	if detail.Root.DecisionReport == nil || len(detail.Root.DecisionReport.Considered) != 1 || detail.Root.DecisionReport.Considered[0].Disposition != "dropped" {
+		t.Fatalf("decision report = %#v", detail.Root.DecisionReport)
+	}
+}
+
 func TestProjectRunDetailFoldsRoutingDecisionOntoSelectedGeneration(t *testing.T) {
 	started := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	graph := Graph{

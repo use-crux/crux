@@ -23,7 +23,7 @@ func StaticIndexIdentityManifest() IdentityManifest {
 		},
 		RuleDescriptors: DigestIdentity{
 			Name:    "crux-indexer-rule-descriptors",
-			Version: "1",
+			Version: "2",
 			Digest:  "sha256:rule-descriptors",
 		},
 		CompilerProjection: DigestIdentity{

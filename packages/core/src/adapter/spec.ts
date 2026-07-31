@@ -19,6 +19,11 @@ import type {
 import type { CruxProviderError } from "./normalized-outcome";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
+import type { ModelCapacityResolver } from "../request/capacity/model-profile";
+import type {
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+} from "../request/history/source";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -49,6 +54,49 @@ export interface AdapterSpec<
 
   /** Materialize an inert prompt tool source for one adapter invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /**
+   * Resolve capacity facts for a concrete provider model.
+   *
+   * Return `undefined` to use core's conservative fallback.
+   *
+   * @example
+   * ```ts
+   * capacity: (model) => model === "known-model" ? profile : undefined
+   * ```
+   */
+  readonly capacity?: ModelCapacityResolver;
+
+  /**
+   * Authoritatively count the complete canonical provider request.
+   *
+   * The planner calls this only when an exact count can change selection or
+   * fit. Implementations may perform provider I/O and must not dispatch a
+   * generation request.
+   *
+   * @param client - Bound provider client.
+   * @param args - Complete canonical request arguments.
+   * @returns Exact input-token count for the request.
+   */
+  countTokens?(
+    client: TClient,
+    args: CallArgs<TExtra>,
+  ): Promise<number>;
+
+  /**
+   * Lower managed history through an optional provider compaction facility.
+   *
+   * Core calls this only when `history({ providerNative: true })` permits the
+   * native path. Portable compaction remains Core-owned and bypasses this hook.
+   *
+   * @param client - Bound provider client.
+   * @param input - Exact prefix and versioned summary policy.
+   * @returns Derived summary text without mutating canonical history.
+   */
+  compactHistory?(
+    client: TClient,
+    input: ProviderHistorySummaryInput,
+  ): Promise<ProviderHistorySummaryResult>;
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
   call(

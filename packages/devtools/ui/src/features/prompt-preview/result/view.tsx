@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 
-import type { PromptPreviewText, PromptPreviewWorkflowState } from "../types";
-import { promptPreviewIssuePath, promptPreviewTextSlices } from "./model";
+import type { PromptPreviewWorkflowState } from "../types";
+import {
+  contributionBoundaryDescription,
+  promptPreviewIssuePath,
+  promptPreviewStatusLabel,
+} from "./model";
 
 function Panel({
   title,
@@ -18,50 +22,6 @@ function Panel({
   );
 }
 
-function ProvenanceText({ value }: { readonly value: PromptPreviewText }) {
-  return (
-    <>
-      <div
-        className="whitespace-pre-wrap font-mono text-xs leading-5"
-        aria-label="Provenance text"
-      >
-        {promptPreviewTextSlices(value).map((slice) => (
-          <span
-            key={`${slice.startUtf16}:${slice.endUtf16}`}
-            data-prompt-text-kind={slice.kind}
-            title={[slice.kind, slice.source, slice.sourceVersion]
-              .filter(Boolean)
-              .join(" · ")}
-            style={{
-              background:
-                slice.kind === "dynamic"
-                  ? "var(--devtools-iris-soft)"
-                  : "transparent",
-              borderBottom:
-                slice.kind === "unknown"
-                  ? "1px dotted var(--devtools-fg-muted)"
-                  : slice.kind === "dynamic"
-                    ? "1px solid var(--devtools-iris)"
-                    : "1px solid transparent",
-            }}
-          >
-            {slice.text}
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2 font-mono text-[10px] opacity-70">
-        {value.staticTokens !== undefined && (
-          <span>authored · {value.staticTokens}</span>
-        )}
-        {value.dynamicTokens !== undefined && (
-          <span>interpolated · {value.dynamicTokens}</span>
-        )}
-        <span>tokens · {value.tokens}</span>
-      </div>
-    </>
-  );
-}
-
 function ReadyResult({
   result,
 }: {
@@ -70,96 +30,107 @@ function ReadyResult({
     { readonly status: "ready" }
   >;
 }) {
-  const { inspection } = result;
+  const { preview, contributions } = result;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 font-mono text-xs">
-        <span>total · {inspection.totalTokens}</span>
-        {inspection.tokenBudget !== undefined && (
-          <span>budget · {inspection.tokenBudget}</span>
+        <strong>{promptPreviewStatusLabel(preview.status)}</strong>
+        {preview.model && (
+          <span className="break-all">model · {preview.model}</span>
         )}
-        <span>system · {inspection.system.tokens}</span>
+        {preview.inputTokens !== undefined && (
+          <span>input · {preview.inputTokens}</span>
+        )}
+        {preview.maxInputTokens !== undefined && (
+          <span>limit · {preview.maxInputTokens}</span>
+        )}
+        <span>measurement · {preview.measurement}</span>
       </div>
-      <Panel title="Assembled system">
-        <div className="space-y-3">
-          {inspection.system.parts.map((part, index) => (
-            <div
-              key={`${part.source}:${index}`}
-              className="space-y-1 border-t pt-2 first:border-t-0 first:pt-0"
-            >
-              <div className="flex gap-2 text-xs">
-                <strong>{part.source}</strong>
-                {part.skipped && <span>skipped</span>}
-              </div>
-              <ProvenanceText value={part} />
-            </div>
-          ))}
-          {inspection.system.parts.length === 0 && (
-            <p className="text-xs opacity-70">No system parts.</p>
-          )}
-        </div>
-      </Panel>
-      {inspection.prompt && (
-        <Panel title="User prompt">
-          <ProvenanceText value={inspection.prompt} />
-        </Panel>
-      )}
-      <Panel title="Dropped contexts">
-        {inspection.droppedContexts.length === 0 ? (
-          <p className="text-xs opacity-70">None.</p>
+      <Panel title="Contribution map">
+        {contributions.length === 0 ? (
+          <p className="text-xs opacity-70">No model-facing contributions.</p>
         ) : (
-          <div className="space-y-3">
-            {inspection.droppedContexts.map((context, index) => (
-              <div key={`${context.source}:${index}`}>
-                <strong className="text-xs">{context.source}</strong>
-                <span className="ml-2 text-xs opacity-70">
-                  priority · {context.priority}
-                </span>
-                <ProvenanceText value={context} />
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <Panel title="Excluded contexts">
-        {inspection.excludedContexts.length === 0 ? (
-          <p className="text-xs opacity-70">None.</p>
-        ) : (
-          <ul className="space-y-1 text-xs">
-            {inspection.excludedContexts.map((context, index) => (
-              <li key={`${context.source}:${index}`}>
-                <strong>{context.source}</strong> · {context.reason}
+          <ul className="space-y-2">
+            {contributions.map((contribution) => (
+              <li key={contribution.id} className="rounded border p-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <strong className="break-all">{contribution.id}</strong>
+                  <span data-contribution-boundary={contribution.boundary}>
+                    {contribution.boundary}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs opacity-70">
+                  {contributionBoundaryDescription(contribution.boundary)}
+                </p>
+                <div className="mt-1 font-mono text-[10px] opacity-70">
+                  {contribution.representations.join(" → ")}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </Panel>
+      <Panel title="Prospective adaptations">
+        {preview.adaptations.length === 0 ? (
+          <p className="text-xs opacity-70">None.</p>
+        ) : (
+          <ul className="space-y-1 text-xs">
+            {preview.adaptations.map((adaptation, index) => (
+              <li key={`${adaptation.contributor}:${index}`}>
+                <strong>{adaptation.contributor}</strong> ·{" "}
+                {adaptation.representation} · {adaptation.state}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      {(preview.warnings.length > 0 || preview.diagnostics.length > 0) && (
+        <Panel title="Planning notices">
+          <ul className="space-y-1 text-xs">
+            {preview.warnings.map((warning, index) => (
+              <li key={`warning:${warning.code}:${index}`}>
+                {warning.code} · {warning.message}
+              </li>
+            ))}
+            {preview.diagnostics.map((diagnostic, index) => (
+              <li key={`diagnostic:${diagnostic.id}:${index}`}>
+                {diagnostic.code} · {diagnostic.message}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
     </div>
   );
 }
 
-/**
- * Presents exact-preview inspection and validation as domain structure.
- * Raw JSON remains available only as a secondary diagnostic disclosure.
- */
+/** Presents observational request planning and contribution boundaries. */
 export function PromptPreviewResultView({
   state,
 }: {
   readonly state: PromptPreviewWorkflowState;
 }) {
-  if (state.phase === "running")
-    return <section>Running exact preview…</section>;
-  if (state.phase === "error")
+  if (state.phase === "running") {
     return (
-      <section role="alert">{state.message ?? "Exact preview failed."}</section>
+      <section role="status" aria-live="polite">
+        Running request preview…
+      </section>
     );
+  }
+  if (state.phase === "error") {
+    return (
+      <section role="alert">
+        {state.message ?? "Request preview failed."}
+      </section>
+    );
+  }
   if (!state.result) return <section>No preview result yet.</section>;
 
   const result = state.result;
   return (
     <section className="min-w-0 space-y-3">
       <h2 className="text-sm font-medium">
-        {result.status === "ready" ? "Inspection" : "Validation"}
+        {result.status === "ready" ? "Request preview" : "Validation"}
       </h2>
       {result.status === "ready" ? (
         <ReadyResult result={result} />

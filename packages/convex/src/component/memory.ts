@@ -9,6 +9,7 @@
 
 import { v } from 'convex/values'
 import { STORE_DOC_COMPONENT_SPEC } from '../store-doc/manifest'
+import { storeDocVersion } from '../store-doc/version'
 import { mutation, query } from './_generated/server.js'
 
 /**
@@ -124,6 +125,64 @@ export const remove = mutation({
       await ctx.db.delete(existing._id)
     }
     return null
+  },
+})
+
+/**
+ * Replace or delete a memory entry only at the observed document version.
+ */
+export const compareAndSet = mutation({
+  args: {
+    key: v.string(),
+    expectedVersion: v.union(v.string(), v.null()),
+    doc: v.any(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { key, expectedVersion, doc }) => {
+    const existing = await ctx.db
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) =>
+        q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, key),
+      )
+      .first()
+    const currentVersion = existing ? storeDocVersion(existing) : null
+    if (currentVersion !== expectedVersion) return false
+
+    if (doc === null) {
+      if (existing) await ctx.db.delete(existing._id)
+      return true
+    }
+    if (
+      typeof doc !== 'object' ||
+      doc === undefined ||
+      String((doc as { key?: unknown }).key) !== key
+    ) {
+      throw new Error('compareAndSet document key must match the requested key')
+    }
+    const write = doc as {
+      content: string
+      metadata?: unknown
+      embedding?: number[]
+      updatedAt: number
+    }
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        content: write.content,
+        metadata: write.metadata,
+        embedding: write.embedding,
+        updatedAt: write.updatedAt,
+      })
+    } else {
+      await ctx.db.insert(STORE_DOC_COMPONENT_SPEC.table, {
+        key,
+        content: write.content,
+        metadata: write.metadata,
+        embedding: write.embedding,
+        createdAt: write.updatedAt,
+        updatedAt: write.updatedAt,
+      })
+    }
+    return true
   },
 })
 

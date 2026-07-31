@@ -127,6 +127,53 @@ export interface CruxPromptBudgetPreview {
   dropped: readonly CruxContextContributionPreview[];
 }
 
+/** One content-free contributor represented in an executed request plan. */
+export interface CruxRequestPlanContributionPreview {
+  id: string;
+  sources: readonly string[];
+  priority: number;
+  boundary: "required" | "sticky" | "elastic";
+  representations: readonly string[];
+}
+
+/** Redacted executed-request evidence retained on the canonical event spine. */
+export interface CruxRequestPlanPreview {
+  kind: "request.plan";
+  stage: "sealed" | "completed";
+  receipt: {
+    id: string;
+    model: string;
+    inputTokens: number;
+    maxInputTokens: number;
+    measurement: "exact" | "estimated" | "conservative";
+    adaptations: readonly {
+      contributor: string;
+      representation: "authored" | "summary" | "offload" | "omitted";
+      fullTokens?: number;
+      selectedTokens?: number;
+      supportRequestId?: string;
+      supportRequestIds?: readonly string[];
+    }[];
+    warnings: readonly { code: string; message: string }[];
+    previousRequestId?: string;
+  };
+  inspection: {
+    id: string;
+    contributions: readonly CruxRequestPlanContributionPreview[];
+    candidates: readonly unknown[];
+    breakdown: unknown;
+    measurement: "exact" | "estimated" | "conservative";
+    counting: unknown;
+    retryCount: number;
+    artifacts: readonly unknown[];
+    supportTools: readonly string[];
+    supportRequests: readonly unknown[];
+    linkedRequestIds: readonly string[];
+    preparation?: unknown;
+    retention: "requires observability retention";
+  };
+}
+
 export interface CruxPromptInputPreview {
   kind: "prompt.input";
   promptId?: string;
@@ -626,6 +673,7 @@ export type DefinitionRefRole =
   | "invoked-guardrail"
   | "invoked-constraint"
   | "invoked-task"
+  | "invoked-thread"
   | "invoked-workspace"
   | "invoked-memory"
   | "invoked-recipe"
@@ -804,6 +852,19 @@ export interface CruxDeferRunAttributes {
   queueDelayMs?: number;
 }
 
+/** Payload-free structural evidence for one Thread operation or I/O decision. */
+export interface CruxThreadOperationAttributes {
+  readonly threadId: string;
+  readonly operation:
+    | "append"
+    | "read"
+    | "edit"
+    | "select"
+    | "redact"
+    | "delete"
+    | "history.override";
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
@@ -812,6 +873,7 @@ export type CruxSpanAttributesByPrimitive = {
   "memory.capture": CruxMemoryCaptureSpanAttributes;
   "defer.scheduled": CruxDeferScheduledAttributes;
   "defer.run": CruxDeferRunAttributes;
+  "thread.operation": CruxThreadOperationAttributes;
   "custom.operation": CruxAttributes;
 };
 

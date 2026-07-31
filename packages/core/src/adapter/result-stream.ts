@@ -85,6 +85,7 @@ export function createStreamResult<
     const text = typeof meta?.text === "string" ? meta.text : streamedText;
     const accumulator = createResultAccumulator();
     accumulator.addStep({
+      ...(meta?.request !== undefined ? { request: meta.request } : {}),
       content:
         meta?.content !== undefined ? meta.content : [{ type: "text", text }],
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
@@ -105,6 +106,7 @@ export function createStreamResult<
       ...(extended?.pendingApprovals
         ? { pendingApprovals: extended.pendingApprovals }
         : {}),
+      ...(meta?.threadCommit ? { threadCommit: meta.threadCommit } : {}),
       ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
       // Present only when the operation spanned several billable attempts; it
       // then replaces the step-derived totals (RFC #173, law 7).

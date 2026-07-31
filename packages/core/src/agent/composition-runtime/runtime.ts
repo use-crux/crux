@@ -5,6 +5,15 @@ import { getExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import { executeAgent, executeFunctionStep } from './execution'
 import { emitCompositionReport } from './report'
+import {
+  createPrepareInvocationState,
+  recordPrepareInvocationOutcome,
+} from '../../request/prepare/invocation'
+import {
+  nestedRequestReceiptTree,
+  type CompositionRequestReceiptNode,
+} from '../../request/receipt/tree'
+import { isAgent } from '../agent'
 import type {
   CompositionRuntime,
   CompositionRuntimeConfig,
@@ -32,6 +41,8 @@ export function createCompositionRuntime(
   // lockstep with the indexer's `composition.<kind>:<safeId(id)>` construction.
   const definitionRef = compositionDefinitionRef(config.kind, config.id)
   const definitionId = definitionRef.id
+  const preparationState = createPrepareInvocationState()
+  const requestNodes: CompositionRequestReceiptNode[] = []
 
   return {
     compositionId,
@@ -52,19 +63,71 @@ export function createCompositionRuntime(
       }
 
       const scope: CompositionScope = {
-        executeAgent: (input) =>
-          executeAgent(
+        executeAgent: async (input) => {
+          const result = await executeAgent(
             compositionId,
             childContext,
             input,
             config.kind === 'parallel'
               ? parallelBranchDefinitionRef(config.id, input.label)
               : undefined,
-          ),
-        executeFunctionStep: (input) =>
-          executeFunctionStep(compositionId, childContext, input),
+            config.prepareInvocation,
+            preparationState,
+          )
+          recordPrepareInvocationOutcome(preparationState, result.usage)
+          if (isAgent(input.agent)) {
+            requestNodes.push(Object.freeze({
+              kind: 'invocation',
+              label: input.label,
+              index: input.index,
+              target: Object.freeze({
+                id: input.agent.id,
+                operation: 'language',
+              }),
+              receipts: Object.freeze([...(result.requests ?? [])]),
+            }))
+          } else {
+            const tree = nestedRequestReceiptTree(result.output)
+            if (tree) {
+              requestNodes.push(Object.freeze({
+                kind: 'composition',
+                label: input.label,
+                index: input.index,
+                tree,
+              }))
+            }
+          }
+          return result
+        },
+        executeFunctionStep: async (input) => {
+          const result = await executeFunctionStep(
+            compositionId,
+            childContext,
+            input,
+          )
+          const tree = nestedRequestReceiptTree(result.output)
+          if (tree) {
+            requestNodes.push(Object.freeze({
+              kind: 'composition',
+              label: input.label,
+              index: input.index,
+              tree,
+            }))
+          }
+          return result
+        },
         report: (input) => emitCompositionReport(config.kind, input),
         childContext,
+        requestReceipts: () => Object.freeze({
+          composition: Object.freeze({
+            id: config.id,
+            executionId: compositionId,
+            kind: config.kind,
+          }),
+          children: Object.freeze(
+            [...requestNodes].sort((left, right) => left.index - right.index),
+          ),
+        }),
       }
 
       const compositionSpan = observe.openSpan({

@@ -82,6 +82,12 @@ export function semanticDefinitionTargetForCall(
         semanticStringLiteralProperty(object, "id", view.syntax) ??
           variableName,
       );
+    case "thread":
+      return target(
+        "thread",
+        semanticStringLiteralProperty(object, "id", view.syntax) ??
+          variableName,
+      );
     case "workspace":
       return target(
         "workspace",

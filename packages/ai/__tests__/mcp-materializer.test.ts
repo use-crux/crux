@@ -68,7 +68,8 @@ describe("AI SDK-native MCP materialization", () => {
     expect(sdkTools.lookup).toBeDefined();
     expect(sdkTools.lookup).not.toBe(nativeTool);
     expect(sdkTools.lookup?.execute).not.toBe(nativeExecute);
-    expect(sdkTools.lookup?.toModelOutput).toBe(nativeToModelOutput);
+    expect(sdkTools.lookup?.toModelOutput).not.toBe(nativeToModelOutput);
+    expect(sdkTools.lookup?.toModelOutput).toEqual(expect.any(Function));
   });
 
   it.each(["generate", "stream"] as const)(

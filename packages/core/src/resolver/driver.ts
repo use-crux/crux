@@ -96,7 +96,13 @@ function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.excluded.push(...nested.excluded)
   out.skills.push(...nested.skills)
   out.memories.push(...nested.memories)
+  mergeThread(out, nested.thread)
   out.blackboards.push(...nested.blackboards)
+  out.history.push(...nested.history)
+  out.representations.push(...nested.representations)
+  for (const [entry, ownership] of nested.representationOwnership) {
+    out.representationOwnership.set(entry, ownership)
+  }
   out.toolSources.push(...nested.toolSources)
   mergeOwnedToolSet(out.tools, out.toolOwners, nested.tools, nested.toolOwners)
   out.toolMiddleware.push(...nested.toolMiddleware)
@@ -201,10 +207,30 @@ async function runContributor(
 
   const children = gate.children ?? contributor.children?.(input)
   if (children && children.length > 0) {
-    mergeNested(
-      out,
-      await resolveUse(children, input, promptId, ports, depth + 1, seenContextIds, dynamicSourceId, staticEntryIds),
+    const nested = await resolveUse(
+      children,
+      input,
+      promptId,
+      ports,
+      depth + 1,
+      seenContextIds,
+      dynamicSourceId,
+      staticEntryIds,
     )
+    if (contributor.representation) {
+      out.representationOwnership.set(
+        contributor.representation,
+        Object.freeze({
+          contexts: Object.freeze([...nested.active]),
+          skills: Object.freeze([...nested.skills]),
+          toolNames: Object.freeze(Object.keys(nested.tools)),
+          constraints: Object.freeze([...nested.constraints]),
+          guardrails: Object.freeze([...nested.guardrails]),
+          toolMiddleware: Object.freeze([...nested.toolMiddleware]),
+        }),
+      )
+    }
+    mergeNested(out, nested)
   }
 
   const contribution = contributor.contribute ? await contributor.contribute({ input, promptId }) : {}
@@ -212,8 +238,13 @@ async function runContributor(
   // Collections register before context expansion so binding order matches
   // entry order even when an expansion nests further collectable entries.
   if (contribution.memory) out.memories.push(contribution.memory)
+  mergeThread(out, contribution.thread)
   if (contribution.skill) out.skills.push(contribution.skill)
   if (contribution.blackboard) out.blackboards.push(contribution.blackboard)
+  if (contribution.history) out.history.push(contribution.history)
+  if (contribution.representations) {
+    out.representations.push(...contribution.representations)
+  }
 
   if (contribution.use && contribution.use.length > 0) {
     mergeNested(
@@ -260,6 +291,19 @@ async function runContributor(
   if (contribution.metadata) out.metadata = { ...out.metadata, ...contribution.metadata }
 
   if (contribution.facts) emitFacts(ports, contribution.facts)
+}
+
+function mergeThread(
+  out: MergedResolution,
+  thread: MergedResolution["thread"],
+): void {
+  if (!thread) return
+  if (out.thread) {
+    throw new Error(
+      `Prompt resolution found multiple Thread entries ("${out.thread.id}" and "${thread.id}"). Use exactly one Thread per prompt graph.`,
+    )
+  }
+  out.thread = thread
 }
 
 function normalizeToolMiddleware(middleware: ToolMiddleware | readonly ToolMiddleware[]): ToolMiddleware[] {

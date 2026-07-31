@@ -186,6 +186,7 @@ export const DefinitionRefRoleSchema = z.enum([
   "invoked-guardrail",
   "invoked-constraint",
   "invoked-task",
+  "invoked-thread",
   "invoked-workspace",
   "invoked-memory",
   "invoked-recipe",

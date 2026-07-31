@@ -25,6 +25,7 @@ import type {
 } from '../observability/contract'
 import type { EvidenceRef } from '../evidence/record-types'
 import type { JsonValue, ToolDef, ToolExecutionOptions, ToolModelOutput, ToModelOutputArgs } from '../types/tool'
+import type { ToolOutputOffloadPolicy } from '../request/representation/ladder-types'
 
 // ─────────────────────────────────────────────────────────────────
 // Tool authoring
@@ -63,6 +64,12 @@ export interface ToolConfig<
   toModelOutput?: (
     args: ToModelOutputArgs<z.infer<TInputSchema>, TOutput>,
   ) => ToolModelOutput | Promise<ToolModelOutput>
+  /**
+   * Exact-recovery policy for large canonical outputs.
+   *
+   * The application-facing return type remains unchanged.
+   */
+  output?: ToolOutputOffloadPolicy
 }
 
 /**
@@ -78,6 +85,7 @@ export type NamedToolDef<
 > = ToolDef<TInput, TOutput, TContext> & {
   readonly name?: TName
   readonly contextSchema?: TContextSchema
+  readonly output?: ToolOutputOffloadPolicy
 }
 
 // ─────────────────────────────────────────────────────────────────

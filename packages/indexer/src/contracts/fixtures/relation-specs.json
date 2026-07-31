@@ -9,9 +9,33 @@
       "runtimeJoin": true
     },
     {
+      "type": "prompt.uses_thread",
+      "fromKinds": ["prompt"],
+      "toKinds": ["thread"],
+      "presentation": "both",
+      "partial": true,
+      "runtimeJoin": true
+    },
+    {
+      "type": "context.uses_thread",
+      "fromKinds": ["context"],
+      "toKinds": ["thread"],
+      "presentation": "both",
+      "partial": true,
+      "runtimeJoin": true
+    },
+    {
       "type": "agent.uses_prompt",
       "fromKinds": ["agent"],
       "toKinds": ["prompt"],
+      "presentation": "both",
+      "partial": true,
+      "runtimeJoin": true
+    },
+    {
+      "type": "agent.uses_thread",
+      "fromKinds": ["agent"],
+      "toKinds": ["thread"],
       "presentation": "both",
       "partial": true,
       "runtimeJoin": true
