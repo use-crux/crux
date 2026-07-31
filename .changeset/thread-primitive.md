@@ -30,3 +30,8 @@ and owner-safe whole-Thread deletion. Redaction permanently poisons replay and
 editing while erasing Thread-owned assets; deletion rejects while any durable
 owner remains, publishes inaccessibility before cleanup, and erases nodes,
 append receipts, pending receipt state, and assets.
+
+Hydrate persisted media automatically on Thread reads, emit payload-safe
+`thread.operation` evidence for every public operation, expose structural
+tree/group/branch/head data to the Runtime Bridge, and discover authored
+Threads plus Prompt/Agent bindings and binding diagnostics in Project Index.

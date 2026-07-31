@@ -17,7 +17,9 @@ import {
 import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
 import { commitThreadTurn, readThreadHistory } from "./entry";
+import { observeThreadOperation } from "./observability";
 import { redactThreadMessages } from "./redact";
+import { registerThreadInspectableResource } from "./runtime-bridge";
 import { commitThreadEdit } from "./store/alternatives";
 import { commitThreadAppend } from "./store/commit";
 import { readThread } from "./store/read";
@@ -65,27 +67,123 @@ export function createThreadHandle(
       );
     }
   };
-  const append: Thread["append"] = (input, appendOptions) =>
-    commitThreadAppend(resolveStorage(), options.id, input, appendOptions);
+  registerThreadInspectableResource(options.id, resolveStorage);
+  const append: Thread["append"] = (input, appendOptions) => {
+    const messages = Array.isArray(input) ? input : [input];
+    return observeThreadOperation({
+      threadId: options.id,
+      operation: "append",
+      attributes: {
+        messageCount: messages.length,
+        roles: messages.map(({ role }) => role),
+      },
+      run: () =>
+        commitThreadAppend(resolveStorage(), options.id, input, appendOptions),
+      complete: (commit) => ({
+        messageIds: commit.messageIds,
+        decision: commit.status,
+        selectedHead: commit.selectedHead,
+        replayed: commit.replayed,
+        ...(commit.parentId ? { parentId: commit.parentId } : {}),
+      }),
+    });
+  };
   const read: Thread["read"] = (readOptions) =>
-    readThread(resolveStorage(), options.id, readOptions);
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "read",
+      attributes: {
+        ...(readOptions?.at ? { at: readOptions.at } : {}),
+        ...(readOptions?.before ? { before: readOptions.before } : {}),
+        ...(readOptions?.limit ? { limit: readOptions.limit } : {}),
+      },
+      run: () => readThread(resolveStorage(), options.id, readOptions),
+      complete: (snapshot) => ({
+        entryCount: snapshot.entries.length,
+        messageCount: snapshot.entries.filter(
+          ({ kind }) => kind === "message",
+        ).length,
+        removedCount: snapshot.entries.filter(
+          ({ kind }) => kind === "removed",
+        ).length,
+        redactedCount: snapshot.entries.filter(
+          ({ kind }) => kind === "redacted",
+        ).length,
+        roles: snapshot.entries.flatMap((entry) =>
+          entry.kind === "message" ? [entry.role] : [],
+        ),
+        ...(snapshot.head ? { head: snapshot.head } : {}),
+        ...(snapshot.cursor ? { cursor: snapshot.cursor } : {}),
+      }),
+    });
   const readHistory: Thread["readHistory"] = () => readThreadHistory(read);
   const commitTurn: Thread["commitTurn"] = (turn) =>
-    commitThreadTurn(
-      (messages, expectedHead) =>
-        commitThreadAppend(resolveStorage(), options.id, messages, {
-          expectedHead,
-        }),
-      turn,
-    );
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "append",
+      attributes: {
+        source: "managed-execution",
+        messageCount: turn.messages.length,
+        roles: turn.messages.map(({ role }) => role),
+      },
+      run: () =>
+        commitThreadTurn(
+          (messages, expectedHead) =>
+            commitThreadAppend(resolveStorage(), options.id, messages, {
+              expectedHead,
+            }),
+          turn,
+        ),
+      complete: (commit) => ({
+        messageIds: commit.messageIds,
+        decision: commit.status,
+        selectedHead: commit.selectedHead,
+        replayed: commit.replayed,
+        ...(commit.parentId ? { parentId: commit.parentId } : {}),
+      }),
+    });
   const edit: Thread["edit"] = (messageId, patch) =>
-    commitThreadEdit(resolveStorage(), options.id, messageId, patch);
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "edit",
+      attributes: { targetId: messageId },
+      run: () =>
+        commitThreadEdit(resolveStorage(), options.id, messageId, patch),
+      complete: (commit) => ({
+        messageIds: commit.messageIds,
+        decision: commit.status,
+        selectedHead: commit.selectedHead,
+        replayed: commit.replayed,
+      }),
+    });
   const select: Thread["select"] = (messageId) =>
-    selectThread(resolveStorage(), options.id, messageId);
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "select",
+      attributes: { targetId: messageId },
+      run: () => selectThread(resolveStorage(), options.id, messageId),
+      complete: (snapshot) => ({
+        entryCount: snapshot.entries.length,
+        ...(snapshot.head ? { head: snapshot.head } : {}),
+      }),
+    });
   const redact: Thread["redact"] = (messageId) =>
-    redactThreadMessages(resolveStorage(), options.id, messageId);
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "redact",
+      attributes: {
+        messageIds: Array.isArray(messageId) ? messageId : [messageId],
+      },
+      run: () => redactThreadMessages(resolveStorage(), options.id, messageId),
+      complete: () => ({ state: "redacted" }),
+    });
   const deleteHandle: Thread["delete"] = () =>
-    deleteThread(resolveStorage(), options.id, ownerRegistry);
+    observeThreadOperation({
+      threadId: options.id,
+      operation: "delete",
+      run: () => deleteThread(resolveStorage(), options.id, ownerRegistry),
+      complete: () => ({ state: "deleted" }),
+    });
   return Object.freeze({
     _tag: "Thread",
     id: options.id,

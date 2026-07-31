@@ -50,6 +50,31 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
   [
     ...promptTextSemanticParityFixtures,
     {
+      name: "authored-thread-definition-and-bindings",
+      workspacePackages: ["core"],
+      files: {
+        "src/thread.ts": `
+        import { agent, prompt } from '@use-crux/core'
+        import { thread } from '@use-crux/core/thread'
+
+        export const conversation = thread({ id: 'conversation' })
+        export const answer = prompt({
+          id: 'answer',
+          use: [conversation],
+          prompt: 'Answer the user',
+        })
+        export const worker = agent({
+          id: 'worker',
+          prompt: answer,
+        })
+      `,
+      },
+      expect: {
+        definitionIds: ["thread:conversation"],
+        relationTypes: ["prompt.uses_thread", "agent.uses_thread"],
+      },
+    },
+    {
       // Locks the semantic-backend-emitted DefinitionRef kinds — prompt,
       // context, and rag.retriever, the config-bearing primitives that produce
       // standalone semantic definitions — to the exact `ProjectDefinition.ID`

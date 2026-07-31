@@ -71,6 +71,7 @@
     "security.warning": "security",
     "skill.load": "skill",
     "task.operation": "task",
+    "thread.operation": "thread",
     "tool.approval": "tool",
     "tool.call": "tool",
     "workspace.operation": "workspace"

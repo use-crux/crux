@@ -46,8 +46,8 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the combined PromptText and execution-evidence epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v39");
+  it("uses the Thread-definition epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v40");
   });
 
   it("does not reuse a valid artifact from the pre-evidence v38 namespace", async () => {

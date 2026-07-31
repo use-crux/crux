@@ -1,0 +1,124 @@
+---
+title: Thread
+description: Durable provider-neutral conversation history with atomic turns, branches, edits, redaction, and deletion.
+---
+
+```ts
+import { thread } from "@use-crux/core/thread";
+```
+
+`thread()` stores canonical Crux messages independently of any model provider.
+History is immutable: appends publish new causal groups, edits create sibling
+revisions, and selection moves the active head without rewriting prior nodes.
+
+## Create and bind a Thread
+
+```ts
+import { prompt } from "@use-crux/core";
+import { thread } from "@use-crux/core/thread";
+
+const conversation = thread({
+  id: "support-42",
+  storage,
+});
+
+const support = prompt({
+  id: "support",
+  use: [conversation],
+  prompt: ({ input }) => input.question,
+});
+```
+
+Omit `storage` to use the `config({ storage })` bundle. A Prompt graph may
+contain exactly one Thread. Managed Prompt and Agent execution reads the
+selected history once, sends that exact revision to the provider, then appends
+the rendered user turn and accepted assistant/tool exchange atomically. The
+operation result exposes the publication receipt as `threadCommit`.
+
+Explicit call-site `messages` shadow the Thread for that invocation: Crux
+neither reads nor writes Thread history.
+
+## Append and read
+
+```ts
+const commit = await conversation.append([
+  { id: "question", role: "user", content: "Can I change my plan?" },
+  { id: "answer", role: "assistant", content: "Yes." },
+]);
+
+const snapshot = await conversation.read();
+```
+
+Caller-supplied message IDs make identical retries replay-safe. Reusing an ID
+with different content or at a different parent is rejected. A multi-message
+append is one causal group and is never split by pagination.
+
+```ts
+await conversation.read({ at: "answer" });       // exact structural prefix
+await conversation.read({ limit: 20 });          // whole-group page
+await conversation.read({ before: snapshot.cursor });
+```
+
+`ThreadSnapshot.entries` contains live messages plus structural `removed` or
+`redacted` entries where applicable. Media is persisted through the Thread's
+`AssetStore` and automatically hydrated when read.
+
+## Branches, edits, and selection
+
+Appending after an earlier message creates a durable alternative when that
+parent is no longer the selected head:
+
+```ts
+await conversation.append(
+  { id: "alternative", role: "assistant", content: "A different answer." },
+  { after: "question" },
+);
+```
+
+Edit a user message to create and select an immutable sibling revision:
+
+```ts
+const edit = await conversation.edit("question", {
+  id: "question-v2",
+  content: "Can I change my annual plan?",
+});
+
+await conversation.select("answer");
+```
+
+Reads expose deterministic `variant` navigation metadata for siblings.
+`select()` accepts an existing sibling or ancestor and restores its remembered
+continuation when one exists.
+
+## Redaction and deletion
+
+```ts
+await conversation.redact(["question", "answer"]);
+await conversation.delete();
+```
+
+Redaction irreversibly erases message provenance and Thread-owned assets while
+retaining the minimum structural tombstone needed to preserve graph safety.
+Redacted IDs cannot be replayed or edited.
+
+Deletion is idempotent and publishes inaccessibility before cleanup. It rejects
+with `ThreadInUseError` while a durable owner is registered. After deletion,
+history operations fail with the `deleted` Thread error code.
+
+## Observability and devtools
+
+Append, read, edit, select, redact, and delete emit `thread.operation` spans
+with structural IDs, roles, counts, state changes, and commit decisions.
+Message content is not placed in span attributes.
+
+In development, each authored Thread registers a payload-safe Runtime Bridge
+resource. Devtools can inspect its tree, causal groups, branch points, and
+owner heads without receiving message content.
+
+## Errors
+
+Thread failures use stable codes such as `invalid_message`, `invalid_parent`,
+`conflict`, `commit_failed`, `unsupported_capability`, `in_use`, and
+`deleted`. Managed publication failures reject with `ThreadCommitError`; a
+successful provider result is never reported as fully accepted when its Thread
+turn could not be committed.

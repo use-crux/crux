@@ -63,8 +63,25 @@ describe("thread managed execution resolution", () => {
           name: "thread.history.override",
           attributes: {
             threadId: "managed-shadow",
+            operation: "history.override",
+            state: "shadowed",
             reason: "explicit-messages",
           },
+        }),
+      );
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: "span:start",
+          name: "thread.history.override",
+          family: "thread",
+          primitive: "thread.operation",
+          definitionRefs: [
+            {
+              id: "thread:managed-shadow",
+              kind: "thread",
+              role: "invoked-thread",
+            },
+          ],
         }),
       );
     } finally {

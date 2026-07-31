@@ -626,6 +626,7 @@ export type DefinitionRefRole =
   | "invoked-guardrail"
   | "invoked-constraint"
   | "invoked-task"
+  | "invoked-thread"
   | "invoked-workspace"
   | "invoked-memory"
   | "invoked-recipe"
@@ -804,6 +805,19 @@ export interface CruxDeferRunAttributes {
   queueDelayMs?: number;
 }
 
+/** Payload-free structural evidence for one Thread operation or I/O decision. */
+export interface CruxThreadOperationAttributes {
+  readonly threadId: string;
+  readonly operation:
+    | "append"
+    | "read"
+    | "edit"
+    | "select"
+    | "redact"
+    | "delete"
+    | "history.override";
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
@@ -812,6 +826,7 @@ export type CruxSpanAttributesByPrimitive = {
   "memory.capture": CruxMemoryCaptureSpanAttributes;
   "defer.scheduled": CruxDeferScheduledAttributes;
   "defer.run": CruxDeferRunAttributes;
+  "thread.operation": CruxThreadOperationAttributes;
   "custom.operation": CruxAttributes;
 };
 

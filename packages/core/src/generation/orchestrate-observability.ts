@@ -13,6 +13,7 @@
 import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import { readPromptTextObservation } from '../resolver/prompt-text-observation'
+import { emitThreadHistoryOverrideEvidence } from '../thread/observability'
 import type { OrchestrationSpec } from './orchestrate-types'
 import { normalizeBudgetMs, type TimeoutOptions } from './timeout'
 import type { GenerationPerformanceTracker } from './performance-metrics'
@@ -63,13 +64,7 @@ export function emitThreadHistoryOverride(
   override: OrchestrationSpec["threadHistoryOverride"],
 ): void {
   if (!override) return
-  observe.event({
-    name: 'thread.history.override',
-    attributes: {
-      threadId: override.threadId,
-      reason: override.reason,
-    },
-  })
+  emitThreadHistoryOverrideEvidence(override.threadId, override.reason)
 }
 
 function normalizeTotalTimeoutMs(totalMs: number | null | undefined): number | undefined {

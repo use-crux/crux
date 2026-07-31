@@ -8,7 +8,6 @@
  * @module
  */
 
-import { decodePersistedMessages } from "../../content/persisted-message";
 import type { Storage } from "../../storage";
 import { ThreadError } from "../errors";
 import type {
@@ -19,6 +18,7 @@ import type {
 } from "../types";
 import { computeThreadVariants } from "../variants";
 import { threadControlKey } from "./keys";
+import { hydrateThreadMessage } from "./hydrate";
 import {
   isNodePublished,
   loadThreadPath,
@@ -143,13 +143,7 @@ async function nodeToEntry(
       createdAt: node.createdAt,
     });
   }
-  const [message] = await decodePersistedMessages({
-    storage,
-    messages: [node.message],
-  });
-  if (!message) {
-    throw new ThreadError("commit_failed", "Stored Thread message could not be decoded.");
-  }
+  const message = await hydrateThreadMessage(storage, node);
   return Object.freeze({
     kind: "message",
     ...structural,

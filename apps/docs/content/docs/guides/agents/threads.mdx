@@ -1,0 +1,39 @@
+---
+title: Conversation Threads
+description: Give prompts and agents durable, branchable conversation history.
+---
+
+Use a Thread when the application, rather than a provider SDK, should own the
+canonical conversation:
+
+```ts
+import { agent } from "@use-crux/core/agent";
+import { prompt } from "@use-crux/core";
+import { thread } from "@use-crux/core/thread";
+
+const conversation = thread({ id: `support:${ticketId}`, storage });
+
+const supportPrompt = prompt({
+  id: "ticket-support",
+  use: [conversation],
+  prompt: ({ input }) => input.message,
+});
+
+const supportAgent = agent({
+  id: "support-agent",
+  prompt: supportPrompt,
+});
+```
+
+Managed execution reads one exact head before provider I/O and publishes the
+accepted turn after that same head. Concurrent calls therefore remain visible
+as alternatives instead of silently overwriting each other. Save the returned
+`threadCommit` when the application needs message IDs or the selected-versus-
+alternative decision.
+
+Keep one Thread in a Prompt graph. Put memory, retrieval, and other context
+entries beside it in `use`; they solve different problems. A Thread is exact
+conversation history, while Memory extracts and renders selected information.
+
+For manual history management, branch navigation, redaction, deletion, and the
+full error contract, see the [Thread API reference](/docs/reference/crux-core/thread).

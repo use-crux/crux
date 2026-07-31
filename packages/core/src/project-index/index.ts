@@ -494,6 +494,7 @@ export type ProjectDefinitionKind =
   | "flow"
   | "flow.step"
   | "task"
+  | "thread"
   | "deferred-work"
   | "composition.parallel"
   | "composition.parallel.branch"
@@ -654,7 +655,13 @@ export interface InjectionMetadataContributionFacts {
 
 export interface InjectionUseFacts {
   variable?: string;
-  relationHint?: "context" | "injectable" | "memory" | "blackboard" | "unknown";
+  relationHint?:
+    | "context"
+    | "injectable"
+    | "memory"
+    | "blackboard"
+    | "thread"
+    | "unknown";
   targetDefinitionId?: string;
   targetKind?: ProjectDefinitionKind;
   targetName?: string;
@@ -1278,6 +1285,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "flow",
   "flow.step",
   "task",
+  "thread",
   "deferred-work",
   "composition.parallel",
   "composition.parallel.branch",

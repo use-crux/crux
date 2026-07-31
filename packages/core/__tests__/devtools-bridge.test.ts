@@ -15,6 +15,7 @@ import {
 import { clearInspectableResources } from '../src/runtime-bridge/resources'
 import { memory, recentMessages } from '../src/memory'
 import { inMemoryRecordStore } from '../src/storage'
+import { thread } from '../src/thread'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -458,6 +459,62 @@ describe('devtools runtime bridge contract', () => {
         content: JSON.stringify({ status: 'ready' }),
       },
     })
+  })
+
+  it('returns payload-safe Thread tree, group, branch, and head topology', async () => {
+    const records = inMemoryRecordStore()
+    const conversation = thread({
+      id: 'support/42',
+      storage: { records },
+    })
+    await conversation.append({
+      id: 'root',
+      role: 'user',
+      content: 'PRIVATE_ROOT_SENTINEL',
+    })
+    await conversation.append(
+      { id: 'answer-a', role: 'assistant', content: 'PRIVATE_A_SENTINEL' },
+      { after: 'root' },
+    )
+    await conversation.append(
+      { id: 'answer-b', role: 'assistant', content: 'PRIVATE_B_SENTINEL' },
+      { after: 'root' },
+    )
+
+    const result = await executeRuntimeBridgeCommand(
+      {},
+      {
+        type: 'command.request',
+        commandId: 'cmd_thread',
+        command: 'store.read',
+        payload: {
+          operation: 'get',
+          resource: 'thread:support%2F42',
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
+      schema: 1,
+      threadId: 'support/42',
+      state: 'live',
+      heads: { main: 'answer-a' },
+      tree: expect.arrayContaining([
+        expect.objectContaining({ id: 'answer-a', parentId: 'root', role: 'assistant' }),
+        expect.objectContaining({ id: 'answer-b', parentId: 'root', role: 'assistant' }),
+        expect.objectContaining({ id: 'root', role: 'user' }),
+      ]),
+      branches: [
+        expect.objectContaining({
+          parentId: 'root',
+          groupIds: expect.any(Array),
+        }),
+      ],
+    })
+    expect((result as { groups: unknown[] }).groups).toHaveLength(3)
+    expect(JSON.stringify(result)).not.toMatch(
+      /PRIVATE_ROOT_SENTINEL|PRIVATE_A_SENTINEL|PRIVATE_B_SENTINEL/,
+    )
   })
 
   it('infers memory resources from trace ids when readable runtime records are available', async () => {

@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  inMemoryAssetStore,
   mutateRecord,
   type RecordStore,
   type Storage,
@@ -302,6 +303,50 @@ export function describeThreadConformance(
         message: expect.stringMatching(/config\.storage.*strongly consistent/u),
       });
     });
+
+    it("hydrates persisted media through the owning AssetStore on read", async () => {
+      const prepared = await options.prepare();
+      const conversation = thread({
+        id: "media-hydration",
+        storage: {
+          ...prepared,
+          assets: prepared.assets ?? inMemoryAssetStore(),
+        },
+      });
+      await conversation.append({
+        id: "image-message",
+        role: "user",
+        content: [{
+          type: "image",
+          source: {
+            type: "data",
+            data: new Uint8Array([1, 2, 3, 4]),
+            mediaType: "image/png",
+            width: 2,
+            height: 2,
+          },
+        }],
+      });
+
+      const entry = (await conversation.read()).entries[0];
+      expect(entry).toMatchObject({
+        kind: "message",
+        id: "image-message",
+        role: "user",
+        content: [{
+          type: "image",
+          source: {
+            type: "data",
+            data: new Uint8Array([1, 2, 3, 4]),
+            mediaType: "image/png",
+            width: 2,
+            height: 2,
+            ref: { uri: expect.stringMatching(/^memory:\/\/asset\//u) },
+          },
+        }],
+      });
+    });
+
     registerThreadAlternativesConformance(options);
   });
 }

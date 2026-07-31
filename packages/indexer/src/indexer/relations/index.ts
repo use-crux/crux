@@ -385,9 +385,8 @@ export function resolveRelationModel(
   const staticBinding = input.found
     ? bindStaticRelationRefs(input.found, input.importedDefinitions, policies)
     : emptyStaticRelationBinding();
-  const relations = mergeRelationsByIdentity(
-    staticBinding.relations,
-    input.relations ?? [],
+  const relations = projectAgentThreadRelations(
+    mergeRelationsByIdentity(staticBinding.relations, input.relations ?? []),
   );
   const projectPolicyGaps = policyGapsForResolvedRelations(
     input.relations ?? [],
@@ -413,6 +412,40 @@ export function resolveRelationModel(
       policyGaps: mergePolicyGaps(staticBinding.policyGaps, projectPolicyGaps),
     }),
   };
+}
+
+/** Projects an Agent's resolved Prompt Thread binding onto the Agent graph node. */
+export function projectAgentThreadRelations(
+  relations: readonly ProjectRelation[],
+): ProjectRelation[] {
+  const threadsByPrompt = new Map<string, ProjectRelation[]>();
+  for (const relation of relations) {
+    if (relation.type !== "prompt.uses_thread") continue;
+    const promptId = relation.from.replace(/:use:\d+$/u, "");
+    const list = threadsByPrompt.get(promptId) ?? [];
+    list.push(relation);
+    threadsByPrompt.set(promptId, list);
+  }
+  const derived = relations.flatMap((relation) => {
+    if (relation.type !== "agent.uses_prompt") return [];
+    return (threadsByPrompt.get(relation.to) ?? []).map((thread) => ({
+      id: relationIdentity({
+        type: "agent.uses_thread",
+        from: relation.from,
+        to: thread.to,
+      }),
+      type: "agent.uses_thread",
+      from: relation.from,
+      to: thread.to,
+      fidelity:
+        relation.fidelity === "resolved" && thread.fidelity === "resolved"
+          ? "resolved"
+          : "partial",
+      source: thread.source,
+      metadata: { viaPromptDefinitionId: relation.to },
+    }) satisfies ProjectRelation);
+  });
+  return mergeRelationsByIdentity(relations, derived);
 }
 
 /**
@@ -564,6 +597,7 @@ function dependencyKeyForRelation(type: string): string | undefined {
   if (type.endsWith(".uses_tool")) return "tools";
   if (type.endsWith(".uses_memory")) return "memory";
   if (type.endsWith(".uses_blackboard")) return "blackboards";
+  if (type.endsWith(".uses_thread")) return "threads";
   if (type.endsWith(".uses_workspace")) return "workspaces";
   return undefined;
 }
@@ -663,10 +697,12 @@ function isInjectionUseRelation(type: string): boolean {
     type === "prompt.uses_injectable" ||
     type === "prompt.uses_memory" ||
     type === "prompt.uses_blackboard" ||
+    type === "prompt.uses_thread" ||
     type === "context.uses_context" ||
     type === "context.uses_injectable" ||
     type === "context.uses_memory" ||
     type === "context.uses_blackboard" ||
+    type === "context.uses_thread" ||
     type === "injectable.uses_context" ||
     type === "injectable.uses_memory" ||
     type === "injectable.uses_blackboard"

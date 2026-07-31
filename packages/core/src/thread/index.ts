@@ -26,3 +26,9 @@ export type {
   ThreadSnapshot,
   ThreadVariantInfo,
 } from "./types";
+export type {
+  ThreadBridgeBranch,
+  ThreadBridgeGroup,
+  ThreadBridgeNode,
+  ThreadRuntimeBridgePayload,
+} from "./runtime-bridge";
