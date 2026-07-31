@@ -3,12 +3,13 @@
 import type { CommunitiesConfig } from '../../knowledge/communities/communities'
 import { createKnowledgeCommunitiesSurface, type KnowledgeCommunitiesSurface } from '../../knowledge/communities/lifecycle'
 import type { ViewRevision } from '../../knowledge/view/revision'
-import type { RecordStore } from '../../storage'
+import type { AssetStore, RecordStore } from '../../storage'
 import type { Retriever } from '../types'
 import type { RetrievalCommunitiesBinding } from './knowledge-binding'
 
 export function createRecipeCommunitiesBinding(input: {
   readonly records?: RecordStore
+  readonly assets?: AssetStore
   readonly indexerId: string
   readonly namespace: string
   readonly config?: CommunitiesConfig
@@ -19,6 +20,7 @@ export function createRecipeCommunitiesBinding(input: {
   if (!input.config) return {}
   const surface = createKnowledgeCommunitiesSurface({
     records: input.records,
+    ...(input.assets ? { assets: input.assets } : {}),
     indexerId: input.indexerId,
     namespace: input.namespace,
     config: input.config,

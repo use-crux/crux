@@ -87,7 +87,7 @@ export type {
   AssertionRelationRecord,
   AssertionRelationType,
 } from './assertions/relations'
-export type { KnowledgeModel, KnowledgeModelConfig } from './model'
+export type { KnowledgeContentPart, KnowledgeModality, KnowledgeModel, KnowledgeModelConfig } from './model'
 export type {
   KnowledgeLocator,
   RelateConfig,

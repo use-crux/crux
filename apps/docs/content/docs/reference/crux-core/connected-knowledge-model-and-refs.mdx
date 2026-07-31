@@ -4,6 +4,7 @@ description: knowledgeModel(), KnowledgeModel, KnowledgeRef, KnowledgeRefKind, a
 ---
 
 ```ts
+import { z } from "zod";
 import {
   decodeKnowledgeRef,
   encodeKnowledgeRef,
@@ -12,11 +13,14 @@ import {
   knowledgeModel,
 } from "@use-crux/core/knowledge";
 import type {
+  KnowledgeContentPart,
+  KnowledgeModality,
   KnowledgeModel,
   KnowledgeModelConfig,
   KnowledgeRef,
   KnowledgeRefKind,
 } from "@use-crux/core/knowledge";
+import type { StoredAsset } from "@use-crux/core/storage";
 ```
 
 ## Overview
@@ -39,6 +43,12 @@ function knowledgeModel(config: KnowledgeModelConfig): KnowledgeModel;
 ```ts
 type KnowledgeModelConfig = RetrievalModel & {
   readonly name: string;
+  readonly modalities?: readonly KnowledgeModality[];
+  readonly generateObjectFromParts?: <T>(args: {
+    readonly system: string;
+    readonly parts: readonly KnowledgeContentPart[];
+    readonly schema: z.ZodType<T>;
+  }) => Promise<{ object: T }>;
 } & (
   | { readonly fingerprint: string; readonly version?: string | number }
   | { readonly version: string | number; readonly fingerprint?: string }
@@ -50,6 +60,8 @@ type KnowledgeModelConfig = RetrievalModel & {
 | `name` | `string` | Required | Must be non-empty after trimming. |
 | `generateText` | `RetrievalModel["generateText"]` | Required | Forwarded unchanged. |
 | `generateObject` | `RetrievalModel["generateObject"]` | Required | Forwarded unchanged. |
+| `modalities` | `readonly KnowledgeModality[]` | `["text"]` | Supported evidence modalities: `"text"`, `"image"`, `"audio"`, or `"video"`. Non-text declarations require `generateObjectFromParts`. |
+| `generateObjectFromParts` | Function | Optional | Required when `modalities` includes image, audio, or video. Receives text plus hydrated media evidence parts. |
 | `fingerprint` | `string` | Stable hash of `{ name, version }` when omitted | Must be non-empty after trimming. |
 | `version` | `string \| number` | Required when `fingerprint` is omitted | String versions must be non-empty. Number versions are accepted as provided. |
 
@@ -59,11 +71,40 @@ type KnowledgeModelConfig = RetrievalModel & {
 interface KnowledgeModel extends RetrievalModel {
   readonly name: string;
   readonly fingerprint: string;
+  readonly modalities?: readonly KnowledgeModality[];
+  generateObjectFromParts?<T>(args: {
+    readonly system: string;
+    readonly parts: readonly KnowledgeContentPart[];
+    readonly schema: z.ZodType<T>;
+  }): Promise<{ object: T }>;
 }
 ```
 
 The returned object forwards `generateText(args)` and `generateObject(args)` to
-the configured functions.
+the configured functions. When media-only evidence is uncovered and the model
+declares the matching modality, Connected Knowledge calls
+`generateObjectFromParts()` instead.
+
+```ts
+type KnowledgeModality = "text" | "image" | "audio" | "video";
+
+type KnowledgeContentPart =
+  | { readonly kind: "text"; readonly text: string }
+  | {
+      readonly kind: "media";
+      readonly mediaType: string;
+      readonly bytesRef: StoredAsset;
+    };
+```
+
+`bytesRef` is the hydrated `StoredAsset` returned by the configured
+`AssetStore.get(source.assetRef)`. The media part keeps the indexing source
+fact vocabulary: `mediaType` from `CruxSourceFacts` and a store-owned asset
+reference resolved through `storage.assets`.
+
+The effective modalities and the presence of `generateObjectFromParts`
+participate in the model fingerprint whenever they differ from the default
+text-only capability.
 
 ### Failures
 
@@ -73,6 +114,7 @@ the configured functions.
 | Missing `version` and `fingerprint` | `Error("Knowledge model requires a version or fingerprint.")` |
 | Empty string `version` | `Error("Knowledge model version must be non-empty.")` |
 | Empty resolved `fingerprint` | `Error("Knowledge model fingerprint must be non-empty.")` |
+| Non-text `modalities` without `generateObjectFromParts` | `Error("Knowledge model declaring image, audio, or video modalities requires generateObjectFromParts.")` |
 
 ### Example
 

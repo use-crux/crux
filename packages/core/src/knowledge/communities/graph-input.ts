@@ -153,12 +153,20 @@ function asVisibleChunk(value: JsonObject, namespace: string): readonly Communit
   const hit = indexedChunkToHit({ value, score: 0 })
   if (!hit || hit.kind === 'finding' || hit.namespace !== namespace || typeof value.ordinal !== 'number') return []
   const ref = { kind: 'chunk' as const, sourceId: hit.source.id, chunkId: hit.chunkId }
+  const source = {
+    ...(hit.source.url ? { url: hit.source.url } : {}),
+    ...(hit.source.path ? { path: hit.source.path } : {}),
+    ...(hit.source.assetRef ? { assetRef: hit.source.assetRef } : {}),
+    ...(hit.source.mediaType ? { mediaType: hit.source.mediaType } : {}),
+    ...(hit.source.location ? { location: hit.source.location } : {}),
+  }
   return [{
     ref,
     sourceId: hit.source.id,
     chunkId: hit.chunkId,
     ordinal: value.ordinal,
     content: hit.content,
+    ...(Object.keys(source).length > 0 ? { source } : {}),
   }]
 }
 

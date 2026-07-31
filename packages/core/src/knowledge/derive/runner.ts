@@ -6,7 +6,7 @@
 
 import type { z } from 'zod'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
-import type { RecordStore } from '../../storage'
+import type { AssetStore, RecordStore } from '../../storage'
 import type { AssertionStage } from '../assertions/assertions'
 import type { RelationStage, RelationTypeSpec } from '../relate/relate'
 import {
@@ -26,6 +26,7 @@ import {
   type ClaimRecord,
   type RawRelationClaim,
 } from './claims'
+import { generateObjectWithEvidence } from './modality-validation'
 import type { DeriveStage } from './stage'
 
 const MAX_PROMPT_CHARS = 12000
@@ -39,6 +40,7 @@ export interface RunDeriveStagesInput {
   readonly stages: readonly DeriveStage[]
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
+  readonly assets?: AssetStore
 }
 
 /** Summary for one derive execution. */
@@ -87,7 +89,12 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
       sourceId: input.document.sourceId,
     }))
     if (isAssertionStage(stage)) {
-      const run = await runAssertionStage({ document: input.document, chunks: input.chunks, stage })
+      const run = await runAssertionStage({
+        document: input.document,
+        chunks: input.chunks,
+        stage,
+        ...(input.assets ? { assets: input.assets } : {}),
+      })
       await replaceAssertionClaimRecords({
         records: input.records,
         indexerId: input.indexerId,
@@ -137,7 +144,11 @@ async function runDeterministic(
   const raw: RawRelationClaim[] = []
   const run = stage.run
   if (!run) throw new Error(`Derive ${stage.id} cannot run.`)
-  await run({ document: input.document, chunks: input.chunks }, {
+  await run({
+    document: input.document,
+    chunks: input.chunks,
+    ...(input.assets ? { assets: input.assets } : {}),
+  }, {
     emit: (type, from, to, opts) => {
       raw.push({
         type,
@@ -162,13 +173,13 @@ async function runGenerated(
   stage: RelationStage<Record<string, RelationTypeSpec>>,
 ): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
   const prompt = renderPrompt(input.document, input.chunks, stage)
-  const first = await readGeneratedClaims(stage, prompt)
+  const first = await readGeneratedClaims(input, stage, prompt)
   const valid = new Map<string, ClaimRecord>()
   const warnings: string[] = []
   addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
 
   if (first.errors.length > 0) {
-    const repaired = await readGeneratedClaims(stage, `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`)
+    const repaired = await readGeneratedClaims(input, stage, `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`)
     addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
     for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
       warnings.push(`Derive ${stage.id} dropped invalid claim: ${error}`)
@@ -179,15 +190,21 @@ async function runGenerated(
 }
 
 async function readGeneratedClaims(
+  input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
   prompt: string,
 ) {
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate claims.`)
-  const result = await model.generateObject({
+  const result = await generateObjectWithEvidence({
+    model,
     system: 'Return only claims that match the requested schema.',
     prompt,
     schema: claimsSchema,
+    sourceId: input.document.sourceId,
+    chunks: input.chunks,
+    subject: `stage "${stage.id}"`,
+    ...(input.assets ? { assets: input.assets } : {}),
   })
   const parsed = claimsSchema.safeParse(result.object)
   if (!parsed.success) {

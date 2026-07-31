@@ -20,12 +20,13 @@ import { createKnowledgeViewRegistry, type KnowledgeViewRegistry } from '../know
 import type { KnowledgeGenerationRetention } from '../knowledge/generation'
 import { relateEntities } from '../knowledge/relate/entities'
 import type { CruxChunk, CruxDocument, IndexingPipeline } from '../indexing'
-import type { JsonObject, RecordStore } from '../storage'
+import type { AssetStore, JsonObject, RecordStore } from '../storage'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 
 /** Configuration for {@link createConnectedKnowledgeIntegration}. Internal. */
 export interface ConnectedKnowledgeIntegrationConfig {
   readonly records?: RecordStore
+  readonly assets?: AssetStore
   readonly indexerId: string
   readonly namespace: string
   readonly pipeline?: IndexingPipeline
@@ -84,6 +85,7 @@ export function createConnectedKnowledgeIntegration(
           stages: deriveStages,
           document: source.document,
           chunks: source.chunks,
+          ...(config.assets ? { assets: config.assets } : {}),
         })
       }
       await compile()

@@ -8,6 +8,7 @@
  */
 
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
+import type { AssetStore } from '../../storage'
 import { stableHash } from '../../indexing/hash'
 import type { RelationDeriveStage, StageMode as SharedStageMode } from '../derive/stage'
 import type { KnowledgeModel } from '../model'
@@ -27,6 +28,7 @@ export interface RelationTypeSpec {
 export interface RelateRunInput {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
+  readonly assets?: AssetStore
 }
 
 /** Options attached to an emitted relation claim. */

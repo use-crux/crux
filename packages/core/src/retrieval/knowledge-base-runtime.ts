@@ -144,6 +144,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
   }
   const connected = createConnectedKnowledgeIntegration({
     records,
+    assets: config.storage?.assets,
     indexerId: config.id,
     namespace: config.namespace,
     pipeline: config.pipeline,

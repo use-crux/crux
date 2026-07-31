@@ -5,6 +5,9 @@
  */
 
 import { stableHash } from '../../indexing/hash'
+import type { CruxChunk } from '../../indexing'
+import type { AssetStore } from '../../storage'
+import { generateObjectWithEvidence } from '../derive/modality-validation'
 import type { KnowledgeModel } from '../model'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { CommunityGraphInput, KnowledgeCommunity, KnowledgeCommunityClustering } from './cluster'
@@ -21,6 +24,7 @@ export interface GenerateCommunityReportsInput {
   readonly graph: CommunityGraphInput
   readonly clustering: KnowledgeCommunityClustering
   readonly lineage: Omit<CommunityReportLineage, 'memberHash'>
+  readonly assets?: AssetStore
   readonly findReusable?: (
     communityId: string,
     memberHash: string,
@@ -51,34 +55,54 @@ export async function generateCommunityReports(
       continue
     }
 
-    const output = await readReportOutput(input.model, community, renderReportPrompt(community, input.graph, children))
+    const output = await readReportOutput({
+      model: input.model,
+      community,
+      graph: input.graph,
+      children,
+      ...(input.assets ? { assets: input.assets } : {}),
+    })
     reports.set(community.communityId, toReport(input, community, output, children, memberHash))
   }
 
   return [...reports.values()].sort((left, right) => left.level - right.level || left.communityId.localeCompare(right.communityId))
 }
 
-async function readReportOutput(
-  model: KnowledgeModel,
-  community: KnowledgeCommunity,
-  prompt: string,
-): Promise<CommunityReportOutput> {
-  const first = await model.generateObject({
+async function readReportOutput(input: {
+  readonly model: KnowledgeModel
+  readonly community: KnowledgeCommunity
+  readonly graph: CommunityGraphInput
+  readonly children: readonly CommunityReport[]
+  readonly assets?: AssetStore
+}): Promise<CommunityReportOutput> {
+  const prompt = renderReportPrompt(input.community, input.graph, input.children)
+  const chunks = reportChunks(input.community, input.graph, input.children)
+  const first = await generateObjectWithEvidence({
+    model: input.model,
     system: 'Return a community report that matches the requested schema.',
     prompt,
     schema: communityReportOutputSchema,
+    sourceId: sourceIdsFor(chunks).join(', '),
+    chunks,
+    subject: `community "${input.community.communityId}"`,
+    ...(input.assets ? { assets: input.assets } : {}),
   })
   const parsed = communityReportOutputSchema.safeParse(first.object)
   if (parsed.success) return parsed.data
 
-  const repaired = await model.generateObject({
+  const repaired = await generateObjectWithEvidence({
+    model: input.model,
     system: 'Return a corrected community report that matches the requested schema.',
     prompt: `${prompt}\n\nFix these validation errors:\n${parsed.error.issues.map((issue) => issue.message).join('\n')}`,
     schema: communityReportOutputSchema,
+    sourceId: sourceIdsFor(chunks).join(', '),
+    chunks,
+    subject: `community "${input.community.communityId}"`,
+    ...(input.assets ? { assets: input.assets } : {}),
   })
   const repairParsed = communityReportOutputSchema.safeParse(repaired.object)
   if (repairParsed.success) return repairParsed.data
-  throw new Error(`Community "${community.communityId}" report failed validation after repair: ${repairParsed.error.message}`)
+  throw new Error(`Community "${input.community.communityId}" report failed validation after repair: ${repairParsed.error.message}`)
 }
 
 function toReport(
@@ -163,6 +187,33 @@ function renderReportPrompt(
     entities.length ? `Entities:\n${entities.join('\n')}` : '',
     chunks.length ? `Evidence:\n${chunks.join('\n')}` : '',
   ].filter(Boolean).join('\n\n')
+}
+
+function reportChunks(
+  community: KnowledgeCommunity,
+  graph: CommunityGraphInput,
+  children: readonly CommunityReport[],
+): readonly CruxChunk[] {
+  if (children.length > 0) return []
+  const chunkByKey = new Map(graph.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
+  return community.chunkRefs.flatMap((ref) => {
+    const chunk = chunkByKey.get(encodeKnowledgeRef(ref))
+    return chunk
+      ? [{
+          namespace: graph.namespace,
+          sourceId: chunk.sourceId,
+          chunkId: chunk.chunkId,
+          ordinal: chunk.ordinal,
+          content: chunk.content,
+          metadata: {},
+          ...(chunk.source ? { source: chunk.source } : {}),
+        }]
+      : []
+  })
+}
+
+function sourceIdsFor(chunks: readonly CruxChunk[]): readonly string[] {
+  return [...new Set(chunks.map((chunk) => chunk.sourceId))].sort()
 }
 
 function cloneForGeneration(

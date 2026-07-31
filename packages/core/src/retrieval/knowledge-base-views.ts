@@ -14,7 +14,7 @@ import type { CommunitiesConfig } from '../knowledge/communities/communities'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
 import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
-import type { ExactFilter, RecordStore } from '../storage'
+import type { AssetStore, ExactFilter, RecordStore } from '../storage'
 import type { KnowledgeBaseFilter, KnowledgeBaseGroundingConfig } from './knowledge-base'
 import { createViewRetriever } from './knowledge-base-view-retriever'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
@@ -34,6 +34,7 @@ interface KnowledgeBaseViewFactoryConfig<
   readonly metadataSchema?: TMetadataSchema
   readonly view: KnowledgeBaseViewConfig<TMetadataSchema>
   readonly records?: RecordStore
+  readonly assets?: AssetStore
   readonly registry: KnowledgeViewRegistry
   readonly retriever: <TFilter extends ExactFilter>(config?: KnowledgeViewRetrieverConfig<TFilter>) => Retriever<TFilter, TModality>
   readonly knowledgeBinding: () => RetrievalKnowledgeBinding | undefined
@@ -118,6 +119,7 @@ function createViewHandle<
 
   const communities = createRecipeCommunitiesBinding({
     records: config.records,
+    ...(config.assets ? { assets: config.assets } : {}),
     indexerId: config.id,
     namespace: config.namespace,
     config: config.communities,

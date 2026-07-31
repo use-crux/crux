@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import { stableStringify } from '../../indexing/hash'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
+import type { AssetStore } from '../../storage'
 import type { AssertionStage } from '../assertions/assertions'
 import { createAssertionIdentity, toAssertionJsonData } from '../assertions/identity'
 import type { AssertionRef } from '../assertions/relations'
@@ -23,6 +24,7 @@ import {
   type AssertionRelationClaimRecord,
   type RawAssertionRelationClaim,
 } from './assertion-relation-claims'
+import { generateObjectWithEvidence } from './modality-validation'
 
 const MAX_PROMPT_CHARS = 12000
 const MAX_CHUNK_CHARS = 1200
@@ -39,6 +41,7 @@ export async function runAssertionStage(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
+  readonly assets?: AssetStore
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
@@ -53,6 +56,7 @@ async function runDeterministic(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
+  readonly assets?: AssetStore
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
@@ -99,21 +103,21 @@ async function runGenerated(input: {
   readonly document: CruxDocument
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
+  readonly assets?: AssetStore
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
   readonly warnings: readonly string[]
 }> {
   const prompt = renderPrompt(input.document, input.chunks, input.stage)
-  const first = await readGeneratedAssertionClaims(input.stage, input.chunks, prompt)
+  const first = await readGeneratedAssertionClaims(input, prompt)
   const valid = new Map<string, AssertionClaimRecord>()
   const warnings: string[] = []
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
 
   if (first.errors.length > 0) {
     const repaired = await readGeneratedAssertionClaims(
-      input.stage,
-      input.chunks,
+      input,
       `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`,
     )
     addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
@@ -126,17 +130,27 @@ async function runGenerated(input: {
 }
 
 async function readGeneratedAssertionClaims(
-  stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
-  chunks: readonly CruxChunk[],
+  input: {
+    readonly document: CruxDocument
+    readonly chunks: readonly CruxChunk[]
+    readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
+    readonly assets?: AssetStore
+  },
   prompt: string,
 ) {
+  const { stage, chunks } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
   const schema = payloadSchema(stage)
-  const result = await model.generateObject({
+  const result = await generateObjectWithEvidence({
+    model,
     system: 'Return only assertions that match the requested schema.',
     prompt,
     schema,
+    sourceId: input.document.sourceId,
+    chunks,
+    subject: `stage "${stage.id}"`,
+    ...(input.assets ? { assets: input.assets } : {}),
   })
   const parsed = schema.safeParse(result.object)
   if (!parsed.success) {

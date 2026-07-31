@@ -10,6 +10,7 @@
 import { z } from 'zod'
 import { createStableId, stableHash } from '../../indexing/hash'
 import type { CruxChunk } from '../../indexing/types'
+import { generateObjectWithEvidence } from '../derive/modality-validation'
 import type { KnowledgeModel } from '../model'
 import type { KnowledgeRef } from '../refs'
 import { relate, type RelationStage } from './relate'
@@ -76,10 +77,15 @@ export function relateEntities(config: RelateEntitiesConfig): RelationStage<type
     types: entityTypes,
     run: async (input, api) => {
       const chunksById = new Map(input.chunks.map((chunk) => [chunk.chunkId, chunk]))
-      const result = await model.generateObject({
+      const result = await generateObjectWithEvidence({
+        model,
         system: 'Return only entity mentions and entity relationships that match the requested schema.',
         prompt: renderPrompt(input.chunks, config.instructions),
         schema: entityExtractionSchema,
+        sourceId: input.document.sourceId,
+        chunks: input.chunks,
+        subject: `stage "${config.id ?? 'entities'}"`,
+        ...(input.assets ? { assets: input.assets } : {}),
       })
       const parsed = entityExtractionSchema.safeParse(result.object)
       if (!parsed.success) {

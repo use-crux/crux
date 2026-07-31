@@ -209,6 +209,7 @@ function createKnowledgeBaseHandle<
   const records = config.records ?? config.storage?.records
   const communities = createRecipeCommunitiesBinding({
     records,
+    assets: config.storage?.assets,
     indexerId: config.id,
     namespace: config.namespace,
     config: config.communities,
@@ -234,6 +235,7 @@ function createKnowledgeBaseHandle<
         retriever: runtime.retriever,
         knowledgeBinding: runtime.knowledgeBinding,
         ...(config.communities ? { communities: config.communities } : {}),
+        ...(config.storage?.assets ? { assets: config.storage.assets } : {}),
         ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
       }),
     assertions: <

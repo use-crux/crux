@@ -104,6 +104,41 @@ const extractedRelations = relate({
 `knowledgeModel()` gives model-backed work a stable name and fingerprint. If
 you change output-affecting model behavior, change the version or fingerprint.
 
+## Multimodal Evidence
+
+Media chunks with a caption or other non-empty text representation use the
+same text path as ordinary chunks. Media-only chunks fail closed before
+model-backed relation extraction, assertion extraction, or community report
+generation unless the model declares the needed modality and the knowledge base
+is configured with `storage.assets`.
+
+```ts
+const extractor = knowledgeModel({
+  name: "visual-relation-extractor",
+  version: "2026-08",
+  modalities: ["text", "image"],
+  generateText,
+  generateObject,
+  generateObjectFromParts,
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage: {
+    records,
+    vectors,
+    assets,
+  },
+  pipeline: indexingPipeline({
+    derive: [relateEntities({ model: extractor })],
+  }),
+});
+```
+
+If a media-only chunk cannot be covered, the diagnostic names the stage or
+community, source id, chunk ids, and modality. Add a text representation during
+ingestion, or configure a model that declares the media modality.
+
 ## Built-In Relation Stages
 
 `relateReferences()` is deterministic. It scans chunk text for Markdown links,

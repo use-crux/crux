@@ -5,7 +5,7 @@
  */
 
 import { createGenerationId } from '../../indexing/hash'
-import type { JsonObject, RecordStore } from '../../storage'
+import type { AssetStore, JsonObject, RecordStore } from '../../storage'
 import { knowledgeCurrentKey } from '../keys'
 import { clusterKnowledgeCommunities } from './cluster'
 import { buildCommunityGraphInput } from './graph-input'
@@ -20,6 +20,7 @@ const inFlight = new Map<string, Promise<void>>()
 
 export interface BuildCommunitiesInput {
   readonly records: RecordStore
+  readonly assets?: AssetStore
   readonly indexerId: string
   readonly namespace: string
   readonly config: CommunitiesConfig
@@ -92,6 +93,7 @@ async function buildOnce(input: BuildCommunitiesInput): Promise<void> {
           graph,
           clustering: clusterKnowledgeCommunities(graph),
           lineage,
+          ...(input.assets ? { assets: input.assets } : {}),
           findReusable: async (communityId, memberHash, strategyFingerprint) => {
             const prior = await store.byId(communityId)
             return prior?.lineage.memberHash === memberHash &&

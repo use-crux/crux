@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { JsonObject, RecordEntry, RecordStore } from '../../storage'
+import type { AssetStore, JsonObject, RecordEntry, RecordStore } from '../../storage'
 import { knowledgeCurrentKey } from '../keys'
 import { asCommunityReportRecord, type CommunityReport } from './records'
 import { communityReportPrefix, communityScopeKey } from './keys'
@@ -47,6 +47,7 @@ export interface KnowledgeCommunitiesSurface {
 
 export interface CreateCommunitiesSurfaceInput {
   readonly records?: RecordStore
+  readonly assets?: AssetStore
   readonly indexerId: string
   readonly namespace: string
   readonly config: CommunitiesConfig
@@ -111,6 +112,7 @@ export function createKnowledgeCommunitiesSurface(
       namespace: input.namespace,
       config: input.config,
       scopeKey: currentScope.scopeKey,
+      ...(input.assets ? { assets: input.assets } : {}),
       ...(currentScope.view ? { view: currentScope.view } : {}),
       retention: input.retention,
       force: options.force,

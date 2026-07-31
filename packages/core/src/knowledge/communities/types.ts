@@ -5,6 +5,7 @@
  */
 
 import type { KnowledgeRef } from '../refs'
+import type { CruxSourceFacts } from '../../indexing'
 
 export type CommunityChunkRef = Extract<KnowledgeRef, { readonly kind: 'chunk' }>
 
@@ -21,6 +22,7 @@ export interface CommunityChunkInput {
   readonly chunkId: string
   readonly ordinal: number
   readonly content: string
+  readonly source?: CruxSourceFacts
 }
 
 export interface CommunityEntityEdgeInput {
