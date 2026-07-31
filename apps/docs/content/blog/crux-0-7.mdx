@@ -1,0 +1,488 @@
+---
+title: "Crux 0.7"
+description: "stream() becomes one Crux-owned logical stream, Safety moves onto the boundary so nothing can publish unchecked output, structured output is always validated, and md brings Markdown-aware prompt authoring to your editor."
+date: "2026-07-30"
+type: Release
+tags: [release, streaming, safety, prompts]
+authors: [henri]
+draft: false
+readTime: 15
+---
+
+Crux 0.7 is about one question: can a stream publish something a policy has not cleared?
+
+Before this release the answer was yes, in several ways. A provider stream object hung off `result.raw` and resolved before terminal Safety. `guardrail({ stream: false })` and `onHoldLimit: 'release'` were both configurations that released unchecked bytes. Structured output was only validated when you happened to set `validationRetry`.
+
+In 0.7 the answer is no, and there is no configuration that changes it.
+
+```bash
+pnpm add @use-crux/core@0.7.0
+# and any adapters you use, on the same version
+pnpm add @use-crux/ai@0.7.0
+```
+
+All `@use-crux/*` packages release together, so keep them on one version.
+
+Here is what is new in Crux 0.7:
+
+- [**Managed logical streams (Breaking):**](#managed-logical-streams) `stream()` returns one Crux-owned stream with the same shape on every route. `result.raw` is removed from stream results.
+- [**Boundary-driven streaming Safety (Breaking):**](#boundary-driven-streaming-safety) Streaming behavior moved from a policy option onto the boundary. An `assert` is now transactional on a stream.
+- [**Structured output always validated (Breaking):**](#structured-output-is-always-validated) `validationRetry` controls only whether Crux retries, not whether Crux checks.
+- [**Media streaming:**](#media-streaming) `streamImage()` and `streamSpeech()` expose genuine finite provider progress with replay and cancellation.
+- [**Media classifier guardrails:**](#media-classifier-guardrails) `guardrail.mediaClassifier()` scores caller-defined categories through any structured-generation model.
+- [**PromptText (`md`):**](#prompttext) Markdown-oriented prompt composition that lowers to plain text before any adapter sees it.
+- [**Crux LSP and the editor extension:**](#crux-lsp-and-the-editor-extension) A stdio language server with Project Index diagnostics, navigation, and semantic completion, plus a lockstep VS Code and Cursor extension.
+- [**Model ingress Safety:**](#model-ingress-safety) One boundary model for caller, tool, retrieval, memory, blackboard, handoff, and retry-feedback content.
+- [**Memory capture is `inline` or `deferred` (Breaking):**](#memory-capture-follows-the-lifecycle) Deferred is the default and uses the shared host retention binding.
+- [**Eval timeouts and cancellation:**](#eval-timeouts-and-cancellation) Authored timeout policies with task-scoped cancellation and comparable Baseline coverage.
+- [**Workspace snapshots:**](#workspace-snapshots) `ws.snapshot.create/list/restore/delete` for materialized subtree checkpoints.
+- [**Observability redaction patterns:**](#observability-redaction-patterns) Deployment-wide `redactPatterns` for organization-specific identifiers.
+- [**Rust/Oxc is the only static index frontend (Breaking):**](#project-index-rustoxc-and-retained-suppressions) Plus lint suppressions retained as evidence instead of deleted.
+
+## Managed logical streams
+
+`stream()` now returns one Crux-owned logical stream with the same shape on every route:
+
+```ts
+const result = await stream(editDraft, {
+  model,
+  input: { instruction: "Fix the intro" },
+});
+
+for await (const partial of result.partialOutputStream) {
+  render(partial);
+}
+
+const final = await result.completion;
+```
+
+```ts
+{ runId, _meta, textStream, fullStream, partialOutputStream, completion, cancel }
+```
+
+A logical stream may use several physical provider attempts. Provider framing, discarded attempts, and the provider stream object are never observable from it. That is the point: a discarded attempt is unrepresentable in what you consume.
+
+Several long-standing sharp edges go away with it.
+
+**All three streams project one shared append-only event log.** You can read them concurrently. A surface you first read late replays from the logical `start` rather than dropping what it missed. Retention never delays publication, and `completion` settles without any stream being drained.
+
+**A terminal failure reaches every surface.** Previously a failure rejected `completion` and left the other surfaces to end quietly. Now every surface replays its committed prefix and then errors with the same normalized error object.
+
+**`textStream` closes on the logical `finish`,** not when provider deltas happen to stop, so the stream ends when the operation does.
+
+**`result.cancel(reason?)` aborts the whole operation,** including the active provider attempt.
+
+For a structured prompt, `textStream` carries canonical serialized `z.input` JSON, and `partialOutputStream` is a parsed projection of that same published text. A partial can only ever describe committed output. `completion.object` remains the single authored-schema-validated `z.output`.
+
+### Usage and cost now tell the truth about retries
+
+Logical `usage` and `cost` are scalar aggregates across every billable physical attempt, discarded ones included, because you paid for each provider call. Everything else in the envelope describes the accepted attempt alone.
+
+This means logical `usage` deliberately stops equalling the sum of `steps[].usage` once a policy retry occurred. That is not a bug to reconcile in your dashboard; it is the difference between what you were charged and what you kept.
+
+If any billable attempt did not report a figure, the total is omitted rather than under-reported. On the AI SDK route a rejected attempt reports no usage at all, so a retried SDK stream omits logical usage rather than quietly showing you the cheap half.
+
+`onChunk`, `onFinish`, and `onError` are logical too. They observe the published sequence and the logical completion, and no caller callback is installed on a physical attempt, so a discarded attempt invokes none of them.
+
+`@use-crux/ai` adds `toUIMessageStream(result)` and `createTextStreamResponse(result)`. Its existing UI-message helpers are now built from `fullStream`.
+
+## Boundary-driven streaming Safety
+
+Streaming behavior used to be a policy-level option, which meant one policy had two different units depending on whether you called `generate()` or `stream()`. It now lives on the boundary, so a policy has one unit everywhere:
+
+```ts
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+guardrail({
+  id: "pii",
+  on: boundary.output.text().sentences({ maxHold: { chars: 500, ms: 2_000 } }),
+  run: guardrail.pii(),
+});
+```
+
+`.deltas()`, `.sentences()`, `.lines()`, `.complete()`, and `.segments()` replace the old `stream: 'chunk' | 'sentence' | 'line' | 'final' | { segment }` values.
+
+**An `assert` constraint is transactional on a stream.** It gates release, and a failed attempt is discarded without publishing bytes, then re-streamed with corrective feedback under the shared `maxSteps` budget. A positive `validationRetry.maxRetries` installs the same commit gate for schema validation.
+
+Buffering is attributable rather than mysterious: a content-free `bufferedBy` reason plus `generation.stream.attempt` spans tell you which policy is holding the stream. Constraint settlement is occurrence- and value-precise, so a settled `constraint.judge()` is not re-run at completion.
+
+Safety also holds an occurrence until every downstream transformation that could change it has completed. An object assertion that passes while a text guard can still rewrite the represented JSON is provisional and cannot release bytes; it is re-evaluated against the final value before anything is published. Object-only pipelines keep progressive release.
+
+`stream: false` and `onHoldLimit: 'release'` were the two ways a stream could release content a policy had not cleared. Both are gone. Reaching a hold limit now fails closed with `StreamHoldLimitError`.
+
+### Rejected output stays rejected
+
+`ValidationExhaustedError` and `ConstraintViolationError` expose size and hash, never a preview of output the caller was not allowed to see. Constraint feedback and metadata no longer reach telemetry, only a feedback length and a metadata count. `ValidationExhaustedError` no longer exposes custom Zod issue messages or model-controlled record keys; use its `issues` summary for stable `{ path, depth, code }` diagnostics.
+
+## Structured output is always validated
+
+Structured response and tool-input schemas now normalize through provider capability profiles. Crux compiles a provider-compatible wire schema, decodes transport sentinels before Safety, validates once with the authored schema, and exposes the parsed output consistently across native, AI SDK, `generate()`, and `stream()` routes.
+
+The behavior change worth reading twice: **structured output is always validated.** `validationRetry` controls whether another attempt is made. Without it, invalid structured output throws `ValidationExhaustedError` instead of being returned.
+
+Compilation fails closed rather than risking silent corruption. An optional property is rejected at compile time when its encoding cannot be proven reversible: inside a recursive schema, a union branch, an intersection or tuple, or when the property is literally named `"*"`.
+
+Adapter authors declare their structured-output capabilities and use the prepared `outputSchema` supplied to request builders. A profile without `structuredOutput` no longer falls back to text; the call fails before any network request.
+
+## Media streaming
+
+`streamImage()` and `streamSpeech()` expose genuine finite provider progress. They are not text `stream()`, simulated chunks, or a completed file divided after the fact. Crux never synthesizes progressive events from a finished artifact.
+
+```ts
+const result = await openai.streamImage({ model: "gpt-image-2", prompt });
+
+for await (const event of result.fullStream) {
+  if (event.type === "image-preview") showPreview(event);
+}
+
+const image = await result.completion;
+```
+
+Both operations start eagerly after preflight and return `{ runId, _meta, fullStream, completion, cancel }`. `fullStream` is the canonical progressive history; `completion` resolves to the same result family as the completed operation, and final event assets share object identity with the completion assets.
+
+Each iterator replays the same retained event objects from `start`, so a late reader is not punished. `cancel()` or `abortSignal` stops the logical operation and fails current readers, later readers, and `completion` with the same normalized error identity.
+
+OpenAI uses genuine Images API previews and Speech API response-body chunks. Google uses current Interactions image deltas and finite Generate Content TTS PCM chunks. Unsupported models and controls fail before provider I/O.
+
+Prefer completed `generateImage()` and `generateSpeech()` unless progressive media materially improves the experience. See [Streaming generated media](/docs/guides/media/streaming).
+
+## Media classifier guardrails
+
+Sometimes a MIME type and a byte limit cannot answer the policy question. `guardrail.mediaClassifier()` asks a structured-generation model to score caller-defined categories for each canonical media part:
+
+```ts title="media-safety.ts"
+import OpenAI from "openai";
+import { createGenerateObjectFn } from "@use-crux/openai";
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+const generate = createGenerateObjectFn(
+  new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+);
+
+export const uploadSafety = guardrail({
+  id: "upload-safety",
+  on: boundary.input.media(),
+  run: guardrail.mediaClassifier({
+    generate,
+    model: "gpt-4.1-mini",
+    categories: [
+      {
+        id: "personal-document",
+        description:
+          "A government identity, financial, medical, or employment document is visible.",
+      },
+    ],
+    threshold: 0.8,
+    thresholds: { "personal-document": 0.9 },
+    action: "block",
+    modalities: ["image", "file"],
+  }),
+});
+```
+
+It takes any `GenerateObjectFn`, and the classifier model is selected per call, so one provider helper can serve several policies. Image, audio, video, and file parts share one provider-neutral contract for categories, inclusive thresholds, capability handling, report mode, and strip escalation.
+
+`GenerateObjectFn` now accepts either a text prompt or canonical messages, so structured media reaches provider adapters without being flattened first. Native OpenAI, Anthropic, and Google object helpers bind only their client; you pass the model per invocation.
+
+Findings survive into audits, terminal decisions, privacy-safe report artifacts, and Devtools Run Detail. Telemetry keeps bounded counts rather than category or media details.
+
+## PromptText
+
+Prompts are usually Markdown living inside TypeScript string literals, which means your editor treats a document as an opaque blob and your runtime has no idea where any of it came from.
+
+`md` builds an opaque, immutable `PromptText` value with native tagged-template syntax:
+
+```ts title="prompt-text.ts"
+import { md, prompt, type PromptText } from "@use-crux/core";
+import { z } from "zod";
+
+const rules: PromptText = md`
+  ## Rules
+
+  - Be concise.
+`;
+
+export const answer = prompt({
+  id: "answer",
+  input: z.object({ question: z.string() }),
+  system: rules,
+  prompt: ({ input }) => md`
+    ## Question
+
+    ${input.question}
+  `,
+});
+```
+
+Runtime composition does not parse or render Markdown. Resolution lowers the value to provider-neutral plain text before adapters, caches, and RPC boundaries, so the bytes a provider receives are unchanged. Existing strings keep working everywhere; this is additive.
+
+`PromptText` is structurally distinct from `string` and cannot be coerced to text directly, which is what makes the editor tooling safe. A direct PromptText Context contribution is static for lifecycle, memo, and provider-cache classification, exactly like a direct string. A callback returning PromptText remains dynamic.
+
+Use `md.json()` for explicit snapshots of structured values.
+
+Project Index records compiler-proven `md` regions with exact source ranges, classifies every canonical source as an owner, named fragment, or anonymous fragment, and emits conservative diagnostics for invalid interpolations, inline sequences, and `md.json()` calls proven to return no text. The JavaScript and native semantic backends produce the same evidence.
+
+Also in this release: `configure`, `ConfigureOptions`, and `PromptRegistry` are exported from the Core root, and that explicit registry lifecycle publishes a revisioned Prompt catalogue for local exact inspection. Explicit preview dispatch calls `Prompt.inspect()` only. It creates no provider generation, tool invocation, ordinary Run, or observability record.
+
+One correctness fix to note: `prompt.prompt` stays synchronous. Callbacks return `string | PromptText`, and the runtime now rejects Promise results from untyped or cast async callbacks instead of awaiting a shape the public type never allowed.
+
+## Crux LSP and the editor extension
+
+Project Index has known things about your code for several releases. Until now you had to run a CLI to hear about them. `crux lsp` is a stdio language server that puts that read model in the editor.
+
+```bash
+crux lsp
+crux lsp --port 4500   # attach to a running crux dev
+crux lsp --root packages/app
+```
+
+It publishes Project Index lint diagnostics for TypeScript and JavaScript, keeps ranges aligned with unsaved edits, explains each finding on hover, and offers the actions its rule declares, including suppression and safe allowlisted companion commands. It moves between an attached `crux dev` read model and its own watcher without clearing diagnostics during handover, so restarting your dev server does not blank the editor.
+
+Beyond diagnostics, indexed definitions and relations project into ordinary editor features: go-to-definition, references, document and workspace symbols, definition context on hover, finding-count inlay hints, code lenses, and Devtools definition links. Hints, lenses, and inline-decoration opacity are live settings.
+
+### Semantic completion
+
+Completion is Project Index-aware in supported first-party dependency slots: prompt, context, MCP, tool, agent, handoff, and routing. Instead of offering every symbol in scope, it offers the definitions that can legally go in that slot.
+
+It uses a bounded, private unsaved-document overlay, makes safe named-import edits, and runs on the existing persistent compiler in both attached and own modes. Cross-file items require compiler-proven direct named-export evidence, so a speculative suggestion cannot introduce an import that does not resolve.
+
+### PromptText in the editor
+
+One bounded Rust analysis drives theme-aware Markdown-role highlighting, folding, heading symbols, safe literal links, static preview, semantic diagnostics, and versioned quick fixes for canonical `md` templates, while native TypeScript behavior is preserved inside interpolations. Identity-sensitive results fail closed against saved semantic generation and source hashes. Transient source and preview content never enters Project Index, caches, logs, or broadcasts.
+
+The VS Code and Cursor extension adds three explicit commands on top: static preview, runtime exact preview, and latest Run. Exact preview discovers a currently configured Prompt, asks for confirmation, and invokes `Prompt.inspect()` with no model generation, tool call, or Run creation. Latest Run resolves current ownership and SQLite ordering at click time, with no cached selection and no automatic navigation. Embedded Devtools routes are bounded, no-store, and cancellation aware, and preview inputs and results stay in memory.
+
+### Installing it
+
+```bash
+npm install -g @use-crux/local
+crux editor install vscode   # or: crux editor install cursor
+```
+
+The extension is distributed as a checksum-verified GitHub Release asset in lockstep with the CLI. `crux editor install` downloads the VSIX matching the running CLI version, verifies `SHA256SUMS`, and installs only into the editor you named. `--download-only` covers managed environments. Stable and nightly releases publish the VSIX, six native CLI archives, and checksums together, and release reconciliation shares one validated asset set so those pieces cannot go missing after a successful staging pass. Trusted project-local npm CLI shims are discovered on both Unix and Windows.
+
+See [`crux lsp`](/docs/reference/lsp) and [VS Code and Cursor](/docs/developer-tools/vscode).
+
+## Model ingress Safety
+
+Content reaches a model from more places than the caller. In 0.7 the same boundary model covers all of them: caller, tool, retrieval, memory, blackboard, handoff, and retry-feedback content each run through semantic text, media, and instruction boundaries.
+
+Provider-visible authored and discovered tool boundaries are added alongside managed memory commit guardrails. Raw tool execution controls stay in `toolPolicy`, which remains the place for "may this tool run", as distinct from "may this content reach the model".
+
+Two gaps close with it. Rejected output and corrective feedback are now guarded before every eligible retry, so a retry cannot smuggle in content the original attempt was blocked for. And semantic-cache hits pass through current output guardrails, one authored schema parse, and constraints before publication, with safe live fallback for expected content rejections, so a cached response is not exempt from a policy you added after it was cached.
+
+`boundary.validation.feedback()` is deprecated in favor of `boundary.input.text({ from: "feedback" })`. The compatibility boundary remains operational for validation feedback.
+
+## Memory capture follows the lifecycle
+
+Capture modes are now `inline | deferred`, with `deferred` as the default.
+
+Deferred capture uses the shared `config({ host })` retention binding. When retention is unavailable, Crux captures inline and emits one development warning rather than losing the write. Retained failures stay observable through `memory.flush()`.
+
+```ts
+memory({
+  id: "assistant",
+  records,
+  namespace: ({ input }) => `user:${input.userId}`,
+  capture: { mode: "deferred" },
+  budget: { maxTokens: 1200 },
+  blocks: [...],
+});
+```
+
+Adapters submit one completed turn and leave mode selection, deterministic tool-event fan-out, settlement, and block flushing to memory. Catalog exposes the effective configured mode, and Runs records one payload-free `memory.capture` lifecycle inside the owning generation Run with the actual inline, fallback, retained, or Eval-captured disposition. When someone asks whether a memory write happened, that is now a lookup rather than an argument.
+
+Migrating: `afterResponse` becomes `deferred`, `detached` becomes `deferred`, and memory-specific `capture.waitUntil` is replaced by the shared host binding.
+
+## Eval timeouts and cancellation
+
+An Eval that hangs on one slow Case used to cost you the whole run. Timeout policies are now authored, inherited, and overridable per Case:
+
+```ts title="evals/support.eval.ts"
+export default evaluate({
+  id: "support",
+  task: support,
+  timeout: {
+    totalMs: 30_000,
+    stepMs: 10_000,
+    toolMs: 5_000,
+    tools: { search: 2_000 },
+  },
+  cases: [
+    { id: "standard", input: { question: "Can I get a refund?" } },
+    {
+      id: "slow-search",
+      input: { question: "Find my archived order" },
+      timeout: { stepMs: 15_000, tools: { search: null } },
+    },
+    {
+      id: "no-eval-ceiling",
+      input: { question: "Run the production policy unchanged" },
+      timeout: null,
+    },
+  ],
+});
+```
+
+Timed-out tasks produce structured complete Run outcomes with comparable Baseline coverage, so a timeout is a result you can compare rather than a hole in the run. Task-scoped cancellation context propagates signals and nested budgets automatically for managed AI tasks. Versioned local and remote readers preserve existing artifacts and quarantine late evidence or result publication.
+
+Project Index and the hydrated Eval catalog expose effective and inherited policy; Eval Runs and normal Runs show structured timeout causes and counts.
+
+## Workspace snapshots
+
+Materialized checkpoints for local files and subtrees, from the singular `ws.snapshot` facet:
+
+```ts
+const checkpoint = await ws.snapshot.create({ path: "/outputs" });
+const page = await ws.snapshot.list({ path: "/outputs", limit: 20 });
+const result = await ws.snapshot.restore(checkpoint);
+await ws.snapshot.delete(checkpoint);
+```
+
+Restore is an unconditional exact-tree replacement. It creates or replaces captured files and deletes later live files inside the captured tree when they were absent from the snapshot. Snapshots own their assets independently.
+
+Authored snapshot usage is indexed, and observed snapshot operations get privacy-safe, snapshot-aware Devtools views. For the comparison with `undo()` and `transaction()`, see [Versions, snapshots, and transactions](/docs/guides/workspaces/versions-and-transactions).
+
+## Observability redaction patterns
+
+Organization-specific identifiers rarely match a generic PII detector. `redactPatterns` handles them deployment-wide:
+
+```ts
+config({
+  observability: {
+    redactPatterns: [
+      /\bACME-\d{6}\b/,
+      { pattern: /\bCUSTOMER-\d+\b/, replacement: "[customer-id]" },
+    ],
+  },
+});
+```
+
+Patterns rewrite string values in artifact previews and URIs, nested record attributes, and run and span error messages, before evidence derivation and final telemetry fan-out. Application, model, and tool data are unchanged. Bare expressions replace every non-empty match with `[REDACTED]`. Object-form replacements are literal, so `$&`, `$1`, `$<name>`, and `$$` are not expanded. Rules run in declaration order.
+
+The evidence trail is deliberately thin: successful application adds `applied: true` plus the affected broad telemetry surfaces. Rules, matched values, replacements, paths, hashes, and counts are never included, because a redaction record that describes what it redacted is not a redaction.
+
+## Project Index: Rust/Oxc and retained suppressions
+
+The Go-orchestrated Rust/Oxc frontend is now the only static index path. The obsolete `experimental.indexer.nativeAst` option and the TypeScript static-plan worker artifact are removed, and Project Index worker events advance to protocol v3. Configured third-party static extractors continue to run through the trusted JavaScript host.
+
+Lint suppressions now stay in Project Index snapshots as materialized evidence instead of deleting the matched findings. `IndexLintFinding` is a strict active/suppressed union: suppressed rows carry directive source, scope, and optional reason metadata, while canonical active rows omit suppression state.
+
+Default lint and check views stay active-only, `--include-suppressed` exposes the retained rows, and a suppressed finding never fails a gate. Devtools Index and Catalog Health report active and suppressed totals separately. Crux Local run-detail reads correlate observed definition references with current findings and present that as Current project health with links back to Catalog, without changing run status or creating suppression telemetry.
+
+## Migrating to 0.7
+
+### Managed streams
+
+| Removed | Replacement |
+| --- | --- |
+| `result.raw` (on a stream result) | Removed, no replacement |
+| `result.raw.partialObjectStream` | `result.partialOutputStream` |
+| `result.raw.fullStream` | `result.fullStream` |
+| `result.raw.textStream` | `result.textStream` |
+| `result.raw.toUIMessageStream(opts)` | `toUIMessageStream(result, opts)` |
+| `result.raw.text` / `.usage` / `.finishReason` | `await result.completion` |
+| `StreamResult<TRawStream, TOutput>` | `StreamResult<TOutput, TPartial>` |
+| `TextStreamResult`, `ObjectStreamResult` | Removed |
+
+A provider stream resolves before terminal Safety and describes only one physical attempt, including one Crux discarded and re-streamed. Reading it bypassed guardrail holds, structured occurrence gating, commit gates, and validation retry. That is the bypass being removed, so there is no `acceptedRaw`, `providerResult`, or `unsafe` variant.
+
+`generate()` results keep `.raw` unchanged; a completed provider response has no equivalent problem. Provider-specific request options are unchanged, and provider-specific terminal facts remain on `completion.providerMetadata`.
+
+### Streaming Safety
+
+| Removed | Replacement |
+| --- | --- |
+| `guardrail({ stream: 'sentence' })` | `on: boundary.output.text().sentences()` |
+| `guardrail({ stream: 'line' })` | `on: boundary.output.text().lines()` |
+| `guardrail({ stream: 'chunk' })` | `on: boundary.output.text().deltas()` |
+| `guardrail({ stream: 'final' })` | `on: boundary.output.text().complete()` |
+| `guardrail({ stream: { segment } })` | `on: boundary.output.text().segments({ maxCharacters, next })` |
+| `guardrail({ stream: false })` | `enabled: false` via `safety.tune`, or omit the policy |
+| `safety.tune[id].stream` | Removed. Tune accepts only `mode` and `enabled` |
+| `constraint({ onChunk })` | `on: boundary.output.object<T>().path('a.b')` |
+| `onHoldLimit: 'release'` | Removed. Hold limits fail closed with `StreamHoldLimitError` |
+| `boundary.output.path<T>()('a.b')` | `boundary.output.object<T>().path('a.b')` |
+
+`constraint({ onChunk })` is not a like-for-like swap. `onChunk` was report-only; an `assert` on a path gates release and can discard the attempt. Use `severity: 'suggest'` to keep the old report-only behavior.
+
+### Other removals and renames
+
+| Removed | Replacement |
+| --- | --- |
+| `AdapterSpec.wrapOutputSchema` | `profile.structuredOutput.accepts` |
+| `NativeChatProfile.outputSchema` | `profile.structuredOutput.accepts` |
+| Hand-built provider schema in `request()` | `ctx.outputSchema`, the compiled wire schema |
+| `capture.mode: 'afterResponse'` | `'deferred'` |
+| `capture.mode: 'detached'` | `'deferred'` |
+| Memory-specific `capture.waitUntil` | Shared `config({ host })` binding |
+| `boundary.validation.feedback()` | `boundary.input.text({ from: "feedback" })` (compatibility boundary still operational) |
+| `experimental.indexer.nativeAst` | Removed. Rust/Oxc is the only static path |
+| Two-argument object helper construction | `createGenerateObjectFn(client)` plus `{ model, ... }` per call |
+
+### Behavior changes
+
+These are not renames. The same code now does something different.
+
+| Before | Now |
+| --- | --- |
+| Structured output validated only when `validationRetry` was set | Always validated; `validationRetry` controls only whether Crux retries |
+| Invalid structured output could be returned | Throws `ValidationExhaustedError` |
+| Constraints on streams ran report-only at end of stream | An `assert` gates release and can retry the attempt |
+| Structured streams always released incrementally | A positive `validationRetry.maxRetries` buffers until end-of-stream so a failed attempt can be discarded |
+| A stream failure rejected only `completion` | Every surface replays its committed prefix and then errors with the same error object |
+| `textStream` closed when provider deltas ended | Surfaces close on the logical `finish` |
+| `stream()` on `@use-crux/ai` discarded `validationRetry` | It is honored |
+| Memory capture defaulted to blocking | Defaults to `deferred` |
+
+### Reindex on upgrade
+
+The additive Project Index metadata behind semantic completion advances the static, semantic, and local snapshot cache identities. Upgrading reindexes automatically instead of reusing an older snapshot. You should not need to delete `.crux/cache` by hand.
+
+### Peer dependency
+
+`@use-crux/google` now requires `@google/genai` 2.x. This is a breaking install change: the removed 1.x Interactions event schema is no longer accepted. `@use-crux/ai` and the provider adapters accept `@use-crux/mcp` 0.7 peers.
+
+Adapters now report the model steps an SDK invocation actually consumed while core enforces the shared `maxSteps` budget. When consumption is unknown or settled tool rounds cannot be resumed safely, Crux fails closed rather than risking duplicate tool side effects.
+
+## Other changes
+
+- **[Breaking]** Streaming: managed logical streams, `result.raw` removed from stream results ([#280](https://github.com/use-crux/crux/pull/280))
+- **[Breaking]** Safety: boundary-driven streaming configuration replaces `GuardrailConfig.stream` and `onHoldLimit: 'release'` ([#280](https://github.com/use-crux/crux/pull/280))
+- **[Breaking]** Core: structured output is always validated; invalid output throws ([#275](https://github.com/use-crux/crux/pull/275))
+- **[Breaking]** Memory: capture modes reduced to `inline | deferred`, defaulting to deferred ([#259](https://github.com/use-crux/crux/pull/259))
+- **[Breaking]** `@use-crux/google`: requires `@google/genai` 2.x ([#292](https://github.com/use-crux/crux/pull/292))
+- **[Breaking]** Indexer: Rust/Oxc becomes the required static index path; `experimental.indexer.nativeAst` removed ([#263](https://github.com/use-crux/crux/pull/263))
+- **[New]** Media: `streamImage()` and `streamSpeech()` bounded streaming operations ([#292](https://github.com/use-crux/crux/pull/292))
+- **[New]** Safety: `guardrail.mediaClassifier()` provider-neutral media classification ([#282](https://github.com/use-crux/crux/pull/282))
+- **[New]** Core: `md`, the opaque `PromptText` type, and `md.json()` snapshots ([#278](https://github.com/use-crux/crux/pull/278))
+- **[New]** Editor: `crux lsp` stdio language server with Project Index lint diagnostics, hover explanations, and rule-declared code actions ([#274](https://github.com/use-crux/crux/pull/274))
+- **[New]** Editor: index-backed go-to-definition, references, document and workspace symbols, hover definition context, inlay hints, code lenses, and Devtools definition links ([#274](https://github.com/use-crux/crux/pull/274))
+- **[New]** Editor: Project Index-aware semantic completion for prompt, context, MCP, tool, agent, handoff, and routing dependency slots ([#274](https://github.com/use-crux/crux/pull/274))
+- **[New]** Editor: `crux editor install vscode|cursor` with checksum-verified lockstep VSIX, six native CLI archives, and `SHA256SUMS` on stable and nightly releases ([#274](https://github.com/use-crux/crux/pull/274))
+- **[New]** Editor: PromptText highlighting, folding, heading symbols, safe literal links, static preview, semantic diagnostics, and versioned quick fixes ([#294](https://github.com/use-crux/crux/pull/294))
+- **[New]** Editor: explicit static preview, runtime exact preview, and latest-Run commands in the VS Code and Cursor extension ([#294](https://github.com/use-crux/crux/pull/294))
+- **[New]** Workspace: materialized subtree snapshots ([#264](https://github.com/use-crux/crux/pull/264))
+- **[New]** Observability: declarative `redactPatterns` ([#291](https://github.com/use-crux/crux/pull/291))
+- **[New]** Evals: authored timeout policies and cooperative cell cancellation ([#283](https://github.com/use-crux/crux/pull/283))
+- **[New]** Core: `configure`, `ConfigureOptions`, and `PromptRegistry` exported from the root ([#278](https://github.com/use-crux/crux/pull/278))
+- **[Improvement]** Safety: unified model-input boundaries for caller, tool, retrieval, memory, blackboard, handoff, and retry-feedback content ([#261](https://github.com/use-crux/crux/pull/261))
+- **[Improvement]** Safety: rejected output and corrective feedback are guarded before every eligible retry ([#261](https://github.com/use-crux/crux/pull/261))
+- **[Improvement]** Safety: semantic-cache hits pass through current output guardrails, schema parse, and constraints before publication ([#261](https://github.com/use-crux/crux/pull/261))
+- **[Improvement]** Safety: additional lifecycle boundary enforcement ([#288](https://github.com/use-crux/crux/pull/288))
+- **[Improvement]** Indexer: lint suppressions retained as evidence; `--include-suppressed` exposes them ([#265](https://github.com/use-crux/crux/pull/265))
+- **[Improvement]** `@use-crux/ai`: `stream()` honors `validationRetry`, which it previously discarded ([#280](https://github.com/use-crux/crux/pull/280))
+- **[Improvement]** `@use-crux/ai`: adds `toUIMessageStream(result)` and `createTextStreamResponse(result)` ([#280](https://github.com/use-crux/crux/pull/280))
+- **[Improvement]** Local: accepts the `generation.stream.attempt` primitive so buffering attribution reaches Devtools ([#280](https://github.com/use-crux/crux/pull/280))
+- **[Improvement]** Docs: media becomes a first-class guide ([#293](https://github.com/use-crux/crux/pull/293))
+- **[Improvement]** CI: parallelized verification jobs ([#262](https://github.com/use-crux/crux/pull/262))
+- **[Fix]** Core: `prompt.prompt` rejects Promise results from cast async callbacks instead of awaiting an unsupported shape ([#278](https://github.com/use-crux/crux/pull/278))
+- **[Fix]** Core: structured-output compilation rejects optional properties whose encoding cannot be proven reversible ([#275](https://github.com/use-crux/crux/pull/275))
+- **[Fix]** Core: `ValidationExhaustedError` no longer exposes custom Zod issue messages or model-controlled record keys ([#280](https://github.com/use-crux/crux/pull/280))
+
+## Getting started
+
+- Upgrading from 0.6: start with [Removed APIs](/docs/guides/advanced/migrations), then the tables above.
+- Streaming: read [Guardrails](/docs/guides/safety/guardrails#streaming) for the boundary units.
+- Prompt authoring: see [PromptText](/docs/reference/crux-core/prompt-text) and [VS Code and Cursor](/docs/developer-tools/vscode).
+- Full detail: see the [0.7.0 release](https://github.com/use-crux/crux/releases/tag/v0.7.0) and package changelogs.

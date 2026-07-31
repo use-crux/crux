@@ -1,0 +1,389 @@
+---
+title: "Crux 0.6"
+description: "Evals V1 replaces the pre-release Quality model, MCP servers become portable tool sources, media gets real Safety boundaries, and memory capture modes finally do what they say."
+date: "2026-07-21"
+type: Release
+tags: [release, evals, mcp, safety]
+authors: [henri]
+draft: false
+readTime: 15
+---
+
+Crux 0.6 is out. The headline is Evals V1: you can now test the same callable task your application runs in production, reuse exact evidence between runs so unchanged cells cost nothing, and accept a completed run as a Baseline to compare against.
+
+```bash
+pnpm add @use-crux/core@0.6.0
+# and any adapters you use, on the same version
+pnpm add @use-crux/ai@0.6.0
+```
+
+All `@use-crux/*` packages release together, so keep them on one version.
+
+Here is what is new in Crux 0.6:
+
+- [**Evals V1 (Breaking):**](#evals-v1) Bind a production task, define typed Cases, reuse exact evidence, accept Baselines. Replaces `@use-crux/core/quality`.
+- [**MCP tool sources:**](#mcp-tool-sources) The new `@use-crux/mcp` package adds Streamable HTTP and stdio servers as portable tools on every adapter.
+- [**Runtime-hosted Evals:**](#runtime-hosted-evals) Strict offline planning, pre-spend cost ceilings, and a first-party `@use-crux/cloudflare` Durable Object host.
+- [**Media Safety:**](#media-safety) `boundary.input.media()`, `boundary.output.media()`, and a declarative `guardrail.media()` attachment policy.
+- [**Memory capture modes (Breaking):**](#memory-capture-modes-are-honored) `afterResponse` and `detached` no longer block the response. Convex vector storage is removed.
+- [**Flow cancellation:**](#flow-cancellation) `handle.cancel(flowId)` behaves the same with and without a Runtime Engine.
+- [**Namespace inference (Breaking):**](#namespace-inference) Serverless production without a resolvable namespace throws `NAMESPACE_AMBIGUOUS` instead of silently writing to `local`.
+- [**`defer()` with zero host setup:**](#defer-with-zero-host-setup) Lazy execution scopes at every Crux primitive boundary, plus explicit `config({ host })` retention bindings.
+- [**`withCrux` lifecycle boundaries (Breaking):**](#withcrux-lifecycle-boundaries) One lifecycle boundary per framework package. The Next build plugin is renamed to `withCruxBuild`.
+- [**Observability schema v4 (Breaking):**](#observability-schema-v4-and-operation-families) Operation-family identity, causally linked child runs, and one Runs row per operation. Older observability storage resets in place.
+- [**Daemon-free CLI:**](#daemon-free-cli) `crux check` with CI exit codes, plus `crux catalog` and `crux manifest`.
+- [**Multimodal embeddings (Breaking):**](#multimodal-embeddings) Text or media retrieval in one namespace with space-identity guards. Custom dense batch functions change signature.
+- [**Crux Local:**](#crux-local) Deterministic TUI input routing, diagnosis-oriented Run detail, and automatic Runtime generation.
+
+## Evals V1
+
+The pre-release Quality model asked you to describe your task twice: once for production and once for testing. The copy drifted, and a passing test told you about the copy.
+
+Evals V1 removes the copy. You bind the production task with `generate.task()` or `stream.task()`, and the Eval imports it:
+
+```ts title="src/support.ts"
+import { generate, stableModel } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
+
+export const supportPrompt = prompt({
+  id: "support",
+  input: z.object({ question: z.string() }),
+  output: z.object({ answer: z.string() }),
+  system: "Answer support questions accurately and concisely.",
+  prompt: ({ input }) => input.question,
+});
+
+export const support = generate.task(supportPrompt, {
+  model: stableModel(openai("gpt-4o-mini")),
+  temperature: 0.2,
+});
+```
+
+`support` is an ordinary callable function. Production calls it directly. The Eval file adds Cases and assertions around that same binding:
+
+```ts title="evals/support.eval.ts"
+import { evaluate } from "@use-crux/core/eval";
+import { support } from "../src/support";
+
+export default evaluate({
+  id: "support",
+  task: support,
+  cases: [
+    {
+      id: "refund",
+      input: { question: "Can I get a refund?" },
+      expected: { answer: "Yes" },
+    },
+  ],
+  expect: ({ output, expected, expect }) => {
+    expect(output.answer).toContain(expected.answer);
+  },
+});
+```
+
+Run it with `crux eval support`, or bare `crux eval` to discover every `*.eval.ts` file.
+
+### Evidence reuse is the part that matters
+
+Re-running an Eval after editing one assertion should not re-pay for every model call. Crux fingerprints the Eval file and its deterministic source dependency closure, including transitive relative imports and workspace packages reached through package-manager symlinks. Installed packages are represented by version and export identity.
+
+The practical effect: editing an assertion reuses task evidence and reruns only the assertion. Editing an imported prompt, or upgrading a package that prompt depends on, misses the old evidence and runs fresh.
+
+Reuse is verified rather than assumed. Before reusing a candidate, Crux re-renders the prompt locally for that Case with no model call and compares a one-way fingerprint against the exact normalized request the original run captured. A mismatch runs that one cell fresh and reports `nondeterministic_renderer`. Raw rendered prompts never cross the evidence boundary.
+
+`stableModel()` is how a model object opts in. It returns the same AI SDK model with the same type, while attesting that its hidden provider configuration is stable enough for exact reuse. An unattested model keeps working; it just always runs fresh and tells you why once.
+
+Two cases fail closed on purpose, because guessing would produce a false pass:
+
+- A managed task constructed inside the Eval file reports `task_binding_untracked`. Crux cannot separate task edits from assertion edits there. Move the task to a production module and import it.
+- A Variant with a callback-valued `system`, `prompt`, or `messages` is rejected, because an Eval-local callback is not a durable arm identity.
+
+### Baselines and cost ceilings
+
+A Baseline is a complete historical run and selected arm that you explicitly accepted. Nothing is promoted automatically, so a comparison always tells you what it is comparing against.
+
+`--max-cost` now fails closed on conservative per-call USD ceilings. Managed tasks, routing trees, bounded tool loops, and judges estimate from `experimental.eval.pricing`. If a path has no model key, you get the missing key and a remedy before any billable work, not an overrun afterwards.
+
+Read the [Evals guide](/docs/guides/evals) for Variants, scorers, and Gates.
+
+## MCP tool sources
+
+MCP servers are now first-class tool sources through the new `@use-crux/mcp` package. Add one inert source to `use[]`; the active adapter connects and discovers tools only when the prompt executes.
+
+```ts title="prompts/support.ts"
+import { prompt } from "@use-crux/core";
+import { mcp, streamableHttp } from "@use-crux/mcp";
+
+interface RuntimeContext {
+  readonly mcpToken: string;
+}
+
+const crm = mcp<RuntimeContext>({
+  id: "crm",
+  transport: ({ runtimeContext }) =>
+    streamableHttp({
+      url: "https://mcp.example.com/v1",
+      headers: { Authorization: `Bearer ${runtimeContext.mcpToken}` },
+    }),
+  tools: { allow: ["search_customer", "update_customer"], prefix: "crm_" },
+});
+
+export const support = prompt({
+  id: "support",
+  use: [crm],
+  prompt: "Help the customer with the available CRM tools.",
+});
+```
+
+Resolving the transport from `runtimeContext` means a tenant token is scoped to the invocation instead of becoming long-lived module state.
+
+Discovered tools are ordinary Crux tools. They keep middleware, Safety, approval, Eval, observability, and cleanup, and they work identically on `@use-crux/ai`, `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google`. The AI adapter delegates to its native client; the others use the official client. Both return the same lifecycle.
+
+Credentials stay out of evidence. Headers, query values, environment values, raw errors, `_meta`, and binary payloads are omitted from observability and Project Index projections. Redirects default to `redirect: 'error'`; if you opt into `follow`, Crux permits same-origin hops and removes configured credentials before a cross-origin one.
+
+For local development, `stdio()` runs a server process directly. See [Connect an MCP server](/docs/guides/tools/mcp).
+
+## Runtime-hosted Evals
+
+Evals can execute on a Runtime host instead of the machine that started them, with generated identity-only registries and strict offline planning.
+
+Strict offline runs load a generated data-only privacy policy without importing Runtime code or touching the network, and fail closed when that projection is missing or stale. Explicit fresh executions take a new durable admission identity, while retries reconnect to the same admitted action rather than double-spending.
+
+`@use-crux/cloudflare` ships as the first-party Durable Object host. Node, serverless, and Convex conformance are covered by the same contract.
+
+The same release adds run-linked feedback through `@use-crux/core/feedback`, AI message metadata through `@use-crux/ai/feedback`, and durable Review plus explicit Add-to-eval workflows in Crux Local and Devtools, so a bad production run can become a Case without hand-copying its input.
+
+## Media Safety
+
+Safety previously stopped at text. In 0.6 the same boundary model covers media on every completed operation.
+
+`boundary.input.media()` inspects canonical non-text input parts before provider normalization, with inferred callback types and stable original indexes. An enforced `strip` removes only the current part; report mode records intent without changing provider input. Input media is guardrail-only: constraints reject the boundary in TypeScript and fail closed on bypassed configurations.
+
+`guardrail.media()` covers the common attachment policy declaratively, so you do not hand-write it:
+
+```ts
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+export const attachments = guardrail({
+  id: "attachments",
+  on: boundary.input.media(),
+  run: guardrail.media({
+    // MIME allowlists, byte limits, exact remote hosts,
+    // inline versus provider-file categories, URL posture
+  }),
+});
+```
+
+It inspects only caller-supplied metadata and local bytes, supports block or strip enforcement, and keeps locator and payload details out of decisions.
+
+`boundary.output.media()` adds completed image, speech, and transcription Safety. Generated images run output policies once after routing selects a result. Enforce-mode strips preserve image order and reset the `image` alias. Speech `text` and optional `instructions` run through their input boundaries before normalization. Transcript text is guarded once before reporting, and an enforced rewrite clears timed segments and words without touching provider-native facts.
+
+Completed operations now validate every exact Safety binding against their primitive before provider work, so an inapplicable binding fails at composition instead of silently doing nothing.
+
+## Memory capture modes are honored
+
+This one is a bug fix that reads like a feature, because the option existed and did not work.
+
+Adapters awaited memory flush unconditionally, so `capture.mode: 'afterResponse'` and `'detached'` both behaved like `'inline'` for prompt-bound memory. If you set a non-blocking mode to keep memory writes off the response path, you did not get one.
+
+Adapters now await capture only when the mode is `'inline'`, or when it is `'afterResponse'` without a configured `capture.waitUntil` hook, which is the serverless-safe fallback.
+
+Two related fixes ship with it. Adapters forward each tool call to memory blocks' `captureToolEvent` hooks, so `episodes()` actually records tool activity and the Convex agent lifecycle retains tool results and errors. And extractive blocks with `write: { mode: 'manual' }` no longer run their extract callback during capture, which is what manual was supposed to mean.
+
+### Convex vector storage is removed
+
+The bundled Convex vector path had no schema vector index and hydrated search results incorrectly, and its same-key vector upsert corrupted memory records. It was not salvageable in place, so it is gone rather than left as a trap.
+
+`convexStorage()` and the ambient Convex runtime storage now provide records only; embeddings remain mirrored on records. Semantic memory blocks fall back to recency listing on Convex unless you configure an explicit `VectorStore`, for example `upstashVectorStore()` from `@use-crux/upstash`. `convexVectorStore()` throws `unsupported_capability` with migration guidance.
+
+Removed with it: the `vectorIndexName` and `semanticCache` profile-storage options, the `ConvexSemanticCacheOptions` type, and the store-doc dense-search contract types. `memory({ records })` from `@use-crux/convex` no longer injects ambient runtime storage when explicit stores are passed.
+
+## Flow cancellation
+
+`FlowHandle.cancel(flowId)` is object-bound and behaves consistently with and without a Runtime Engine. With Runtime, cancellation atomically marks both the durable work and its flow snapshot cancelled, including through `crux.flows.cancel()`, while leaving independently deferred or scheduled child work running.
+
+Missing-runtime guidance now points at `handle.resume(flowId)` rather than an API that does not apply, and the positional, barrier-buffered durability contract for `flow.defer()` and `flow.after()` is documented.
+
+## Namespace inference
+
+A production serverless deployment that silently shared the `local` durable namespace was a data-correctness problem that surfaced late.
+
+`serverless()` now resolves the namespace in a fixed order: explicit `namespace`, then a non-empty `CRUX_RUNTIME_NAMESPACE`, then Vercel deployment inference where production resolves to `production` and previews to `preview-<sanitized branch>`, then `local` outside production.
+
+A production configuration that reaches the end of that list throws `NAMESPACE_AMBIGUOUS` at composition. Set `CRUX_RUNTIME_NAMESPACE=production` or pass `serverless({ namespace: "..." })`. `node()` keeps its `local` default.
+
+Development is noisier on purpose: Runtime setup and preflight warn when a serverless definition legitimately falls back to `local`, and `crux runtime generate` and `crux dev` render passing-setup warnings instead of hiding them behind a green check.
+
+## `defer()` with zero host setup
+
+Background work used to require you to think about the host before you could think about the work. Crux now opens lazy execution scopes at agent, adapter, tool, Safety, flow-step, and Convex bridge boundaries, so inline `defer()` works with no host setup inside defer-capable primitives on long-lived processes. Nested work drains at its nearest boundary, and streaming adapters restore one scope across Core-owned iteration and completion segments.
+
+For everything else, retention is explicit:
+
+```ts
+config({ host: node() });      // or next(), vercel(), workers()
+```
+
+`config({ host })` bindings exist for Node, Next.js, Cloudflare Workers, and Vercel. Configured host retention applies uniformly when any Crux primitive is the execution root. Primitive drains still start immediately, while retention-port failures propagate after deterministic sealing rather than silently accepting work the host cannot keep alive. Config-only ambient defer uses an ephemeral invocation per call, and failed or cancelled scopes record and skip inline callbacks instead of running them.
+
+Evals get the same treatment. An Eval task that calls `defer()` has the registration captured as cell evidence instead of invoking the inline callback or staging named Runtime work, so evaluating a task does not produce background side effects. Expired remote cells drop late observability writes through the shared scope-sealing policy.
+
+Defer completion classes and lifetime factories are removed in favor of the scope kernel's host bindings. Serverless and Node wrappers enqueue retained work through the root gate. The config-dependent `defer.missing_scope` bundled lint is gone; `crux setup` now owns host-retention diagnostics using your selected config and platform evidence, with exact Next, Vercel, and Workers remediations.
+
+## `withCrux` lifecycle boundaries
+
+Each framework package now has exactly one `withCrux`, and it means one thing: the lifecycle boundary.
+
+Cloudflare Workers and Next.js get opinionated `withCrux` boundaries while keeping their low-level adapters. Both compose deferred work with contained, bounded post-response observability drains. `createCruxConvex().run()` owns the corresponding bounded terminal drain and preserves deployment identity across durable continuation boundaries. A rejected promise from an advisory drain reporter is contained rather than delaying or replacing your handler result.
+
+Two moves come with it, both without compatibility aliases:
+
+- The Next Runtime artifact build plugin is renamed to `withCruxBuild`, reserving `withCrux` for lifecycle boundaries. A build plugin and a request boundary sharing a name was a trap worth removing.
+- The Workers `withCrux` boundary moves out of Core's deleted `/observability/workers` subpath into `@use-crux/cloudflare`, where its structured drain runs before the kernel flush.
+
+Portable MCP entrypoints fail closed when stdio is selected; Node runtimes resolve their lazy stdio adapters through private conditional imports.
+
+## Observability schema v4 and operation families
+
+A durable Flow that resumed three times used to look like three unrelated runs sharing a trace ID. Schema v4 gives observability an explicit operation-family identity.
+
+Root runs own an `operationId`. Independently durable nested Flow work, named defer, and Convex swarm work open causally linked child runs, while ordinary pipeline, parallel, consensus, delegate, generation, and host continuations remain spans or fresh segments. Local Runs projects one row per operation with aggregate child and topology health, child-before-root shells, family-atomic retention, and deletion tombstones.
+
+Run lookup and deletion now require an operation or member-run ID. W3C trace IDs remain correlation data and never select an operation implicitly.
+
+Deployment identity is immutable and carried through observability graph records, suspend and resume propagation, and local run detail. `@use-crux/otel` exports a portable Resource-attribute mapper, maps lightweight identity per span, and projects DefinitionRefs through bounded attributes and events.
+
+Successful managed operation results correlate with the exact Core-owned W3C trace and producing span. Generation hooks and middleware receive finalized results, stream handles expose identity immediately and repeat it on completion, and completed media, agent, flow, scoring, compaction, citation, and content-indexing envelopes follow the same exact-owner contract while provider payloads stay ID-free.
+
+**Older observability storage resets in place**, because family membership cannot be reconstructed from existing trace IDs. Historical local runs are not migrated.
+
+## Daemon-free CLI
+
+Three commands that previously wanted a running server now work as one-shot invocations, which is what CI actually needs.
+
+```bash
+crux check              # deterministic JSON, explicit CI exit codes
+crux catalog list       # also: show, status, explain
+crux manifest           # artifact generation
+crux catalog import     # verified and idempotent
+```
+
+`crux lint` uses the same one-shot Project Index service and embedded worker pipeline by default, keeping its no-gate compatibility behavior and an explicit `--server` path.
+
+`crux catalog` projections are deterministic and carry compiler provenance, safe source paths, Health, Eval, and runtime joins, and truthful partial or unknown state rather than a confident guess. The beta `crux index` list and show paths delegate to Catalog; category keywords and explicit reindex remain. Durable definition, relation, source-reference, and diagnostic evidence retains canonical extractor and resolved extension provenance across worker, cache, and restart boundaries, and Catalog explanations name every actual contributor.
+
+Local observability resolves runtime definition references only against the exact immutable deployment manifest a run names, and labels current-checkout comparisons separately, so a run from last week is not explained using today's source. Definition fingerprints use normalized project-relative source identity, so identical checkouts produce the same manifest ID.
+
+## Multimodal embeddings
+
+Text and media can now share one embedding namespace instead of forcing a text-only projection.
+
+Indexers store media documents through `AssetStore`, stamp vectors with a SHA-256 embedding-space digest, and retrieve the same namespace with either text or media while retaining `RetrieverHit.source.assetRef` attribution. Media bytes and provider locators never enter record or vector metadata, pipeline caches, observability artifacts, or retrieval traces.
+
+The guards are the useful part. Namespace guards reject incompatible model, dimension, normalization, modality, or task spaces before a write or a search, and require a full reindex or a new namespace. Mixing embedding spaces in one namespace fails loudly instead of returning quietly meaningless neighbors.
+
+Project Index emits module-scoped embedding definitions, embedding-call facts, vector-indexer facts, and consumer-to-embedding relations. Semantic lints reject proven unsupported media modalities, sparse and media combinations, and exact embedding-identity mismatches inside a shared namespace. Devtools Catalog shows each retriever and knowledge base's resolved embedding modalities and dense vector-space identity, and Run Detail presents embedding roles, modality counts, space digests, and byte-safe asset, media-type, and page or time attribution on media retrieval hits.
+
+Two upgrade notes. Custom dense provider batch functions now receive validated `NormalizedEmbeddingInput[]` plus `{ role }` instead of `string[]`. And embedding fingerprints include modality and space semantics, which invalidates old embedding and indexing cache entries once so they are safely re-embedded.
+
+The indexing pipeline also caches validated dense and sparse embedding bundles per source, so re-ingesting a corpus where most documents are unchanged no longer re-embeds them.
+
+## Crux Local
+
+Local got a stabilization pass focused on the two things you do most: reading a failed run, and trusting the keyboard.
+
+TUI input routing is deterministic. Focused filters consume text before workspace shortcuts, each key dispatches at most one action, and help plus pane footers show only actions you can actually run. Navigating Back restores logical route, pane focus, and stable selections. In-flight Overview and Runs fetches cancel when the owning dev command ends.
+
+Run detail is diagnosis-oriented: failure evidence, diagnostics, activity, artifacts, events, and exact definition references up front, with complete raw observability records behind explicit inspect and export actions. Runs reads are revision-aware and selection-owned, so a late response from a previously selected run cannot overwrite what you are looking at.
+
+Runtime generation is automatic and reliable, and executable packaging for the workspace CLI launcher and nightly releases is fixed.
+
+## Migrating to 0.6
+
+Crux is pre-launch and prefers one mental model over compatibility aliases, so these were removed rather than deprecated.
+
+| Removed | Replacement |
+| --- | --- |
+| `@use-crux/core/quality` exports | `@use-crux/core/eval` |
+| `crux quality` commands | `crux eval` |
+| `convexVectorStore()` | An explicit `VectorStore`, for example `upstashVectorStore()` |
+| `vectorIndexName`, `semanticCache` profile-storage options | Removed with the Convex vector path |
+| `ConvexSemanticCacheOptions` | Removed |
+| `compactConversation()` from `@use-crux/convex` | Core conversation helpers |
+| Implicit HTTPS download in `@use-crux/ai` `transcribe` | `@use-crux/ai/transcription/node` |
+| `withCrux` on the Next Runtime artifact build plugin | `withCruxBuild` |
+| `@use-crux/core/observability/workers` | `withCrux` from `@use-crux/cloudflare` |
+| Defer completion classes and lifetime factories | `config({ host })` retention bindings |
+| The `defer.missing_scope` bundled lint | `crux setup` host-retention diagnostics |
+| Third-party authoring on the Indexer root | The experimental `/extensions` subpath |
+
+Behavior changes to account for:
+
+- A production `serverless()` composition without a resolvable namespace now throws `NAMESPACE_AMBIGUOUS`. Check this before deploying, not after.
+- `capture.mode: 'afterResponse'` and `'detached'` are now genuinely non-blocking. If your code relied on memory being written before the response returned, set `'inline'` explicitly.
+- Extractive blocks with `write: { mode: 'manual' }` no longer extract during capture.
+- The `@use-crux/ai` root no longer downloads HTTPS transcription input implicitly. Portable callers must pass materialized audio; Node callers import `transcribe` or `createAiSdkTranscribe` from `@use-crux/ai/transcription/node` to keep the bounded, DNS-pinned download.
+- Older observability storage resets in place for schema v4. Run lookup and deletion now require an operation or member-run ID rather than a W3C trace ID.
+- Custom dense provider batch functions receive `NormalizedEmbeddingInput[]` plus `{ role }` instead of `string[]`.
+- Embedding fingerprints now include modality and space semantics, invalidating old embedding and indexing cache entries once so they are re-embedded safely.
+- Completed-operation bindings use the documented exact media-operation vocabulary. Normalized spellings such as `generate-image` or `generateimage` no longer imply a Core-owned media span.
+- Input guardrail rewrites fail closed on multimodal messages: a rewrite that cannot be applied blocks rather than passing the original through.
+
+## Other changes
+
+- **[Breaking]** Evals: replace the pre-release Quality authoring, execution, CLI, storage, and Devtools model with Evals V1 ([#234](https://github.com/use-crux/crux/pull/234))
+- **[Breaking]** Convex: remove the unusable bundled vector path from memory storage ([#238](https://github.com/use-crux/crux/pull/238))
+- **[Breaking]** Runtime: infer serverless namespaces and throw `NAMESPACE_AMBIGUOUS` in production preflight ([#206](https://github.com/use-crux/crux/pull/206))
+- **[Breaking]** `@use-crux/ai`: move implicit HTTPS transcription download to the `transcription/node` subpath ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Breaking]** Observability: advance to schema v4 with operation-family identity; older storage resets in place ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Breaking]** Next: rename the Runtime artifact build plugin to `withCruxBuild` ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Breaking]** Cloudflare: move the Workers `withCrux` boundary out of Core's deleted `/observability/workers` subpath ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Breaking]** Core: remove defer completion classes and lifetime factories in favor of `config({ host })` ([#229](https://github.com/use-crux/crux/pull/229), [#245](https://github.com/use-crux/crux/pull/245))
+- **[Breaking]** Ingest: custom dense provider batch functions receive `NormalizedEmbeddingInput[]` plus `{ role }` ([#257](https://github.com/use-crux/crux/pull/257))
+- **[New]** MCP: portable Streamable HTTP and stdio tool sources in `@use-crux/mcp` ([#227](https://github.com/use-crux/crux/pull/227))
+- **[New]** CLI: daemon-free `crux check` with deterministic JSON and explicit CI exit codes ([#229](https://github.com/use-crux/crux/pull/229))
+- **[New]** CLI: deterministic `crux catalog` list, show, status, and explain, plus `crux manifest` and idempotent `crux catalog import` ([#229](https://github.com/use-crux/crux/pull/229))
+- **[New]** Core: opinionated `withCrux` lifecycle boundaries for Cloudflare Workers and Next.js ([#229](https://github.com/use-crux/crux/pull/229))
+- **[New]** Core: explicit `config({ host })` retention bindings for Node, Next.js, Workers, and Vercel ([#229](https://github.com/use-crux/crux/pull/229))
+- **[New]** Core: lazy execution scopes at agent, adapter, tool, Safety, flow-step, and Convex bridge boundaries, so inline `defer()` needs no host setup ([#245](https://github.com/use-crux/crux/pull/245))
+- **[New]** Ingest: media documents through `AssetStore`, embedding-space digests, and `RetrieverHit.source.assetRef` attribution ([#257](https://github.com/use-crux/crux/pull/257))
+- **[New]** Core: export `detectSuspiciousPatterns`, and `TaskCompleteArgs` from `@use-crux/core/tasks` ([#215](https://github.com/use-crux/crux/pull/215))
+- **[New]** Safety: `boundary.input.media()` for canonical non-text input parts ([#230](https://github.com/use-crux/crux/pull/230))
+- **[New]** Safety: declarative `guardrail.media()` attachment policies ([#231](https://github.com/use-crux/crux/pull/231))
+- **[New]** Safety: `boundary.output.media()` plus completed image, speech, and transcription enforcement ([#249](https://github.com/use-crux/crux/pull/249))
+- **[New]** Core: execution scope seam with host retention bindings ([#245](https://github.com/use-crux/crux/pull/245))
+- **[New]** Ingest: native multimodal embeddings ([#257](https://github.com/use-crux/crux/pull/257))
+- **[Improvement]** Core: cache validated dense and sparse embedding bundles per source ([#248](https://github.com/use-crux/crux/pull/248))
+- **[Improvement]** Ingest: namespace guards reject incompatible model, dimension, normalization, modality, or task spaces before writes or search ([#257](https://github.com/use-crux/crux/pull/257))
+- **[Improvement]** Indexer: module-scoped embedding definitions, embedding-call facts, vector-indexer facts, and consumer-to-embedding relations ([#257](https://github.com/use-crux/crux/pull/257))
+- **[Improvement]** `@use-crux/otel`: portable Resource-attribute mapper with per-span deployment identity and bounded DefinitionRef projection ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Improvement]** CLI: `crux lint` uses the one-shot Project Index service by default, with an explicit `--server` path ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Improvement]** CLI: `crux setup` owns host-retention diagnostics; the `defer.missing_scope` bundled lint is removed ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Improvement]** Indexer: narrow the published root to Crux-owned compiler contracts; third-party authoring stays on the experimental `/extensions` subpath ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Improvement]** Flows: complete object-bound flow handle cancellation ([#217](https://github.com/use-crux/crux/pull/217))
+- **[Improvement]** Observability: correlate operation results with runs ([#250](https://github.com/use-crux/crux/pull/250))
+- **[Improvement]** Observability: project identity and portable entrypoint verification ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Improvement]** Local: stabilize the CLI and TUI ([#252](https://github.com/use-crux/crux/pull/252))
+- **[Improvement]** Local: make Runtime generation automatic and reliable ([#254](https://github.com/use-crux/crux/pull/254))
+- **[Improvement]** Docs: overhaul documentation for readability and API accuracy ([#215](https://github.com/use-crux/crux/pull/215))
+- **[Improvement]** Docs: reshape package READMEs to orient rather than document ([#216](https://github.com/use-crux/crux/pull/216))
+- **[Improvement]** Docs: launch the blog and sitewide SEO ([#235](https://github.com/use-crux/crux/pull/235))
+- **[Fix]** Memory: honor capture modes and forward tool events to `captureToolEvent` ([#238](https://github.com/use-crux/crux/pull/238))
+- **[Fix]** Core: fail closed on unappliable multimodal guardrail rewrites ([#213](https://github.com/use-crux/crux/pull/213))
+- **[Fix]** Core: validate the shared runtime registry ([#226](https://github.com/use-crux/crux/pull/226))
+- **[Fix]** Core: restore observability configuration across bundled server module copies, and reconcile abandoned activity without treating it as running ([#225](https://github.com/use-crux/crux/pull/225))
+- **[Fix]** Core: reject malformed shared runtime registry ancestry and hook layers before duplicate module copies adopt them ([#225](https://github.com/use-crux/crux/pull/225))
+- **[Fix]** Postgres: revive nested suspend deadlines when decoding Runtime snapshots, and recognize expired flow snapshots in terminal retention ([#229](https://github.com/use-crux/crux/pull/229))
+- **[Fix]** Convex: register valid Eval HTTP actions ([#256](https://github.com/use-crux/crux/pull/256))
+- **[Fix]** Observability: correct operation-family grouping ([#253](https://github.com/use-crux/crux/pull/253))
+- **[Fix]** Local: fix executable mode for the workspace CLI launcher ([#255](https://github.com/use-crux/crux/pull/255))
+- **[Fix]** Release: fix Crux Local executable packaging and nightly releases ([#218](https://github.com/use-crux/crux/pull/218), [#219](https://github.com/use-crux/crux/pull/219))
+
+## Getting started
+
+- New to Crux: start with [Getting started](/docs/getting-started).
+- Adding Evals: read the [Evals guide](/docs/guides/evals), then run `crux eval`.
+- Connecting MCP: follow [Connect an MCP server](/docs/guides/tools/mcp).
+- Full detail: see the [0.6.0 release](https://github.com/use-crux/crux/releases/tag/v0.6.0) and package changelogs.
