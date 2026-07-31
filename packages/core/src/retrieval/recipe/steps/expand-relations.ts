@@ -173,6 +173,13 @@ export function expandRelations(config: ExpandRelationsConfig = {}): RetrievalSt
         return { hits: [...input.hits, ...additions], warnings }
       },
     }),
+    {
+      direction,
+      depth,
+      limit,
+      seeds: [...seeds],
+      ...(config.types ? { types: [...config.types] } : {}),
+    },
   )
 }
 

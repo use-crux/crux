@@ -28,6 +28,7 @@ let recipeRunCounter = 0
 /** Normalized single-source recipe configuration used by the runner. */
 export interface RecipeRunnerConfig {
   recipeId: string
+  recipeFingerprint: string
   sources: readonly NormalizedRecipeSource[]
   steps: readonly RetrievalStep[]
   model?: RetrievalStepContext['model']
@@ -51,6 +52,7 @@ export async function runRetrievalRecipe(
     definitionRefs: [recipeDefinitionRef(config.recipeId)],
     attributes: {
       recipeId: config.recipeId,
+      recipeFingerprint: config.recipeFingerprint,
       sourceRetrieverIds: config.sources.map((source) => source.retriever.id),
       namespaceCount: new Set(
         config.sources.map((source) => source.retriever.namespace),
@@ -171,6 +173,7 @@ function buildTrace(args: {
   return {
     id: args.traceId,
     recipeId: args.config.recipeId,
+    fingerprint: args.config.recipeFingerprint,
     retrieverId: args.config.sources[0]?.retriever.id ?? '',
     startedAt: args.startedAt,
     durationMs: Date.now() - args.startedAt,

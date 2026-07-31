@@ -19,6 +19,7 @@ import { runRetrievalRecipe } from './run'
 import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 import { isBuiltInRetrievalStep, type RetrievalStep } from './step'
 import { normalizeRecipeSources, type NormalizedRecipeSource, type RetrievalRecipeSourceInput } from './source'
+import { fingerprintRetrievalRecipeBehavior } from './bound-identity'
 export type { RecipeTrace, StepTrace } from './trace'
 export type { RetrievalRecipeSource } from './source'
 
@@ -35,12 +36,14 @@ export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] =
 interface InternalRetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]>
   extends RetrievalRecipeConfig<TSteps> {
   knowledge?: RetrievalKnowledgeBinding
+  fingerprint?: string
 }
 
 /** Named, inspectable retrieval composition. */
 export interface RetrievalRecipe {
   readonly _tag: 'RetrievalRecipe'
   readonly id: string
+  readonly fingerprint: string
   run(input: RetrieveInput, options?: RetrieveOptions): Promise<readonly RetrieverHit[]>
   retrieve(query: RetrieveInput, options?: RetrieveOptions): Promise<RetrieverHit[]>
   retrieveWithTrace(
@@ -66,9 +69,11 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   const internalConfig = config as InternalRetrievalRecipeConfig<TSteps>
   const sources = normalizeRecipeSources(config.retriever)
   validateRecipeConfig(config, sources)
+  const fingerprint = internalConfig.fingerprint ?? fingerprintRetrievalRecipeBehavior(config)
 
   const runnerConfig = {
     recipeId: config.id,
+    recipeFingerprint: fingerprint,
     sources,
     steps: config.steps,
     ...(config.model ? { model: config.model } : {}),
@@ -87,6 +92,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   return Object.freeze({
     _tag: 'RetrievalRecipe' as const,
     id: config.id,
+    fingerprint,
     run: retrieve,
     retrieve,
     retrieveWithTrace,

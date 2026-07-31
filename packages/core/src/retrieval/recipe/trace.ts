@@ -33,6 +33,7 @@ export interface StepTrace {
 export interface RecipeTrace {
   id: string
   recipeId: string
+  fingerprint: string
   retrieverId: string
   startedAt: number
   durationMs: number

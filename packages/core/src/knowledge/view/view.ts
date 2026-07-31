@@ -21,8 +21,11 @@ export type KnowledgeViewRetrieverConfig<TFilter extends ExactFilter = ExactFilt
 /** Options for {@link KnowledgeView.recipe}. */
 export type KnowledgeViewRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]> = Omit<
   RetrievalRecipeConfig<TSteps>,
-  'retriever'
->
+  'id' | 'retriever'
+> & {
+  /** Stable recipe id. Anonymous bound recipes derive one from read surface and behavior. */
+  readonly id?: string
+}
 
 /** Configuration passed to {@link KnowledgeBase.view}. */
 export interface KnowledgeBaseViewConfig<TMetadataSchema extends z.ZodType<unknown> | undefined> {

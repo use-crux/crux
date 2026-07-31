@@ -100,6 +100,7 @@ interface RetrieveStepConfig {
 const retrieveStepConfigs = new WeakMap<RetrievalStep, RetrieveStepConfig>()
 const internalStepIds = new WeakSet<RetrievalStep>()
 const rerankerDefinitionIds = new WeakMap<RetrievalStep, string>()
+const publicStepConfigs = new WeakMap<RetrievalStep, Readonly<Record<string, unknown>>>()
 
 /** Create a typed retrieval step. */
 export function retrievalStep<const TIn extends StepPhase, const TOut extends StepPhase>(
@@ -122,8 +123,12 @@ export function isBuiltInRetrievalStep(step: RetrievalStep): boolean {
 }
 
 /** Mark a step as created by a built-in recipe helper. Internal. */
-export function markBuiltInRetrievalStep<TStep extends RetrievalStep>(step: TStep): TStep {
+export function markBuiltInRetrievalStep<TStep extends RetrievalStep>(
+  step: TStep,
+  publicConfig?: Readonly<Record<string, unknown>>,
+): TStep {
   internalStepIds.add(step)
+  if (publicConfig) setRetrievalStepPublicConfig(step, publicConfig)
   return step
 }
 
@@ -149,4 +154,17 @@ export function setRerankerDefinitionId(step: RetrievalStep, rerankerId: string)
 /** Return the authored reranker definition id for a rerank step. Internal. */
 export function getRerankerDefinitionId(step: RetrievalStep): string | undefined {
   return rerankerDefinitionIds.get(step)
+}
+
+/** Capture public options that affect a built-in step. Internal. */
+export function setRetrievalStepPublicConfig(
+  step: RetrievalStep,
+  config: Readonly<Record<string, unknown>>,
+): void {
+  publicStepConfigs.set(step, config)
+}
+
+/** Return public options that affect a built-in step. Internal. */
+export function getRetrievalStepPublicConfig(step: RetrievalStep): Readonly<Record<string, unknown>> | undefined {
+  return publicStepConfigs.get(step)
 }

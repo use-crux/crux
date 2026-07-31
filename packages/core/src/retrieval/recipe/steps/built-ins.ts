@@ -68,6 +68,7 @@ export function fanout(
         return { queries: dedupePlannedQueries(expandedGroups.flat()).slice(0, maxQueries) }
       },
     }),
+    { maxQueries },
   )
 }
 
@@ -114,6 +115,7 @@ export function rerank(
         return { hits: hits.slice(0, config.topK ?? hits.length) }
       },
     }),
+    { ...(config.topK !== undefined ? { topK: config.topK } : {}) },
   )
   setRerankerDefinitionId(step, config.engine.name)
   return step
@@ -160,6 +162,7 @@ export function expandParents(config: {
         return { hits: expanded, warnings }
       },
     }),
+    { records: config.records !== undefined, ...(config.indexerId ? { indexerId: config.indexerId } : {}), ...(config.maxParentChars !== undefined ? { maxParentChars: config.maxParentChars } : {}), ...(config.missing ? { missing: config.missing } : {}) },
   )
 }
 
@@ -224,6 +227,7 @@ export function compressToBudget(
         return { hits: compressed }
       },
     }),
+    { tokens: config.tokens, maxCharsPerHit, ...(config.keepEmpty !== undefined ? { keepEmpty: config.keepEmpty } : {}) },
   )
 }
 

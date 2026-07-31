@@ -157,6 +157,89 @@ expanded?.provenance?.graph;
 
 `seed` is the encoded ref that discovered the hit. `path` is the encoded traversal path. `edges` are the relation types followed along the path. `distance` is the semantic hop distance used for ordering and limits.
 
+## Live Views
+
+Use `metadataSchema` when a knowledge base has stable source metadata you want to address as a read surface. `view({ id, where })` is typed by that schema and stays live as matching sources are indexed, reindexed, or removed.
+
+```ts
+import { z } from "zod";
+import { knowledgeBase } from "@use-crux/core/knowledge";
+
+const metadataSchema = z.object({
+  status: z.enum(["draft", "published", "archived"]),
+  team: z.string(),
+  priority: z.enum(["normal", "high"]),
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  metadataSchema,
+});
+
+const publishedDocs = docs.view({
+  id: "published-docs",
+  where: {
+    status: "published",
+    team: ["docs", "support"],
+  },
+});
+```
+
+Array values are exact `IN` matches. Use `{ any: [...] }` for a union of compound clauses:
+
+```ts
+const responseDocs = docs.view({
+  id: "response-docs",
+  where: {
+    any: [
+      { status: "published", priority: "high" },
+      { status: "published", team: "support" },
+    ],
+  },
+});
+```
+
+Views expose the same read shape as a knowledge base:
+
+```ts
+const hits = await publishedDocs.retriever({ limit: 8 }).retrieve("billing limits");
+
+const answerDocs = publishedDocs.recipe({
+  steps: [
+    retrieve({ limit: 8 }),
+    expandRelations({ types: ["mentionsArea"], direction: "both" }),
+  ],
+});
+```
+
+Membership is authoritative. The portable vector path may push exact metadata filters down into storage, but every returned hit is still checked against the resolved view membership before it is returned. A storage optimization can collapse that into a membership-aware query without changing the result contract.
+
+Resolve a view when you need a replayable member set:
+
+```ts
+const revision = await publishedDocs.resolve();
+const pinnedDocs = publishedDocs.at(revision.revisionHash);
+
+const replayHits = await pinnedDocs.retriever({ limit: 8 }).retrieve("billing limits");
+```
+
+The live handle sees the next revision when matching sources change. A pinned handle replays the exact revision and fails if a member source is no longer exactly available.
+
+Scopes isolate live views and their revisions by namespace:
+
+```ts
+const tenantDocs = docs.scope({ namespace: "tenant-a" });
+
+const tenantPublished = tenantDocs.view({
+  id: "published-docs",
+  where: { status: "published" },
+});
+```
+
+The same view id can exist in another namespace without sharing members, graph traversal, or hydrated hits.
+
 ## What Runs When
 
 Plain `knowledgeBase()` indexing and retrieval behave as before. Passing a pipeline adds the connected knowledge work you configured.

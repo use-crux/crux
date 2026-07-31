@@ -22,6 +22,7 @@ import { createKnowledgeBaseView } from './knowledge-base-views'
 import { retrievalRecipe, type RetrievalRecipe, type RetrievalRecipeConfig } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
+import { deriveBoundRetrievalRecipeIdentity, knowledgeBaseRecipeSurface } from './recipe/bound-identity'
 import type {
   KnowledgeBaseIndexInput,
   KnowledgeBaseLifecycleState,
@@ -83,8 +84,11 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
 /** Recipe options for {@link KnowledgeBase.recipe}. */
 export type KnowledgeBaseRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]> = Omit<
   RetrievalRecipeConfig<TSteps>,
-  'retriever'
->
+  'id' | 'retriever'
+> & {
+  /** Stable recipe id. Anonymous bound recipes derive one from read surface and behavior. */
+  id?: string
+}
 
 /** Grounding options for {@link KnowledgeBase.grounding}. */
 export type KnowledgeBaseGroundingConfig = Omit<GroundingConfig, 'id' | 'retriever'> & {
@@ -215,16 +219,34 @@ function createKnowledgeBaseHandle<
     ): RetrievalRecipe => {
       const knowledge = runtime.knowledgeBinding()
       if (!recipeConfig) {
+        const steps = [retrieve()] as const
+        const surface = knowledgeBaseRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace })
+        const identity = deriveBoundRetrievalRecipeIdentity({
+          surface,
+          steps,
+        })
         const defaultRecipeConfig = {
-          id: `${config.id}-recipe`,
+          id: identity.id,
+          fingerprint: identity.fingerprint,
           retriever: runtime.retriever(),
-          steps: [retrieve()] as const,
+          steps,
           ...(knowledge ? { knowledge } : {}),
         }
         return retrievalRecipe(defaultRecipeConfig)
       }
+      const identity = recipeConfig.id !== undefined
+        ? { id: recipeConfig.id, fingerprint: undefined }
+        : deriveBoundRetrievalRecipeIdentity({
+            surface: knowledgeBaseRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace }),
+            steps: recipeConfig.steps,
+            ...(recipeConfig.model ? { model: recipeConfig.model } : {}),
+            ...(recipeConfig.concurrency !== undefined ? { concurrency: recipeConfig.concurrency } : {}),
+            ...(recipeConfig.onSourceError !== undefined ? { onSourceError: recipeConfig.onSourceError } : {}),
+          })
       const boundRecipeConfig = {
         ...recipeConfig,
+        id: identity.id,
+        ...(identity.fingerprint ? { fingerprint: identity.fingerprint } : {}),
         retriever: runtime.retriever() as unknown as Retriever,
         ...(knowledge ? { knowledge } : {}),
       }

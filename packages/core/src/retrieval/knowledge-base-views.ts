@@ -12,13 +12,7 @@ import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
 import { loadViewRevision, type ViewRevision } from '../knowledge/view/revision'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
-import type {
-  KnowledgeBaseViewConfig,
-  KnowledgeView,
-  KnowledgeViewRecipeConfig,
-  KnowledgeViewResolution,
-  KnowledgeViewRetrieverConfig,
-} from '../knowledge/view/view'
+import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
 import type { ExactFilter, RecordStore } from '../storage'
 import { createRetrieverEntity } from './entity'
@@ -27,8 +21,8 @@ import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import { retrievalRecipe, type RetrievalRecipe } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
+import { deriveBoundRetrievalRecipeIdentity, viewRecipeSurface } from './recipe/bound-identity'
 import type { Retriever, RetrieverHit, RetrievalToolConfig, RetrieverTools } from './types'
-
 const branchCeiling = 16
 
 interface KnowledgeBaseViewFactoryConfig<
@@ -144,16 +138,35 @@ function createViewHandle<
     ): RetrievalRecipe => {
       const viewRetriever = handle.retriever() as unknown as Retriever
       const knowledge = memberBinding()
+      const surface = viewRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace, viewId: registration.viewId, where: registration.where, ...(config.pinnedRevisionHash ? { revisionHash: config.pinnedRevisionHash } : {}) })
       if (!recipeConfig) {
-        return retrievalRecipe({
-          id: `${config.id}:${registration.viewId}-recipe`,
-          retriever: viewRetriever,
-          steps: [retrieve()] as const,
-          ...(knowledge ? { knowledge } : {}),
+        const steps = [retrieve()] as const
+        const identity = deriveBoundRetrievalRecipeIdentity({
+          surface,
+          steps,
         })
+        const defaultRecipeConfig = {
+          id: identity.id,
+          fingerprint: identity.fingerprint,
+          retriever: viewRetriever,
+          steps,
+          ...(knowledge ? { knowledge } : {}),
+        }
+        return retrievalRecipe(defaultRecipeConfig)
       }
+      const identity = recipeConfig.id !== undefined
+        ? { id: recipeConfig.id, fingerprint: undefined }
+        : deriveBoundRetrievalRecipeIdentity({
+            surface,
+            steps: recipeConfig.steps,
+            ...(recipeConfig.model ? { model: recipeConfig.model } : {}),
+            ...(recipeConfig.concurrency !== undefined ? { concurrency: recipeConfig.concurrency } : {}),
+            ...(recipeConfig.onSourceError !== undefined ? { onSourceError: recipeConfig.onSourceError } : {}),
+          })
       return retrievalRecipe({
         ...recipeConfig,
+        id: identity.id,
+        ...(identity.fingerprint ? { fingerprint: identity.fingerprint } : {}),
         retriever: viewRetriever,
         ...(knowledge ? { knowledge } : {}),
       })
