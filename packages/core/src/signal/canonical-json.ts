@@ -8,7 +8,12 @@
 import type { JsonValue } from "../storage/types";
 import { createRuntimeError } from "../runtime/engine/errors";
 
-/** Clone one Signal value while keeping JSON errors payload-safe. */
+/**
+ * Clone one Signal value while keeping JSON errors payload-safe.
+ *
+ * @remarks Finite numbers retain their exact JavaScript value. Arrays must
+ * contain an own element at every index; holes and inherited indices reject.
+ */
 export function cloneSignalJson<T extends JsonValue>(
   value: T,
   subject: "match" | "normalized output",
@@ -88,7 +93,7 @@ function cloneSignalJsonValue(
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return invalidSignalJson();
-    return Object.is(value, -0) ? 0 : value;
+    return value;
   }
   if (Array.isArray(value)) {
     if (seen.has(value)) return invalidSignalJson();
@@ -96,9 +101,8 @@ function cloneSignalJsonValue(
     const clone: JsonValue[] = [];
     const length = value.length;
     for (let index = 0; index < length; index += 1) {
-      clone.push(
-        index in value ? cloneSignalJsonValue(value[index], seen) : null,
-      );
+      if (!Object.hasOwn(value, index)) return invalidSignalJson();
+      clone.push(cloneSignalJsonValue(value[index], seen));
     }
     seen.delete(value);
     return clone;

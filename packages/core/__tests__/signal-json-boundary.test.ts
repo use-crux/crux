@@ -6,19 +6,47 @@ import { CruxRuntimeError } from "@use-crux/core/runtime";
 afterEach(() => vi.restoreAllMocks());
 
 describe("Signal normalized JSON boundary", () => {
-  it("clones sparse array slots as null", async () => {
-    const sparse = new Array<unknown>(2);
-    sparse[1] = "retained";
+  it.each([
+    ["sparse array holes", sparseArray],
+    ["inherited numeric array properties", arrayWithInheritedIndex],
+  ])("rejects %s before acceptance", async (_label, createOutput) => {
+    let output = createOutput();
     const changed = signal({
       id: "json.sparse-array",
-      schema: outputSchema(sparse),
+      schema: outputSchema(() => output),
     });
-    const delivered = Promise.withResolvers<unknown>();
-    changed.subscribe((occurrence) => delivered.resolve(occurrence.payload));
+    const listener = vi.fn();
+    changed.subscribe(listener);
+    const randomUuid = vi.spyOn(globalThis.crypto, "randomUUID");
+
+    const error = await changed
+      .publish({}, { idempotencyKey: "json-array-retry" })
+      .catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(CruxRuntimeError);
+    expect(error).toMatchObject({ code: "PAYLOAD_NOT_JSON", cause: undefined });
+    expect(randomUuid).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+
+    output = ["accepted"];
+    await expect(
+      changed.publish({}, { idempotencyKey: "json-array-retry" }),
+    ).resolves.toMatchObject({ signalId: "json.sparse-array" });
+    expect(randomUuid).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it("preserves finite negative zero in accepted normalized output", async () => {
+    const changed = signal({
+      id: "json.negative-zero",
+      schema: outputSchema({ value: -0 }),
+    });
+    const delivered = Promise.withResolvers<number>();
+    changed.subscribe((occurrence) => delivered.resolve(occurrence.payload.value));
 
     await changed.publish({});
 
-    await expect(delivered.promise).resolves.toEqual([null, "retained"]);
+    expect(Object.is(await delivered.promise, -0)).toBe(true);
   });
 
   const cyclic: Record<string, unknown> = {};
@@ -59,12 +87,28 @@ describe("Signal normalized JSON boundary", () => {
   });
 });
 
-function outputSchema(output: unknown): SignalSchema {
+function outputSchema(output: unknown | (() => unknown)): SignalSchema {
   return {
     "~standard": {
       version: 1,
       vendor: "json-boundary-test",
-      validate: () => ({ value: output as never }),
+      validate: () => ({
+        value: (typeof output === "function" ? output() : output) as never,
+      }),
     },
   };
+}
+
+function sparseArray(): unknown[] {
+  const output = new Array<unknown>(2);
+  output[1] = "retained";
+  return output;
+}
+
+function arrayWithInheritedIndex(): unknown[] {
+  const output = new Array<unknown>(1);
+  const prototype = Object.create(Array.prototype) as object;
+  Object.defineProperty(prototype, "0", { value: "inherited" });
+  Object.setPrototypeOf(output, prototype);
+  return output;
 }
