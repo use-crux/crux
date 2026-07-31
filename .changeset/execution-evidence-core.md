@@ -45,6 +45,11 @@ decisions author authority evidence with explicit supersession and exact
 attempt/resume provenance. Native producers do not infer verification or
 recovery.
 
+Custom Effects now contribute receipt-safe intent and change evidence
+automatically. Recovery attempts contribute their own receipt evidence and
+link recovery outcomes to the original receipt without exposing execution or
+recovery state.
+
 Project qualified evidence to dedicated closed OpenTelemetry events. Evidence
 relationships, coverage, and coverage conflicts export only approved bounded
 correlation fields; payloads, graph endpoints, producer identity, digests,

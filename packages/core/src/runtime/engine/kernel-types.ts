@@ -8,6 +8,7 @@
  */
 
 import type { JsonValue } from "../../storage";
+import type { EffectScopeRef } from "../../effect/types";
 import type { RuntimeEvent } from "../ports/events";
 import type { Lease } from "../ports/leases";
 import type { FlowSnapshot as RuntimeFlowSnapshot } from "../ports/state";
@@ -158,6 +159,8 @@ export interface RuntimeSuspendRegistration {
 export interface RuntimeSuspensionSnapshotInput {
   /** Original flow input. */
   readonly input: JsonValue;
+  /** In-process Effect boundary retained across flow execution segments. */
+  readonly effects?: EffectScopeRef;
   /** Existing label-keyed step cache. */
   readonly completedSteps: Readonly<Record<string, JsonValue>>;
   /** Serializable observability carrier for the next execution segment. */

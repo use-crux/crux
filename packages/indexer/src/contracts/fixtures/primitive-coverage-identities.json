@@ -1,4 +1,644 @@
 {
+  "identities": [
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "agent",
+      "family": "agent",
+      "fixtureClasses": {
+        "definitions": "first-party-phase6-agent-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase6-agent-native-fixtures.ts",
+        "diagnostics": "first-party-phase6-agent-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase6-agent-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-agent-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-agent-native-fixtures.ts",
+        "sourceRefs": "first-party-phase6-agent-native-fixtures.ts",
+        "sources": "first-party-phase6-agent-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase6-agent-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "blackboard",
+      "family": "blackboard",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-native-fixtures.ts",
+        "sources": "first-party-phase7-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "composition",
+      "family": "composition",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-composition-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-composition-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-composition-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-composition-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-composition-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-composition-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-composition-native-fixtures.ts",
+        "sources": "first-party-phase7-composition-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-composition-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "context",
+      "family": "context",
+      "fixtureClasses": {
+        "definitions": "first-party-phase6-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "diagnostics": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase6-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
+        "sourceRefs": "first-party-phase6-native-fixtures.ts",
+        "sources": "first-party-phase6-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase6-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "defer",
+      "family": "defer",
+      "fixtureClasses": {
+        "definitions": "defer-native-fixtures.test.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "defer-native-fixtures.test.ts",
+        "diagnostics": "defer-native-fixtures.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "defer-native-fixtures.test.ts",
+        "runtimeMetadata": "defer-native-fixtures.test.ts",
+        "sourceGraph": "defer-native-fixtures.test.ts",
+        "sourceRefs": "defer-native-fixtures.test.ts",
+        "sources": "defer-native-fixtures.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "defer-native-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "effect",
+      "family": "effect",
+      "fixtureClasses": {
+        "definitions": "first-party-shared-fixtures.test.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-shared-fixtures.test.ts",
+        "diagnostics": "first-party-shared-fixtures.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-shared-fixtures.test.ts",
+        "runtimeMetadata": "first-party-shared-fixtures.test.ts",
+        "sourceGraph": "first-party-shared-fixtures.test.ts",
+        "sourceRefs": "first-party-shared-fixtures.test.ts",
+        "sources": "first-party-shared-fixtures.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-shared-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "embedding",
+      "family": "embedding",
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "sources": "embedding-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "embedding-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "embedding.call",
+      "family": "embedding.call",
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "sources": "embedding-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "embedding-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "eval",
+      "family": "eval",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "evidence.record",
+      "family": "evidence.record",
+      "fixtureClasses": {
+        "definitions": "evidence-record-native-static.test.ts",
+        "degradedBehavior": "evidence-record-native-static.test.ts",
+        "dependencies": "evidence-record-native-static.test.ts",
+        "diagnostics": "evidence-record-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "evidence-record-native-static.test.ts",
+        "runtimeMetadata": "evidence-record-native-static.test.ts",
+        "sourceGraph": "evidence-record-native-static.test.ts",
+        "sourceRefs": "evidence-record-native-static.test.ts",
+        "sources": "evidence-record-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "evidence-record-native-static.test.ts",
+        "positive": "evidence-record-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "flow",
+      "family": "flow",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-flow-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-flow-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
+        "sources": "first-party-phase7-flow-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-flow-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core-media",
+      "extractor": "ingest.source",
+      "family": "ingest.source",
+      "fixtureClasses": {
+        "definitions": "media-native-static.test.ts",
+        "degradedBehavior": "media-native-static.test.ts",
+        "dependencies": "media-native-static.test.ts",
+        "diagnostics": "media-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "media-native-static.test.ts",
+        "runtimeMetadata": "media-native-static.test.ts",
+        "sourceGraph": "media-native-static.test.ts",
+        "sourceRefs": "media-native-static.test.ts",
+        "sources": "media-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "media-native-static.test.ts",
+        "positive": "media-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "injectable",
+      "family": "injectable",
+      "fixtureClasses": {
+        "definitions": "first-party-phase6-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "diagnostics": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase6-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
+        "sourceRefs": "first-party-phase6-native-fixtures.ts",
+        "sources": "first-party-phase6-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase6-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core-mcp",
+      "extractor": "mcp.server",
+      "family": "mcp.server",
+      "fixtureClasses": {
+        "definitions": "mcp-native-static.test.ts",
+        "degradedBehavior": "mcp-native-static.test.ts",
+        "dependencies": "mcp-native-static.test.ts",
+        "diagnostics": "mcp-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "mcp-native-static.test.ts",
+        "runtimeMetadata": "mcp-native-static.test.ts",
+        "sourceGraph": "mcp-native-static.test.ts",
+        "sourceRefs": "mcp-native-static.test.ts",
+        "sources": "mcp-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "mcp-native-static.test.ts",
+        "positive": "mcp-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core-media",
+      "extractor": "media.operation",
+      "family": "media.operation",
+      "fixtureClasses": {
+        "definitions": "media-native-static.test.ts",
+        "degradedBehavior": "media-native-static.test.ts",
+        "dependencies": "media-native-static.test.ts",
+        "diagnostics": "media-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "media-native-static.test.ts",
+        "runtimeMetadata": "media-native-static.test.ts",
+        "sourceGraph": "media-native-static.test.ts",
+        "sourceRefs": "media-native-static.test.ts",
+        "sources": "media-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "media-native-static.test.ts",
+        "positive": "media-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "memory",
+      "family": "memory",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-native-fixtures.ts",
+        "sources": "first-party-phase7-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "prompt",
+      "family": "prompt",
+      "fixtureClasses": {
+        "definitions": "first-party-phase6-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "diagnostics": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase6-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
+        "sourceRefs": "first-party-phase6-native-fixtures.ts",
+        "sources": "first-party-phase6-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase6-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "rag.indexer",
+      "family": "rag.indexer",
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "sources": "embedding-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "embedding-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "rag.retriever",
+      "family": "rag.retriever",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "registry-skill",
+      "family": "registry-skill",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "routing",
+      "family": "routing",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-native-fixtures.ts",
+        "sources": "first-party-phase7-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "runtime.task",
+      "family": "runtime.task",
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-flow-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase7-flow-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
+        "sources": "first-party-phase7-flow-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase7-flow-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "safety",
+      "family": "safety",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "scorer",
+      "family": "scorer",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "skill-registry",
+      "family": "skill-registry",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "storage",
+      "family": "storage",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "thread",
+      "family": "thread",
+      "fixtureClasses": {
+        "definitions": "thread-native-static.test.ts",
+        "degradedBehavior": "thread-native-static.test.ts",
+        "dependencies": "thread-native-static.test.ts",
+        "diagnostics": "thread-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "thread-native-static.test.ts",
+        "runtimeMetadata": "thread-native-static.test.ts",
+        "sourceGraph": "thread-native-static.test.ts",
+        "sourceRefs": "thread-native-static.test.ts",
+        "sources": "thread-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "thread-native-static.test.ts",
+        "positive": "thread-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "tool",
+      "family": "tool",
+      "fixtureClasses": {
+        "definitions": "first-party-phase6-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "diagnostics": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase6-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
+        "sourceRefs": "first-party-phase6-native-fixtures.ts",
+        "sources": "first-party-phase6-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase6-native-fixtures.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "workspace",
+      "family": "workspace",
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "sources": "first-party-phase5-native-fixtures.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "first-party-native-negative-fixtures.test.ts",
+        "positive": "first-party-phase5-native-fixtures.ts"
+      }
+    }
+  ],
   "requiredFixtureClasses": [
     "definitions",
     "relations",
@@ -10,623 +650,5 @@
     "sourceGraph",
     "runtimeMetadata",
     "degradedBehavior"
-  ],
-  "identities": [
-    {
-      "extension": "@use-crux/indexer/crux-core-mcp",
-      "extractor": "mcp.server",
-      "family": "mcp.server",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "mcp-native-static.test.ts",
-        "relations": "mcp-native-static.test.ts",
-        "sourceRefs": "mcp-native-static.test.ts",
-        "diagnostics": "mcp-native-static.test.ts",
-        "dependencies": "mcp-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "mcp-native-static.test.ts",
-        "sourceGraph": "mcp-native-static.test.ts",
-        "runtimeMetadata": "mcp-native-static.test.ts",
-        "degradedBehavior": "mcp-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "mcp-native-static.test.ts",
-        "negative": "mcp-native-static.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core-media",
-      "extractor": "media.operation",
-      "family": "media.operation",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "media-native-static.test.ts",
-        "relations": "media-native-static.test.ts",
-        "sourceRefs": "media-native-static.test.ts",
-        "diagnostics": "media-native-static.test.ts",
-        "dependencies": "media-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "media-native-static.test.ts",
-        "sourceGraph": "media-native-static.test.ts",
-        "runtimeMetadata": "media-native-static.test.ts",
-        "degradedBehavior": "media-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "media-native-static.test.ts",
-        "negative": "media-native-static.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core-media",
-      "extractor": "ingest.source",
-      "family": "ingest.source",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "media-native-static.test.ts",
-        "relations": "media-native-static.test.ts",
-        "sourceRefs": "media-native-static.test.ts",
-        "diagnostics": "media-native-static.test.ts",
-        "dependencies": "media-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "media-native-static.test.ts",
-        "sourceGraph": "media-native-static.test.ts",
-        "runtimeMetadata": "media-native-static.test.ts",
-        "degradedBehavior": "media-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "media-native-static.test.ts",
-        "negative": "media-native-static.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "rag.retriever",
-      "family": "rag.retriever",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "safety",
-      "family": "safety",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "scorer",
-      "family": "scorer",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "storage",
-      "family": "storage",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "workspace",
-      "family": "workspace",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "eval",
-      "family": "eval",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "skill-registry",
-      "family": "skill-registry",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "registry-skill",
-      "family": "registry-skill",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase5-native-fixtures.ts",
-        "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "first-party-phase5-native-fixtures.ts",
-        "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "dependencies": "first-party-phase5-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase5-native-fixtures.ts",
-        "sourceGraph": "first-party-phase5-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase5-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "tool",
-      "family": "tool",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase6-native-fixtures.ts",
-        "relations": "first-party-phase6-native-fixtures.ts",
-        "sourceRefs": "first-party-phase6-native-fixtures.ts",
-        "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "dependencies": "first-party-phase6-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase6-native-fixtures.ts",
-        "sourceGraph": "first-party-phase6-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase6-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "injectable",
-      "family": "injectable",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase6-native-fixtures.ts",
-        "relations": "first-party-phase6-native-fixtures.ts",
-        "sourceRefs": "first-party-phase6-native-fixtures.ts",
-        "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "dependencies": "first-party-phase6-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase6-native-fixtures.ts",
-        "sourceGraph": "first-party-phase6-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase6-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "context",
-      "family": "context",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase6-native-fixtures.ts",
-        "relations": "first-party-phase6-native-fixtures.ts",
-        "sourceRefs": "first-party-phase6-native-fixtures.ts",
-        "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "dependencies": "first-party-phase6-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase6-native-fixtures.ts",
-        "sourceGraph": "first-party-phase6-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase6-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "prompt",
-      "family": "prompt",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase6-native-fixtures.ts",
-        "relations": "first-party-phase6-native-fixtures.ts",
-        "sourceRefs": "first-party-phase6-native-fixtures.ts",
-        "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "dependencies": "first-party-phase6-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase6-native-fixtures.ts",
-        "sourceGraph": "first-party-phase6-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase6-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "agent",
-      "family": "agent",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase6-agent-native-fixtures.ts",
-        "relations": "first-party-phase6-agent-native-fixtures.ts",
-        "sourceRefs": "first-party-phase6-agent-native-fixtures.ts",
-        "diagnostics": "first-party-phase6-agent-native-fixtures.ts",
-        "dependencies": "first-party-phase6-agent-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase6-agent-native-fixtures.ts",
-        "sourceGraph": "first-party-phase6-agent-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase6-agent-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase6-agent-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "composition",
-      "family": "composition",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-composition-native-fixtures.ts",
-        "relations": "first-party-phase7-composition-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-composition-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-composition-native-fixtures.ts",
-        "dependencies": "first-party-phase7-composition-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-composition-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-composition-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-composition-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-composition-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "memory",
-      "family": "memory",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-native-fixtures.ts",
-        "relations": "first-party-phase7-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "dependencies": "first-party-phase7-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "blackboard",
-      "family": "blackboard",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-native-fixtures.ts",
-        "relations": "first-party-phase7-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "dependencies": "first-party-phase7-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "routing",
-      "family": "routing",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-native-fixtures.ts",
-        "relations": "first-party-phase7-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "dependencies": "first-party-phase7-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "flow",
-      "family": "flow",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-flow-native-fixtures.ts",
-        "relations": "first-party-phase7-flow-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
-        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-flow-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-flow-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "defer",
-      "family": "defer",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "defer-native-fixtures.test.ts",
-        "relations": "defer-native-fixtures.test.ts",
-        "sourceRefs": "defer-native-fixtures.test.ts",
-        "diagnostics": "defer-native-fixtures.test.ts",
-        "dependencies": "defer-native-fixtures.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "defer-native-fixtures.test.ts",
-        "sourceGraph": "defer-native-fixtures.test.ts",
-        "runtimeMetadata": "defer-native-fixtures.test.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "defer-native-fixtures.test.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "runtime.task",
-      "family": "runtime.task",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "first-party-phase7-flow-native-fixtures.ts",
-        "relations": "first-party-phase7-flow-native-fixtures.ts",
-        "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
-        "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
-        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "first-party-phase7-flow-native-fixtures.ts",
-        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
-        "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
-        "degradedBehavior": "static-provided-record-index.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "first-party-phase7-flow-native-fixtures.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "embedding",
-      "family": "embedding",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "embedding-native-static.test.ts",
-        "relations": "embedding-native-static.test.ts",
-        "sourceRefs": "embedding-native-static.test.ts",
-        "diagnostics": "embedding-native-static.test.ts",
-        "dependencies": "embedding-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "embedding-native-static.test.ts",
-        "sourceGraph": "embedding-native-static.test.ts",
-        "runtimeMetadata": "embedding-native-static.test.ts",
-        "degradedBehavior": "embedding-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "embedding-native-static.test.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "embedding.call",
-      "family": "embedding.call",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "embedding-native-static.test.ts",
-        "relations": "embedding-native-static.test.ts",
-        "sourceRefs": "embedding-native-static.test.ts",
-        "diagnostics": "embedding-native-static.test.ts",
-        "dependencies": "embedding-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "embedding-native-static.test.ts",
-        "sourceGraph": "embedding-native-static.test.ts",
-        "runtimeMetadata": "embedding-native-static.test.ts",
-        "degradedBehavior": "embedding-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "embedding-native-static.test.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "evidence.record",
-      "family": "evidence.record",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "evidence-record-native-static.test.ts",
-        "relations": "evidence-record-native-static.test.ts",
-        "sourceRefs": "evidence-record-native-static.test.ts",
-        "diagnostics": "evidence-record-native-static.test.ts",
-        "dependencies": "evidence-record-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "evidence-record-native-static.test.ts",
-        "sourceGraph": "evidence-record-native-static.test.ts",
-        "runtimeMetadata": "evidence-record-native-static.test.ts",
-        "degradedBehavior": "evidence-record-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "evidence-record-native-static.test.ts",
-        "negative": "evidence-record-native-static.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "thread",
-      "family": "thread",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "thread-native-static.test.ts",
-        "relations": "thread-native-static.test.ts",
-        "sourceRefs": "thread-native-static.test.ts",
-        "diagnostics": "thread-native-static.test.ts",
-        "dependencies": "thread-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "thread-native-static.test.ts",
-        "sourceGraph": "thread-native-static.test.ts",
-        "runtimeMetadata": "thread-native-static.test.ts",
-        "degradedBehavior": "thread-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "thread-native-static.test.ts",
-        "negative": "thread-native-static.test.ts"
-      }
-    },
-    {
-      "extension": "@use-crux/indexer/crux-core",
-      "extractor": "rag.indexer",
-      "family": "rag.indexer",
-      "nativeCovered": true,
-      "fixtureClasses": {
-        "definitions": "embedding-native-static.test.ts",
-        "relations": "embedding-native-static.test.ts",
-        "sourceRefs": "embedding-native-static.test.ts",
-        "diagnostics": "embedding-native-static.test.ts",
-        "dependencies": "embedding-native-static.test.ts",
-        "lints": "lint-rule-parity-coverage.json",
-        "sources": "embedding-native-static.test.ts",
-        "sourceGraph": "embedding-native-static.test.ts",
-        "runtimeMetadata": "embedding-native-static.test.ts",
-        "degradedBehavior": "embedding-native-static.test.ts"
-      },
-      "parityFixtures": {
-        "positive": "embedding-native-static.test.ts",
-        "negative": "first-party-native-negative-fixtures.test.ts"
-      }
-    }
   ]
 }

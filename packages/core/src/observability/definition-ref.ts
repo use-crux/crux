@@ -3,8 +3,9 @@
  *
  * Runtime records join back to Project Index definitions through a
  * {@link DefinitionRef}. Every directly-observed `ProjectDefinitionKind` — one
- * whose runtime span is itself the subject — has a canonical id of the uniform
- * shape `<kind>:<safeId(authoredId)>` and exactly one {@link DefinitionRefRole}.
+ * whose runtime span is itself the subject — has exactly one
+ * {@link DefinitionRefRole}. Most use `<kind>:<safeId(authoredId)>`; Effect
+ * definitions use their composite `(id, version)` identity.
  * That kind→role mapping is closed in {@link DIRECTLY_OBSERVED_DEFINITION_REF_ROLES}
  * and enforced against the coverage manifest at compile time, so a new
  * directly-observed kind cannot be added without giving it a role here.
@@ -12,7 +13,7 @@
  * ## What the id must match
  *
  * The id is compared byte-for-byte against the indexer's `ProjectDefinition.ID`
- * (`<kind>:<safe_id(authored)>`), so callers must pass the *authored* identity
+ * so callers must pass the *authored* identity
  * the indexer read — not the model-facing key, the runtime instance id, or a
  * step label. When the authored id is absent, the indexer falls back to the
  * compile-time local/variable name, which the runtime cannot observe; callers
@@ -71,6 +72,7 @@ export const DIRECTLY_OBSERVED_DEFINITION_REF_ROLES: Record<
   agent: "invoked-agent",
   flow: "invoked-flow",
   task: "invoked-task",
+  effect: "invoked-effect",
   thread: "invoked-thread",
   "composition.parallel": "invoked-composition",
   "composition.pipeline": "invoked-composition",
@@ -101,11 +103,9 @@ export const DIRECTLY_OBSERVED_DEFINITION_REF_ROLES: Record<
  * identity the indexer read for `kind`; the role is looked up from
  * {@link DIRECTLY_OBSERVED_DEFINITION_REF_ROLES}.
  */
-export function definitionRef<K extends DirectlyObservedKind>(
-  kind: K,
-  authoredId: string,
-  source?: SanitizedSourceRef,
-): DefinitionRef {
+export function definitionRef<
+  K extends Exclude<DirectlyObservedKind, "effect">,
+>(kind: K, authoredId: string, source?: SanitizedSourceRef): DefinitionRef {
   return {
     id: `${kind}:${safeDefinitionId(authoredId)}`,
     kind,
@@ -312,6 +312,25 @@ export function taskDefinitionRef(
   source?: SanitizedSourceRef,
 ): DefinitionRef {
   return definitionRef("task", name, source);
+}
+
+/**
+ * Build the `invoked-effect` ref for an `effect.run` span. Effect definitions
+ * use the composite `(id, version)` identity, with normalization applied only
+ * to the authored id so the version suffix stays byte-identical to Static
+ * Index output.
+ */
+export function effectDefinitionRef(
+  id: string,
+  version: number,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return {
+    id: `effect:${safeDefinitionId(id)}:v${version}`,
+    kind: "effect",
+    role: DIRECTLY_OBSERVED_DEFINITION_REF_ROLES.effect,
+    ...(source ? { source } : {}),
+  };
 }
 
 /**

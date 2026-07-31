@@ -1,0 +1,272 @@
+---
+title: Effects
+description: In-process custom effects, receipts, recovery, rollback boundaries, and reconciliation.
+---
+
+```ts
+import {
+  effect,
+  recover,
+  rollbackOnError,
+  rollback,
+  reconcileEffect,
+  EffectOutcomeUnknownError,
+  RollbackError,
+} from "@use-crux/core/effect";
+```
+
+Effects make external state changes explicit. Every execution records an
+immutable receipt, recoverable definitions register one recovery unit per
+receipt, and rollback boundaries recover completed units in causal LIFO order.
+
+This surface is in-process. Receipt refs, scope refs, captured state, and
+recovery handlers do not survive a restart.
+
+## `effect()`
+
+Define a typed callable effect.
+
+```ts
+function effect<TOutput, TCaptured, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options: CapturedRecoverableEffectOptions<
+    TInput,
+    TOutput,
+    TCaptured
+  >,
+): RecoverableEffectDefinition<TInput, TOutput>;
+
+function effect<TOutput, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options: RecoverableEffectOptions<TInput, TOutput>,
+): RecoverableEffectDefinition<TInput, TOutput>;
+
+function effect<TOutput, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options?: EffectOptions<TInput>,
+): EffectDefinition<TInput, TOutput>;
+```
+
+Passing a `recover` function or captured-recovery object returns a
+`RecoverableEffectDefinition`. The default `version` is `1`. The tuple
+`(id, version)` must identify one definition object; a conflicting definition
+throws `EFFECT_DUPLICATE_ID`.
+
+| Argument | Description |
+| --- | --- |
+| `id` | Stable dotted domain identifier. |
+| `execute` | External change. Receives typed input plus `idempotencyKey`, `receiptId`, `scope`, and optional cancellation. |
+| `options.version` | Replay and recovery contract version. |
+| `options.resource` | Safe resource identity projected before execution. |
+| `options.recover` | Recovery function, or `{ capture, execute }` for pre-state recovery. |
+
+The returned definition is callable and exposes `id`, `version`, `_tag`, and
+`.run()`. Calling it returns only the executor output. `.run()` returns
+`{ output, receipt }`. Recoverable definitions also expose `.recover()`.
+
+```ts
+const archiveAccount = effect(
+  "account.archive",
+  async (
+    input: { accountId: string },
+    { idempotencyKey },
+  ) => accounts.archive(input.accountId, { idempotencyKey }),
+  {
+    resource: ({ accountId }) => ({
+      type: "account",
+      id: accountId,
+    }),
+    recover: async ({ input, idempotencyKey }) => {
+      await accounts.restore(input.accountId, { idempotencyKey });
+    },
+  },
+);
+
+const execution = await archiveAccount.run({
+  accountId: "acct_123",
+});
+```
+
+Resource projection and capture run before the executor. If either fails, Crux
+does not call the executor.
+
+## `recover()`
+
+Recover the single unit associated with one receipt.
+
+```ts
+function recover(
+  receipt: EffectReceiptRef,
+  options?: RecoverOptions,
+): Promise<RecoveryUnitResult>;
+```
+
+`options` accepts `reason`, `conflict` (`"fail"` by default or `"force"`), and
+an `AbortSignal`. Recovery returns a settlement instead of erasing the original
+receipt. Repeated calls after success return `already_recovered`; ambiguous
+outcomes return `ambiguous` without invoking the handler.
+
+```ts
+const result = await recover(execution.receipt, {
+  reason: "The account owner cancelled",
+});
+```
+
+For a recoverable definition, `archiveAccount.recover(receipt, options)` first
+checks that the receipt belongs to that definition.
+
+## `rollbackOnError()`
+
+Run work inside an automatic rollback boundary.
+
+```ts
+function rollbackOnError<T>(
+  run: (scope: RollbackBoundaryController) => Awaitable<T>,
+  options?: RollbackOnErrorOptions,
+): Promise<T>;
+```
+
+The default `{ recovery: "required" }` rejects an effect without recovery
+before it executes. `{ recovery: "best-effort" }` admits irreversible effects
+and reports them honestly if rollback is later required.
+
+If the callback returns, the function returns that value without recovery. If
+the callback throws and rollback completes, the original error is rethrown. If
+rollback is incomplete, `RollbackError` preserves the callback error as
+`cause`.
+
+The controller exposes:
+
+| Member | Description |
+| --- | --- |
+| `ref` | JSON-safe `EffectScopeRef` for delayed rollback. |
+| `rollback(options?)` | Start manual rollback and return `RollbackResult`. |
+
+```ts
+await rollbackOnError(async (boundary) => {
+  await archiveAccount({ accountId: "acct_123" });
+  return boundary.ref;
+});
+```
+
+## `rollback()`
+
+Recover completed units owned by an existing boundary.
+
+```ts
+function rollback(
+  scope: EffectScopeRef,
+  options?: RollbackOptions,
+): Promise<RollbackResult>;
+```
+
+The result contains the scope, aggregate status, timestamps, and one
+`RecoveryUnitResult` per planned unit. Aggregate status is one of `completed`,
+`partial`, `not_possible`, `failed`, or `cancelled`.
+
+```ts
+const result = await rollback(scope, {
+  reason: "Approval was revoked",
+});
+```
+
+Rollback is sequential and causal. Repeated and concurrent requests join or
+reuse unit settlement so a successful recovery handler runs once.
+
+## Run-like boundaries
+
+Flow runs and pipeline, agent, and composition roots are passive rollback
+boundaries. Their result types expose `effects: EffectScopeRef`, so completed
+units can be recovered later with `rollback(result.effects)`. A run failure,
+suspension, cancellation, or expiration never starts recovery automatically.
+
+Inside a flow handler, `flow.effects` exposes the same reference and
+`flow.rollback(options?)` starts explicit rollback immediately. Starting it
+makes the boundary terminal, so later Effects reject with
+`EFFECT_SCOPE_TERMINAL`.
+
+Run-like refs are resolvable only while the current process retains the receipt
+ledger and recovery handlers. Runtime-backed delayed recovery is not part of
+this in-process surface.
+
+## `reconcileEffect()`
+
+Settle an effect execution or recovery attempt whose external outcome is
+unknown.
+
+```ts
+function reconcileEffect(
+  receipt: EffectReceiptRef,
+  resolution: EffectReconciliation,
+): Promise<EffectReceipt>;
+```
+
+A resolution is either:
+
+```ts
+{ outcome: "succeeded", output: JsonValue, reason: string }
+{ outcome: "failed", reason: string }
+```
+
+`reason` is retained for audit. Reconciliation rejects settled, missing, or
+mismatched receipt identities rather than rewriting them. Confirming a
+successful execution activates its prepared recovery unit; confirming failure
+removes it.
+
+## `EffectOutcomeUnknownError`
+
+Classify an external operation whose outcome cannot be determined safely.
+
+```ts
+new EffectOutcomeUnknownError(
+  message: string,
+  details?: Readonly<Record<string, unknown>>,
+  options?: { cause?: unknown },
+);
+```
+
+Throw this only when retrying could duplicate an external change. Crux records
+`EFFECT_OUTCOME_AMBIGUOUS`, leaves the details on the thrown error, and requires
+`reconcileEffect()` before recovery can proceed.
+
+## `RollbackError`
+
+Signals that a required rollback did not complete.
+
+```ts
+class RollbackError extends CruxEffectError {
+  readonly result?: RollbackResult;
+  readonly recoveryError?: unknown;
+}
+```
+
+`result` contains honest unit settlements when planning completed.
+`recoveryError` retains a recovery-system failure that occurred before or
+during settlement, and `cause` retains the original callback error when one
+exists.
+
+```ts
+try {
+  await rollbackOnError(run);
+} catch (error) {
+  if (error instanceof RollbackError) {
+    console.error(error.result?.status);
+  }
+}
+```
+
+## Errors and supporting exports
+
+`CruxEffectError` is the common structured error with `code`, `docsUrl`, and
+`cause`. `EFFECT_ERROR_CODES` is the stable code catalog. Public contract types
+such as `EffectReceiptRef`, `EffectScopeRef`, `EffectResource`,
+`RecoveryUnitResult`, and `RollbackResult` are exported from the same subpath.
+
+Learn the workflows in the [Effects overview](/docs/guides/effects),
+[recovery patterns](/docs/guides/effects/recovery-patterns),
+[rollback boundaries](/docs/guides/effects/rollback-boundaries), and
+[ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation).
+See [Effects error codes](/docs/errors#effects-codes) for diagnosis and fixes.

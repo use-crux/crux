@@ -74,7 +74,7 @@ fn builtin_index_lint_findings(
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
     use crate::filter::StaticIndexLintOptions;
@@ -139,5 +139,75 @@ mod tests {
         assert!(rule_ids.contains(&"defer.floating_named_promise"));
         assert!(!rule_ids.contains(&"defer.missing_scope"));
         assert!(rule_ids.contains(&"runtime.missing_runtime_config"));
+    }
+
+    #[test]
+    fn effect_duplicate_identity_requires_distinct_definition_source_evidence() {
+        let effect = |version: f64, source_refs: Value| {
+            serde_json::from_value::<StaticIndexPatchFacts>(json!({
+                "definitions": [{
+                    "id": "effect:payments.charge:v2",
+                    "kind": "effect",
+                    "name": "payments.charge",
+                    "fidelity": "resolved",
+                    "metadata": {
+                        "facts": {
+                            "kind": "effect",
+                            "effectId": "payments.charge",
+                            "version": version,
+                            "recoverable": true,
+                            "capture": false,
+                            "resource": true
+                        }
+                    },
+                    "sourceRefs": source_refs
+                }]
+            }))
+            .expect("effect fixture facts decode")
+        };
+        let source_ref = |id: &str, line: usize| {
+            json!({
+                "id": id,
+                "role": "execute",
+                "property": "executor",
+                "symbol": "execute",
+                "source": { "file": "src/effects.ts", "line": line },
+                "fidelity": "resolved"
+            })
+        };
+
+        let mut duplicate = effect(
+            1.5,
+            json!([
+                source_ref("effect:payments.charge:v2:execute:1", 3),
+                source_ref("effect:payments.charge:v2:execute:2", 8)
+            ]),
+        );
+        append_builtin_lint_findings(&mut duplicate, &StaticIndexLintOptions::default());
+        let finding = duplicate
+            .lint_findings
+            .iter()
+            .find(|finding| finding.rule_id == "effect.duplicate_identity")
+            .expect("duplicate Effect identity finding");
+        assert_eq!(
+            finding
+                .extra
+                .get("evidence")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(2)
+        );
+
+        let mut reexport = effect(
+            1.5,
+            json!([source_ref("effect:payments.charge:v2:execute:1", 3)]),
+        );
+        append_builtin_lint_findings(&mut reexport, &StaticIndexLintOptions::default());
+        assert!(
+            reexport
+                .lint_findings
+                .iter()
+                .all(|finding| finding.rule_id != "effect.duplicate_identity")
+        );
     }
 }

@@ -188,6 +188,7 @@ export const ARTIFACT_CAPTURE_DECISIONS = {
   'security.report': 'exempt',
   'media.report': 'exempt',
   'constraint.report': 'safety',
+  'effect.receipt': 'exempt',
 } as const satisfies Record<CruxCanonicalArtifactKind, CruxObservabilityArtifactCaptureDecision>
 
 export function isCanonicalArtifactKind(kind: CruxArtifactKind): kind is CruxCanonicalArtifactKind {

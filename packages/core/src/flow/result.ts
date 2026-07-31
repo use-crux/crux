@@ -9,6 +9,7 @@
  */
 
 import type { OperationResultMeta } from "../observability";
+import type { EffectScopeRef } from "../effect";
 import { withOperationResultMeta } from "../observability/internal/result-meta";
 import type { FlowResult, FlowResultPayload } from "./types";
 
@@ -31,32 +32,36 @@ export function flowResultOperation(
 export function completedFlowResultPayload<T>(
   output: T,
   flowId: string,
+  effects: EffectScopeRef,
 ): FlowResultPayload<T> {
-  return { status: "completed", output, flowId };
+  return { status: "completed", output, flowId, effects };
 }
 
 /** Construct an unobserved suspended flow payload. */
 export function suspendedFlowResultPayload<T>(
   flowId: string,
   suspendedAt: string,
+  effects: EffectScopeRef,
 ): FlowResultPayload<T> {
-  return { status: "suspended", flowId, suspendedAt };
+  return { status: "suspended", flowId, suspendedAt, effects };
 }
 
 /** Construct an unobserved cancelled flow payload. */
 export function cancelledFlowResultPayload<T>(
   flowId: string,
+  effects: EffectScopeRef,
   cancelReason?: string,
 ): FlowResultPayload<T> {
-  return { status: "cancelled", flowId, cancelReason };
+  return { status: "cancelled", flowId, cancelReason, effects };
 }
 
 /** Construct an unobserved expired flow payload. */
 export function expiredFlowResultPayload<T>(
   flowId: string,
   suspendedAt: string,
+  effects: EffectScopeRef,
 ): FlowResultPayload<T> {
-  return { status: "expired", flowId, suspendedAt };
+  return { status: "expired", flowId, suspendedAt, effects };
 }
 
 /**

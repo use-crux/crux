@@ -28,6 +28,7 @@ import {
 } from "./typescript-matches";
 import { staticCalleeRecordFromExpression } from "./typescript-callee";
 import { typeScriptDeferNativeFacts } from "./defer-native-facts";
+import { typeScriptEffectNativeFacts } from "./effect-native-facts";
 
 const DEFAULT_CONSTRUCTOR_NAMES = ["Agent"] as const;
 
@@ -97,12 +98,15 @@ function parseTypeScriptSyntaxFile(
     interfaceHash: sourceInterfaceHashFromSourceFile(sourceFile),
     imports,
     matches,
-    nativeFacts: typeScriptDeferNativeFacts(
-      input.file,
-      relativePath,
-      input.source,
-      matches,
-    ),
+    nativeFacts: [
+      ...typeScriptDeferNativeFacts(
+        input.file,
+        relativePath,
+        input.source,
+        matches,
+      ),
+      ...typeScriptEffectNativeFacts(relativePath, matches),
+    ],
     localInitializers,
     diagnostics: (sourceFile.parseDiagnostics ?? []).map(
       (diagnostic, index) => ({

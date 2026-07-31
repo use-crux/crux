@@ -14,6 +14,7 @@ import {
   fmtDuration,
   fmtTokens,
 } from "./span-detail-inspection";
+import { effectRollup } from "./span-detail-effect";
 
 export type RunArchetype = "eval" | "indexing" | "swarm" | "flow" | "generic";
 
@@ -132,6 +133,18 @@ export function archetypeStrip(
   m: RunMetrics,
   root: ObservabilityRunDetailNode | undefined,
 ): StatItem[] {
+  const effects = effectRollup(root);
+  const withEffects = (items: StatItem[]): StatItem[] =>
+    effects.effects > 0
+      ? [
+          ...items,
+          {
+            label: "effects",
+            value: effects.label,
+            tone: effects.ambiguous > 0 ? "warn" : "plum",
+          },
+        ]
+      : items;
   const durItem: StatItem = {
     label: m.running ? "elapsed" : "dur",
     value: fmtDuration(m.durationMs),
@@ -146,7 +159,7 @@ export function archetypeStrip(
       const pct = cases.length
         ? Math.round((passed / cases.length) * 100)
         : undefined;
-      return [
+      return withEffects([
         { label: "cases", value: String(cases.length) },
         ...(pct != null
           ? [
@@ -158,7 +171,7 @@ export function archetypeStrip(
             ]
           : []),
         cost,
-      ];
+      ]);
     }
     case "indexing": {
       const t = indexingTotals(root);
@@ -168,7 +181,7 @@ export function archetypeStrip(
       if (t.chunks != null)
         items.push({ label: "chunks", value: fmtTokens(t.chunks) });
       items.push(durItem, cost);
-      return items;
+      return withEffects(items);
     }
     case "swarm": {
       const raw = findArtifact(root, "composition.report")?.preview as
@@ -182,7 +195,7 @@ export function archetypeStrip(
         (Array.isArray(raw?.handoffPath)
           ? Math.max(0, raw!.handoffPath.length - 1)
           : undefined);
-      return [
+      return withEffects([
         ...(agents != null
           ? [{ label: "agents", value: String(agents) } as StatItem]
           : []),
@@ -192,11 +205,15 @@ export function archetypeStrip(
         durItem,
         tokens,
         cost,
-      ];
+      ]);
     }
     case "flow": {
       const steps = (root?.children ?? []).length;
-      return [{ label: "steps", value: String(steps) }, durItem, cost];
+      return withEffects([
+        { label: "steps", value: String(steps) },
+        durItem,
+        cost,
+      ]);
     }
     default: {
       const items: StatItem[] = [durItem, tokens, cost];
@@ -208,7 +225,7 @@ export function archetypeStrip(
         });
       if (m.spanCount != null)
         items.push({ label: "spans", value: String(m.spanCount) });
-      return items;
+      return withEffects(items);
     }
   }
 }

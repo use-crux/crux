@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from '../../storage'
+import type { EffectScopeRef } from '../../effect/types'
 import type { WorkItem } from '../engine/work'
 import type {
   EventCursor,
@@ -26,6 +27,8 @@ import type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 export interface FlowSnapshot {
   /** Durable flow instance id. */
   readonly flowId: FlowId
+  /** In-process Effect boundary retained across flow execution segments. */
+  readonly effects?: EffectScopeRef
   /** Owning runtime work item for this flow occurrence. */
   readonly workId: WorkId
   /** Name-based target id for the flow definition. */

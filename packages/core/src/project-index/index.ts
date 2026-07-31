@@ -15,6 +15,7 @@ import type {
   RagIndexerFacts,
 } from "./embedding-facts";
 import type { EvalFacts } from "./eval-facts";
+import type { EffectFacts } from "./effect-facts";
 import type { EvidenceRecordFacts } from "./evidence-record-facts";
 import {
   PromptTextDiagnosticEvidenceSchema,
@@ -47,6 +48,7 @@ export type {
   RagIndexerFacts,
 } from "./embedding-facts";
 export * from "./eval-facts";
+export * from "./effect-facts";
 export * from "./evidence-record-facts";
 export * from "./definition-kind-coverage";
 export * from "./diagnostic-evidence";
@@ -494,6 +496,7 @@ export type ProjectDefinitionKind =
   | "flow"
   | "flow.step"
   | "task"
+  | "effect"
   | "thread"
   | "deferred-work"
   | "composition.parallel"
@@ -1046,6 +1049,7 @@ export type PrimitiveSpecificFacts =
   | StorageFacts
   | SafetyFacts
   | ScorerFacts
+  | EffectFacts
   | EvalFacts
   | MediaOperationFacts
   | IngestSourceFacts;
@@ -1071,8 +1075,8 @@ export interface ProjectIdentity {
    */
   observability?: {
     /** True when at least one observability redaction pattern is configured. */
-    readonly redactPatternsConfigured: boolean
-  }
+    readonly redactPatternsConfigured: boolean;
+  };
 }
 
 export interface ProjectDefinition {
@@ -1285,6 +1289,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "flow",
   "flow.step",
   "task",
+  "effect",
   "thread",
   "deferred-work",
   "composition.parallel",
