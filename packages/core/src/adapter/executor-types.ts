@@ -56,6 +56,16 @@ export interface ExecutorRequestStepInput<TModel> {
   readonly systemBlocks: readonly SystemBlock[] | undefined;
   /** Canonical transcript the SDK is about to send. */
   readonly messages: readonly Message[];
+  /** Outcome from the immediately preceding semantic provider call. */
+  readonly previousCall?: {
+    /** Provider-reported usage, absent when unknown. */
+    readonly usage?: {
+      /** Provider-reported input tokens. */
+      readonly inputTokens?: number;
+      /** Provider-reported output tokens. */
+      readonly outputTokens?: number;
+    };
+  };
 }
 
 /**

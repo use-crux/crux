@@ -5,10 +5,7 @@ import type {
   RequestReceipt,
   SystemMessagePrefixPatch,
 } from "@use-crux/core/adapter";
-import {
-  systemMessagePrefixPatch,
-  toJsonValue,
-} from "@use-crux/core/adapter";
+import { systemMessagePrefixPatch, toJsonValue } from "@use-crux/core/adapter";
 import type { SdkGateway } from "../gateway";
 import type { SdkUsageLike } from "../meta";
 import { extractCost, normalizeUsage } from "../meta";
@@ -21,7 +18,11 @@ import {
 import { buildSystemArg, extractModelInfo } from "../provider-profile";
 import { extractResponse } from "../result-shape";
 import { mapAiSdkFinishReason } from "../normalized-outcome";
-import { canonicalBase, buildBaseArgs } from "./request-args";
+import {
+  canonicalBase,
+  buildBaseArgs,
+  syncToolArgs,
+} from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
 import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
 import { createStepTransformModelWrapper } from "./step-transform";
@@ -168,8 +169,7 @@ export function createLoopCallPlan(
             : {}),
           ...(directive[systemMessagePrefixPatch] !== undefined
             ? {
-                [systemMessagePrefixPatch]:
-                  directive[systemMessagePrefixPatch],
+                [systemMessagePrefixPatch]: directive[systemMessagePrefixPatch],
               }
             : {}),
         };
@@ -179,9 +179,11 @@ export function createLoopCallPlan(
   args.prepareStep = async ({
     model,
     messages,
+    steps,
   }: {
     model: Parameters<NonNullable<typeof wrapStepModel>>[0];
     messages: Array<{ role: string; content: unknown }>;
+    steps?: SdkStepResultLike[];
   }) => {
     const prefixPatch = overrides?.[systemMessagePrefixPatch];
     const patchedMessages = prefixPatch
@@ -205,28 +207,30 @@ export function createLoopCallPlan(
         ...(overrides?.activeTools !== undefined
           ? { activeTools: [...overrides.activeTools] }
           : {}),
-        ...(patchedMessages !== undefined
-          ? { messages: patchedMessages }
-          : {}),
+        ...(patchedMessages !== undefined ? { messages: patchedMessages } : {}),
       };
     }
     const stepMessages = patchedMessages ?? messages;
-      const normalizedMessages = normalizeAiSdkMessages(
-        stepMessages as Array<{
-          role: string;
-          content: unknown;
-        }>,
-      );
-      const planned = await planStep({
-          model: stepModel,
-          modelInfo: extractModelInfo(stepModel),
-          system: planningSystem,
-          systemBlocks: planningSystemBlocks,
-          messages: normalizedMessages,
-        });
+    const normalizedMessages = normalizeAiSdkMessages(
+      stepMessages as Array<{
+        role: string;
+        content: unknown;
+      }>,
+    );
+    const previousUsage = normalizeUsage(steps?.at(-1)?.usage);
+    const planned = await planStep({
+      model: stepModel,
+      modelInfo: extractModelInfo(stepModel),
+      system: planningSystem,
+      systemBlocks: planningSystemBlocks,
+      messages: normalizedMessages,
+      ...(steps?.length
+        ? { previousCall: previousUsage ? { usage: previousUsage } : {} }
+        : {}),
+    });
+    syncToolArgs(args, request);
     requestReceipts.push(planned.receipt);
-    const activeTools =
-      planned.activeTools ?? overrides?.activeTools;
+    const activeTools = planned.activeTools ?? overrides?.activeTools;
     return {
       model: planned.model,
       system: buildSystemArg(
@@ -234,18 +238,16 @@ export function createLoopCallPlan(
         planned.system,
         planned.modelInfo,
       ),
-      ...(activeTools !== undefined
-        ? { activeTools: [...activeTools] }
-        : {}),
-        messages: lowerSealedAiSdkMessages(
-          stepMessages as Array<{ role: string; content: unknown }>,
-          normalizedMessages,
-          planned.messages,
-          {
-            provider: planned.modelInfo.provider || "ai-sdk",
-            diagnostics: request.diagnostics,
-          },
-        ),
+      ...(activeTools !== undefined ? { activeTools: [...activeTools] } : {}),
+      messages: lowerSealedAiSdkMessages(
+        stepMessages as Array<{ role: string; content: unknown }>,
+        normalizedMessages,
+        planned.messages,
+        {
+          provider: planned.modelInfo.provider || "ai-sdk",
+          diagnostics: request.diagnostics,
+        },
+      ),
     };
   };
 

@@ -12,6 +12,14 @@ import {
   nativeEvidenceArtifactRef,
   recordNativeEvidence,
 } from '../evidence/internal'
+import {
+  CONTROL_RESOURCE_BINDER,
+  CONTROL_RESOURCE_RUNTIME,
+  CONTROL_RESOURCE_TYPE,
+  type ControlReadable,
+  type ControlResourceRuntime,
+} from '../request/prepare/resources'
+import { readPinnedPreparationResource } from '../request/prepare/pin-context'
 
 /**
  * Structured `invoked-memory` ref for a memory span, or `{}` when the memory is
@@ -872,11 +880,26 @@ export function memory(config: MemoryConfig): Memory {
     createContext: (options) => createContext(options.input, options),
   })
 
-  const api: Memory = {
+  const api: Memory & {
+    readonly [CONTROL_RESOURCE_BINDER]: (
+      resource: object & {
+        readonly [CONTROL_RESOURCE_RUNTIME]?: ControlResourceRuntime<unknown>
+      },
+      input: Readonly<Record<string, unknown>>,
+      promptId?: string,
+    ) => Promise<unknown | null>
+  } = {
     _tag: 'Memory',
     id: config.id,
     blocks: Object.freeze([...config.blocks]),
     config,
+    async [CONTROL_RESOURCE_BINDER](resource, input, promptId) {
+      const runtime = resource[CONTROL_RESOURCE_RUNTIME]
+      if (!runtime || !config.blocks.includes(resource as MemoryBlock)) {
+        throw new Error('Control resource is not declared by this Memory.')
+      }
+      return runtime.read(await createContext({ ...input }, { promptId }))
+    },
     asContext(options) {
       return contextWithFullPromptInput({
         id: `memory:${config.id}`,
@@ -1073,12 +1096,19 @@ export function workingState<T extends z.ZodType>(config: {
   set(value: z.infer<T>, options: MemoryRuntimeOptions): Promise<void>
   patch(value: Partial<z.infer<T>>, options: MemoryRuntimeOptions): Promise<void>
   clear(options: MemoryRuntimeOptions): Promise<void>
-} {
+} & ControlReadable<z.infer<T>> {
   function key(options: MemoryRuntimeOptions) {
     return `${blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id)}state`
   }
 
   async function get(options: MemoryRuntimeOptions): Promise<z.infer<T> | null> {
+    const pinned = readPinnedPreparationResource(
+      (options as MemoryRuntimeOptions & {
+        readonly input?: Record<string, unknown>
+      }).input,
+      block as MemoryBlock & ControlReadable<z.infer<T>>,
+    )
+    if (pinned) return pinned
     const startedAt = now()
     const value = await options.records.get(key(options))
     const state = value ? (value.state as z.infer<T>) : null
@@ -1130,7 +1160,17 @@ export function workingState<T extends z.ZodType>(config: {
     },
   })
 
-  return Object.assign(block, { get, set, patch, clear })
+  return Object.assign(block, {
+    get,
+    set,
+    patch,
+    clear,
+    [CONTROL_RESOURCE_TYPE]: (value: z.infer<T>) => value,
+    [CONTROL_RESOURCE_RUNTIME]: {
+      kind: 'working-state' as const,
+      read: (options: unknown) => get(options as MemoryRuntimeOptions),
+    },
+  })
 }
 
 export function episodes(config: {

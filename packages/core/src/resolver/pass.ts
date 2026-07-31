@@ -116,6 +116,10 @@ export async function runPromptPass(
 ): Promise<PromptResolutionPass> {
   let input = opts.input ?? {};
   const resolverPrivateInput = collectResolverPrivateInput(input);
+  if (Object.keys(resolverPrivateInput).length > 0) {
+    input = { ...input };
+    for (const key of Object.keys(resolverPrivateInput)) delete input[key];
+  }
 
   if (mergedSchema) {
     const parseResult = safeParseSchema(mergedSchema, input);

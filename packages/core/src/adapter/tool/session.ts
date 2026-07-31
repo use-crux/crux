@@ -581,6 +581,8 @@ export function createToolLifecycle(
   // ── Preparation: merge precedence + middleware chain order ──────
   let wrappedTools: Record<string, unknown> = {};
   let armedTools: Record<string, unknown> | undefined;
+  const armedToolWireSchemas: Record<string, JsonSchemaObject> | undefined =
+    options.regime === "sdk" ? {} : undefined;
   let descriptors: ToolDescriptor[] | undefined;
   let exposedDescriptors: readonly ToolDescriptor[] = [];
   let armedDescriptors: readonly ToolDescriptor[] = [];
@@ -750,6 +752,19 @@ export function createToolLifecycle(
     );
     for (const name of [...toolInputPlans.keys()]) {
       if (!retained.has(name)) toolInputPlans.delete(name);
+    }
+    if (armedToolWireSchemas) {
+      for (const name of Object.keys(armedToolWireSchemas)) {
+        delete armedToolWireSchemas[name];
+      }
+      const exposedByName = new Map(
+        armedDescriptors.map((descriptor) => [descriptor.name, descriptor]),
+      );
+      for (const [name, plan] of toolInputPlans) {
+        if (!plan.hasAuthoredSchema) continue;
+        const descriptor = exposedByName.get(name);
+        if (descriptor) armedToolWireSchemas[name] = descriptor.parameters;
+      }
     }
     enabled = retained.size > 0;
 
@@ -1711,17 +1726,7 @@ export function createToolLifecycle(
       // authored validator, non-Zod tools so an AI SDK `jsonSchema(...)` wrapper
       // is unwrapped and a raw JSON Schema is installed correctly. Tools with no
       // schema are left untouched. Undefined when no such tool exists.
-      let result: Record<string, JsonSchemaObject> | undefined;
-      const exposedByName = new Map(
-        armedDescriptors.map((descriptor) => [descriptor.name, descriptor]),
-      );
-      for (const [name, plan] of toolInputPlans) {
-        if (!plan.hasAuthoredSchema) continue;
-        const descriptor = exposedByName.get(name);
-        if (!descriptor) continue;
-        (result ??= {})[name] = descriptor.parameters;
-      }
-      return result;
+      return armedToolWireSchemas;
     },
 
     get descriptors() {

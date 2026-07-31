@@ -8,6 +8,10 @@ import type { ModelCountingConfidence } from "../capacity/model-profile";
 import type { RequestTokenBreakdown } from "../measure/breakdown";
 import type { RequestAdaptation, RequestWarning } from "./adaptations";
 import { supportRequestReceipt } from "./support";
+import {
+  preparationDecision,
+  type PreparationDecisionInspection,
+} from "../prepare/journal";
 
 let fallbackRequestId = 0;
 const retryCounts = new WeakMap<RequestReceipt, { value: number }>();
@@ -42,6 +46,8 @@ export interface RequestInspection {
   readonly retryCount: number;
   /** Receipted support calls linked from selected adaptations. */
   readonly supportRequests: readonly RequestSupportReceipt[];
+  /** Accepted content-free preparation decision for this provider call. */
+  readonly preparation?: PreparationDecisionInspection;
   /** Evidence-retention limitation until durable inspection is wired. */
   readonly retention: "requires observability retention";
 }
@@ -114,8 +120,9 @@ export function createRequestReceipt(
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),
-    inspect: async () =>
-      Object.freeze({
+    inspect: async () => {
+      const preparation = preparationDecision(receipt);
+      return Object.freeze({
         id,
         breakdown: input.breakdown,
         measurement: input.measurement,
@@ -123,8 +130,10 @@ export function createRequestReceipt(
         providerOverheadTokens: input.providerOverheadTokens,
         retryCount: retryCount.value,
         supportRequests: linkedSupportRequests(adaptations),
+        ...(preparation ? { preparation } : {}),
         retention: "requires observability retention" as const,
-      }),
+      });
+    },
   };
   Object.defineProperty(receipt, "inspect", {
     enumerable: false,

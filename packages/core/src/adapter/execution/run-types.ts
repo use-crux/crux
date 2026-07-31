@@ -33,6 +33,7 @@ import type { FinalStepInfo } from "../result-accumulator";
 import type { CallHandle } from "../call-handle";
 import type { CruxRunId } from "../../observability";
 import type { InputBudget } from "../../request/budget/input-budget";
+import type { PrepareStep } from "../../request/prepare/step";
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
@@ -68,6 +69,9 @@ export interface AdapterExecutionGenerateArgs<
 
   /** Whole-request input pressure settings applied to each provider call. */
   readonly inputBudget?: InputBudget;
+
+  /** Callback evaluated before each semantic provider-call plan is sealed. */
+  readonly prepareStep?: PrepareStep<TModel>;
 
   /** Maximum loop iterations before generation stops. Defaults to 10. */
   readonly maxSteps?: number;

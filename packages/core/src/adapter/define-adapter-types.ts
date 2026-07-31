@@ -31,6 +31,7 @@ import type { DeepPartial } from "./logical-stream";
 import type { CallHandle } from "./call-handle";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type { InputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
 export interface AdapterTransportInfo {
@@ -69,6 +70,8 @@ export interface AdapterGenerateBaseOptions<
    * contributors to satisfy either value.
    */
   inputBudget?: InputBudget;
+  /** Boundary-local callback evaluated before every semantic provider call. */
+  prepareStep?: PrepareStep<string>;
   /** Maximum tool loop iterations. Default: 10. */
   maxSteps?: number;
   /** Additional generation settings at call-site (highest precedence). */

@@ -28,6 +28,7 @@ import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
 import type { GenerateResult } from "./result-accumulator";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type { InputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 /**
  * Model argument accepted by a loop-owning executor.
@@ -70,6 +71,8 @@ export interface ExecutorGenerateBaseOptions<
   /** Token budget for the system message. */
   /** Whole-request input pressure settings for each provider call. */
   inputBudget?: InputBudget;
+  /** Boundary-local callback evaluated before every semantic provider call. */
+  prepareStep?: PrepareStep<TModel>;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
   /**

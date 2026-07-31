@@ -99,6 +99,23 @@ import {
   recordRequestRetryCount,
   type RequestReceipt,
 } from "../../request/receipt/receipt";
+import {
+  createPrepareStepState,
+  recordPrepareStepOutcome,
+  runPrepareStep,
+} from "../../request/prepare/step";
+import {
+  resolveExecutionAmendment,
+  type ResolvedExecutionAmendment,
+} from "../../request/prepare/amendment";
+import {
+  createPreparationResources,
+  preparationResourceReads,
+  type PreparationResources,
+} from "../../request/prepare/resources";
+import type { ExecutionAmendment } from "../../request/prepare/amendment";
+import { commitPreparationDecision } from "../../request/prepare/journal";
+import type { StepReason } from "../../request/prepare/step-context";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -132,6 +149,7 @@ export async function generateCore<
     modelId: modelInfo.modelId,
     settings: args.settings,
   });
+  let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
 
@@ -170,6 +188,7 @@ export async function generateCore<
   let providerResponseOrdinal = 0;
   const stepFacts: ResultStepFacts[] = [];
   let lastRequestReceipt: RequestReceipt | undefined;
+  const prepareStepState = createPrepareStepState();
   const representationEpoch = createRequestRepresentationEpoch();
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
@@ -231,10 +250,7 @@ export async function generateCore<
     );
     return normalized;
   };
-  selectRepresentationCapabilities(
-    safety,
-    resolved.representations ?? [],
-  );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
   selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
@@ -288,8 +304,12 @@ export async function generateCore<
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       reresolve: async (skillSession) => {
+        boundaryResolveOpts = withSkillActivationInput(
+          resolveOpts,
+          skillSession,
+        );
         resolved = await prompt.resolve(
-          withSkillActivationInput(resolveOpts, skillSession),
+          boundaryResolveOpts,
         );
         selectRepresentationSkills(
           resolved,
@@ -346,13 +366,14 @@ export async function generateCore<
 
   const sealProviderRequest = async (
     request: CallArgs<TExtra>,
+    boundary: PreparedCoreBoundary,
   ): Promise<SealedRequestPlan<TExtra>> => {
     const sealed = await sealRequest({
       provider: modelInfo.provider,
-      model: modelInfo.modelId,
+      model: boundary.model,
       request,
-      settings: resolved.settings,
-      inputBudget: args.inputBudget,
+      settings: boundary.resolved.settings,
+      inputBudget: boundary.inputBudget,
       capacity: dialect.capacity,
       countTokens: dialect.countTokens
         ? (candidate) => dialect.countTokens!(dialect.client, candidate)
@@ -361,22 +382,22 @@ export async function generateCore<
       previousRequestId: lastRequestReceipt?.id,
       history: initialMessages.history,
       generateHistorySummary,
-      representations: resolved.representations,
+      representations: boundary.resolved.representations,
       representationEpoch,
       prepareRequest: (candidate, selections) => {
         selectRepresentationCapabilities(
           safety,
-          resolved.representations ?? [],
+          boundary.resolved.representations ?? [],
           selections,
         );
         selectRepresentationSkills(
-          resolved,
-          resolved.representations ?? [],
+          boundary.resolved,
+          boundary.resolved.representations ?? [],
           selections,
         );
         selectRepresentationMiddleware(
-          resolved,
-          resolved.representations ?? [],
+          boundary.resolved,
+          boundary.resolved.representations ?? [],
           selections,
         );
         return guardRepresentedRequest(safety, candidate);
@@ -385,24 +406,83 @@ export async function generateCore<
         representationSelections = selections;
         selectRepresentationCapabilities(
           safety,
-          resolved.representations ?? [],
+          boundary.resolved.representations ?? [],
           selections,
         );
         selectRepresentationSkills(
-          resolved,
-          resolved.representations ?? [],
+          boundary.resolved,
+          boundary.resolved.representations ?? [],
           selections,
         );
         selectRepresentationMiddleware(
-          resolved,
-          resolved.representations ?? [],
+          boundary.resolved,
+          boundary.resolved.representations ?? [],
           selections,
         );
-        await lifecycle.rearm(resolved);
+        await lifecycle.rearm(boundary.resolved);
       },
     });
+    if (boundary.decision) {
+      commitPreparationDecision({
+        receipt: sealed.receipt,
+        requestId: sealed.receipt.id,
+        stepIndex: boundary.decision.stepIndex,
+        reason: boundary.decision.reason,
+        amendment: boundary.decision.amendment,
+        resources: preparationResourceReads(boundary.decision.resources),
+      });
+    }
     lastRequestReceipt = sealed.receipt;
     return sealed;
+  };
+
+  const prepareBoundary = async (
+    boundaryMessages: readonly Message[],
+    reason: "initial" | "tool-result" | "validation-retry",
+  ): Promise<PreparedCoreBoundary> => {
+    if (!args.prepareStep) {
+      return Object.freeze({
+        resolved,
+        model: modelInfo.modelId,
+        inputBudget: args.inputBudget,
+        activeTools: args.activeTools,
+      });
+    }
+    const resources = createPreparationResources({
+      entries: prompt.contexts,
+      requestInput: args.input ?? {},
+      promptId: prompt.id,
+    });
+    const amendment = await runPrepareStep({
+      callback: args.prepareStep,
+      state: prepareStepState,
+      requestInput: args.input ?? {},
+      reason,
+      previousReceipt: lastRequestReceipt,
+      messages: boundaryMessages,
+      resources,
+      signal: args.signal,
+    });
+    const boundary = await resolveExecutionAmendment({
+      prompt,
+      resolveOptions: boundaryResolveOpts,
+      baseline: resolved,
+      amendment,
+      model: modelInfo.modelId,
+      inputBudget: args.inputBudget,
+      baselineActiveTools: args.activeTools,
+      resources,
+    });
+    await lifecycle.rearm(boundary.resolved);
+    return Object.freeze({
+      ...boundary,
+      decision: {
+        amendment,
+        resources,
+        stepIndex: prepareStepState.index - 1,
+        reason,
+      },
+    });
   };
 
   const generated = await sourceSession
@@ -440,33 +520,49 @@ export async function generateCore<
           for (let step = 0; step < maxSteps; step++) {
             steps++;
             const providerMessages = await prepareProviderMessages(messages);
+            const boundary = await prepareBoundary(
+              providerMessages,
+              lastRequestReceipt ? "tool-result" : "initial",
+            );
             emitInputTokenEstimate({
               messages: providerMessages,
               provider: modelInfo.provider,
-              model: modelInfo.modelId,
+              model: boundary.model,
               media: dialect.media,
             });
+            const boundaryTools = selectedDescriptors(
+              lifecycle.descriptors,
+              boundary.activeTools,
+            );
             const callArgs: CallArgs<TExtra> = {
-              model: modelInfo.modelId,
-              system: currentSystem,
-              systemBlocks: currentSystemBlocks,
+              model: boundary.model,
+              system:
+                boundary.resolved === resolved
+                  ? currentSystem
+                  : boundary.resolved.system,
+              systemBlocks:
+                boundary.resolved === resolved
+                  ? currentSystemBlocks
+                  : boundary.resolved.systemBlocks,
               messages: providerMessages,
-              settings: mappedSettings,
-              schema: resolved.schema,
+              settings:
+                boundary.resolved === resolved
+                  ? mappedSettings
+                  : dialect.mapSettings(boundary.resolved.settings),
+              schema: boundary.resolved.schema,
               outputSchema,
-              tools: lifecycle.descriptors
-                ? [...lifecycle.descriptors]
-                : undefined,
+              tools: boundaryTools,
               extra: (args.extra ?? {}) as TExtra,
             };
-            const sealed = await sealProviderRequest(callArgs);
+            const sealed = await sealProviderRequest(callArgs, boundary);
             lastCallArgs = sealed.request;
 
             const { raw, extracted } = await callProvider(lastCallArgs);
-            recordRequestRetryCount(
-              sealed.receipt,
-              extracted.transportRetries,
-            );
+            recordPrepareStepOutcome(prepareStepState, {
+              usage: extracted.usage,
+              transportRetries: extracted.transportRetries,
+            });
+            recordRequestRetryCount(sealed.receipt, extracted.transportRetries);
             lastRaw = raw;
             const providerStep = stepFactsFromResponse(extracted);
             const guardedStep = await guardSafetySessionLanguageStep(
@@ -564,13 +660,38 @@ export async function generateCore<
               );
               messages = [...messages, ...guardedWriteback.corrective];
               const providerMessages = await prepareProviderMessages(messages);
+              const boundary = await prepareBoundary(
+                providerMessages,
+                "validation-retry",
+              );
               const regenArgs = {
                 ...lastCallArgs!,
+                model: boundary.model,
+                system:
+                  boundary.resolved === resolved
+                    ? currentSystem
+                    : boundary.resolved.system,
+                systemBlocks:
+                  boundary.resolved === resolved
+                    ? currentSystemBlocks
+                    : boundary.resolved.systemBlocks,
                 messages: providerMessages,
+                settings:
+                  boundary.resolved === resolved
+                    ? mappedSettings
+                    : dialect.mapSettings(boundary.resolved.settings),
+                tools: selectedDescriptors(
+                  lifecycle.descriptors,
+                  boundary.activeTools,
+                ),
               };
-              const sealed = await sealProviderRequest(regenArgs);
+              const sealed = await sealProviderRequest(regenArgs, boundary);
               lastCallArgs = sealed.request;
               const regen = await callProvider(lastCallArgs);
+              recordPrepareStepOutcome(prepareStepState, {
+                usage: regen.extracted.usage,
+                transportRetries: regen.extracted.transportRetries,
+              });
               recordRequestRetryCount(
                 sealed.receipt,
                 regen.extracted.transportRetries,
@@ -716,6 +837,28 @@ export async function generateCore<
       lastRequestReceipt,
     );
   }
+}
+
+type PreparedCoreBoundary = ResolvedExecutionAmendment<string> & {
+  readonly decision?: {
+    readonly amendment?: ExecutionAmendment<string>;
+    readonly resources: PreparationResources;
+    readonly stepIndex: number;
+    readonly reason: StepReason;
+  };
+};
+
+function selectedDescriptors(
+  descriptors:
+    | readonly NonNullable<CallArgs<Record<string, unknown>>["tools"]>[number][]
+    | undefined,
+  activeTools: readonly string[] | undefined,
+): CallArgs<Record<string, unknown>>["tools"] {
+  if (!descriptors) return undefined;
+  const selected = activeTools
+    ? descriptors.filter((descriptor) => activeTools.includes(descriptor.name))
+    : descriptors;
+  return selected.length > 0 ? [...selected] : undefined;
 }
 
 function stepFactsFromResponse(

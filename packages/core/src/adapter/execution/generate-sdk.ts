@@ -123,6 +123,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     modelId: modelInfo.modelId,
     settings: args.settings,
   });
+  let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
@@ -171,10 +172,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     safety,
     resolved.schema,
   );
-  selectRepresentationCapabilities(
-    safety,
-    resolved.representations ?? [],
-  );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
   selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
@@ -242,8 +240,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
       reresolve: async (skillSession) => {
+        boundaryResolveOpts = withSkillActivationInput(
+          resolveOpts,
+          skillSession,
+        );
         resolved = await prompt.resolve(
-          withSkillActivationInput(resolveOpts, skillSession),
+          boundaryResolveOpts,
         );
         selectRepresentationSkills(
           resolved,
@@ -312,8 +314,15 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
   const planStep = createSdkRequestStepPlanner({
     dialect,
-    settings: resolved.settings,
+    prompt,
+    resolveOptions: () => boundaryResolveOpts,
+    resolved: () => resolved,
+    rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
+    configuredActiveTools: args.activeTools,
     inputBudget: args.inputBudget,
+    prepareStep: args.prepareStep,
+    requestInput: args.input ?? {},
+    signal: args.signal,
     schema: resolved.schema,
     outputSchema: structuredPlan?.outputSchema,
     tools: () =>
@@ -322,7 +331,6 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     extra: args.extra,
     history: initialMessages.history,
     generateHistorySummary: sdkHistorySummaryGenerator(dialect),
-    representations: () => resolved.representations,
     prepareRequest: (candidate, selections) => {
       selectRepresentationCapabilities(
         safety,
@@ -420,6 +428,17 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       model: modelInfo.modelId,
       media: dialect.media,
     });
+    if (args.prepareStep) {
+      await planStep.prime({
+        model: args.model,
+        modelInfo,
+        system: currentSystem,
+        systemBlocks: currentSystemBlocks,
+        messages:
+          providerMessages ??
+          (promptText ? [{ role: "user", content: promptText }] : []),
+      });
+    }
     return {
       model: args.model,
       modelInfo,
@@ -456,8 +475,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     }
     return visible.filter(
       (name) =>
-        args.activeTools!.includes(name) ||
-        name === OFFLOAD_SUPPORT_TOOL_NAME,
+        args.activeTools!.includes(name) || name === OFFLOAD_SUPPORT_TOOL_NAME,
     );
   }
 

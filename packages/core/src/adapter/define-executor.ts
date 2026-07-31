@@ -169,6 +169,7 @@ export function loopRuntimeAdapter<
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       inputBudget: opts.inputBudget,
+      prepareStep: opts.prepareStep,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -243,6 +244,7 @@ export function loopRuntimeAdapter<
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       inputBudget: opts.inputBudget,
+      prepareStep: opts.prepareStep,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
@@ -270,6 +272,7 @@ export function loopRuntimeAdapter<
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
       inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
+      prepareStep: options.prepareStep ?? agent.prepareStep,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
     } as unknown as ExecutorGenerateOptions<TModel>;
 

@@ -990,9 +990,37 @@ export {
 } from "./request/capacity/model-profile";
 export { RequestCompositionError } from "./request/errors";
 export { mergeInputBudget } from "./request/budget/input-budget";
+export { PreparationError } from "./request/prepare/step";
+export { ResourceReadError } from "./request/prepare/resources";
 export type {
   InputBudget,
 } from "./request/budget/input-budget";
+export type {
+  PreparationErrorReason,
+  PrepareStep,
+} from "./request/prepare/step";
+export type {
+  ControlReadable,
+  PreparationResources,
+  ResourceReadErrorReason,
+} from "./request/prepare/resources";
+export type {
+  AmendableContextEntry,
+  ContributorSelector,
+  ExecutionAmendment,
+} from "./request/prepare/amendment";
+export type {
+  PreparationAttemptStats,
+  PreparationCoverage,
+  PreparationModelCallStats,
+  PreparationScopeStats,
+  PreparationUsageStats,
+  StepContext,
+  StepPreparationStats,
+  StepReason,
+  StepToolHistoryEntry,
+} from "./request/prepare/step-context";
+export type { PreparationDecisionInspection } from "./request/prepare/journal";
 export type {
   RequestCompositionErrorCode,
   RequestDiagnostic,

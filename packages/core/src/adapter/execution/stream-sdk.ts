@@ -119,6 +119,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     modelId: modelInfo.modelId,
     settings: args.settings,
   });
+  let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
@@ -223,8 +224,12 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
       reresolve: async (skillSession) => {
+        boundaryResolveOpts = withSkillActivationInput(
+          resolveOpts,
+          skillSession,
+        );
         resolved = await prompt.resolve(
-          withSkillActivationInput(resolveOpts, skillSession),
+          boundaryResolveOpts,
         );
         selectRepresentationSkills(
           resolved,
@@ -250,7 +255,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     await closeSources();
     throw error;
   }
-  const tools = lifecycle.tools;
+  let tools = lifecycle.tools;
   // Text streams gate here; the structured stream is created after compilation
   // below (it needs the canonical schema + decode manifest).
   let trackedSafety =
@@ -417,8 +422,15 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       : undefined;
   const planStep = createSdkRequestStepPlanner({
     dialect,
-    settings: resolved.settings,
+    prompt,
+    resolveOptions: () => boundaryResolveOpts,
+    resolved: () => resolved,
+    rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
+    configuredActiveTools: args.activeTools,
     inputBudget: args.inputBudget,
+    prepareStep: args.prepareStep,
+    requestInput: args.input ?? {},
+    signal: args.signal,
     schema: resolved.schema,
     outputSchema: structuredOutputSchema,
     tools: () =>
@@ -427,7 +439,6 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     extra: args.extra,
     history: initialMessages.history,
     generateHistorySummary: sdkHistorySummaryGenerator(dialect),
-    representations: () => resolved.representations,
     prepareRequest: (candidate, selections) => {
       selectRepresentationCapabilities(
         safety,
@@ -466,6 +477,19 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       await lifecycle.rearm(resolved);
     },
   });
+
+  if (args.prepareStep) {
+    await planStep.prime({
+      model: args.model,
+      modelInfo,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
+      messages:
+        providerMessages ??
+        (promptText ? [{ role: "user", content: promptText }] : []),
+    });
+    tools = lifecycle.tools;
+  }
 
   const request: ExecutorRequest<TModel> & {
     schema?: z.ZodType;

@@ -11,6 +11,7 @@ import {
   type AdapterSpec,
   type ExecutorRequest,
   type LoopRuntimePort,
+  type PrepareStep,
   type RequestReceipt,
 } from "../src";
 
@@ -57,6 +58,9 @@ interface ParityHarness {
   readonly generateLinked: () => Promise<{
     readonly steps: readonly { readonly request?: RequestReceipt }[];
   }>;
+  readonly generatePrepared: (
+    callback: PrepareStep<string>,
+  ) => Promise<{ readonly steps: readonly { readonly request?: RequestReceipt }[] }>;
   readonly providerCalls: ReturnType<typeof vi.fn>;
 }
 
@@ -122,6 +126,12 @@ function coreOwnedHarness(
         maxSteps: 2,
       });
     },
+    generatePrepared: (prepareStep) =>
+      runtime.generate(parityPrompt, {
+        model: "model-1",
+        input: { message: "hello" },
+        prepareStep,
+      }),
     providerCalls,
   };
 }
@@ -233,6 +243,12 @@ function sdkOwnedHarness(
         input: { message: "look it up" },
         maxSteps: 2,
       }),
+    generatePrepared: (prepareStep) =>
+      executor.generate(parityPrompt, {
+        model: "model-1",
+        input: { message: "hello" },
+        prepareStep,
+      }),
     providerCalls,
   };
 }
@@ -291,6 +307,22 @@ describe.each(harnesses)("%s request planning", (_name, createHarness) => {
       expect.objectContaining({ contributor: "tools" }),
     );
     expect(harness.providerCalls).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies the same preparation boundary before sealing", async () => {
+    const harness = createHarness();
+    const callback = vi.fn(() => ({
+      model: "model-2",
+      inputBudget: { max: 300 },
+    }));
+    const result = await harness.generatePrepared(callback);
+
+    expect(callback).toHaveBeenCalledOnce();
+    expect(result.steps[0]?.request).toMatchObject({
+      model: "model-2",
+      maxInputTokens: 300,
+    });
+    expect(harness.providerCalls).toHaveBeenCalledOnce();
   });
 });
 

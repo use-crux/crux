@@ -68,3 +68,31 @@ export type {
   ToolOutputOffloadPolicy,
 } from "./representation/ladder-types";
 export type { OffloadReceipt } from "./offload/handle";
+export {
+  PreparationError,
+  type PreparationErrorReason,
+  type PrepareStep,
+} from "./prepare/step";
+export {
+  ResourceReadError,
+  type ControlReadable,
+  type PreparationResources,
+  type ResourceReadErrorReason,
+} from "./prepare/resources";
+export type {
+  AmendableContextEntry,
+  ContributorSelector,
+  ExecutionAmendment,
+} from "./prepare/amendment";
+export type {
+  PreparationAttemptStats,
+  PreparationCoverage,
+  PreparationModelCallStats,
+  PreparationScopeStats,
+  PreparationUsageStats,
+  StepContext,
+  StepPreparationStats,
+  StepReason,
+  StepToolHistoryEntry,
+} from "./prepare/step-context";
+export type { PreparationDecisionInspection } from "./prepare/journal";

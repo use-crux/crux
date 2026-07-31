@@ -72,6 +72,17 @@ import {
   selectRepresentationSkills,
 } from "./representation-safety";
 import { recordRequestRetryCount } from "../../request/receipt/receipt";
+import {
+  createPrepareStepState,
+  recordPrepareStepOutcome,
+  runPrepareStep,
+} from "../../request/prepare/step";
+import { resolveExecutionAmendment } from "../../request/prepare/amendment";
+import {
+  createPreparationResources,
+  preparationResourceReads,
+} from "../../request/prepare/resources";
+import { commitPreparationDecision } from "../../request/prepare/journal";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -111,6 +122,7 @@ export async function streamCore<
   const mappedSettings = dialect.mapSettings(resolved.settings);
   const initialMessages = initialCoreMessageState(resolved, args.messages);
   const representationEpoch = createRequestRepresentationEpoch();
+  const prepareStepState = createPrepareStepState();
   let messages = initialMessages.messages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -133,10 +145,7 @@ export async function streamCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  selectRepresentationCapabilities(
-    safety,
-    resolved.representations ?? [],
-  );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
   selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
@@ -263,16 +272,77 @@ export async function streamCore<
           signal: args.signal,
         }),
     );
-    const sealStreamRequest = (
+    let lastStreamReceipt:
+      | import("../../request/receipt/receipt").RequestReceipt
+      | undefined;
+    const sealStreamRequest = async (
       request: CallArgs<TExtra>,
       previousRequestId?: string,
-    ) =>
-      sealRequest({
+    ) => {
+      const resources = args.prepareStep
+        ? createPreparationResources({
+            entries: prompt.contexts,
+            requestInput: args.input ?? {},
+            promptId: prompt.id,
+          })
+        : undefined;
+      const amendment = resources
+        ? await runPrepareStep({
+            callback: args.prepareStep,
+            state: prepareStepState,
+            requestInput: args.input ?? {},
+            reason: previousRequestId ? "validation-retry" : "initial",
+            previousReceipt: lastStreamReceipt,
+            messages: request.messages,
+            resources,
+            signal: args.signal,
+          })
+        : undefined;
+      const boundary = resources
+        ? await resolveExecutionAmendment({
+            prompt,
+            resolveOptions: resolveOpts,
+            baseline: resolved,
+            amendment,
+            model: modelInfo.modelId,
+            inputBudget: args.inputBudget,
+            baselineActiveTools: args.activeTools,
+            resources,
+          })
+        : {
+            resolved,
+            model: modelInfo.modelId,
+            inputBudget: args.inputBudget,
+            activeTools: args.activeTools,
+          };
+      if (resources) await lifecycle.rearm(boundary.resolved);
+      const boundaryRequest: CallArgs<TExtra> = {
+        ...request,
+        model: boundary.model,
+        system:
+          boundary.resolved === resolved
+            ? currentSystem
+            : boundary.resolved.system,
+        systemBlocks:
+          boundary.resolved === resolved
+            ? currentSystemBlocks
+            : boundary.resolved.systemBlocks,
+        schema: boundary.resolved.schema,
+        settings:
+          boundary.resolved === resolved
+            ? mappedSettings
+            : dialect.mapSettings(boundary.resolved.settings),
+        tools: selectStreamDescriptors(
+          lifecycle.descriptors,
+          boundary.activeTools,
+        ),
+      };
+      const next = await sealRequest({
         provider: modelInfo.provider,
-        model: modelInfo.modelId,
-        request,
-        settings: resolved.settings,
-        inputBudget: args.inputBudget,
+        model: boundary.model,
+        request: boundaryRequest,
+        settings: boundary.resolved.settings,
+        inputBudget: boundary.inputBudget,
         capacity: dialect.capacity,
         countTokens: dialect.countTokens
           ? (candidate) => dialect.countTokens!(dialect.client, candidate)
@@ -281,22 +351,22 @@ export async function streamCore<
         previousRequestId,
         history: initialMessages.history,
         generateHistorySummary,
-        representations: resolved.representations,
+        representations: boundary.resolved.representations,
         representationEpoch,
         prepareRequest: (candidate, selections) => {
           selectRepresentationCapabilities(
             safety,
-            resolved.representations ?? [],
+            boundary.resolved.representations ?? [],
             selections,
           );
           selectRepresentationSkills(
-            resolved,
-            resolved.representations ?? [],
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
             selections,
           );
           selectRepresentationMiddleware(
-            resolved,
-            resolved.representations ?? [],
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
             selections,
           );
           return guardRepresentedRequest(safety, candidate);
@@ -304,22 +374,35 @@ export async function streamCore<
         applyRepresentationSelection: async (selections) => {
           selectRepresentationCapabilities(
             safety,
-            resolved.representations ?? [],
+            boundary.resolved.representations ?? [],
             selections,
           );
           selectRepresentationSkills(
-            resolved,
-            resolved.representations ?? [],
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
             selections,
           );
           selectRepresentationMiddleware(
-            resolved,
-            resolved.representations ?? [],
+            boundary.resolved,
+            boundary.resolved.representations ?? [],
             selections,
           );
-          await lifecycle.rearm(resolved);
+          await lifecycle.rearm(boundary.resolved);
         },
       });
+      if (resources) {
+        commitPreparationDecision({
+          receipt: next.receipt,
+          requestId: next.receipt.id,
+          stepIndex: prepareStepState.index - 1,
+          reason: previousRequestId ? "validation-retry" : "initial",
+          amendment,
+          resources: preparationResourceReads(resources),
+        });
+      }
+      lastStreamReceipt = next.receipt;
+      return next;
+    };
     const sealed = await sealStreamRequest(callArgs);
 
     // Resolved BEFORE the provider stream is observed: `token.chunk` telemetry must
@@ -384,6 +467,10 @@ export async function streamCore<
             ...providerHandle,
             completion: async () => {
               const completion = await providerHandle.completion();
+              recordPrepareStepOutcome(prepareStepState, {
+                usage: completion?.usage,
+                transportRetries: completion?.transportRetries,
+              });
               recordRequestRetryCount(
                 sealed.receipt,
                 completion?.transportRetries,
@@ -577,4 +664,17 @@ export async function streamCore<
     await sourceSession.close();
     throw error;
   }
+}
+
+function selectStreamDescriptors(
+  descriptors:
+    | readonly NonNullable<CallArgs<Record<string, unknown>>["tools"]>[number][]
+    | undefined,
+  activeTools: readonly string[] | undefined,
+): CallArgs<Record<string, unknown>>["tools"] {
+  if (!descriptors) return undefined;
+  const selected = activeTools
+    ? descriptors.filter((descriptor) => activeTools.includes(descriptor.name))
+    : descriptors;
+  return selected.length > 0 ? [...selected] : undefined;
 }

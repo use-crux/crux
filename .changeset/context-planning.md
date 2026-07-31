@@ -73,3 +73,11 @@ with a required, budgeted retrieval Tool. Tool definitions may declare
 exactly while execution evidence distinguishes the application output from
 the model-facing reference. Persistence configuration may provide an existing
 asset store so already-addressable asset bytes are reused.
+
+Add `prepareStep` to managed language generation and Agent definitions. Each
+semantic provider call can inspect immutable input, transcript, Tool history,
+minimal honest usage statistics, prior request evidence, and declared
+`workingState()` or Blackboard resources before returning a constrained
+boundary-local contributor, Tool, model, or input-budget amendment. Accepted
+decisions are committed with redacted resource revision evidence before
+dispatch and reused by exact transport retries.

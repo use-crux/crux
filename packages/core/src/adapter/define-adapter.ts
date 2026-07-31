@@ -45,6 +45,7 @@ import type {
 } from "./define-adapter-types";
 import { createStreamResult } from "./result-accumulator";
 import { mergeInputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 export type {
   AdapterGenerateOptions,
@@ -150,6 +151,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -190,6 +192,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -236,6 +239,7 @@ export function adapter<
         input: opts.input,
         provider: opts.provider,
         inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -274,6 +278,9 @@ export function adapter<
         maxSteps: options.maxSteps,
         validationRetry: options.validationRetry,
         inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
+        prepareStep: (options.prepareStep ?? agent.prepareStep) as
+          | PrepareStep<string>
+          | undefined,
         extra: {} as TExtra,
       };
 

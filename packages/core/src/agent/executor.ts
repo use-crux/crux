@@ -15,6 +15,7 @@ import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { TokenUsage } from '../generation/types'
 import type { WithOperationResultMeta } from '../observability'
 import type { InputBudget } from '../request/budget/input-budget'
+import type { PrepareStep } from '../request/prepare/step'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -71,6 +72,8 @@ export interface ExecuteOptions {
   maxSteps?: number
   /** Invocation-level whole-request input pressure overrides. */
   inputBudget?: InputBudget
+  /** Invocation callback overriding the Agent default for this run. */
+  prepareStep?: PrepareStep<AnyModel>
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.

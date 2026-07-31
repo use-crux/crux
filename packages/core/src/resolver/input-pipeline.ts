@@ -24,8 +24,12 @@ import {
   isForcedOffload,
   isRepresentationLadder,
 } from '../request/representation/ladder'
+import { PREPARATION_RESOURCES_INPUT } from '../request/prepare/pin-context'
 
-const RESOLVER_PRIVATE_INPUT_KEYS = ['_crux_activeSkills'] as const
+const RESOLVER_PRIVATE_INPUT_KEYS = [
+  '_crux_activeSkills',
+  PREPARATION_RESOURCES_INPUT,
+] as const
 
 /**
  * Extract resolver-owned metadata fields before user input validation.
