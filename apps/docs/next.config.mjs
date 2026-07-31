@@ -12,7 +12,6 @@ const config = {
     // Keep the full reference build within the preview host's 8 GB limit.
     cpus: 1,
     turbopackFileSystemCacheForDev: false,
-    webpackMemoryOptimizations: true,
   },
   turbopack: {
     root: monorepoRoot,

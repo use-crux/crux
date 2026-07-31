@@ -7,7 +7,7 @@
     "dev": "CRUX_DOCS_TWOSLASH=0 NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3002",
     "dev:twoslash": "NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3002",
     "dev:twoslash:only": "NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3002",
-    "build": "next build --webpack",
+    "build": "NODE_OPTIONS=--max-old-space-size=6144 next build",
     "check:effects": "node scripts/check-effect-docs.mjs",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
