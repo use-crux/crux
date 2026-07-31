@@ -10,6 +10,7 @@
 export { knowledgeBase } from '../retrieval/knowledge-base'
 export { assertions } from './assertions/assertions'
 export { communities } from './communities/communities'
+export { runConnectedKnowledgeConformance } from './conformance'
 export { knowledgeModel } from './model'
 export { relate } from './relate/relate'
 export { relateEntities } from './relate/entities'
@@ -30,6 +31,12 @@ export type {
   CommunitiesConfig,
   CommunitiesFactoryConfig,
 } from './communities/communities'
+export type {
+  ConnectedKnowledgeConformanceAssertion,
+  ConnectedKnowledgeConformanceExpect,
+  ConnectedKnowledgeConformanceTest,
+  RunConnectedKnowledgeConformanceOptions,
+} from './conformance'
 export type {
   CommunityBuildDescriptor,
   CommunityReadinessStatus,
