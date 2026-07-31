@@ -6,6 +6,7 @@
       "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 1,
       "traceId": "11111111111111111111111111111111", "sessionId": "session_demo_support", "name": "Refund answer · grounded", "rootPrimitive": "generation.call",
       "startedAt": "2026-07-30T09:00:00.000Z", "status": "running",
+      "privacy": { "redaction": { "applied": true, "surfaces": ["artifact.preview"] } },
       "attributes": { "environment": "demo", "ticket": "SUP-1042" },
       "definitionRefs": [{ "id": "prompt:demo.support", "kind": "prompt", "role": "resolved-prompt", "source": { "file": "src/support.ts", "line": 38 } }]
     },
@@ -24,7 +25,12 @@
       "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 3,
       "traceId": "11111111111111111111111111111111", "spanId": "1111111111111111", "artifactId": "artifact_demo_refund_context", "kind": "context.contribution",
       "createdAt": "2026-07-30T09:00:00.020Z", "contentType": "application/json", "encoding": "json",
-      "preview": { "sourceId": "context:demo.refund-policy", "included": true, "tokens": 84, "text": "Refunds are available within 14 days of purchase." }
+      "preview": {
+        "kind": "context.contribution", "state": "active", "included": true,
+        "sourceId": "context:demo.refund-policy", "injectableKind": "context",
+        "tokens": 84, "staticTokens": 68, "dynamicTokens": 16,
+        "text": "Refunds are available within 14 days of purchase."
+      }
     },
     {
       "schemaVersion": 4, "recordId": "demo_good_context_edge", "type": "edge",
@@ -63,7 +69,8 @@
       "schemaVersion": 4, "recordId": "demo_good_generation_end", "type": "span:end",
       "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 9,
       "traceId": "11111111111111111111111111111111", "spanId": "1111111111111111", "endedAt": "2026-07-30T09:00:01.250Z", "durationMs": 1240, "status": "ok",
-      "metrics": { "inputTokens": 2100, "outputTokens": 180, "totalTokens": 2280, "costUsd": 0.012 }
+      "metrics": { "inputTokens": 2100, "cacheReadTokens": 420, "outputTokens": 180, "totalTokens": 2280, "costUsd": 0.012 },
+      "attributes": { "finishReason": "stop" }
     },
     {
       "schemaVersion": 4, "recordId": "demo_good_run_end", "type": "run:end",
@@ -169,14 +176,22 @@
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 14,
       "traceId": "22222222222222222222222222222222", "spanId": "2222222222222221", "endedAt": "2026-07-30T09:06:15.000Z", "durationMs": 74990, "status": "error",
       "metrics": { "inputTokens": 13200, "outputTokens": 1300, "totalTokens": 14500, "costUsd": 0.09 },
-      "error": { "name": "GroundingError", "message": "Answer failed refund grounding", "retryable": false }
+      "error": {
+        "name": "GroundingError", "message": "Answer failed refund grounding",
+        "category": "quality", "code": "GROUNDING_MISSING", "phase": "output",
+        "retryable": false
+      }
     },
     {
       "schemaVersion": 4, "recordId": "demo_bad_run_end", "type": "run:end",
       "runId": "run_demo_support_regression", "operationId": "run_demo_support_regression", "segmentId": "segment_demo_support_regression", "segmentSeq": 15,
       "traceId": "22222222222222222222222222222222", "endedAt": "2026-07-30T09:06:15.000Z", "durationMs": 75000, "status": "error",
       "metrics": { "inputTokens": 13200, "outputTokens": 1300, "totalTokens": 14500, "costUsd": 0.09 },
-      "error": { "name": "GroundingError", "message": "Answer failed refund grounding", "retryable": false }
+      "error": {
+        "name": "GroundingError", "message": "Answer failed refund grounding",
+        "category": "quality", "code": "GROUNDING_MISSING", "phase": "output",
+        "retryable": false
+      }
     },
     {
       "schemaVersion": 4, "recordId": "demo_suspended_run_start", "type": "run:start",
@@ -244,6 +259,182 @@
       "runId": "run_demo_account_lookup", "operationId": "run_demo_account_lookup", "segmentId": "segment_demo_account_lookup", "segmentSeq": 3,
       "traceId": "55555555555555555555555555555555", "endedAt": "2026-07-30T09:15:02.200Z", "durationMs": 2200, "status": "error",
       "error": { "name": "AccountTimeoutError", "message": "Account service timed out", "retryable": true }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_messages", "type": "artifact",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 11,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111111",
+      "artifactId": "artifact_demo_good_messages", "kind": "messages",
+      "createdAt": "2026-07-30T09:00:00.018Z", "contentType": "application/json", "encoding": "json", "sizeBytes": 420,
+      "preview": {
+        "input": { "customer": "Ada", "question": "Can I refund my monthly plan?" },
+        "system": "You are a concise support agent.\n\nUse the current refund policy.",
+        "systemBlocks": [
+          { "source": "prompt:demo.support", "text": "You are a concise support agent." },
+          { "source": "context:demo.refund-policy", "text": "Use the current refund policy.", "artifactId": "artifact_demo_refund_context" }
+        ],
+        "userPrompt": {
+          "kind": "prompt-text",
+          "text": "Customer Ada asks: Can I refund my monthly plan?",
+          "segments": [
+            { "text": "Customer ", "dynamic": false },
+            { "text": "Ada", "dynamic": true, "source": "customer.name", "sourceVersion": "ticket-v3" },
+            { "text": " asks: ", "dynamic": false },
+            { "text": "Can I refund my monthly plan?", "dynamic": true, "source": "ticket.question", "sourceVersion": "ticket-v3" }
+          ],
+          "tokens": 12, "staticTokens": 3, "dynamicTokens": 9
+        },
+        "messages": [{ "role": "user", "content": "Can I refund my monthly plan?" }],
+        "toolNames": ["searchPolicies"]
+      }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_budget", "type": "artifact",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 12,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111111",
+      "artifactId": "artifact_demo_good_budget", "kind": "prompt.budget",
+      "createdAt": "2026-07-30T09:00:00.019Z", "contentType": "application/json", "encoding": "json", "sizeBytes": 280,
+      "preview": {
+        "kind": "prompt.budget", "usedTokens": 2184, "totalTokens": 2400,
+        "dropped": [{
+          "kind": "context.contribution", "state": "dropped-budget", "included": false,
+          "sourceId": "context:demo.ticket-history", "injectableKind": "context",
+          "reason": "token budget reserved for answer", "priority": 10, "tokens": 640
+        }]
+      }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_tool_request", "type": "artifact",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 13,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111113",
+      "artifactId": "artifact_demo_tool_request", "kind": "tool.request",
+      "createdAt": "2026-07-30T09:00:00.200Z", "contentType": "application/json", "encoding": "json", "sizeBytes": 164,
+      "preview": {
+        "toolName": "searchPolicies", "toolCallId": "call_demo_policy",
+        "args": { "query": "monthly plan refund window", "locale": "en-NL", "limit": 3, "filters": { "product": "monthly-plan", "active": true } }
+      },
+      "attributes": { "toolName": "searchPolicies", "toolCallId": "call_demo_policy" }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_tool_result", "type": "artifact",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 14,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111113",
+      "artifactId": "artifact_demo_tool_result", "kind": "tool.result",
+      "createdAt": "2026-07-30T09:00:00.330Z", "contentType": "application/json", "encoding": "json", "sizeBytes": 260,
+      "preview": {
+        "result": {
+          "hits": [
+            { "id": "policy-refunds", "title": "Refund policy", "windowDays": 14, "eligible": true },
+            { "id": "policy-exceptions", "title": "Refund exceptions", "requiresApproval": true }
+          ],
+          "queryTimeMs": 38, "source": "support-policy-index"
+        }
+      },
+      "attributes": { "toolName": "searchPolicies", "toolCallId": "call_demo_policy" }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_media_span", "type": "span",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 15,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111114", "parentSpanId": "1111111111111111",
+      "family": "media", "primitive": "media.describe", "name": "Describe receipt attachment",
+      "startedAt": "2026-07-30T09:00:00.350Z", "endedAt": "2026-07-30T09:00:00.430Z", "durationMs": 80, "status": "ok",
+      "model": "gpt-4.1-mini", "provider": "openai"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_media_artifact", "type": "artifact",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 16,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111114",
+      "artifactId": "artifact_demo_receipt_media", "kind": "output",
+      "createdAt": "2026-07-30T09:00:00.420Z", "contentType": "application/json", "encoding": "json", "sizeBytes": 2048,
+      "privacy": { "redaction": { "applied": true, "surfaces": ["artifact.preview"] } },
+      "preview": {
+        "content": [{
+          "kind": "image", "mediaType": "image/png", "sizeBytes": 2048,
+          "width": 1280, "height": 720, "sourceCategory": "asset-ref",
+          "source": { "ref": "asset://demo-private-receipt" }, "digestPrefix": "abcdef1234567890"
+        }]
+      }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_good_memory_capture", "type": "span",
+      "runId": "run_demo_support_good", "operationId": "run_demo_support_good", "segmentId": "segment_demo_support_good", "segmentSeq": 17,
+      "traceId": "11111111111111111111111111111111", "spanId": "1111111111111115", "parentSpanId": "1111111111111111",
+      "family": "memory", "primitive": "memory.capture", "name": "memory.capture",
+      "startedAt": "2026-07-30T09:00:01.210Z", "endedAt": "2026-07-30T09:00:01.240Z", "durationMs": 30, "status": "ok",
+      "memoryId": "support-conversation",
+      "attributes": {
+        "memoryId": "support-conversation", "operation": "turn",
+        "requestedMode": "deferred", "disposition": "retained", "outcome": "completed",
+        "blockCount": 2, "toolEventCount": 1
+      },
+      "definitionRefs": [{ "id": "memory:support-conversation", "kind": "memory", "role": "invoked-memory" }]
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_root_start", "type": "run:start",
+      "runId": "run_demo_refund_flow", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow", "segmentSeq": 1,
+      "traceId": "66666666666666666666666666666666", "sessionId": "session_demo_support",
+      "name": "Refund resolution flow", "rootPrimitive": "flow.run",
+      "startedAt": "2026-07-30T09:20:00.000Z", "status": "running"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_root_span", "type": "span",
+      "runId": "run_demo_refund_flow", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow", "segmentSeq": 2,
+      "traceId": "66666666666666666666666666666666", "spanId": "6666666666666661",
+      "family": "flow", "primitive": "flow.run", "name": "Refund resolution flow", "flowId": "demo.refund-resolution",
+      "startedAt": "2026-07-30T09:20:00.010Z", "endedAt": "2026-07-30T09:20:02.500Z", "durationMs": 2490, "status": "ok"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_step_triage", "type": "span",
+      "runId": "run_demo_refund_flow", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow", "segmentSeq": 3,
+      "traceId": "66666666666666666666666666666666", "spanId": "6666666666666662", "parentSpanId": "6666666666666661",
+      "family": "flow", "primitive": "flow.step", "name": "Triage request", "flowId": "demo.refund-resolution", "stepId": "triage",
+      "startedAt": "2026-07-30T09:20:00.020Z", "endedAt": "2026-07-30T09:20:00.400Z", "durationMs": 380, "status": "ok"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_step_research", "type": "span",
+      "runId": "run_demo_refund_flow", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow", "segmentSeq": 4,
+      "traceId": "66666666666666666666666666666666", "spanId": "6666666666666663", "parentSpanId": "6666666666666661",
+      "family": "flow", "primitive": "flow.step", "name": "Research policy", "flowId": "demo.refund-resolution", "stepId": "research",
+      "startedAt": "2026-07-30T09:20:00.410Z", "endedAt": "2026-07-30T09:20:02.300Z", "durationMs": 1890, "status": "ok"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_root_end", "type": "run:end",
+      "runId": "run_demo_refund_flow", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow", "segmentSeq": 5,
+      "traceId": "66666666666666666666666666666666",
+      "endedAt": "2026-07-30T09:20:02.510Z", "durationMs": 2510, "status": "ok"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_child_start", "type": "run:start",
+      "runId": "run_demo_refund_flow_research", "operationId": "run_demo_refund_flow",
+      "parentRunId": "run_demo_refund_flow", "triggeredBySpanId": "6666666666666663",
+      "segmentId": "segment_demo_refund_flow_research", "segmentSeq": 1,
+      "traceId": "66666666666666666666666666666666", "sessionId": "session_demo_support",
+      "name": "Research member", "rootPrimitive": "generation.call",
+      "startedAt": "2026-07-30T09:20:00.500Z", "status": "running"
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_child_generation", "type": "span",
+      "runId": "run_demo_refund_flow_research", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow_research", "segmentSeq": 2,
+      "traceId": "66666666666666666666666666666666", "spanId": "6666666666666671",
+      "family": "generation", "primitive": "generation.call", "name": "Research refund policy",
+      "startedAt": "2026-07-30T09:20:00.510Z", "endedAt": "2026-07-30T09:20:02.200Z", "durationMs": 1690, "status": "ok",
+      "model": "gpt-4o-mini", "provider": "openai",
+      "metrics": { "inputTokens": 960, "cacheReadTokens": 240, "outputTokens": 110, "totalTokens": 1070, "costUsd": 0.006 },
+      "attributes": { "finishReason": "stop" }
+    },
+    {
+      "schemaVersion": 4, "recordId": "demo_flow_child_end", "type": "run:end",
+      "runId": "run_demo_refund_flow_research", "operationId": "run_demo_refund_flow",
+      "segmentId": "segment_demo_refund_flow_research", "segmentSeq": 3,
+      "traceId": "66666666666666666666666666666666",
+      "endedAt": "2026-07-30T09:20:02.210Z", "durationMs": 1710, "status": "ok",
+      "metrics": { "inputTokens": 960, "outputTokens": 110, "totalTokens": 1070, "costUsd": 0.006 }
     }
   ]
 }

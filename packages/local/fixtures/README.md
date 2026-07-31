@@ -19,11 +19,18 @@ the same alternate port to both commands if 4466 is unavailable.
 
 After seeding:
 
-- **Overview** shows five runs, non-empty pass-rate/cost/latency KPIs, recent
+- **Overview** shows six operations, non-empty pass-rate/cost/latency KPIs, recent
   runs, derived insights, and live ingest activity.
-- **Runs** shows five ok/error/suspended operations. The refund regression has
+- **Runs** shows six ok/error/suspended operations. The refund regression has
   an at-least-ten-span waterfall with repeated tool calls, retrieval and
   guardrail failures, and terminal error diagnosis.
+- The grounded refund run exercises primitive-aware detail: included and
+  budget-dropped context, a token budget bar, authored/dynamic PromptText
+  segments, turn decisions, full tool arguments/results, sanitized image
+  metadata, memory-capture disposition, redaction evidence, and timing/token
+  splits.
+- The refund-resolution flow shows ordered steps plus a real child member run;
+  the member row drills into the child through the normal Runs read model.
 - **Index** shows authored contexts, tools, prompts, Eval Cases, and the Eval.
 - **Insights** is populated by the product-owned Inspect analyzer. The seeded
   slow, high-token, costly, repeated-tool, retrieval, guardrail, and error

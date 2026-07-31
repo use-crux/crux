@@ -40,16 +40,18 @@ type Runs struct {
 	diagnosis       *RunDiagnosis
 	focus           runsFocus
 
-	runList        *kit.ListPane[api.ObservabilityRunSummary]
-	spanList       *kit.ListPane[RunRow]
-	spanDocument   *kit.DocumentPane
-	size           Size
-	layout         runsLayout
-	filteringRuns  bool
-	runQuery       string
-	runStatusIndex int
-	expandedRows   map[string]bool
-	exportState    runExportState
+	runList          *kit.ListPane[api.ObservabilityRunSummary]
+	spanList         *kit.ListPane[RunRow]
+	spanDocument     *kit.DocumentPane
+	size             Size
+	layout           runsLayout
+	filteringRuns    bool
+	runQuery         string
+	runStatusIndex   int
+	expandedRows     map[string]bool
+	expandedPayloads map[string]bool
+	showAllSpans     bool
+	exportState      runExportState
 }
 
 type runsFocus int

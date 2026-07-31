@@ -176,7 +176,7 @@ func TestRunsResizeReachesFocusedPaneBeforeNavigationThroughRealProgram(t *testi
 	if driver.before == "" || driver.after == driver.before {
 		t.Fatalf("selection after resized page navigation = %q, want change from %q", driver.after, driver.before)
 	}
-	if !strings.Contains(driver.snapshot, "hierarchy row 19") {
+	if !strings.Contains(driver.snapshot, "hierarchy row 18") {
 		t.Fatalf("resized pane did not keep its selected last row visible:\n%s", driver.snapshot)
 	}
 	assertTerminalFrameGeometry(t, driver.snapshot, 100, 30)

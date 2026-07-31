@@ -23,7 +23,7 @@ func (c *preservingRunDetailClient) ObservabilityRunDetail(context.Context, stri
 	return c.detail, true, nil
 }
 
-// TestRunsExportEmitsCmd asserts pressing `e` with a selected run
+// TestRunsExportEmitsCmd asserts pressing `x` with a selected run
 // returns a non-nil tea.Cmd — the cmd writes the run's JSON to
 // ~/.crux/exports/run-{id}.json and emits an `exportSavedMsg`. The
 // actual file IO is exercised via the cmd; the screen-level behavior
@@ -36,22 +36,22 @@ func TestRunsExportEmitsCmd(t *testing.T) {
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
 	})
 
-	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
-		t.Error("pressing `e` returned nil cmd; expected export emitter")
+		t.Error("pressing `x` returned nil cmd; expected export emitter")
 	}
 }
 
-// TestRunsExportWithoutSelectionIsNoop asserts pressing `e` with no
+// TestRunsExportWithoutSelectionIsNoop asserts pressing `x` with no
 // run loaded does nothing (returns nil) so the user doesn't see a
 // surprise file appear.
 func TestRunsExportWithoutSelectionIsNoop(t *testing.T) {
 	r := NewRuns()
 	// No detail and no pane selection.
 
-	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd != nil {
-		t.Errorf("pressing `e` without a run returned non-nil cmd %v", cmd)
+		t.Errorf("pressing `x` without a run returned non-nil cmd %v", cmd)
 	}
 }
 

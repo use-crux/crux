@@ -107,7 +107,7 @@ func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
 }
 
 func TestSpanDetailSurfacesObservedError(t *testing.T) {
-	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
+	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","code":"TOOL_TIMEOUT","phase":"execution","retryable":false}`)
 	r := NewRuns()
 	selectRunForTest(r, "run-error")
 	setRunDiagnosisForTest(r, runDiagnosisFixture{
@@ -141,7 +141,7 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	selectSpanForTest(r, "sp-error")
 
 	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))
-	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {
+	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "code", "TOOL_TIMEOUT", "phase", "execution", "retryable", "false", "error.stack", "search.ts:10:3"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("rendered error span missing %q\nfull output:\n%s", want, plain)
 		}

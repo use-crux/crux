@@ -21,6 +21,9 @@ func (s *Runs) waterfallHeader(width int) string {
 
 func (s *Runs) waterfallHeaderBlock(width int) string {
 	header := s.waterfallHeader(width)
+	if strip := s.runHeaderStrip(width); strip != "" {
+		header += "\n" + strip
+	}
 	snapshot := s.detailResource.Snapshot()
 	status := resourceLifecycleStatus(snapshot.State, snapshot.Refreshing, snapshot.Err)
 	if status == "" {

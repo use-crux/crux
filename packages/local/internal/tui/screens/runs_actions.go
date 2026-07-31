@@ -5,7 +5,9 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -53,6 +55,10 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		exportReason = "load a run before exporting"
 	}
 	definitionReason := disabledUnless(len(s.definitionChoices()) > 0, "no definition references")
+	failureReason := disabledUnless(len(s.failingSpanIDs()) > 0, "run has no failing spans")
+	payloadReason := disabledUnless(s.currentActivity() != nil && s.currentActivity().Primitive == "tool.call", "select a tool.call span")
+	memberReason := disabledUnless(s.firstMemberRun() != nil, "run has no child members")
+	triageReason := disabledUnless(s.diagnosis != nil && runStatusFailed(s.diagnosis.Summary.Status), "run is not failed")
 	activateReason := ""
 	switch s.focus {
 	case focusRuns:
@@ -161,6 +167,48 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 			Run:            func() tea.Cmd { return s.cycleRunStatusFilter(ctx, client) },
 		},
 		{
+			ID:             "runs.failure-next",
+			Binding:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "next failure")),
+			DisabledReason: failureReason,
+			Run: func() tea.Cmd {
+				s.stepFailure(1)
+				return nil
+			},
+		},
+		{
+			ID:             "runs.failure-previous",
+			Binding:        key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "previous failure")),
+			DisabledReason: failureReason,
+			Run: func() tea.Cmd {
+				s.stepFailure(-1)
+				return nil
+			},
+		},
+		{
+			ID:             "runs.payload",
+			Binding:        key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "expand payload")),
+			DisabledReason: payloadReason,
+			Run: func() tea.Cmd {
+				s.togglePayload()
+				return nil
+			},
+		},
+		{
+			ID:             "runs.triage",
+			Binding:        key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "all/failure path")),
+			DisabledReason: triageReason,
+			Run: func() tea.Cmd {
+				s.toggleTriageRows()
+				return nil
+			},
+		},
+		{
+			ID:             "runs.member",
+			Binding:        key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "open child run")),
+			DisabledReason: memberReason,
+			Run:            func() tea.Cmd { return s.openFirstMember(ctx, client) },
+		},
+		{
 			ID:             "runs.definition",
 			Binding:        key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "open definition")),
 			DisabledReason: definitionReason,
@@ -174,7 +222,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:             "runs.export",
-			Binding:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export run")),
+			Binding:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export run")),
 			DisabledReason: exportReason,
 			Run:            s.exportRun,
 		},
@@ -222,10 +270,46 @@ func (s *Runs) waterfallKeybinds() []shell.Keybind {
 		return nil
 	}
 	return actionKeybinds(s.Actions(context.TODO(), nil), map[string]bool{
-		"runs.activate": true,
-		"runs.inspect":  true,
-		"runs.export":   true,
+		"runs.activate":         true,
+		"runs.failure-next":     true,
+		"runs.failure-previous": true,
+		"runs.payload":          true,
+		"runs.member":           true,
+		"runs.inspect":          true,
+		"runs.export":           true,
 	})
+}
+
+func (s *Runs) togglePayload() {
+	span := s.currentSpan()
+	if span == nil {
+		return
+	}
+	if s.expandedPayloads == nil {
+		s.expandedPayloads = map[string]bool{}
+	}
+	s.expandedPayloads[span.ID] = !s.expandedPayloads[span.ID]
+	s.resizeSpanDocument(s.layout.detail)
+}
+
+func (s *Runs) openFirstMember(ctx context.Context, client DataClient) tea.Cmd {
+	member := s.firstMemberRun()
+	if member == nil {
+		return nil
+	}
+	detail := detailForMember(s.diagnosis.Raw.SchemaVersion, *member)
+	s.ensureSelectedRunVisible(member.Run.RunID)
+	s.runList.SetItems(s.selectableRuns())
+	s.runList.Select(member.Run.RunID)
+	s.spanList.SetItems(nil)
+	s.diagnosis = nil
+	s.showAllSpans = false
+	_, token := s.detailResource.Begin(ctx, runsDetailOwner(member.Run.RunID), uint64Revision(member.Run.Revision))
+	_ = s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail]{
+		Token: token,
+		Value: detail,
+	}, client)
+	return nil
 }
 
 func actionKeybinds(actions []interaction.Action, allowed map[string]bool) []shell.Keybind {

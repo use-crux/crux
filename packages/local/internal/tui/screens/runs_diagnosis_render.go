@@ -16,6 +16,9 @@ func renderDiagnosisOverview(diagnosis *RunDiagnosis, width int) string {
 	}
 	var b strings.Builder
 	b.WriteString(diagnosisSection("RUN SUMMARY"))
+	if diagnosis.Summary.RunID != "" {
+		b.WriteString(kvRow("run", diagnosis.Summary.RunID, width))
+	}
 	b.WriteString(kvRow("status", diagnosis.Summary.Status, width))
 	if diagnosis.Summary.DurationMs > 0 {
 		b.WriteString(kvRow("duration", formatSpanDuration(diagnosis.Summary.DurationMs), width))

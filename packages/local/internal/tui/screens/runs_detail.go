@@ -92,8 +92,13 @@ func (s *Runs) renderSpanDetailDocument(span *api.InspectRunSpan, width int) str
 	b.WriteString(kvRow("start", formatSpanStart(span.StartedAt, s.runStartedAtMillis()), width))
 	dur := formatSpanDuration(deref(span.DurationMs))
 	b.WriteString(kvRowColored("duration", dur, durationColor(span.DurationMs, s.runDurationPointer()), width))
-	b.WriteString(kvRow("self", "—", width)) // self time not exposed by backend
+	if activity := s.currentActivity(); activity != nil && activity.Timing.SelfMs > 0 {
+		b.WriteString(kvRow("self", formatSpanDuration(activity.Timing.SelfMs), width))
+	}
 	b.WriteString(s.childrenRow(span, width))
+	if splits := renderSpanSplitBars(s.currentActivity(), width); splits != "" {
+		b.WriteString(splits)
+	}
 	b.WriteString("\n")
 
 	// COST
@@ -127,6 +132,14 @@ func (s *Runs) renderSpanDetailDocument(span *api.InspectRunSpan, width int) str
 		b.WriteString(s.section(spanDetailHeader(span)))
 		b.WriteString(payload)
 		b.WriteString("\n")
+	}
+	if depth := renderPrimitiveDepth(s.currentActivity(), width, s.payloadIsExpanded(span.ID)); depth != "" {
+		b.WriteString(depth)
+		b.WriteString("\n\n")
+	}
+	if members := s.renderSelectedMemberRuns(span.ID, width); members != "" {
+		b.WriteString(members)
+		b.WriteString("\n\n")
 	}
 
 	// TIMINGS — only when the primitive carries detailed timing signals.
@@ -171,6 +184,22 @@ func (s *Runs) renderSpanDetailDocument(span *api.InspectRunSpan, width int) str
 	}
 
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func (s *Runs) payloadIsExpanded(spanID string) bool {
+	return s.expandedPayloads != nil && s.expandedPayloads[spanID]
+}
+
+func (s *Runs) renderSelectedMemberRuns(spanID string, width int) string {
+	if s.diagnosis == nil {
+		return ""
+	}
+	rootID := firstNonEmpty(s.diagnosis.Raw.Root.SpanID, s.diagnosis.Raw.Root.ID)
+	if spanID != rootID || (s.diagnosis.Raw.Run.RootPrimitive != "flow.run" &&
+		s.diagnosis.Raw.Root.Family != "flow" && s.diagnosis.Raw.Root.Family != "composition") {
+		return ""
+	}
+	return renderMemberRuns(s.diagnosis.Raw, width)
 }
 
 func formatDocumentPosition(position kit.DocumentPosition) string {
