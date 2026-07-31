@@ -115,6 +115,7 @@ import {
 } from "./PrimitiveCards";
 import { EvalCard } from "./EvalCard";
 import { DeferredWorkCard } from "./DeferredWorkCard";
+import { EffectCard } from "./EffectCard";
 import { WorkspaceSnapshotCard } from "../workspace-snapshot/card";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
 import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
@@ -4395,6 +4396,31 @@ export function SpanDetailPanel({
             resetKey={node.id}
           >
             <DeferredWorkCard node={node} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    );
+  }
+
+  // Effects are domain state transitions with receipt and recovery semantics.
+  // Keep their safe receipt summary and recovery linkage on one dedicated card.
+  if (node.primitive === "effect.run") {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader
+          node={node}
+          detail={detail}
+          kind={kind}
+          isRoot={isRoot}
+          trace={trace}
+        />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Effect" compact resetKey={node.id}>
+            <EffectCard
+              node={node}
+              root={detail.root}
+              onSelectSpan={(spanId) => onSelectSpan?.(spanId)}
+            />
           </SectionErrorBoundary>
         </div>
       </div>

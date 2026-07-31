@@ -52,6 +52,7 @@ export type PrimitiveKind =
   | "generation"
   | "agent"
   | "tool"
+  | "effect"
   | "memory-capture"
   | "memory"
   | "handoff"
@@ -73,6 +74,7 @@ export function classifyPrimitive(
   if (primitive.startsWith("media.")) return "operation";
   if (primitive.startsWith("agent.")) return "agent";
   if (primitive.startsWith("tool.")) return "tool";
+  if (primitive === "effect.run") return "effect";
   if (primitive === "memory.capture") return "memory-capture";
   if (primitive.startsWith("memory.")) return "memory";
   if (primitive.startsWith("handoff.") || primitive.startsWith("delegate."))
@@ -115,6 +117,8 @@ export function tabsForKind(kind: PrimitiveKind): readonly InspectTabId[] {
       return ["output", "context", "tools", "retrieval", "scores", "citations"];
     case "tool":
       return ["tool"];
+    case "effect":
+      return ["report"];
     case "memory-capture":
     case "memory":
       return ["memory"];
@@ -152,6 +156,7 @@ export const KIND_ACCENT: Record<PrimitiveKind, string> = {
   generation: "var(--devtools-warn)",
   agent: "var(--devtools-iris)",
   tool: "var(--devtools-fg-muted)",
+  effect: "var(--devtools-plum)",
   "memory-capture": "var(--devtools-plum)",
   memory: "var(--devtools-plum)",
   handoff: "var(--devtools-fg-faint)",
