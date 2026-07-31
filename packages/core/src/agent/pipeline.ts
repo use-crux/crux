@@ -63,7 +63,8 @@ interface RuntimeStep {
   retry?: RetryOptions
 }
 
-interface PipelinePreparationOptions {
+/** Composition-boundary preparation accepted by `pipeline()` definitions. */
+export interface PipelinePreparationOptions {
   prepareInvocation?: PrepareInvocation<unknown, PipelineInvocationContext>
 }
 
