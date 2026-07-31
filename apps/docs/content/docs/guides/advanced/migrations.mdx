@@ -1,11 +1,49 @@
 ---
 title: Removed APIs
-description: What the structured-output and streaming-safety rollout removed, and what replaces each one.
+description: Removed pre-launch APIs, their replacements, and the semantic changes to account for.
 ---
 
 Crux is pre-launch and prefers one mental model over compatibility aliases, so
 these APIs were removed outright rather than deprecated. Each row has a direct
 replacement.
+
+## Context planning
+
+Request pressure now applies to the complete provider request. Plain
+contributors are exact and required; only explicit representation wrappers
+authorize a smaller form.
+
+| Removed | Replacement |
+| --- | --- |
+| Resolver or adapter `tokenBudget` | `inputBudget: { optimizeAt?, max? }` |
+| Stateless `recentMessages()` | `history.recent()` |
+| Stateful MemoryBlock `recentMessages()` | Removed; canonical history belongs to caller messages or Thread |
+| `createSlidingWindow()` | `history.recent()` or managed `history()` |
+| `createBudgetManager()` | `inputBudget` plus representation wrappers |
+| `summarizeMessages()` | `history({ summary: { strategy } })` |
+| `compactConversation()` | Managed `history()` |
+| `prompt.inspect()` | `preview(target, options)` before execution |
+| Serialized `receipt.inspect()` | `inspectRequest(receiptOrId)` |
+
+These changes are semantic:
+
+- A bare Thread or caller transcript is complete exact history; it no longer
+  implies a ten-message window.
+- `inputBudget` measures messages, system content, Tools and schemas, media,
+  output reserve, and provider overhead. It never drops a context merely
+  because that context has low priority.
+- `history.recent()` preserves causal Tool groups and leading system
+  directives. Managed `history()` keeps summaries as derived assistant
+  evidence while canonical messages remain unchanged.
+- `prefer()`, `summarizable()`, `offloadable()`, and outermost `droppable()`
+  define the only legal fidelity ladder.
+- `preview()` is observational: it does not generate artifacts, publish
+  references, schedule maintenance, execute Tools, or reserve a request.
+- Executed request receipts retain compact JSON-safe facts. Full redacted
+  evidence is available through live inspection, recent in-process lookup, or
+  the configured observability retention pipeline.
+
+See [Context planning](/docs/guides/context-planning) for the complete model.
 
 ## Structured output
 

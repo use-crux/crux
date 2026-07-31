@@ -18,7 +18,10 @@ They can also bundle richer primitives such as
 
 Once you have more than one or two prompts, parts of every prompt repeat: brand voice, terminology, schema definitions, tool instructions, the current date, the user's locale. Copy-pasting them into every prompt creates drift the moment one of them needs to change.
 
-Contexts let you define a fragment once and compose it into any prompt via `use: [...]`. Their input schemas merge into the prompt's input type, their system text is appended after the prompt's own system text, and low-priority contexts can be dropped under token pressure.
+Contexts let you define a fragment once and compose it into any prompt via
+`use: [...]`. Their input schemas merge into the prompt's input type, and their
+system text is appended after the prompt's own system text. A context remains
+exact unless an explicit representation wrapper authorizes a smaller form.
 
 ## When should I use a context?
 
@@ -78,13 +81,14 @@ When a prompt resolves, contexts are processed in this order:
 3. **Compose** the prompt's own system text first, followed by cached contexts
    as a stable prefix and then uncached contexts as the droppable tail. Each
    tier preserves `use` order.
-4. **Apply the token budget** by dropping the lowest-priority uncached contexts
-   until the text fits. The prompt's own system text and cached prefix remain.
+4. **Retain exact contributions** unless `prefer()`, `summarizable()`,
+   `offloadable()`, or `droppable()` explicitly authorizes another
+   representation.
 
-Priority is `0–100` (default `50`). Higher priority means dropped later under
-token pressure. It does not reorder contexts within a cache tier. See [Context
-Caching](/docs/guides/contexts/caching) for prefix behavior and [Best
-Practices](/docs/foundations/best-practices) for priority guidelines.
+Priority is `0–100` (default `50`). It orders fidelity decisions between
+authorized ladders and does not reorder contexts within a cache tier. See
+[Context Caching](/docs/guides/contexts/caching) for prefix behavior and
+[Context planning](/docs/guides/context-planning) for representation rules.
 
 ## Conditional Contexts
 
@@ -202,17 +206,11 @@ const assistant = prompt({
 
 This is best for static decisions known when the prompt is created. Use `when()` for runtime decisions based on input.
 
-### Debug what was excluded
+### Preview the composed request
 
-Prompt inspection includes excluded conditional contexts, so users can see why a context did not contribute.
-
-```ts
-const inspection = await articlePrompt.inspect({
-  input: { title: "Launch notes", mode: "draft" },
-});
-
-console.log(inspection.excludedContexts);
-```
+Use `preview()` with the same input and model to measure the prospective
+complete request without executing it. Conditional contexts follow the same
+resolution path as execution.
 
 Excluded contexts are not resolved, do not call async `system()` functions, and do not contribute tools. Their input keys still become optional in the merged type because Crux cannot know at compile time which runtime branch will be active.
 
@@ -222,7 +220,7 @@ Excluded contexts are not resolved, do not call async `system()` functions, and 
 
 ```ts title="context-with-memory.ts"
 import { context, prompt } from "@use-crux/core";
-import { memory, recentMessages, facts } from "@use-crux/core/memory";
+import { memory, facts } from "@use-crux/core/memory";
 import { skill } from "@use-crux/core/skill/node";
 import { z } from "zod";
 
@@ -230,10 +228,7 @@ const userMemory = memory({
   id: "user-memory",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [
-    recentMessages({ id: "recent", maxMessages: 8 }),
-    facts({ id: "facts", embed: dense }),
-  ],
+  blocks: [facts({ id: "facts", embed: dense })],
 });
 
 const escalationSkill = skill.fromFile("./skills/escalation/SKILL.md");
@@ -263,7 +258,10 @@ This keeps prompt wiring small:
 prompt -> personalizedSupport -> userMemory + escalationSkill
 ```
 
-The nested memory still behaves like memory. It renders its context, exposes its tools, participates in capture/flush, and appears in inspection/devtools through the same resolution path as if it were placed directly in the prompt `use` array.
+The nested memory still behaves like memory. It renders its context, exposes
+its tools, participates in capture/flush, and appears in request evidence
+through the same resolution path as if it were placed directly in the prompt
+`use` array.
 
 Use this pattern when a context is really a product capability, not just text. For one-off prompts, putting [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), or [skills](/docs/guides/skills) directly in `prompt({ use: [...] })` is simpler.
 
@@ -284,7 +282,7 @@ Use this pattern when a context is really a product capability, not just text. F
   />
   <Card
     title="Token budget"
-    description="Set a budget and let Crux drop lowest-priority contexts under pressure."
+    description="Set whole-request limits and authorize explicit representation ladders."
     href="/docs/guides/contexts/token-budget"
   />
   <Card

@@ -1,0 +1,50 @@
+---
+title: History planning
+description: Keep canonical history exact while authorizing safe projections.
+---
+
+Caller-owned `messages` are the canonical transcript. Bare history is complete
+and exact; Crux never infers a ten-message window or mutates the source under
+pressure.
+
+Use `history.recent()` for a stateless exact suffix:
+
+```ts
+import { history, prompt } from "@use-crux/core";
+
+const reply = prompt({
+  id: "reply",
+  use: [history.recent({ messages: 12 })],
+  prompt: "Continue the conversation.",
+});
+```
+
+The projection keeps leading system directives and never splits a Tool call
+from its result. Message and token limits are soft when the newest causal group
+is larger than the limit.
+
+Use managed `history()` when older turns may become a derived summary:
+
+```ts
+import { history, prompt, summarize } from "@use-crux/core";
+
+const reply = prompt({
+  id: "managed-reply",
+  use: [
+    history({
+      recent: { messages: 8 },
+      summary: { strategy: summarize.adaptive() },
+      onMiss: "inline",
+    }),
+  ],
+  prompt: "Continue the conversation.",
+});
+```
+
+Summaries are assistant-role derived evidence, not system authority. Their
+identity includes the canonical prefix, strategy version, model, and
+governance. `onMiss` controls whether a missing artifact is prepared inline,
+falls back to the recent exact suffix, or fails before dispatch.
+
+Canonical messages remain unchanged in every mode. A later request can plan
+from them again at full fidelity.

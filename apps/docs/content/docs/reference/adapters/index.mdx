@@ -423,7 +423,7 @@ Options for adapter `generate()` calls.
 | `model`           | `string`                                                     | Model identifier                                            |
 | `input`           | `Record<string, unknown>?`                                   | Input for the prompt                                        |
 | `provider`        | `string?`                                                    | Provider identifier for adaptation matching                 |
-| `tokenBudget`     | `number?`                                                    | Token budget for system message                             |
+| `inputBudget`     | `{ optimizeAt?: number; max?: number }?`                     | Whole-request soft watermark and strict input maximum       |
 | `maxSteps`        | `number?`                                                    | Maximum tool loop iterations. Default: 10.                  |
 | `settings`        | `GenerationSettings?`                                        | Additional generation settings (highest precedence)         |
 | `extra`           | `TExtra?`                                                    | Provider-specific options                                   |
@@ -501,7 +501,7 @@ Create an SDK-loop executor from a `LoopRuntimePort`. Provider packages should i
 | --------- | --------------------------------------------------- | ----------------- |
 | `port`    | `LoopRuntimePort<TModel, TRawResponse, TRawStream>` | Loop runtime port |
 
-`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `toolApproval`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeout`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. `timeout` is structured: `totalMs` covers the whole managed call, `stepMs` covers provider attempts, `chunkMs` covers stream inactivity, and `toolMs` / `tools[name]` cover tool execution. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
+`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `toolApproval`, `messages`, `maxSteps`, `settings`, `inputBudget`, `timeout`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. `timeout` is structured: `totalMs` covers the whole managed call, `stepMs` covers provider attempts, `chunkMs` covers stream inactivity, and `toolMs` / `tools[name]` cover tool execution. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
 
 ## `LoopRuntimePort`
 

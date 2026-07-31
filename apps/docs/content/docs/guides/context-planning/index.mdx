@@ -1,0 +1,49 @@
+---
+title: Context planning
+description: Fit complete provider requests without silently truncating canonical context.
+---
+
+Crux plans every language-model request after the concrete model is known and
+before provider dispatch. The planner measures the complete request—messages,
+Tools and schemas, media, output reserve, and provider overhead—then selects
+the highest-fidelity representation that fits.
+
+Plain contexts are exact and required. Pressure never makes Crux discard one.
+Authorize alternatives explicitly:
+
+```ts
+import {
+  context,
+  droppable,
+  offloadable,
+  prefer,
+  summarizable,
+} from "@use-crux/core";
+
+const full = context({ id: "catalog", system: loadFullCatalog });
+const compact = context({ id: "catalog-compact", system: loadCatalogIndex });
+
+const catalog = droppable(
+  offloadable(
+    summarizable(
+      prefer(full, compact),
+    ),
+  ),
+);
+```
+
+The fixed fidelity order is full → authored alternative → generated summary →
+exact-recovery reference → omission. `droppable()` must be outermost because
+omission is terminal. Tools, Safety policies, middleware, and Skills owned by a
+contributor remain attached until that contributor is explicitly omitted.
+
+Every deviation appears in the executed request receipt. If no authorized
+complete candidate fits, execution throws `RequestCompositionError` before the
+provider is called.
+
+<Cards>
+  <Card title="History" href="/docs/guides/context-planning/history" description="Project exact transcripts with recent or managed history." />
+  <Card title="Budgets" href="/docs/guides/context-planning/budgets" description="Set soft and strict whole-request pressure limits." />
+  <Card title="Adaptive hooks" href="/docs/guides/context-planning/hooks" description="Prepare each step or managed child invocation." />
+  <Card title="Receipts and preview" href="/docs/guides/context-planning/receipts-preview" description="Inspect prospective and executed request evidence." />
+</Cards>

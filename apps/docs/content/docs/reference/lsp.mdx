@@ -301,7 +301,7 @@ application code.
 **Crux: Preview PromptText in Application Runtime** is available only for a
 current semantic Prompt owner and an active `crux dev` runtime that published
 that exact Prompt through `configure({ prompts })`. Devtools shows an explicit
-confirmation before dispatch. Dispatch invokes `Prompt.inspect()` once. It
+confirmation before dispatch. Dispatch invokes observational `preview()` once. It
 does not call a model, invoke tools, or create a Run or observability record,
 but authored callbacks are trusted application code and may perform their own
 I/O or side effects. Inputs and results remain in the active in-memory preview

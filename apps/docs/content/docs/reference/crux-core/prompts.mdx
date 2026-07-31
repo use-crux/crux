@@ -1,6 +1,6 @@
 ---
 title: Prompts
-description: prompt(), createPrompts(), Prompt, and prompt inspection.
+description: prompt(), createPrompts(), Prompt resolution, and request preview.
 ---
 
 ```ts
@@ -64,7 +64,6 @@ const summarize = prompt({
 | Method              | Description                                                                   |
 | ------------------- | ----------------------------------------------------------------------------- |
 | `.resolve(options)` | Validate and return the composed `ResolvedPrompt` without calling a model.    |
-| `.inspect(options)` | Return composition, source, and token-budget details without calling a model. |
 
 ## PromptText
 
@@ -114,23 +113,29 @@ resolved.settings;
 
 It validates input and runs composition but does not call a model.
 
-## `.inspect(options)`
+## `preview(target, options)`
 
-`.inspect()` runs the same resolution path and adds debugging metadata:
+`preview()` observes whole-request planning without running provider calls,
+Tools, preparation callbacks, or artifact publication:
 
 ```ts
-const inspection = await support.inspect({
+import { preview } from "@use-crux/core";
+
+const result = await preview(support, {
   input: { userId: "user_123", question: "How do I configure SSO?" },
-  tokenBudget: 4000,
+  model,
+  inputBudget: { max: 4000 },
 });
 
-inspection.system.parts;
-inspection.droppedContexts;
-inspection.excludedContexts;
-inspection.totalTokens;
+result.status;
+result.inputTokens;
+result.adaptations;
+result.diagnostics;
 ```
 
-Use it to understand what was included, excluded, cached, or dropped.
+Use it to understand whether a request fits and which authorized
+representations are ready or still require execution-time preparation. For
+complete evidence about an executed request, inspect its request receipt.
 
 ## `compilePrompt(config, { ports? })`
 

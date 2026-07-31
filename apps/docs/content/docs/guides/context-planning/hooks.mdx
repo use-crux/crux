@@ -1,0 +1,35 @@
+---
+title: Adaptive preparation hooks
+description: Amend a request at provider-step or managed-child boundaries.
+---
+
+`prepareStep` runs before every semantic provider call, including later Tool
+rounds and structured-output retries. It receives immutable input, transcript,
+prior request evidence, honest run statistics, and only the resources declared
+for that callback.
+
+```ts
+const result = await generate(reply, {
+  model,
+  prepareStep: async ({ reason, stats, previousReceipt }) => {
+    if (reason === "tool-result" && stats.run.usage.inputTokens > 20_000) {
+      return { inputBudget: { max: 24_000 } };
+    }
+    return {};
+  },
+});
+```
+
+Amendments are boundary-local and constrained: add or remove declared
+contributors and Tools, choose a concrete model, or narrow the input budget.
+They do not accumulate accidentally across steps. Invalid amendments, timeouts,
+and unavailable declared resources fail before provider dispatch.
+
+`prepareInvocation` applies one immutable child baseline before a managed
+Pipeline, Parallel, Consensus, or Swarm child runs. The child's `prepareStep`
+decisions then layer on top for each provider call. Function-only stages and
+nested orchestration wrappers do not create a false preparation boundary.
+
+Resource reads are revision-pinned. Blackboard or working-state content is
+available to the callback and same-boundary resolution, but raw values never
+enter receipts, diagnostics, or errors.

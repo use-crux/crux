@@ -1,0 +1,5 @@
+{
+  "title": "Context planning",
+  "description": "Plan complete provider requests, adapt authorized representations, and inspect request evidence.",
+  "pages": ["index", "history", "budgets", "hooks", "receipts-preview"]
+}

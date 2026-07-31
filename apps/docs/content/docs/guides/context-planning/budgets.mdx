@@ -1,0 +1,41 @@
+---
+title: Input budgets
+description: Apply soft and strict limits to the complete provider request.
+---
+
+`inputBudget` controls whole-request pressure:
+
+```ts
+const result = await generate(reply, {
+  model,
+  input,
+  inputBudget: {
+    optimizeAt: 24_000,
+    max: 30_000,
+  },
+});
+```
+
+- `optimizeAt` is a soft watermark. Crux prefers the highest-fidelity complete
+  candidate that fits below it.
+- `max` is strict. If no authorized candidate fits, the request fails before
+  provider dispatch.
+
+The effective maximum also reserves the model's configured output allowance,
+provider framing overhead, and a safety margin for estimated counting.
+Adapters may provide an authoritative complete-request counting port.
+
+An Agent can declare a default and an invocation can narrow it:
+
+```ts
+const writer = agent({
+  id: "writer",
+  prompt: writePrompt,
+  model,
+  inputBudget: { optimizeAt: 16_000, max: 24_000 },
+});
+```
+
+Budgets never authorize loss. Wrap a contributor with `prefer()`,
+`summarizable()`, `offloadable()`, or `droppable()` to define the legal
+degradation ladder.

@@ -41,24 +41,20 @@ const chatPrompt = prompt({ use: [terminology], ... })
 
 ## Set priorities deliberately
 
-Context priority (0–100) controls two things: ordering in the system message and which contexts survive token budget pressure. Higher priority = appears first and drops last.
-
-General guidelines:
-
-- **90–100**: Critical instructions that must always be present (date, mode, core rules)
-- **60–80**: Important context (schema definitions, tool instructions, agent state)
-- **30–50**: Helpful but droppable (brand voice, style guides, examples)
-- **0–20**: Nice-to-have (terminology glosses, formatting hints)
+Priority orders authorized alternatives; it does not make a plain Context
+droppable. Keep critical instructions exact, and wrap only content whose
+fidelity may change:
 
 ```ts
-context({ priority: 90, system: `Today is ${date}.` }); // always kept
-context({ priority: 70, system: "## Editor schema\n..." }); // kept unless budget is tight
-context({ priority: 30, system: "## Brand voice\n..." }); // first to drop
+const rules = context({ priority: 90, system: `Today is ${date}.` });
+const examples = droppable(
+  context({ priority: 30, system: "## Examples\n..." }),
+);
 ```
 
 <Callout type="idea">
-  Use `.inspect()` during development to verify your priority ordering works as
-  expected under different token budgets.
+  Use `preview()` during development to verify prospective selection under
+  different input budgets.
 </Callout>
 
 ## Use `when` to skip irrelevant contexts

@@ -1,0 +1,45 @@
+---
+title: Receipts and preview
+description: Observe prospective fit and inspect redacted executed-request evidence.
+---
+
+Use `preview()` before execution:
+
+```ts
+import { preview } from "@use-crux/core";
+
+const result = await preview(writer, {
+  input: { topic: "Release notes" },
+  inputBudget: { max: 24_000 },
+});
+
+if (result.status === "over-limit") {
+  console.error(result.diagnostics);
+}
+```
+
+`status` is `fits`, `over-limit`, or `unknown`. `unknown` means runtime-only
+sources or an unprepared summary/reference could change the outcome. Preview
+may resolve read-only sources and reuse existing artifacts. It never generates
+summaries, publishes offloads, schedules maintenance, writes canonical state,
+executes Tools, or reserves a request.
+
+Every executed provider step has a small JSON-safe `RequestReceipt`:
+
+```ts
+const receipt = result.steps[0].request;
+console.log(receipt.inputTokens, receipt.adaptations);
+
+const details = await receipt.inspect();
+```
+
+Full inspection contains redacted contributor identities, candidate rejection
+reasons, token attribution, counting margins, artifact and support-call
+receipts, support Tools, preparation decisions, and linked request IDs. It
+never contains authored prompt, message, Tool-result, or resource content.
+
+`inspect` is non-enumerable, so receipts round-trip through JSON. For a
+serialized receipt, use `inspectRequest(receiptOrId)` while evidence remains in
+the bounded process buffer. Cross-process or longer retention uses the existing
+observability pipeline; expiry leaves the small receipt useful and produces a
+typed `RequestInspectionUnavailableError`.

@@ -168,7 +168,7 @@ PromptText has three deliberately different inspection modes:
 
 - **Static preview** analyzes the current editor buffer without executing
   application code. Runtime-only values remain `⟪unknown⟫`.
-- **Exact preview** explicitly invokes `Prompt.inspect()` in a selected
+- **Exact preview** explicitly invokes observational `preview()` for a selected
   connected application runtime. Devtools presents assembled system parts,
   user-prompt provenance, token totals and budget, dropped/excluded contexts,
   and validation issues. Opening the page does not dispatch inspection.

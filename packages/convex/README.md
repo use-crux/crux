@@ -28,7 +28,7 @@ app.use(crux);
 ```ts
 import { createCruxConvex, prompt } from "@use-crux/convex";
 import { context } from "@use-crux/convex/context";
-import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { memory, workingState } from "@use-crux/convex/memory";
 import { knowledgeBase, retrievalRecipe } from "@use-crux/convex/retrieval";
 import { skill } from "@use-crux/convex/skill";
 import { tool } from "@use-crux/convex/tools";
@@ -47,7 +47,9 @@ The mirrored subpaths intentionally stay close to `@use-crux/core`:
 | `convexAgent()`               | Convex-only API      | Profile-backed helper that resolves a Crux prompt per Convex Agent turn.                                         |
 | `createCruxConvex()`          | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
 
-Avoid split imports inside Convex files when a Convex profile exists. For example, import memory blocks from `@use-crux/convex/memory`, not `memory` from `@use-crux/convex/memory` plus `recentMessages` from `@use-crux/core/memory`.
+Avoid split imports inside Convex files when a Convex profile exists. For
+example, import memory blocks from `@use-crux/convex/memory`; import canonical
+history projection separately from `@use-crux/core/history`.
 
 The package root is curated. It exports Convex APIs plus common prompt authoring helpers (`prompt`, `context`, `createPrompts`, `createContexts`, and sanitization helpers), but it does not blanket re-export every `@use-crux/core` API. If a Convex mirror exists, prefer it; if no mirror exists yet, import the SDK-agnostic primitive from `@use-crux/core`.
 
@@ -517,7 +519,7 @@ The exported `ConvexAgentConfig` type encodes that requirement through `ConvexAg
 ```ts
 import { openai } from "@ai-sdk/openai";
 import { createCruxConvex, prompt } from "@use-crux/convex";
-import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { memory, workingState } from "@use-crux/convex/memory";
 import { skill } from "@use-crux/convex/skill";
 import { tool } from "@use-crux/convex/tools";
 import { z } from "zod";
@@ -532,10 +534,7 @@ const draftState = z.object({
 
 const editorMemory = memory({
   id: "editor-memory",
-  blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
-    workingState({ id: "draft-state", schema: draftState }),
-  ],
+  blocks: [workingState({ id: "draft-state", schema: draftState })],
 });
 
 const copyEditing = skill.inline({

@@ -8,7 +8,7 @@ Give your Convex Agent threads Crux prompts, memory, tools, and skills. `crux.co
 ```ts
 import { createCruxConvex, prompt } from "@use-crux/convex";
 import { context } from "@use-crux/convex/context";
-import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { memory, workingState } from "@use-crux/convex/memory";
 import { skill } from "@use-crux/convex/skill";
 import { tool } from "@use-crux/convex/tools";
 ```
@@ -22,7 +22,7 @@ Define normal Crux primitives from the Convex profile subpaths:
 
 import { createCruxConvex, prompt } from "@use-crux/convex";
 import { context } from "@use-crux/convex/context";
-import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { memory, workingState } from "@use-crux/convex/memory";
 import { skill } from "@use-crux/convex/skill";
 import { tool } from "@use-crux/convex/tools";
 import { z } from "zod";
@@ -35,7 +35,6 @@ const sessionState = z.object({
 const supportMemory = memory({
   id: "support-memory",
   blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
     workingState({ id: "session-state", schema: sessionState }),
   ],
 });

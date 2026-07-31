@@ -32,7 +32,7 @@ import {
   convexTools,
   wrapConvexTool,
 } from "@use-crux/convex/agent";
-import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { memory, workingState } from "@use-crux/convex/memory";
 import { skill } from "@use-crux/convex/skill";
 import { tool } from "@use-crux/convex/tools";
 ```
@@ -328,15 +328,10 @@ Profile-backed Crux prompt lifecycle helper:
 
 ```ts
 import { createCruxConvex, prompt } from "@use-crux/convex";
-import { memory, recentMessages } from "@use-crux/convex/memory";
+import { history } from "@use-crux/core/history";
 import { tool } from "@use-crux/convex/tools";
 import { z } from "zod";
 import { components } from "./_generated/api";
-
-const threadMemory = memory({
-  id: "support-memory",
-  blocks: [recentMessages({ id: "recent", maxMessages: 10 })],
-});
 
 const lookupOrder = tool({
   name: "lookupOrder",
@@ -347,8 +342,8 @@ const lookupOrder = tool({
 
 const supportPrompt = prompt({
   id: "support-agent",
+  use: [history.recent({ messages: 10 })],
   input: z.object({ message: z.string() }),
-  use: [threadMemory],
   tools: { lookupOrder },
   prompt: ({ input }) => input.message,
 });

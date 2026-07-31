@@ -6,6 +6,7 @@
     "---Building blocks---",
     "prompts",
     "contexts",
+    "context-planning",
     "tools",
     "media",
     "---Context & memory---",
