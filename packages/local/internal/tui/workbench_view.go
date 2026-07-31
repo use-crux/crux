@@ -66,7 +66,7 @@ func (w *Workbench) layoutBody(root kit.Rect, path []string, right string) []str
 	return kit.ComposeStyled(panes, [][]string{
 		blockLines(rail),
 		rightColumn,
-	}, workbenchStyles)
+	}, workbenchStyles, workbenchStyles.SurfaceRail)
 }
 
 func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) []string {

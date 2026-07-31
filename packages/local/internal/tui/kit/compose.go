@@ -14,13 +14,18 @@ func Compose(rects []Rect, contents [][]string) []string {
 	return compose(rects, contents, adapterStyles.Border)
 }
 
-// ComposeStyled is Compose with a theme-styled pane divider.
-func ComposeStyled(rects []Rect, contents [][]string, styles theme.Styles) []string {
-	return compose(rects, contents, ruleStyle(styles))
+// ComposeStyled is Compose with a theme-styled pane divider. When a surface is
+// supplied, the divider is part of that painted surface.
+func ComposeStyled(rects []Rect, contents [][]string, styles theme.Styles, surface ...lipgloss.Style) []string {
+	return compose(rects, contents, ruleStyle(styles, surface...))
 }
 
-func ruleStyle(styles theme.Styles) lipgloss.Style {
-	return styles.Border.Background(styles.SurfaceBody.GetBackground())
+func ruleStyle(styles theme.Styles, surface ...lipgloss.Style) lipgloss.Style {
+	rule := styles.Border
+	if len(surface) > 0 {
+		rule = rule.Background(surface[0].GetBackground())
+	}
+	return rule
 }
 
 func compose(rects []Rect, contents [][]string, dividerStyle lipgloss.Style) []string {

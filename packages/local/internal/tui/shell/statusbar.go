@@ -91,7 +91,6 @@ func StatusBar(width int, keybinds []Keybind, badge StatusBadge) string {
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	bar := left + strings.Repeat(" ", max(0, gap)) + right
 	return lipgloss.NewStyle().
-		Background(ColorPanel).
 		Foreground(ColorTextMuted).
 		Width(width).
 		Render(bar)

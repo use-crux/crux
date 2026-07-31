@@ -18,8 +18,8 @@ const (
 )
 
 // ReconcileBorders turns intersecting pane rules into one connected junction
-// graph, then normalizes every rule cell to the theme border tone on its
-// active surface. Unpainted rule cells use the body surface.
+// graph, then normalizes every rule cell to the theme border tone while
+// preserving its active surface background, including terminal default.
 func ReconcileBorders(frame string) string {
 	return ReconcileBordersStyled(frame, adapterStyles)
 }
@@ -96,15 +96,14 @@ type ansiColors struct {
 
 func normalizeBorderStyles(frame string, styles theme.Styles) string {
 	borderForeground := renderedColors(styles.Border.Render("x")).foreground
-	bodyBackground := renderedColors(styles.SurfaceBody.Render("x")).background
 	lines := strings.Split(frame, "\n")
 	for index := range lines {
-		lines[index] = normalizeBorderLine(lines[index], borderForeground, bodyBackground)
+		lines[index] = normalizeBorderLine(lines[index], borderForeground)
 	}
 	return strings.Join(lines, "\n")
 }
 
-func normalizeBorderLine(line, borderForeground, bodyBackground string) string {
+func normalizeBorderLine(line, borderForeground string) string {
 	var out strings.Builder
 	active := ansiColors{}
 	for offset := 0; offset < len(line); {
@@ -125,17 +124,13 @@ func normalizeBorderLine(line, borderForeground, bodyBackground string) string {
 			continue
 		}
 
-		background := active.background
-		if background == "" {
-			background = bodyBackground
-		}
-		if active.foreground == borderForeground && active.background == background {
+		if active.foreground == borderForeground {
 			out.WriteString(line[offset : offset+size])
 			offset += size
 			continue
 		}
 
-		writeANSIColors(&out, borderForeground, background)
+		writeANSIColors(&out, borderForeground, active.background)
 		out.WriteString(line[offset : offset+size])
 		writeANSIColors(&out, active.foreground, active.background)
 		offset += size

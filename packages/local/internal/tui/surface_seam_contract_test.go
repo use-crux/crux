@@ -21,12 +21,18 @@ import (
 var contractStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 
 var (
-	borderForeground  = firstCellStyle(contractStyles.Border.Render("x")).Foreground
-	bodyBackground    = firstCellStyle(contractStyles.SurfaceBody.Render("x")).Background
-	railBackground    = firstCellStyle(contractStyles.SurfaceRail.Render("x")).Background
-	bandBackground    = firstCellStyle(contractStyles.SurfaceBand.Render("x")).Background
-	overlayBackground = firstCellStyle(contractStyles.SurfaceOverlay.Render("x")).Background
+	railBackground = firstCellStyle(contractStyles.SurfaceRail.Render("x")).Background
+	bandBackground = firstCellStyle(contractStyles.SurfaceBand.Render("x")).Background
 )
+
+var contractProfiles = []struct {
+	name   string
+	styles theme.Styles
+}{
+	{"truecolor", theme.NewStyles(theme.Resolve(colorprofile.TrueColor))},
+	{"ansi256", theme.NewStyles(theme.Resolve(colorprofile.ANSI256))},
+	{"ansi", theme.NewStyles(theme.Resolve(colorprofile.ANSI))},
+}
 
 func TestRegisteredScreensHonorSurfaceContract(t *testing.T) {
 	for _, screenID := range registeredFixtureScreenIDs(t) {
@@ -38,7 +44,6 @@ func TestRegisteredScreensHonorSurfaceContract(t *testing.T) {
 					workbench.Resize(size.width, size.height)
 					frame := workbench.View()
 					assertDeclaredSurfaces(t, screenID, size.width, size.height, frame)
-					assertRuleStyles(t, screenID, size.width, frame)
 				})
 			}
 		})
@@ -57,87 +62,107 @@ func TestRegisteredScreensHonorJunctionContract(t *testing.T) {
 				workbench.Resize(width, height)
 				frame := workbench.View()
 				assertJunctions(t, fmt.Sprintf("%s-%dx%d", screenID, width, height), frame)
-				assertRuleStyles(t, screenID, width, frame)
 				return frame
 			})
 		})
 	}
 }
 
-func TestOverlaysHonorRuleStyleContract(t *testing.T) {
-	palette := overlays.NewPalette()
-	palette.Open()
-	help := overlays.NewHelp()
-	help.SetScreenKeybinds("runs", []shell.Keybind{shell.Bind("j/k", "move")})
-	help.Open()
-	inspect := overlays.NewInspect()
-	inspect.Open("span retrieve", "8af2f1c", json.RawMessage(`{"query":"typed prompts","hits":4}`))
-
-	for name, frame := range map[string]string{
-		"palette": palette.View(160, 45),
-		"help":    help.View(160, 45),
-		"inspect": inspect.View(160, 45),
-	} {
-		t.Run(name, func(t *testing.T) {
-			assertRuleStylesOnSurface(t, frame, overlayBackground)
+func TestRegisteredScreensHonorRuleStyleContract(t *testing.T) {
+	for _, profile := range contractProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			t.Parallel()
+			for _, screenID := range registeredFixtureScreenIDs(t) {
+				t.Run(screenID, func(t *testing.T) {
+					t.Parallel()
+					assertRuleStyleMatrix(t, fixtureWorkbenchAtScreen(t, screenID), profile.styles)
+				})
+			}
 		})
 	}
 }
 
-func TestWorkbenchOverlaysHonorRuleStyleContract(t *testing.T) {
-	tests := map[string]func(*Workbench){
-		"palette": func(workbench *Workbench) { workbench.palette.Open() },
-		"help": func(workbench *Workbench) {
-			workbench.help.SetScreenKeybinds("overview", []shell.Keybind{shell.Bind("j/k", "move")})
-			workbench.help.Open()
+func TestOverlaysHonorRuleStyleContract(t *testing.T) {
+	overlayCases := map[string]func() func(int, int) string{
+		"palette": func() func(int, int) string {
+			overlay := overlays.NewPalette()
+			overlay.Open()
+			return overlay.View
 		},
-		"inspect": func(workbench *Workbench) {
-			workbench.inspect.Open("span retrieve", "8af2f1c", json.RawMessage(`{"query":"typed prompts","hits":4}`))
+		"help": func() func(int, int) string {
+			overlay := overlays.NewHelp()
+			overlay.SetScreenKeybinds("overview", []shell.Keybind{shell.Bind("j/k", "move")})
+			overlay.Open()
+			return overlay.View
 		},
-		"definition-chooser": func(workbench *Workbench) {
-			workbench.definitionChooser.Open([]screens.DefinitionChoice{{ID: "prompt:answer"}, {ID: "agent:support"}})
+		"inspect": func() func(int, int) string {
+			overlay := overlays.NewInspect()
+			overlay.Open("span retrieve", "8af2f1c", json.RawMessage(`{"query":"typed prompts","hits":4}`))
+			return overlay.View
+		},
+		"definition-chooser": func() func(int, int) string {
+			overlay := newDefinitionChooser()
+			overlay.Open([]screens.DefinitionChoice{{ID: "prompt:answer"}, {ID: "agent:support"}})
+			return func(width, height int) string {
+				overlay.Resize(width, height)
+				return overlay.View()
+			}
 		},
 	}
-	for name, open := range tests {
-		t.Run(name, func(t *testing.T) {
-			workbench := fixtureWorkbenchAtScreen(t, "overview")
-			workbench.Resize(160, 45)
-			open(workbench)
-			frame := workbench.View()
-			assertRuleStyles(t, "overview", 160, frame)
-			assertRoundedRuleStylesOnSurface(t, frame, overlayBackground)
+	for _, profile := range contractProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			t.Parallel()
+			for name, newView := range overlayCases {
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					assertRuleFrameMatrix(t, newView(), profile.styles)
+				})
+			}
 		})
 	}
 }
 
 func TestReconcileBordersHonorsActiveThemeProfile(t *testing.T) {
-	profiles := []struct {
-		name    string
-		profile colorprofile.Profile
-	}{
-		{"truecolor", colorprofile.TrueColor},
-		{"ansi256", colorprofile.ANSI256},
-		{"ansi", colorprofile.ANSI},
-	}
-	for _, test := range profiles {
-		t.Run(test.name, func(t *testing.T) {
-			styles := theme.NewStyles(theme.Resolve(test.profile))
-			frame := styles.SurfaceRail.Render("│") + " " + styles.SurfaceBody.Render("│")
-			got := kit.ReconcileBordersStyled(frame, styles)
+	for _, profile := range contractProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			frame := profile.styles.SurfaceRail.Render("│x") + " │x"
+			got := kit.ReconcileBordersStyled(frame, profile.styles)
 			cells := uitest.CellStyles(got)
-			wantForeground := firstCellStyle(styles.Border.Render("x")).Foreground
-			wantRail := firstCellStyle(styles.SurfaceRail.Render("x")).Background
-			wantBody := firstCellStyle(styles.SurfaceBody.Render("x")).Background
-			for _, cell := range []struct {
-				x          int
-				background string
-			}{{0, wantRail}, {2, wantBody}} {
-				if got := cells[cell.x]; got.Foreground != wantForeground || got.Background != cell.background {
-					t.Fatalf("cell %d style = %#v, want foreground %q background %q", cell.x, got, wantForeground, cell.background)
+			wantForeground := firstCellStyle(profile.styles.Border.Render("x")).Foreground
+			for _, cell := range []struct{ rule, neighbor int }{{0, 1}, {3, 4}} {
+				if got := cells[cell.rule]; got.Foreground != wantForeground || got.Background != cells[cell.neighbor].Background {
+					t.Fatalf("cell %d style = %#v, want foreground %q and neighbor %d background %q", cell.rule, got, wantForeground, cell.neighbor, cells[cell.neighbor].Background)
 				}
 			}
 		})
 	}
+}
+
+func assertRuleStyleMatrix(t *testing.T, workbench *Workbench, styles theme.Styles) {
+	t.Helper()
+	assertRuleFrameMatrix(t, func(width, height int) string {
+		workbench.Resize(width, height)
+		return workbench.View()
+	}, styles)
+}
+
+func assertRuleFrameMatrix(t *testing.T, render func(int, int) string, styles theme.Styles) {
+	t.Helper()
+	wantForeground := firstCellStyle(styles.Border.Render("x")).Foreground
+	assertFrame := func(t *testing.T, width, height int) string {
+		t.Helper()
+		frame := kit.ReconcileBordersStyled(render(width, height), styles)
+		assertRuleStyles(t, frame, wantForeground)
+		return frame
+	}
+	for _, size := range []struct{ width, height int }{{160, 45}, {100, 30}, {70, 24}} {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			assertFrame(t, size.width, size.height)
+		})
+	}
+	uitest.FuzzResize(t, func(width, height int) string {
+		return assertFrame(t, width, height)
+	})
 }
 
 func registeredFixtureScreenIDs(t *testing.T) []string {
@@ -200,81 +225,84 @@ func assertUniformBackground(t *testing.T, line string, row, start, end int, wan
 	}
 }
 
-func assertRuleStyles(t *testing.T, screenID string, width int, frame string) {
+func assertRuleStyles(t *testing.T, frame, wantForeground string) {
 	t.Helper()
-	for y, line := range strings.Split(frame, "\n") {
-		plain := ansi.Strip(line)
-		styles := uitest.CellStyles(line)
-		x := 0
-		for _, glyph := range plain {
-			if isRuleGlyph(glyph) {
-				wantBackground := bodyBackground
-				if kit.Classify(width) != kit.LayoutSingle && x < shell.NavRailWidth {
-					wantBackground = railBackground
-				}
-				if screenID == "overview" && overviewUsesBand(width) &&
-					y >= 2 && y < 7 && x > shell.NavRailWidth {
-					wantBackground = bandBackground
-				}
-				assertRuleCellStyle(t, frame, x, y, glyph, styles, wantBackground)
+	grid := styledCellGrid(frame)
+	for y, row := range grid {
+		for x, cell := range row {
+			if !isRuleGlyph(cell.glyph) {
+				continue
 			}
-			x += lipgloss.Width(string(glyph))
+			if cell.style.Foreground != wantForeground {
+				t.Fatalf("rule %q at (%d,%d) foreground = %q, want %q:\n%s", cell.glyph, x, y, cell.style.Foreground, wantForeground, junctionContext(frame, y))
+			}
+			neighbors := ruleNeighbors(grid, x, y, cell.glyph)
+			if !matchesNeighborBackground(cell.style.Background, neighbors) {
+				t.Fatalf("rule %q at (%d,%d) background = %q, adjacent backgrounds are %s:\n%s", cell.glyph, x, y, cell.style.Background, formatNeighbors(neighbors), junctionContext(frame, y))
+			}
 		}
 	}
 }
 
-func overviewUsesBand(frameWidth int) bool {
-	if kit.Classify(frameWidth) == kit.LayoutSingle {
-		return false
-	}
-	return kit.Classify(frameWidth-shell.NavRailWidth-1) != kit.LayoutSingle
+type styledCell struct {
+	x, y  int
+	glyph rune
+	style uitest.CellStyle
 }
 
-func assertRuleStylesOnSurface(t *testing.T, frame, wantBackground string) {
-	t.Helper()
-	for y, line := range strings.Split(frame, "\n") {
+func styledCellGrid(frame string) [][]styledCell {
+	lines := strings.Split(frame, "\n")
+	grid := make([][]styledCell, len(lines))
+	for y, line := range lines {
 		styles := uitest.CellStyles(line)
 		x := 0
 		for _, glyph := range ansi.Strip(line) {
-			if isRuleGlyph(glyph) {
-				assertRuleCellStyle(t, frame, x, y, glyph, styles, wantBackground)
+			width := lipgloss.Width(string(glyph))
+			for column := range width {
+				grid[y] = append(grid[y], styledCell{x: x + column, y: y, glyph: glyph, style: styles[x+column]})
 			}
-			x += lipgloss.Width(string(glyph))
+			x += width
 		}
 	}
+	return grid
 }
 
-func assertRoundedRuleStylesOnSurface(t *testing.T, frame, wantBackground string) {
-	t.Helper()
-	found := 0
-	for y, line := range strings.Split(frame, "\n") {
-		styles := uitest.CellStyles(line)
-		x := 0
-		for _, glyph := range ansi.Strip(line) {
-			if strings.ContainsRune("╭╮╰╯", glyph) {
-				assertRuleCellStyle(t, frame, x, y, glyph, styles, wantBackground)
-				found++
-			}
-			x += lipgloss.Width(string(glyph))
+func ruleNeighbors(grid [][]styledCell, x, y int, glyph rune) []styledCell {
+	directions := [][2]int{{-1, 0}, {1, 0}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+	if glyph == '─' {
+		directions = [][2]int{{0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+	} else if glyph != '│' {
+		directions = [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+	}
+	neighbors := make([]styledCell, 0, len(directions))
+	for _, direction := range directions {
+		nx, ny := x+direction[0], y+direction[1]
+		if ny < 0 || ny >= len(grid) || nx < 0 || nx >= len(grid[ny]) {
+			continue
+		}
+		neighbor := grid[ny][nx]
+		if !isRuleGlyph(neighbor.glyph) {
+			neighbors = append(neighbors, neighbor)
 		}
 	}
-	if found == 0 {
-		t.Fatal("overlay frame has no rounded border cells")
-	}
+	return neighbors
 }
 
-func assertRuleCellStyle(t *testing.T, frame string, x, y int, glyph rune, styles []uitest.CellStyle, wantBackground string) {
-	t.Helper()
-	if x >= len(styles) {
-		t.Fatalf("rule %q at (%d,%d) has no computed ANSI style", glyph, x, y)
+func matchesNeighborBackground(background string, neighbors []styledCell) bool {
+	for _, neighbor := range neighbors {
+		if background == neighbor.style.Background {
+			return true
+		}
 	}
-	got := styles[x]
-	if got.Foreground != borderForeground {
-		t.Fatalf("rule %q at (%d,%d) foreground = %q, want %q:\n%s", glyph, x, y, got.Foreground, borderForeground, junctionContext(frame, y))
+	return len(neighbors) == 0
+}
+
+func formatNeighbors(neighbors []styledCell) string {
+	parts := make([]string, 0, len(neighbors))
+	for _, neighbor := range neighbors {
+		parts = append(parts, fmt.Sprintf("(%d,%d)=%q", neighbor.x, neighbor.y, neighbor.style.Background))
 	}
-	if got.Background != wantBackground {
-		t.Fatalf("rule %q at (%d,%d) background = %q, want %q:\n%s", glyph, x, y, got.Background, wantBackground, junctionContext(frame, y))
-	}
+	return strings.Join(parts, ", ")
 }
 
 func isRuleGlyph(glyph rune) bool {
