@@ -114,7 +114,7 @@ export interface KnowledgeBaseConfig<
   chunking?: ChunkingOptions
   /** Explicit indexing pipeline used for document indexing. */
   pipeline?: IndexingPipeline
-  /** Metadata schema used to type retrieval filters. */
+  /** Metadata schema used to type retrieval filters and validate indexed metadata. */
   metadataSchema?: TMetadataSchema
   /** Lifecycle policy for inactive generations and vector retention. */
   lifecycle?: { retention?: 'cleanup' | 'retain-inactive' }
