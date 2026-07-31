@@ -157,6 +157,64 @@ expanded?.provenance?.graph;
 
 `seed` is the encoded ref that discovered the hit. `path` is the encoded traversal path. `edges` are the relation types followed along the path. `distance` is the semantic hop distance used for ordering and limits.
 
+## Global Search
+
+Use `globalSearch()` when the query should scan Connected Knowledge community reports instead of starting from vector hits. Configure communities on the knowledge base, prepare them when you want to prewarm the materialization, then use `globalSearch()` as the recipe's single producer step.
+
+```ts
+import { communities, knowledgeBase } from "@use-crux/core/knowledge";
+import { globalSearch } from "@use-crux/core/retrieval";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  communities: communities({ model }),
+});
+
+await docs.communities?.prepare();
+
+const reportSearch = docs.recipe({
+  id: "docs-report-search",
+  steps: [
+    globalSearch({
+      model,
+      detail: "overview",
+      scan: "all",
+      limit: 12,
+    }),
+  ],
+});
+
+const findings = await reportSearch.retrieve("which launch risks affect billing?");
+```
+
+`globalSearch()` returns finding hits. Evidence hits keep `source`, `chunkId`, and `metadata`; finding hits use `kind: "finding"` and carry a citation with an issued `findingTarget`, transitive evidence supports, assertion refs, and community lineage.
+
+```ts
+for (const hit of findings) {
+  if (hit.kind === "finding") {
+    console.log(hit.content, hit.citation.findingTarget);
+  } else {
+    console.log(hit.source.id, hit.chunkId);
+  }
+}
+```
+
+A retrieval recipe can have only one producer step: use either `retrieve()` or `globalSearch()`. Request filters are rejected for global search because reports may summarize evidence outside the filter. Use a typed view for narrowing:
+
+```ts
+const published = docs.view({
+  id: "published",
+  where: { status: "published" },
+});
+
+const publishedReportSearch = published.recipe({
+  steps: [globalSearch({ model, detail: "detailed" })],
+});
+```
+
+The recipe trace includes a knowledge receipt with the coverage path (`"exact"`, `"compensated"`, `"raw-fallback"`, or `"materialization-wait"`), selected detail, scan mode, processed report counts, preflight estimate, and adaptive descent trace when `scan: "adaptive"` is used.
+
 ## Live Views
 
 Use `metadataSchema` when a knowledge base has stable source metadata you want to address as a read surface. `view({ id, where })` is typed by that schema and stays live as matching sources are indexed, reindexed, or removed.

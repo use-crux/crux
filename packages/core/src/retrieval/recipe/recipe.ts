@@ -16,7 +16,7 @@ import { createRetrieverTools } from '../tools'
 import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
 import { normalizeRetrieveRequest } from '../request'
 import { runRetrievalRecipe } from './run'
-import type { RetrievalKnowledgeBinding } from './knowledge-binding'
+import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
 import { isBuiltInRetrievalStep, type RetrievalStep } from './step'
 import { normalizeRecipeSources, type NormalizedRecipeSource, type RetrievalRecipeSourceInput } from './source'
 import { fingerprintRetrievalRecipeBehavior } from './bound-identity'
@@ -36,6 +36,7 @@ export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] =
 interface InternalRetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]>
   extends RetrievalRecipeConfig<TSteps> {
   knowledge?: RetrievalKnowledgeBinding
+  communities?: RetrievalCommunitiesBinding
   fingerprint?: string
 }
 
@@ -80,6 +81,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     concurrency: config.concurrency ?? 4,
     onSourceError: config.onSourceError ?? 'fail',
     ...(internalConfig.knowledge ? { knowledge: internalConfig.knowledge } : {}),
+    ...(internalConfig.communities ? { communities: internalConfig.communities } : {}),
   }
   const retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'] = (queryOrRequest, options = {}) =>
     runRetrievalRecipe(runnerConfig, queryOrRequest, options)
@@ -115,6 +117,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
 }
 
 function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly NormalizedRecipeSource[]): void {
+  const internalConfig = config as InternalRetrievalRecipeConfig
   if (!config.id.trim()) {
     throw new RetrievalConfigError('invalid_step_order', 'Retrieval recipe id must be non-empty.')
   }
@@ -131,6 +134,12 @@ function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly N
     if (step.needsModel && !step.model && !config.model) {
       throw new RetrievalConfigError('missing_model', `Retrieval step "${step.id}" requires a model.`)
     }
+    if (step.kind === 'global-search' && !internalConfig.communities) {
+      throw new RetrievalConfigError(
+        'missing_model',
+        `Retrieval step "${step.id}" requires connected knowledge communities. Configure knowledgeBase({ communities: communities({ model }) }) and run it through knowledgeBase().recipe(...) or view.recipe(...).`,
+      )
+    }
     if ((step.id === 'retrieve' || step.id === 'fusion') && !isBuiltInRetrievalStep(step)) {
       throw new RetrievalConfigError('reserved_step_id', `Retrieval step id "${step.id}" is reserved.`)
     }
@@ -139,7 +148,17 @@ function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly N
 
 function validateStepOrder(steps: readonly RetrievalStep[]): void {
   let current: 'queries' | 'hits' = 'queries'
+  let producer: RetrievalStep | undefined
   for (const step of steps) {
+    if (isProducerStep(step)) {
+      if (producer) {
+        throw new RetrievalConfigError(
+          'invalid_step_order',
+          `Retrieval recipe has more than one producer step: "${producer.id}" and "${step.id}". Use exactly one of retrieve() or globalSearch().`,
+        )
+      }
+      producer = step
+    }
     if (step.phase.in !== current) {
       throw new RetrievalConfigError(
         'invalid_step_order',
@@ -148,6 +167,10 @@ function validateStepOrder(steps: readonly RetrievalStep[]): void {
     }
     current = step.phase.out
   }
+}
+
+function isProducerStep(step: RetrievalStep): boolean {
+  return step.kind === 'retrieve' || step.kind === 'global-search'
 }
 
 function createRecipeRetriever(

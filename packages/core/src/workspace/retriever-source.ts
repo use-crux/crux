@@ -174,7 +174,7 @@ function hitToFile(
   options: WorkspaceRetrieverMountSourceOptions,
 ): RetrieverVirtualFile {
   const content =
-    options.contentForHit?.(hit) ?? hit.parent?.content ?? hit.content;
+    options.contentForHit?.(hit) ?? (hit.kind === "finding" ? hit.content : hit.parent?.content ?? hit.content);
   const mimeType =
     typeof options.mimeType === "function"
       ? options.mimeType(hit)
@@ -193,10 +193,10 @@ function hitWorkspacePath(
   mountPath: WorkspacePath,
   options: WorkspaceRetrieverMountSourceOptions,
 ): WorkspacePath {
-  const rawPath =
-    options.pathForHit?.(hit) ??
-    hit.source.path?.replace(/^\/+/, "") ??
-    `${hit.source.id}/${hit.chunkId}.md`;
+  const configuredPath = options.pathForHit?.(hit);
+  const rawPath = configuredPath ?? (hit.kind === "finding"
+    ? `findings/${hit.citation.findingTarget}.md`
+    : hit.source.path?.replace(/^\/+/, "") ?? `${hit.source.id}/${hit.chunkId}.md`);
   const candidate = rawPath.startsWith("/")
     ? normalizePath(rawPath)
     : normalizePath(`${mountPath}/${rawPath}`);
@@ -209,6 +209,9 @@ function hitWorkspacePath(
 }
 
 function hitMetadata(hit: RetrieverHit): Record<string, JsonValue> | undefined {
+  if (hit.kind === "finding") {
+    return { findingTarget: hit.citation.findingTarget };
+  }
   const metadata: Record<string, JsonValue> = {
     sourceId: hit.source.id,
     chunkId: hit.chunkId,

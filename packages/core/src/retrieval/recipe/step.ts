@@ -10,7 +10,7 @@ import type { ExactFilter } from '../../storage'
 import type { RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
 import type { RetrievalModel } from '../model'
-import type { RetrievalKnowledgeBinding } from './knowledge-binding'
+import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
 
 /** Phase of data flowing through a retrieval recipe. */
 export type StepPhase = 'queries' | 'hits'
@@ -20,6 +20,7 @@ export type RetrievalStepKind =
   | 'rewrite-query'
   | 'fanout'
   | 'retrieve'
+  | 'global-search'
   | 'filter'
   | 'fusion'
   | 'rerank'
@@ -45,6 +46,7 @@ export type StepInput<TPhase extends StepPhase> = TPhase extends 'queries'
 export type StepOutput<TPhase extends StepPhase> = StepInput<TPhase> & {
   warnings?: readonly string[]
   sources?: readonly RetrievalSourceTrace[]
+  knowledge?: KnowledgeStepTrace
 }
 
 /** Per-source retrieve attribution captured on retrieve-step traces. */
@@ -60,6 +62,31 @@ export interface RetrievalSourceTrace {
   error?: { message: string; name?: string }
 }
 
+/** Knowledge-specific receipt payload emitted by connected retrieval steps. */
+export interface KnowledgeStepTrace {
+  readonly contributor: string
+  readonly view?: { readonly id: string; readonly viewRevision: string | null }
+  readonly generations: readonly string[]
+  readonly coverage: 'exact' | 'compensated' | 'raw-fallback' | 'materialization-wait'
+  readonly coverageBasis: string
+  readonly scan?: 'all' | 'adaptive'
+  readonly detail?: 'overview' | 'detailed'
+  readonly available: { readonly reports: number; readonly findings?: number }
+  readonly processed: { readonly reports: number; readonly findings?: number }
+  readonly adaptive?: {
+    readonly threshold: number
+    readonly visited: readonly { readonly communityId: string; readonly rating: number }[]
+    readonly skipped: readonly { readonly communityId: string; readonly rating: number }[]
+  }
+  readonly preflight?: {
+    readonly reports: number
+    readonly batches: number
+    readonly inputChars: number
+    readonly calls: number
+  }
+  readonly truncations?: readonly string[]
+}
+
 /** Runtime context provided to a retrieval step. */
 export interface RetrievalStepContext {
   recipeId: string
@@ -69,6 +96,7 @@ export interface RetrievalStepContext {
   model?: RetrievalModel
   concurrency: number
   readonly knowledge?: RetrievalKnowledgeBinding
+  readonly communities?: RetrievalCommunitiesBinding
 }
 
 /** Config for `retrievalStep()`. */

@@ -34,10 +34,8 @@ import type { KnowledgeBaseViewConfig, KnowledgeView } from '../knowledge/view/v
 import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from '../knowledge/assertions/set'
 import type { AssertionStage } from '../knowledge/assertions/assertions'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
-import {
-  createKnowledgeCommunitiesSurface,
-  type KnowledgeCommunitiesSurface,
-} from '../knowledge/communities/lifecycle'
+import type { KnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
+import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -209,6 +207,13 @@ function createKnowledgeBaseHandle<
 ): KnowledgeBase<TMetadataSchema, TModality> {
   const runtime = createKnowledgeBaseRuntime(config)
   const records = config.records ?? config.storage?.records
+  const communities = createRecipeCommunitiesBinding({
+    records,
+    indexerId: config.id,
+    namespace: config.namespace,
+    config: config.communities,
+    retention: config.lifecycle?.retention,
+  })
 
   const handle = {
     id: config.id,
@@ -276,8 +281,11 @@ function createKnowledgeBaseHandle<
         ...recipeConfig,
         id: identity.id,
         ...(identity.fingerprint ? { fingerprint: identity.fingerprint } : {}),
-        retriever: runtime.retriever() as unknown as Retriever,
+        retriever: recipeConfig.steps.some((step) => step.kind === 'global-search')
+          ? globalSearchRecipeRetriever(config.id, config.namespace)
+          : runtime.retriever() as unknown as Retriever,
         ...(knowledge ? { knowledge } : {}),
+        ...(communities.binding ? { communities: communities.binding } : {}),
       }
       return retrievalRecipe(boundRecipeConfig)
     },
@@ -301,13 +309,7 @@ function createKnowledgeBaseHandle<
   }
   const communityHandle = config.communities
     ? {
-        communities: createKnowledgeCommunitiesSurface({
-          records,
-          indexerId: config.id,
-          namespace: config.namespace,
-          config: config.communities,
-          ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
-        }),
+        communities: communities.surface,
       }
     : {}
   const completeHandle = { ...handle, ...communityHandle }

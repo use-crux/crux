@@ -179,7 +179,7 @@ function defaultRenderContextContent(
       ...hits.map((hit, index) => ({
         text: `${index > 0 ? '\n' : ''}${renderHitLine(hit)}`,
         dynamic: true,
-        source: `${meta.namespace}:${hit.source.id}/${hit.chunkId}`,
+        source: hit.kind === 'finding' ? `${meta.namespace}:${hit.citation.findingTarget}` : `${meta.namespace}:${hit.source.id}/${hit.chunkId}`,
         ...retrieverHitFreshness(hit),
       })),
     ],
@@ -187,11 +187,15 @@ function defaultRenderContextContent(
 }
 
 function renderHitLine(hit: RetrieverHit): string {
+  if (hit.kind === 'finding') {
+    return `- [${hit.citation.findingTarget}] (score: ${hit.score.toFixed(2)}) ${hit.content}`
+  }
   const attribution = `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)})`
   return hit.content ? `${attribution} ${hit.content}` : attribution
 }
 
 function retrieverHitFreshness(hit: RetrieverHit): Pick<ContextTextSegment, 'observedAt' | 'sourceVersion'> {
+  if (hit.kind === 'finding') return {}
   return {
     ...(typeof hit.metadata.observedAt === 'number' ? { observedAt: hit.metadata.observedAt } : {}),
     ...(typeof hit.metadata.sourceVersion === 'string' ? { sourceVersion: hit.metadata.sourceVersion } : {}),
@@ -199,5 +203,6 @@ function retrieverHitFreshness(hit: RetrieverHit): Pick<ContextTextSegment, 'obs
 }
 
 function hasRetrieverHitFreshness(hit: RetrieverHit): boolean {
+  if (hit.kind === 'finding') return false
   return typeof hit.metadata.observedAt === 'number' || typeof hit.metadata.sourceVersion === 'string'
 }

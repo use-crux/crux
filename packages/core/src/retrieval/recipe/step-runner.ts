@@ -4,7 +4,7 @@ import { observe } from '../../observability'
 import { recipeStepDefinitionRef, rerankerDefinitionRef } from '../../observability/definition-ref'
 import { matchesExactFilter, type JsonObject } from '../../storage'
 import type { RetrieveRequest } from '../request'
-import type { RetrieverHit } from '../types'
+import type { EvidenceHit, RetrieverHit } from '../types'
 import { runFederatedRetrieveStep } from './federation'
 import type { RetrievalKnowledgeBinding } from './knowledge-binding'
 import type { RecipeRunnerConfig } from './run'
@@ -13,6 +13,8 @@ import {
   getRetrieveStepConfig,
   type PlannedQuery,
   type RetrievalStep,
+  type StepOutput,
+  type StepPhase,
 } from './step'
 import { countStepPayload, serializeRecipeError, type StepTrace } from './trace'
 
@@ -56,10 +58,11 @@ export async function runRecipeStep(args: {
 
   try {
     assertStepAcceptsState(args.step, args.state)
-    const output = await span.withContext(() =>
-      args.step.kind === 'retrieve'
-        ? runRetrieveStep(args.config, args.request, args.state, args.step)
-        : args.step.run(stepInput(args.state), {
+    const output = await span.withContext(async (): Promise<StepOutput<StepPhase>> => {
+      if (args.step.kind === 'retrieve') {
+        return runRetrieveStep(args.config, args.request, args.state, args.step)
+      }
+      return args.step.run(stepInput(args.state), {
             recipeId: args.config.recipeId,
             sources: args.config.sources.map((source) => ({
               retrieverId: source.retriever.id,
@@ -71,8 +74,9 @@ export async function runRecipeStep(args: {
             model: args.step.model ?? args.config.model,
             concurrency: args.config.concurrency,
             ...(knowledge ? { knowledge } : {}),
-          }),
-    )
+            ...(args.config.communities ? { communities: args.config.communities } : {}),
+          }) as StepOutput<StepPhase> | Promise<StepOutput<StepPhase>>
+    })
 
     const outputCounts = countStepPayload(output)
     args.traces.push({
@@ -86,6 +90,7 @@ export async function runRecipeStep(args: {
       ...(outputCounts.hitCount !== undefined ? { outputHitCount: outputCounts.hitCount } : {}),
       warnings: output.warnings ?? [],
       ...(output.sources ? { sources: output.sources } : {}),
+      ...(output.knowledge ? { knowledge: output.knowledge } : {}),
     })
     span.end({
       status: 'ok',
@@ -149,7 +154,7 @@ function stepKnowledge(
     ...binding,
     hydrate: async (ref) => {
       const hit = await binding.hydrate(ref)
-      return hit && matchesExactFilter(hitVisibility(hit), filter) ? hit : null
+      return hit && hit.kind !== 'finding' && matchesExactFilter(hitVisibility(hit), filter) ? hit : null
     },
   }
 }
@@ -158,7 +163,7 @@ function stepInput(state: RecipeState) {
   return state.phase === 'queries' ? { queries: state.queries } : { hits: state.hits }
 }
 
-function hitVisibility(hit: RetrieverHit): JsonObject {
+function hitVisibility(hit: EvidenceHit): JsonObject {
   return {
     ...scalarMetadata(hit.metadata),
     namespace: hit.namespace,

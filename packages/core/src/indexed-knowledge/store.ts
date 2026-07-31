@@ -122,6 +122,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
   }
 
   async function expandParent(hit: Parameters<IndexedKnowledgeStore['expandParent']>[0], options: ParentExpansionOptions = {}) {
+    if (hit.kind === 'finding') return hit
     const key = hit.parent?.key
     const parentId = hit.parent?.parentId
     if (!key && !parentId) return hit

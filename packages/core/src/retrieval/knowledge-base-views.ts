@@ -13,7 +13,6 @@ import { indexedChunkToHit } from '../indexed-knowledge/records'
 import { loadViewRevision, type ViewRevision } from '../knowledge/view/revision'
 import { createAssertionSet } from '../knowledge/assertions/set'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
-import { createKnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
 import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
@@ -21,6 +20,7 @@ import type { ExactFilter, RecordStore } from '../storage'
 import { createRetrieverEntity } from './entity'
 import type { KnowledgeBaseFilter, KnowledgeBaseGroundingConfig } from './knowledge-base'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
+import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
 import { retrievalRecipe, type RetrievalRecipe } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
@@ -103,7 +103,7 @@ function createViewHandle<
       ...binding,
       hydrate: async (ref) => {
         const hit = await binding.hydrate(ref)
-        if (!hit) return null
+        if (!hit || hit.kind === 'finding') return null
         return (await memberSet()).has(hit.source.id) ? hit : null
       },
     }
@@ -118,6 +118,16 @@ function createViewHandle<
   async function memberSet(): Promise<ReadonlySet<string>> {
     return new Set((await availableRevision()).members.map((member) => member.sourceId))
   }
+
+  const communities = createRecipeCommunitiesBinding({
+    records: config.records,
+    indexerId: config.id,
+    namespace: config.namespace,
+    config: config.communities,
+    viewId: registration.viewId,
+    resolveView: availableRevision,
+    retention: config.retention,
+  })
 
   const handle: KnowledgeView<TMetadataSchema, TModality> = {
     id: registration.viewId,
@@ -141,7 +151,10 @@ function createViewHandle<
     recipe: <const TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]>(
       recipeConfig?: KnowledgeViewRecipeConfig<TSteps>,
     ): RetrievalRecipe => {
-      const viewRetriever = handle.retriever() as unknown as Retriever
+      const usesGlobalSearch = recipeConfig?.steps.some((step) => step.kind === 'global-search') ?? false
+      const viewRetriever = usesGlobalSearch
+        ? globalSearchRecipeRetriever(`${config.id}:${registration.viewId}`, config.namespace)
+        : handle.retriever() as unknown as Retriever
       const knowledge = memberBinding()
       const surface = viewRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace, viewId: registration.viewId, where: registration.where, ...(config.pinnedRevisionHash ? { revisionHash: config.pinnedRevisionHash } : {}) })
       if (!recipeConfig) {
@@ -156,6 +169,7 @@ function createViewHandle<
           retriever: viewRetriever,
           steps,
           ...(knowledge ? { knowledge } : {}),
+          ...(communities.binding ? { communities: communities.binding } : {}),
         }
         return retrievalRecipe(defaultRecipeConfig)
       }
@@ -174,6 +188,7 @@ function createViewHandle<
         ...(identity.fingerprint ? { fingerprint: identity.fingerprint } : {}),
         retriever: viewRetriever,
         ...(knowledge ? { knowledge } : {}),
+        ...(communities.binding ? { communities: communities.binding } : {}),
       })
     },
     grounding: (groundingConfig?: KnowledgeBaseGroundingConfig): Grounding =>
@@ -198,15 +213,7 @@ function createViewHandle<
   }
   const communityHandle = config.communities
     ? {
-        communities: createKnowledgeCommunitiesSurface({
-          records: config.records,
-          indexerId: config.id,
-          namespace: config.namespace,
-          config: config.communities,
-          viewId: registration.viewId,
-          resolveView: availableRevision,
-          ...(config.retention ? { retention: config.retention } : {}),
-        }),
+        communities: communities.surface,
       }
     : {}
   return Object.freeze({ ...handle, ...communityHandle }) as KnowledgeView<TMetadataSchema, TModality>
@@ -240,7 +247,7 @@ function createViewRetriever<TModality extends EmbeddingModality>(config: {
       const members = new Set(revision.members.map((member) => member.sourceId))
       const groups = await Promise.all(branches.map((filter) => config.base.retrieve({ ...request, limit, filter })))
       await config.assertRevisionAvailable(revision)
-      return bestHits(groups.flat().filter((hit) => members.has(hit.source.id)), limit)
+      return bestHits(groups.flat().filter((hit) => hit.kind !== 'finding' && members.has(hit.source.id)), limit)
     },
     ...(config.records ? { getSource: viewGetSource(config) } : {}),
   })
@@ -304,7 +311,9 @@ function bestHits(hits: readonly RetrieverHit[], limit: number | undefined): Ret
 }
 
 function hitKey(hit: RetrieverHit): string {
-  return `${hit.namespace}:${hit.source.id}:${hit.chunkId}`
+  return hit.kind === 'finding'
+    ? `${hit.namespace}:finding:${hit.citation.findingTarget}`
+    : `${hit.namespace}:${hit.source.id}:${hit.chunkId}`
 }
 
 function requireObjectMetadataSchema(

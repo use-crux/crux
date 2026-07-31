@@ -13,7 +13,7 @@ import { mapConcurrent } from '../../../shared/concurrency'
 import type { RecordStore } from '../../../storage'
 import type { RetrievalModel } from '../../model'
 import type { Reranker } from '../../reranker'
-import type { RetrieverHit } from '../../types'
+import type { EvidenceHit, RetrieverHit } from '../../types'
 import {
   markBuiltInRetrievalStep,
   retrievalStep,
@@ -139,7 +139,13 @@ export function expandParents(config: {
         const warnings: string[] = []
         const stores = new Map<string, ReturnType<typeof createIndexedKnowledgeStore>>()
         const expanded: RetrieverHit[] = []
+        let skippedFindings = 0
         for (const hit of input.hits) {
+          if (hit.kind === 'finding') {
+            skippedFindings += 1
+            expanded.push(hit)
+            continue
+          }
           const indexerId = config.indexerId ?? context.sources[0]?.retrieverId ?? context.recipeId
           const storeKey = `${indexerId}:${hit.namespace}`
           const store =
@@ -158,6 +164,9 @@ export function expandParents(config: {
             warnings.push(`parentExpand could not find parent record "${hit.parent.key ?? hit.parent.parentId}".`)
           }
           expanded.push(next)
+        }
+        if (skippedFindings > 0) {
+          warnings.push(`expandParents skipped ${skippedFindings} finding hit${skippedFindings === 1 ? '' : 's'}.`)
         }
         return { hits: expanded, warnings }
       },
@@ -180,14 +189,9 @@ export function compressToBudget(
       needsModel: true,
       async run(input, context) {
         const model = requireStepModel(config.id ?? 'compress', context.model)
+        const evidenceHits = input.hits.filter(isEvidenceHit)
         const outputSchema = z.object({
-          hits: z.array(
-            z.object({
-              sourceId: z.string(),
-              chunkId: z.string(),
-              excerpts: z.array(z.string()),
-            }),
-          ),
+          hits: z.array(z.object({ sourceId: z.string(), chunkId: z.string(), excerpts: z.array(z.string()) })),
         })
         const result = await model.generateObject({
           system:
@@ -196,17 +200,17 @@ export function compressToBudget(
             query: context.originalQuery,
             tokenBudget: config.tokens,
             maxCharsPerHit,
-            hits: input.hits.map((hit) => ({
-              sourceId: hit.source.id,
-              chunkId: hit.chunkId,
-              content: hit.content,
-            })),
+            hits: evidenceHits.map((hit) => ({ sourceId: hit.source.id, chunkId: hit.chunkId, content: hit.content })),
           }),
           schema: outputSchema,
         })
         const excerptsById = new Map(result.object.hits.map((item) => [flatSourceChunkIdentity(item), item.excerpts]))
         const compressed: RetrieverHit[] = []
         for (const hit of input.hits) {
+          if (hit.kind === 'finding') {
+            compressed.push(hit)
+            continue
+          }
           const excerpts = (excerptsById.get(sourceChunkIdentity(hit)) ?? [])
             .map((excerpt) => excerpt.trim())
             .filter(Boolean)
@@ -215,13 +219,7 @@ export function compressToBudget(
           compressed.push({
             ...hit,
             content,
-            provenance: {
-              ...hit.provenance,
-              compression: {
-                originalLength: hit.content.length,
-                compressedLength: content.length,
-              },
-            },
+            provenance: { ...hit.provenance, compression: { originalLength: hit.content.length, compressedLength: content.length } },
           })
         }
         return { hits: compressed }
@@ -274,6 +272,7 @@ function normalizePlannedQuery(query: PlannedQuery): PlannedQuery {
 }
 
 function withRerankProvenance(hit: RetrieverHit): RetrieverHit {
+  if (hit.kind === 'finding') return hit
   return {
     ...hit,
     provenance: {
@@ -283,10 +282,14 @@ function withRerankProvenance(hit: RetrieverHit): RetrieverHit {
   }
 }
 
-function sourceChunkIdentity(hit: Pick<RetrieverHit, 'source' | 'chunkId'>): string {
+function sourceChunkIdentity(hit: Pick<EvidenceHit, 'source' | 'chunkId'>): string {
   return `${hit.source.id}/${hit.chunkId}`
 }
 
 function flatSourceChunkIdentity(hit: { sourceId: string; chunkId: string }): string {
   return `${hit.sourceId}/${hit.chunkId}`
+}
+
+function isEvidenceHit(hit: RetrieverHit): hit is EvidenceHit {
+  return hit.kind !== 'finding'
 }

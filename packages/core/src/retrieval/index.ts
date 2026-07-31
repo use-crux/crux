@@ -16,6 +16,7 @@ export { retrievalRecipe } from './recipe/recipe'
 export { retrievalStep } from './recipe/step'
 export { compressToBudget, expandParents, fanout, rerank, retrieve, rewriteQuery } from './recipe/steps/built-ins'
 export { expandRelations } from './recipe/steps/expand-relations'
+export { globalSearch } from './recipe/steps/global-search'
 export { judgeReranker } from './reranker'
 export { RetrievalConfigError, RetrievalNotImplementedError, RetrievalRunError } from './errors'
 export { RETRIEVAL_HITS_KIND, isRetrievalToolPayload } from './tools'
@@ -87,6 +88,9 @@ export type {
   RetrievalToolConfig,
   RetrievalToolName,
   Retriever,
+  EvidenceHit,
+  FindingCitation,
+  FindingHit,
   RetrieverHit,
   RetrieverSource,
   RetrieverMode,

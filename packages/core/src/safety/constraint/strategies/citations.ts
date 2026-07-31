@@ -7,7 +7,7 @@
 import type { z } from 'zod'
 import type { BoundaryDef } from '../../boundary'
 import type { ConstraintRun, ConstraintCheckResult } from '../types'
-import type { RetrieverHit } from '../../../retrieval/types'
+import type { EvidenceHit, RetrieverHit } from '../../../retrieval/types'
 import type { CitationConstraintConfig } from '../../../citations/types'
 import { resolveCitations } from '../../../citations/resolve'
 import { createArtifact, formatCitationFeedback, selectDefaultCitations } from '../../../citations/validation'
@@ -86,8 +86,12 @@ export function citations<TSchema extends z.ZodType = z.ZodType<unknown>>(
 
 async function allowedHits<TSchema extends z.ZodType>(
   config: Omit<CitationConstraintConfig<TSchema>, 'name'>,
-): Promise<readonly RetrieverHit[]> {
+): Promise<readonly EvidenceHit[]> {
   if (config.session) return config.session.allowedHits()
-  if (config.hits) return config.hits
+  if (config.hits) return config.hits.filter(isEvidenceHit)
   throw new Error('constraint.citations(): either hits or session must be provided.')
+}
+
+function isEvidenceHit(hit: RetrieverHit): hit is EvidenceHit {
+  return hit.kind !== 'finding'
 }

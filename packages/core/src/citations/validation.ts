@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod'
-import type { RetrieverHit } from '../retrieval'
+import type { EvidenceHit } from '../retrieval'
 import { citationSchema, type Citation } from './schema'
 import type {
   CitationIssue,
@@ -23,7 +23,7 @@ import type {
 /** Validate a citation's quote against the cited hit per the quote policy. */
 export function validateQuote(
   citation: Citation,
-  hit: RetrieverHit,
+  hit: EvidenceHit,
   policy: CitationQuotePolicy,
 ): CitationIssue | undefined {
   if (policy === false) return undefined
@@ -43,7 +43,7 @@ export function validateQuote(
 }
 
 /** Validate a citation's character span against the cited hit content. */
-export function validateSpan(citation: Citation, hit: RetrieverHit): CitationIssue | undefined {
+export function validateSpan(citation: Citation, hit: EvidenceHit): CitationIssue | undefined {
   if (!citation.span) return undefined
   const { start, end } = citation.span
   if (end <= start || end > hit.content.length) {
@@ -70,7 +70,7 @@ export function selectDefaultCitations(parsed: unknown): readonly Citation[] | u
 
 /** Build the structured citation-validation artifact for observability. */
 export function createArtifact(args: {
-  hits: readonly RetrieverHit[]
+  hits: readonly EvidenceHit[]
   citations: readonly ResolvedCitation[]
   issues: readonly CitationIssue[]
   requestedCount: number

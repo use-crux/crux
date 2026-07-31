@@ -151,7 +151,7 @@ async function readVisibleChunks(config: BuildCommunityGraphInputConfig): Promis
 
 function asVisibleChunk(value: JsonObject, namespace: string): readonly CommunityChunkInput[] {
   const hit = indexedChunkToHit({ value, score: 0 })
-  if (!hit || hit.namespace !== namespace || typeof value.ordinal !== 'number') return []
+  if (!hit || hit.kind === 'finding' || hit.namespace !== namespace || typeof value.ordinal !== 'number') return []
   const ref = { kind: 'chunk' as const, sourceId: hit.source.id, chunkId: hit.chunkId }
   return [{
     ref,

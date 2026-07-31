@@ -6,7 +6,7 @@
 
 import type { KnowledgeNeighbor } from '../../../knowledge/graph-types'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../../../knowledge/refs'
-import type { RetrieverHit } from '../../types'
+import type { EvidenceHit, RetrieverHit } from '../../types'
 import { markBuiltInRetrievalStep, retrievalStep, type RetrievalStep } from '../step'
 
 type RelationDirection = 'out' | 'in' | 'both'
@@ -81,11 +81,16 @@ export function expandRelations(config: ExpandRelationsConfig = {}): RetrievalSt
         if (limit === 0 || depth === 0 || seeds.length === 0) return { hits: [...input.hits] }
 
         const warnings: string[] = []
+        const findingHits = input.hits.filter((hit) => hit.kind === 'finding')
+        if (findingHits.length > 0) {
+          warnings.push(`expandRelations skipped ${findingHits.length} finding hit${findingHits.length === 1 ? '' : 's'}.`)
+        }
+        const evidenceHits = input.hits.filter(isEvidenceHit)
         const seedRefs = [
-          ...(seeds.includes('hits') ? hitSeeds(input.hits) : []),
-          ...(seeds.includes('query') ? querySeeds(context.originalQuery, input.hits.length) : []),
+          ...(seeds.includes('hits') ? hitSeeds(evidenceHits) : []),
+          ...(seeds.includes('query') ? querySeeds(context.originalQuery, evidenceHits.length) : []),
         ]
-        const incomingKeys = new Set(input.hits.map(hitKey))
+        const incomingKeys = new Set(evidenceHits.map(hitKey))
         const candidates = new Map<string, Candidate>()
         let totalCandidates = 0
         let totalCandidateWarning = false
@@ -162,7 +167,7 @@ export function expandRelations(config: ExpandRelationsConfig = {}): RetrievalSt
           const candidate = ordered[index]
           if (!candidate) continue
           const hydrated = await context.knowledge.hydrate(candidate.ref)
-          if (!hydrated) continue
+          if (!hydrated || hydrated.kind === 'finding') continue
           const key = hitKey(hydrated)
           if (emittedKeys.has(key)) continue
           emittedKeys.add(key)
@@ -170,7 +175,18 @@ export function expandRelations(config: ExpandRelationsConfig = {}): RetrievalSt
           additions.push(withGraphProvenance(hydrated, candidate, score))
         }
 
-        return { hits: [...input.hits, ...additions], warnings }
+        return {
+          hits: [...input.hits, ...additions],
+          warnings,
+          knowledge: context.knowledge ? {
+            contributor: 'expand-relations',
+            generations: [],
+            coverage: 'exact',
+            coverageBasis: 'visible graph neighbors from the bound knowledge reader',
+            available: { reports: 0 },
+            processed: { reports: 0, findings: additions.length },
+          } : undefined,
+        }
       },
     }),
     {
@@ -183,7 +199,7 @@ export function expandRelations(config: ExpandRelationsConfig = {}): RetrievalSt
   )
 }
 
-function hitSeeds(hits: readonly RetrieverHit[]): Array<{ readonly ref: KnowledgeRef; readonly rank: number }> {
+function hitSeeds(hits: readonly EvidenceHit[]): Array<{ readonly ref: KnowledgeRef; readonly rank: number }> {
   return hits.map((hit, rank) => ({
     rank,
     ref: { kind: 'chunk', sourceId: hit.source.id, chunkId: hit.chunkId },
@@ -233,7 +249,7 @@ function hopCost(from: KnowledgeRef, neighbor: KnowledgeNeighbor): number {
   return from.kind === 'entity' || neighbor.ref.kind === 'entity' ? 0 : 1
 }
 
-function withGraphProvenance(hit: RetrieverHit, candidate: Candidate, score: number): RetrieverHit {
+function withGraphProvenance(hit: EvidenceHit, candidate: Candidate, score: number): EvidenceHit {
   const graph: GraphProvenance = {
     seed: encodeKnowledgeRef(candidate.path[0] ?? candidate.ref),
     path: candidate.path.map(encodeKnowledgeRef),
@@ -248,7 +264,7 @@ function withGraphProvenance(hit: RetrieverHit, candidate: Candidate, score: num
       rawScore: hit.provenance?.rawScore ?? hit.score,
       fusedScore: score,
       graph,
-    } as RetrieverHit['provenance'] & { readonly graph: GraphProvenance },
+    } as EvidenceHit['provenance'] & { readonly graph: GraphProvenance },
   }
 }
 
@@ -256,10 +272,14 @@ function rrfScore(graphRank: number, seedRank: number): number {
   return 1 / (rrfK + graphRank) + 1 / (rrfK + seedRank)
 }
 
-function hitKey(hit: RetrieverHit): string {
+function hitKey(hit: EvidenceHit): string {
   return `${hit.namespace}:${hit.source.id}:${hit.chunkId}`
 }
 
 function sameRef(left: KnowledgeRef, right: KnowledgeRef): boolean {
   return encodeKnowledgeRef(left) === encodeKnowledgeRef(right)
+}
+
+function isEvidenceHit(hit: RetrieverHit): hit is EvidenceHit {
+  return hit.kind !== 'finding'
 }
