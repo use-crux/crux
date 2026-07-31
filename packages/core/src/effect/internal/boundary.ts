@@ -33,6 +33,8 @@ export interface EffectBoundaryState {
   readonly recovery: NonNullable<RollbackOnErrorOptions["recovery"]>;
   /** Effect operations that began inside the boundary and remain unsettled. */
   readonly pending: Set<Promise<unknown>>;
+  /** Nearest enclosing effect boundary, when nested. */
+  readonly parent?: EffectBoundaryState;
   /** Current boundary lifecycle. */
   lifecycle: "open" | "rolling_back" | "completed" | "closed";
   /** Shared rollback operation once rollback begins. */
@@ -47,6 +49,7 @@ export const effectBoundaryFacet =
 export function createEffectBoundary(
   scope: ExecutionScope,
   recovery: EffectBoundaryState["recovery"],
+  parent?: EffectBoundaryState,
 ): EffectBoundaryState {
   return {
     ref: Object.freeze({
@@ -56,6 +59,7 @@ export function createEffectBoundary(
     }),
     recovery,
     pending: new Set<Promise<unknown>>(),
+    ...(parent === undefined ? {} : { parent }),
     lifecycle: "open",
   };
 }
@@ -72,20 +76,24 @@ export function assertEffectBoundaryOpen(
   boundary: EffectBoundaryState,
   effectId: string,
 ): void {
-  if (boundary.lifecycle === "open") return;
+  let candidate: EffectBoundaryState | undefined = boundary;
+  while (candidate?.lifecycle === "open") {
+    candidate = candidate.parent;
+  }
+  if (!candidate) return;
   throw new CruxEffectError({
     code: "EFFECT_SCOPE_TERMINAL",
     message:
       `Effect \`${effectId}\` cannot start because boundary ` +
-      `\`${boundary.ref.id}\` is terminal.`,
+      `\`${candidate.ref.id}\` is terminal.`,
   });
 }
 
 /** Track an effect promise on the nearest explicit boundary. */
 export function trackEffectBoundaryOperation<T>(
   operation: Promise<T>,
+  boundary = currentEffectBoundary(),
 ): Promise<T> {
-  const boundary = currentEffectBoundary();
   if (!boundary) return operation;
   const tracked: Promise<unknown> = operation;
   boundary.pending.add(tracked);

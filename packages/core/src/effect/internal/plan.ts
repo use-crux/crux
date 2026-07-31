@@ -9,6 +9,7 @@ import type {
   EffectReceipt,
   RecoveryUnitRecord,
 } from "../receipt-types";
+import type { RecoveryStackEntry } from "./recovery-stack";
 import type {
   EffectReceiptRef,
   RecoveryUnitResult,
@@ -19,8 +20,13 @@ import type {
 /** One ordered action or expected settlement in a rollback plan. */
 export type RollbackPlanStep =
   | {
-      readonly kind: "recover";
+      readonly kind: "recover-effect";
       readonly receipt: EffectReceiptRef;
+      readonly cancelled: RecoveryUnitResult;
+    }
+  | {
+      readonly kind: "recover-boundary";
+      readonly unitId: string;
       readonly cancelled: RecoveryUnitResult;
     }
   | {
@@ -105,13 +111,36 @@ export function decideRollbackBoundary(
 
 /** Build a causal LIFO plan without invoking recovery handlers. */
 export function planRollback(
+  stack: readonly RecoveryStackEntry[],
   receipts: readonly EffectReceipt[],
   units: readonly RecoveryUnitRecord[],
 ): readonly RollbackPlanStep[] {
+  const receiptsById = new Map(
+    receipts.map((receipt) => [receipt.id, receipt]),
+  );
   const unitsById = new Map(units.map((unit) => [unit.id, unit]));
   const steps: RollbackPlanStep[] = [];
 
-  for (const receipt of [...receipts].reverse()) {
+  for (const entry of [...stack].reverse()) {
+    if (entry.kind === "boundary") {
+      const unit = unitsById.get(entry.unitId);
+      if (!unit) continue;
+      if (unit.status === "recovered") {
+        steps.push({
+          kind: "settle",
+          result: recoveryUnitResult(unit, "already_recovered"),
+        });
+      } else {
+        steps.push({
+          kind: "recover-boundary",
+          unitId: unit.id,
+          cancelled: recoveryUnitResult(unit, "cancelled"),
+        });
+      }
+      continue;
+    }
+    const receipt = receiptsById.get(entry.receiptId);
+    if (!receipt) continue;
     if (receipt.outcome !== "succeeded") continue;
     const unit = receipt.recoveryUnitId
       ? unitsById.get(receipt.recoveryUnitId)
@@ -129,7 +158,7 @@ export function planRollback(
     }
     if (unit) {
       steps.push({
-        kind: "recover",
+        kind: "recover-effect",
         receipt: receiptRef(receipt),
         cancelled: unitResult(receipt, unit.id, "cancelled"),
       });
@@ -148,6 +177,17 @@ export function planRollback(
   }
 
   return Object.freeze(steps);
+}
+
+function recoveryUnitResult(
+  unit: RecoveryUnitRecord,
+  status: RecoveryUnitResult["status"],
+): RecoveryUnitResult {
+  return Object.freeze({
+    unitId: unit.id,
+    effectIds: unit.effectIds,
+    status,
+  });
 }
 
 /** Fold unit settlements into the RFC aggregate status. */

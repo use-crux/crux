@@ -81,6 +81,9 @@ export async function recoverEffectReceiptAttempt(
       }),
     });
   }
+  if (unit.kind !== "effect") {
+    throw receiptNotFound(receipt.id);
+  }
   if (unit.receiptIds.length !== 1) {
     throw new CruxEffectError({
       code: "EFFECT_RECOVERY_SHARED_UNIT",

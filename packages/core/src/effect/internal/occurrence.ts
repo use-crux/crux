@@ -8,6 +8,7 @@
 import type { EffectScopeRef } from "../types";
 
 let nextOccurrenceId = 0;
+const nextIndexByIdentity = new Map<string, number>();
 
 /** Identity allocated before one custom effect executor runs. */
 export interface EffectOccurrence {
@@ -19,21 +20,33 @@ export interface EffectOccurrence {
   readonly recoveryUnitId: string;
   /** Stable recovery idempotency key. */
   readonly recoveryIdempotencyKey: string;
+  /** Deterministic active kernel-scope path. */
+  readonly scopePath: string;
+  /** Repetition index within the same boundary, path, and definition. */
+  readonly index: number;
 }
 
 /** Allocate receipt and execution identity for one in-process occurrence. */
 export function createEffectOccurrence(
   boundary: EffectScopeRef,
+  scopePath: string,
   effectId: string,
   effectVersion: number,
 ): EffectOccurrence {
-  const index = ++nextOccurrenceId;
+  const identity =
+    `${boundary.id}\u0000${scopePath}\u0000` +
+    `${effectId}\u0000${effectVersion}`;
+  const index = (nextIndexByIdentity.get(identity) ?? 0) + 1;
+  nextIndexByIdentity.set(identity, index);
+  const receiptIndex = ++nextOccurrenceId;
+  const key =
+    `${boundary.id}:${scopePath}:${effectId}:${effectVersion}:${index}`;
   return Object.freeze({
-    receiptId: `effect-receipt:${index}`,
-    idempotencyKey:
-      `effect-execution:${boundary.id}:${effectId}:${effectVersion}:${index}`,
-    recoveryUnitId: `effect-unit:${index}`,
-    recoveryIdempotencyKey:
-      `effect-recovery:${boundary.id}:${effectId}:${effectVersion}:${index}`,
+    receiptId: `effect-receipt:${receiptIndex}`,
+    idempotencyKey: `effect-execution:${key}`,
+    recoveryUnitId: `effect-unit:${receiptIndex}`,
+    recoveryIdempotencyKey: `effect-recovery:${key}`,
+    scopePath,
+    index,
   });
 }

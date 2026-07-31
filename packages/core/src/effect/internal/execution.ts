@@ -15,6 +15,7 @@ import type {
   EffectRecoveryContext,
   EffectScopeRef,
 } from "../types";
+import { currentScopeStack } from "../../scope/internal";
 import { CruxEffectError } from "../errors";
 import {
   assertEffectBoundaryOpen,
@@ -24,19 +25,18 @@ import {
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
 import { createEffectOccurrence } from "./occurrence";
-import { registerRecoveryUnit } from "./recovery-stack";
+import {
+  registerEffectStackEntry,
+  registerRecoveryUnit,
+} from "./recovery-stack";
 
 type CapturedRecovery<TInput, TOutput> = {
-  readonly capture: (
-    context: EffectCaptureContext<TInput>,
-  ) => Awaitable<unknown>;
-  readonly execute: (
-    context: CapturedEffectRecoveryContext<
-      TInput,
-      TOutput,
-      unknown
-    >,
-  ) => Awaitable<void>;
+  readonly capture: (context: EffectCaptureContext<TInput>) => Awaitable<unknown>;
+  readonly execute: (context: CapturedEffectRecoveryContext<
+    TInput,
+    TOutput,
+    unknown
+  >) => Awaitable<void>;
 };
 
 /** Runtime configuration retained from an effect definition. */
@@ -44,9 +44,7 @@ export interface EffectRuntimeOptions<TInput, TOutput>
   extends EffectOptions<TInput> {
   /** Optional single-receipt recovery handler. */
   readonly recover?:
-    | ((
-        context: EffectRecoveryContext<TInput, TOutput>,
-      ) => Awaitable<void>)
+    | ((context: EffectRecoveryContext<TInput, TOutput>) => Awaitable<void>)
     | CapturedRecovery<TInput, TOutput>;
 }
 
@@ -80,10 +78,16 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   const boundary =
     explicitBoundary?.ref ?? createImplicitRootBoundary();
   const ownsBoundary = explicitBoundary === undefined;
+  const ancestry = currentScopeStack();
+  const groupingScope = ancestry.find(
+    (scope) => scope.kind !== "effect-boundary",
+  );
+  const scopePath = [...ancestry]
+    .reverse()
+    .map((scope) => `${scope.kind}[${scope.id}]`)
+    .join("/");
   const occurrence = createEffectOccurrence(
-    boundary,
-    definition.id,
-    definition.version,
+    boundary, scopePath || "root", definition.id, definition.version,
   );
   if (ownsBoundary) {
     effectLedger.registerScope({
@@ -96,7 +100,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     id: occurrence.receiptId,
     effectId: definition.id,
     effectVersion: definition.version,
-    scopeId: boundary.id,
+    scopeId: groupingScope?.id ?? boundary.id,
     boundaryId: boundary.id,
     runId: boundary.runId,
     recovery: options?.recover
@@ -106,9 +110,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   });
   const ref = receiptRef(receipt.id, definition.id);
   const input = args[0] as TInput;
-  let resource:
-    | ReturnType<NonNullable<EffectOptions<TInput>["resource"]>>
-    | undefined;
+  let resource: ReturnType<
+    NonNullable<EffectOptions<TInput>["resource"]>
+  >;
   let captured: unknown;
 
   try {
@@ -129,10 +133,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     throw failure;
   }
 
-  if (
-    options?.recover &&
-    typeof options.recover !== "function"
-  ) {
+  if (options?.recover && typeof options.recover !== "function") {
     try {
       captured = await options.recover.capture({
         input,
@@ -229,6 +230,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         : {}),
       completedAt: Date.now(),
     });
+    registerEffectStackEntry(boundary.id, receipt.id);
     if (ownsBoundary) closeImplicitBoundary(boundary);
     return Object.freeze({
       output,

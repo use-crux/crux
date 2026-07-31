@@ -5,15 +5,20 @@
  */
 
 import { runScope } from "../scope/internal";
-import { RollbackError } from "./errors";
+import { CruxEffectError, RollbackError } from "./errors";
 import {
   closeEffectBoundary,
   createEffectBoundary,
   createEffectBoundaryId,
+  currentEffectBoundary,
   effectBoundaryFacet,
   startEffectBoundaryRollback,
+  trackEffectBoundaryOperation,
+  waitForEffectBoundaryOperations,
+  type EffectBoundaryState,
 } from "./internal/boundary";
 import { effectLedger } from "./internal/ledger";
+import { registerNestedBoundaryUnit } from "./internal/recovery-stack";
 import {
   decideRollbackBoundary,
   type RollbackBoundarySettlement,
@@ -52,29 +57,33 @@ export async function rollbackOnError<T>(
   options?: RollbackOnErrorOptions,
 ): Promise<T> {
   const recovery = options?.recovery ?? "required";
-  return runScope(
+  const parent = currentEffectBoundary();
+  const operation = runScope<T>(
     {
       kind: "effect-boundary",
       id: createEffectBoundaryId(),
     },
     {},
     async (scope) => {
-      const boundary = createEffectBoundary(scope, recovery);
+      const boundary = createEffectBoundary(scope, recovery, parent);
       scope.setFacet(effectBoundaryFacet, boundary);
       effectLedger.registerScope({
         ref: boundary.ref,
+        ...(parent === undefined ? {} : { parentId: parent.ref.id }),
         status: "open",
         unitIds: [],
       });
       const controller: RollbackBoundaryController = Object.freeze({
         ref: boundary.ref,
-        rollback: async (rollbackOptions?: RollbackOptions) =>
-          (
+        rollback: async (rollbackOptions?: RollbackOptions) => {
+          assertNotDescendantRollback(boundary);
+          return (
             await startEffectBoundaryRollback(
               boundary,
               rollbackOptions,
             )
-          ).result,
+          ).result;
+        },
       });
       let callback: RollbackCallbackSettlement<T>;
       try {
@@ -90,19 +99,60 @@ export async function rollbackOnError<T>(
         const rollback = await settleRollbackOperation(
           boundary.rollbackOperation,
         );
+        registerWithParent(boundary, rollback);
         return applyBoundaryDecision(recovery, callback, rollback);
       }
 
       if (callback.kind === "returned") {
+        await waitForEffectBoundaryOperations(boundary);
         closeEffectBoundary(boundary);
+        registerWithParent(boundary);
         return callback.value;
       }
 
       const rollback = await settleRollbackOperation(
         startEffectBoundaryRollback(boundary),
       );
+      registerWithParent(boundary, rollback);
       return applyBoundaryDecision(recovery, callback, rollback);
     },
+  );
+  return trackEffectBoundaryOperation(operation, parent);
+}
+
+function assertNotDescendantRollback(
+  boundary: EffectBoundaryState,
+): void {
+  const active = currentEffectBoundary();
+  let candidate = active;
+  while (candidate && candidate !== boundary) {
+    candidate = candidate.parent;
+  }
+  if (!active || active === boundary || candidate !== boundary) return;
+  throw new CruxEffectError({
+    code: "EFFECT_SCOPE_TERMINAL",
+    message:
+      `Boundary \`${boundary.ref.id}\` cannot start rollback from ` +
+      `descendant boundary \`${active.ref.id}\`.`,
+  });
+}
+
+function registerWithParent(
+  boundary: EffectBoundaryState,
+  rollback?: RollbackBoundarySettlement,
+): void {
+  if (!boundary.parent) return;
+  const status =
+    rollback?.kind === "result" &&
+    rollback.result.status === "completed"
+      ? "recovered"
+      : rollback === undefined
+        ? "active"
+        : "failed";
+  registerNestedBoundaryUnit(
+    boundary.parent.ref.id,
+    boundary.ref,
+    status,
   );
 }
 

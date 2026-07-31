@@ -19,6 +19,10 @@ import type {
   RecoverOptions,
   RecoveryUnitResult,
 } from "../types";
+import type {
+  RecoveryStackEntry,
+  RegisteredRecoveryUnit,
+} from "./recovery-stack";
 
 /** Settlement shared by callers joining one in-flight recovery. */
 export interface RecoveryOperationResult {
@@ -57,15 +61,6 @@ export interface RecoveryHandlerInvocation {
   /** Stable unit idempotency key. */
   readonly idempotencyKey: string;
   readonly options?: RecoverOptions;
-}
-
-/** Recovery unit with its in-process handler binding. */
-export interface RegisteredRecoveryUnit extends RecoveryUnitRecord {
-  /** Invoke the exact definition version registered for this unit. */
-  readonly execute: (
-    invocation: RecoveryHandlerInvocation,
-  ) => Promise<void>;
-  readonly recoveryOperation?: Promise<RecoveryOperationResult>;
 }
 
 /** Fields required to allocate a preparing receipt. */
@@ -113,19 +108,15 @@ export interface EffectLedger {
   /** Allocate a preparing receipt. */
   createReceipt(init: EffectReceiptInit): EffectReceipt;
   /** Apply one legal monotonic receipt transition. */
-  transition(
-    receiptId: string,
-    patch: ReceiptTransition,
-  ): EffectReceipt;
+  transition(receiptId: string, patch: ReceiptTransition): EffectReceipt;
   /** Retain one recovery envelope. */
   putEnvelope(envelope: StoredRecoveryEnvelope): void;
   /** Register a scope read model. */
   registerScope(scope: EffectScopeRecord): void;
   /** Register one recovery unit. */
-  registerUnit(
-    boundaryId: string,
-    unit: RegisteredRecoveryUnit,
-  ): void;
+  registerUnit(boundaryId: string, unit: RegisteredRecoveryUnit): void;
+  /** Append one settled effect or child boundary to the causal stack. */
+  appendStackEntry(boundaryId: string, entry: RecoveryStackEntry): void;
   /** Update a recovery unit lifecycle. */
   markUnit(
     unitId: string,
@@ -133,10 +124,7 @@ export interface EffectLedger {
     recoveryOperation?: Promise<RecoveryOperationResult>,
   ): void;
   /** Fold a recovery availability update onto one receipt. */
-  markReceiptRecovery(
-    receiptId: string,
-    recovery: RecoveryAvailability,
-  ): void;
+  markReceiptRecovery(receiptId: string, recovery: RecoveryAvailability): void;
   /** Read one receipt. */
   getReceipt(id: string): EffectReceipt | undefined;
   /** Read retained recovery data. */
@@ -149,6 +137,8 @@ export interface EffectLedger {
   receiptsFor(boundaryId: string): readonly EffectReceipt[];
   /** Read ordered units for one boundary. */
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
+  /** Read the causal recovery stack for one boundary. */
+  stackFor(boundaryId: string): readonly RecoveryStackEntry[];
 }
 
 const receipts = new Map<string, EffectReceipt>();
@@ -156,6 +146,7 @@ const envelopes = new Map<string, StoredRecoveryEnvelope>();
 const scopes = new Map<string, EffectScopeRecord>();
 const units = new Map<string, RegisteredRecoveryUnit>();
 const unitIdsByBoundary = new Map<string, string[]>();
+const stacksByBoundary = new Map<string, RecoveryStackEntry[]>();
 
 const terminalOutcomes = new Set<EffectOutcome>([
   "succeeded",
@@ -230,6 +221,11 @@ export const effectLedger: EffectLedger = {
     unitIdsByBoundary.set(boundaryId, [...ids, unit.id]);
   },
 
+  appendStackEntry(boundaryId, entry) {
+    const entries = stacksByBoundary.get(boundaryId) ?? [];
+    stacksByBoundary.set(boundaryId, [...entries, Object.freeze(entry)]);
+  },
+
   markUnit(unitId, status, recoveryOperation) {
     const current = units.get(unitId);
     if (!current) {
@@ -280,6 +276,10 @@ export const effectLedger: EffectLedger = {
       .filter(
         (unit): unit is RegisteredRecoveryUnit => unit !== undefined,
       );
+  },
+
+  stackFor(boundaryId) {
+    return stacksByBoundary.get(boundaryId) ?? [];
   },
 };
 
