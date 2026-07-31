@@ -36,3 +36,6 @@ await rollbackOnError(
 
 Best-effort mode does not make an irreversible effect recoverable. If later
 work fails, inspect the `RollbackError.result` unit statuses.
+
+See [Choose strict or best-effort recovery](/docs/guides/effects/rollback-boundaries#choose-strict-or-best-effort-recovery)
+for the guarantees and result handling of both modes.

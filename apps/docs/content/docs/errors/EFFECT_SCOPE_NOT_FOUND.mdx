@@ -25,3 +25,6 @@ await rollback(scope);
 
 Do not construct, edit, or mix scope refs from different runs. This release
 stores scopes in process, so a ref cannot be resolved after a restart.
+
+See [Roll back a boundary later](/docs/guides/effects/rollback-boundaries#roll-back-a-boundary-later)
+for the lifetime and use of `boundary.ref`.

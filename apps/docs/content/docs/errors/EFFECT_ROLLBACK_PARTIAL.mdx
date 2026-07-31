@@ -28,3 +28,6 @@ try {
 `error.recoveryError` retains the underlying recovery-system error when one
 exists. Do not treat a partial result as a successful rollback; reconcile
 ambiguous units and retry only units whose external semantics make that safe.
+
+See [Read a RollbackResult](/docs/guides/effects/rollback-boundaries#read-a-rollbackresult)
+for aggregate and per-unit status guidance.
