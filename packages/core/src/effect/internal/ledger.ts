@@ -41,6 +41,8 @@ export interface EffectReceiptInit {
   readonly recoveryUnitId?: string;
   /** Containing run identifier. */
   readonly runId?: string;
+  /** Canonical observability span identifier. */
+  readonly spanId?: string;
   /** Initial recovery availability. */
   readonly recovery: RecoveryAvailability;
   readonly startedAt: number;
@@ -141,6 +143,7 @@ export const effectLedger: EffectLedger = {
       boundaryId: init.boundaryId,
       ...(init.parentReceiptId === undefined ? {} : { parentReceiptId: init.parentReceiptId }),
       ...(init.runId === undefined ? {} : { runId: init.runId }),
+      ...(init.spanId === undefined ? {} : { spanId: init.spanId }),
       attemptCount: 1,
       outcome: "preparing",
       recovery: init.recovery,

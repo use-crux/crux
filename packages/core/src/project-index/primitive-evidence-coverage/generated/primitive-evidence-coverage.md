@@ -76,5 +76,6 @@
 | runtime.convex.flush | runtime | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | defer.scheduled | defer | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | defer.run | defer | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
+| effect.run | effect | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | evidence.record | evidence | producer | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | custom.operation | custom | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |

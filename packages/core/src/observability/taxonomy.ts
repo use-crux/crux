@@ -35,6 +35,7 @@ export const CRUX_PRIMITIVE_FAMILIES = [
   "feedback",
   "runtime",
   "defer",
+  "effect",
   "evidence",
   "custom",
 ] as const;
@@ -113,6 +114,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   "runtime.convex.flush",
   "defer.scheduled",
   "defer.run",
+  "effect.run",
   "evidence.record",
   "custom.operation",
 ] as const;
@@ -139,6 +141,7 @@ export const CRUX_CANONICAL_EDGE_TYPES = [
   "eval.case_of",
   "derived.from",
   "evidence.for",
+  "recovery.of",
 ] as const;
 
 /** Canonical artifact kinds in the observability graph. */
@@ -181,6 +184,7 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   "corpus.report",
   "security.report",
   "media.report",
+  "effect.receipt",
 ] as const;
 
 /** Canonical family for each operation primitive. */
@@ -257,6 +261,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "runtime.convex.flush": "runtime",
   "defer.scheduled": "defer",
   "defer.run": "defer",
+  "effect.run": "effect",
   "evidence.record": "evidence",
   "custom.operation": "custom",
 } as const satisfies Record<

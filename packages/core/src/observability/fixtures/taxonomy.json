@@ -22,6 +22,7 @@
     "defer.run": "defer",
     "defer.scheduled": "defer",
     "delegate.invoke": "delegate",
+    "effect.run": "effect",
     "embedding.call": "embedding",
     "evidence.record": "evidence",
     "eval.case": "eval",
@@ -87,6 +88,7 @@
     "context.contribution",
     "corpus.report",
     "delegate.report",
+    "effect.receipt",
     "embedding.report",
     "error.raw",
     "error.stack",
@@ -133,6 +135,7 @@
     "memory.read",
     "memory.write",
     "produced",
+    "recovery.of",
     "replay.of",
     "retrieval.returned",
     "triggered"

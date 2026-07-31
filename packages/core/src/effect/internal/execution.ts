@@ -29,6 +29,7 @@ import {
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
 import { recordEffectReceiptSettlement } from "./evidence";
+import { observeEffectRun } from "./observability";
 import {
   createEffectOccurrence,
   createEffectReceiptRef,
@@ -97,6 +98,15 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   const occurrence = createEffectOccurrence(
     boundary, scopePath || "root", definition.id, definition.version,
   );
+  const observation = observeEffectRun({
+    effectId: definition.id,
+    effectVersion: definition.version,
+    receiptId: occurrence.receiptId,
+    scopeId: groupingScope?.id ?? boundary.id,
+    boundaryId: boundary.id,
+    recovery: options?.recover ? "unavailable" : "irreversible",
+  });
+  return observation.run(async () => {
   if (ownsBoundary) {
     effectLedger.registerScope({
       ref: boundary,
@@ -111,6 +121,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     scopeId: groupingScope?.id ?? boundary.id,
     boundaryId: boundary.id,
     runId: boundary.runId,
+    ...(observation.spanId === undefined
+      ? {}
+      : { spanId: observation.spanId }),
     recovery: options?.recover
       ? "unavailable"
       : "irreversible",
@@ -138,6 +151,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       error: summarizeEffectError(failure),
     });
     recordEffectReceiptSettlement(settledReceipt);
+    observation.settle(settledReceipt);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw failure;
   }
@@ -163,6 +177,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         error: summarizeEffectError(failure),
       });
       recordEffectReceiptSettlement(settledReceipt);
+      observation.settle(settledReceipt);
       if (ownsBoundary) closeImplicitRootBoundary(boundary);
       throw failure;
     }
@@ -208,6 +223,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       completedAt: Date.now(),
     });
     recordEffectReceiptSettlement(settledReceipt);
+    observation.settle(settledReceipt);
     registerEffectStackEntry(boundary.id, receipt.id);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     return Object.freeze({
@@ -244,6 +260,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         error: summarizeEffectError(error),
       });
       recordEffectReceiptSettlement(settledReceipt);
+      observation.settle(settledReceipt);
       registerEffectStackEntry(boundary.id, receipt.id);
       if (ownsBoundary) closeImplicitRootBoundary(boundary);
       throw error;
@@ -254,9 +271,11 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       error: summarizeEffectError(error),
     });
     recordEffectReceiptSettlement(settledReceipt);
+    observation.settle(settledReceipt);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw error;
   }
+  });
 }
 
 function isOptionalJsonSafe(value: unknown): boolean {

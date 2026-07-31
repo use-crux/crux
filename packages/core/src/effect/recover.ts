@@ -20,6 +20,7 @@ import { effectLedger } from "./internal/ledger";
 import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
 import { reconcileEffectReceipt } from "./internal/reconcile";
 import { recordEffectRecoveryAttempt } from "./internal/evidence";
+import { observeEffectRecoveryRun } from "./internal/observability";
 import type {
   EffectReconciliation,
   EffectReceiptRef,
@@ -149,10 +150,7 @@ export async function recoverEffectReceiptAttempt(
       ),
     });
   }
-  if (
-    unit.status === "recovering" &&
-    unit.recoveryOperation
-  ) {
+  if (unit.status === "recovering" && unit.recoveryOperation) {
     return unit.recoveryOperation;
   }
 
@@ -169,8 +167,11 @@ export async function recoverEffectReceiptAttempt(
 
   const operation = Promise.resolve().then(
     async (): Promise<EffectRecoveryAttempt> => {
+      const attemptId = createRecoveryAttemptReceiptId();
+      const observation = observeEffectRecoveryRun(storedReceipt, attemptId);
+      return observation.run(async () => {
       const attempt = effectLedger.createReceipt({
-        id: createRecoveryAttemptReceiptId(),
+        id: attemptId,
         effectId: storedReceipt.effectId,
         effectVersion: storedReceipt.effectVersion,
         scopeId: storedReceipt.scopeId,
@@ -180,6 +181,7 @@ export async function recoverEffectReceiptAttempt(
         ...(storedReceipt.runId === undefined
           ? {}
           : { runId: storedReceipt.runId }),
+        spanId: observation.spanId,
         recovery: "unavailable",
         startedAt: Date.now(),
       });
@@ -211,6 +213,7 @@ export async function recoverEffectReceiptAttempt(
           "recovered",
         );
         recordEffectRecoveryAttempt(original, settledAttempt);
+        observation.settle(settledAttempt);
         return Object.freeze({
           result: createRecoveryUnitResult(
             unit,
@@ -231,6 +234,7 @@ export async function recoverEffectReceiptAttempt(
             "ambiguous",
           );
           recordEffectRecoveryAttempt(original, settledAttempt);
+          observation.settle(settledAttempt);
           return Object.freeze({
             result: Object.freeze({
               ...createRecoveryUnitResult(
@@ -250,6 +254,7 @@ export async function recoverEffectReceiptAttempt(
         });
         effectLedger.markUnit(unit.id, "failed");
         recordEffectRecoveryAttempt(storedReceipt, settledAttempt);
+        observation.settle(settledAttempt);
         return Object.freeze({
           result: Object.freeze({
             ...createRecoveryUnitResult(
@@ -262,6 +267,7 @@ export async function recoverEffectReceiptAttempt(
           error,
         });
       }
+      });
     },
   );
   effectLedger.markUnit(unit.id, "recovering", operation);

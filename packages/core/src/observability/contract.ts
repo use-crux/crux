@@ -804,6 +804,87 @@ export interface CruxDeferRunAttributes {
   queueDelayMs?: number;
 }
 
+/** Terminal outcome summarized for a custom effect receipt. */
+export type CruxEffectOutcome =
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "unknown";
+
+/** Recovery availability summarized for a custom effect receipt. */
+export type CruxEffectRecoveryAvailability =
+  | "available"
+  | "unavailable"
+  | "irreversible"
+  | "expired"
+  | "conflict"
+  | "handler_unavailable"
+  | "ambiguous"
+  | "recovered";
+
+/** Safe domain resource identity attached to effect telemetry. */
+export interface CruxEffectResourceSummary {
+  /** Domain resource type. */
+  readonly type: string;
+  /** Stable resource identifier. */
+  readonly id?: string;
+  /** Resource namespace. */
+  readonly namespace?: string;
+  /** Safe scalar facets selected by the effect definition. */
+  readonly attributes?: Readonly<
+    Record<string, string | number | boolean>
+  >;
+}
+
+/** Privacy-safe artifact preview for one settled custom effect receipt. */
+export interface CruxEffectReceiptSummary {
+  /** Preview discriminant. */
+  readonly kind: "effect.receipt";
+  /** Stable receipt identifier. */
+  readonly receiptId: string;
+  /** Authored effect definition identifier. */
+  readonly effectId: string;
+  /** Effect definition version. */
+  readonly effectVersion: number;
+  /** Nearest non-boundary scope identifier. */
+  readonly scopeId: string;
+  /** Owning rollback boundary identifier. */
+  readonly boundaryId: string;
+  /** Original receipt identifier for a recovery attempt. */
+  readonly parentReceiptId?: string;
+  /** Terminal execution outcome. */
+  readonly outcome: CruxEffectOutcome;
+  /** Recovery availability at settlement. */
+  readonly recovery: CruxEffectRecoveryAvailability;
+  /** Safe domain resource projection. */
+  readonly resource?:
+    | CruxEffectResourceSummary
+    | readonly CruxEffectResourceSummary[];
+}
+
+/** Canonical wire attributes for an `effect.run` span. */
+export interface CruxEffectRunAttributes extends CruxAttributes {
+  /** Authored effect definition identifier. */
+  readonly "crux.effect.id": string;
+  /** Effect definition version. */
+  readonly "crux.effect.version": number;
+  /** Stable receipt identifier. */
+  readonly "crux.effect.receipt.id": string;
+  /** Nearest non-boundary scope identifier. */
+  readonly "crux.effect.scope.id": string;
+  /** Owning rollback boundary identifier. */
+  readonly "crux.effect.boundary.id": string;
+  /** Original receipt identifier for a recovery attempt. */
+  readonly "crux.effect.parent_receipt.id"?: string;
+  /** Receipt outcome at the point represented by the record. */
+  readonly "crux.effect.outcome":
+    | "preparing"
+    | "running"
+    | CruxEffectOutcome;
+  /** Recovery availability at the point represented by the record. */
+  readonly "crux.effect.recovery": CruxEffectRecoveryAvailability;
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
@@ -812,6 +893,7 @@ export type CruxSpanAttributesByPrimitive = {
   "memory.capture": CruxMemoryCaptureSpanAttributes;
   "defer.scheduled": CruxDeferScheduledAttributes;
   "defer.run": CruxDeferRunAttributes;
+  "effect.run": CruxEffectRunAttributes;
   "custom.operation": CruxAttributes;
 };
 

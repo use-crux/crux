@@ -1,6 +1,7 @@
 export * from './contract'
 export * from './taxonomy'
 export * from './evidence-edge-schema'
+export { EffectReceiptSummarySchema } from './effect-schema'
 export type {
   OperationResultMeta,
   OperationRunRef,

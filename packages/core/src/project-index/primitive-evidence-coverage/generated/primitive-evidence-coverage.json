@@ -1575,6 +1575,27 @@
       "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
     },
     {
+      "name": "effect.run",
+      "family": "effect",
+      "participation": "subject",
+      "roles": {
+        "intent": "advanced-custom",
+        "authority": "advanced-custom",
+        "change": "advanced-custom",
+        "verification": "advanced-custom",
+        "recovery": "advanced-custom"
+      },
+      "nativeEvidence": {
+        "status": "custom-only"
+      },
+      "runtimeDurability": "local-durable",
+      "otelPolicy": "closed-allowlist",
+      "devtoolsRenderer": "packages/devtools/ui/src/features/run-detail/evidence/EvidencePanel.tsx",
+      "conformanceTest": "packages/core/__tests__/evidence/record-inspect.test.ts",
+      "owner": "https://github.com/use-crux/crux/issues/287",
+      "interimBehavior": "Advanced custom authoring is supported; no automatic native producer is promised."
+    },
+    {
       "name": "evidence.record",
       "family": "evidence",
       "participation": "producer",
