@@ -5,6 +5,7 @@
  */
 
 import type { z } from "zod";
+import type { Message } from "../../generation/messages";
 import type { Context } from "../../prompt/context-types";
 import type { ToolMiddleware } from "../../tools/types";
 
@@ -136,7 +137,13 @@ export interface ResolvedRepresentationRung {
     | "offload"
     | "omitted";
   readonly text?: string;
+  /** Complete canonical transcript for a history representation. */
+  readonly messages?: readonly Message[];
   readonly available: boolean;
+  /** Linked support request that prepared this representation. */
+  readonly supportRequestId?: string;
+  /** Every bounded support request that prepared this representation. */
+  readonly supportRequestIds?: readonly string[];
 }
 
 /** Resolved redacted policy carried from prompt resolution into planning. @internal */
@@ -162,6 +169,8 @@ export interface ResolvedRepresentationPolicy {
     readonly fullText: string;
     readonly replacement: string;
   }[];
+  /** Lowest safe transcript used only for branch lower-bound measurement. */
+  readonly lowerBoundMessages?: readonly Message[];
   readonly rungs: readonly ResolvedRepresentationRung[];
 }
 

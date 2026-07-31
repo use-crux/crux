@@ -43,6 +43,7 @@ export function coreStepDialect<
     materializeToolSource: spec.materializeToolSource,
     capacity: spec.capacity,
     countTokens: spec.countTokens,
+    compactHistory: spec.compactHistory,
     mapSettings: spec.mapSettings,
     mapError: spec.mapError,
     call: spec.call,
@@ -80,6 +81,9 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
     structuredOutput: port.structuredOutput,
     media: port.media,
     materializeToolSource: port.materializeToolSource,
+    compactHistory: port.compactHistory
+      ? (input) => port.compactHistory!(input)
+      : undefined,
     [toolModelIngressDialect]: port[toolModelIngressDialect],
     describeModel: (model) => port.describeModel(model),
     mapSettings: (settings, model) => port.mapSettings(settings, model),

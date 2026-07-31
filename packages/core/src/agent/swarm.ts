@@ -19,7 +19,7 @@ import type {
 import type { AgentExecutor, AgentResult } from "./executor";
 import { createCompositionRuntime } from "./composition-runtime";
 import type { CompositionScope } from "./composition-runtime";
-import type { GenerateTextFn } from "../compaction/types";
+import type { GenerateTextFn } from "../generation/support-types";
 import { observe } from "../observability";
 import type { CruxSpanId, OperationResultMeta } from "../observability";
 import type { RetryOptions } from "../generation/retry";

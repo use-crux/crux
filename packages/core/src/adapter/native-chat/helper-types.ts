@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { GenerateObjectFn, GenerateTextFn } from "../../compaction";
+import type { GenerateObjectFn, GenerateTextFn } from "../../generation/support-types";
 
 /** Bound helper functions generated from the same single-turn provider path. */
 export interface NativeChatHelpers<TClient> {

@@ -96,6 +96,9 @@ function portForBoundLoop(
       : {}),
     media: loop.media,
     materializeToolSource: bound.materializeToolSource,
+    compactHistory: bound.compactHistory
+      ? (input) => bound.compactHistory!(input)
+      : undefined,
     [toolModelIngressDialect]: bound[toolModelIngressDialect],
     describeModel:
       loop.describeModel ?? ((model) => describeModelFallback(id, model)),

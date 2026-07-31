@@ -20,6 +20,7 @@ export type {
 export type {
   RequestInspection,
   RequestReceipt,
+  RequestSupportReceipt,
 } from "./receipt/receipt";
 export type {
   RequestTokenBreakdown,
@@ -28,8 +29,20 @@ export type {
 export {
   history,
   type HistoryFactory,
-} from "./history/recent";
+} from "./history/managed";
+export {
+  summarize,
+  type SummarizeFactory,
+  type SummarizeStrategy,
+} from "./history/strategies";
 export type {
+  HistoryOptions,
+  HistoryProjection,
+  ManagedHistoryProjection,
+  ManagedHistoryRecent,
+  ManagedHistorySummaryOptions,
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
   RecentHistoryOptions,
   RecentHistoryProjection,
 } from "./history/source";

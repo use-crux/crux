@@ -20,6 +20,10 @@ import type { CruxProviderError } from "./normalized-outcome";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
 import type { ModelCapacityResolver } from "../request/capacity/model-profile";
+import type {
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+} from "../request/history/source";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -78,6 +82,21 @@ export interface AdapterSpec<
     client: TClient,
     args: CallArgs<TExtra>,
   ): Promise<number>;
+
+  /**
+   * Lower managed history through an optional provider compaction facility.
+   *
+   * Core calls this only when `history({ providerNative: true })` permits the
+   * native path. Portable compaction remains Core-owned and bypasses this hook.
+   *
+   * @param client - Bound provider client.
+   * @param input - Exact prefix and versioned summary policy.
+   * @returns Derived summary text without mutating canonical history.
+   */
+  compactHistory?(
+    client: TClient,
+    input: ProviderHistorySummaryInput,
+  ): Promise<ProviderHistorySummaryResult>;
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
   call(

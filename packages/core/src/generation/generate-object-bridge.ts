@@ -11,7 +11,7 @@ import type {
   GenerateObjectCommonOptions,
   GenerateObjectFn,
   GenerateObjectInput,
-} from './types'
+} from './support-types'
 
 const DEFAULT_PROMPT_ID = 'crux.generateObject'
 
@@ -79,7 +79,7 @@ export interface GenerateObjectBridgeOptions {
  *
  * @example
  * ```ts
- * import { createGenerateObjectFnFromGenerate } from '@use-crux/core/compaction'
+ * This bridge is internal to Core primitives that need full adapter execution.
  * import { generate } from '@use-crux/ai'
  *
  * const generateObject = createGenerateObjectFnFromGenerate(generate)

@@ -35,6 +35,8 @@ import type { RequestAdaptation } from "../receipt/adaptations";
 import type { ResolvedRepresentationPolicy } from "../representation/ladder-types";
 import type { RequestRepresentationEpoch } from "./epoch";
 import { selectRepresentedRequest } from "./select";
+import type { GenerateHistorySummary } from "../artifacts/lifecycle";
+import { resolveManagedHistoryPolicy } from "../history/managed-policy";
 
 const warnedExactHistory = new Set<string>();
 
@@ -44,6 +46,7 @@ export interface SealRequestInput<
 > {
   readonly provider: string;
   readonly model: string;
+  readonly responseModel?: unknown;
   readonly request: CallArgs<TExtra>;
   readonly settings: GenerationSettings;
   readonly inputBudget?: InputBudget;
@@ -52,6 +55,7 @@ export interface SealRequestInput<
   readonly media?: ProviderMediaHooks;
   readonly previousRequestId?: string;
   readonly history?: RequestHistoryContext;
+  readonly generateHistorySummary?: GenerateHistorySummary;
   readonly representations?: readonly ResolvedRepresentationPolicy[];
   readonly representationEpoch?: RequestRepresentationEpoch;
   readonly prepareRequest?: (
@@ -85,7 +89,42 @@ export async function sealRequest<
     measurement,
   });
   let adaptations: readonly RequestAdaptation[] = [];
-  const policies = input.representations ?? [];
+  const planningWarnings: RequestWarning[] = [];
+  const policies = [...(input.representations ?? [])];
+  if (input.history?.policy === "managed" && input.history.projection) {
+    if (input.countTokens) {
+      inputTokens = assertAuthoritativeTokenCount(
+        await input.countTokens(request),
+      );
+      measurement = "exact";
+      budget = deriveInputBudget({
+        profile,
+        settings: input.settings,
+        inputBudget: input.inputBudget,
+        measurement,
+      });
+    }
+    const managed = await resolveManagedHistoryPolicy({
+      projection: input.history.projection,
+      messages: request.messages,
+      provider: input.provider,
+      model: input.model,
+      responseModel: input.responseModel,
+      fullInputTokens: inputTokens,
+      optimizeAt: budget.optimizeAt,
+      max: budget.max,
+      generate:
+        input.generateHistorySummary ??
+        (() =>
+          Promise.reject(
+            new TypeError(
+              "The active adapter cannot prepare managed history summaries.",
+            ),
+          )),
+    });
+    if (managed.policy) policies.unshift(managed.policy);
+    planningWarnings.push(...managed.warnings);
+  }
   if (policies.length > 0) {
     if (input.countTokens) {
       measurement = "exact";
@@ -140,7 +179,10 @@ export async function sealRequest<
     estimate.breakdown,
     inputTokens,
   );
-  const warnings = requestWarnings(input, inputTokens, budget.optimizeAt);
+  const warnings = [
+    ...requestWarnings(input, inputTokens, budget.optimizeAt),
+    ...planningWarnings,
+  ];
   if (inputTokens > budget.max) {
     throw tooLargeError(
       input,

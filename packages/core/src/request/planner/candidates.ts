@@ -105,6 +105,12 @@ export function buildRequestCandidate<
     adaptations.push({
       contributor: policy.contributor,
       representation: rung.kind,
+      ...(rung.supportRequestId
+        ? { supportRequestId: rung.supportRequestId }
+        : {}),
+      ...(rung.supportRequestIds
+        ? { supportRequestIds: rung.supportRequestIds }
+        : {}),
     });
   }
   request = applySkillProjection(request, omittedPolicies);
@@ -137,7 +143,13 @@ export function buildRequestBranchLowerBound<
     const policy = policies[index]!;
     const selected = prefix[index];
     const rung = selected === undefined
-      ? { kind: "omitted" as const, available: true }
+      ? {
+          kind: "omitted" as const,
+          available: true,
+          ...(policy.lowerBoundMessages
+            ? { messages: policy.lowerBoundMessages }
+            : {}),
+        }
       : policy.rungs[selected]!;
     if (selected === 0 && rung.kind === "full") continue;
     if (rung.kind === "omitted") omittedPolicies.push(policy);
@@ -189,8 +201,9 @@ function applyRung<
       }
     }
   }
-  const messages =
-    !systemBlocks && !request.system
+  const messages = rung.messages
+    ? [...rung.messages]
+    : !systemBlocks && !request.system
       ? replaceFoldedSystem(
           request.messages,
           policy.fullTexts,

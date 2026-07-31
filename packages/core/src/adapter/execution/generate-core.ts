@@ -65,6 +65,7 @@ import {
   appendAssistantResultMessage,
   initialCoreMessageState,
 } from "./messages";
+import { coreHistorySummaryGenerator } from "./history-summary";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
@@ -338,6 +339,10 @@ export async function generateCore<
         mapError: dialect.mapError,
       });
     });
+  const generateHistorySummary = coreHistorySummaryGenerator(
+    dialect,
+    callProvider,
+  );
 
   const sealProviderRequest = async (
     request: CallArgs<TExtra>,
@@ -355,6 +360,7 @@ export async function generateCore<
       media: dialect.media,
       previousRequestId: lastRequestReceipt?.id,
       history: initialMessages.history,
+      generateHistorySummary,
       representations: resolved.representations,
       representationEpoch,
       prepareRequest: (candidate, selections) => {

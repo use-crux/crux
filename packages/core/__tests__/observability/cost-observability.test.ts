@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createBudgetManager } from '../../src/compaction/budget'
-import { summarizeMessages } from '../../src/compaction/summarize'
 import { CostLimitError, modelPricing, withCostTracking } from '../../src/cost'
 import { prompt } from '../../src/prompt/prompt'
 import {
@@ -58,7 +56,7 @@ async function generateOnce(options: { cost?: number; model?: string; provider?:
   )
 }
 
-describe('canonical cost, budget, and compaction observability', () => {
+describe('canonical cost observability', () => {
   afterEach(() => {
     resetHooks()
     resetObservabilityRuntime()
@@ -140,80 +138,4 @@ describe('canonical cost, budget, and compaction observability', () => {
     )
   })
 
-    it('records budget checks as prompt.budget spans', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    const budget = createBudgetManager({ limit: 100, warningThreshold: 0.5, criticalThreshold: 0.9 })
-    budget.report('system', 30)
-    budget.report('messages', 40)
-
-    const state = budget.check()
-    await observe.flush()
-
-    expect(state.level).toBe('warning')
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:start',
-        primitive: 'prompt.budget',
-        name: 'budget.check',
-        attributes: expect.objectContaining({ limit: 100, sourceCount: 2 }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:end',
-        status: 'ok',
-        attributes: expect.objectContaining({ used: 70, available: 30, pressure: 0.7, level: 'warning' }),
-      }),
-    )
-  })
-
-    it('records compaction summaries with before/after token metadata and bounded artifacts', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    const generate = vi.fn(async () => ({ text: 'User discussed European capitals.' }))
-
-    await observe.run({ name: 'compact conversation', rootPrimitive: 'compaction.run' }, async () => {
-      await summarizeMessages({
-        messages: [
-          { role: 'user', content: 'What is the capital of France?' },
-          { role: 'assistant', content: 'Paris.' },
-        ],
-        generate,
-        model: 'summary-model',
-        focus: ['decisions'],
-      })
-    })
-    await observe.flush()
-
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:start',
-        primitive: 'compaction.run',
-        name: 'compaction.summarize',
-        attributes: expect.objectContaining({ messageCount: 2, model: 'summary-model', focus: ['decisions'] }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'artifact',
-        kind: 'compaction.report',
-        attributes: expect.objectContaining({ primitive: 'compaction.run', compactionKind: 'summary' }),
-        preview: expect.objectContaining({
-          kind: 'compaction.report',
-          strategy: 'summary',
-          summaryPreview: 'User discussed European capitals.',
-          beforeTokens: expect.any(Number),
-          afterTokens: expect.any(Number),
-        }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:end',
-        status: 'ok',
-        attributes: expect.objectContaining({ tokensBefore: expect.any(Number), tokensAfter: expect.any(Number) }),
-      }),
-    )
-  })
 })

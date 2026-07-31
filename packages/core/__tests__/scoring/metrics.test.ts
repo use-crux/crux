@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { metrics } from '../../src/scoring/metrics'
-import type { GenerateObjectFn } from '../../src/compaction/types'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 
 const mockGenerate: GenerateObjectFn = (async () => ({
   object: { reasoning: 'Test reasoning', score: 4 },

@@ -41,7 +41,7 @@ import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { ToolSource } from '../tools/tool-source'
 import type { ToolOwnerLabel } from './tool-merge'
-import type { RecentHistoryProjection } from '../request/history/source'
+import type { HistoryProjection } from '../request/history/source'
 import type { RepresentationEntry } from '../request/representation/ladder-types'
 import type {
   CruxContextContributionPreview,
@@ -159,7 +159,7 @@ export interface Contribution {
   memory?: MemoryEntry
   skill?: SkillEntry
   blackboard?: BlackboardEntry
-  history?: RecentHistoryProjection
+  history?: HistoryProjection
   representations?: readonly RepresentationEntry[]
   facts?: ContributionFacts
 }
@@ -233,7 +233,7 @@ export interface MergedResolution {
   skills: SkillEntry[]
   memories: MemoryEntry[]
   blackboards: BlackboardEntry[]
-  history: RecentHistoryProjection[]
+  history: HistoryProjection[]
   representations: RepresentationEntry[]
   representationOwnership: Map<
     RepresentationEntry,

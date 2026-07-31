@@ -7,9 +7,24 @@
 import type { ModelCountingConfidence } from "../capacity/model-profile";
 import type { RequestTokenBreakdown } from "../measure/breakdown";
 import type { RequestAdaptation, RequestWarning } from "./adaptations";
+import { supportRequestReceipt } from "./support";
 
 let fallbackRequestId = 0;
 const retryCounts = new WeakMap<RequestReceipt, { value: number }>();
+
+/** Redacted linked support-call facts retained with live inspection. */
+export interface RequestSupportReceipt {
+  /** Support request identity linked from the adaptation. */
+  readonly id: string;
+  /** Concrete support model. */
+  readonly model: string;
+  /** Measured support-call input tokens. */
+  readonly inputTokens: number;
+  /** Effective support-call input maximum. */
+  readonly maxInputTokens: number;
+  /** Support-call measurement confidence. */
+  readonly measurement: ModelCountingConfidence;
+}
 
 /** Retained breakdown-only inspection available for a live request receipt. */
 export interface RequestInspection {
@@ -25,6 +40,8 @@ export interface RequestInspection {
   readonly providerOverheadTokens: number;
   /** Number of provider transport retries reported for the sealed request. */
   readonly retryCount: number;
+  /** Receipted support calls linked from selected adaptations. */
+  readonly supportRequests: readonly RequestSupportReceipt[];
   /** Evidence-retention limitation until durable inspection is wired. */
   readonly retention: "requires observability retention";
 }
@@ -85,13 +102,14 @@ export function createRequestReceipt(
 ): RequestReceipt {
   const id = input.id ?? createRequestId();
   const retryCount = { value: input.retryCount ?? 0 };
+  const adaptations = Object.freeze([...(input.adaptations ?? [])]);
   const receipt: RequestReceipt = {
     id,
     model: input.model,
     inputTokens: input.inputTokens,
     maxInputTokens: input.maxInputTokens,
     measurement: input.measurement,
-    adaptations: Object.freeze([...(input.adaptations ?? [])]),
+    adaptations,
     warnings: Object.freeze([...(input.warnings ?? [])]),
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
@@ -104,6 +122,7 @@ export function createRequestReceipt(
         safetyMarginTokens: input.safetyMarginTokens,
         providerOverheadTokens: input.providerOverheadTokens,
         retryCount: retryCount.value,
+        supportRequests: linkedSupportRequests(adaptations),
         retention: "requires observability retention" as const,
       }),
   };
@@ -113,6 +132,35 @@ export function createRequestReceipt(
   });
   retryCounts.set(receipt, retryCount);
   return Object.freeze(receipt);
+}
+
+function linkedSupportRequests(
+  adaptations: readonly RequestAdaptation[],
+): readonly RequestSupportReceipt[] {
+  const ids = new Set(
+    adaptations.flatMap((adaptation) =>
+      adaptation.supportRequestIds ??
+      (adaptation.supportRequestId
+        ? [adaptation.supportRequestId]
+        : []),
+    ),
+  );
+  return Object.freeze(
+    [...ids].flatMap((id) => {
+      const linked = supportRequestReceipt(id);
+      return linked
+        ? [
+            Object.freeze({
+              id: linked.id,
+              model: linked.model,
+              inputTokens: linked.inputTokens,
+              maxInputTokens: linked.maxInputTokens,
+              measurement: linked.measurement,
+            }),
+          ]
+        : [];
+    }),
+  );
 }
 
 /** Record adapter-reported transport retries without mutating the receipt. @internal */

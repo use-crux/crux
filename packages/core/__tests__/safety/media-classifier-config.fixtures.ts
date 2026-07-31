@@ -1,6 +1,6 @@
 /** Focused authoring fixtures for media-classifier config tests. */
 
-import type { GenerateObjectFn } from '../../src/compaction'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import { normalizeMediaClassifierConfig } from '../../src/safety/guardrail/strategies/media-classifier/config'
 import type {
   MediaClassifierCategories,

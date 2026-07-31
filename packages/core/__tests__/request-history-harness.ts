@@ -9,7 +9,7 @@ import {
   type Message,
 } from "../src";
 
-function response(text: string): AdapterResponse {
+export function historyResponse(text: string): AdapterResponse {
   return {
     text,
     toolCalls: undefined,
@@ -20,13 +20,22 @@ function response(text: string): AdapterResponse {
   };
 }
 
+export const managedHistoryMessages: Message[] = [
+  { role: "user", content: "old question with detailed account context" },
+  { role: "assistant", content: "old answer with detailed preferences" },
+  { role: "user", content: "middle question with more account context" },
+  { role: "assistant", content: "middle answer with more preferences" },
+  { role: "user", content: "new question" },
+  { role: "assistant", content: "new answer" },
+];
+
 export function historyAdapter() {
   const requests: CallArgs[] = [];
   const call = vi.fn(async (_client: object, args: CallArgs) => {
     requests.push(args);
     return {
       raw: { text: "done" },
-      extracted: response("done"),
+      extracted: historyResponse("done"),
     };
   });
   const spec: AdapterSpec<object, { readonly text: string }> = {
@@ -75,7 +84,7 @@ export function sdkHistoryAdapter() {
       return {
         status: "complete",
         raw: {},
-        response: response("done"),
+        response: historyResponse("done"),
         messages: [
           ...planned.messages,
           { role: "assistant", content: "done" },

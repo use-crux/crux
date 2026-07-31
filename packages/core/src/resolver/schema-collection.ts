@@ -117,7 +117,8 @@ export function collectSchemaContributions(
       entry._tag === 'Skill' ||
       entry._tag === 'Memory' ||
       entry._tag === 'Blackboard' ||
-      entry._tag === 'HistoryRecent'
+      entry._tag === 'HistoryRecent' ||
+      entry._tag === 'HistoryManaged'
     ) {
       out.push({ id: undefined, schema: undefined, optional: optionalPath })
       continue

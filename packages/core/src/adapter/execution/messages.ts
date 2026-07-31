@@ -19,6 +19,8 @@ import {
   projectRecentHistory,
 } from "../../request/history/recent";
 import type {
+  HistoryProjection,
+  ManagedHistoryProjection,
   RecentHistoryProjection,
   RequestHistoryContext,
 } from "../../request/history/source";
@@ -74,7 +76,7 @@ export function initialMessageState(
   resolved: {
     readonly prompt?: string;
     readonly messages?: readonly unknown[];
-    readonly historyProjection?: RecentHistoryProjection;
+    readonly historyProjection?: HistoryProjection;
   },
   messages?: Message[],
   nativeMessages?: readonly unknown[],
@@ -88,13 +90,13 @@ export function initialMessageState(
     (!nativeMessages || nativeMessages.length === 0)
   ) {
     throw invalidHistoryComposition(
-      "history.recent() has no history source. Supply caller-owned messages or remove the projection.",
+      "The history projection has no history source. Supply caller-owned messages or remove the projection.",
     );
   }
   if (nativeMessages && nativeMessages.length > 0) {
     if (resolved.historyProjection && history.length === 0) {
       throw invalidHistoryComposition(
-        "history.recent() requires canonical caller-owned messages; provider-native history cannot be projected before normalization.",
+        "History projection requires canonical caller-owned messages; provider-native history cannot be projected before normalization.",
       );
     }
     const selected = applyHistoryProjection(
@@ -109,7 +111,10 @@ export function initialMessageState(
         history.length > 0
           ? {
               source: "caller-messages",
-              policy: resolved.historyProjection ? "recent" : "exact",
+              policy: historyPolicy(resolved.historyProjection),
+              ...(managedProjection(resolved.historyProjection)
+                ? { projection: resolved.historyProjection }
+                : {}),
               warnings: selected.warnings,
               changed: selected.messages.length !== history.length,
             }
@@ -136,7 +141,10 @@ export function initialMessageState(
       source === "explicit-history" || source === "resolved-messages"
         ? {
             source: "caller-messages",
-            policy: resolved.historyProjection ? "recent" : "exact",
+            policy: historyPolicy(resolved.historyProjection),
+            ...(managedProjection(resolved.historyProjection)
+              ? { projection: resolved.historyProjection }
+              : {}),
             warnings: selected.warnings,
             changed: selected.messages.length !== history.length,
           }
@@ -154,7 +162,7 @@ export function initialCoreMessageState(
   resolved: {
     readonly prompt?: string;
     readonly messages?: readonly unknown[];
-    readonly historyProjection?: RecentHistoryProjection;
+    readonly historyProjection?: HistoryProjection;
   },
   messages?: Message[],
 ): InitialMessageState {
@@ -166,7 +174,7 @@ export function initialCoreMessageState(
     !resolved.messages
   ) {
     throw invalidHistoryComposition(
-      "history.recent() has no history source. Supply caller-owned messages or remove the projection.",
+      "The history projection has no history source. Supply caller-owned messages or remove the projection.",
     );
   }
   let source: InitialMessageSource = callerMessagesPresent
@@ -188,7 +196,10 @@ export function initialCoreMessageState(
       source === "explicit-history" || source === "resolved-messages"
         ? {
             source: "caller-messages",
-            policy: resolved.historyProjection ? "recent" : "exact",
+            policy: historyPolicy(resolved.historyProjection),
+            ...(managedProjection(resolved.historyProjection)
+              ? { projection: resolved.historyProjection }
+              : {}),
             warnings: selected.warnings,
             changed: selected.messages.length !== history.length,
           }
@@ -198,16 +209,31 @@ export function initialCoreMessageState(
 
 function applyHistoryProjection(
   messages: readonly Message[],
-  projection: RecentHistoryProjection | undefined,
+  projection: HistoryProjection | undefined,
 ): {
   readonly messages: Message[];
   readonly warnings: readonly RequestWarning[];
 } {
-  if (!projection) return { messages: [...messages], warnings: [] };
+  if (!projection || projection._tag === "HistoryManaged") {
+    return { messages: [...messages], warnings: [] };
+  }
   return projectRecentHistory(
     callerOwnedHistorySource(messages),
     projection,
   );
+}
+
+function managedProjection(
+  projection: HistoryProjection | undefined,
+): projection is ManagedHistoryProjection {
+  return projection?._tag === "HistoryManaged";
+}
+
+function historyPolicy(
+  projection: HistoryProjection | undefined,
+): RequestHistoryContext["policy"] {
+  if (!projection) return "exact";
+  return projection._tag === "HistoryManaged" ? "managed" : "recent";
 }
 
 /**

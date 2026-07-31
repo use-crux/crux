@@ -37,7 +37,7 @@ import type {
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyMessage, AnyToolSet } from "../types";
 import type { GenerationSettings } from "../generation/types";
-import type { RecentHistoryProjection } from "../request/history/source";
+import type { HistoryProjection } from "../request/history/source";
 import type { ResolvedRepresentationPolicy } from "../request/representation/ladder-types";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
@@ -93,7 +93,7 @@ export interface SystemBlock {
  */
 export interface ResolvedPrompt {
   /** Stateless history policy selected by the resolved `use` graph. */
-  historyProjection?: RecentHistoryProjection;
+  historyProjection?: HistoryProjection;
   /** Resolved representation policy consumed by managed request planning. @internal */
   representations?: readonly ResolvedRepresentationPolicy[];
   /** The assembled system message (own system + context contributions + adaptations). */

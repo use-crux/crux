@@ -24,7 +24,7 @@ import type {
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
 import type { ToolOwnerLabel } from './tool-merge'
-import type { RecentHistoryProjection } from '../request/history/source'
+import type { HistoryProjection } from '../request/history/source'
 import { invalidHistoryComposition } from '../request/history/recent'
 import type { RepresentationEntry } from '../request/representation/ladder-types'
 
@@ -35,7 +35,7 @@ export interface PostMergeSurface {
   readonly skills: SkillEntry[]
   readonly memories: MemoryEntry[]
   readonly blackboards: BlackboardEntry[]
-  readonly historyProjection: RecentHistoryProjection | undefined
+  readonly historyProjection: HistoryProjection | undefined
   readonly representationLadders: readonly RepresentationEntry[]
   readonly representationOwnership: ReadonlyMap<
     RepresentationEntry,
@@ -58,7 +58,7 @@ export async function resolvePostMergeSurface(
 ): Promise<PostMergeSurface> {
   if (merged.history.length > 1) {
     throw invalidHistoryComposition(
-      "Exactly one history projection may be active after prompt resolution. Remove the duplicate history.recent() entry.",
+      "Exactly one history projection may be active after prompt resolution. Remove the duplicate history entry.",
     )
   }
   const contexts = [...merged.active]

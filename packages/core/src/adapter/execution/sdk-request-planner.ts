@@ -18,6 +18,7 @@ import type { SdkLoopDialect } from "./dialect-types";
 import type { RequestHistoryContext } from "../../request/history/source";
 import type { ResolvedRepresentationPolicy } from "../../request/representation/ladder-types";
 import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
+import type { GenerateHistorySummary } from "../../request/artifacts/lifecycle";
 
 interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>;
@@ -29,6 +30,7 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly activeTools?: readonly string[];
   readonly extra?: Record<string, unknown>;
   readonly history?: RequestHistoryContext;
+  readonly generateHistorySummary?: GenerateHistorySummary;
   readonly representations: () =>
     readonly ResolvedRepresentationPolicy[] | undefined;
   readonly prepareRequest?: (
@@ -85,6 +87,7 @@ export function createSdkRequestStepPlanner<
     const sealed = await sealRequest({
       provider: step.modelInfo.provider || options.dialect.id,
       model: step.modelInfo.modelId,
+      responseModel: step.model,
       request: {
         model: step.modelInfo.modelId,
         system: step.system,
@@ -104,6 +107,7 @@ export function createSdkRequestStepPlanner<
       media: options.dialect.media,
       previousRequestId,
       history: options.history,
+      generateHistorySummary: options.generateHistorySummary,
       representations: options.representations(),
       representationEpoch,
       prepareRequest: options.prepareRequest,

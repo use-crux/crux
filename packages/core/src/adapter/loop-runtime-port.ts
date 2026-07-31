@@ -29,6 +29,10 @@ import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type { StructuredOutputCapabilities } from "./structured-output";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type {
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+} from "../request/history/source";
+import type {
   ExecutorOutcome,
   ExecutorRequest,
   ExecutorProviderStreamHandle,
@@ -125,6 +129,16 @@ export interface LoopRuntimePort<
 
   /** Materialize an inert prompt tool source for one SDK-loop invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /**
+   * Prepare one managed-history summary for an SDK-owned loop.
+   *
+   * The input flag is authoritative: `providerNative: false` requires the
+   * portable lowering rather than an SDK or provider compaction shortcut.
+   */
+  compactHistory?(
+    input: ProviderHistorySummaryInput,
+  ): Promise<ProviderHistorySummaryResult>;
 
   /** @internal Guard client-tool output through the runtime's native dialect. */
   readonly [toolModelIngressDialect]?: ToolModelIngressDialect;

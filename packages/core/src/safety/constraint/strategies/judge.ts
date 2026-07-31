@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { GenerateObjectFn } from '../../../compaction/types'
+import type { GenerateObjectFn } from '../../../generation/support-types'
 import type { BoundaryDef } from '../../boundary'
 import type { ConstraintRun, ConstraintCheckResult } from '../types'
 import type { JudgeInstance, JudgeResult } from '../../../scoring/types'

@@ -1,14 +1,14 @@
 import type OpenAI from 'openai'
-import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
+import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core'
 import { openAIHelpers } from './native'
 
 /**
  * Create a `GenerateObjectFn` that wraps an OpenAI client.
  *
  * The helper uses the same provider runtime as `createOpenAI()`, then
- * returns the schema-validated object expected by Crux compaction and scoring
- * APIs. Pass a non-empty OpenAI model ID in every call. Provider SDK errors
- * are not caught or wrapped.
+ * returns the schema-validated object expected by Crux scoring and retrieval
+ * APIs. Pass a non-empty OpenAI model ID in every call. Provider SDK errors are
+ * not caught or wrapped.
  *
  * @example
  * ```ts

@@ -16,51 +16,24 @@ import {
   type RecentHistoryProjection,
 } from "./source";
 
-/** Public factory surface for request history policies. */
-export interface HistoryFactory {
-  /**
-   * Select the newest causal-group-safe suffix of a complete transcript.
-   *
-   * This policy is stateless: it never calls a model, writes Storage, captures
-   * a transcript, or schedules work. Complete causal groups can make either
-   * limit soft.
-   *
-   * @param limit - Message cap, or message/token caps.
-   * @returns An inert entry for a prompt's `use` array.
-   *
-   * @example
-   * ```ts
-   * const reply = prompt({
-   *   use: [history.recent({ messages: 20, tokens: 12_000 })],
-   *   prompt: "Reply to the conversation.",
-   * })
-   * ```
-   */
-  recent(
-    limit?: number | Readonly<RecentHistoryOptions>,
-  ): RecentHistoryProjection;
+/** Create an inert stateless recent-history policy. @internal */
+export function createRecentHistoryProjection(
+  limit: number | Readonly<RecentHistoryOptions> = 20,
+): RecentHistoryProjection {
+  const limits =
+    typeof limit === "number" ? { messages: limit } : { ...limit };
+  validateLimit("messages", limits.messages);
+  validateLimit("tokens", limits.tokens);
+  if (limits.messages === undefined && limits.tokens === undefined) {
+    throw new TypeError(
+      "history.recent() requires a messages or tokens limit.",
+    );
+  }
+  return Object.freeze({
+    _tag: "HistoryRecent" as const,
+    limits: Object.freeze(limits),
+  });
 }
-
-/** Create provider-neutral history policies for prompt composition. */
-export const history: HistoryFactory = Object.freeze({
-  recent(
-    limit: number | Readonly<RecentHistoryOptions> = 20,
-  ): RecentHistoryProjection {
-    const limits =
-      typeof limit === "number" ? { messages: limit } : { ...limit };
-    validateLimit("messages", limits.messages);
-    validateLimit("tokens", limits.tokens);
-    if (limits.messages === undefined && limits.tokens === undefined) {
-      throw new TypeError(
-        "history.recent() requires a messages or tokens limit.",
-      );
-    }
-    return Object.freeze({
-      _tag: "HistoryRecent" as const,
-      limits: Object.freeze(limits),
-    });
-  },
-});
 
 /** Apply one recent-history policy to caller-owned canonical messages. @internal */
 export function projectRecentHistory(

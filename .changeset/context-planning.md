@@ -49,3 +49,18 @@ canonical source's capabilities, remain monotonic within a concrete-model
 epoch, and expose every selected alternative or omission in request receipts.
 Generated-summary and exact-recovery rungs fail explicitly until their backing
 artifacts are prepared.
+
+Add managed `history()` with derived recent-history defaults, adaptive,
+regenerating, rolling, and hierarchical summary strategies, content-addressed
+summary artifacts, concurrent preparation deduplication, stale-while-revalidate
+reuse, and explicit inline, recent-only, or fail miss behavior. Summary
+maintenance uses the configured request-retention host without delaying the
+accepted response, every bounded support call is linked through receipt
+inspection, and `providerNative: false` forces portable Core lowering.
+
+Remove the `@use-crux/core/compaction` subpath and its legacy
+`summarizeMessages()`, `compactConversation()`, `createBudgetManager()`, and
+`extractKeyFacts()` helpers. Use managed `history()` for adaptive conversation
+projection and provider-neutral generation function types from
+`@use-crux/core`. The Convex package no longer mirrors
+`compactConversation()`.

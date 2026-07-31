@@ -690,12 +690,30 @@ export type {
   UnsupportedCapabilityIssue,
 } from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";
-export { history } from "./request/history/recent";
-export type { HistoryFactory } from "./request/history/recent";
+export { history } from "./request/history/managed";
+export type { HistoryFactory } from "./request/history/managed";
+export { summarize } from "./request/history/strategies";
 export type {
+  SummarizeFactory,
+  SummarizeStrategy,
+} from "./request/history/strategies";
+export type {
+  HistoryOptions,
+  HistoryProjection,
+  ManagedHistoryProjection,
+  ManagedHistoryRecent,
+  ManagedHistorySummaryOptions,
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
   RecentHistoryOptions,
   RecentHistoryProjection,
 } from "./request/history/source";
+export type {
+  GenerateObjectCommonOptions,
+  GenerateObjectFn,
+  GenerateObjectInput,
+  GenerateTextFn,
+} from "./generation/support-types";
 export {
   droppable,
   offload,

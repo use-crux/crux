@@ -50,6 +50,7 @@ import type {
 } from "./types";
 import type { ResultStepFacts } from "../result-accumulator";
 import { initialMessageState } from "./messages";
+import { sdkHistorySummaryGenerator } from "./history-summary";
 import { buildTraceMeta } from "./metadata";
 import {
   finalizeSdkResultEnvelope,
@@ -319,6 +320,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     extra: args.extra,
     history: initialMessages.history,
+    generateHistorySummary: sdkHistorySummaryGenerator(dialect),
     representations: () => resolved.representations,
     prepareRequest: (candidate, selections) => {
       selectRepresentationCapabilities(

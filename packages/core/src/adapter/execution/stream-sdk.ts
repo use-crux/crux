@@ -59,6 +59,7 @@ import { stampCruxRunId } from "../../generation/run-id";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, SdkLoopDialect } from "./types";
 import { initialMessageState } from "./messages";
+import { sdkHistorySummaryGenerator } from "./history-summary";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
@@ -424,6 +425,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     extra: args.extra,
     history: initialMessages.history,
+    generateHistorySummary: sdkHistorySummaryGenerator(dialect),
     representations: () => resolved.representations,
     prepareRequest: (candidate, selections) => {
       selectRepresentationCapabilities(

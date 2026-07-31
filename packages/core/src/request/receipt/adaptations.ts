@@ -18,6 +18,10 @@ export interface RequestAdaptation {
   readonly fullTokens?: number;
   /** Complete-request size after this adaptation was selected. */
   readonly selectedTokens?: number;
+  /** Linked support request that prepared the selected representation. */
+  readonly supportRequestId?: string;
+  /** Every bounded support request that prepared the representation. */
+  readonly supportRequestIds?: readonly string[];
 }
 
 /** Non-fatal warning produced while planning a request. */

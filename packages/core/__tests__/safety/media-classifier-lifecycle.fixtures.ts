@@ -1,4 +1,4 @@
-import type { GenerateObjectFn } from '../../src/compaction'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import {
   guardrail,
   type MediaClassifierAction,

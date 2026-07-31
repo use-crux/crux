@@ -39,7 +39,7 @@ import type {
   MemoryEntry,
   SkillEntry,
 } from '../prompt/context-types'
-import type { RecentHistoryProjection } from '../request/history/source'
+import type { HistoryProjection } from '../request/history/source'
 import {
   compileRepresentationLadder,
   isForcedOffload,
@@ -520,7 +520,8 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
   if (isToolSource(entry)) return lowerToolSource(entry, index)
   switch (entry._tag) {
     case 'HistoryRecent':
-      return lowerRecentHistory(entry as RecentHistoryProjection, index)
+    case 'HistoryManaged':
+      return lowerHistory(entry as HistoryProjection, index)
     case 'Skill':
       return lowerSkill(entry as SkillEntry, index)
     case 'Memory':
@@ -572,8 +573,8 @@ function lowerRepresentation(
   }
 }
 
-function lowerRecentHistory(
-  projection: RecentHistoryProjection,
+function lowerHistory(
+  projection: HistoryProjection,
   index: number,
 ): LoweredContributor {
   return {

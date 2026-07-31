@@ -64,6 +64,7 @@ import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-sea
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
 import { sealRequest } from "../../request/planner/seal";
 import { createRequestRepresentationEpoch } from "../../request/planner/epoch";
+import { coreHistorySummaryGenerator } from "./history-summary";
 import {
   guardRepresentedRequest,
   selectRepresentationCapabilities,
@@ -255,6 +256,13 @@ export async function streamCore<
       tools,
       extra: (args.extra ?? {}) as TExtra,
     };
+    const generateHistorySummary = coreHistorySummaryGenerator(
+      dialect,
+      (supportRequest) =>
+        dialect.call(dialect.client, supportRequest, {
+          signal: args.signal,
+        }),
+    );
     const sealStreamRequest = (
       request: CallArgs<TExtra>,
       previousRequestId?: string,
@@ -272,6 +280,7 @@ export async function streamCore<
         media: dialect.media,
         previousRequestId,
         history: initialMessages.history,
+        generateHistorySummary,
         representations: resolved.representations,
         representationEpoch,
         prepareRequest: (candidate, selections) => {

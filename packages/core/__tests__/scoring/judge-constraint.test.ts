@@ -12,7 +12,7 @@ import { boundary, constraint } from '../../src/safety'
 import type { BoundaryDef, Constraint, SafetyRunContext, SubjectOf } from '../../src/safety'
 import { ConstraintViolationError } from '../../src/safety/constraint'
 import { createSafety, type SafetyOutput } from '../../src/safety/session'
-import type { GenerateObjectFn } from '../../src/compaction/types'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import type { Message } from '../../src/generation/messages'
 
 function generateWith(score: number, reasoning = 'Test explanation'): GenerateObjectFn {

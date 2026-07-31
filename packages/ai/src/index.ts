@@ -41,6 +41,8 @@ import type {
   AnyPrompt,
   AnyToolSet,
   ContextEntry,
+  GenerateObjectFn,
+  GenerateTextFn,
   MergedInput,
   GenerationSettings,
   Message,
@@ -67,10 +69,6 @@ import type {
   PromptInputOf,
   StreamOf,
 } from "@use-crux/core/routing";
-import type {
-  GenerateObjectFn,
-  GenerateTextFn,
-} from "@use-crux/core/compaction";
 import type { SdkGateway } from "./gateway";
 import { liveSdkGateway } from "./gateway";
 import type {
@@ -769,16 +767,7 @@ export const prepare = defaultAi.prepare!;
 /**
  * AI SDK `generateText` wrapped as a `GenerateTextFn`.
  *
- * Use this when calling `@use-crux/core` APIs that expect a `GenerateTextFn`
- * (e.g., `compactConversation()`, `summarizeMessages()`).
- *
- * @example
- * ```ts
- * import { generateTextFn } from '@use-crux/ai'
- * import { compactConversation } from '@use-crux/convex'
- *
- * await compactConversation({ generate: generateTextFn, model, ... })
- * ```
+ * Use this when calling `@use-crux/core` APIs that expect a `GenerateTextFn`.
  */
 export const generateTextFn = defaultAi.generateTextFn;
 
@@ -786,14 +775,12 @@ export const generateTextFn = defaultAi.generateTextFn;
  * AI SDK `generateObject` wrapped as a `GenerateObjectFn`.
  *
  * Use this when calling `@use-crux/core` APIs that expect a `GenerateObjectFn`
- * (e.g., `judge().score()`, `extractKeyFacts()`).
+ * (e.g., `judge().score()`).
  *
  * This helper shares the same AI SDK structured-attempt mechanics used by
  * prompt structured generation: provider schema sanitation, core-backed JSON
  * repair, and router/cascade model resolution. It still exposes only the
- * lightweight `GenerateObjectFn` result shape. Use
- * `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`
- * when the helper call must also run through full adapter prompt execution.
+ * lightweight `GenerateObjectFn` result shape.
  *
  * @example
  * ```ts

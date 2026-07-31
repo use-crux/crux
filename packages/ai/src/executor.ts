@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ModelMessage } from "ai";
 import {
   normalizeAdapterCallError,
   toolModelIngressDialect,
@@ -26,6 +26,10 @@ import { materializeAiSdkToolSource } from "./mcp-materializer";
 import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
 import { runCoordinatedStream } from "./sdk-codec/coordinated-stream";
 import { aiSdkStructuredCapabilities } from "./provider-profile";
+import { toModelMessages } from "./messages";
+
+const HISTORY_SUMMARY_SYSTEM =
+  "You are a conversation summarizer. Produce a concise summary of the canonical conversation prefix. Preserve decisions, facts, tool results, and user preferences. Do not add information.";
 
 export type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 
@@ -68,6 +72,16 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
     describeModel: codec.describeModel,
 
     mapSettings: codec.mapSettings,
+
+    async compactHistory(input) {
+      const result = await gateway.generateText({
+        model: input.model as LanguageModel,
+        system: HISTORY_SUMMARY_SYSTEM,
+        messages: toModelMessages(input.messages) as ModelMessage[],
+        maxOutputTokens: 500,
+      });
+      return { summary: result.text };
+    },
 
     async runTextLoop(request) {
       const call = codec.loop(request);

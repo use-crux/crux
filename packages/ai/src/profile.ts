@@ -44,6 +44,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
       const runtime = createAiSdkLoopRuntime(gateway);
       const {
         capabilities,
+        compactHistory,
         materializeToolSource,
         runTextLoop,
         runStructuredAttempt,
@@ -52,6 +53,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
       } = runtime;
       return {
         capabilities,
+        compactHistory,
         materializeToolSource,
         [toolModelIngressDialect]: runtime[toolModelIngressDialect],
         runTextLoop,
