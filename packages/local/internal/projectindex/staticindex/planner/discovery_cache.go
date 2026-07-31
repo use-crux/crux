@@ -76,7 +76,38 @@ func loadDiscoveryCache(root string) *discoveryCache {
 	if cache.data.Imports == nil {
 		cache.data.Imports = map[string]cachedImportResolution{}
 	}
+	cache.evictMissingFiles()
 	return cache
+}
+
+func (cache *discoveryCache) evictMissingFiles() {
+	for key, entry := range cache.data.Classifications {
+		if cache.sourceFileMissing(entry.File) {
+			delete(cache.data.Classifications, key)
+			cache.dirty = true
+		}
+	}
+	for key, entry := range cache.data.Imports {
+		missing := cache.sourceFileMissing(entry.File)
+		for _, dependency := range entry.Dependencies {
+			missing = missing || cache.sourceFileMissing(dependency)
+		}
+		if missing {
+			delete(cache.data.Imports, key)
+			cache.dirty = true
+		}
+	}
+}
+
+func (cache *discoveryCache) sourceFileMissing(file string) bool {
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(cache.root, filepath.FromSlash(file))
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		return os.IsNotExist(err)
+	}
+	return info.IsDir()
 }
 
 func (cache *discoveryCache) Save() {

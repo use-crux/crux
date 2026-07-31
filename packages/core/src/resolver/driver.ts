@@ -96,6 +96,7 @@ function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.excluded.push(...nested.excluded)
   out.skills.push(...nested.skills)
   out.memories.push(...nested.memories)
+  mergeThread(out, nested.thread)
   out.blackboards.push(...nested.blackboards)
   out.history.push(...nested.history)
   out.representations.push(...nested.representations)
@@ -237,6 +238,7 @@ async function runContributor(
   // Collections register before context expansion so binding order matches
   // entry order even when an expansion nests further collectable entries.
   if (contribution.memory) out.memories.push(contribution.memory)
+  mergeThread(out, contribution.thread)
   if (contribution.skill) out.skills.push(contribution.skill)
   if (contribution.blackboard) out.blackboards.push(contribution.blackboard)
   if (contribution.history) out.history.push(contribution.history)
@@ -289,6 +291,19 @@ async function runContributor(
   if (contribution.metadata) out.metadata = { ...out.metadata, ...contribution.metadata }
 
   if (contribution.facts) emitFacts(ports, contribution.facts)
+}
+
+function mergeThread(
+  out: MergedResolution,
+  thread: MergedResolution["thread"],
+): void {
+  if (!thread) return
+  if (out.thread) {
+    throw new Error(
+      `Prompt resolution found multiple Thread entries ("${out.thread.id}" and "${thread.id}"). Use exactly one Thread per prompt graph.`,
+    )
+  }
+  out.thread = thread
 }
 
 function normalizeToolMiddleware(middleware: ToolMiddleware | readonly ToolMiddleware[]): ToolMiddleware[] {

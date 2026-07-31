@@ -35,6 +35,9 @@ fn merge_definition(
     existing: StaticIndexDefinition,
     incoming: StaticIndexDefinition,
 ) -> StaticIndexDefinition {
+    let retains_thread_definitions = existing.kind == "thread"
+        && incoming.kind == "thread"
+        && existing.source != incoming.source;
     let keep_existing_core = fidelity_rank(existing.fidelity) >= fidelity_rank(incoming.fidelity);
     let metadata = if keep_existing_core {
         merge_metadata(incoming.metadata.as_ref(), existing.metadata.as_ref())
@@ -77,8 +80,64 @@ fn merge_definition(
         .clone()
         .or(existing.fingerprint.clone());
     merged.metadata = metadata;
-    merged.source_refs = merge_source_refs(existing.source_refs, incoming.source_refs);
+    merged.source_refs =
+        merge_source_refs(existing.source_refs.clone(), incoming.source_refs.clone());
+    if retains_thread_definitions {
+        append_thread_definition_ref(&mut merged.source_refs, &existing);
+        append_thread_definition_ref(&mut merged.source_refs, &incoming);
+    }
     merged
+}
+
+fn append_thread_definition_ref(
+    source_refs: &mut Vec<StaticIndexProjectSourceRef>,
+    definition: &StaticIndexDefinition,
+) {
+    if definition.status.as_deref() != Some("active") {
+        return;
+    }
+    let Some(source) = definition.source.as_ref() else {
+        return;
+    };
+    if source_refs
+        .iter()
+        .any(|source_ref| source_ref.role == "definition" && source_ref.source == *source)
+    {
+        return;
+    }
+    if let Some(source_ref) = thread_definition_source_ref(definition) {
+        source_refs.push(source_ref);
+    }
+}
+
+fn thread_definition_source_ref(
+    definition: &StaticIndexDefinition,
+) -> Option<StaticIndexProjectSourceRef> {
+    let source = definition.source.clone()?;
+    let identity = definition.fingerprint.clone().unwrap_or_else(|| {
+        format!(
+            "{}:{}:{}",
+            source.file,
+            source.line,
+            source.column.unwrap_or_default()
+        )
+    });
+    Some(StaticIndexProjectSourceRef {
+        id: format!("source-ref:thread-definition:{}:{identity}", definition.id),
+        role: "definition".to_string(),
+        property: None,
+        symbol: definition
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("exportName"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        source,
+        snippet: definition.source_snippet.clone(),
+        fidelity: definition.fidelity,
+        description: Some("Authored Thread definition".to_string()),
+        metadata: None,
+    })
 }
 
 fn merge_metadata(base: Option<&Value>, overlay: Option<&Value>) -> Option<Value> {
@@ -157,5 +216,88 @@ fn fidelity_rank(fidelity: StaticIndexFidelity) -> u8 {
         StaticIndexFidelity::Resolved => 3,
         StaticIndexFidelity::Partial => 2,
         StaticIndexFidelity::Error => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::merge_definitions_by_id;
+    use crate::core::facts::StaticIndexDefinition;
+
+    #[test]
+    fn duplicate_threads_retain_each_authored_definition_source() {
+        let definitions: Vec<StaticIndexDefinition> = serde_json::from_value(json!([
+            {
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "source": { "file": "src/a.ts", "line": 3 },
+                "fidelity": "resolved",
+                "status": "active",
+                "fingerprint": "first",
+                "metadata": { "exportName": "conversation" }
+            },
+            {
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "source": { "file": "src/b.ts", "line": 7 },
+                "fidelity": "resolved",
+                "status": "active",
+                "fingerprint": "second",
+                "metadata": { "exportName": "duplicateConversation" }
+            },
+            {
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "source": { "file": "src/a.ts", "line": 3 },
+                "fidelity": "resolved",
+                "status": "active",
+                "fingerprint": "first",
+                "metadata": { "exportName": "duplicateConversation" }
+            }
+        ]))
+        .expect("definitions decode");
+
+        let merged = merge_definitions_by_id(definitions);
+        let refs = &merged[0].source_refs;
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].role, "definition");
+        assert_eq!(refs[0].symbol.as_deref(), Some("conversation"));
+        assert_eq!(refs[0].source.file, "src/a.ts");
+        assert_eq!(refs[1].symbol.as_deref(), Some("duplicateConversation"));
+        assert_eq!(refs[1].source.file, "src/b.ts");
+    }
+
+    #[test]
+    fn inactive_thread_duplicates_do_not_become_active_occurrence_refs() {
+        let definitions: Vec<StaticIndexDefinition> = serde_json::from_value(json!([
+            {
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "source": { "file": "src/active.ts", "line": 3 },
+                "fidelity": "resolved",
+                "status": "active",
+                "metadata": { "exportName": "conversation" }
+            },
+            {
+                "id": "thread:conversation",
+                "kind": "thread",
+                "name": "conversation",
+                "source": { "file": "src/inactive.ts", "line": 3 },
+                "fidelity": "resolved",
+                "status": "inactive",
+                "metadata": { "exportName": "legacyConversation" }
+            }
+        ]))
+        .expect("definitions decode");
+
+        let merged = merge_definitions_by_id(definitions);
+        assert_eq!(merged[0].source_refs.len(), 1);
+        assert_eq!(merged[0].source_refs[0].source.file, "src/active.ts");
     }
 }

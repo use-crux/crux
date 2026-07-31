@@ -106,6 +106,7 @@ export function createStreamResult<
       ...(extended?.pendingApprovals
         ? { pendingApprovals: extended.pendingApprovals }
         : {}),
+      ...(meta?.threadCommit ? { threadCommit: meta.threadCommit } : {}),
       ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
       // Present only when the operation spanned several billable attempts; it
       // then replaces the step-derived totals (RFC #173, law 7).

@@ -94,7 +94,10 @@ import {
   selectRepresentationMiddleware,
   selectRepresentationSkills,
 } from "./representation-safety";
-import type { SealedRequestPlan } from "../../request/planner/plan";
+import {
+  validateRequestPlan,
+  type SealedRequestPlan,
+} from "../../request/planner/plan";
 import {
   recordRequestRetryCount,
   type RequestReceipt,
@@ -116,6 +119,14 @@ import {
 import type { ExecutionAmendment } from "../../request/prepare/amendment";
 import { commitPreparationDecision } from "../../request/prepare/journal";
 import type { StepReason } from "../../request/prepare/step-context";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  isThreadReplay,
+  prepareThreadInvocation,
+  validateThreadReplay,
+} from "./thread-history";
+import { attachThreadCommit } from "./thread-result";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -151,9 +162,14 @@ export async function generateCore<
   });
   let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(resolved, args.messages);
   const mappedSettings = dialect.mapSettings(resolved.settings);
 
-  const initialMessages = initialCoreMessageState(resolved, args.messages);
+  const initialMessages = initialCoreMessageState(
+    resolved,
+    args.messages,
+    threadInvocation.source,
+  );
   let messages = initialMessages.messages;
   let outputSchema: JsonSchemaObject | undefined;
   let decodeManifest: StructuredOutputDecodeManifest | undefined;
@@ -267,6 +283,11 @@ export async function generateCore<
     },
   );
   messages = [...guardedInput.messages];
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    { messages },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const guardSkillAmendment = createSkillIngressAmendmentGuard({
@@ -308,9 +329,7 @@ export async function generateCore<
           resolveOpts,
           skillSession,
         );
-        resolved = await prompt.resolve(
-          boundaryResolveOpts,
-        );
+        resolved = await prompt.resolve(boundaryResolveOpts);
         selectRepresentationSkills(
           resolved,
           resolved.representations ?? [],
@@ -511,6 +530,9 @@ export async function generateCore<
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
           },
           cachedFinalizer,
         ),
@@ -558,6 +580,7 @@ export async function generateCore<
             const sealed = await sealProviderRequest(callArgs, boundary);
             lastCallArgs = sealed.request;
 
+            await validateRequestPlan(sealed);
             const { raw, extracted } = await callProvider(lastCallArgs);
             recordPrepareStepOutcome(prepareStepState, {
               usage: extracted.usage,
@@ -688,6 +711,7 @@ export async function generateCore<
               };
               const sealed = await sealProviderRequest(regenArgs, boundary);
               lastCallArgs = sealed.request;
+              await validateRequestPlan(sealed);
               const regen = await callProvider(lastCallArgs);
               recordPrepareStepOutcome(prepareStepState, {
                 usage: regen.extracted.usage,
@@ -805,6 +829,17 @@ export async function generateCore<
             acceptedCanonicalInput !== undefined
             ? attachCachedStructuredCandidate(result, acceptedCanonicalInput)
             : result;
+        },
+        async (result) => {
+          if (result.threadCommit || result.pendingApprovals) return;
+          await validateThreadReplay(threadInvocation, isThreadReplay(result));
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            result,
+          );
+          return threadCommit
+            ? attachThreadCommit(result, threadCommit)
+            : undefined;
         },
         async (result) => {
           await lifecycle.captureTurn({

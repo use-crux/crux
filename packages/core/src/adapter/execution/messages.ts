@@ -23,6 +23,7 @@ import type {
   ManagedHistoryProjection,
   RecentHistoryProjection,
   RequestHistoryContext,
+  HistorySource,
 } from "../../request/history/source";
 import { callerOwnedHistorySource } from "../../request/history/source";
 import type { RequestWarning } from "../../request/receipt/adaptations";
@@ -32,6 +33,7 @@ export type InitialMessageSource =
   | "explicit-history"
   | "native-history"
   | "resolved-messages"
+  | "thread-history"
   | "resolved-prompt"
   | "empty";
 
@@ -41,6 +43,8 @@ export interface InitialMessageState {
   readonly promptText: string | undefined;
   readonly source: InitialMessageSource;
   readonly history: RequestHistoryContext | undefined;
+  /** Historical messages before the automatic Thread current turn. */
+  readonly historyMessageCount: number;
 }
 
 /**
@@ -80,20 +84,22 @@ export function initialMessageState(
   },
   messages?: Message[],
   nativeMessages?: readonly unknown[],
+  threadSource?: HistorySource,
 ): InitialMessageState {
   const history: Message[] = [...(messages ?? [])];
-  const callerMessagesPresent = history.length > 0;
+  const callerMessagesPresent = messages !== undefined;
   if (
     resolved.historyProjection &&
     !callerMessagesPresent &&
     !resolved.messages &&
-    (!nativeMessages || nativeMessages.length === 0)
+    nativeMessages === undefined &&
+    !threadSource
   ) {
     throw invalidHistoryComposition(
       "The history projection has no history source. Supply caller-owned messages or remove the projection.",
     );
   }
-  if (nativeMessages && nativeMessages.length > 0) {
+  if (nativeMessages !== undefined) {
     if (resolved.historyProjection && history.length === 0) {
       throw invalidHistoryComposition(
         "History projection requires canonical caller-owned messages; provider-native history cannot be projected before normalization.",
@@ -119,6 +125,21 @@ export function initialMessageState(
               changed: selected.messages.length !== history.length,
             }
           : undefined,
+      historyMessageCount: history.length,
+    };
+  }
+  if (threadSource) {
+    const selected = applyHistoryProjection(
+      threadSource,
+      resolved.historyProjection,
+    );
+    return {
+      messages: selected.messages,
+      promptText: undefined,
+      source: "thread-history",
+      history: historyContext(threadSource, resolved.historyProjection, selected),
+      historyMessageCount:
+        selected.messages.length - (threadSource.current?.length ?? 0),
     };
   }
   let promptText: string | undefined;
@@ -149,6 +170,7 @@ export function initialMessageState(
             changed: selected.messages.length !== history.length,
           }
         : undefined,
+    historyMessageCount: history.length,
   };
 }
 
@@ -165,17 +187,33 @@ export function initialCoreMessageState(
     readonly historyProjection?: HistoryProjection;
   },
   messages?: Message[],
+  threadSource?: HistorySource,
 ): InitialMessageState {
   const history: Message[] = [...(messages ?? [])];
-  const callerMessagesPresent = history.length > 0;
+  const callerMessagesPresent = messages !== undefined;
   if (
     resolved.historyProjection &&
     !callerMessagesPresent &&
-    !resolved.messages
+    !resolved.messages &&
+    !threadSource
   ) {
     throw invalidHistoryComposition(
       "The history projection has no history source. Supply caller-owned messages or remove the projection.",
     );
+  }
+  if (threadSource) {
+    const selected = applyHistoryProjection(
+      threadSource,
+      resolved.historyProjection,
+    );
+    return {
+      messages: selected.messages,
+      promptText: undefined,
+      source: "thread-history",
+      history: historyContext(threadSource, resolved.historyProjection, selected),
+      historyMessageCount:
+        selected.messages.length - (threadSource.current?.length ?? 0),
+    };
   }
   let source: InitialMessageSource = callerMessagesPresent
     ? "explicit-history"
@@ -204,23 +242,57 @@ export function initialCoreMessageState(
             changed: selected.messages.length !== history.length,
           }
         : undefined,
+    historyMessageCount: history.length,
   };
 }
 
 function applyHistoryProjection(
-  messages: readonly Message[],
+  input: readonly Message[] | HistorySource,
   projection: HistoryProjection | undefined,
 ): {
   readonly messages: Message[];
   readonly warnings: readonly RequestWarning[];
 } {
+  const source = Array.isArray(input)
+    ? callerOwnedHistorySource(input)
+    : input as HistorySource;
   if (!projection || projection._tag === "HistoryManaged") {
-    return { messages: [...messages], warnings: [] };
+    return {
+      messages: [
+        ...source.messages,
+        ...(source.mode === "automatic" ? (source.current ?? []) : []),
+      ],
+      warnings: [],
+    };
   }
-  return projectRecentHistory(
-    callerOwnedHistorySource(messages),
-    projection,
-  );
+  return projectRecentHistory(source, projection);
+}
+
+function historyContext(
+  source: HistorySource,
+  projection: HistoryProjection | undefined,
+  selected: {
+    readonly messages: readonly Message[];
+    readonly warnings: readonly RequestWarning[];
+  },
+): RequestHistoryContext {
+  const completeLength =
+    source.messages.length +
+    (source.mode === "automatic" ? (source.current?.length ?? 0) : 0);
+  return {
+    source: source.kind,
+    policy: historyPolicy(projection),
+    ...(managedProjection(projection) ? { projection } : {}),
+    warnings: selected.warnings,
+    changed: selected.messages.length !== completeLength,
+    ...(source.identity ? { sourceIdentity: source.identity } : {}),
+    ...(source.revision ? { sourceRevision: source.revision } : {}),
+    ...(source.validate ? { validateSource: source.validate } : {}),
+    ...(source.artifactRange ? { artifactRange: source.artifactRange } : {}),
+    ...(source.mode === "automatic"
+      ? { currentLength: source.current?.length ?? 0 }
+      : {}),
+  };
 }
 
 function managedProjection(

@@ -51,6 +51,7 @@ export function tooLargeError<
             id: `${requestId}:history-remedy`,
             code: "HISTORY_EXACT_REMEDY",
             contributor: "history",
+            source: input.history?.source,
             message:
               "Keep canonical history exact and configure history.recent() for a stateless window or history() for managed adaptation.",
           },

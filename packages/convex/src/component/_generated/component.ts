@@ -24,6 +24,13 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     memory: {
+      compareAndSet: FunctionReference<
+        "mutation",
+        "internal",
+        { doc: any; expectedVersion: string | null; key: string },
+        boolean,
+        Name
+      >;
       get: FunctionReference<"query", "internal", { key: string }, any, Name>;
       insert: FunctionReference<
         "mutation",

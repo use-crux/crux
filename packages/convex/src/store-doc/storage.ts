@@ -11,6 +11,7 @@ import { StorageError } from '@use-crux/core/storage'
 import type { JsonObject, RecordEntry, RecordListOptions, RecordStore, RecordWriteOptions } from '@use-crux/core/storage'
 import { createStoreDocCodec } from './codec'
 import type { ComponentDocumentPort, DecodedStoreDoc, StoreDocRecord } from './types'
+import { storeDocVersion } from './version'
 import {
   assertExactFilter,
   assertStorageKey,
@@ -94,6 +95,28 @@ export function createStoreDocRecordStore<T extends JsonObject = JsonObject>(
       assertStorageKey(key)
       await config.io.delete(key)
     },
+    async getVersioned(key) {
+      assertStorageKey(key)
+      const doc = await config.io.get(key)
+      if (!doc) return { value: null, version: null }
+      const decoded = codec.decode(doc)
+      if (decoded.expired) {
+        await config.io.delete(decoded.key)
+        return { value: null, version: null }
+      }
+      return {
+        value: cloneJsonObject(decoded.value) as T,
+        version: storeDocVersion(doc),
+      }
+    },
+    async putVersioned(key, value, expectedVersion) {
+      assertStorageKey(key)
+      return config.io.compareAndSet(
+        key,
+        expectedVersion,
+        value === null ? null : encode(key, value),
+      )
+    },
     list,
     async *scan(prefix, options) {
       let cursor: string | undefined
@@ -108,6 +131,7 @@ export function createStoreDocRecordStore<T extends JsonObject = JsonObject>(
       filter: 'scan',
       watch: false,
       batch: false,
+      mutate: 'cas',
     }),
   }
 }

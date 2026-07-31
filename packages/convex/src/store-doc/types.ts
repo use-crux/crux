@@ -69,6 +69,12 @@ export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRec
   insert(doc: StoreDocWrite): Promise<boolean>
   /** Delete one document by key. */
   delete(key: string): Promise<void>
+  /** Atomically replace or delete a document at an observed opaque version. */
+  compareAndSet(
+    key: string,
+    expectedVersion: string | null,
+    doc: StoreDocWrite | null,
+  ): Promise<boolean>
 }
 
 /** Decoded store document with policy metadata surfaced for callers. */

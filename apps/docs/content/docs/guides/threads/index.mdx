@@ -1,0 +1,352 @@
+---
+title: Threads
+description: Persist exact canonical conversation history with stable identities, atomic turns, and durable alternatives.
+---
+
+A Thread stores a conversation the way your application needs to remember it:
+exact canonical messages with stable IDs, safe concurrent writes, and edit and
+branch history that never rewrites what already happened. You create one with
+a stable ID, and reading it back returns the conversation as it actually
+occurred:
+
+```ts
+import { thread } from "@use-crux/core/thread";
+
+const conversation = thread({ id: "support:ticket-42" });
+
+await conversation.append({ role: "user", content: "Where is my order?" });
+
+const snapshot = await conversation.read();
+```
+
+Bind the same Thread to a Prompt or Agent through `use` and Crux manages the
+conversation boundary for you: each call reads the history, invokes the
+provider, and commits the accepted turn atomically.
+
+## Why Threads Exist
+
+A conversational request contains several kinds of state that look similar but
+have different owners:
+
+| State | Owner | Purpose | Safe to treat as canonical history? |
+| --- | --- | --- | --- |
+| Canonical messages | Your application | The exact conversation record, with stable identities and branches | Yes |
+| Model-facing prompt buffer | Request planning | The representation selected for one provider call | No |
+| Provider transcript | Provider client or service | Provider-specific request and response state | No |
+| Memory | A MemoryBlock | Extracted working state, episodes, facts, or procedures | No |
+
+Without a Thread, the caller normally owns a `Message[]` and must persist it,
+coordinate concurrent writes, keep tool exchanges together, and define what an
+edit means. A provider transcript can hide some of that work, but it also ties
+conversation identity and replay behavior to one provider's protocol.
+
+A Thread gives canonical Crux messages an application-owned home. Provider
+adapters read from it and publish to it, but no provider owns it. Request
+planning may later select a recent suffix or a summary for one call without
+changing the stored record.
+
+### Canonical history is not a prompt buffer
+
+Prompt buffers are allowed to change shape. They may include system
+instructions, retrieved context, memory renderings, Tool schemas, validation
+feedback, or a derived summary. Those values can be correct for one request and
+wrong as a conversation record.
+
+A Thread stores only canonical conversation messages. It does not store:
+
+- System prompts or context fragments.
+- Retrieved documents or rendered memory blocks.
+- Validation feedback or rejected attempts.
+- History summaries or other model-facing projections.
+- Provider-native request envelopes.
+
+This boundary lets you answer two different questions without confusing them:
+
+1. What happened in the conversation?
+2. What did this provider call receive?
+
+Read the Thread for the first question. Inspect the request receipt for the
+second.
+
+## Quickstart: One Managed Turn
+
+Threads persist through the standard Storage bundle, so configure one first.
+The in-memory adapter is enough for local development:
+
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+import { inMemoryStorage } from "@use-crux/core/storage";
+
+export default config({
+  storage: inMemoryStorage(),
+});
+```
+
+Then bind a Thread to a Prompt and run a turn:
+
+```ts title="support.ts"
+import { prompt } from "@use-crux/core";
+import { thread } from "@use-crux/core/thread";
+import { z } from "zod";
+import { model, runtime } from "./runtime";
+
+export function supportThread(ticketId: string) {
+  return thread({ id: `support:${ticketId}` });
+}
+
+export async function answerTicket(ticketId: string, message: string) {
+  const conversation = supportThread(ticketId);
+  const reply = prompt({
+    id: "support-reply",
+    use: [conversation],
+    input: z.object({ message: z.string() }),
+    system: "Answer the support question using the known conversation.",
+    prompt: ({ input }) => input.message,
+  });
+
+  const result = await runtime.generate(reply, {
+    model,
+    input: { message },
+  });
+
+  const snapshot = await conversation.read();
+
+  return {
+    text: result.text,
+    commit: result.threadCommit,
+    history: snapshot.entries,
+  };
+}
+```
+
+The call performs one managed lifecycle:
+
+1. Read the selected Thread path and its revision.
+2. Build and seal the whole provider request.
+3. Invoke the provider using the selected model-facing history.
+4. Publish the rendered user message and accepted assistant exchange after the
+   observed head.
+5. Return only after publication succeeds.
+
+`result.threadCommit` identifies the published causal group. `read()` returns
+the selected root-to-head path with Thread IDs and structural metadata:
+
+```ts
+const snapshot = await supportThread(ticketId).read();
+
+for (const entry of snapshot.entries) {
+  if (entry.kind === "message") {
+    console.log(entry.id, entry.role, entry.content);
+  }
+}
+```
+
+Use `readHistory()` only when building framework integration that needs the
+exact provider-neutral message projection. Product UI normally wants `read()`
+because it retains IDs, variants, and erasure tombstones.
+
+## The Immutable Tree And Heads
+
+Think of a Thread as an immutable message tree plus a small mutable control
+record:
+
+```text
+                         +-- assistant A -- user follow-up A
+user question -----------+
+                         +-- assistant B -- user follow-up B
+                                  ^
+                                  selected head
+```
+
+Each message has a stable ID and an immutable parent. A multi-message append is
+one causal group, so a Tool call, its matching result, and the accepted response
+cannot be split by pagination or branch publication.
+
+The selected head identifies the active root-to-leaf path. `read()` walks that
+path. Appending normally advances the head. Appending after an older group
+boundary creates an alternative. `select()` moves navigation state without
+rewriting a message.
+
+The tree matters during races. If two requests read the same head and finish at
+the same time, one commit advances the selected head and the other becomes a
+durable alternative. Neither write is discarded and neither is silently
+rebased onto content it never observed.
+
+## When To Use A Thread
+
+Use a Thread when at least one of these conditions applies:
+
+- The application must own conversation history across providers.
+- More than one request can append to the same conversation.
+- Users can edit a prior turn, regenerate an answer, or switch alternatives.
+- Stable message IDs and deterministic write replay matter.
+- You need explicit redaction or whole-conversation deletion semantics.
+- Prompt or Agent execution should read and commit history automatically.
+
+Do not add a Thread only to avoid passing a short local array. It adds durable
+storage, identity, branch, and cleanup responsibilities. Those costs are useful
+only when the application needs the guarantees.
+
+## Choose Threads Or Caller-Owned History
+
+| Choice | Best fit | Benefits | Costs and limits |
+| --- | --- | --- | --- |
+| Thread | Durable application-owned conversations | Atomic turns, stable identities, alternatives, edit/select, redaction, deletion, managed commits | Requires qualifying Storage and explicit lifecycle policy |
+| Call-site `messages` | One endpoint already owns a complete transcript | Direct and stateless from Crux's perspective | Caller handles persistence, races, identity, tool grouping, and edits |
+| Prompt-level `messages` | A Prompt computes one complete transcript | Reusable with the Prompt definition | Shadows any bound Thread and does not commit back to it |
+| Bare caller-owned history | Short conversations where every turn must reach the model | Exact with no projection policy | Unbounded; fails when the complete request no longer fits |
+| `history.recent()` | Only a recent exact suffix must reach the model | No summary call or history Storage write | Older turns are omitted from that request |
+| Managed `history()` | Older turns may become derived summary evidence | Bounded model-facing history with explicit miss policy | Summary work can add latency and may lose detail |
+| MemoryBlock `recentMessages()` | Legacy code only | None in current Crux | Removed; migrate canonical history to a Thread or caller-owned messages |
+
+The last four rows describe model-facing history policy, not a canonical store.
+A Thread can be the source for bare exact history, `history.recent()`, or managed
+`history()`.
+
+### A common split of responsibilities
+
+Use a Thread for what was said. Use Memory for what should be remembered. Use
+retrieval for external knowledge. Use request-history policy for what portion of
+the canonical transcript one provider call should see.
+
+```ts
+const supportReply = prompt({
+  id: "support-reply",
+  use: [conversation, userMemory, productDocs],
+  prompt: ({ input }) => input.message,
+});
+```
+
+One Prompt graph may contain exactly one active Thread. It can contain other
+context entries beside that Thread.
+
+## Configure Storage
+
+<Callout type="warn" title="Durable Threads need linearizable record mutation">
+  A Thread requires the standard `config.storage` bundle and a `RecordStore`
+  whose `capabilities().mutate` value is `"native"` or `"cas"`. The in-memory,
+  Upstash Redis, and Convex record adapters qualify. Construction is inert, so
+  missing Storage fails when an operation first resolves it. A store without
+  linearizable mutation fails when publication, navigation, or erasure needs
+  that capability. Both use `ThreadError` code `unsupported_capability` and
+  include setup guidance.
+</Callout>
+
+Use the in-memory adapter for tests and local development. Use a durable
+adapter for conversations that must survive process restarts. An explicit
+bundle makes tenancy and test isolation visible:
+
+```ts
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { thread } from "@use-crux/core/thread";
+
+const storage = inMemoryStorage();
+const conversation = thread({
+  id: "support:ticket-42",
+  storage,
+});
+```
+
+Passing `thread({ storage })` and configuring the global `config.storage`
+bundle are equivalent; choose whichever fits your dependency-injection style.
+
+Available first-party record adapters:
+
+| Adapter | Mutation capability | Durability | Typical use |
+| --- | --- | --- | --- |
+| `inMemoryRecordStore()` or `inMemoryStorage()` | `"native"` | Process-local | Tests, examples, local development |
+| `upstashRedisRecordStore()` | `"cas"` | Durable Redis | Serverless or shared application state |
+| `convexRecordStore()` or `convexStorage()` | `"cas"` | Durable Convex component state | Convex actions and reactive applications |
+
+Threads use the `records` member for structure and receipts. If messages contain
+inline media, provide the same owning `assets` member for persistence,
+hydration, redaction, and deletion. A records-only bundle is sufficient for
+text-only history.
+
+Custom stores must report and implement linearizable single-key mutation. A
+plain get-then-put sequence is not enough because it can lose a concurrent
+head update.
+
+## What Exact History Guarantees
+
+"Exact" refers to the canonical Crux messages on the selected path. It means:
+
+- No implicit recent-message window.
+- No silent truncation to fit a context limit.
+- No replacement of old messages with a summary in storage.
+- No insertion of system prompts, retries, or derived context as fake turns.
+- No splitting of causal groups during pagination.
+- No lost concurrent append.
+- No in-place edit of published content.
+
+Exact does not mean every provider-native field becomes part of the Thread.
+Adapters lower provider responses into canonical Crux messages first. Store
+provider-specific audit data separately when your product requires it.
+
+If exact history no longer fits a request, whole-request planning either uses a
+history policy you authorized or fails before provider dispatch. It does not
+change the Thread to make the request fit.
+
+## Failure Behavior
+
+Thread failures are typed and happen at the boundary where the guarantee can no
+longer be kept:
+
+| Failure | Result |
+| --- | --- |
+| No global or explicit Storage | `ThreadError` with `code: "unsupported_capability"` and configuration guidance |
+| `records.capabilities().mutate === false` | `ThreadError` with `code: "unsupported_capability"` |
+| Conflicting stable message identity | `ThreadError` with `code: "identity_conflict"` |
+| Publication cannot complete | `ThreadCommitError` with `code: "commit_failed"` |
+| Operation targets a deleted Thread | `ThreadError` with `code: "deleted"` |
+
+Managed execution does not report provider output as accepted when Thread
+publication fails. Catch `ThreadCommitError` at the same boundary where you
+would handle a failed database commit. Do not show the output as a completed
+conversation turn and then hope a later write repairs it.
+
+## Choose Stable IDs At Application Boundaries
+
+Direct appends generate message IDs when you omit them. Supply IDs when an
+application event can be delivered more than once:
+
+```ts
+const commit = await conversation.append({
+  id: `inbox:${event.id}`,
+  role: "user",
+  content: event.message,
+});
+
+if (commit.replayed) {
+  console.log("The identical event was already published.");
+}
+```
+
+The same ID, content, role, and structural parent returns the original receipt
+with `replayed: true`. Reusing the ID with changed content, a changed role, a
+partial batch, or another parent throws `identity_conflict`.
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Managed conversations"
+    description="Follow read, plan, invoke, and commit through Prompt and Agent execution."
+    href="/docs/guides/threads/conversations"
+  />
+  <Card
+    title="Branching and alternatives"
+    description="Handle concurrent writes, edits, selection, regeneration, and branch pickers."
+    href="/docs/guides/threads/branching"
+  />
+  <Card
+    title="Erasure"
+    description="Choose visibility removal, provenance redaction, or whole-Thread deletion."
+    href="/docs/guides/threads/erasure"
+  />
+  <Card
+    title="Thread reference"
+    description="Read the complete API, types, error codes, and observability contract."
+    href="/docs/reference/crux-core/thread"
+  />
+</Cards>

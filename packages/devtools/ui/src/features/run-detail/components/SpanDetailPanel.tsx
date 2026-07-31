@@ -115,6 +115,7 @@ import {
 } from "./PrimitiveCards";
 import { EvalCard } from "./EvalCard";
 import { DeferredWorkCard } from "./DeferredWorkCard";
+import { ThreadOperationCard } from "./ThreadOperationCard";
 import { WorkspaceSnapshotCard } from "../workspace-snapshot/card";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
 import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
@@ -4395,6 +4396,25 @@ export function SpanDetailPanel({
             resetKey={node.id}
           >
             <DeferredWorkCard node={node} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.primitive === "thread.operation") {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader
+          node={node}
+          detail={detail}
+          kind={kind}
+          isRoot={isRoot}
+          trace={trace}
+        />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Thread operation" compact resetKey={node.id}>
+            <ThreadOperationCard node={node} />
           </SectionErrorBoundary>
         </div>
       </div>

@@ -256,6 +256,7 @@ export function fakeLoopRuntime(
           systemBlocks,
           messages,
         });
+        await planned.validate?.();
         system = planned.system;
         systemBlocks = planned.systemBlocks;
         messages = [...planned.messages];
@@ -451,6 +452,7 @@ export function fakeLoopRuntime(
             ? [{ role: "user" as const, content: request.prompt }]
             : []),
       });
+      await planned.validate?.();
       const scripted = structured.shift() ?? "{}";
       if (scripted instanceof Error) throw scripted;
 
@@ -513,6 +515,7 @@ export function fakeLoopRuntime(
             ? [{ role: "user" as const, content: request.prompt }]
             : []),
       });
+      await planned.validate?.();
       const scripted = streams.shift() ?? ["fake ", "stream"];
 
       // Drive the safety streaming sub-protocol exactly as a real port must:

@@ -94,6 +94,12 @@ import {
   selectRepresentationSkills,
 } from "./representation-safety";
 import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+  validateThreadReplay,
+} from "./thread-history";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -121,17 +127,23 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   });
   let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages ?? (args.nativeMessages !== undefined ? [] : undefined),
+  );
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
     args.nativeMessages,
+    threadInvocation.source,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = initialMessages.history?.changed
-    ? undefined
-    : args.nativeMessages;
+  let nativeMessages =
+    threadInvocation.source || initialMessages.history?.changed
+      ? undefined
+      : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafetyWithBindingApplicability(
@@ -153,10 +165,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  selectRepresentationCapabilities(
-    safety,
-    resolved.representations ?? [],
-  );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
   selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
@@ -180,6 +189,14 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    {
+      messages,
+      ...(promptText ? { prompt: promptText } : {}),
+    },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
 
@@ -228,9 +245,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           resolveOpts,
           skillSession,
         );
-        resolved = await prompt.resolve(
-          boundaryResolveOpts,
-        );
+        resolved = await prompt.resolve(boundaryResolveOpts);
         selectRepresentationSkills(
           resolved,
           resolved.representations ?? [],
@@ -539,8 +554,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     }
     return visible.filter(
       (name) =>
-        args.activeTools!.includes(name) ||
-        name === OFFLOAD_SUPPORT_TOOL_NAME,
+        args.activeTools!.includes(name) || name === OFFLOAD_SUPPORT_TOOL_NAME,
     );
   }
 
@@ -577,6 +591,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
             ...(dialect.replayStream
               ? {
                   createCachedStreamResult: (cached: {
@@ -610,6 +627,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   }
 
   const cachedRelease = readCachedReleaseSeal(handle);
+  try {
+    await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
+  } catch (error) {
+    stepBudget.dispose();
+    await closeSources();
+    throw error;
+  }
   const innerCompletion = handle.completion.bind(handle);
   const wrappedCompletion = async (): Promise<
     ExecutorStreamMeta | undefined
@@ -673,6 +697,12 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       });
+      await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
+      const threadCommit = await commitThreadInvocation(threadInvocation, {
+        messages: guarded?.messages ?? messages,
+        ...(guarded?.content ? { content: guarded.content } : {}),
+        ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
+      });
       await runInStreamObservationContext(handle, () =>
         lifecycle.captureTurn({
           messages,
@@ -680,10 +710,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           toolCalls: guarded?.toolCalls,
         }),
       );
-      return guarded
+      const completed = threadCommit ? { ...guarded, threadCommit } : guarded;
+      return completed
         ? stampCruxRunId(
             withOperationResultMeta(
-              guarded as ExecutorStreamCompletionPayload,
+              completed as ExecutorStreamCompletionPayload,
               handle._meta,
             ),
             handle.runId,

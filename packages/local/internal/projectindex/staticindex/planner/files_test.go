@@ -138,6 +138,44 @@ func TestProjectStaticIndexFileSelectionReusesDiscoveryCacheForUnchangedSources(
 	}
 }
 
+func TestProjectStaticIndexDiscoveryCacheEvictsFileDeletedWhileStopped(t *testing.T) {
+	root := t.TempDir()
+	writeStaticIndexPlanCacheFixtureFile(t, root, "src/entry.ts", "import './deleted'\nexport const stable = prompt({ id: 'stable' })\n")
+	deleted := writeStaticIndexPlanCacheFixtureFile(t, root, "src/deleted.ts", "export const stale = prompt({ id: 'stale' })\n")
+
+	indexed, err := fileSelection(root, "")
+	if err != nil {
+		t.Fatalf("initial fileSelection error = %v", err)
+	}
+	if !slices.Contains(indexed.Files, deleted) {
+		t.Fatalf("initial files = %v, want deleted fixture %s", indexed.Files, deleted)
+	}
+	if err := os.Remove(deleted); err != nil {
+		t.Fatalf("remove indexed file %s: %v", deleted, err)
+	}
+
+	restarted := loadDiscoveryCache(root)
+	for _, classification := range restarted.data.Classifications {
+		if classification.File == "src/deleted.ts" {
+			t.Fatalf("restarted discovery cache retained deleted classification: %+v", classification)
+		}
+	}
+	for _, imports := range restarted.data.Imports {
+		if imports.File == "src/deleted.ts" || slices.Contains(imports.Dependencies, "src/deleted.ts") {
+			t.Fatalf("restarted discovery cache retained deleted import selection: %+v", imports)
+		}
+	}
+	restarted.Save()
+
+	refreshed, err := fileSelection(root, "")
+	if err != nil {
+		t.Fatalf("restarted fileSelection error = %v", err)
+	}
+	if slices.Contains(refreshed.Files, deleted) || slices.Contains(refreshed.PrimaryFiles, deleted) {
+		t.Fatalf("restarted selection files=%v primary=%v, want deleted file evicted", refreshed.Files, refreshed.PrimaryFiles)
+	}
+}
+
 func TestProjectStaticIndexDiscoveryCacheInvalidatesByCallNamesAndSourceFingerprint(t *testing.T) {
 	root := t.TempDir()
 	workflow := writeStaticIndexPlanCacheFixtureFile(t, root, "src/workflow.ts", "export const wf = defineWorkflow({ id: 'wf' })\n")

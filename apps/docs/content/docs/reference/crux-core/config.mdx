@@ -1,10 +1,10 @@
 ---
 title: Config
-description: Full crux.config.ts reference for project policy, local tooling, runtime hooks, persistence, observability, plugins, and experimental options.
+description: Full crux.config.ts reference for project policy, local tooling, runtime hooks, storage, observability, plugins, and experimental options.
 ---
 
 `config()` is the single public API for Crux project configuration. Use it for policy, local tooling,
-runtime hooks, persistence, observability, plugins, and explicit experimental opt-ins.
+runtime hooks, storage, observability, plugins, and explicit experimental opt-ins.
 
 Do not repeat prompts, contexts, tools, agents, flows, registries, or skills in `config()`. Author
 those values in normal TypeScript modules and export them. Local tooling discovers them from source.
@@ -39,7 +39,7 @@ When local tooling imports the config with `CRUX_INDEX=1`, Crux returns an inert
 observability transport, Runtime Bridge, store, middleware, tokenizer, or plugin side effects are
 installed. This is what `crux config inspect` uses.
 
-Outside index mode, config application is transactional: persistence and explicit observability are
+Outside index mode, config application is transactional: storage and explicit observability are
 installed before user plugins, the Runtime Bridge connects after the prompt registry exists, and
 `dispose()` tears down the bridge before restoring config-owned hooks, plugins, and observability.
 This keeps plugin setup predictable without adding another public setup API.
@@ -66,7 +66,7 @@ interface CruxConfig {
   indexer?: CruxIndexerConfig;
   experimental?: CruxExperimentalConfig;
   runtime?: RuntimeEngineDefinition;
-  persistence?: CruxPersistenceConfig;
+  storage?: Storage;
   generation?: CruxGenerationConfig;
   devtools?: CruxDevtoolsConfig;
   observability?: CruxObservabilityConfig;
@@ -80,7 +80,7 @@ interface CruxConfig {
 | `indexer`       | `CruxIndexerConfig`       | no third-party extensions                                | `@use-crux/indexer`                       |
 | `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | Evals, `@use-crux/indexer`, Local         |
 | `runtime`       | `RuntimeEngineDefinition` | no durable Runtime Engine                                | Runtime Engine APIs, wake handlers, CLI   |
-| `persistence`   | `CruxPersistenceConfig`   | no global store                                          | flows, plans, tasks, Runtime Bridge reads |
+| `storage`       | `Storage`                 | no global store                                          | flows, plans, tasks, Runtime Bridge reads |
 | `generation`    | `CruxGenerationConfig`    | `autoEscape: true`; `securityWarnings` in development    | prompt resolution and generation          |
 | `devtools`      | `CruxDevtoolsConfig`      | no runtime devtools transport unless installed elsewhere | local devtools plugin and Runtime Bridge  |
 | `observability` | `CruxObservabilityConfig` | no explicit export transport                             | canonical observability transport         |
@@ -254,24 +254,29 @@ Use `node()` for local/test execution, `serverless({ store, wake })` for HTTP-wo
 
 See [Runtime Engine](/docs/reference/crux-core/runtime-engine) for the API reference and [Runtime guides](/docs/guides/durable-execution) for deployment shapes.
 
-## `persistence`
+## `storage`
 
-Persistence config installs explicit runtime records. Crux does not infer durability, tenancy, or data
+Storage config installs the standard capability bundle. Crux does not infer durability, tenancy, or data
 locality from source discovery.
 
-| Option                | Type          | Default     | Notes                                                                      |
-| --------------------- | ------------- | ----------- | -------------------------------------------------------------------------- |
-| `persistence.records` | `RecordStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge record reads. |
+| Option            | Type          | Default     | Notes                                                                      |
+| ----------------- | ------------- | ----------- | -------------------------------------------------------------------------- |
+| `storage.records` | `RecordStore` | required    | Used by durable flows, plans, tasks, and Runtime Bridge record reads.      |
+| `storage.vectors` | `VectorStore` | `undefined` | Optional vector-search capability.                                         |
+| `storage.assets`  | `AssetStore`  | `undefined` | Optional media and oversized-payload capability.                           |
 
 ```ts title="crux.config.ts"
 import { inMemoryRecordStore } from "@use-crux/core/storage";
 
 export default config({
-  persistence: {
+  storage: {
     records: inMemoryRecordStore(),
   },
 });
 ```
+
+The former `persistence` key is rejected with migration guidance. Move its
+`records` member directly into `storage`.
 
 See [Storage](/docs/reference/crux-core/storage).
 

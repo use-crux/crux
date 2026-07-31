@@ -23,6 +23,7 @@ export interface EncodeState {
   readonly storage: Storage;
   readonly dedupe: Map<string, StoredAsset>;
   readonly writtenRefs: AssetRef[];
+  readonly assetKey?: (path: string, contentIdentity: string) => string;
 }
 
 /** Encode invocation messages into the private JSON persisted form. */
@@ -199,10 +200,14 @@ async function persistedOwnedData(
         "Data media requires Storage.assets before messages can be persisted.",
     });
   }
-  const key = `${asset.mediaType}:${asset.sha256 ?? sha256Hex(await dataBytes(asset.data))}`;
+  const sha256 = sha256Hex(await dataBytes(asset.data));
+  const key = `${asset.mediaType}:${sha256}`;
   const existing = state.dedupe.get(key);
   if (existing) return persistedAssetRef(existing, path);
-  const stored = await state.storage.assets.put(asset);
+  const stored = await state.storage.assets.put(
+    { ...asset, sha256 },
+    state.assetKey ? { key: state.assetKey(path, key) } : undefined,
+  );
   state.writtenRefs.push(stored.ref);
   state.dedupe.set(key, stored);
   return persistedAssetRef(stored, path);

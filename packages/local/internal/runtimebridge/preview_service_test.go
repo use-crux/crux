@@ -52,8 +52,8 @@ func TestPreviewDispatchSelectsExactlyAndValidatesResponse(t *testing.T) {
 	}
 	response := `{"type":"command.result","commandId":"` + request.CommandID + `","result":{
 		"status":"ready","targetId":"prompt:greeting","catalogueRevision":4,
-		"inspection":{"system":{"text":"","tokens":0,"coverage":"complete","parts":[]},
-		"totalTokens":0,"droppedContexts":[],"excludedContexts":[]}}}`
+		"preview":{"status":"fits","measurement":"exact","adaptations":[],
+		"warnings":[],"diagnostics":[]},"contributions":[]}}`
 	if err := service.HandlePeerMessage("peer-b", []byte(response)); err != nil {
 		t.Fatalf("HandlePeerMessage: %v", err)
 	}
@@ -262,8 +262,8 @@ func TestPreviewWebSocketCancellationDiscardsLateResponse(t *testing.T) {
 
 	late := `{"type":"command.result","commandId":"` + request.CommandID + `","result":{
 		"status":"ready","targetId":"prompt:x","catalogueRevision":1,
-		"inspection":{"system":{"text":"","tokens":0,"coverage":"complete","parts":[]},
-		"totalTokens":0,"droppedContexts":[],"excludedContexts":[]}}}`
+		"preview":{"status":"fits","measurement":"exact","adaptations":[],
+		"warnings":[],"diagnostics":[]},"contributions":[]}}`
 	if err := service.HandlePeerMessage("peer-cancel", []byte(late)); err != nil {
 		t.Fatalf("late response changed command state: %v", err)
 	}

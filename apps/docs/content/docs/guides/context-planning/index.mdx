@@ -111,6 +111,9 @@ History projection never mutates the canonical transcript. See
 [History planning](/docs/guides/context-planning/history) for causal grouping,
 artifact misses, and source precedence.
 
+Use a [Thread](/docs/guides/threads) when the application should persist that
+canonical transcript and keep concurrent or edited continuations as branches.
+
 ## Set pressure independently
 
 `inputBudget` does not authorize loss. It tells the planner when to prefer an

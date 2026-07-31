@@ -18,6 +18,7 @@ import type { CruxFinishReason } from "./normalized-outcome";
 import type { AssistantContentPart } from "../types/content";
 import type { RequestReceipt } from "../request/receipt/receipt";
 import type { OffloadReceipt } from "../request/offload/handle";
+import type { ThreadCommit } from "../thread/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Adapter Response
@@ -164,6 +165,8 @@ export interface StreamCompletionMetadata extends GenerationMeta {
   readonly providerMetadata?: unknown;
   /** Additional transport attempts used for this same sealed request. */
   readonly transportRetries?: number;
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
 }
 
 // ─────────────────────────────────────────────────────────────────

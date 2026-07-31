@@ -51,11 +51,15 @@ import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { guardStreamCompletion } from "./stream-completion";
 import { observe } from "../../observability";
 import { sumUsageWhenComplete } from "../result-usage";
-import type { SealedRequestPlan } from "../../request/planner/plan";
+import {
+  validateRequestPlan,
+  type SealedRequestPlan,
+} from "../../request/planner/plan";
 import {
   recordRequestRetryCount,
   type RequestReceipt,
 } from "../../request/receipt/receipt";
+import type { ThreadCommit } from "../../thread/types";
 
 /** Everything the coordinated route needs from the prepared streaming call. */
 export interface CoordinatedStreamRouteOptions<
@@ -101,7 +105,7 @@ export interface CoordinatedStreamRouteOptions<
     readonly messages: readonly Message[];
     readonly assistantText: string | undefined;
     readonly toolCalls: unknown;
-  }) => Promise<void> | void;
+  }) => Promise<ThreadCommit | undefined>;
 }
 
 /**
@@ -275,6 +279,7 @@ export function openCoordinatedStructuredStream<
         { ...callArgs, messages: retryMessages },
         lastRequest.id,
       );
+      await validateRequestPlan(sealed);
       lastRequest = sealed.receipt;
       const rawHandle = await withBudget(
         (budgetSignal) =>
@@ -505,14 +510,14 @@ export function openCoordinatedStructuredStream<
           ...(committedCandidate ? { committedCandidate } : {}),
           promptId,
         });
-        await runInStreamObservationContext(handle, () =>
+        const threadCommit = await runInStreamObservationContext(handle, () =>
           options.captureTurn({
             messages,
             assistantText: guarded?.text || undefined,
             toolCalls: meta?.toolCalls,
           }),
         );
-        return guarded;
+        return threadCommit ? { ...guarded, threadCommit } : guarded;
       } finally {
         await closeSources();
       }

@@ -52,6 +52,7 @@ pub(crate) fn relation_refs_for_injection_use(
                     "injectable": format!("{owner}.uses_injectable"),
                     "memory": format!("{owner}.uses_memory"),
                     "blackboard": format!("{owner}.uses_blackboard"),
+                    "thread": format!("{owner}.uses_thread"),
                 },
                 "fromId": from_id,
                 "toVariable": variable,

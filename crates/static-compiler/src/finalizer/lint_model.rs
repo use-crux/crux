@@ -5,10 +5,10 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::core::definition_merge::merge_definitions_by_id;
-use crate::core::facts::StaticIndexPatchFacts;
+use crate::core::facts::{StaticIndexDefinition, StaticIndexPatchFacts};
 use crate::finalizer::run::{append_missing_builtin_rule_descriptors, merge_fact_value};
 use crate::lints::filter::StaticIndexLintOptions;
-use crate::lints::findings::append_builtin_lint_findings;
+use crate::lints::findings::append_builtin_lint_findings_with_definition_occurrences;
 use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_index_relation_model};
 use crate::source::model::with_static_index_source_model;
 
@@ -17,9 +17,14 @@ pub(crate) fn apply_static_index_lint_model(
     lint_facts: &[Value],
     policies: &StaticIndexRelationPolicyTable,
     lint_options: &StaticIndexLintOptions,
+    definition_occurrences: &[StaticIndexDefinition],
 ) {
     if lint_facts.is_empty() {
-        append_builtin_lint_findings(facts, lint_options);
+        append_builtin_lint_findings_with_definition_occurrences(
+            facts,
+            lint_options,
+            definition_occurrences,
+        );
         return;
     }
 
@@ -37,7 +42,11 @@ pub(crate) fn apply_static_index_lint_model(
         .collect::<BTreeSet<_>>();
     let relation_model = resolve_static_index_relation_model(lint_model, policies);
     let mut lint_model = with_static_index_source_model(relation_model.facts);
-    append_builtin_lint_findings(&mut lint_model, lint_options);
+    append_builtin_lint_findings_with_definition_occurrences(
+        &mut lint_model,
+        lint_options,
+        definition_occurrences,
+    );
     facts.lint_findings = lint_model.lint_findings;
     facts.rule_descriptors = lint_model.rule_descriptors;
     facts.diagnostics.extend(

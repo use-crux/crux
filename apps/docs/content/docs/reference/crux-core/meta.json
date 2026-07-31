@@ -8,6 +8,7 @@
     "prompt-resolution",
     "prompt-text",
     "contexts",
+    "thread",
     "tools",
     "tool-middleware",
     "multimodal",

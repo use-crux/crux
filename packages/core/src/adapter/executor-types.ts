@@ -89,6 +89,8 @@ export interface SealedExecutorRequestStep<TModel> {
   readonly activeTools?: readonly string[];
   /** Public evidence for the sealed provider request. */
   readonly receipt: RequestReceipt;
+  /** Revalidate canonical source ownership immediately before provider I/O. */
+  readonly validate?: () => Promise<void>;
 }
 
 /** Core-owned planner callback invoked before each SDK-managed model call. */

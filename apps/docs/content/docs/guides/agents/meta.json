@@ -1,5 +1,5 @@
 {
   "title": "Agents",
   "description": "agent(), blackboards, handoffs, and delegates: building blocks for multi-agent systems.",
-  "pages": ["index", "agent", "handoff", "blackboard", "delegate"]
+  "pages": ["index", "agent", "threads", "handoff", "blackboard", "delegate"]
 }

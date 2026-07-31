@@ -7,6 +7,7 @@
 import { sha256Hex } from "../../content/sha256";
 import type { Message } from "../../generation/messages";
 import type { SummarizeStrategy } from "../history/strategies";
+import type { ThreadHistoryRange } from "../history/source";
 
 const encoder = new TextEncoder();
 const ARTIFACT_PROMPT_VERSION = "history-summary-v1";
@@ -28,19 +29,26 @@ export interface HistoryArtifactIdentity {
   readonly series: string;
   readonly sourceDigest: string;
   readonly prefixLength: number;
+  readonly threadRange?: ThreadHistoryRange;
 }
 
 /** Build content-addressed identity without exposing source content. @internal */
 export function historyArtifactIdentity(input: {
   readonly prefix: readonly Message[];
+  readonly threadRange?: ThreadHistoryRange;
   readonly strategy: SummarizeStrategy;
   readonly provider: string;
   readonly model: string;
   readonly providerNative: boolean;
 }): HistoryArtifactIdentity {
-  const sourceDigest = digestMessages(input.prefix);
+  const sourceDigest = input.threadRange
+    ? digest({ kind: "thread", ...input.threadRange })
+    : digestMessages(input.prefix);
   const series = digest({
     kind: "history-summary",
+    source: input.threadRange
+      ? { kind: "thread", identity: input.threadRange.source }
+      : { kind: "manual" },
     strategy: `${input.strategy.kind}:v${input.strategy.version}`,
     provider: input.provider,
     model: input.model,
@@ -51,7 +59,9 @@ export function historyArtifactIdentity(input: {
   });
   const id = digest({
     series,
-    sourceDigest,
+    ...(input.threadRange
+      ? { threadRevision: input.threadRange.revision, range: input.threadRange }
+      : { sourceDigest }),
     prefixLength: input.prefix.length,
   });
   return Object.freeze({
@@ -60,6 +70,7 @@ export function historyArtifactIdentity(input: {
     series,
     sourceDigest,
     prefixLength: input.prefix.length,
+    ...(input.threadRange ? { threadRange: input.threadRange } : {}),
   });
 }
 

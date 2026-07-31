@@ -1,4 +1,5 @@
 import type { IndexPatchFacts } from '../../patches'
+import { projectAgentThreadRelations } from '../../relations'
 
 /** Evidence array keys that semantic backends may stream. */
 export const semanticEvidenceBatchKinds = [
@@ -43,6 +44,7 @@ export async function collectProjectedSemanticEvidence(
 export function projectSemanticEvidenceBatches(batches: Iterable<SemanticEvidenceBatch>): IndexPatchFacts {
   const facts: MutableSemanticEvidenceFacts = { diagnostics: [] }
   for (const batch of batches) appendSemanticEvidenceBatch(facts, batch)
+  if (facts.relations) facts.relations = projectAgentThreadRelations(facts.relations)
   return facts
 }
 

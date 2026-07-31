@@ -21,7 +21,9 @@ import type { ResolvedRepresentationPolicy } from "../representation/ladder-type
 import { causalMessageGroups } from "./causal-groups";
 import type {
   HistoryOptions,
+  HistoryArtifactSpan,
   ManagedHistoryProjection,
+  ThreadHistoryRange,
 } from "./source";
 
 /** Resolve a managed history policy at one concrete request boundary. @internal */
@@ -35,12 +37,20 @@ export async function resolveManagedHistoryPolicy(input: {
   readonly optimizeAt: number;
   readonly max: number;
   readonly generate: GenerateHistorySummary;
+  readonly currentLength?: number;
+  readonly artifactRange?: (span: HistoryArtifactSpan) => ThreadHistoryRange;
 }): Promise<{
   readonly policy?: ResolvedRepresentationPolicy;
   readonly warnings: readonly RequestWarning[];
 }> {
+  const currentLength = input.currentLength ?? 0;
+  const historyMessages =
+    currentLength > 0
+      ? input.messages.slice(0, -currentLength)
+      : input.messages;
+  const current = currentLength > 0 ? input.messages.slice(-currentLength) : [];
   const split = splitManagedHistory(
-    input.messages,
+    historyMessages,
     input.projection.options.recent,
     input.max,
   );
@@ -56,6 +66,8 @@ export async function resolveManagedHistoryPolicy(input: {
   const warnings: RequestWarning[] = [];
   let artifact = await findHistorySummaryArtifact({
     prefix: split.prefix,
+    artifactOffset: split.prefixOffset,
+    ...(input.artifactRange ? { artifactRange: input.artifactRange } : {}),
     strategy,
     provider: input.provider,
     model: summaryModel,
@@ -65,6 +77,8 @@ export async function resolveManagedHistoryPolicy(input: {
   if (!artifact && input.fullInputTokens > input.max) {
     const joined = joinHistorySummaryPreparation({
       prefix: split.prefix,
+      artifactOffset: split.prefixOffset,
+      ...(input.artifactRange ? { artifactRange: input.artifactRange } : {}),
       strategy,
       provider: input.provider,
       model: summaryModel,
@@ -83,6 +97,8 @@ export async function resolveManagedHistoryPolicy(input: {
     } else if (input.projection.options.onMiss === "inline") {
       const preparation = prepareHistorySummaryArtifact({
         prefix: split.prefix,
+        artifactOffset: split.prefixOffset,
+        ...(input.artifactRange ? { artifactRange: input.artifactRange } : {}),
         strategy,
         provider: input.provider,
         model: summaryModel,
@@ -110,6 +126,8 @@ export async function resolveManagedHistoryPolicy(input: {
   ) {
     const preparationInput = {
       prefix: split.prefix,
+      artifactOffset: split.prefixOffset,
+      ...(input.artifactRange ? { artifactRange: input.artifactRange } : {}),
       strategy,
       provider: input.provider,
       model: summaryModel,
@@ -117,8 +135,7 @@ export async function resolveManagedHistoryPolicy(input: {
       providerNative: input.projection.options.providerNative,
       generate: input.generate,
     };
-    const scheduled =
-      scheduleHistorySummaryPreparation(preparationInput);
+    const scheduled = scheduleHistorySummaryPreparation(preparationInput);
     warnings.push(scheduled.warning);
     if (!scheduled.retained) {
       try {
@@ -139,7 +156,10 @@ export async function resolveManagedHistoryPolicy(input: {
   if (artifact) {
     rungs.push({
       kind: "summary",
-      messages: managedSummaryMessages(split, artifact),
+      messages: Object.freeze([
+        ...managedSummaryMessages(split, artifact),
+        ...current,
+      ]),
       available: true,
       ...(artifact.supportRequestId
         ? { supportRequestId: artifact.supportRequestId }
@@ -161,7 +181,7 @@ export async function resolveManagedHistoryPolicy(input: {
   if (input.projection.options.onMiss === "recent-only") {
     rungs.push({
       kind: "omitted",
-      messages: split.recentOnly,
+      messages: Object.freeze([...split.recentOnly, ...current]),
       available: true,
     });
   }
@@ -177,7 +197,7 @@ export async function resolveManagedHistoryPolicy(input: {
       ownedSkillIds: Object.freeze([]),
       ownedToolMiddleware: Object.freeze([]),
       omissionEdits: Object.freeze([]),
-      lowerBoundMessages: split.recentOnly,
+      lowerBoundMessages: Object.freeze([...split.recentOnly, ...current]),
       rungs: Object.freeze(rungs),
     }),
     warnings: Object.freeze(warnings),
@@ -187,6 +207,7 @@ export async function resolveManagedHistoryPolicy(input: {
 /** Deterministic causal split shared by execution and preview. @internal */
 export interface ManagedHistorySplit {
   readonly leading: readonly Message[];
+  readonly prefixOffset: number;
   readonly prefix: readonly Message[];
   readonly conversational: readonly Message[];
   readonly recentOnly: readonly Message[];
@@ -234,6 +255,7 @@ export function splitManagedHistory(
   );
   return Object.freeze({
     leading: Object.freeze([...leading]),
+    prefixOffset: leading.length,
     prefix: Object.freeze(conversational.slice(0, prefixLength)),
     conversational: Object.freeze(conversational),
     recentOnly: Object.freeze([...leading, ...recentMessages]),

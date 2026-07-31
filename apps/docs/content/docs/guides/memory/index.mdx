@@ -70,7 +70,9 @@ Capture lifecycle evidence is deliberately payload-free. It retains the authored
 
 Conversation history is canonical request input rather than mutable memory.
 Use `history.recent()` or managed `history()` from `@use-crux/core` to project
-it without giving a MemoryBlock ownership of the transcript.
+it without giving a MemoryBlock ownership of the transcript. Use a
+[Thread](/docs/guides/threads) when Crux should also persist the exact
+conversation and its branches.
 
 `workingState()` is task state. It is one typed value, validated by Zod, that the application or agent can overwrite as the task progresses.
 

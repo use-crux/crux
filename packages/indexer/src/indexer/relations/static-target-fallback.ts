@@ -20,6 +20,9 @@ export function fallbackRelationTargetId(
     case "prompt.uses_injectable":
     case "context.uses_injectable":
       return `injectable:${safeVariableId(variableName)}`;
+    case "prompt.uses_thread":
+    case "context.uses_thread":
+      return `thread:${safeVariableId(variableName)}`;
     case "prompt.uses_tool":
     case "context.uses_tool":
     case "injectable.uses_tool":

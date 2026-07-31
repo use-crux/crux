@@ -11,7 +11,13 @@
 
 import type { z } from 'zod'
 import type { AnyToolSet } from '../types'
-import type { BlackboardEntry, Context, MemoryEntry, SkillEntry } from '../prompt/context-types'
+import type {
+  BlackboardEntry,
+  Context,
+  MemoryEntry,
+  SkillEntry,
+  ThreadHistoryEntry,
+} from '../prompt/context-types'
 import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
@@ -34,6 +40,7 @@ export interface PostMergeSurface {
   readonly excluded: ExcludedContext[]
   readonly skills: SkillEntry[]
   readonly memories: MemoryEntry[]
+  readonly thread?: ThreadHistoryEntry
   readonly blackboards: BlackboardEntry[]
   readonly historyProjection: HistoryProjection | undefined
   readonly representationLadders: readonly RepresentationEntry[]
@@ -76,6 +83,7 @@ export async function resolvePostMergeSurface(
     excluded: merged.excluded,
     skills,
     memories: merged.memories,
+    ...(merged.thread ? { thread: merged.thread } : {}),
     blackboards: merged.blackboards,
     historyProjection: merged.history[0],
     representationLadders: merged.representations,

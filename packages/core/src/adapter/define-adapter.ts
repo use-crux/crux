@@ -297,6 +297,9 @@ export function adapter<
             step.request ? [step.request] : [],
           ),
         ),
+        ...(result.threadCommit
+          ? { threadCommit: result.threadCommit }
+          : {}),
       };
     };
 

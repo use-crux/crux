@@ -110,6 +110,20 @@ function scopeRecords(records: RecordStore, prefix: string): RecordStore {
             }),
           )
       : undefined,
+    mutate: records.mutate
+      ? (key, fn) => records.mutate!(prefixKey(prefix, key), fn)
+      : undefined,
+    getVersioned: records.getVersioned
+      ? (key) => records.getVersioned!(prefixKey(prefix, key))
+      : undefined,
+    putVersioned: records.putVersioned
+      ? (key, value, expectedVersion) =>
+          records.putVersioned!(
+            prefixKey(prefix, key),
+            value,
+            expectedVersion,
+          )
+      : undefined,
     capabilities: () => records.capabilities(),
   };
 }

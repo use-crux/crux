@@ -121,6 +121,8 @@ export async function sealRequest<
               "The active adapter cannot prepare managed history summaries.",
             ),
           )),
+      currentLength: input.history.currentLength,
+      artifactRange: input.history.artifactRange,
     });
     if (managed.policy) policies.unshift(managed.policy);
     planningWarnings.push(...managed.warnings);
@@ -235,11 +237,25 @@ export async function sealRequest<
       media: input.media,
       previousRequestId: input.previousRequestId,
     }),
+    history: input.history,
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
       : {}),
   });
-  return requestPlan(request, receipt);
+  await input.history?.validateSource?.();
+  return requestPlan(
+    request,
+    receipt,
+    input.history?.sourceIdentity &&
+      input.history.sourceRevision &&
+      input.history.validateSource
+      ? {
+          identity: input.history.sourceIdentity,
+          revision: input.history.sourceRevision,
+          validate: input.history.validateSource,
+        }
+      : undefined,
+  );
 }
 
 async function prepareSelectedRepresentations(

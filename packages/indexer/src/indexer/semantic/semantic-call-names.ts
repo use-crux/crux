@@ -51,6 +51,7 @@ const firstPartySemanticCallNames = [
   "swarm",
   "tool",
   "toolPolicy",
+  "thread",
   "context",
   "prompt",
   "record",

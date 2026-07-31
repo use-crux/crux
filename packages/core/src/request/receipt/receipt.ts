@@ -15,6 +15,7 @@ import {
   type RequestSupportReceipt,
 } from "./inspection";
 import { emitRequestPlan } from "./observability";
+import type { RequestHistoryContext } from "../history/source";
 
 export type {
   RequestInspection,
@@ -59,6 +60,12 @@ export interface RequestReceipt {
   readonly warnings: readonly RequestWarning[];
   /** Previous provider request in the same managed loop. */
   readonly previousRequestId?: string;
+  /** Redacted canonical history ownership used by this request. */
+  readonly history?: {
+    readonly source: RequestHistoryContext["source"];
+    readonly policy: RequestHistoryContext["policy"];
+    readonly revision?: string;
+  };
   /** Inspect redacted evidence retained with this live receipt. */
   inspect(): Promise<RequestInspection>;
 }
@@ -78,6 +85,7 @@ export interface CreateRequestReceiptInput {
   readonly warnings?: readonly RequestWarning[];
   readonly adaptations?: readonly RequestAdaptation[];
   readonly inspection?: RequestInspectionEvidence;
+  readonly history?: RequestHistoryContext;
 }
 
 /** Create one immutable JSON-safe request receipt. @internal */
@@ -100,6 +108,17 @@ export function createRequestReceipt(
     warnings: Object.freeze([...(input.warnings ?? [])]),
     ...(input.previousRequestId
       ? { previousRequestId: input.previousRequestId }
+      : {}),
+    ...(input.history
+      ? {
+          history: Object.freeze({
+            source: input.history.source,
+            policy: input.history.policy,
+            ...(input.history.sourceRevision
+              ? { revision: input.history.sourceRevision }
+              : {}),
+          }),
+        }
       : {}),
     inspect: async () => inspect(),
   };

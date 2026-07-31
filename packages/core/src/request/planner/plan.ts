@@ -15,12 +15,19 @@ export interface SealedRequestPlan<
   readonly request: CallArgs<TExtra>;
   /** Public evidence attached to the executed step. */
   readonly receipt: RequestReceipt;
+  /** Canonical source revision pinned when this plan was sealed. */
+  readonly source?: {
+    readonly identity: string;
+    readonly revision: string;
+    readonly validate: () => Promise<void>;
+  };
 }
 
 /** Freeze one exact request plan without mutating canonical sources. @internal */
 export function requestPlan<TExtra extends Record<string, unknown>>(
   request: CallArgs<TExtra>,
   receipt: RequestReceipt,
+  source?: SealedRequestPlan<TExtra>["source"],
 ): SealedRequestPlan<TExtra> {
   const preserved = new Set<object>();
   if (request.schema) preserved.add(request.schema);
@@ -28,7 +35,18 @@ export function requestPlan<TExtra extends Record<string, unknown>>(
     request,
     preserved,
   ) as CallArgs<TExtra>;
-  return Object.freeze({ request: sealedRequest, receipt });
+  return Object.freeze({
+    request: sealedRequest,
+    receipt,
+    ...(source ? { source: Object.freeze({ ...source }) } : {}),
+  });
+}
+
+/** Revalidate canonical source ownership immediately before provider I/O. */
+export async function validateRequestPlan(
+  plan: SealedRequestPlan<Record<string, unknown>>,
+): Promise<void> {
+  await plan.source?.validate();
 }
 
 function immutableClone(

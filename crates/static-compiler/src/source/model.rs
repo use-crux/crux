@@ -146,15 +146,22 @@ fn source_ref_dependencies(definitions: &[StaticIndexDefinition]) -> Vec<(String
         .iter()
         .flat_map(|definition| {
             let from = definition.source.as_ref().map(|source| source.file.clone());
-            definition.source_refs.iter().filter_map(move |ref_| {
-                let from = from.clone()?;
-                let to = ref_.source.file.clone();
-                if to.is_empty() || to == from {
-                    None
-                } else {
-                    Some((from, to))
-                }
-            })
+            definition
+                .source_refs
+                .iter()
+                .filter(|ref_| {
+                    !(ref_.role == "definition"
+                        && ref_.id.starts_with("source-ref:thread-definition:"))
+                })
+                .filter_map(move |ref_| {
+                    let from = from.clone()?;
+                    let to = ref_.source.file.clone();
+                    if to.is_empty() || to == from {
+                        None
+                    } else {
+                        Some((from, to))
+                    }
+                })
         })
         .collect()
 }

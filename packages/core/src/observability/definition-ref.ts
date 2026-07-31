@@ -71,6 +71,7 @@ export const DIRECTLY_OBSERVED_DEFINITION_REF_ROLES: Record<
   agent: "invoked-agent",
   flow: "invoked-flow",
   task: "invoked-task",
+  thread: "invoked-thread",
   "composition.parallel": "invoked-composition",
   "composition.pipeline": "invoked-composition",
   "composition.consensus": "invoked-composition",
@@ -250,6 +251,14 @@ export function contextDefinitionRef(
   source?: SanitizedSourceRef,
 ): DefinitionRef {
   return definitionRef("context", id, source);
+}
+
+/** Build the `invoked-thread` ref for a public Thread operation span. */
+export function threadDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("thread", id, source);
 }
 
 /**

@@ -113,6 +113,20 @@
       }
     },
     {
+      "kind": "thread",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "thread.operation"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "thread:connected",
+        "kind": "thread",
+        "role": "invoked-thread"
+      }
+    },
+    {
       "kind": "composition.parallel",
       "primary": "directly-observed",
       "secondary": [],

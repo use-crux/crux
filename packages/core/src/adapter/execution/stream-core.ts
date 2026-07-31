@@ -83,6 +83,13 @@ import {
   preparationResourceReads,
 } from "../../request/prepare/resources";
 import { commitPreparationDecision } from "../../request/prepare/journal";
+import { validateRequestPlan } from "../../request/planner/plan";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+  validateThreadReplay,
+} from "./thread-history";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -119,8 +126,13 @@ export async function streamCore<
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(resolved, args.messages);
   const mappedSettings = dialect.mapSettings(resolved.settings);
-  const initialMessages = initialCoreMessageState(resolved, args.messages);
+  const initialMessages = initialCoreMessageState(
+    resolved,
+    args.messages,
+    threadInvocation.source,
+  );
   const representationEpoch = createRequestRepresentationEpoch();
   const prepareStepState = createPrepareStepState();
   let messages = initialMessages.messages;
@@ -162,6 +174,11 @@ export async function streamCore<
     },
   );
   messages = [...guardedInput.messages];
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    { messages },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const sourceSession = await materializeToolSources({
@@ -435,6 +452,9 @@ export async function streamCore<
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
             createCachedStreamResult: (cached) =>
               createCachedStreamHandle(cached) as unknown as MiddlewareResult,
           },
@@ -447,6 +467,7 @@ export async function streamCore<
             model: modelInfo.modelId,
             media: dialect.media,
           });
+          await validateRequestPlan(sealed);
           const providerHandle = await withBudget(
             (signal) =>
               dialect.stream(dialect.client, sealed.request, {
@@ -488,6 +509,12 @@ export async function streamCore<
 
     const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
     const cachedRelease = readCachedReleaseSeal(handle);
+    try {
+      await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
+    } catch (error) {
+      await closeSources();
+      throw error;
+    }
 
     // A live enforce `assert` commit gate on a structured stream can reject an
     // attempt (RFC #173). Route it through the coordinated route so a rejected
@@ -521,12 +548,23 @@ export async function streamCore<
             ...(structuredCanonicalSchema ? { structuredCanonicalSchema } : {}),
             ...(structuredDecodeManifest ? { structuredDecodeManifest } : {}),
             closeSources,
-            captureTurn: (turn) =>
-              lifecycle.captureTurn({
+            captureTurn: async (turn) => {
+              const threadCommit = await commitThreadInvocation(
+                threadInvocation,
+                {
+                  messages: turn.messages,
+                  ...(turn.assistantText !== undefined
+                    ? { text: turn.assistantText }
+                    : {}),
+                },
+              );
+              await lifecycle.captureTurn({
                 messages: [...turn.messages],
                 assistantText: turn.assistantText,
                 toolCalls: turn.toolCalls as never,
-              }),
+              });
+              return threadCommit;
+            },
           },
           gates.validationGate,
         ),
@@ -648,6 +686,15 @@ export async function streamCore<
                 }
               : {}),
           });
+          await validateThreadReplay(
+            threadInvocation,
+            cachedRelease !== undefined,
+          );
+          const threadCommit = await commitThreadInvocation(threadInvocation, {
+            messages: guarded?.messages ?? messages,
+            ...(guarded?.content ? { content: guarded.content } : {}),
+            ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
+          });
           await runInStreamObservationContext(handle, () =>
             lifecycle.captureTurn({
               messages,
@@ -655,7 +702,7 @@ export async function streamCore<
               toolCalls: meta?.toolCalls,
             }),
           );
-          return guarded;
+          return threadCommit ? { ...guarded, threadCommit } : guarded;
         } finally {
           await closeSources();
         }

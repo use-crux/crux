@@ -34,6 +34,7 @@ import type { CallHandle } from "../call-handle";
 import type { CruxRunId } from "../../observability";
 import type { InputBudget } from "../../request/budget/input-budget";
 import type { PrepareStep } from "../../request/prepare/step";
+import type { ThreadCommit } from "../../thread/types";
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
@@ -193,6 +194,8 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
 
   /** Tool approval requests when execution suspended instead of completing. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
 }
 
 /** Internal result shape produced before orchestration stamps the run ID. */
