@@ -28,6 +28,7 @@ import {
 } from "./boundary";
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
+import { recordEffectReceiptSettlement } from "./evidence";
 import {
   createEffectOccurrence,
   createEffectReceiptRef,
@@ -130,12 +131,13 @@ export async function executeEffectOccurrence<TInput, TOutput>(
       `Resource projection failed for effect \`${definition.id}\`.`,
       error,
     );
-    effectLedger.transition(receipt.id, {
+    const settledReceipt = effectLedger.transition(receipt.id, {
       outcome: "failed",
       recovery: "unavailable",
       completedAt: Date.now(),
       error: summarizeEffectError(failure),
     });
+    recordEffectReceiptSettlement(settledReceipt);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw failure;
   }
@@ -153,13 +155,14 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         `Recovery capture failed for effect \`${definition.id}\`.`,
         error,
       );
-      effectLedger.transition(receipt.id, {
+      const settledReceipt = effectLedger.transition(receipt.id, {
         outcome: "failed",
         recovery: "unavailable",
         ...(resource === undefined ? {} : { resource }),
         completedAt: Date.now(),
         error: summarizeEffectError(failure),
       });
+      recordEffectReceiptSettlement(settledReceipt);
       if (ownsBoundary) closeImplicitRootBoundary(boundary);
       throw failure;
     }
@@ -194,7 +197,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         recover: options.recover,
       });
     }
-    effectLedger.transition(receipt.id, {
+    const settledReceipt = effectLedger.transition(receipt.id, {
       outcome: "succeeded",
       ...(options?.recover
         ? {
@@ -204,6 +207,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         : {}),
       completedAt: Date.now(),
     });
+    recordEffectReceiptSettlement(settledReceipt);
     registerEffectStackEntry(boundary.id, receipt.id);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     return Object.freeze({
@@ -230,7 +234,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           recover: options.recover,
         });
       }
-      effectLedger.transition(receipt.id, {
+      const settledReceipt = effectLedger.transition(receipt.id, {
         outcome: "unknown",
         recovery: "ambiguous",
         ...(options?.recover
@@ -239,15 +243,17 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         completedAt: Date.now(),
         error: summarizeEffectError(error),
       });
+      recordEffectReceiptSettlement(settledReceipt);
       registerEffectStackEntry(boundary.id, receipt.id);
       if (ownsBoundary) closeImplicitRootBoundary(boundary);
       throw error;
     }
-    effectLedger.transition(receipt.id, {
+    const settledReceipt = effectLedger.transition(receipt.id, {
       outcome: "failed",
       completedAt: Date.now(),
       error: summarizeEffectError(error),
     });
+    recordEffectReceiptSettlement(settledReceipt);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw error;
   }

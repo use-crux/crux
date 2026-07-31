@@ -8,10 +8,10 @@
 import { CruxEffectError } from "../errors";
 import type { EffectReceipt, RecoveryAvailability } from "../receipt-types";
 import type { EffectReceiptRef, EffectReconciliation } from "../types";
+import { recordEffectReceiptReconciliation, recordEffectRecoveryReconciliation } from "./evidence";
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
 import type { RegisteredRecoveryUnit, StoredRecoveryEnvelope } from "./recovery-stack";
-
 export type LedgerReconciliation =
   | {
       readonly kind: "execution";
@@ -165,10 +165,8 @@ function unknownReceipt(
 }
 
 function settleUnknownReceipt(
-  receipt: EffectReceipt,
-  outcome: "succeeded" | "failed",
-  recovery: RecoveryAvailability,
-  recoveryUnitId?: string,
+  receipt: EffectReceipt, outcome: "succeeded" | "failed",
+  recovery: RecoveryAvailability, recoveryUnitId?: string,
 ): EffectReceipt {
   const {
     error: discardedError,
@@ -239,16 +237,16 @@ export function reconcileEffectReceipt(
   if (target.parentReceiptId) {
     return reconcileRecoveryAttempt(receipt, target, resolution);
   }
-  return effectLedger.reconcile({
+  const settled = effectLedger.reconcile({
     kind: "execution",
     receiptId: target.id,
     resolution,
   });
+  recordEffectReceiptReconciliation(settled);
+  return settled;
 }
 
-function findUnknownRecoveryAttempt(
-  receipt: EffectReceipt,
-): EffectReceipt | undefined {
+function findUnknownRecoveryAttempt(receipt: EffectReceipt): EffectReceipt | undefined {
   if (receipt.recovery !== "ambiguous") return undefined;
   return effectLedger
     .receiptsFor(receipt.boundaryId)
@@ -282,9 +280,11 @@ function reconcileRecoveryAttempt(
     unitId: unit.id,
     resolution,
   });
+  const settledOriginal = effectLedger.getReceipt(original.id) ?? original;
+  recordEffectRecoveryReconciliation(settledOriginal, settledAttempt);
   return requested.id === attempt.id
     ? settledAttempt
-    : effectLedger.getReceipt(original.id) ?? original;
+    : settledOriginal;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -19,6 +19,7 @@ import {
 import { effectLedger } from "./internal/ledger";
 import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
 import { reconcileEffectReceipt } from "./internal/reconcile";
+import { recordEffectRecoveryAttempt } from "./internal/evidence";
 import type {
   EffectReconciliation,
   EffectReceiptRef,
@@ -184,6 +185,9 @@ export async function recoverEffectReceiptAttempt(
       });
       effectLedger.transition(attempt.id, {
         outcome: "running",
+        ...(storedReceipt.resource === undefined
+          ? {}
+          : { resource: storedReceipt.resource }),
       });
       try {
         await unit.execute({
@@ -197,15 +201,16 @@ export async function recoverEffectReceiptAttempt(
           idempotencyKey: unit.idempotencyKey,
           options,
         });
-        effectLedger.transition(attempt.id, {
+        const settledAttempt = effectLedger.transition(attempt.id, {
           outcome: "succeeded",
           completedAt: Date.now(),
         });
         effectLedger.markUnit(unit.id, "recovered");
-        effectLedger.markReceiptRecovery(
+        const original = effectLedger.markReceiptRecovery(
           storedReceipt.id,
           "recovered",
         );
+        recordEffectRecoveryAttempt(original, settledAttempt);
         return Object.freeze({
           result: createRecoveryUnitResult(
             unit,
@@ -215,16 +220,17 @@ export async function recoverEffectReceiptAttempt(
         });
       } catch (error) {
         if (error instanceof EffectOutcomeUnknownError) {
-          effectLedger.transition(attempt.id, {
+          const settledAttempt = effectLedger.transition(attempt.id, {
             outcome: "unknown",
             recovery: "ambiguous",
             completedAt: Date.now(),
             error: summarizeEffectError(error),
           });
-          effectLedger.markReceiptRecovery(
+          const original = effectLedger.markReceiptRecovery(
             storedReceipt.id,
             "ambiguous",
           );
+          recordEffectRecoveryAttempt(original, settledAttempt);
           return Object.freeze({
             result: Object.freeze({
               ...createRecoveryUnitResult(
@@ -237,12 +243,13 @@ export async function recoverEffectReceiptAttempt(
             error,
           });
         }
-        effectLedger.transition(attempt.id, {
+        const settledAttempt = effectLedger.transition(attempt.id, {
           outcome: "failed",
           completedAt: Date.now(),
           error: summarizeEffectError(error),
         });
         effectLedger.markUnit(unit.id, "failed");
+        recordEffectRecoveryAttempt(storedReceipt, settledAttempt);
         return Object.freeze({
           result: Object.freeze({
             ...createRecoveryUnitResult(

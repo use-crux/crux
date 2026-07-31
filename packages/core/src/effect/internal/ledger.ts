@@ -77,7 +77,7 @@ export interface EffectLedger {
     status: RecoveryUnitLifecycle,
     recoveryOperation?: Promise<RecoveryOperationResult>,
   ): void;
-  markReceiptRecovery(receiptId: string, recovery: RecoveryAvailability): void;
+  markReceiptRecovery(receiptId: string, recovery: RecoveryAvailability): EffectReceipt;
   getReceipt(id: string): EffectReceipt | undefined;
   getEnvelope(receiptId: string): StoredRecoveryEnvelope | undefined;
   getUnit(unitId: string): RegisteredRecoveryUnit | undefined;
@@ -217,7 +217,9 @@ export const effectLedger: EffectLedger = {
     if (!current) {
       throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
     }
-    receipts.set(receiptId, Object.freeze({ ...current, recovery }));
+    const next = Object.freeze({ ...current, recovery });
+    receipts.set(receiptId, next);
+    return next;
   },
 
   getReceipt(id) {
