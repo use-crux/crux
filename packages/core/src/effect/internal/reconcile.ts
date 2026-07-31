@@ -90,7 +90,13 @@ function executionReconciliation(
   const next = settleUnknownReceipt(
     receipt,
     command.resolution.outcome,
-    succeeded ? (unit ? "available" : "irreversible") : "unavailable",
+    succeeded
+      ? unit
+        ? "available"
+        : receipt.effectKind === "native"
+          ? receipt.recovery
+          : "irreversible"
+      : "unavailable",
     succeeded ? unit?.id : undefined,
   );
   return {

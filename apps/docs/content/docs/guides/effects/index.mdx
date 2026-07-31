@@ -133,6 +133,21 @@ and does not make the external change. Captured recovery state stays inside the
 in-process ledger. Observability and automatic evidence receive only the safe
 resource summary and receipt status.
 
+## Native Crux effects
+
+Native Crux domains can opt into the internal Effect contract without wrapping
+their mutations in `effect()`. A native mutation keeps its own primitive
+identity, contributes the same receipt-safe intent and change evidence, and
+adds `crux.effect.*` facets to its existing span instead of creating a duplicate
+`effect.run` span.
+
+Native recovery coverage is capability-based. A receipt can honestly report
+`unavailable` or `irreversible` until its owning domain ships a safe recovery
+strategy; individual recovery and rollback preserve that blocked status rather
+than invoking a generic restore path. This is an internal first-party seam, not
+a public provider registry. Application-defined mutations continue to use
+`effect()`.
+
 ## Inspect effects in Devtools
 
 Run `crux dev`, then open **Library → Index** to inspect Effects discovered from

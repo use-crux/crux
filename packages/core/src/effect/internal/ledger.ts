@@ -33,6 +33,8 @@ export interface EffectReceiptInit {
   readonly id: string;
   readonly effectId: string;
   readonly effectVersion: number;
+  readonly effectKind?: "custom" | "native";
+  readonly nativePrimitive?: string;
   readonly scopeId: string;
   readonly boundaryId: string;
   /** Original receipt when this record describes recovery. */
@@ -138,7 +140,10 @@ export const effectLedger: EffectLedger = {
       id: init.id,
       effectId: init.effectId,
       effectVersion: init.effectVersion,
-      effectKind: "custom",
+      effectKind: init.effectKind ?? "custom",
+      ...(init.nativePrimitive === undefined
+        ? {}
+        : { nativePrimitive: init.nativePrimitive }),
       scopeId: init.scopeId,
       boundaryId: init.boundaryId,
       ...(init.parentReceiptId === undefined ? {} : { parentReceiptId: init.parentReceiptId }),

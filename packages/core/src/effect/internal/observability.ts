@@ -12,6 +12,7 @@ import {
   type CruxEffectResourceSummary,
   type CruxEffectRunAttributes,
   type CruxSpanId,
+  type OpenObservedSpan,
 } from "../../observability";
 import type { EffectReceipt, RecoveryAvailability } from "../receipt-types";
 import type { EffectResource } from "../types";
@@ -117,6 +118,32 @@ export function observeEffectRecoveryRun(
       : { originalSpanId: original.spanId }),
     recovery: "unavailable",
   });
+}
+
+/** Add receipt facets and an artifact to an existing native operation span. */
+export function observeNativeEffectReceipt(
+  span: OpenObservedSpan,
+  receipt: EffectReceipt,
+): void {
+  try {
+    span.setAttributes({
+      "crux.effect.id": receipt.effectId,
+      "crux.effect.version": receipt.effectVersion,
+      "crux.effect.receipt.id": receipt.id,
+      "crux.effect.scope.id": receipt.scopeId,
+      "crux.effect.boundary.id": receipt.boundaryId,
+      "crux.effect.outcome": receipt.outcome,
+      "crux.effect.recovery": receipt.recovery,
+    } satisfies CruxEffectRunAttributes);
+    span.withContext(() => {
+      observe.artifact({
+        kind: "effect.receipt",
+        contentType: "application/json",
+        encoding: "json",
+        preview: receiptSummary(receipt),
+      });
+    });
+  } catch {}
 }
 
 function startAttributes(

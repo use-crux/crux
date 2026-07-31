@@ -19,3 +19,7 @@ duplicate-identity diagnostics.
 Make flow runs and pipeline, agent, and composition roots passive rollback
 boundaries. Their results expose in-process Effect scope references, and flows
 can explicitly recover completed units through `flow.rollback()`.
+
+Add an internal audit-first native Effect contract so first-party domains can
+contribute receipts, evidence, and Effect facets on their existing spans while
+reporting unavailable or irreversible recovery honestly.
