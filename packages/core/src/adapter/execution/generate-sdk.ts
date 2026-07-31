@@ -80,6 +80,12 @@ import {
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+} from "./thread-history";
+import { attachThreadCommit } from "./thread-result";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -112,14 +118,21 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages,
+  );
+  resolved = threadInvocation.resolved;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
-    args.nativeMessages,
+    threadInvocation.binding ? undefined : args.nativeMessages,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = args.nativeMessages;
+  let nativeMessages = threadInvocation.binding
+    ? undefined
+    : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const retryId = args.validationRetry
@@ -179,6 +192,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  threadInvocation = alignThreadInvocationInput(threadInvocation, {
+    messages,
+    ...(promptText ? { prompt: promptText } : {}),
+  });
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const guardSkillAmendment = createSkillIngressAmendmentGuard({
@@ -396,6 +413,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
           },
           cachedFinalizer,
         ),
@@ -426,6 +446,17 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           } finally {
             stepBudget.dispose();
           }
+        },
+        async (result) => {
+          if (result.threadCommit) return;
+          if (result.pendingApprovals) return;
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            result,
+          );
+          return threadCommit
+            ? attachThreadCommit(result, threadCommit)
+            : undefined;
         },
         async (result) => {
           await lifecycle.captureTurn({
@@ -515,6 +546,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     );
     if (finalOutput.text !== finalText) {
       finalText = finalOutput.text;
+      resultMessages = replaceFinalAssistantOutput(resultMessages, finalText);
       if (resultStepFacts.length > 0) {
         const previous = resultStepFacts[resultStepFacts.length - 1]!;
         resultStepFacts[resultStepFacts.length - 1] = {

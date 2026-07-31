@@ -14,6 +14,7 @@ import type { AnyModel, AnyToolSet } from '../types'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { TokenUsage } from '../generation/types'
 import type { WithOperationResultMeta } from '../observability'
+import type { ThreadCommit } from '../thread/types'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ export interface AgentResultPayload<TOutput = unknown> {
   readonly durationMs: number
   /** Token usage if available. */
   readonly usage?: TokenUsage
+  /** Atomic canonical Thread publication produced by this Agent invocation. */
+  readonly threadCommit?: ThreadCommit
 }
 
 /**

@@ -22,6 +22,8 @@ import type { AnyToolSet } from "../types";
 import type { InternalInjectableEntry } from "./internal-injection";
 import type { ToolSource } from "../tools/tool-source";
 import type { PromptText } from "../prompt-text";
+import type { Message } from "../generation/messages";
+import type { ThreadCommit } from "../thread/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Definition warnings
@@ -303,6 +305,7 @@ export type ContextEntry =
   | MatchSpec
   | SkillEntry
   | MemoryEntry
+  | ThreadHistoryEntry
   | BlackboardEntry
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
@@ -429,6 +432,33 @@ export interface MemoryEntry {
     options?: Record<string, unknown>,
   ): Promise<void>;
   flush(options?: Record<string, unknown>): Promise<void>;
+}
+
+/** Messages accepted for atomic publication after a managed Thread invocation. */
+export interface ThreadTurnCommitInput {
+  /** The rendered user turn and accepted assistant/tool exchange. */
+  readonly messages: readonly Message[];
+  /** Exact Thread head observed before provider I/O. */
+  readonly after?: string;
+}
+
+/**
+ * A Thread entry in a prompt's `use` array.
+ *
+ * This structural contract keeps prompt resolution independent of the concrete
+ * implementation exported from `@use-crux/core/thread`.
+ */
+export interface ThreadHistoryEntry {
+  readonly _tag: "Thread";
+  /** Stable application identity for the conversation. */
+  readonly id: string;
+  /** Read the exact selected revision observed by one managed invocation. */
+  readHistory(): Promise<{
+    readonly head?: string;
+    readonly messages: readonly Message[];
+  }>;
+  /** Atomically publish one accepted turn after the observed revision. */
+  commitTurn(turn: ThreadTurnCommitInput): Promise<ThreadCommit>;
 }
 
 /**

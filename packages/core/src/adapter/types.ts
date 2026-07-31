@@ -16,6 +16,7 @@ import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
 import type { CruxFinishReason } from "./normalized-outcome";
 import type { AssistantContentPart } from "../types/content";
+import type { ThreadCommit } from "../thread/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Adapter Response
@@ -156,6 +157,8 @@ export interface StreamCompletionMetadata extends GenerationMeta {
   readonly warnings?: readonly unknown[];
   /** Provider-owned completion metadata. */
   readonly providerMetadata?: unknown;
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
 }
 
 // ─────────────────────────────────────────────────────────────────

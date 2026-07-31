@@ -82,6 +82,11 @@ import {
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+} from "./thread-history";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -108,15 +113,22 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages,
+  );
+  resolved = threadInvocation.resolved;
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
-    args.nativeMessages,
+    threadInvocation.binding ? undefined : args.nativeMessages,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = args.nativeMessages;
+  let nativeMessages = threadInvocation.binding
+    ? undefined
+    : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafetyWithBindingApplicability(
@@ -160,6 +172,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  threadInvocation = alignThreadInvocationInput(threadInvocation, {
+    messages,
+    ...(promptText ? { prompt: promptText } : {}),
+  });
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
 
@@ -453,6 +469,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
             ...(dialect.replayStream
               ? {
                   createCachedStreamResult: (cached: {
@@ -557,10 +576,21 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           toolCalls: guarded?.toolCalls,
         }),
       );
-      return guarded
+      const threadCommit = await commitThreadInvocation(
+        threadInvocation,
+        {
+          messages: guarded?.messages ?? messages,
+          ...(guarded?.content ? { content: guarded.content } : {}),
+          ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
+        },
+      );
+      const completed = threadCommit
+        ? { ...guarded, threadCommit }
+        : guarded;
+      return completed
         ? stampCruxRunId(
             withOperationResultMeta(
-              guarded as ExecutorStreamCompletionPayload,
+              completed as ExecutorStreamCompletionPayload,
               handle._meta,
             ),
             handle.runId,

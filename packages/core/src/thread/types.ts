@@ -130,6 +130,16 @@ export interface Thread {
   ): Promise<ThreadCommit>;
   /** Read an exact root-to-head path with optional group-safe pagination. */
   read(options?: ThreadReadOptions): Promise<ThreadSnapshot>;
+  /** Read the exact selected revision for one managed invocation. */
+  readHistory(): Promise<{
+    readonly head?: string;
+    readonly messages: readonly Message[];
+  }>;
+  /** Atomically publish one accepted managed turn after its observed head. */
+  commitTurn(turn: {
+    readonly messages: readonly Message[];
+    readonly after?: string;
+  }): Promise<ThreadCommit>;
   /** Create and select an immutable sibling replacement for a user message. */
   edit(messageId: string, patch: ThreadEditPatch): Promise<ThreadCommit>;
   /** Select an existing sibling or ancestor with its remembered continuation. */

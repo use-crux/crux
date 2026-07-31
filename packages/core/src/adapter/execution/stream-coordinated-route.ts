@@ -51,6 +51,7 @@ import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { guardStreamCompletion } from "./stream-completion";
 import { observe } from "../../observability";
 import { sumUsageWhenComplete } from "../result-usage";
+import type { ThreadCommit } from "../../thread/types";
 
 /** Everything the coordinated route needs from the prepared streaming call. */
 export interface CoordinatedStreamRouteOptions<
@@ -89,7 +90,7 @@ export interface CoordinatedStreamRouteOptions<
     readonly messages: readonly Message[];
     readonly assistantText: string | undefined;
     readonly toolCalls: unknown;
-  }) => Promise<void> | void;
+  }) => Promise<ThreadCommit | undefined>;
 }
 
 /**
@@ -476,14 +477,16 @@ export function openCoordinatedStructuredStream<
           ...(committedCandidate ? { committedCandidate } : {}),
           promptId,
         });
-        await runInStreamObservationContext(handle, () =>
+        const threadCommit = await runInStreamObservationContext(handle, () =>
           options.captureTurn({
-            messages,
+            messages: guarded?.messages ?? messages,
             assistantText: guarded?.text || undefined,
             toolCalls: meta?.toolCalls,
           }),
         );
-        return guarded;
+        return threadCommit
+          ? { ...guarded, threadCommit }
+          : guarded;
       } finally {
         await closeSources();
       }

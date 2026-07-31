@@ -388,6 +388,9 @@ export async function runPromptPass(
       promptId: config.id,
     }));
   }
+  if (postMerge.thread) {
+    resolved.threadBinding = postMerge.thread;
+  }
 
   const systemTokens = inspectionSystem
     ? ports.tokenizer.count(inspectionSystem)

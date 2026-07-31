@@ -11,6 +11,7 @@ import { resolveRecords } from "../runtime/runtime";
 import type { Storage } from "../storage";
 import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
+import { commitThreadTurn, readThreadHistory } from "./entry";
 import { commitThreadEdit } from "./store/alternatives";
 import { commitThreadAppend } from "./store/commit";
 import { readThread } from "./store/read";
@@ -54,6 +55,15 @@ export function thread(options: ThreadOptions): Thread {
     commitThreadAppend(resolveStorage(), options.id, input, appendOptions);
   const read: Thread["read"] = (readOptions) =>
     readThread(resolveStorage(), options.id, readOptions);
+  const readHistory: Thread["readHistory"] = () => readThreadHistory(read);
+  const commitTurn: Thread["commitTurn"] = (turn) =>
+    commitThreadTurn(
+      (messages, expectedHead) =>
+        commitThreadAppend(resolveStorage(), options.id, messages, {
+          expectedHead,
+        }),
+      turn,
+    );
   const edit: Thread["edit"] = (messageId, patch) =>
     commitThreadEdit(resolveStorage(), options.id, messageId, patch);
   const select: Thread["select"] = (messageId) =>
@@ -63,6 +73,8 @@ export function thread(options: ThreadOptions): Thread {
     id: options.id,
     append,
     read,
+    readHistory,
+    commitTurn,
     edit,
     select,
   });

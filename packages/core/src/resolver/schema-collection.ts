@@ -93,7 +93,12 @@ export function collectSchemaContributions(
       continue
     }
 
-    if (entry._tag === 'Skill' || entry._tag === 'Memory' || entry._tag === 'Blackboard') {
+    if (
+      entry._tag === 'Skill' ||
+      entry._tag === 'Memory' ||
+      entry._tag === 'Thread' ||
+      entry._tag === 'Blackboard'
+    ) {
       out.push({ id: undefined, schema: undefined, optional: optionalPath })
       continue
     }

@@ -49,12 +49,17 @@ interface CommitDecision {
   readonly replayed: boolean;
 }
 
+/** Internal exact-parent override used by managed read-then-commit execution. */
+export interface ThreadAppendCommitOptions extends AppendOptions {
+  readonly expectedHead?: string | null;
+}
+
 /** Normalize, persist, and atomically publish one append batch. */
 export async function commitThreadAppend(
   storage: Storage,
   threadId: string,
   input: ThreadMessageInput | readonly ThreadMessageInput[],
-  options: AppendOptions = {},
+  options: ThreadAppendCommitOptions = {},
 ): Promise<ThreadCommit> {
   ensureMutationCapability(storage, threadId);
   const messages = Array.isArray(input) ? input : [input];
@@ -65,15 +70,18 @@ export async function commitThreadAppend(
   const observedControl = rawControl ? parseThreadControlRecord(rawControl) : null;
   assertLive(observedControl, threadId);
   const prepared = await prepareThreadMessages(storage, messages);
+  const hasExpectedHead = Object.hasOwn(options, "expectedHead");
+  const parentId = hasExpectedHead
+    ? options.expectedHead ?? null
+    : options.after ?? observedControl?.heads[OWNER] ?? null;
   const replay = await replayThreadAppend(
     storage,
     threadId,
     observedControl,
     prepared,
-    options.after,
+    hasExpectedHead ? options.expectedHead ?? null : options.after,
   );
   if (replay) return replay;
-  const parentId = options.after ?? observedControl?.heads[OWNER] ?? null;
   if (parentId) {
     await assertAppendBoundary(storage, threadId, observedControl, parentId);
   }

@@ -33,7 +33,7 @@ export async function replayThreadAppend(
   threadId: string,
   control: ThreadControlRecord | null,
   messages: readonly ReplayMessage[],
-  after: string | undefined,
+  after: string | null | undefined,
 ): Promise<ThreadCommit | null> {
   const stored = await Promise.all(
     messages.map(async ({ id }) => {

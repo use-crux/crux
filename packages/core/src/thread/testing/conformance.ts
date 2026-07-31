@@ -52,9 +52,11 @@ export function describeThreadConformance(
       expect(Object.keys(conversation).sort()).toEqual([
         "_tag",
         "append",
+        "commitTurn",
         "edit",
         "id",
         "read",
+        "readHistory",
         "select",
       ]);
       expect(Object.isFrozen(commit)).toBe(true);

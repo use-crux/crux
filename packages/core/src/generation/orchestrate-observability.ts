@@ -58,6 +58,20 @@ export function emitOperationDeadline(totalMs: TimeoutOptions['totalMs']): void 
   })
 }
 
+/** Record that call-site messages intentionally shadowed resolved Thread I/O. */
+export function emitThreadHistoryOverride(
+  override: OrchestrationSpec["threadHistoryOverride"],
+): void {
+  if (!override) return
+  observe.event({
+    name: 'thread.history.override',
+    attributes: {
+      threadId: override.threadId,
+      reason: override.reason,
+    },
+  })
+}
+
 function normalizeTotalTimeoutMs(totalMs: number | null | undefined): number | undefined {
   if (typeof totalMs !== 'number' || !Number.isFinite(totalMs) || totalMs <= 0) return undefined
   return Math.floor(totalMs)

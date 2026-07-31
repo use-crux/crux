@@ -34,6 +34,7 @@ import type {
   ContextTextSegment,
   MemoryEntry,
   SkillEntry,
+  ThreadHistoryEntry,
 } from '../prompt/context-types'
 import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
@@ -155,6 +156,7 @@ export interface Contribution {
   guardrails?: readonly Guardrail[]
   metadata?: Readonly<Record<string, unknown>>
   memory?: MemoryEntry
+  thread?: ThreadHistoryEntry
   skill?: SkillEntry
   blackboard?: BlackboardEntry
   facts?: ContributionFacts
@@ -226,6 +228,7 @@ export interface MergedResolution {
   excluded: ExcludedContext[]
   skills: SkillEntry[]
   memories: MemoryEntry[]
+  thread?: ThreadHistoryEntry
   blackboards: BlackboardEntry[]
   tools: AnyToolSet
   toolSources: ToolSource[]

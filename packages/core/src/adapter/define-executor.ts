@@ -277,6 +277,9 @@ export function loopRuntimeAdapter<
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
       usage: result._meta.usage,
+      ...(result.threadCommit
+        ? { threadCommit: result.threadCommit }
+        : {}),
     };
   };
 

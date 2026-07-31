@@ -162,6 +162,10 @@ packages/core/src/       Published as @use-crux/core
 │   ├── prompt-types.ts   prompt() config/instance/hooks/result + semantic-cache intent types
 │   ├── type-utils.ts     Prompt/context inference helpers (Simplify, DeepReadonly, MergeContextInputs, MergedInput)
 │   └── types.ts          Curated type barrel over context-types + prompt-types
+├── thread/             Durable conversation history and branch navigation
+│   ├── entry.ts        Structural ContextEntry boundary for exact reads and turn commits
+│   ├── thread.ts       thread() handle and public history/edit/navigation methods
+│   └── store/          Canonical immutable events, snapshot reduction, and storage commits
 ├── prompt-text/        Markdown-oriented PromptText authoring + private structured-text kernel
 │   ├── index.ts        Public md tagged template, md.json(), and opaque PromptText contract
 │   ├── internal.ts     Nominal shell registry, immutable interpolation snapshots, stable errors, and resolver-only lowering boundary
@@ -616,7 +620,7 @@ Resolve context entries (resolver/ — contributor lowering + driver)
   │         contributor `when` — exclusions recorded with source + reason
   ├── children: nested `use` entries / match branches resolve BEFORE the entry itself
   ├── contribute: contexts, tools (collision-checked), constraints, guardrails, metadata,
-  │               memory bindings, skill + blackboard collection, pipeline re-entry
+  │               memory and Thread bindings, skill + blackboard collection, pipeline re-entry
   └── Output: active Context[] + excluded ExcludedContext[] + merged channels
   ↓
 Internal post-merge collectors
@@ -655,7 +659,7 @@ Tool collection (only from active contexts)
   call-site tools are applied later by adapter execution and intentionally win
   ↓
 PromptResolution
-  ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
+  ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings, threadBinding }
   └── inspect() derives InspectResult from this same pass
   ↓
 Adapter execution
@@ -674,6 +678,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ records })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
+- A Thread entry contributes one structural binding and no schema, text, or tools. The resolver rejects duplicate bindings. Adapter execution reads the exact history once before the provider call, commits only the rendered user turn and accepted assistant/tool exchange, and exposes the receipt on the final result. Explicit call-site `messages` shadow both Thread reads and writes.
 
 ### Token-Aware Context Dropping
 

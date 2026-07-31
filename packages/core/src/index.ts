@@ -570,6 +570,8 @@ export type {
   ContextSystemResult,
   ContextTextSegment,
   ContextEntry,
+  ThreadHistoryEntry,
+  ThreadTurnCommitInput,
   ConditionalContext,
   MatchCases,
   MatchSpec,

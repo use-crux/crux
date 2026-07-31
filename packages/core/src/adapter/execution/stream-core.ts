@@ -62,6 +62,11 @@ import { withDefaultResolverPorts } from "../../resolver/ports";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+} from "./thread-history";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -99,6 +104,11 @@ export async function streamCore<
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages,
+  );
+  resolved = threadInvocation.resolved;
   const mappedSettings = dialect.mapSettings(resolved.settings);
   const initialMessages = initialCoreMessageState(resolved, args.messages);
   let messages = initialMessages.messages;
@@ -138,6 +148,9 @@ export async function streamCore<
     },
   );
   messages = [...guardedInput.messages];
+  threadInvocation = alignThreadInvocationInput(threadInvocation, {
+    messages,
+  });
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const sourceSession = await materializeToolSources({
@@ -270,6 +283,9 @@ export async function streamCore<
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
             createCachedStreamResult: (cached) =>
               createCachedStreamHandle(cached) as unknown as MiddlewareResult,
           },
@@ -338,12 +354,22 @@ export async function streamCore<
             ...(structuredCanonicalSchema ? { structuredCanonicalSchema } : {}),
             ...(structuredDecodeManifest ? { structuredDecodeManifest } : {}),
             closeSources,
-            captureTurn: (turn) =>
-              lifecycle.captureTurn({
+            captureTurn: async (turn) => {
+              await lifecycle.captureTurn({
                 messages: [...turn.messages],
                 assistantText: turn.assistantText,
                 toolCalls: turn.toolCalls as never,
-              }),
+              });
+              return commitThreadInvocation(
+                threadInvocation,
+                {
+                  messages: turn.messages,
+                  ...(turn.assistantText
+                    ? { text: turn.assistantText }
+                    : {}),
+                },
+              );
+            },
           },
           gates.validationGate,
         ),
@@ -472,7 +498,17 @@ export async function streamCore<
               toolCalls: meta?.toolCalls,
             }),
           );
-          return guarded;
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            {
+              messages: guarded?.messages ?? messages,
+              ...(guarded?.content ? { content: guarded.content } : {}),
+              ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
+            },
+          );
+          return threadCommit
+            ? { ...guarded, threadCommit }
+            : guarded;
         } finally {
           await closeSources();
         }

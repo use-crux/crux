@@ -31,6 +31,7 @@ const assistant = prompt({
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`context()`](/docs/reference/crux-core/contexts)                          | System text, input fields, tools, constraints, and guardrails                                   |
 | [`when()` / `match()`](/docs/reference/crux-core/contexts)                 | Conditional Context inclusion                                                                   |
+| `thread()`                                                                | Exact conversation history for managed execution and atomic accepted-turn publication           |
 | [`memory()`](/docs/reference/crux-core/memory)                             | Memory Context, tools, and capture or flush lifecycle                                           |
 | [`blackboard()`](/docs/reference/crux-core/agent)                          | Shared-state Context and focused tools                                                          |
 | [`retriever()` / `retrievalRecipe()`](/docs/reference/crux-core/retrieval) | Retrieval Context, search or source tools, and trace metadata                                   |
@@ -42,6 +43,13 @@ const assistant = prompt({
 Manual `.asContext()` and `.asTools()` helpers remain useful for frameworks
 that do not run Prompt resolution. Normal Prompts should place primitives in
 `use`.
+
+A Prompt or Agent may resolve exactly one Thread. Managed execution reads its
+history once, prepends that exact snapshot to the rendered request, and
+publishes the rendered user turn plus the accepted assistant/tool exchange as
+one atomic causal group. The returned result exposes the publication receipt as
+`threadCommit`. If a call supplies explicit `messages`, those messages take
+precedence and Thread storage is neither read nor written for that invocation.
 
 ## Custom Contributor Entries
 

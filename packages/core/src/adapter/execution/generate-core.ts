@@ -85,6 +85,12 @@ import {
 import { createCachedGenerateCandidateFinalizer } from "./cached-generate-candidate";
 import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-candidate-finalizer";
 import { attachCachedStructuredCandidate } from "../../runtime/internal/cached-structured-candidate";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  prepareThreadInvocation,
+} from "./thread-history";
+import { attachThreadCommit } from "./thread-result";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -120,6 +126,11 @@ export async function generateCore<
     settings: args.settings,
   });
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages,
+  );
+  resolved = threadInvocation.resolved;
   const mappedSettings = dialect.mapSettings(resolved.settings);
 
   const initialMessages = initialCoreMessageState(resolved, args.messages);
@@ -231,6 +242,9 @@ export async function generateCore<
     },
   );
   messages = [...guardedInput.messages];
+  threadInvocation = alignThreadInvocationInput(threadInvocation, {
+    messages,
+  });
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const guardSkillAmendment = createSkillIngressAmendmentGuard({
@@ -329,6 +343,9 @@ export async function generateCore<
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
           },
           cachedFinalizer,
         ),
@@ -565,11 +582,23 @@ export async function generateCore<
             ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
             ...(pendingApprovals ? { pendingApprovals } : {}),
           });
-          return resolved.schema &&
+          const finalized = resolved.schema &&
             !suspendedApproval &&
             acceptedCanonicalInput !== undefined
             ? attachCachedStructuredCandidate(result, acceptedCanonicalInput)
             : result;
+          return finalized;
+        },
+        async (result) => {
+          if (result.threadCommit) return;
+          if (result.pendingApprovals) return;
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            result,
+          );
+          return threadCommit
+            ? attachThreadCommit(result, threadCommit)
+            : undefined;
         },
         async (result) => {
           await lifecycle.captureTurn({

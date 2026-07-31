@@ -19,6 +19,7 @@ import type { RoutingReceipt } from "../routing/receipt";
 import { sumUsageWhenComplete } from "./result-usage";
 import type { CruxRunId } from "../observability";
 import type { StreamCompletionPayload } from "./stream-result-types";
+import type { ThreadCommit } from "../thread/types";
 
 export { createStreamResult } from "./result-stream";
 export { sumUsageWhenComplete } from "./result-usage";
@@ -105,6 +106,8 @@ export interface GenerateResultPayload<TRaw, TOutput = unknown> {
   readonly routing?: RoutingReceipt;
   /** Approval requests awaiting a decision, present only when execution suspended. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
   /** Raw provider or SDK response object. */
   readonly raw: TRaw;
   /** Provider-neutral facts accumulated during generation. */
@@ -166,6 +169,8 @@ export interface ResultEnvelopeBase<TRaw, TOutput = unknown> {
   readonly cost?: GenerationMeta["cost"];
   /** Approval requests when execution suspended. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
   /** Routing decisions for calls that used a routing wrapper. */
   readonly routing?: RoutingReceipt;
   /**
@@ -223,6 +228,9 @@ export function createResultAccumulator() {
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
           : {}),
+        ...(base.threadCommit
+          ? { threadCommit: base.threadCommit }
+          : {}),
         raw: base.raw,
         _meta: base._meta,
       };
@@ -257,6 +265,9 @@ export function createResultAccumulator() {
         ...(base.routing !== undefined ? { routing: base.routing } : {}),
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
+          : {}),
+        ...(base.threadCommit
+          ? { threadCommit: base.threadCommit }
           : {}),
         _meta: base._meta,
       };

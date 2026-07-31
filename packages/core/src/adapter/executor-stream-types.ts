@@ -10,6 +10,7 @@ import type {
 import type { RoutingReceipt } from "../routing/receipt";
 import type { AssistantContentPart } from "../types/content";
 import type { LogicalBillingTotals } from "./types";
+import type { ThreadCommit } from "../thread/types";
 
 /** Provider/SDK completion facts produced before core operation stamping. */
 export interface ExecutorStreamCompletionPayload extends GenerationMeta {
@@ -34,6 +35,8 @@ export interface ExecutorStreamCompletionPayload extends GenerationMeta {
   readonly warnings?: readonly unknown[];
   /** Provider-owned completion metadata. */
   readonly providerMetadata?: unknown;
+  /** Atomic canonical Thread publication produced by this invocation. */
+  readonly threadCommit?: ThreadCommit;
   /** Stream timing metrics measured by the executor. */
   readonly streaming?: {
     /** Time to first token in milliseconds. */

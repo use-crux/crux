@@ -14,7 +14,7 @@
 import type { z } from 'zod'
 import type { AnyModel, AnyToolSet } from '../types'
 import type { Prompt } from '../prompt/prompt-types'
-import type { Context } from '../prompt/context-types'
+import type { ContextEntry } from '../prompt/context-types'
 import type { AnyRoutable } from '../routing/types'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ export type RoutableModel<TModel = AnyModel> = TModel | AnyRoutable
 export interface AgentConfig<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TModel = AnyModel,
 > {
   /** Unique identifier for this agent. */
@@ -92,7 +92,7 @@ export interface HandoffTarget {
 export interface Agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TModel = AnyModel,
 > {
   /** Discriminant tag for runtime type checking. */
@@ -119,7 +119,7 @@ export interface Agent<
  * Uses `z.ZodType` as upper bounds — the widest Zod schema types — so
  * any `Agent<TInput, TOutput, TContexts>` is assignable to `AnyAgent`.
  */
-export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly Context<z.ZodType>[], AnyModel>
+export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly ContextEntry[], AnyModel>
 
 /**
  * Extract the inferred input type from an agent's prompt schema.
@@ -131,7 +131,7 @@ export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly Context<
  * ```
  */
 export type InferAgentInput<T> =
-  T extends Agent<infer TInput, z.ZodType | undefined, readonly Context<z.ZodType>[]>
+  T extends Agent<infer TInput, z.ZodType | undefined, readonly ContextEntry[]>
     ? TInput extends z.ZodType
       ? z.infer<TInput>
       : unknown
@@ -148,7 +148,7 @@ export type InferAgentInput<T> =
  * ```
  */
 export type InferAgentOutput<T> =
-  T extends Agent<z.ZodType, infer TOutput, readonly Context<z.ZodType>[]>
+  T extends Agent<z.ZodType, infer TOutput, readonly ContextEntry[]>
     ? TOutput extends z.ZodType
       ? z.infer<TOutput>
       : string
@@ -236,7 +236,7 @@ export function isAgent(value: unknown): value is AnyAgent {
 export function agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TModel = AnyModel,
 >(config: AgentConfig<TOwnInput, TOutput, TContexts, TModel>): Agent<TOwnInput, TOutput, TContexts, TModel> {
   return Object.freeze({
