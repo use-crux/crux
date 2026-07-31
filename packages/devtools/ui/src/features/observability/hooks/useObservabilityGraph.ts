@@ -121,6 +121,56 @@ function optionalSeq(value: unknown): number | undefined {
   return typeof seq === "number" ? seq : undefined;
 }
 
+function stringAttribute(
+  attributes: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  const value = attributes?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+const RETRIEVAL_STEP_LABELS: Record<string, string> = {
+  "expand-relations": "Expand relations",
+  "global-search": "Global search",
+  derive: "Derive",
+  compile: "Compile",
+};
+
+function humanizeToken(value: string): string {
+  return value
+    .split(/[-_.\s]+/u)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function retrievalStepFallbackLabel(
+  node: ObservabilityRunDetailNode,
+): string | undefined {
+  if (node.primitive !== "retrieval.step") return undefined;
+  const stepKind =
+    stringAttribute(node.attributes, "stepKind") ??
+    stringAttribute(node.attributes, "kind");
+  if (!stepKind) return undefined;
+  const label = RETRIEVAL_STEP_LABELS[stepKind] ?? humanizeToken(stepKind);
+  const stepId =
+    node.stepId ?? stringAttribute(node.attributes, "stepId") ?? undefined;
+  return stepId && stepId !== stepKind ? `${label} · ${stepId}` : label;
+}
+
+function isGenericRetrievalStepLabel(node: ObservabilityRunDetailNode): boolean {
+  if (node.primitive !== "retrieval.step") return false;
+  const label = node.display?.label;
+  if (!label) return true;
+  const normalized = label.toLowerCase();
+  return (
+    label === node.primitive ||
+    label === node.name ||
+    normalized === "retrieval" ||
+    normalized === "retrieval step"
+  );
+}
+
 function nodeKind(node: ObservabilityRunDetailNode): SpanNode["kind"] {
   switch (node.display?.kind) {
     case "run":
@@ -150,7 +200,11 @@ export function nodeFromRunDetail(
   const isGeneration =
     node.primitive === "generation" ||
     (node.primitive?.startsWith("generation.") ?? false);
+  const retrievalStepLabel = isGenericRetrievalStepLabel(node)
+    ? retrievalStepFallbackLabel(node)
+    : undefined;
   const rawLabel =
+    retrievalStepLabel ||
     node.display?.label ||
     node.name ||
     node.primitive ||

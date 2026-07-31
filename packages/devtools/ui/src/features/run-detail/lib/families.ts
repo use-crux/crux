@@ -147,6 +147,12 @@ const TAG_LABEL_OVERRIDES: Record<string, string> = {
   "tool.approval": "approval",
   "defer.scheduled": "scheduled",
   "defer.run": "deferred",
+  "knowledge.expand-relations": "expand",
+  "knowledge.global-search": "search",
+  "knowledge.derive": "derive",
+  "knowledge.compile": "compile",
+  "retrieval.expand-relations": "expand",
+  "retrieval.global-search": "search",
 };
 
 export function primitiveTagLabel(primitive: string | undefined): string {

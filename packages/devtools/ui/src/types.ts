@@ -388,6 +388,11 @@ export interface DependencyFacts {
   blocks?: string[];
   routers?: string[];
   ragPipelines?: string[];
+  knowledgeBases?: string[];
+  knowledgeRelations?: string[];
+  knowledgeAssertions?: string[];
+  knowledgeCommunities?: string[];
+  knowledgeModels?: string[];
   retrievers?: string[];
   guardrails?: string[];
   constraints?: string[];
@@ -817,7 +822,8 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
       | "block"
       | "store"
       | "storage"
-      | "case";
+      | "case"
+      | "view";
     order?: number;
   };
   intelligence?: DefinitionIntelligence;

@@ -211,6 +211,15 @@ export interface IndexFacts {
   routingContextRequired?: boolean;
   profile?: Record<string, unknown>;
   // rag
+  knowledgeBaseId?: string;
+  viewId?: string;
+  whereFields?: readonly string[];
+  relationId?: string;
+  assertionId?: string;
+  communitiesId?: string;
+  modelName?: string;
+  version?: string | number;
+  typeNames?: readonly string[];
   topK?: number;
   index?: number;
   rerankerId?: string;
@@ -1152,6 +1161,34 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case "flow":
       push("runtime", f.runtime);
       push("steps", f.stepNames);
+      break;
+    case "rag.knowledgeBase":
+      push("id", f.knowledgeBaseId);
+      push("namespace", f.namespace);
+      break;
+    case "rag.knowledgeBase.view":
+      push("view", f.viewId);
+      push("where", f.whereFields);
+      break;
+    case "knowledge.relation":
+      push("id", f.relationId);
+      push("version", f.version);
+      push("types", f.typeNames);
+      push("model", f.modelName);
+      break;
+    case "knowledge.assertions":
+      push("id", f.assertionId);
+      push("version", f.version);
+      push("types", f.typeNames);
+      push("model", f.modelName);
+      break;
+    case "knowledge.communities":
+      push("id", f.communitiesId);
+      push("model", f.modelName);
+      break;
+    case "knowledge.model":
+      push("model", f.modelName);
+      push("version", f.version);
       break;
     case "composition.swarm":
       push("participants", f.participants);
