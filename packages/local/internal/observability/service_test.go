@@ -317,6 +317,33 @@ func TestServiceRunsWithOptionsLimitsBeforeRollups(t *testing.T) {
 	}
 }
 
+func TestServiceRunsWithOptionsHonorsExpensiveRollupOption(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":2,"recordId":"option-start","type":"run:start","runId":"run-option","segmentId":"seg-option","segmentSeq":1,"traceId":"trace-option","name":"option","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"option-span","type":"span","runId":"run-option","segmentId":"seg-option","segmentSeq":2,"traceId":"trace-option","spanId":"span-option","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","status":"ok","attributes":{"model":"attribute-only-model"}}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	cheap, err := service.RunsWithOptions(ctx, RunListOptions{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cheap) != 1 || cheap[0].Model != "" || cheap[0].OrderingConfidence != "" || cheap[0].DeliveryHealth != nil {
+		t.Fatalf("cheap list unexpectedly enriched: %#v", cheap)
+	}
+
+	enriched, err := service.RunsWithOptions(ctx, RunListOptions{Limit: 10, IncludeExpensiveRollups: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(enriched) != 1 || enriched[0].Model != "attribute-only-model" || enriched[0].OrderingConfidence != "causal" || enriched[0].DeliveryHealth == nil {
+		t.Fatalf("expensive list was not enriched: %#v", enriched)
+	}
+}
+
 func TestServiceRunsWithOptionsFiltersBySessionID(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

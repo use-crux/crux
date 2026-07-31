@@ -21,15 +21,11 @@ import (
 )
 
 func printIngestTokenHint(io *output.IO, token, tokenPath string) {
-	if token == "" {
+	if token == "" || tokenPath == "" {
 		return
 	}
-	suffix := ""
-	if tokenPath != "" {
-		suffix = fmt.Sprintf(" (saved at %s)", devText(io, tokenPath))
-	}
-	devStatusf(io, "%s Remote observability ingest: %s%s\n",
-		devBullet(io), devStrong(io, "CRUX_DEVTOOLS_TOKEN="+token), suffix)
+	devStatusf(io, "%s Remote observability ingest: %s · read with %s\n",
+		devBullet(io), devStrong(io, "ingest token "+tokenPath), devText(io, "cat "+tokenPath))
 }
 
 func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, startup *startupTracker) *tui.App {

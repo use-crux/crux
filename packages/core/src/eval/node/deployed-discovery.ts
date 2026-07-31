@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   collectEvalModules,
+  evalDiscoveryScope,
   findEvalFiles,
   isEval,
   type EvalDiscoveryError,
@@ -19,13 +20,18 @@ export async function discoverDeployableProjectEvals(
   const modules: EvalModule[] = [];
   const errors: EvalDiscoveryError[] = [];
   const files = options.relativeFiles ?? (await findEvalFiles(projectRoot));
+  const scopeCache = new Map<string, string>();
   for (const relativeFile of [...new Set(files)].sort()) {
     try {
       const exports = (await import(
         pathToFileURL(resolve(projectRoot, relativeFile)).href
       )) as Record<string, unknown>;
       if (Object.values(exports).some(isEval)) {
-        modules.push({ relativeFile, exports });
+        modules.push({
+          relativeFile,
+          scope: await evalDiscoveryScope(projectRoot, relativeFile, scopeCache),
+          exports,
+        });
       }
     } catch (error) {
       errors.push({

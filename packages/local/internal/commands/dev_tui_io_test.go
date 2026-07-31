@@ -31,3 +31,24 @@ func TestTUIProgramUsesInjectedInputAndOutput(t *testing.T) {
 		t.Fatal("TUI program did not render to injected output")
 	}
 }
+
+func TestIngestTokenHintPrintsPathWithoutSecret(t *testing.T) {
+	var errOut bytes.Buffer
+	streams := output.NewTestIO(&bytes.Buffer{}, &errOut, output.TestIOOptions{})
+	const (
+		token     = "secret-ingest-token"
+		tokenPath = ".crux/devtools/ingest-token"
+	)
+
+	printIngestTokenHint(streams, token, tokenPath)
+
+	got := errOut.String()
+	if strings.Contains(got, token) {
+		t.Fatalf("ingest token hint leaked secret bytes: %q", got)
+	}
+	for _, want := range []string{"ingest token " + tokenPath, "cat " + tokenPath} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("ingest token hint = %q, want %q", got, want)
+		}
+	}
+}

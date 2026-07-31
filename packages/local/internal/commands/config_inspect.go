@@ -295,7 +295,7 @@ type configRow struct {
 // the resolved config file, and every config() domain with its values and origin
 // tags — `(default)`, `(config)`, `(package.json)`, `(set)` — so a zero-config
 // project reads as the defaults Crux applied and an overridden one shows exactly
-// what changed. A compact discovery summary and diagnostics close it out. Paths
+// what changed. A scoped config-model summary and diagnostics close it out. Paths
 // are normalized relative to the project root; every styled span funnels through
 // io.Sprint so `--no-color`/non-TTY output stays byte-clean.
 func printConfigInspect(io *output.IO, raw json.RawMessage) error {
@@ -377,12 +377,13 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 		listRow(io, "installed", model.Plugins),
 	})
 
-	// ── Discovered (compact context, not config) ─────────────
+	// ── Config-visible source model ───────────────────────────
 	fmt.Fprintln(out)
-	printConfigDomain(io, "Discovered", []configRow{
+	printConfigDomain(io, "Config-visible source model", []configRow{
 		{label: "definitions", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Definitions))},
 		{label: "relations", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Relations))},
 		{label: "Evals", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Evals))},
+		{label: "scope", value: "config imports only; run crux index for the full Project Index"},
 	})
 
 	// ── Diagnostics ──────────────────────────────────────────

@@ -214,8 +214,10 @@ type RunListOptions struct {
 	// stable across concurrent inserts; Offset is not and remains only for
 	// maintenance and internal callers.
 	Cursor string
-	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
-	// UI list endpoints leave this off; single-run detail reads remain exact.
+	// IncludeExpensiveRollups enriches RunsWithOptions results from span/event
+	// JSON plus segment, delivery, and topology projections. When false, list
+	// reads use only the operation/run rollup columns selected by the base query;
+	// single-run detail and canonical RunsPage reads remain exact.
 	IncludeExpensiveRollups bool
 }
 

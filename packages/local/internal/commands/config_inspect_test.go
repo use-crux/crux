@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
@@ -178,8 +181,9 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		"persistence:", "store",
 		"lint:", "profile", "strict", "rules",
 		"plugins:", "@acme/tracer",
-		// Compact discovery summary + diagnostics.
-		"Discovered", "definitions", "relations", "Evals",
+		// The scoped config model is explicitly distinguished from the full Index.
+		"Config-visible source model", "definitions", "relations", "Evals",
+		"config imports only; run crux index for the full Project Index",
 		"Diagnostics  1", "info", "project_model.missing_stable_id",
 	} {
 		if !strings.Contains(text, want) {
@@ -190,6 +194,35 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 	// Explicit values must be tagged as config, defaults as default.
 	if !strings.Contains(text, "first-party-only  (default)") {
 		t.Fatalf("default indexer.trust was not tagged (default):\n%s", text)
+	}
+}
+
+func TestConfigInspectPipedStderrDoesNotAnimateWhenColorIsForced(t *testing.T) {
+	if os.Getenv("CRUX_CONFIG_PIPE_HELPER") == "1" {
+		streams := output.NewIO(false)
+		oldResolver := resolveProjectConfigForInspect
+		resolveProjectConfigForInspect = func(context.Context, string, string, string, commandWorkerProcess) (json.RawMessage, error) {
+			time.Sleep(2 * configSpinnerInterval)
+			return loadedConfigFixture("/tmp/project"), nil
+		}
+		defer func() { resolveProjectConfigForInspect = oldResolver }()
+		_, err := resolveProjectConfigWithProgress(context.Background(), streams, "/tmp/project", "", "", commandWorkerProcess{})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestConfigInspectPipedStderrDoesNotAnimateWhenColorIsForced$")
+	cmd.Env = append(os.Environ(), "CRUX_CONFIG_PIPE_HELPER=1", "CLICOLOR_FORCE=1", "NO_COLOR=")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("helper failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("piped stderr received spinner frames: %q", stderr.String())
 	}
 }
 

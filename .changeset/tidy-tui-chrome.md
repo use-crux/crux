@@ -1,8 +1,10 @@
 ---
-"@use-crux/local": patch
+"@use-crux/local": minor
 ---
 
 Improve TUI framing and per-screen readability with identifiable, title-first insight and run rows, semantic KPI delta colors, accented active breadcrumbs and insight categories, correct count pluralization, hanging detail values, project-relative source locations, actionable empty states, visible truncation, centered content-sized overlays, complete navigation, and single-line pane headers and breadcrumbs. Export the node-basic named defer target so the authored example boots without a target-export diagnostic.
+
+Keep input responsive during large Index refreshes, preserve filtered Runs lists across navigation, clarify that model filters apply to the loaded Runs page, show Insights case-evidence lifecycle details, confirm when startup finds no issues, and replace the shutdown ingest-token secret with its file path and read command.
 
 Make audited TUI interactions honest and reversible: preserve Overview drill history, document and execute Insights actions, expose jump-prefix guidance, refresh dismissed insights, confirm run exports, unify document scrolling, prioritize browser failures, mark active tabs without relying on color, anchor lint drills, clarify filter clearing, and collapse repeated demo tool spans.
 

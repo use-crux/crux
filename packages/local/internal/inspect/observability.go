@@ -23,6 +23,9 @@ func buildInspectRunsFromObservability(ctx context.Context, obs *observability.S
 }
 
 func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *observability.Service, dir string, projectRoot string, opts observability.RunListOptions) ([]inspectRunRecord, error) {
+	// Inspect derives user-facing identity, cost, and health from the exact
+	// bounded page rather than the stored-rollup-only list path.
+	opts.IncludeExpensiveRollups = true
 	summaries, err := obs.RunsWithOptions(ctx, opts)
 	if err != nil {
 		return nil, err

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,6 +19,8 @@ import (
 
 // ErrNotFound identifies a 404 response without exposing the response body.
 var ErrNotFound = errors.New("not found")
+
+const connectTimeout = 500 * time.Millisecond
 
 // Client talks to a running crux devtools server over HTTP.
 // Create one with [New] or [NewDefault]. All request methods are safe
@@ -29,12 +32,20 @@ type Client struct {
 }
 
 // New creates a client targeting the given base URL (e.g. "http://localhost:4400").
-// The client uses a 10-second timeout for all requests.
+// The client gives loopback connects a short budget so one-shot commands fail
+// promptly when no dev server is listening, while allowing established
+// requests up to 10 seconds for a response.
 func New(baseURL string) *Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{
+		Timeout:   connectTimeout,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
 	return &Client{
 		BaseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: transport,
 		},
 	}
 }

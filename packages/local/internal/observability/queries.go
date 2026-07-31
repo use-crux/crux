@@ -273,8 +273,10 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	if err := rows.Close(); err != nil {
 		return nil, 0, fmt.Errorf("close observability runs rows: %w", err)
 	}
-	if err := s.enrichOperationSummaries(ctx, runs); err != nil {
-		return nil, 0, err
+	if opts.IncludeExpensiveRollups {
+		if err := s.enrichOperationSummaries(ctx, runs); err != nil {
+			return nil, 0, err
+		}
 	}
 	return runs, appliedLimit, nil
 }
@@ -357,6 +359,9 @@ func decodeRunListCursor(cursor string) (string, string, error) {
 // and reports the server's current revision alongside a stable cursor for
 // the next page.
 func (s *Service) RunsPage(ctx context.Context, opts RunListOptions) (RunsResponse, error) {
+	// The canonical revisioned page promises delivery/topology and exact
+	// identity evidence. RunsWithOptions remains the explicit cheap-list path.
+	opts.IncludeExpensiveRollups = true
 	runs, appliedLimit, err := s.runsWithOptions(ctx, opts)
 	if err != nil {
 		return RunsResponse{}, err
