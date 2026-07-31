@@ -120,7 +120,7 @@ func (c *FixtureClient) RunsWithOptions(ctx context.Context, _ api.InspectRunsOp
 func (c *FixtureClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
 	return nil, nil
 }
-func (c *FixtureClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *FixtureClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{}, nil
 }
 func (c *FixtureClient) ObservabilityRunDetail(_ context.Context, traceID string) (api.ObservabilityRunDetail, bool, error) {
@@ -132,8 +132,23 @@ func (c *FixtureClient) ObservabilityRunDetail(_ context.Context, traceID string
 func (c *FixtureClient) ObservabilityResourceActivity(context.Context, string) ([]api.ObservabilityResourceActivity, error) {
 	return nil, nil
 }
+func (c *FixtureClient) DefinitionActivity(_ context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error) {
+	if definitionID != "prompt:writer.prompt" {
+		return api.CatalogRuntimeActivityV1{DefinitionID: definitionID}, nil
+	}
+	return api.CatalogRuntimeActivityV1{
+		DefinitionID: definitionID,
+		RunCount:     3,
+		LastRunID:    "8af2f1c",
+		LastRunAt:    c.Now.Add(-14 * time.Minute).Format(time.RFC3339),
+		LastStatus:   "failed",
+	}, nil
+}
 func (c *FixtureClient) ProjectIndex(context.Context) (api.IndexData, error) {
 	return api.IndexData{}, nil
+}
+func (c *FixtureClient) ProjectIndexWatchStatus(context.Context) (api.ProjectIndexWatchStatus, error) {
+	return api.ProjectIndexWatchStatus{State: "idle"}, nil
 }
 func (c *FixtureClient) DevtoolsContext(context.Context) (api.DevtoolsContext, error) {
 	return api.DevtoolsContext{}, nil

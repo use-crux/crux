@@ -68,7 +68,7 @@ func (s *Insights) Actions(ctx context.Context, client DataClient) []interaction
 		},
 		{
 			ID:             "insights.dismiss",
-			Binding:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "dismiss")),
+			Binding:        key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "dismiss")),
 			DisabledReason: recordReason,
 			Run:            func() tea.Cmd { return s.dismiss(ctx, client) },
 		},
@@ -86,7 +86,7 @@ func (s *Insights) Actions(ctx context.Context, client DataClient) []interaction
 		},
 		{
 			ID:             "insights.export",
-			Binding:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export insight")),
+			Binding:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export insight")),
 			DisabledReason: recordReason,
 			Run:            s.exportInsight,
 		},

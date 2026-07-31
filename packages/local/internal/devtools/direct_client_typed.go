@@ -44,11 +44,15 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.InspectRuns
 }
 
 // ObservabilityRunsPage loads the revisioned Runs read-model page.
-func (c *DirectClient) ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error) {
+func (c *DirectClient) ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error) {
 	if c.observability == nil {
 		return api.ObservabilityRunsPage{}, errNoObservabilityService
 	}
-	page, err := c.observability.RunsPage(ctx, observability.RunListOptions{})
+	opts := observability.RunListOptions{}
+	if len(definitionID) > 0 {
+		opts.DefinitionID = definitionID[0]
+	}
+	page, err := c.observability.RunsPage(ctx, opts)
 	if err != nil {
 		return api.ObservabilityRunsPage{}, err
 	}
@@ -81,8 +85,35 @@ func (c *DirectClient) ObservabilityResourceActivity(ctx context.Context, family
 	return activity, err
 }
 
+// DefinitionActivity returns the bounded per-definition runtime join used by
+// Catalog surfaces without routing through HTTP.
+func (c *DirectClient) DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error) {
+	activity := api.CatalogRuntimeActivityV1{DefinitionID: definitionID}
+	if c.observability == nil {
+		return activity, errNoObservabilityService
+	}
+	summary, err := c.observability.DefinitionActivitySummary(ctx, definitionID)
+	if err != nil {
+		return activity, err
+	}
+	activity.RunCount = summary.RunCount
+	if summary.LastRun != nil {
+		activity.LastRunID = summary.LastRun.RunID
+		activity.LastRunAt = summary.LastRun.StartedAt
+		activity.LastStatus = summary.LastRun.Status
+	}
+	return activity, nil
+}
+
 func (c *DirectClient) ProjectIndex(ctx context.Context) (api.IndexData, error) {
 	return endpoints.ProjectIndex.Call(ctx, endpoints.Deps{Devtools: c.devtools})
+}
+
+func (c *DirectClient) ProjectIndexWatchStatus(ctx context.Context) (api.ProjectIndexWatchStatus, error) {
+	if c.devtools == nil {
+		return api.ProjectIndexWatchStatus{}, errNoDevtoolsService
+	}
+	return c.devtools.ProjectIndexWatchStatus(ctx)
 }
 
 func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.InspectActivityEvent, error) {

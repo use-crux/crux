@@ -9,8 +9,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-// Actions returns Index's executable focused-list and export actions.
-func (s *Index) Actions(_ context.Context, _ DataClient) []interaction.Action {
+// Actions returns Index's executable browser, detail, and workflow actions.
+func (s *Index) Actions(ctx context.Context, client DataClient) []interaction.Action {
 	pageDownKeys := []string{"pgdown", "ctrl+d"}
 	pageUpKeys := []string{"pgup", "ctrl+u"}
 	firstKeys := []string{"home"}
@@ -24,23 +24,62 @@ func (s *Index) Actions(_ context.Context, _ DataClient) []interaction.Action {
 		lastHelp = "end/G"
 	}
 	return []interaction.Action{
-		s.indexNavigationAction("index.next", []string{"j", "down"}, "j/↓", "next "+s.focusItemLabel()),
-		s.indexNavigationAction("index.previous", []string{"k", "up"}, "k/↑", "previous "+s.focusItemLabel()),
-		s.indexNavigationAction("index.page-down", pageDownKeys, "pgdn/^d", "next "+s.focusPageLabel()),
-		s.indexNavigationAction("index.page-up", pageUpKeys, "pgup/^u", "previous "+s.focusPageLabel()),
-		s.indexNavigationAction("index.first", firstKeys, firstHelp, "first "+s.focusItemLabel()),
-		s.indexNavigationAction("index.last", lastKeys, lastHelp, "last "+s.focusItemLabel()),
+		s.indexNavigationAction(ctx, client, "index.next", []string{"j", "down"}, "j/↓", "next "+s.focusItemLabel()),
+		s.indexNavigationAction(ctx, client, "index.previous", []string{"k", "up"}, "k/↑", "previous "+s.focusItemLabel()),
+		s.indexNavigationAction(ctx, client, "index.page-down", pageDownKeys, "pgdn/^d", "next "+s.focusPageLabel()),
+		s.indexNavigationAction(ctx, client, "index.page-up", pageUpKeys, "pgup/^u", "previous "+s.focusPageLabel()),
+		s.indexNavigationAction(ctx, client, "index.first", firstKeys, firstHelp, "first "+s.focusItemLabel()),
+		s.indexNavigationAction(ctx, client, "index.last", lastKeys, lastHelp, "last "+s.focusItemLabel()),
 		{
 			ID:             "index.activate",
-			Binding:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "open detail")),
-			DisabledReason: disabledUnless(s.focus == indexFocusDefinitions && s.SelectedDefinitionID() != "", "select a definition"),
+			Binding:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", s.activateLabel())),
+			DisabledReason: s.activateDisabledReason(),
 			Run: func() tea.Cmd {
+				if s.focus == indexFocusDetail {
+					target := s.selectedRelationTarget()
+					if target == "" {
+						return nil
+					}
+					return func() tea.Msg {
+						return NavigateRequest{NavID: "index", Kind: "definition", ID: target}
+					}
+				}
 				document := s.syncDetail()
 				s.setFocus(indexFocusDetail)
 				if document.hasLint {
 					s.detail.RestoreAnchor(document.lintAnchor)
 				}
 				return nil
+			},
+		},
+		{
+			ID:             "index.group",
+			Binding:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "group by "+s.nextGroupAxisLabel())),
+			DisabledReason: disabledUnless(len(s.indexData().Definitions) > 0, "no definitions to group"),
+			Run: func() tea.Cmd {
+				s.toggleGroupAxis()
+				return nil
+			},
+		},
+		{
+			ID:             "index.suppressed",
+			Binding:        key.NewBinding(key.WithKeys("s"), key.WithHelp("s", s.suppressedActionLabel())),
+			DisabledReason: disabledUnless(s.hasSuppressedFindings(), "no suppressed findings"),
+			Run: func() tea.Cmd {
+				s.showSuppressed = !s.showSuppressed
+				s.syncDetail()
+				return nil
+			},
+		},
+		{
+			ID:             "index.runs",
+			Binding:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "open definition runs")),
+			DisabledReason: disabledUnless(s.currentDefinitionActivity().RunCount > 0, "no runtime activity"),
+			Run: func() tea.Cmd {
+				definitionID := s.SelectedDefinitionID()
+				return func() tea.Msg {
+					return NavigateRequest{NavID: "runs", Kind: "definition", ID: definitionID}
+				}
 			},
 		},
 		{
@@ -63,20 +102,35 @@ func (s *Index) Actions(_ context.Context, _ DataClient) []interaction.Action {
 		},
 		{
 			ID:             "index.export",
-			Binding:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export definition")),
+			Binding:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export definition")),
 			DisabledReason: disabledUnless(s.SelectedDefinitionID() != "", "select a definition to export"),
 			Run:            s.exportDefinition,
 		},
 	}
 }
 
-func (s *Index) indexNavigationAction(id string, keys []string, helpKey, label string) interaction.Action {
+func (s *Index) indexNavigationAction(
+	ctx context.Context,
+	client DataClient,
+	id string,
+	keys []string,
+	helpKey string,
+	label string,
+) interaction.Action {
 	return interaction.Action{
 		ID:             id,
 		Binding:        key.NewBinding(key.WithKeys(keys...), key.WithHelp(helpKey, label)),
 		DisabledReason: disabledUnless(s.focusHasNavigableContent(), "focused pane is empty"),
 		Run: func() tea.Cmd {
+			if s.focus == indexFocusDetail && s.moveRelation(keys[0]) {
+				return nil
+			}
+			before := s.SelectedDefinitionID()
 			s.updateFocusedPane(tea.KeyPressMsg{Code: keyCode(keys[0]), Text: keyText(keys[0])})
+			if before != s.SelectedDefinitionID() {
+				s.relationCursor = 0
+				return s.fetchDefinitionActivity(ctx, client)
+			}
 			return nil
 		},
 	}
@@ -126,6 +180,9 @@ func (s *Index) shiftFocus(delta int) {
 
 func (s *Index) focusItemLabel() string {
 	if s.focus == indexFocusDetail {
+		if s.relationCount() > 0 {
+			return "relation"
+		}
 		return "line"
 	}
 	return "definition"
@@ -141,4 +198,21 @@ func (s *Index) focusPageLabel() string {
 // Keybinds returns the same executable Index actions used for dispatch.
 func (s *Index) Keybinds() []shell.Keybind {
 	return actionKeybinds(s.Actions(context.TODO(), nil), nil)
+}
+
+func (s *Index) activateLabel() string {
+	if s.focus == indexFocusDetail && s.selectedRelationTarget() != "" {
+		return "open relation"
+	}
+	return "open detail"
+}
+
+func (s *Index) activateDisabledReason() string {
+	if s.SelectedDefinitionID() == "" {
+		return "select a definition"
+	}
+	if s.focus == indexFocusDetail && s.selectedRelationTarget() == "" {
+		return "no relation selected"
+	}
+	return ""
 }

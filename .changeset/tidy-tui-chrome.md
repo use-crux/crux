@@ -9,3 +9,5 @@ Make audited TUI interactions honest and reversible: preserve Overview drill his
 Render modal rows against a symmetric opaque backdrop so Index detail text cannot bleed through overlay seams, and standardize the Runs time-window label as lowercase `last 1h`.
 
 Deepen Runs detail with primitive-aware request, PromptText, decision, tool, memory, media, flow, timing, cost, and member-run evidence; add failure-path triage with `e`/`E` stepping and bounded terminal-safe payload expansion.
+
+Deepen the Index Catalog with schema field trees, complete lint evidence, navigable relation columns, agent and flow summaries, PromptText provenance, per-definition runtime activity, indexing/watch status, kind/file grouping, and consistent `x` exports.

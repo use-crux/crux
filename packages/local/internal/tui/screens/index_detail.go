@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,8 @@ type indexDefinitionDocument struct {
 	hasSourceLocation    bool
 	lintAnchor           kit.DocumentAnchor
 	hasLint              bool
+	relationAnchor       kit.DocumentAnchor
+	hasRelation          bool
 }
 
 func renderIndexDefinitionDocument(index api.IndexData, definition api.ProjectDefinition) string {
@@ -24,6 +27,31 @@ func renderIndexDefinitionDocument(index api.IndexData, definition api.ProjectDe
 }
 
 func buildIndexDefinitionDocument(index api.IndexData, definition api.ProjectDefinition, width int) indexDefinitionDocument {
+	return buildIndexDefinitionDocumentWithOptions(index, definition, width, indexDefinitionDetailOptions{})
+}
+
+type indexDefinitionDetailOptions struct {
+	activity       api.CatalogRuntimeActivityV1
+	showSuppressed bool
+	relationCursor int
+}
+
+type indexDocumentBuilder struct {
+	index       api.IndexData
+	definition  api.ProjectDefinition
+	width       int
+	pathWidth   int
+	projectRoot string
+	lines       []string
+	document    indexDefinitionDocument
+}
+
+func buildIndexDefinitionDocumentWithOptions(
+	index api.IndexData,
+	definition api.ProjectDefinition,
+	width int,
+	options indexDefinitionDetailOptions,
+) indexDefinitionDocument {
 	if width <= 0 {
 		width = 80
 	}
@@ -31,102 +59,108 @@ func buildIndexDefinitionDocument(index api.IndexData, definition api.ProjectDef
 	if projectRoot == "" && index.Project != nil {
 		projectRoot = index.Project.Root
 	}
-	lines := make([]string, 0, 32)
-	document := indexDefinitionDocument{}
-	section := func(title string) { lines = append(lines, " "+shell.SectionTag.Render(title)) }
-	field := func(label, value string) {
-		if value != "" {
-			rows := strings.TrimRight(labelValueRows(label, value, width, shell.ColorText), "\n")
-			lines = append(lines, strings.Split(rows, "\n")...)
-		}
+	builder := &indexDocumentBuilder{
+		index: index, definition: definition, width: width,
+		pathWidth: max(1, width-16), projectRoot: projectRoot,
+		lines: make([]string, 0, 64),
 	}
-	pathWidth := max(1, width-16)
 
-	section("IDENTITY")
-	field("id", definition.ID)
-	field("kind", definition.Kind)
-	field("name", definition.Name)
-	field("description", definition.Description)
-	field("path", strings.Join(definition.Path, " › "))
-	field("tags", strings.Join(definition.Tags, ", "))
-	field("status", definition.Status)
-	field("fidelity", definition.Fidelity)
-	field("fingerprint", definition.Fingerprint)
+	builder.renderHero()
+	builder.renderIdentity(options.activity)
+	builder.renderSchemas()
+	builder.renderPromptText()
+	builder.renderSources()
+	builder.renderLint(options.showSuppressed)
+	builder.renderRelations(options.relationCursor)
+	builder.renderDiagnostics()
 
+	builder.document.content = strings.Join(builder.lines, "\n")
+	return builder.document
+}
+
+func (b *indexDocumentBuilder) section(title string) {
+	b.lines = append(b.lines, " "+shell.SectionTag.Render(title))
+}
+
+func (b *indexDocumentBuilder) field(label, value string) {
+	b.fieldTone(label, value, shell.ColorText)
+}
+
+func (b *indexDocumentBuilder) fieldTone(label, value string, tone color.Color) {
+	if value == "" {
+		return
+	}
+	rows := strings.TrimRight(labelValueRows(label, value, b.width, tone), "\n")
+	b.lines = append(b.lines, strings.Split(rows, "\n")...)
+}
+
+func (b *indexDocumentBuilder) renderIdentity(activity api.CatalogRuntimeActivityV1) {
+	definition := b.definition
+	b.section("IDENTITY")
+	b.field("id", definition.ID)
+	b.field("kind", definition.Kind)
+	b.field("name", definition.Name)
+	b.field("description", definition.Description)
+	b.field("path", strings.Join(definition.Path, " › "))
+	b.field("tags", strings.Join(definition.Tags, ", "))
+	b.field("status", definition.Status)
+	b.field("fidelity", definition.Fidelity)
+	b.field("fingerprint", definition.Fingerprint)
+	if activity.DefinitionID == definition.ID && activity.RunCount > 0 {
+		b.fieldTone("runtime", formatDefinitionActivity(activity), definitionActivityTone(activity.LastStatus))
+	}
+}
+
+func (b *indexDocumentBuilder) renderSources() {
+	definition := b.definition
 	if definition.Source != nil {
-		section("SOURCE")
-		if location := formatIndexSourceLocation(projectRoot, *definition.Source, pathWidth); location != "" {
-			document.sourceLocationAnchor = kit.DocumentAnchor{SourceLine: len(lines)}
-			document.hasSourceLocation = true
-			field("location", location)
+		b.section("SOURCE")
+		if location := formatIndexSourceLocation(b.projectRoot, *definition.Source, b.pathWidth); location != "" {
+			b.document.sourceLocationAnchor = kit.DocumentAnchor{SourceLine: len(b.lines)}
+			b.document.hasSourceLocation = true
+			b.field("location", location)
 		}
 	}
 	if snippet := definition.SourceSnippet; snippet != nil {
-		section("SOURCE SNIPPET")
-		field("language", snippet.Language)
-		field("range", formatIndexSourceRange(projectRoot, snippet.Range, pathWidth))
+		b.section("SOURCE SNIPPET")
+		b.field("language", snippet.Language)
+		b.field("range", formatIndexSourceRange(b.projectRoot, snippet.Range, b.pathWidth))
 		if snippet.Truncated {
-			field("status", "truncated by indexer")
+			b.field("status", "truncated by indexer")
 		}
-		lines = append(lines, strings.Split(sanitizeIndexMultiline(snippet.Source), "\n")...)
+		b.lines = append(b.lines, strings.Split(sanitizeIndexMultiline(snippet.Source), "\n")...)
 	}
 
 	if len(definition.SourceRefs) > 0 {
-		section("SOURCE REFERENCES")
+		b.section("SOURCE REFERENCES")
 		for _, ref := range definition.SourceRefs {
-			field("reference", ref.ID)
-			field(ref.Role, formatIndexSourceReference(projectRoot, ref, pathWidth))
-			field("description", ref.Description)
+			b.field("reference", ref.ID)
+			b.field(ref.Role, formatIndexSourceReference(b.projectRoot, ref, b.pathWidth))
+			b.field("description", ref.Description)
 			if ref.Snippet != nil {
-				field("language", ref.Snippet.Language)
-				field("snippet range", formatIndexSourceRange(projectRoot, ref.Snippet.Range, pathWidth))
+				b.field("language", ref.Snippet.Language)
+				b.field("snippet range", formatIndexSourceRange(b.projectRoot, ref.Snippet.Range, b.pathWidth))
 				if ref.Snippet.Truncated {
-					field("status", "truncated by indexer")
+					b.field("status", "truncated by indexer")
 				}
-				lines = append(lines, strings.Split(sanitizeIndexMultiline(ref.Snippet.Source), "\n")...)
+				b.lines = append(b.lines, strings.Split(sanitizeIndexMultiline(ref.Snippet.Source), "\n")...)
 			}
 		}
 	}
+}
 
-	for _, finding := range activeLintFindingsForDefinition(index, definition.ID) {
-		if !document.hasLint {
-			document.lintAnchor = kit.DocumentAnchor{SourceLine: len(lines)}
-			document.hasLint = true
-		}
-		section("LINT")
-		field("rule", strings.TrimSpace(finding.RuleID+" · "+finding.Severity+" · "+finding.Title))
-		field("message", finding.Message)
-		field("why", finding.Rationale)
-		field("impact", finding.Impact)
-		field("docs", finding.DocsURL)
-	}
-
-	for _, relation := range index.Relations {
-		if relation.From != definition.ID && relation.To != definition.ID {
+func (b *indexDocumentBuilder) renderDiagnostics() {
+	for _, diagnostic := range b.index.Diagnostics {
+		if !stringSliceContains(diagnostic.RelatedDefinitionIDs, b.definition.ID) {
 			continue
 		}
-		section("RELATION")
-		field(relation.Type, relation.From+" → "+relation.To)
-		field("fidelity", relation.Fidelity)
-		if relation.Source != nil {
-			field("source", formatIndexSourceLocation(projectRoot, *relation.Source, pathWidth))
-		}
-	}
-
-	for _, diagnostic := range index.Diagnostics {
-		if !stringSliceContains(diagnostic.RelatedDefinitionIDs, definition.ID) {
-			continue
-		}
-		section("DIAGNOSTIC")
-		field("diagnostic", strings.TrimSpace(diagnostic.Code+" · "+diagnostic.Severity+" · "+diagnostic.Message))
-		field("fix", diagnostic.SuggestedFix)
+		b.section("DIAGNOSTIC")
+		b.field("diagnostic", strings.TrimSpace(diagnostic.Code+" · "+diagnostic.Severity+" · "+diagnostic.Message))
+		b.field("fix", diagnostic.SuggestedFix)
 		if diagnostic.Source != nil {
-			field("source", formatIndexSourceLocation(projectRoot, *diagnostic.Source, pathWidth))
+			b.field("source", formatIndexSourceLocation(b.projectRoot, *diagnostic.Source, b.pathWidth))
 		}
 	}
-
-	document.content = strings.Join(lines, "\n")
-	return document
 }
 
 func formatIndexSourceLocation(projectRoot string, source api.SourceLoc, width int) string {

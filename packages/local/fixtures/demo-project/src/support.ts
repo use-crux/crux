@@ -1,4 +1,5 @@
-import { context, prompt, tool } from "@use-crux/core";
+import { context, flow, md, prompt, tool } from "@use-crux/core";
+import { agent } from "@use-crux/core/agent";
 import { z } from "zod";
 
 /** Grounding policy used by the support answer prompt. */
@@ -43,8 +44,22 @@ export const supportPrompt = prompt({
   }),
   use: [refundPolicy],
   tools: { searchPolicies },
-  system: "Answer from retrieved policy evidence and cite every policy claim.",
-  prompt: ({ input }) => input.question,
+  system: md`Answer from retrieved policy evidence and cite every policy claim.`,
+  prompt: ({ input }) => md`Customer question: ${input.question}`,
+});
+
+/** Support agent whose prompt, tool, and handoff facts feed the Catalog hero. */
+export const supportAgent = agent({
+  id: "demo.support-agent",
+  prompt: supportPrompt,
+  tools: { searchPolicies },
+  handoffs: ["demo.support-manager"],
+});
+
+/** Ordered support workflow used by the Catalog flow hero. */
+export const refundResolutionFlow = flow("demo.refund-resolution", async (scope) => {
+  await scope.step("research policy", async () => "policy-refunds");
+  return scope.step("draft answer", async () => "ready");
 });
 
 /** Opaque production-shaped task used by the authored Eval fixture. */

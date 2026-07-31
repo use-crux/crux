@@ -43,7 +43,7 @@ func (c *overviewRunsProgramClient) Runs(context.Context) ([]api.InspectRunRecor
 	return c.inspectRuns(), nil
 }
 
-func (c *overviewRunsProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *overviewRunsProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{
 		c.observabilityRun(firstSimilarRunID),
 		c.observabilityRun(secondSimilarRunID),

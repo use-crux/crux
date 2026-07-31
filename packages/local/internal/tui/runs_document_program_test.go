@@ -36,7 +36,7 @@ func (c *runsDocumentProgramClient) GetJSON(context.Context, string, any) error 
 	return nil
 }
 
-func (c *runsDocumentProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *runsDocumentProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{{
 		RunID:         documentProgramRunID,
 		Name:          "document scroll fixture",

@@ -95,6 +95,51 @@ func TestDirectClientProjectIndexIncludesStorageReadModel(t *testing.T) {
 	}
 }
 
+func TestDirectClientIndexDepthMethodsStayInProcess(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":4,"recordId":"activity-start","type":"run:start","runId":"run_activity","operationId":"run_activity","segmentId":"segment_activity","segmentSeq":1,"traceId":"trace_activity","name":"activity","rootPrimitive":"generation.call","startedAt":"2026-07-31T10:00:00.000Z","status":"running","definitionRefs":[{"id":"prompt:activity","kind":"prompt","role":"resolved-prompt"}]},
+		{"schemaVersion":4,"recordId":"activity-end","type":"run:end","runId":"run_activity","operationId":"run_activity","segmentId":"segment_activity","segmentSeq":2,"traceId":"trace_activity","endedAt":"2026-07-31T10:00:01.000Z","durationMs":1000,"status":"ok"}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	service := NewService(state, nil).WithObservability(obs)
+	client := NewDirectClientFromService(service).WithObservability(obs)
+	activity, err := client.DefinitionActivity(ctx, "prompt:activity")
+	if err != nil {
+		t.Fatalf("DefinitionActivity error = %v", err)
+	}
+	if activity.RunCount != 1 || activity.LastRunID != "run_activity" || activity.LastStatus != "ok" {
+		t.Fatalf("DefinitionActivity = %+v, want observability summary", activity)
+	}
+	page, err := client.ObservabilityRunsPage(ctx, "prompt:activity")
+	if err != nil {
+		t.Fatalf("ObservabilityRunsPage definition filter error = %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != "run_activity" {
+		t.Fatalf("ObservabilityRunsPage definition filter = %+v, want run_activity", page.Rows)
+	}
+	status, err := client.ProjectIndexWatchStatus(ctx)
+	if err != nil {
+		t.Fatalf("ProjectIndexWatchStatus error = %v", err)
+	}
+	if status.State != "idle" {
+		t.Fatalf("ProjectIndexWatchStatus = %+v, want service idle state", status)
+	}
+}
+
 func findAPIDefinition(definitions []api.ProjectDefinition, id string) *api.ProjectDefinition {
 	for i := range definitions {
 		if definitions[i].ID == id {

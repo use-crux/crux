@@ -18,6 +18,9 @@ func (s *Runs) renderList(width, height int) string {
 	if filter := s.activeRunStatusFilter(); filter.label != "" {
 		right = shell.TextMuted.Render("filter: " + filter.label)
 	}
+	if s.definitionFilter != "" {
+		right = shell.TextMuted.Render("definition: " + kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 24, "…"))
+	}
 	if s.runQuery != "" {
 		right = shell.TextMuted.Render("/" + sanitizeRunsInline(s.runQuery))
 	}

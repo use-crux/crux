@@ -40,7 +40,7 @@ func newDefinitionChooserProgramClient() *definitionChooserProgramClient {
 	return &definitionChooserProgramClient{FixtureClient: uitest.NewFixtureClient(), refs: refs}
 }
 
-func (c *definitionChooserProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *definitionChooserProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{{RunID: "run-definitions", Name: "definitions"}}}, nil
 }
 

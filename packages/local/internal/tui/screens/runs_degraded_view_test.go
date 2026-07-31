@@ -19,7 +19,7 @@ type failingRunsViewClient struct {
 	detailErr error
 }
 
-func (c *failingRunsViewClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *failingRunsViewClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{}, c.listErr
 }
 

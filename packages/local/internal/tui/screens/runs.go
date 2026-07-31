@@ -26,7 +26,7 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 //	│   docs_agent │ ├ agent  retrieve(loop)  ━━━━━   9.80s  │ parent   8af2…f1c    │
 //	│   14.2s      │ ├ tool   rag.search …    │       0.54s  │ kind     agent.sub…  │
 //	│   18.4k tok  │ …                                       │ op       agent       │
-//	│              │ [↵] span detail [i] inspect [e] export  │ TIMING   …           │
+//	│              │ [↵] span detail [i] inspect [x] export  │ TIMING   …           │
 //	└──────────────┴─────────────────────────────────────────┴──────────────────────┘
 //
 // Focus moves with h/l. j/k cycles within the focused pane; ↵ activates
@@ -45,6 +45,7 @@ type Runs struct {
 	spanDocument     *kit.DocumentPane
 	size             Size
 	layout           runsLayout
+	definitionFilter string
 	filteringRuns    bool
 	runQuery         string
 	runStatusIndex   int
@@ -92,9 +93,20 @@ func (s *Runs) Editing() bool { return s.filteringRuns }
 // owns this route parameter; display names and legacy workspace selection do
 // not participate in resolving it.
 func (s *Runs) Focus(kind, id string) {
-	if kind != "run" || id == "" {
+	if id == "" {
 		return
 	}
+	if kind == "definition" {
+		s.definitionFilter = id
+		s.clearRunSelection()
+		s.runList.SetItems(nil)
+		s.runsResource.Cancel()
+		return
+	}
+	if kind != "run" {
+		return
+	}
+	s.definitionFilter = ""
 	s.spanList.SetItems(nil)
 	s.detailResource.Cancel()
 	s.diagnosis = nil
@@ -106,6 +118,16 @@ func (s *Runs) Focus(kind, id string) {
 	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
 	s.runList.Select(id)
+}
+
+func (s *Runs) FocusRoot() {
+	if s.definitionFilter == "" {
+		return
+	}
+	s.definitionFilter = ""
+	s.clearRunSelection()
+	s.runList.SetItems(nil)
+	s.runsResource.Cancel()
 }
 
 // SelectedRunID returns the pane-owned stable identity of the active run.
@@ -147,6 +169,8 @@ func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.I
 	commands := make([]tea.Cmd, 0, 2)
 	listRevision, listInvalid := invalidations.Revision(bridge.RunsListResource)
 	if listInvalid || s.runsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
+	} else if s.runsResource.Snapshot().Token.Owner != runsListOwnerForDefinition(s.definitionFilter) {
 		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
 	}
 
@@ -280,6 +304,9 @@ func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 
 func (s *Runs) Breadcrumb() ([]string, string) {
 	path := []string{"runs"}
+	if s.definitionFilter != "" {
+		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 36, "…"))
+	}
 	if selected, _, ok := s.runList.Selected(); ok {
 		name := firstNonEmpty(selected.Name, selected.RunID)
 		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(name), 36, "…"))

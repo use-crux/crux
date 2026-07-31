@@ -19,6 +19,7 @@ import (
 
 var errNoInspectService = fmt.Errorf("Inspect service not configured")
 var errNoObservabilityService = fmt.Errorf("observability service not configured")
+var errNoDevtoolsService = fmt.Errorf("devtools service not configured")
 
 // DirectClient exposes the devtools read API against an in-process store.
 // It lets native clients use the same logical routes as the HTTP API without a

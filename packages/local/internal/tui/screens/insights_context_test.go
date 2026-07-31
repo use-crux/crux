@@ -36,7 +36,7 @@ func TestInsightsCommandsInheritWorkbenchContext(t *testing.T) {
 	}
 
 	screen.applyInsights([]api.InspectInsightRecord{{InsightID: "insight-1"}})
-	command := screen.Update(root, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), client)
+	command := screen.Update(root, tea.KeyPressMsg(tea.Key{Text: "d", Code: 'd'}), client)
 	if command == nil {
 		t.Fatal("dismiss did not return a command")
 	}

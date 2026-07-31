@@ -17,7 +17,7 @@ func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
 
 	for _, binding := range bindings {
 		switch binding.Key {
-		case "j/↓", "k/↑", "pgdn/^d", "pgup/^u", "home", "end", "l/→/tab", "↵", "e":
+		case "j/↓", "k/↑", "pgdn/^d", "pgup/^u", "home", "end", "l/→/tab", "↵", "v", "x":
 		default:
 			t.Errorf("Index advertised unhandled key %q (%s)", binding.Key, binding.Label)
 		}
@@ -209,15 +209,15 @@ func TestIndexViewOmitsSuppressedFindingsFromBadgesAndLists(t *testing.T) {
 	}
 }
 
-// TestIndexExportEmitsCmd asserts `e` returns a non-nil cmd that
+// TestIndexExportEmitsCmd asserts `x` returns a non-nil cmd that
 // exports the focused definition as JSON.
 func TestIndexExportEmitsCmd(t *testing.T) {
 	c := NewIndex()
 	c.SetIndexForTest(sampleIndex())
 
-	cmd := c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
-		t.Error("pressing `e` returned nil; expected export cmd")
+		t.Error("pressing `x` returned nil; expected export cmd")
 	}
 }
 

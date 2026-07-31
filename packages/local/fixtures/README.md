@@ -31,7 +31,12 @@ After seeding:
   splits.
 - The refund-resolution flow shows ordered steps plus a real child member run;
   the member row drills into the child through the normal Runs read model.
-- **Index** shows authored contexts, tools, prompts, Eval Cases, and the Eval.
+- **Index** shows authored contexts, tools, prompts, an agent, an ordered flow,
+  Eval Cases, and the Eval. The support prompt exercises input/output schema
+  trees, PromptText sources, relations in both directions, and a three-run
+  runtime-activity join. The agent exercises a multi-fix lint finding; the agent
+  and flow expose compact structure heroes. Grouping can switch between kind
+  and file.
 - **Insights** is populated by the product-owned Inspect analyzer. The seeded
   slow, high-token, costly, repeated-tool, retrieval, guardrail, and error
   evidence crosses its normal derivation thresholds; no insight record is

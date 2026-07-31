@@ -25,7 +25,7 @@ func (c *rootContextProgramClient) Overview(ctx context.Context) (api.InspectOve
 	return api.InspectOverviewRecord{}, ctx.Err()
 }
 
-func (c *rootContextProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *rootContextProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{
 		{RunID: "run-a", Name: "run A"},
 		{RunID: "run-b", Name: "run B"},

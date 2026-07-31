@@ -1,6 +1,7 @@
 package uitest
 
 import (
+	"context"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -32,5 +33,23 @@ func TestFixtureClientObservabilityRunDetail(t *testing.T) {
 	}
 	if detail.Run.SpanCount != nodes {
 		t.Fatalf("ObservabilityRunDetail spanCount = %d, nodes = %d", detail.Run.SpanCount, nodes)
+	}
+}
+
+func TestFixtureClientIndexDepthJoins(t *testing.T) {
+	client := NewFixtureClient()
+	activity, err := client.DefinitionActivity(context.Background(), "prompt:writer.prompt")
+	if err != nil {
+		t.Fatalf("DefinitionActivity returned error: %v", err)
+	}
+	if activity.RunCount != 3 || activity.LastRunID != "8af2f1c" || activity.LastStatus != "failed" {
+		t.Fatalf("DefinitionActivity = %+v, want populated fixture join", activity)
+	}
+	status, err := client.ProjectIndexWatchStatus(context.Background())
+	if err != nil {
+		t.Fatalf("ProjectIndexWatchStatus returned error: %v", err)
+	}
+	if status.State != "idle" {
+		t.Fatalf("ProjectIndexWatchStatus = %+v, want idle", status)
 	}
 }

@@ -79,9 +79,9 @@ func TestInsightsExportEmitsCmd(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
-		t.Error("pressing `e` returned nil; expected export cmd")
+		t.Error("pressing `x` returned nil; expected export cmd")
 	}
 }
 
@@ -120,7 +120,7 @@ func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 		got = append(got, bind.Key+" "+bind.Label)
 	}
 	text := strings.Join(got, " · ")
-	for _, want := range []string{"t linked traces", "x dismiss"} {
+	for _, want := range []string{"t linked traces", "d dismiss", "x export insight"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("keybinds missing wired action %q: %s", want, text)
 		}
@@ -137,7 +137,7 @@ func TestInsightsKeybindsOmitRecordActionsWithoutSelection(t *testing.T) {
 
 	for _, bind := range i.Keybinds() {
 		switch bind.Key {
-		case "t", "f", "x", "e":
+		case "t", "f", "d", "x":
 			t.Errorf("Insights advertised record action %q without a selected insight", bind.Key)
 		}
 	}

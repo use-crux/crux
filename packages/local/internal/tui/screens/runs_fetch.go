@@ -22,7 +22,11 @@ func (m runDetailLoadedMsg) ResourceOwner() resource.ResourceOwner {
 	return resource.ResourceResult[api.ObservabilityRunDetail](m).Token.Owner
 }
 
-var runsListOwner = resource.ResourceOwner{Screen: "runs", Resource: "list"}
+var runsListOwner = runsListOwnerForDefinition("")
+
+func runsListOwnerForDefinition(definitionID string) resource.ResourceOwner {
+	return resource.ResourceOwner{Screen: "runs", Resource: "list", RecordID: definitionID}
+}
 
 func runsDetailOwner(runID string) resource.ResourceOwner {
 	return resource.ResourceOwner{Screen: "runs", Resource: "detail", RecordID: runID}
@@ -34,13 +38,14 @@ func (s *Runs) fetchRunsList(parent context.Context, c DataClient) tea.Cmd {
 
 func (s *Runs) fetchRunsListAtRevision(parent context.Context, c DataClient, revision uint64) tea.Cmd {
 	snapshot := s.runsResource.Snapshot()
-	ctx, token := s.runsResource.Begin(parent, runsListOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
+	owner := runsListOwnerForDefinition(s.definitionFilter)
+	ctx, token := s.runsResource.Begin(parent, owner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return fetchRunsList(ctx, c, token)
 }
 
 func fetchRunsList(ctx context.Context, c DataClient, token resource.RequestToken) tea.Cmd {
 	return func() tea.Msg {
-		page, err := c.ObservabilityRunsPage(ctx)
+		page, err := c.ObservabilityRunsPage(ctx, token.Owner.RecordID)
 		if err != nil {
 			return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
 				Token: token,

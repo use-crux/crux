@@ -31,7 +31,7 @@ func (c *definitionNavigationProgramClient) GetJSON(context.Context, string, any
 	return nil
 }
 
-func (c *definitionNavigationProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *definitionNavigationProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{{
 		RunID: "run-definition-source", Name: "definition source navigation",
 	}}}, nil

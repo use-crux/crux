@@ -12,7 +12,7 @@ type revisionRunsClient struct {
 	*uitest.FixtureClient
 }
 
-func (c *revisionRunsClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *revisionRunsClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{
 		Revision: 53,
 		Rows: []api.ObservabilityRunSummary{

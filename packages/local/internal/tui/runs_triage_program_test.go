@@ -24,7 +24,7 @@ func newTriageProgramClient() *triageProgramClient {
 	return &triageProgramClient{FixtureClient: uitest.NewFixtureClient()}
 }
 
-func (c *triageProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *triageProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{{
 		RunID: "run-triage", Name: "failed flow", RootPrimitive: "flow.run", Status: "error",
 	}}}, nil
