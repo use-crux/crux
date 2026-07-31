@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from "../storage";
+import type { EffectScopeRef } from "../effect/types";
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
 import type { RuntimeTargetOutcome } from "../runtime/engine/kernel";
 import type { RuntimeScheduledWorkIntent } from "../runtime/engine/kernel";
@@ -131,6 +132,7 @@ export function runtimeFlowSnapshot(
   execution: RuntimeFlowExecution,
   options: {
     readonly status: RuntimeFlowSnapshot["status"];
+    readonly effects: EffectScopeRef;
     readonly input: unknown;
     readonly completedSteps: Record<
       string,
@@ -146,6 +148,7 @@ export function runtimeFlowSnapshot(
     targetId: execution.work.targetId,
     namespace: execution.work.namespace,
     status: options.status,
+    effects: options.effects,
     input: runtimeInputValue(options.input),
     ...(options.continuation ? { continuation: options.continuation } : {}),
     completedSteps: runtimeCompletedSteps(options.completedSteps),

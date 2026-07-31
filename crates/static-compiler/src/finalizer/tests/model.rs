@@ -213,6 +213,59 @@ fn finalize_merges_duplicate_definitions_by_id() {
 }
 
 #[test]
+fn finalize_lints_distinct_effect_calls_after_identity_merge() {
+    let definition = |line: usize| {
+        json!({
+            "id": "effect:payments.charge:v2",
+            "kind": "effect",
+            "name": "payments.charge",
+            "fidelity": "resolved",
+            "status": "active",
+            "metadata": {
+                "facts": {
+                    "kind": "effect",
+                    "effectId": "payments.charge",
+                    "version": 2,
+                    "recoverable": true,
+                    "capture": false,
+                    "resource": true
+                }
+            },
+            "sourceRefs": [{
+                "id": format!("effect:payments.charge:v2:execute:{line}"),
+                "role": "execute",
+                "property": "executor",
+                "symbol": "execute",
+                "source": { "file": "effects.ts", "line": line },
+                "fidelity": "resolved"
+            }]
+        })
+    };
+    let output = finalize_static_index_values(
+        &[json!({ "definitions": [definition(3), definition(8)] })],
+        &[],
+    );
+
+    assert_eq!(output.counts.definitions, 1);
+    assert_eq!(output.model.facts.definitions[0].source_refs.len(), 2);
+    let finding = output
+        .model
+        .facts
+        .lint_findings
+        .iter()
+        .find(|finding| finding.rule_id == "effect.duplicate_identity")
+        .expect("duplicate Effect identity finding");
+    assert_eq!(
+        finding
+            .extra
+            .get("evidence")
+            .and_then(|value| value.as_array())
+            .map(Vec::len),
+        Some(2)
+    );
+}
+
+#[test]
 fn finalize_reports_thread_conflicts_as_lints_without_duplicate_diagnostics() {
     let output = finalize_static_index_values(
         &[json!({

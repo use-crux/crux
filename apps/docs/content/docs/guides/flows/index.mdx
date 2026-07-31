@@ -57,6 +57,7 @@ If you're making a single `generate()` call, you don't need a flow, just call `g
 - **Fallbacks**: switch to a cheaper model or alternative strategy when retries are exhausted
 - **Suspend/resume**: pause for human approval, external events, or async dependencies; resume later, even in a different process
 - **Structured tracing**: every `generate()` inside a step is tagged with `flowId`, `stepId`, and `stepLabel` automatically
+- **Explicit Effect rollback**: every run owns a passive rollback boundary exposed through `flow.effects`, `flow.rollback()`, and `result.effects`
 - **Devtools grouping**: the Timeline groups traces by flow and step instead of guessing from timing
 - **Eval↔runtime comparison**: production tasks and Eval Cases share canonical run and trace identities
 - **Cross-boundary**: works across Convex actions, microservices, or any multi-process setup by passing IDs
@@ -80,7 +81,7 @@ const editPipeline = flow("edit-pipeline", async (flow) => {
 const result = await editPipeline.run();
 ```
 
-`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function: use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
+`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function: use it to thread data between steps. Every result also carries an in-process `effects` reference for explicit recovery; see [Rollback boundaries](/docs/guides/effects/rollback-boundaries#roll-back-a-flow-after-review). Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
 
 ## Sessions
 

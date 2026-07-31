@@ -1,0 +1,191 @@
+---
+title: Ambiguity and reconciliation
+description: Classify unknown external outcomes, confirm them out of band, and reconcile both executions and recovery attempts safely.
+---
+
+An external request can succeed even when your process never receives the
+response. A payment provider might accept a charge and then time out, or a
+recovery call might complete just before its connection drops. Retrying in
+either case could duplicate the change.
+
+Effects distinguish an unknown outcome from an ordinary known failure. The
+receipt becomes `unknown`, automatic rollback reports the unit as `ambiguous`,
+and Crux waits for external evidence instead of guessing.
+
+## Classify an unknown outcome
+
+Throw `EffectOutcomeUnknownError` only when the provider may have committed the
+operation and retrying could duplicate it. The error tells Crux why the receipt
+cannot settle and lets you retain safe provider identifiers for investigation.
+Ordinary thrown errors continue to mean the operation is known to have failed.
+
+```ts
+import {
+  effect,
+  EffectOutcomeUnknownError,
+  type EffectReceiptRef,
+} from "@use-crux/core/effect";
+
+let receipt: EffectReceiptRef | undefined;
+
+const chargeCustomer = effect(
+  "billing.charge",
+  async (input: ChargeInput, context) => {
+    receipt = {
+      kind: "effect.receipt",
+      id: context.receiptId,
+      effectId: "billing.charge",
+    };
+
+    try {
+      return await billing.charge(input, {
+        idempotencyKey: context.idempotencyKey,
+      });
+    } catch (cause) {
+      if (!billing.mayHaveAccepted(cause)) throw cause;
+
+      throw new EffectOutcomeUnknownError(
+        "The provider did not confirm the charge outcome",
+        { providerOperationId: input.operationId },
+        { cause },
+      );
+    }
+  },
+  { recover: refundCharge },
+);
+```
+
+The executor receives `receiptId` before the external call, which lets
+application code associate the Crux receipt with a provider operation ID even
+when no response arrives. Keep that association in application state that fits
+your current process model. This release does not persist the Effect ledger
+across restarts.
+
+<Callout type="warn">
+  Do not classify every timeout as unknown. Use the provider's documented
+  semantics. If it guarantees that a particular error means no operation was
+  created, throw the ordinary error so the receipt settles as failed.
+</Callout>
+
+## Reconcile after external confirmation
+
+Use `reconcileEffect()` only after provider logs, an idempotent status endpoint,
+or authorized operator evidence establishes the actual outcome. It settles the
+ambiguous receipt, retains the required audit reason, and is the only supported
+way to move a receipt out of `unknown`.
+
+```ts
+import { reconcileEffect } from "@use-crux/core/effect";
+
+if (receipt) {
+  await reconcileEffect(receipt, {
+    outcome: "failed",
+    reason: "The provider confirms that no charge was created",
+  });
+}
+```
+
+Reconciliation validates the receipt identity and rejects receipts that are
+missing, mismatched, or already settled. It never rewrites the original attempt
+or erases its ambiguous history.
+
+## Confirm a successful execution
+
+Choose `outcome: "succeeded"` when the provider confirms that the external
+change exists. Supply the exact known JSON-safe executor output because future
+recovery may depend on it.
+
+```ts
+const charge = await billing.getCharge(providerOperationId);
+
+await reconcileEffect(receipt, {
+  outcome: "succeeded",
+  output: {
+    chargeId: charge.id,
+    amount: charge.amount,
+    currency: charge.currency,
+  },
+  reason: `Provider confirms charge ${charge.id}`,
+});
+```
+
+Confirmed success settles the receipt as succeeded and activates the recovery
+unit that Crux prepared before execution. The output must match the recovery
+contract for this Effect version. Do not invent placeholder output merely to
+clear the ambiguity.
+
+## Confirm a failed execution
+
+Choose `outcome: "failed"` when the provider confirms that no external change
+was made. No output is required because there is nothing to recover.
+
+```ts
+await reconcileEffect(receipt, {
+  outcome: "failed",
+  reason: "The provider confirms that the request was rejected before commit",
+});
+```
+
+Confirmed failure settles the receipt and removes its prepared recovery unit.
+A later rollback will not attempt compensation for a change that evidence says
+never happened.
+
+## Reconcile an unknown recovery attempt
+
+Recovery calls can have the same response-loss window as execution. If a
+recovery handler throws `EffectOutcomeUnknownError`, Crux records a distinct
+unknown recovery attempt and leaves the original unit ambiguous. It does not
+retry automatically because providing an idempotency key does not prove that a
+custom handler forwarded it.
+
+After checking the provider, call `reconcileEffect()` with the original receipt
+whose recovery is ambiguous. In this in-process slice, Crux resolves its sole
+linked unknown recovery attempt. A direct recovery-attempt receipt also works
+when the surrounding runtime retains one.
+
+```ts
+await reconcileEffect(originalReceipt, {
+  outcome: "succeeded",
+  output: null,
+  reason: "The provider confirms that the refund completed",
+});
+```
+
+Confirming recovery success atomically settles the attempt and marks the
+original unit recovered. Confirming recovery failure marks the attempt failed
+and returns the original unit to an active, retryable state:
+
+```ts
+await reconcileEffect(originalReceipt, {
+  outcome: "failed",
+  reason: "The provider confirms that the refund was not created",
+});
+```
+
+A known failed recovery may be retried under application policy. An unknown
+recovery must be reconciled first.
+
+## Design for the uncertainty window
+
+No SDK can guarantee exactly-once changes across an arbitrary external system
+and a separate receipt store. Build every high-impact Effect around the gap:
+
+1. Forward the provided idempotency key when the provider supports it.
+2. Retain a provider operation ID that can be queried later.
+3. Return JSON-safe output containing the identifiers recovery needs.
+4. Classify only genuinely uncertain errors with
+   `EffectOutcomeUnknownError`.
+5. Require external evidence and an audit reason before reconciliation.
+
+Devtools reflects the same contract. Ambiguous Effect cards stay visible and
+do not show a misleading recovery affordance. Use Runs to inspect the receipt
+and provider details, then use application code with appropriate authorization
+to reconcile it.
+
+## Related
+
+- [Effects overview](/docs/guides/effects)
+- [Recovery patterns](/docs/guides/effects/recovery-patterns)
+- [Rollback boundaries](/docs/guides/effects/rollback-boundaries)
+- [EFFECT_OUTCOME_AMBIGUOUS](/docs/errors/EFFECT_OUTCOME_AMBIGUOUS)
+- [Effects API reference](/docs/reference/crux-core/effect)

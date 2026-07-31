@@ -62,6 +62,7 @@ const negativeFixtureCases: readonly NegativeFixtureCase[] = [
     callNames: ["router", "split", "retry", "cascade", "fallback"],
   },
   { family: "flow", callNames: ["flow"] },
+  { family: "effect", callNames: ["effect"] },
 ];
 
 describe("first-party native negative fixtures", () => {

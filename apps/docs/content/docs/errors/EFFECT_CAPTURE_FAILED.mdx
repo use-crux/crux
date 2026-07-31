@@ -1,0 +1,26 @@
+---
+title: EFFECT_CAPTURE_FAILED
+description: A captured-recovery effect could not record its pre-state.
+---
+
+## What failed
+
+The `recover.capture()` handler threw before the effect executor started.
+
+## Why
+
+Captured recovery needs a trustworthy before-state. Crux records the failed
+preparation receipt, registers no active recovery unit, and does not call the
+executor.
+
+## Fix
+
+Fix or retry the pre-state read before attempting the external change. Keep the
+capture result minimal, and make the handler safe to call before every effect
+execution.
+
+If recovery can be derived from input and output instead, use a direct
+`recover(context)` handler and remove capture.
+
+See [Recovery patterns](/docs/guides/effects/recovery-patterns#choose-a-recovery-form)
+for both recovery forms and their tradeoffs.

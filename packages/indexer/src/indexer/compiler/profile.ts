@@ -47,6 +47,14 @@ export const cruxCoreCompilerProjections = [
     staticCallNames: ["defer"],
   },
   {
+    name: "effect-definition-facts",
+    version: "1",
+    phase: "extract",
+    reason:
+      "Compiler-owned static projection indexes public effect definitions and their runtime identity.",
+    staticCallNames: ["effect"],
+  },
+  {
     name: "source-ref-projection",
     version: "1",
     phase: "parse",
@@ -71,7 +79,7 @@ export const cruxCoreCompilerProjections = [
 
 export const cruxCoreCompilerProfile = {
   name: "@use-crux/indexer/crux-core-profile",
-  version: "3",
+  version: "4",
   extensions: [
     embeddingPrimitiveManifest,
     mediaPrimitiveManifest,

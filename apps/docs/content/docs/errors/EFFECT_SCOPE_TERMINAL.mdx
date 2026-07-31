@@ -1,0 +1,26 @@
+---
+title: EFFECT_SCOPE_TERMINAL
+description: New effect work was attempted after a rollback boundary became terminal.
+---
+
+## What failed
+
+An effect tried to start after its boundary began rollback, or a descendant
+boundary tried to roll back an ancestor that it was still running inside.
+
+## Why
+
+Rollback plans use a settled snapshot. Admitting new work after that snapshot
+would omit a change, and a descendant waiting on its own ancestor would create
+a lifecycle cycle.
+
+## Fix
+
+Await all intended effect work before starting manual rollback. After rollback
+starts, return from the boundary instead of launching another effect.
+
+If a child boundary needs independent rollback, retain and roll back the child
+scope rather than invoking its active ancestor's controller.
+
+See [Understand terminal boundaries](/docs/guides/effects/rollback-boundaries#understand-terminal-boundaries)
+for manual and nested-boundary rules.

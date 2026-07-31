@@ -10,6 +10,7 @@ import type {
   CruxTraceId,
   OperationResultMeta,
 } from "@use-crux/core/observability";
+import type { EffectScopeRef } from "@use-crux/core/effect";
 
 declare const executorResult: Awaited<ReturnType<AgentExecutor>>;
 declare const payload: AgentResultPayload<{ readonly verdict: "approved" }>;
@@ -25,6 +26,9 @@ const executorPayload: AgentResultPayload = executorResult;
 const resultMeta: OperationResultMeta = result._meta;
 const parallelMeta: OperationResultMeta = parallelResult._meta;
 const pipelineMeta: OperationResultMeta = pipelineResult._meta;
+const agentEffects: EffectScopeRef = result.effects;
+const parallelEffects: EffectScopeRef = parallelResult.effects;
+const pipelineEffects: EffectScopeRef = pipelineResult.effects;
 
 void payload.agentId;
 void payload.output.verdict;
@@ -35,6 +39,9 @@ void executorPayload;
 void resultMeta;
 void parallelMeta;
 void pipelineMeta;
+void agentEffects;
+void parallelEffects;
+void pipelineEffects;
 
 // @ts-expect-error Executor payloads never contain core-owned operation identity.
 void executorResult._meta;

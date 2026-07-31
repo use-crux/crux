@@ -31,11 +31,13 @@ durable status for all five roles. Shipped native producers currently include:
 | `plan.operation` | Change |
 | `task.operation` | Change |
 | `workspace.operation` | Change |
+| `effect.run` | Receipt-safe intent and change, plus recovery outcomes linked to the original receipt |
 
 Automatic Workspace recovery is not shipped yet. Effect receipt and rollback
-evidence also waits for the canonical Effects receipt model. Crux does not
-infer authority, verification, mutation, or recovery from names, nesting, or
-timestamps.
+evidence uses only effect identity, safe resource summaries, receipt outcome,
+and recovery status; it never exposes input, output, captured state, errors, or
+recovery envelopes. Crux does not infer authority, verification, mutation, or
+recovery from names, nesting, or timestamps.
 
 The generated, version-controlled primitive coverage matrix is the exact
 inventory. `custom-only` means the subject is supported but no native producer

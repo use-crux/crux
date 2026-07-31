@@ -8,6 +8,7 @@
     "dev:twoslash": "NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3002",
     "dev:twoslash:only": "NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3002",
     "build": "NODE_OPTIONS=--max-old-space-size=6144 next build",
+    "check:effects": "node scripts/check-effect-docs.mjs",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "typecheck": "tsgo --noEmit"

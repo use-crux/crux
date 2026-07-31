@@ -1,6 +1,6 @@
 {
   "title": "@use-crux/core",
-  "description": "The base Crux package, prompts, contexts, memory, agents, flows, plans, tasks, skills, scoring, Evals, safety, index, lint, runtime bridge, and observability.",
+  "description": "The base Crux package, prompts, contexts, memory, agents, flows, effects, plans, tasks, skills, scoring, Evals, safety, index, lint, runtime bridge, and observability.",
   "pages": [
     "index",
     "config",
@@ -29,6 +29,7 @@
     "cache",
     "agent",
     "flow",
+    "effect",
     "defer",
     "runtime-engine",
     "plan",

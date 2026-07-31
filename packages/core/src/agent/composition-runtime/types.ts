@@ -4,6 +4,7 @@ import type { RetryOptions } from '../../generation/retry'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { CruxSpanId } from '../../observability'
 import type { WithOperationResultMeta } from '../../observability'
+import type { EffectScopeRef } from '../../effect'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import type { AnyModel, AnyToolSet } from '../../types'
 import type {
@@ -17,6 +18,9 @@ export type CompositionKind = 'parallel' | 'pipeline' | 'consensus' | 'swarm'
 
 type CompositionResultEnvelope<TResult extends object> =
   TResult extends readonly unknown[] ? never : TResult
+
+type CompositionResultWithEffects<TResult extends object> =
+  CompositionResultEnvelope<TResult> & { readonly effects: EffectScopeRef }
 
 /** Additional child execution-context fields for one composition step. */
 export interface CompositionStepContextInput {
@@ -145,5 +149,5 @@ export interface CompositionRuntime {
     body: (
       scope: CompositionScope,
     ) => Promise<CompositionResultEnvelope<TResult>>,
-  ): Promise<WithOperationResultMeta<CompositionResultEnvelope<TResult>>>
+  ): Promise<WithOperationResultMeta<CompositionResultWithEffects<TResult>>>
 }

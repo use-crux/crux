@@ -1,0 +1,10 @@
+{
+  "title": "Effects and rollback",
+  "description": "Make external state changes explicit, recoverable, and observable with receipts and rollback boundaries.",
+  "pages": [
+    "index",
+    "recovery-patterns",
+    "rollback-boundaries",
+    "ambiguity-and-reconciliation"
+  ]
+}

@@ -51,6 +51,24 @@ Public `defer()` failures use `CruxDeferError` from `@use-crux/core`.
 | [`DEFER_TARGET_INPUT_REQUIRED`](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) | Named target missing required JSON input.          |
 | [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)                 | Named work could not commit before the response.   |
 
+## Effects codes
+
+Public custom-effect failures use `CruxEffectError` from
+`@use-crux/core/effect`. `EffectOutcomeUnknownError` and `RollbackError`
+provide additional structured fields for ambiguity and incomplete rollback.
+
+| Code | Meaning |
+| --- | --- |
+| [`EFFECT_DUPLICATE_ID`](/docs/errors/EFFECT_DUPLICATE_ID) | Two effect definitions share one id and version. |
+| [`EFFECT_RESOURCE_FAILED`](/docs/errors/EFFECT_RESOURCE_FAILED) | Resource projection failed before execution. |
+| [`EFFECT_CAPTURE_FAILED`](/docs/errors/EFFECT_CAPTURE_FAILED) | Recovery pre-state capture failed before execution. |
+| [`EFFECT_RECOVERY_REQUIRED`](/docs/errors/EFFECT_RECOVERY_REQUIRED) | A required-recovery boundary blocked an irreversible effect. |
+| [`EFFECT_SCOPE_NOT_FOUND`](/docs/errors/EFFECT_SCOPE_NOT_FOUND) | A rollback scope ref is invalid or unavailable. |
+| [`EFFECT_RECEIPT_NOT_FOUND`](/docs/errors/EFFECT_RECEIPT_NOT_FOUND) | A receipt ref is invalid, unavailable, or belongs to another definition. |
+| [`EFFECT_SCOPE_TERMINAL`](/docs/errors/EFFECT_SCOPE_TERMINAL) | New work targeted a boundary that is rolling back or closed. |
+| [`EFFECT_OUTCOME_AMBIGUOUS`](/docs/errors/EFFECT_OUTCOME_AMBIGUOUS) | An external outcome is unknown or cannot be reconciled safely. |
+| [`EFFECT_ROLLBACK_PARTIAL`](/docs/errors/EFFECT_ROLLBACK_PARTIAL) | A required rollback did not complete. |
+
 ## Execution evidence codes
 
 `CruxEvidenceError` covers synchronous authoring and inspection failures.

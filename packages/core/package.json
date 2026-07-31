@@ -157,6 +157,10 @@
       "types": "./src/flow/index.ts",
       "import": "./src/flow/index.ts"
     },
+    "./effect": {
+      "types": "./src/effect/index.ts",
+      "import": "./src/effect/index.ts"
+    },
     "./memory": {
       "types": "./src/memory/index.ts",
       "import": "./src/memory/index.ts"
@@ -344,6 +348,9 @@
       ],
       "flow": [
         "src/flow/index.ts"
+      ],
+      "effect": [
+        "src/effect/index.ts"
       ],
       "memory": [
         "src/memory/index.ts"

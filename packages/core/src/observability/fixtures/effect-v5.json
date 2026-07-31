@@ -1,0 +1,173 @@
+{
+  "records": [
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_effect_start",
+      "type": "span:start",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 1,
+      "spanId": "1111111111111111",
+      "parentSpanId": null,
+      "family": "effect",
+      "primitive": "effect.run",
+      "name": "crm.customer.update",
+      "startedAt": "2026-07-31T12:00:00.000Z",
+      "status": "running",
+      "attributes": {
+        "crux.effect.id": "crm.customer.update",
+        "crux.effect.version": 1,
+        "crux.effect.receipt.id": "effect_receipt_1",
+        "crux.effect.scope.id": "scope_1",
+        "crux.effect.boundary.id": "boundary_1",
+        "crux.effect.outcome": "preparing",
+        "crux.effect.recovery": "unavailable"
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_effect_artifact",
+      "type": "artifact",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 2,
+      "artifactId": "artifact_effect_receipt_1",
+      "spanId": "1111111111111111",
+      "kind": "effect.receipt",
+      "createdAt": "2026-07-31T12:00:01.000Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "preview": {
+        "kind": "effect.receipt",
+        "receiptId": "effect_receipt_1",
+        "effectId": "crm.customer.update",
+        "effectVersion": 1,
+        "scopeId": "scope_1",
+        "boundaryId": "boundary_1",
+        "outcome": "succeeded",
+        "recovery": "available",
+        "resource": {
+          "type": "crm.customer",
+          "id": "customer_1",
+          "attributes": {
+            "region": "eu",
+            "priority": 2,
+            "active": true
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_effect_end",
+      "type": "span:end",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 3,
+      "spanId": "1111111111111111",
+      "endedAt": "2026-07-31T12:00:01.000Z",
+      "durationMs": 1000,
+      "status": "ok",
+      "attributes": {
+        "crux.effect.outcome": "succeeded",
+        "crux.effect.recovery": "available"
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_recovery_start",
+      "type": "span:start",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 4,
+      "spanId": "2222222222222222",
+      "parentSpanId": null,
+      "family": "effect",
+      "primitive": "effect.run",
+      "name": "crm.customer.update recovery",
+      "startedAt": "2026-07-31T12:00:02.000Z",
+      "status": "running",
+      "attributes": {
+        "crux.effect.id": "crm.customer.update",
+        "crux.effect.version": 1,
+        "crux.effect.receipt.id": "effect_receipt_2",
+        "crux.effect.scope.id": "scope_1",
+        "crux.effect.boundary.id": "boundary_1",
+        "crux.effect.parent_receipt.id": "effect_receipt_1",
+        "crux.effect.outcome": "preparing",
+        "crux.effect.recovery": "unavailable"
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_recovery_artifact",
+      "type": "artifact",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 5,
+      "artifactId": "artifact_effect_receipt_2",
+      "spanId": "2222222222222222",
+      "kind": "effect.receipt",
+      "createdAt": "2026-07-31T12:00:03.000Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "preview": {
+        "kind": "effect.receipt",
+        "receiptId": "effect_receipt_2",
+        "effectId": "crm.customer.update",
+        "effectVersion": 1,
+        "scopeId": "scope_1",
+        "boundaryId": "boundary_1",
+        "parentReceiptId": "effect_receipt_1",
+        "outcome": "succeeded",
+        "recovery": "unavailable",
+        "resource": {
+          "type": "crm.customer",
+          "id": "customer_1"
+        }
+      }
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_recovery_of",
+      "type": "edge",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 6,
+      "edgeId": "edge_recovery_of",
+      "edgeType": "recovery.of",
+      "from": {
+        "kind": "span",
+        "id": "2222222222222222"
+      },
+      "to": {
+        "kind": "span",
+        "id": "1111111111111111"
+      },
+      "createdAt": "2026-07-31T12:00:03.000Z"
+    },
+    {
+      "schemaVersion": 5,
+      "recordId": "rec_recovery_end",
+      "type": "span:end",
+      "operationId": "run_effect_fixture",
+      "runId": "run_effect_fixture",
+      "segmentId": "seg_effect_fixture",
+      "segmentSeq": 7,
+      "spanId": "2222222222222222",
+      "endedAt": "2026-07-31T12:00:03.000Z",
+      "durationMs": 1000,
+      "status": "ok",
+      "attributes": {
+        "crux.effect.outcome": "succeeded",
+        "crux.effect.recovery": "unavailable"
+      }
+    }
+  ]
+}

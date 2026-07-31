@@ -260,6 +260,7 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   blackboard: { label: "Blackboard", family: "state", glyph: "grid" },
   thread: { label: "Thread", family: "state", glyph: "branch" },
   workspace: { label: "Workspace", family: "state", glyph: "folder" },
+  effect: { label: "Effect", family: "state", glyph: "spark" },
   "storage.recordStore": {
     label: "Record store",
     family: "state",

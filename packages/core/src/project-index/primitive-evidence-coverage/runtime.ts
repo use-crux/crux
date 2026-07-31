@@ -116,6 +116,10 @@ export const runtimeEvidenceCoverage = {
     name: "defer.run",
     participation: "subject",
   }),
+  "effect.run": row({
+    name: "effect.run",
+    participation: "subject",
+  }),
   "evidence.record": row({
     name: "evidence.record",
     participation: "producer",

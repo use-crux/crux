@@ -32,6 +32,7 @@ import type {
   SwarmInvocationContext,
 } from "../request/prepare/invocation";
 import type { CompositionRequestReceiptTree } from "../request/receipt/tree";
+import type { EffectScopeRef } from "../effect";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -191,6 +192,8 @@ export interface SwarmResult<
 > {
   /** Exact identity of the `composition.swarm` operation that produced this result. */
   readonly _meta: OperationResultMeta;
+  /** In-process reference to this composition's passive rollback boundary. */
+  readonly effects: EffectScopeRef;
   /** The final agent's output — union of every possible agent output. */
   output: InferAgentOutput<TAgents[Extract<keyof TAgents, string>]>;
   /** ID of the agent that produced the final output. */

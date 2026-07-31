@@ -1,0 +1,33 @@
+---
+title: EFFECT_ROLLBACK_PARTIAL
+description: A required effect rollback did not complete.
+---
+
+## What failed
+
+`rollbackOnError()` threw `RollbackError` because one or more recovery units
+failed, were unavailable, remained ambiguous, or could not be reversed.
+
+## Fix
+
+Inspect `error.result` before deciding what to retry or escalate:
+
+```ts
+try {
+  await rollbackOnError(run);
+} catch (error) {
+  if (error instanceof RollbackError) {
+    for (const unit of error.result?.units ?? []) {
+      console.error(unit.effectIds, unit.status, unit.error);
+    }
+  }
+}
+```
+
+`error.cause` retains the original callback failure.
+`error.recoveryError` retains the underlying recovery-system error when one
+exists. Do not treat a partial result as a successful rollback; reconcile
+ambiguous units and retry only units whose external semantics make that safe.
+
+See [Read a RollbackResult](/docs/guides/effects/rollback-boundaries#read-a-rollbackresult)
+for aggregate and per-unit status guidance.

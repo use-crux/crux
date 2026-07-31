@@ -1,0 +1,305 @@
+---
+title: Rollback boundaries
+description: Group related effects, choose strict or best-effort recovery, and respond to rollback results without hiding partial work.
+---
+
+A rollback boundary groups related Effects under one causal recovery plan. Use
+`rollbackOnError()` when later work should trigger recovery of earlier changes
+in reverse causal order. It is a compensation boundary, not a database
+transaction: every receipt remains visible, and the result states exactly what
+could and could not be recovered.
+
+```ts
+import {
+  RollbackError,
+  rollbackOnError,
+  type RollbackResult,
+} from "@use-crux/core/effect";
+
+await rollbackOnError(async () => {
+  const customer = await createCustomer(input);
+  await chargeCustomer(customer);
+  await scheduleWelcomeEmail(customer);
+});
+```
+
+If the callback returns, `rollbackOnError()` returns its value without running
+recovery. If the callback throws, completed recovery units run in causal LIFO
+order. A completed rollback rethrows the original callback error unchanged.
+An incomplete rollback throws `RollbackError` with the original error as
+`cause` and its `RollbackResult` as `result`.
+
+## Choose strict or best-effort recovery
+
+The default `{ recovery: "required" }` mode is for operations that must remain
+fully recoverable. It rejects an Effect without a recovery handler before
+resource projection, capture, or execution, so the boundary never quietly
+admits a change it cannot reverse.
+
+```ts
+await rollbackOnError(async () => {
+  await updateCustomer(input);
+  await sendEmail(input); // Blocked if email.send has no recovery.
+});
+```
+
+When strict mode reports `EFFECT_RECOVERY_REQUIRED`, choose the domain action
+that makes the guarantee honest:
+
+1. Define recovery for the Effect.
+2. Move the irreversible Effect outside the boundary, usually after the
+   recoverable work succeeds.
+3. Explicitly accept partial rollback with `{ recovery: "best-effort" }`.
+
+Use best-effort mode when the operation is still useful even though part of it
+cannot be reversed, such as an email sent after a database update. The mode
+admits irreversible Effects but does not label them as recovered.
+
+```ts
+await rollbackOnError(
+  async () => {
+    await updateCustomer(input);
+    await sendWelcomeEmail(input);
+  },
+  { recovery: "best-effort" },
+);
+```
+
+A later failure still produces an honest result. The customer update may be
+recovered while the email unit reports `irreversible`.
+
+## Read a RollbackResult
+
+Use `RollbackResult` to decide whether the application can continue, should
+retry a known-safe unit, or needs operator review. The top-level `status`
+summarizes the plan, while `units` preserves each settlement and its Effect IDs,
+safe resource, and structured error.
+
+| Result status | What it means | What to do |
+| --- | --- | --- |
+| `completed` | Every unit is `recovered` or `already_recovered`. | Continue the failure path knowing compensation completed. |
+| `partial` | At least one unit recovered and at least one did not. | Inspect every non-recovered unit and escalate or retry only when its external semantics are safe. |
+| `not_possible` | No unit recovered, and all units were blocked or unavailable rather than failing during a handler call. | Do not retry the whole operation blindly. Resolve unavailable, irreversible, expired, conflicting, or ambiguous work first. |
+| `failed` | No unit recovered and at least one recovery handler failed. | Diagnose the failed unit. A known failed recovery can be retried under application policy. |
+| `cancelled` | Cancellation left at least one planned unit untouched. | Inspect all units before resuming; earlier units may already be recovered. |
+
+Unit statuses add the detail needed to respond:
+
+- `recovered` and `already_recovered` need no further recovery;
+- `irreversible`, `unavailable`, `expired`, and `handler_unavailable` require a
+  domain or deployment decision before another attempt;
+- `conflict` means newer resource state blocked safe recovery, so review that
+  state before considering an authorized force operation;
+- `ambiguous` requires external confirmation and
+  [reconciliation](/docs/guides/effects/ambiguity-and-reconciliation), not a
+  retry;
+- `failed` is a known handler failure and may be retryable when the provider
+  and compensation are idempotent;
+- `cancelled` means this unit did not finish because the rollback request was
+  cancelled.
+
+```ts
+function unresolvedUnits(result: RollbackResult) {
+  return result.units.filter(
+    (unit) =>
+      unit.status !== "recovered" &&
+      unit.status !== "already_recovered",
+  );
+}
+
+try {
+  await rollbackOnError(runOperation);
+} catch (error) {
+  if (error instanceof RollbackError && error.result) {
+    const unresolved = unresolvedUnits(error.result);
+    await recoveryQueue.escalate({
+      scope: error.result.scope,
+      status: error.result.status,
+      units: unresolved,
+    });
+  }
+  throw error;
+}
+```
+
+Do not convert an incomplete result into success just because some units
+recovered. `partial`, `not_possible`, and `cancelled` describe different
+operational situations, and the unit statuses tell you which response is safe.
+
+## Roll back from inside the boundary
+
+The callback receives a controller so application logic can reject completed
+work without first throwing. Call `boundary.rollback()` when a decision made
+inside the operation should recover the boundary immediately and return the
+result for inspection.
+
+```ts
+const review = await rollbackOnError(async (boundary) => {
+  await updateCustomer(input);
+  await publishReport(input);
+
+  const decision = await reviewChanges(input);
+  if (!decision.approved) {
+    const result = await boundary.rollback({
+      reason: decision.reason,
+    });
+    return { status: "rejected" as const, result };
+  }
+
+  return { status: "approved" as const };
+});
+```
+
+In required mode, the wrapper returns the callback value only when the manual
+rollback completed. An incomplete result becomes `RollbackError`. Best-effort
+mode allows the callback to return any terminal rollback result so the caller
+can apply its own domain policy.
+
+## Roll back a boundary later
+
+Keep `boundary.ref` when review or approval happens after the callback returns.
+The ref is a JSON-safe `EffectScopeRef` that tells `rollback()` which completed
+boundary to recover. Use this only while the same process and in-memory ledger
+are alive.
+
+```ts
+import { rollback } from "@use-crux/core/effect";
+
+const scope = await rollbackOnError(async (boundary) => {
+  await updateCustomer({ id: "cus_123", name: "Ada" });
+  return boundary.ref;
+});
+
+const result = await rollback(scope, {
+  reason: "The approval was withdrawn",
+});
+```
+
+`rollback()` always returns `RollbackResult`; it does not erase the original
+receipts. Repeated or concurrent requests join or reuse unit settlement, so a
+successfully recovered unit reports `already_recovered` and its handler does
+not run twice.
+
+This release does not persist scope refs, captured state, or recovery handlers.
+A ref cannot be resolved after restart. Durable delayed recovery belongs to a
+future runtime slice.
+
+## Understand terminal boundaries
+
+Starting `boundary.rollback()` or `rollback(scope)` makes that boundary
+terminal. Crux rejects any new Effect that tries to join it with
+`EFFECT_SCOPE_TERMINAL`, because admitting work after the recovery snapshot
+could leave an external change outside the plan.
+
+Await all intended Effect work before starting rollback. Pure computation may
+finish after manual rollback, which lets the callback format and return a
+rejection result, but it must not launch more Effects.
+
+## Nest rollback boundaries
+
+Nest `rollbackOnError()` when a sub-operation needs its own recovery decision.
+The inner boundary owns and orders its Effects. After it completes, the outer
+boundary treats that child boundary as one causal recovery unit.
+
+```ts
+await rollbackOnError(async () => {
+  await createOrder(input);
+
+  await rollbackOnError(async () => {
+    await reserveInventory(input.items);
+    await createShipment(input.address);
+  });
+
+  await capturePayment(input.payment);
+});
+```
+
+If the inner callback fails, it rolls back its own completed units before the
+error reaches the outer boundary. If the inner callback succeeds but later
+outer work fails, outer rollback recovers the completed child boundary as a
+unit while preserving the child's internal causal order. A child already
+recovered independently settles as `already_recovered` when the parent later
+rolls back.
+
+Do not ask an active child boundary to roll back the ancestor it is still
+running inside. That lifecycle cycle is rejected with
+`EFFECT_SCOPE_TERMINAL`.
+
+## Effects inside tools and flow steps
+
+Effect definitions keep the same call semantics inside tools and flow steps.
+The live execution scope records that ancestry, and the nearest rollback
+boundary owns the recovery unit automatically. Flow runs and pipeline, agent,
+and composition roots provide passive boundaries; you do not pass boundary or
+run IDs into the Effect.
+
+Use `tool()` when a model should be able to request a domain change. Call the
+Effect from the tool's `execute` function exactly as you would from application
+code:
+
+```ts
+import { generate, tool } from "@use-crux/ai";
+import { z } from "zod";
+
+const renameCustomer = tool({
+  description: "Rename a customer account",
+  parameters: z.object({
+    customerId: z.string(),
+    name: z.string(),
+  }),
+  execute: async ({ customerId, name }) =>
+    updateCustomer({ id: customerId, name }),
+});
+
+await rollbackOnError(async () => {
+  await generate(customerAgent, {
+    model,
+    input: { request: "Rename cus_123 to Ada" },
+    tools: { renameCustomer },
+  });
+  await verifyCustomerProfile();
+});
+```
+
+An Effect inside `flow.step()` keeps its flow-step ancestry while the flow run
+owns recovery. Run-like boundaries are passive: failure, suspension,
+cancellation, or expiration does not recover automatically or require every
+Effect to define recovery. Flow, pipeline, agent, and composition results
+expose an `effects` ref for explicit `rollback(result.effects)` later.
+
+## Roll back a flow after review
+
+`FlowScope` exposes `flow.effects` and can start rollback inside the handler
+with `flow.rollback()`. This fits reviewer decisions made before return:
+
+```ts
+const publication = flow("publication", async (flow, input) => {
+  await flow.step("publish", () => publishReport(input));
+  const review = await flow.step("review", () => reviewReport(input));
+
+  if (!review.approved) {
+    const rollbackResult = await flow.rollback({
+      reason: review.reason ?? "Reviewer rejected publication",
+    });
+    return { status: "rejected" as const, rollbackResult };
+  }
+
+  return { status: "published" as const };
+});
+```
+
+Starting `flow.rollback()` makes the flow's Effect boundary terminal. The
+handler may finish pure computation and return its rejection result, but any
+later Effect is rejected with `EFFECT_SCOPE_TERMINAL`.
+
+Use `rollback(result.effects)` when review happens after the run completes.
+Both APIs are in-process in this release: the reference resolves only while
+the same process, receipt ledger, and recovery handlers remain alive. Runtime-
+backed recovery after restart belongs to a future release.
+
+## Related
+
+- [Effects overview](/docs/guides/effects)
+- [Recovery patterns](/docs/guides/effects/recovery-patterns)
+- [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [Effects API reference](/docs/reference/crux-core/effect)

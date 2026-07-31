@@ -1,5 +1,6 @@
 import { observe } from '../../observability'
 import { withOperationResultMeta } from '../../observability/internal/result-meta'
+import { runPassiveEffectBoundary } from '../../effect/internal/boundary'
 import { compositionDefinitionRef, parallelBranchDefinitionRef } from '../../observability/definition-ref'
 import { getExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
@@ -143,11 +144,18 @@ export function createCompositionRuntime(
       })
 
       try {
-        const payload = await compositionSpan.withContext(() => body(scope))
-        const result = withOperationResultMeta(payload, {
-          traceId: compositionSpan.traceId,
-          spanId: compositionSpan.spanId,
-        })
+        const result = await compositionSpan.withContext(() =>
+          runPassiveEffectBoundary(compositionId, async (boundary) => {
+            const payload = await body(scope)
+            return withOperationResultMeta(
+              { ...payload, effects: boundary.ref },
+              {
+                traceId: compositionSpan.traceId,
+                spanId: compositionSpan.spanId,
+              },
+            )
+          }),
+        )
         compositionSpan.end()
         return result
       } catch (error) {
