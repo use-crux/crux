@@ -343,6 +343,7 @@ var primitiveFamilyByName = map[string]string{
 	"feedback.record":           "feedback",
 	"defer.scheduled":           "defer",
 	"defer.run":                 "defer",
+	"effect.run":                "effect",
 	"evidence.record":           "evidence",
 	"custom.operation":          "custom",
 }
@@ -368,11 +369,13 @@ var canonicalEdgeTypes = map[string]struct{}{
 	"eval.case_of":       {},
 	"derived.from":       {},
 	"evidence.for":       {},
+	"recovery.of":        {},
 }
 
 var canonicalArtifactKinds = map[string]struct{}{
 	"approval.decision":    {},
 	"approval.request":     {},
+	"effect.receipt":       {},
 	"input":                {},
 	"output":               {},
 	"messages":             {},
@@ -441,6 +444,11 @@ func ValidateRecord(record Record) error {
 		} else if span.Family != want {
 			return fmt.Errorf("span %s family %q does not match primitive %q", span.SpanID, span.Family, span.Primitive)
 		}
+		if span.Primitive == "effect.run" {
+			if err := validateEffectRunAttributes(span.Attributes); err != nil {
+				return err
+			}
+		}
 	case RecordEdge:
 		var edge EdgeRecord
 		if err := json.Unmarshal(record.Payload, &edge); err != nil {
@@ -448,6 +456,9 @@ func ValidateRecord(record Record) error {
 		}
 		if !isCanonicalOrCustom(edge.EdgeType, canonicalEdgeTypes) {
 			return fmt.Errorf("edge %s has invalid edgeType %q", edge.EdgeID, edge.EdgeType)
+		}
+		if err := validateRecoveryOfEdge(edge); err != nil {
+			return err
 		}
 		if edge.EdgeType == "evidence.for" {
 			if err := validateEvidenceEdgeAttributes(edge.Attributes); err != nil {
@@ -474,6 +485,9 @@ func ValidateRecord(record Record) error {
 		}
 		if !isCanonicalOrCustom(artifact.Kind, canonicalArtifactKinds) {
 			return fmt.Errorf("artifact %s has invalid kind %q", artifact.ArtifactID, artifact.Kind)
+		}
+		if err := validateEffectReceiptArtifact(artifact); err != nil {
+			return err
 		}
 		if _, err := validateEvidenceSourceArtifact(
 			record.Payload,
