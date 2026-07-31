@@ -9,18 +9,22 @@
  */
 
 import { decodePersistedMessages } from "../../content/persisted-message";
-import type { JsonObject, Storage } from "../../storage";
+import type { Storage } from "../../storage";
 import { ThreadError } from "../errors";
 import type {
   ThreadEntry,
   ThreadReadOptions,
   ThreadSnapshot,
+  ThreadVariantInfo,
 } from "../types";
-import { threadControlKey, threadNodeKey } from "./keys";
+import { computeThreadVariants } from "../variants";
+import { threadControlKey } from "./keys";
+import {
+  isNodePublished,
+  loadThreadPath,
+} from "./path";
 import {
   parseThreadControlRecord,
-  parseThreadNodeRecord,
-  type ThreadControlRecord,
   type ThreadNodeRecord,
 } from "./records";
 
@@ -46,77 +50,20 @@ export async function readThread(
     );
   }
 
-  const path = await loadPath(storage, threadId, head);
+  const path = await loadThreadPath(storage, threadId, head);
   const addressed = applyBefore(path, options.before);
   const page = applyLimit(addressed, options.limit);
+  const variants = await computeThreadVariants(
+    storage,
+    threadId,
+    control,
+    path,
+  );
   const entries = await Promise.all(
-    page.nodes.map((node) => nodeToEntry(storage, node)),
+    page.nodes.map((node) =>
+      nodeToEntry(storage, node, variants.get(node.id))),
   );
   return frozenSnapshot(threadId, head, entries, page.cursor);
-}
-
-/** Whether a node is reachable from any published Thread position. */
-export async function isNodePublished(
-  storage: Storage,
-  threadId: string,
-  control: ThreadControlRecord,
-  messageId: string,
-): Promise<boolean> {
-  const positions = new Set([
-    ...Object.values(control.heads),
-    ...Object.values(control.leaves),
-  ]);
-  for (const position of positions) {
-    let cursor: string | null = position;
-    const visited = new Set<string>();
-    while (cursor && !visited.has(cursor)) {
-      if (cursor === messageId) return true;
-      visited.add(cursor);
-      const raw = await getNodeRecord(storage, threadId, cursor);
-      if (!raw) break;
-      cursor = parseThreadNodeRecord(raw).parentId;
-    }
-  }
-  return false;
-}
-
-async function loadPath(
-  storage: Storage,
-  threadId: string,
-  head: string,
-): Promise<readonly ThreadNodeRecord[]> {
-  const reverse: ThreadNodeRecord[] = [];
-  const visited = new Set<string>();
-  let cursor: string | null = head;
-  while (cursor) {
-    if (visited.has(cursor)) {
-      throw new ThreadError("commit_failed", "Stored Thread path contains a cycle.");
-    }
-    visited.add(cursor);
-    const raw = await getNodeRecord(storage, threadId, cursor);
-    if (!raw) {
-      throw new ThreadError(
-        "commit_failed",
-        `Published Thread path references missing message "${cursor}".`,
-      );
-    }
-    const node = parseThreadNodeRecord(raw);
-    reverse.push(node);
-    cursor = node.parentId;
-  }
-  return reverse.reverse();
-}
-
-async function getNodeRecord(
-  storage: Storage,
-  threadId: string,
-  messageId: string,
-): Promise<JsonObject | null> {
-  const key = threadNodeKey(threadId, messageId);
-  if (storage.records.getMany) {
-    return (await storage.records.getMany([key]))[0] ?? null;
-  }
-  return storage.records.get(key);
 }
 
 function applyBefore(
@@ -172,6 +119,7 @@ function groupPath(path: readonly ThreadNodeRecord[]): ThreadNodeRecord[][] {
 async function nodeToEntry(
   storage: Storage,
   node: ThreadNodeRecord,
+  variant: ThreadVariantInfo | undefined,
 ): Promise<ThreadEntry> {
   const structural = {
     id: node.id,
@@ -198,6 +146,7 @@ async function nodeToEntry(
     kind: "message",
     ...structural,
     createdAt: node.createdAt,
+    ...(variant ? { variant } : {}),
     ...message,
   });
 }

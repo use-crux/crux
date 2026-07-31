@@ -30,9 +30,15 @@ import {
   parseThreadControlRecord,
   parseThreadNodeRecord,
   type ThreadControlRecord,
+  type ThreadReceiptRecord,
 } from "./records";
+import {
+  finalizeThreadReceipt,
+  readPersistedThreadReceiptRecord,
+  toThreadReceiptRecord,
+} from "./receipts";
 import { replayThreadAppend } from "./replay";
-import { isNodePublished } from "./read";
+import { isNodePublished } from "./path";
 
 const OWNER = "main";
 const CONSISTENCY_ATTEMPTS = 8;
@@ -68,8 +74,8 @@ export async function commitThreadAppend(
   );
   if (replay) return replay;
   const parentId = options.after ?? observedControl?.heads[OWNER] ?? null;
-  if (options.after) {
-    await assertAppendBoundary(storage, threadId, observedControl, options.after);
+  if (parentId) {
+    await assertAppendBoundary(storage, threadId, observedControl, parentId);
   }
 
   const group = deriveThreadGroup(parentId, prepared);
@@ -88,15 +94,21 @@ export async function commitThreadAppend(
       const control = current ? parseThreadControlRecord(current) : null;
       assertLive(control, threadId);
       if (control && (await isNodePublished(storage, threadId, control, leafId))) {
-        const selected = await isNodePublishedFromHead(
-          storage,
-          threadId,
-          control.heads[OWNER],
-          leafId,
-        );
+        const receipt =
+          control.pendingReceipts[firstId] ??
+          await readPersistedThreadReceiptRecord(
+            storage,
+            threadId,
+            firstId,
+          );
+        if (!receiptMatchesNodes(receipt, nodes, parentId)) {
+          throw new ThreadCommitError(
+            `Thread "${threadId}" cannot recover the original append receipt for "${firstId}".`,
+          );
+        }
         decision = {
-          status: selected ? "selected" : "alternative",
-          selectedHead: selected ? leafId : control.heads[OWNER] ?? leafId,
+          status: receipt.status,
+          selectedHead: receipt.selectedHead,
           replayed: true,
         };
         return { type: "none" };
@@ -105,6 +117,21 @@ export async function commitThreadAppend(
       const now = new Date().toISOString();
       const currentHead = control?.heads[OWNER];
       const selected = currentHead === (parentId ?? undefined);
+      const leaves = advanceRememberedLeaves(
+        control?.leaves ?? {},
+        parentId,
+        leafId,
+      );
+      const status = selected ? "selected" : "alternative";
+      const selectedHead = selected ? leafId : currentHead ?? leafId;
+      const pendingReceipt = toThreadReceiptRecord({
+        status,
+        messageIds: Object.freeze(nodes.map((node) => node.id)),
+        ...(parentId ? { parentId } : {}),
+        selectedHead,
+        committedAt: nodes[0]!.createdAt,
+        replayed: false,
+      });
       const next: ThreadControlRecord = {
         schema: 1,
         state: "live",
@@ -113,15 +140,21 @@ export async function commitThreadAppend(
           ...(selected ? { [OWNER]: leafId } : {}),
         },
         leaves: {
-          ...(control?.leaves ?? {}),
-          ...(!selected ? { [firstId]: leafId } : {}),
+          ...leaves.value,
+          ...(!selected && !leaves.advanced
+            ? { [firstId]: leafId }
+            : {}),
+        },
+        pendingReceipts: {
+          ...(control?.pendingReceipts ?? {}),
+          [firstId]: pendingReceipt,
         },
         createdAt: control?.createdAt ?? now,
         updatedAt: now,
       };
       decision = {
-        status: selected ? "selected" : "alternative",
-        selectedHead: selected ? leafId : currentHead ?? leafId,
+        status,
+        selectedHead,
         replayed: false,
       };
       return { type: "put", value: next };
@@ -144,7 +177,47 @@ export async function commitThreadAppend(
     committedAt: nodes[0]!.createdAt,
     replayed: decision.replayed,
   };
-  return Object.freeze(receipt);
+  const frozen = Object.freeze(receipt);
+  try {
+    await finalizeThreadReceipt(storage, threadId, frozen);
+  } catch (error) {
+    throw mapCommitError(threadId, error);
+  }
+  return frozen;
+}
+
+function receiptMatchesNodes(
+  receipt: ThreadReceiptRecord | null,
+  nodes: readonly { readonly id: string; readonly createdAt: string }[],
+  parentId: string | null,
+): receipt is ThreadReceiptRecord {
+  return (
+    receipt !== null &&
+    receipt.committedAt === nodes[0]!.createdAt &&
+    receipt.parentId === parentId &&
+    receipt.messageIds.length === nodes.length &&
+    receipt.messageIds.every((id, index) => id === nodes[index]!.id)
+  );
+}
+
+function advanceRememberedLeaves(
+  leaves: Readonly<Record<string, string>>,
+  parentId: string | null,
+  leafId: string,
+): {
+  readonly value: Readonly<Record<string, string>>;
+  readonly advanced: boolean;
+} {
+  if (!parentId) return { value: leaves, advanced: false };
+  let advanced = false;
+  const value = Object.fromEntries(
+    Object.entries(leaves).map(([branch, rememberedLeaf]) => {
+      if (rememberedLeaf !== parentId) return [branch, rememberedLeaf];
+      advanced = true;
+      return [branch, leafId];
+    }),
+  );
+  return { value, advanced };
 }
 
 async function assertAppendBoundary(
@@ -186,24 +259,6 @@ async function assertReadYourWrites(
     "unsupported_capability",
     `Thread "${threadId}" could not read its published commit. Configure config.storage with a strongly consistent records store that supports mutate().`,
   );
-}
-
-async function isNodePublishedFromHead(
-  storage: Storage,
-  threadId: string,
-  head: string | undefined,
-  messageId: string,
-): Promise<boolean> {
-  if (!head) return false;
-  const control: ThreadControlRecord = {
-    schema: 1,
-    state: "live",
-    heads: { [OWNER]: head },
-    leaves: {},
-    createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString(),
-  };
-  return isNodePublished(storage, threadId, control, messageId);
 }
 
 function ensureMutationCapability(storage: Storage, threadId: string): void {

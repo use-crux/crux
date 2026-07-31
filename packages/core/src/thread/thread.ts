@@ -1,8 +1,8 @@
 /**
  * Canonical Thread factory.
  *
- * Construction is inert: configured Storage is resolved only when append or
- * read executes, matching other authored Crux primitives.
+ * Construction is inert: configured Storage is resolved only when an
+ * operation executes, matching other authored Crux primitives.
  *
  * @module
  */
@@ -11,8 +11,10 @@ import { resolveRecords } from "../runtime/runtime";
 import type { Storage } from "../storage";
 import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
+import { commitThreadEdit } from "./store/alternatives";
 import { commitThreadAppend } from "./store/commit";
 import { readThread } from "./store/read";
+import { selectThread } from "./store/select";
 import type { Thread, ThreadOptions } from "./types";
 
 /**
@@ -52,10 +54,16 @@ export function thread(options: ThreadOptions): Thread {
     commitThreadAppend(resolveStorage(), options.id, input, appendOptions);
   const read: Thread["read"] = (readOptions) =>
     readThread(resolveStorage(), options.id, readOptions);
+  const edit: Thread["edit"] = (messageId, patch) =>
+    commitThreadEdit(resolveStorage(), options.id, messageId, patch);
+  const select: Thread["select"] = (messageId) =>
+    selectThread(resolveStorage(), options.id, messageId);
   return Object.freeze({
     _tag: "Thread",
     id: options.id,
     append,
     read,
+    edit,
+    select,
   });
 }

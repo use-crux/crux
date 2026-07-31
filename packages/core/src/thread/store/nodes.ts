@@ -125,6 +125,8 @@ function sameImmutableNode(
     left.seq === right.seq &&
     left.groupEnd === right.groupEnd &&
     left.state === "live" &&
-    left.identity === right.identity
+    left.identity === right.identity &&
+    left.editOf === right.editOf &&
+    left.revisionOf === right.revisionOf
   );
 }

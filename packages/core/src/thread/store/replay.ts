@@ -17,6 +17,8 @@ import {
   type ThreadControlRecord,
   type ThreadNodeRecord,
 } from "./records";
+import { readThreadReceipt } from "./receipts";
+import { isNodePublished } from "./path";
 
 /** Prepared identity needed to recognize an already-published append. */
 export interface ReplayMessage {
@@ -59,81 +61,33 @@ export async function replayThreadAppend(
       node.groupId !== first.groupId ||
       node.seq !== index ||
       node.groupEnd !== (index === nodes.length - 1) ||
-      node.state !== "live"
+      node.state !== "live" ||
+      node.editOf !== undefined ||
+      node.revisionOf !== undefined
     ) {
       throw identityConflict();
     }
   }
 
-  const selectedHead = control.heads.main;
   const leaf = nodes.at(-1)!.id;
-  const selected = selectedHead
-    ? await isAncestor(storage, threadId, selectedHead, leaf)
-    : false;
-  if (!selected && !Object.values(control.leaves).includes(leaf)) {
+  if (!(await isNodePublished(storage, threadId, control, leaf))) {
     throw identityConflict();
   }
-
-  return Object.freeze({
-    status: selected ? "selected" : "alternative",
-    messageIds: Object.freeze(nodes.map((node) => node.id)),
-    ...(first.parentId ? { parentId: first.parentId } : {}),
-    selectedHead: selected
-      ? leaf
-      : await selectedSiblingLeaf(
-          storage,
-          threadId,
-          selectedHead,
-          first.parentId,
-        ),
-    committedAt: first.createdAt,
-    replayed: true,
-  });
-}
-
-async function isAncestor(
-  storage: Storage,
-  threadId: string,
-  head: string,
-  candidate: string,
-): Promise<boolean> {
-  let cursor: string | null = head;
-  while (cursor) {
-    if (cursor === candidate) return true;
-    const value = await storage.records.get(threadNodeKey(threadId, cursor));
-    if (!value) return false;
-    cursor = parseThreadNodeRecord(value).parentId;
-  }
-  return false;
-}
-
-async function selectedSiblingLeaf(
-  storage: Storage,
-  threadId: string,
-  head: string | undefined,
-  parentId: string | null,
-): Promise<string> {
-  if (!head) {
+  const receipt = await readThreadReceipt(
+    storage,
+    threadId,
+    first.id,
+    control.pendingReceipts[first.id],
+  );
+  if (
+    receipt.committedAt !== first.createdAt ||
+    receipt.messageIds.length !== nodes.length ||
+    receipt.messageIds.some((id, index) => id !== nodes[index]!.id) ||
+    receipt.parentId !== (first.parentId ?? undefined)
+  ) {
     throw identityConflict();
   }
-  const path: ThreadNodeRecord[] = [];
-  let cursor: string | null = head;
-  while (cursor) {
-    const value = await storage.records.get(threadNodeKey(threadId, cursor));
-    if (!value) throw identityConflict();
-    const node = parseThreadNodeRecord(value);
-    path.unshift(node);
-    cursor = node.parentId;
-  }
-  const start = parentId
-    ? path.findIndex((node) => node.id === parentId) + 1
-    : 0;
-  const first = path[start];
-  if (!first || first.parentId !== parentId) throw identityConflict();
-  const group = path.slice(start).filter((node) => node.groupId === first.groupId);
-  const leaf = group.find((node) => node.groupEnd);
-  if (!leaf) throw identityConflict();
-  return leaf.id;
+  return receipt;
 }
 
 function identityConflict(): ThreadError {

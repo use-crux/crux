@@ -13,5 +13,7 @@ guidance; move `{ records }` directly to `storage`.
 
 Add the provider-neutral `thread({ id })` primitive with immutable canonical
 history, stable replay identities, causal-group pagination, and durable
-alternatives for concurrent appends. Adapter authors can run the shared Thread
-conformance suite from `@use-crux/core/thread/testing/vitest`.
+alternatives for concurrent appends. Threads support immutable user-message
+edits, remembered branch selection, and deterministic variant navigation
+metadata. Adapter authors can run the shared Thread conformance suite from
+`@use-crux/core/thread/testing/vitest`.

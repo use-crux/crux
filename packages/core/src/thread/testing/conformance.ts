@@ -14,6 +14,7 @@ import {
   type Storage,
 } from "../../storage";
 import { thread } from "../thread";
+import { registerThreadAlternativesConformance } from "./alternatives-conformance";
 /** Options for {@link describeThreadConformance}. */
 export interface DescribeThreadConformanceOptions {
   /** Human-readable implementation name used for the Vitest suite. */
@@ -51,8 +52,10 @@ export function describeThreadConformance(
       expect(Object.keys(conversation).sort()).toEqual([
         "_tag",
         "append",
+        "edit",
         "id",
         "read",
+        "select",
       ]);
       expect(Object.isFrozen(commit)).toBe(true);
       expect(await conversation.read()).toEqual({
@@ -295,5 +298,6 @@ export function describeThreadConformance(
         message: expect.stringMatching(/config\.storage.*strongly consistent/u),
       });
     });
+    registerThreadAlternativesConformance(options);
   });
 }

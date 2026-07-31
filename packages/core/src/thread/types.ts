@@ -10,8 +10,20 @@
 import type { Message } from "../generation/messages";
 import type { Storage } from "../storage";
 
+type UserMessage = Exclude<Message, { role: "assistant" }>;
+
 /** Input to {@link Thread.append}, with an optional caller-stable identity. */
 export type ThreadMessageInput = Message & { readonly id?: string };
+
+/** Replacement content for an immutable user-message edit. */
+export interface ThreadEditPatch {
+  /** Optional caller-stable identity for retry-safe editing. */
+  readonly id?: string;
+  /** Replacement user content; the original message role is preserved. */
+  readonly content: UserMessage["content"];
+  /** Optional replacement metadata. */
+  readonly metadata?: UserMessage["metadata"];
+}
 
 /** A live canonical message on a Thread path. */
 export type ThreadMessage = Message & {
@@ -118,4 +130,8 @@ export interface Thread {
   ): Promise<ThreadCommit>;
   /** Read an exact root-to-head path with optional group-safe pagination. */
   read(options?: ThreadReadOptions): Promise<ThreadSnapshot>;
+  /** Create and select an immutable sibling replacement for a user message. */
+  edit(messageId: string, patch: ThreadEditPatch): Promise<ThreadCommit>;
+  /** Select an existing sibling or ancestor with its remembered continuation. */
+  select(messageId: string): Promise<ThreadSnapshot>;
 }

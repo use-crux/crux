@@ -16,3 +16,11 @@ export function threadControlKey(threadId: string): string {
 export function threadNodeKey(threadId: string, messageId: string): string {
   return `${threadControlKey(threadId)}/node/${encodeURIComponent(messageId)}`;
 }
+
+/** Immutable append-receipt key for one published causal group. */
+export function threadReceiptKey(
+  threadId: string,
+  firstMessageId: string,
+): string {
+  return `${threadControlKey(threadId)}/receipt/${encodeURIComponent(firstMessageId)}`;
+}

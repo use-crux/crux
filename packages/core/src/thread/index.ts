@@ -18,6 +18,7 @@ export type {
   Thread,
   ThreadCommit,
   ThreadEntry,
+  ThreadEditPatch,
   ThreadMessage,
   ThreadMessageInput,
   ThreadOptions,
