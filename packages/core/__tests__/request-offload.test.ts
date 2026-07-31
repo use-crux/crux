@@ -18,7 +18,7 @@ import { historyResponse as response } from "./request-history-harness";
 describe.sequential("offloadable()", () => {
   it("publishes before dispatch and exposes only a bounded opaque retrieval reference", async () => {
     const records = inMemoryRecordStore();
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     const canonical = "Exact private deployment log line. ".repeat(180);
     const observed: Array<{
       readonly request: CallArgs;
@@ -99,7 +99,7 @@ describe.sequential("offloadable()", () => {
 
   it("forces exact recovery with backing and rejects Tool-less structured output", async () => {
     const records = inMemoryRecordStore();
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     const requests: CallArgs[] = [];
     const spec: AdapterSpec<object, { readonly text: string }> = {
       providerId: "forced-offload-test",
@@ -167,7 +167,7 @@ describe.sequential("offloadable()", () => {
 
   it("retrieves the exact canonical value through the injected bounded Tool", async () => {
     const installation = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const canonical = {
       kind: "trace",

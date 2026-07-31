@@ -33,6 +33,7 @@ import type {
   ContextEntry,
   ContextTextSegment,
   MemoryEntry,
+  ThreadHistoryEntry,
 } from "../prompt/context-types";
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyMessage, AnyToolSet } from "../types";
@@ -141,6 +142,8 @@ export interface ResolvedPrompt {
     input: Record<string, unknown>;
     promptId?: string;
   }>;
+  /** Canonical Thread selected from this prompt's `use` graph, when present. */
+  threadBinding?: ThreadHistoryEntry;
 }
 
 // ─────────────────────────────────────────────────────────────────

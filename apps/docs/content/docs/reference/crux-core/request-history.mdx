@@ -15,6 +15,10 @@ import type {
 History planning chooses a model-facing projection of a complete canonical
 transcript. It never mutates or replaces the caller-owned messages.
 
+When a Thread owns the canonical transcript, the same policies project its
+selected path without changing stored history. See
+[Managed conversations](/docs/guides/threads/conversations#history-planning-and-thread-revisions).
+
 ## Choose a history policy
 
 | Policy | Use when | Do not use when |
@@ -223,6 +227,7 @@ libraries, adapter implementations, and reusable configuration builders.
 ## Related
 
 - Guide: [History planning](/docs/guides/context-planning/history)
+- Guide: [Managed Thread conversations](/docs/guides/threads/conversations)
 - Guide: [Input budgets](/docs/guides/context-planning/budgets)
 - Reference: [Request planning](/docs/reference/crux-core/request-planning)
 - Reference: [Preparation hooks](/docs/reference/crux-core/request-preparation)

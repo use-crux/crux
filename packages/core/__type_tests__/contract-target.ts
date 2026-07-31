@@ -187,6 +187,7 @@ type _GenerateResultKeys = Expect<
     | "providerMetadata"
     | "routing"
     | "pendingApprovals"
+    | "threadCommit"
     | "raw"
     | "_meta"
   >

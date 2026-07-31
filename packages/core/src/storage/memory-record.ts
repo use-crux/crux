@@ -8,7 +8,13 @@
  * @module
  */
 
-import type { JsonObject, RecordEntry, RecordEvent, RecordStore, RecordWriteOptions } from './types'
+import type {
+  JsonObject,
+  RecordEntry,
+  RecordEvent,
+  RecordStore,
+  RecordWriteOptions,
+} from './types'
 import {
   assertRecordWriteOptions,
   assertValidKey,
@@ -28,6 +34,7 @@ type Listener<T extends JsonObject> = (event: RecordEvent<T>) => void
 export function inMemoryRecordStore<T extends JsonObject = JsonObject>(): RecordStore<T> {
   const records = new Map<string, MemoryRecord<T>>()
   const listeners = new Set<Listener<T>>()
+  const mutations = new Map<string, Promise<void>>()
 
   const getActiveRecord = (key: string): MemoryRecord<T> | undefined => {
     const record = records.get(key)
@@ -126,11 +133,36 @@ export function inMemoryRecordStore<T extends JsonObject = JsonObject>(): Record
         listeners.delete(listener)
       }
     },
+    async mutate(key, fn) {
+      assertValidKey(key)
+      return serializeMutation(mutations, key, async () => {
+        const record = getActiveRecord(key)
+        const current = record ? cloneJsonObject(record.value) : null
+        const mutation = await fn(current)
+        if (mutation.type === 'none') {
+          return current ? cloneJsonObject(current) : null
+        }
+        if (mutation.type === 'delete') {
+          records.delete(key)
+          emit({ type: 'delete', key, timestamp: Date.now() })
+          return null
+        }
+        write(key, mutation.value, undefined)
+        emit({
+          type: 'put',
+          key,
+          value: cloneJsonObject(mutation.value),
+          timestamp: Date.now(),
+        })
+        return cloneJsonObject(mutation.value)
+      })
+    },
     capabilities: () => ({
       ttl: 'lazy',
       filter: 'scan',
       watch: true,
       batch: false,
+      mutate: 'native',
     }),
   }
 }
@@ -141,4 +173,25 @@ function isExpired<T extends JsonObject>(record: MemoryRecord<T>): boolean {
 
 function cloneRecordEvent<T extends JsonObject>(event: RecordEvent<T>): RecordEvent<T> {
   return event.type === 'put' ? { ...event, value: cloneJsonObject(event.value) } : { ...event }
+}
+
+async function serializeMutation<T>(
+  mutations: Map<string, Promise<void>>,
+  key: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previous = mutations.get(key) ?? Promise.resolve()
+  let release: (() => void) | undefined
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const tail = previous.then(() => current)
+  mutations.set(key, tail)
+  await previous
+  try {
+    return await fn()
+  } finally {
+    release?.()
+    if (mutations.get(key) === tail) mutations.delete(key)
+  }
 }

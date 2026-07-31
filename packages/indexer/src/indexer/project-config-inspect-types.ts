@@ -69,7 +69,8 @@ export interface ProjectConfigInspect {
     readonly bridge: ProjectConfigSetting;
   };
   readonly persistence: {
-    readonly records: ProjectConfigSetting;
+    /** Whether the standard `config.storage.records` capability is bound. */
+    readonly store: ProjectConfigSetting;
   };
   readonly lint: {
     readonly profile: ProjectConfigSetting;

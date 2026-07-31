@@ -78,7 +78,7 @@ describe("first-party shared static index fixtures", () => {
           ? "@use-crux/indexer/crux-core-media"
           : mcp
             ? "@use-crux/indexer/crux-core-mcp"
-          : "@use-crux/indexer/crux-core",
+            : "@use-crux/indexer/crux-core",
       );
       expect(identity.family).toBe(identity.extractor);
       expect(identity.nativeCovered).toBe(true);
@@ -96,7 +96,9 @@ describe("first-party shared static index fixtures", () => {
             ? "mcp-native-static.test.ts"
             : identity.extractor === "evidence.record"
               ? "evidence-record-native-static.test.ts"
-          : "first-party-native-negative-fixtures.test.ts",
+              : identity.extractor === "thread"
+                ? "thread-native-static.test.ts"
+                : "first-party-native-negative-fixtures.test.ts",
       );
       for (const fixtureClass of coverage.requiredFixtureClasses) {
         expect(

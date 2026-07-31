@@ -38,6 +38,16 @@ describe('config — runtime domain mapping', () => {
     crux.dispose()
   })
 
+  it('rejects the legacy persistence key with storage migration guidance', () => {
+    const records = inMemoryRecordStore()
+
+    expect(() =>
+      config({
+        persistence: { records },
+      } as unknown as Parameters<typeof config>[0]),
+    ).toThrow(/config\.persistence.*config\.storage/)
+  })
+
   it('installs one explicit feedback destination and shared redaction paths', async () => {
     const submissions: unknown[] = []
     const crux = config({
@@ -273,7 +283,7 @@ describe('config — runtime domain mapping', () => {
 
     try {
       const crux = config({
-        persistence: { records: ignoredStore },
+        storage: { records: ignoredStore },
         generation: {
           middleware: ignoredMiddleware,
           tokenizer: (text) => text.length,

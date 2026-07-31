@@ -16,7 +16,7 @@ import { historyResponse as response } from "./request-history-harness";
 describe.sequential("Tool output offload", () => {
   it("keeps small outputs inline and offloads large outputs without changing canonical evidence", async () => {
     const records = inMemoryRecordStore();
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     const results: Array<{
       readonly output?: unknown;
       readonly modelOutput: unknown;
@@ -110,7 +110,7 @@ describe.sequential("Tool output offload", () => {
 
   it("forces offload while retaining the canonical result in evidence", async () => {
     const installation = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const canonical = { exact: "forced Tool result" };
     const results: Array<{

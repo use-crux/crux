@@ -1,0 +1,332 @@
+---
+title: Branching And Alternatives
+description: Preserve concurrent appends, edit without mutation, navigate remembered continuations, and render branch pickers.
+---
+
+A Thread is a tree even when most conversations look linear. Every append has
+an exact parent. The selected head chooses one path through the tree, while
+other published paths remain addressable.
+
+Branching is not an exceptional recovery format. It is the normal answer to
+concurrent writes, edits, answer regeneration, and explicit append-after-
+history operations.
+
+## Concurrent Appends Do Not Lose Writes
+
+Two callers can observe the same selected head and append concurrently:
+
+```ts
+const receipts = await Promise.all([
+  conversation.append({
+    id: "turn-left",
+    role: "user",
+    content: "Left request",
+  }),
+  conversation.append({
+    id: "turn-right",
+    role: "user",
+    content: "Right request",
+  }),
+]);
+
+const selected = receipts.find((receipt) => receipt.status === "selected");
+const alternative = receipts.find(
+  (receipt) => receipt.status === "alternative",
+);
+```
+
+Exactly one publication advances the selected head. The other attaches to the
+same observed parent and returns `status: "alternative"`. Both receipts are
+durable.
+
+The alternative is not silently rebased after the winner. Rebasing would imply
+that it observed the winning message. It is also not dropped, because completion
+order should not erase a valid application event.
+
+Read either path directly:
+
+```ts
+const active = await conversation.read();
+const other = await conversation.read({
+  at: alternative!.messageIds.at(-1)!,
+});
+```
+
+`read({ at })` is observational. It does not change selection. Use `select()`
+when future default appends should continue from another path.
+
+## Causal Groups Define Branch Boundaries
+
+Every `append()` call publishes one causal group. A one-message append has one
+group member. A Tool exchange or another batch can have several.
+
+```ts
+await conversation.append([
+  { id: "question", role: "user", content: "Check my order." },
+  {
+    id: "assistant-call",
+    role: "assistant",
+    content: [{
+      type: "tool-call",
+      toolCallId: "lookup-1",
+      toolName: "lookup_order",
+      input: { orderId: "42" },
+    }],
+  },
+  {
+    id: "lookup-result",
+    role: "tool",
+    content: "Shipped",
+    metadata: { toolCallId: "lookup-1", toolName: "lookup_order" },
+  },
+  { id: "answer", role: "assistant", content: "It has shipped." },
+]);
+```
+
+The legal append boundary is `answer`, the group-ending message. Appending
+after `question`, `assistant-call`, or `lookup-result` would split one causal
+exchange and fails with `ThreadError` code `invalid_group`.
+
+This rule also applies to managed turns. Managed execution commits the rendered
+user message and accepted assistant or Tool exchange as one group.
+
+## Append After An Earlier Boundary
+
+Pass `after` to attach a new group after a specific published group end:
+
+```ts
+await conversation.append({
+  id: "first-question",
+  role: "user",
+  content: "Which plan is active?",
+});
+
+await conversation.append({
+  id: "first-answer",
+  role: "assistant",
+  content: "The monthly plan.",
+});
+
+await conversation.append({
+  id: "follow-up",
+  role: "user",
+  content: "Can I change it?",
+});
+
+const branch = await conversation.append(
+  {
+    id: "alternative-follow-up",
+    role: "user",
+    content: "When does it renew?",
+  },
+  { after: "first-answer" },
+);
+
+console.log(branch.status); // "alternative"
+```
+
+The selected path still ends at `follow-up`. The new branch is readable at
+`alternative-follow-up` and can be selected later.
+
+Use application-known message IDs or a prior `ThreadCommit.messageIds` value as
+the boundary. Do not infer a boundary from array position. Pagination can
+return groups larger than its soft message limit.
+
+## Edit Means Branch, Not Mutation
+
+`edit()` creates a new sibling message and selects it. The original remains
+unchanged and readable:
+
+```ts
+await conversation.append({
+  id: "question-v1",
+  role: "user",
+  content: "Can I change my plan?",
+});
+
+await conversation.append({
+  id: "answer-v1",
+  role: "assistant",
+  content: "Yes.",
+});
+
+const edited = await conversation.edit("question-v1", {
+  id: "question-v2",
+  content: "Can I change my annual plan?",
+  metadata: { source: "user-edit" },
+});
+
+console.log(edited.status); // "selected"
+```
+
+The selected path now ends at `question-v2`. The original path still contains
+`question-v1` and `answer-v1`:
+
+```ts
+const original = await conversation.read({ at: "answer-v1" });
+const current = await conversation.read();
+```
+
+The current public edit target must be a live user message that is the sole
+member of its causal group. Editing an assistant message, a message inside a
+multi-message group, or a redacted message fails with a typed error.
+
+That restriction matters for managed turns because their user and accepted
+assistant exchange share a group. To revise such a turn, create an alternative
+whole turn after the preceding group boundary. Do not try to split the managed
+group at its user message.
+
+## Remembered Continuations
+
+Selection remembers the leaf associated with each branch. Continuing the
+edited branch and then returning to the original restores the original answer:
+
+```ts
+await conversation.append({
+  id: "answer-v2",
+  role: "assistant",
+  content: "Yes, before the renewal date.",
+});
+
+const original = await conversation.select("question-v1");
+console.log(original.head); // "answer-v1"
+
+const edited = await conversation.select("question-v2");
+console.log(edited.head); // "answer-v2"
+```
+
+`select()` accepts a published sibling or ancestor of the selected path. Pass a
+branch's group-start message ID. Selecting a message already on the active path
+is a continuation-preserving no-op, so selecting `question-v2` while its branch
+is active does not shorten the head back from `answer-v2`.
+
+An off-path selection restores the remembered continuation when one exists. If
+the branch has no later continuation, selection resolves to the end of its
+published causal group.
+
+## Regenerate An Assistant Answer
+
+For a user message published as its own group, append the regenerated assistant
+after that user boundary:
+
+```ts
+await conversation.append({
+  id: "regenerate-question",
+  role: "user",
+  content: "Explain the renewal policy.",
+});
+
+await conversation.append({
+  id: "answer-original",
+  role: "assistant",
+  content: "Your plan renews monthly.",
+});
+
+async function publishRegeneration(content: string) {
+  const commit = await conversation.append(
+    {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content,
+    },
+    { after: "regenerate-question" },
+  );
+
+  await conversation.select(commit.messageIds[0]);
+  return commit;
+}
+```
+
+The append initially returns `alternative` because the original answer remains
+selected. `select()` makes the regenerated answer active. Retain both variants
+so the user can move back.
+
+For a prior managed turn, the user message is not a legal internal branch
+boundary. Regenerate by publishing an alternative complete turn after the
+previous group's end, with new stable IDs for the replacement user and
+assistant messages.
+
+## Variant Metadata
+
+`read()` adds `variant` only to group-start messages that have published
+siblings. Linear messages carry no wrapper:
+
+```ts
+type ThreadVariantInfo = {
+  readonly index: number;
+  readonly count: number;
+  readonly previous?: string;
+  readonly next?: string;
+};
+```
+
+The fields mean:
+
+| Field | UI meaning |
+| --- | --- |
+| `index` | Zero-based position of this sibling in deterministic order |
+| `count` | Total published siblings at this parent |
+| `previous` | Message ID of the previous sibling, when present |
+| `next` | Message ID of the next sibling, when present |
+
+Sibling order is deterministic. Use the metadata returned by each fresh read
+instead of caching a separate branch count in the UI.
+
+## Render A Branch Picker
+
+Show a picker beside the message carrying `variant`, not beside every message
+in its continuation:
+
+```ts
+import type { Thread, ThreadEntry } from "@use-crux/core/thread";
+
+function branchPicker(entry: ThreadEntry) {
+  if (entry.kind !== "message" || !entry.variant) return null;
+
+  return {
+    label: `${entry.variant.index + 1} of ${entry.variant.count}`,
+    previousId: entry.variant.previous,
+    nextId: entry.variant.next,
+  };
+}
+
+async function chooseVariant(
+  conversation: Thread,
+  messageId: string | undefined,
+) {
+  if (!messageId) return;
+  const selected = await conversation.select(messageId);
+  renderConversation(selected.entries);
+}
+```
+
+Recommended UI behavior:
+
+- Display `index + 1` of `count`.
+- Disable the previous control when `previous` is absent.
+- Disable the next control when `next` is absent.
+- Call `select(previous)` or `select(next)` and render the returned snapshot.
+- Replace the visible continuation with the selected snapshot instead of
+  splicing messages locally.
+- Refresh after a new append because the sibling count may have changed.
+- Keep a stable key based on `entry.id`; do not use the sibling index as identity.
+
+The picker changes the active head for subsequent appends. If your UI needs a
+read-only preview, call `read({ at: siblingId })` instead of `select()`.
+
+## Branch-Safe Application Rules
+
+1. Store message IDs and commit receipts with application events.
+2. Treat `status: "alternative"` as a successful durable publication.
+3. Render the selected path from `read()`, not from local append order.
+4. Branch only at causal-group ends.
+5. Use `variant.previous` and `variant.next` for navigation.
+6. Supply stable IDs when an append or edit can be retried.
+7. Never overwrite a prior message to simulate an edit.
+
+## Related
+
+- Guide: [Threads](/docs/guides/threads)
+- Guide: [Managed conversations](/docs/guides/threads/conversations)
+- Guide: [Removal, redaction, and deletion](/docs/guides/threads/erasure)
+- Reference: [Thread](/docs/reference/crux-core/thread)

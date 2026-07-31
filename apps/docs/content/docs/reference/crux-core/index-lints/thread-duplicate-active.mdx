@@ -1,0 +1,46 @@
+---
+title: thread.duplicate_active
+---
+
+## What it checks
+
+Crux emits this finding when more than one active `thread()` definition uses
+the same id.
+
+## Why it matters
+
+A Thread id identifies one canonical conversation tree across storage,
+managed execution, observability, and developer tooling. Reusing an active id
+can make unrelated definitions share history or make tooling point at the
+wrong authored source.
+
+## How to fix
+
+Give each active Thread a unique id, or remove the duplicate export:
+
+```ts
+import { thread } from "@use-crux/core/thread";
+
+export const supportConversation = thread({ id: "support-conversation" });
+export const salesConversation = thread({ id: "sales-conversation" });
+```
+
+## When to suppress
+
+Suppress only during a short migration where duplicate source remains in the
+project but exactly one definition can be active at runtime. Place the
+directive immediately before the first definition reported by `crux lint`:
+
+```ts
+// crux-lint-disable-next-line thread.duplicate_active -- legacy export is inactive in production
+export const supportConversation = thread({ id: "support-conversation" });
+export const legacyConversation = thread({ id: "support-conversation" });
+```
+
+## Rule metadata
+
+- Rule id: `thread.duplicate_active`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

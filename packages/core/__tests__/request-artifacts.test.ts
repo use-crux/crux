@@ -9,6 +9,13 @@ import {
   type CruxHostBinding,
 } from "../src";
 import { inMemoryRecordStore } from "../src/storage";
+import { historyArtifactIdentity } from "../src/request/artifacts/identity";
+import {
+  findHistorySummaryArtifact,
+  prepareHistorySummaryArtifact,
+} from "../src/request/artifacts/lifecycle";
+import { threadHistorySource } from "../src/request/history/source";
+import { summarize } from "../src/request/history/strategies";
 import {
   historyResponse as response,
   managedHistoryMessages as messages,
@@ -26,9 +33,137 @@ function managedPrompt(
 }
 
 describe.sequential("managed history artifacts", () => {
+  it("uses message digests for manual history and Thread revision ranges for Thread history", () => {
+    const common = {
+      strategy: summarize.regenerate(),
+      provider: "artifact-identity-test",
+      model: "model-1",
+      providerNative: false,
+    };
+    const manualA = historyArtifactIdentity({
+      ...common,
+      prefix: [{ role: "user", content: "first" }],
+    });
+    const manualB = historyArtifactIdentity({
+      ...common,
+      prefix: [{ role: "user", content: "second" }],
+    });
+    const threadA = historyArtifactIdentity({
+      ...common,
+      prefix: [{ role: "user", content: "first" }],
+      threadRange: {
+        source: "thread:conversation",
+        revision: "thread-revision-1",
+        range: "range-1",
+        offset: 0,
+        start: "message-1",
+        end: "message-1",
+        length: 1,
+      },
+    });
+    const threadSameRange = historyArtifactIdentity({
+      ...common,
+      prefix: [{ role: "user", content: "different rendered content" }],
+      threadRange: {
+        source: "thread:conversation",
+        revision: "thread-revision-1",
+        range: "range-1",
+        offset: 0,
+        start: "message-1",
+        end: "message-1",
+        length: 1,
+      },
+    });
+
+    expect(manualA.id).not.toBe(manualB.id);
+    expect(threadA.id).toBe(threadSameRange.id);
+    expect(
+      historyArtifactIdentity({
+        ...common,
+        prefix: [{ role: "user", content: "first" }],
+        threadRange: {
+          source: "thread:conversation",
+          revision: "thread-revision-2",
+          range: "range-1",
+          offset: 0,
+          start: "message-1",
+          end: "message-1",
+          length: 1,
+        },
+      }).id,
+    ).not.toBe(threadA.id);
+  });
+
+  it("reuses a compatible Thread prefix across later revisions", async () => {
+    const records = inMemoryRecordStore();
+    const installation = config({ storage: { records } });
+    let revision = "thread-revision-1";
+    const artifactRange = (span: { offset: number; length: number }) => ({
+      source: "thread:compatible-prefix",
+      revision,
+      range: `range:${span.offset}:${span.length}`,
+      offset: span.offset,
+      length: span.length,
+    });
+    const common = {
+      artifactRange,
+      artifactOffset: 0,
+      strategy: summarize.regenerate(),
+      provider: "artifact-thread-prefix-test",
+      model: "model-1",
+      providerNative: false,
+    };
+    try {
+      await prepareHistorySummaryArtifact({
+        ...common,
+        prefix: messages.slice(0, 2),
+        generate: async () => ({ summary: "older prefix" }),
+      }).artifact;
+      revision = "thread-revision-2";
+
+      const artifact = await findHistorySummaryArtifact({
+        ...common,
+        prefix: messages.slice(0, 4),
+      });
+
+      expect(artifact).toMatchObject({
+        summary: "older prefix",
+        stale: true,
+        identity: {
+          prefixLength: 2,
+          threadRange: { revision: "thread-revision-2", length: 2 },
+        },
+      });
+    } finally {
+      installation.dispose();
+    }
+  });
+
+  it("identifies a summarized Thread range after leading system messages", () => {
+    const source = threadHistorySource({
+      id: "leading-system",
+      revision: "thread-revision-1",
+      messages: [
+        { role: "system", content: "directive" },
+        { role: "user", content: "question" },
+        { role: "assistant", content: "answer" },
+      ],
+      messageIds: ["system-1", "user-1", "assistant-1"],
+      current: [],
+      validate: async () => undefined,
+    });
+
+    expect(source.artifactRange?.({ offset: 1, length: 1 })).toMatchObject({
+      start: "user-1",
+      end: "user-1",
+      offset: 1,
+      length: 1,
+    });
+  });
+
   it("deduplicates concurrent preparation and reuses one content-addressed artifact", async () => {
     const records = inMemoryRecordStore();
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     let releaseSummary!: () => void;
     const summaryGate = new Promise<void>((resolve) => {
       releaseSummary = resolve;
@@ -94,9 +229,10 @@ describe.sequential("managed history artifacts", () => {
         (await records.list("crux:request-summary:v1:")).entries,
       ).toHaveLength(1);
       expect(
-        results.flatMap((result) =>
-          result.steps[0]?.request?.warnings.map((warning) => warning.code) ??
-          [],
+        results.flatMap(
+          (result) =>
+            result.steps[0]?.request?.warnings.map((warning) => warning.code) ??
+            [],
         ),
       ).toEqual(
         expect.arrayContaining([
@@ -137,7 +273,7 @@ describe.sequential("managed history artifacts", () => {
     };
     const installation = config({
       host,
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const events: string[] = [];
     const spec: AdapterSpec<object, { readonly text: string }> = {
@@ -166,14 +302,11 @@ describe.sequential("managed history artifacts", () => {
     };
 
     try {
-      await adapter(spec)({}).generate(
-        managedPrompt("artifact-ordering"),
-        {
-          model: "ordering-model",
-          messages,
-          inputBudget: { max: 1_000, optimizeAt: 50 },
-        },
-      );
+      await adapter(spec)({}).generate(managedPrompt("artifact-ordering"), {
+        model: "ordering-model",
+        messages,
+        inputBudget: { max: 1_000, optimizeAt: 50 },
+      });
 
       expect(events).toEqual(["response"]);
       expect(retained).toHaveLength(1);
@@ -195,7 +328,7 @@ describe.sequential("managed history artifacts", () => {
           retained.push(work);
         },
       },
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const calls: CallArgs[] = [];
     const spec: AdapterSpec<object, { readonly text: string }> = {

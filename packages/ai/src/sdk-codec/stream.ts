@@ -71,6 +71,7 @@ export async function createStreamCallPlan(
       systemBlocks: request.systemBlocks,
       messages: normalizedMessages,
     });
+    await planned.validate?.();
     requestReceipts.push(planned.receipt);
     return {
       model: planned.model,

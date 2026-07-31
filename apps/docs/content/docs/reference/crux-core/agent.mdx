@@ -121,6 +121,7 @@ Throws `ConsensusError` when quorum is not met. The error has `.votes` and `.quo
 | `output`     | `unknown`                  | The agent's output                               |
 | `durationMs` | `number`                   | Execution time                                   |
 | `usage`      | `TokenUsage \| undefined` | Token usage if available                         |
+| `threadCommit` | `ThreadCommit \| undefined` | Atomic Thread publication receipt, when the Agent Prompt uses a Thread |
 | `_meta`      | `OperationResultMeta`      | Exact `agent.run` trace and span owned by Core   |
 
 ### `AgentExecutor`

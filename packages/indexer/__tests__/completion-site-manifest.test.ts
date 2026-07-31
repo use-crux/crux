@@ -125,7 +125,7 @@ describe("completion site manifest", () => {
         callNames: ["context"],
         propertyPath: ["use", "*"],
         slot: "identifierArrayElement",
-        acceptedKinds: ["context", "mcp.server"],
+        acceptedKinds: ["context", "thread", "mcp.server"],
         insertion: "identifier",
       },
       {
@@ -139,7 +139,7 @@ describe("completion site manifest", () => {
         callNames: ["prompt"],
         propertyPath: ["use", "*"],
         slot: "identifierArrayElement",
-        acceptedKinds: ["context", "mcp.server"],
+        acceptedKinds: ["context", "thread", "mcp.server"],
         insertion: "identifier",
       },
       {

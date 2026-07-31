@@ -5,8 +5,12 @@
  */
 
 import type { Message } from "../../generation/messages";
+import { sha256Hex } from "../../content/sha256";
+import { canonicalEvidenceJson } from "../../evidence/canonical-json";
 import type { RequestWarning } from "../receipt/adaptations";
 import type { SummarizeStrategy } from "./strategies";
+
+const encoder = new TextEncoder();
 
 /** Limits accepted by {@link history.recent}. */
 export interface RecentHistoryOptions {
@@ -25,9 +29,7 @@ export interface RecentHistoryProjection {
 }
 
 /** Options controlling the exact suffix retained by {@link history}. */
-export type ManagedHistoryRecent =
-  | number
-  | Readonly<RecentHistoryOptions>;
+export type ManagedHistoryRecent = number | Readonly<RecentHistoryOptions>;
 
 /** Configuration for a managed history summary representation. */
 export interface ManagedHistorySummaryOptions {
@@ -92,9 +94,6 @@ export interface ProviderHistorySummaryResult {
 /**
  * Canonical history made available to one request.
  *
- * Thread integration binds this seam when canonical Thread lands. Until then,
- * caller-owned complete transcripts are the only source implementation.
- *
  * @internal
  */
 export interface HistorySource {
@@ -106,6 +105,34 @@ export interface HistorySource {
   readonly mode: "manual" | "automatic";
   /** Current invocation messages appended after projection in automatic mode. */
   readonly current?: readonly Message[];
+  /** Stable canonical source identity for revision-aware planning. */
+  readonly identity?: string;
+  /** Exact source revision observed for this request. */
+  readonly revision?: string;
+  /** Revalidate the observed revision immediately before provider dispatch. */
+  readonly validate?: () => Promise<void>;
+  /** Derive revision/range identity for a managed-history prefix. */
+  readonly artifactRange?: (span: HistoryArtifactSpan) => ThreadHistoryRange;
+}
+
+/** Exact canonical source span summarized by one managed artifact. @internal */
+export interface HistoryArtifactSpan {
+  readonly offset: number;
+  readonly length: number;
+}
+
+/** Thread-owned range identity used instead of message-content digests. @internal */
+export interface ThreadHistoryRange {
+  readonly source: string;
+  /** Exact Thread control-record revision observed for this request. */
+  readonly revision: string;
+  /** Opaque identity of the selected message-id prefix within that revision. */
+  readonly range: string;
+  /** Zero-based canonical message offset of the summarized range. */
+  readonly offset: number;
+  readonly start?: string;
+  readonly end?: string;
+  readonly length: number;
 }
 
 /** Redacted history facts carried into request planning. @internal */
@@ -120,6 +147,16 @@ export interface RequestHistoryContext {
   readonly warnings: readonly RequestWarning[];
   /** Whether projection changed the canonical message sequence. */
   readonly changed: boolean;
+  /** Stable canonical source identity pinned into the request plan. */
+  readonly sourceIdentity?: string;
+  /** Exact source revision pinned into the request plan. */
+  readonly sourceRevision?: string;
+  /** Revalidate the pinned source revision before provider dispatch. */
+  readonly validateSource?: () => Promise<void>;
+  /** Derive Thread-owned summary artifact range identity. */
+  readonly artifactRange?: (span: HistoryArtifactSpan) => ThreadHistoryRange;
+  /** Automatic current-turn messages excluded from history projection caps. */
+  readonly currentLength?: number;
 }
 
 /** Bind a caller-owned complete transcript to the history seam. @internal */
@@ -130,5 +167,50 @@ export function callerOwnedHistorySource(
     kind: "caller-messages",
     messages: Object.freeze([...messages]),
     mode: "manual",
+  });
+}
+
+/** Bind an exact Thread snapshot and current turn to the history seam. @internal */
+export function threadHistorySource(input: {
+  readonly id: string;
+  readonly revision: string;
+  readonly messages: readonly Message[];
+  readonly messageIds: readonly string[];
+  readonly current: readonly Message[];
+  readonly validate: () => Promise<void>;
+}): HistorySource {
+  if (input.messages.length !== input.messageIds.length) {
+    throw new TypeError("Thread history messages and identities must align.");
+  }
+  const messageIds = Object.freeze([...input.messageIds]);
+  return Object.freeze({
+    kind: "thread" as const,
+    messages: Object.freeze([...input.messages]),
+    mode: "automatic" as const,
+    current: Object.freeze([...input.current]),
+    identity: `thread:${input.id}`,
+    revision: input.revision,
+    validate: input.validate,
+    artifactRange(span: HistoryArtifactSpan): ThreadHistoryRange {
+      if (
+        !Number.isSafeInteger(span.offset) ||
+        span.offset < 0 ||
+        !Number.isSafeInteger(span.length) ||
+        span.length < 0 ||
+        span.offset + span.length > messageIds.length
+      ) {
+        throw new TypeError("Thread history artifact span is out of bounds.");
+      }
+      const ids = messageIds.slice(span.offset, span.offset + span.length);
+      return Object.freeze({
+        source: `thread:${input.id}`,
+        revision: input.revision,
+        range: sha256Hex(encoder.encode(canonicalEvidenceJson(ids))),
+        ...(ids[0] ? { start: ids[0] } : {}),
+        ...(ids.at(-1) ? { end: ids.at(-1) } : {}),
+        offset: span.offset,
+        length: ids.length,
+      });
+    },
   });
 }

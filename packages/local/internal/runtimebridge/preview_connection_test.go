@@ -104,6 +104,6 @@ func capturePreviewRequest(
 func readyPreviewResponse(request CommandRequest) string {
 	return `{"type":"command.result","commandId":"` + request.CommandID + `","result":{
 		"status":"ready","targetId":"prompt:x","catalogueRevision":1,
-		"inspection":{"system":{"text":"","tokens":0,"coverage":"complete","parts":[]},
-		"totalTokens":0,"droppedContexts":[],"excludedContexts":[]}}}`
+		"preview":{"status":"fits","measurement":"exact","adaptations":[],
+		"warnings":[],"diagnostics":[]},"contributions":[]}}`
 }

@@ -38,6 +38,7 @@ import type {
   MatchSpec,
   MemoryEntry,
   SkillEntry,
+  ThreadHistoryEntry,
 } from '../prompt/context-types'
 import type { HistoryProjection } from '../request/history/source'
 import {
@@ -352,6 +353,21 @@ function lowerMemory(entry: MemoryEntry, index: number): LoweredContributor {
   }
 }
 
+function lowerThread(
+  entry: ThreadHistoryEntry,
+  index: number,
+): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: entry.id,
+    family: 'thread',
+    index,
+    mergeSourceId: `thread:${entry.id}`,
+    toolOwnerLabel: undefined,
+    contribute: () => ({ thread: entry }),
+  }
+}
+
 function lowerBlackboard(entry: BlackboardEntry, index: number): LoweredContributor {
   return {
     [CONTRIBUTOR]: true,
@@ -526,6 +542,8 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
       return lowerSkill(entry as SkillEntry, index)
     case 'Memory':
       return lowerMemory(entry as MemoryEntry, index)
+    case 'Thread':
+      return lowerThread(entry as ThreadHistoryEntry, index)
     case 'Blackboard':
       return lowerBlackboard(entry as BlackboardEntry, index)
     case 'MatchSpec':

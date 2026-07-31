@@ -46,8 +46,8 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the context-planning semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v40");
+  it("uses the combined Thread and context-planning semantic epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v41");
   });
 
   it("does not reuse a valid artifact from the pre-context-planning v39 namespace", async () => {

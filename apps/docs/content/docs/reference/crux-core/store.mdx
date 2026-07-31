@@ -6,7 +6,11 @@ description: JSON record storage methods, capabilities, TTL, filters, and bundle
 `RecordStore` is the JSON record capability from [`@use-crux/core/storage`](/docs/reference/crux-core/storage).
 
 ```ts
-import { inMemoryRecordStore, keySpace } from "@use-crux/core/storage";
+import {
+  inMemoryRecordStore,
+  keySpace,
+  mutateRecord,
+} from "@use-crux/core/storage";
 import type { JsonObject, RecordStore } from "@use-crux/core/storage";
 
 const records = inMemoryRecordStore();
@@ -35,11 +39,34 @@ interface RecordStore<T extends JsonObject = JsonObject> {
     options?: Omit<RecordListOptions, "cursor">,
   ): AsyncIterable<RecordEntry<T>>;
   watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void;
+  mutate?(
+    key: string,
+    fn: (current: T | null) =>
+      | RecordMutation<T>
+      | Promise<RecordMutation<T>>,
+  ): Promise<T | null>;
+  getVersioned?(
+    key: string,
+  ): Promise<{ value: T | null; version: string | null }>;
+  putVersioned?(
+    key: string,
+    value: T | null,
+    expectedVersion: string | null,
+  ): Promise<boolean>;
   capabilities(): RecordStoreCapabilities;
 }
 ```
 
 `put()` creates or replaces a record. `create()` is the atomic insert primitive and returns `false` when an active record already exists.
+Use `mutateRecord()` when a read-modify-write must be linearizable across
+concurrent callers:
+
+```ts
+await mutateRecord(records, "counter", (current) => ({
+  type: "put",
+  value: { count: (current?.count ?? 0) + 1 },
+}));
+```
 
 ## Capabilities
 
@@ -49,6 +76,7 @@ type RecordStoreCapabilities = {
   filter: "native" | "scan" | false;
   watch: boolean;
   batch: boolean;
+  mutate: "native" | "cas" | false;
 };
 ```
 

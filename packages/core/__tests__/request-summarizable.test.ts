@@ -16,7 +16,7 @@ import { historyResponse as response } from "./request-history-harness";
 describe.sequential("summarizable()", () => {
   it("prepares and selects one derived summary while retaining source capabilities", async () => {
     const records = inMemoryRecordStore();
-    const installation = config({ persistence: { records } });
+    const installation = config({ storage: { records } });
     const requests: CallArgs[] = [];
     const lookup = tool({
       description: "Look up an exact document section.",
@@ -99,7 +99,7 @@ describe.sequential("summarizable()", () => {
 
   it("treats source arrays atomically, unions capabilities, and rejects member collisions", async () => {
     const installation = config({
-      persistence: { records: inMemoryRecordStore() },
+      storage: { records: inMemoryRecordStore() },
     });
     const firstTool = tool({
       description: "Read the first source.",

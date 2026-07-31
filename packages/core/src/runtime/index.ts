@@ -34,7 +34,6 @@ export type {
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
-  CruxPersistenceConfig,
   CruxRuntimeConfig,
 } from "./config";
 export { configure } from "./configure";

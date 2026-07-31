@@ -258,6 +258,7 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     child: true,
   },
   blackboard: { label: "Blackboard", family: "state", glyph: "grid" },
+  thread: { label: "Thread", family: "state", glyph: "branch" },
   workspace: { label: "Workspace", family: "state", glyph: "folder" },
   "storage.recordStore": {
     label: "Record store",
@@ -895,6 +896,7 @@ export const INJECT_REL_KIND: Record<string, string> = {
   injectable: "injectable",
   memory: "memory",
   blackboard: "blackboard",
+  thread: "thread",
   unknown: "unknown",
 };
 

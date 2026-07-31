@@ -17,6 +17,7 @@ import type { WithOperationResultMeta } from '../observability'
 import type { InputBudget } from '../request/budget/input-budget'
 import type { PrepareStep } from '../request/prepare/step'
 import type { RequestReceipt } from '../request/receipt/receipt'
+import type { ThreadCommit } from '../thread/types'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ export interface AgentResultPayload<TOutput = unknown> {
   readonly usage?: TokenUsage
   /** Ordered provider requests executed by this managed child. */
   readonly requests?: readonly RequestReceipt[]
+  /** Atomic canonical Thread publication produced by this Agent invocation. */
+  readonly threadCommit?: ThreadCommit
 }
 
 /**

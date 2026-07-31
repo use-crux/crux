@@ -92,6 +92,14 @@ import {
   selectRepresentationSkills,
 } from "./representation-safety";
 import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
+import {
+  alignThreadInvocationInput,
+  commitThreadInvocation,
+  isThreadReplay,
+  prepareThreadInvocation,
+  validateThreadReplay,
+} from "./thread-history";
+import { attachThreadCommit } from "./thread-result";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -125,16 +133,22 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   });
   let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
+  let threadInvocation = await prepareThreadInvocation(
+    resolved,
+    args.messages ?? (args.nativeMessages !== undefined ? [] : undefined),
+  );
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
     args.nativeMessages,
+    threadInvocation.source,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = initialMessages.history?.changed
-    ? undefined
-    : args.nativeMessages;
+  let nativeMessages =
+    threadInvocation.source || initialMessages.history?.changed
+      ? undefined
+      : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const retryId = args.validationRetry
@@ -196,6 +210,14 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    {
+      messages,
+      ...(promptText ? { prompt: promptText } : {}),
+    },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
   const guardSkillAmendment = createSkillIngressAmendmentGuard({
@@ -244,9 +266,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           resolveOpts,
           skillSession,
         );
-        resolved = await prompt.resolve(
-          boundaryResolveOpts,
-        );
+        resolved = await prompt.resolve(boundaryResolveOpts);
         selectRepresentationSkills(
           resolved,
           resolved.representations ?? [],
@@ -513,6 +533,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             resolved,
             outputMode: resolved.schema ? "object" : "text",
             timeout: args.timeout,
+            ...(threadInvocation.override
+              ? { threadHistoryOverride: threadInvocation.override }
+              : {}),
           },
           cachedFinalizer,
         ),
@@ -543,6 +566,17 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           } finally {
             stepBudget.dispose();
           }
+        },
+        async (result) => {
+          if (result.threadCommit || result.pendingApprovals) return;
+          await validateThreadReplay(threadInvocation, isThreadReplay(result));
+          const threadCommit = await commitThreadInvocation(
+            threadInvocation,
+            result,
+          );
+          return threadCommit
+            ? attachThreadCommit(result, threadCommit)
+            : undefined;
         },
         async (result) => {
           await lifecycle.captureTurn({

@@ -247,6 +247,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
       messages: sealed.request.messages,
       ...(activeTools ? { activeTools: Object.freeze([...activeTools]) } : {}),
       receipt: sealed.receipt,
+      ...(sealed.source ? { validate: sealed.source.validate } : {}),
     });
   };
   return Object.assign(planner, {

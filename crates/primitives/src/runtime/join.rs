@@ -206,6 +206,15 @@ pub(crate) fn routing_runtime_join(
             );
             runtime_join.insert("workspaceId".to_string(), Value::String(workspace_id));
         }
+        "thread" => {
+            let thread_id = strip_definition_prefix(id, "thread:").to_string();
+            span_attributes.insert("threadId".to_string(), Value::String(thread_id.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("thread.operation".to_string()),
+            );
+            runtime_join.insert("threadId".to_string(), Value::String(thread_id));
+        }
         "rag.retriever" => {
             let retriever_id = strip_definition_prefix(id, "rag.retriever:").to_string();
             span_attributes.insert(

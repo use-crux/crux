@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectIndexData } from "@/types";
 import { buildIndex, indexFactChips, type ViewDef } from "./adapt";
+import { indexSectionOrder } from "./detail";
 import { kindMeta } from "./kit";
 
 describe("indexFactChips", () => {
@@ -48,6 +49,14 @@ describe("indexFactChips", () => {
 });
 
 describe("kindMeta", () => {
+  it("registers Thread definitions in the State family", () => {
+    expect(kindMeta("thread")).toMatchObject({
+      label: "Thread",
+      family: "state",
+      glyph: "branch",
+    });
+  });
+
   it("registers Eval definitions in the Evals family", () => {
     expect(kindMeta("eval")).toMatchObject({
       label: "Eval",
@@ -92,6 +101,36 @@ describe("kindMeta", () => {
       label: "Indexer",
       family: "capability",
     });
+  });
+});
+
+describe("Thread catalog presentation", () => {
+  it("keeps Thread relationships prominent without inventing live facts", () => {
+    const def = {
+      id: "thread:conversation",
+      kind: "thread",
+      name: "conversation",
+      fidelity: "resolved",
+      confidence: "static",
+      facts: { kind: "thread" },
+      lint: [],
+      raw: {
+        id: "thread:conversation",
+        kind: "thread",
+        name: "conversation",
+        fidelity: "resolved",
+      },
+    } satisfies ViewDef;
+
+    expect(indexFactChips(def)).toEqual([]);
+    expect(indexSectionOrder(def)).toEqual([
+      "hero",
+      "threadInspector",
+      "relations",
+      "source",
+      "observability",
+      "health",
+    ]);
   });
 });
 

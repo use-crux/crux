@@ -104,7 +104,7 @@ export function assertFlowSnapshotResumable(snapshot: FlowSnapshot): void {
  * Writes the signal payload to the store. The flow will pick it up
  * on the next `flow().resume(flowId)` call.
  *
- * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
+ * Uses the RecordStore from runtime config (`config({ storage: { records } })`).
  */
 export async function signalFlow(flowId: string, name: string, payload: JsonValue = {}): Promise<void> {
   const store = resolveRecords()
@@ -138,7 +138,7 @@ export async function getFlowSnapshot(flowId: string): Promise<FlowSnapshot | nu
 /**
  * List flows from the store, optionally filtered by status.
  *
- * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
+ * Uses the RecordStore from runtime config (`config({ storage: { records } })`).
  */
 export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary[]> {
   const store = resolveRecords()
@@ -159,7 +159,7 @@ export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary
  * Cancel a suspended flow externally.
  *
  * Updates the flow snapshot status to 'cancelled' in the store.
- * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
+ * Uses the RecordStore from runtime config (`config({ storage: { records } })`).
  */
 export async function cancelFlow(flowId: string, reason?: string): Promise<void> {
   const store = resolveRecords()

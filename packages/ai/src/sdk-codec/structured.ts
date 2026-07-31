@@ -104,6 +104,7 @@ export async function createStructuredCallPlan(
       systemBlocks: request.systemBlocks,
       messages: normalizedMessages,
     });
+    await planned.validate?.();
     requestReceipt = planned.receipt;
     return {
       model: planned.model,

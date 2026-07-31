@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 56 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want context-planning epoch 56", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 59 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 59", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -47,7 +47,14 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Epoch 55",
 		"authored evidence.record definitions",
 		"Epoch 56",
+		"authored Thread definitions",
 		"context-planning structure",
+		"Epoch 57",
+		"first-class Thread lint findings",
+		"Epoch 58",
+		"sources deleted while offline",
+		"Epoch 59",
+		"independently advanced Thread and context-planning",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -58,7 +65,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-56", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-59", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -67,6 +74,14 @@ func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 
 func TestProjectIndexFactStoreMissesPreExecutionEvidenceSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 54, "pre-execution-evidence snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreThreadLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 56, "pre-Thread-lint snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreStaleDeletionSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 57, "pre-stale-deletion snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T) {

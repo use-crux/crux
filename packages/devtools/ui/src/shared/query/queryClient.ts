@@ -99,6 +99,11 @@ export const qk = {
     operations: (since?: number, until?: number, limit?: number) =>
       ["memory", "operations", since, until, limit] as const,
   },
+  threads: {
+    all: ["threads"] as const,
+    inspection: (threadId: string) =>
+      ["threads", "inspection", threadId] as const,
+  },
   workspaces: {
     all: ["workspaces"] as const,
     list: () => ["workspaces", "list"] as const,

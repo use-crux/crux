@@ -6,12 +6,58 @@ import {
   RequestCompositionError,
   type Message,
 } from "../src";
+import { inMemoryStorage } from "../src/storage";
+import { thread } from "../src/thread";
 import {
   historyAdapter,
   sdkHistoryAdapter,
 } from "./request-history-harness";
 
 describe("history.recent()", () => {
+  it.each(["caller-messages", "thread"] as const)(
+    "projects the %s source through the shared history seam",
+    async (source) => {
+      const harness = historyAdapter();
+      const prior: Message[] = [
+        { role: "user", content: "old question" },
+        { role: "assistant", content: "old answer" },
+        { role: "user", content: "new question" },
+        { role: "assistant", content: "new answer" },
+      ];
+      const conversation = thread({
+        id: `recent-source-${source}`,
+        storage: inMemoryStorage(),
+      });
+      if (source === "thread") {
+        await conversation.append(
+          prior.map((message, index) => ({ ...message, id: `prior-${index}` })),
+        );
+      }
+      const reply = prompt({
+        id: `recent-source-${source}`,
+        use:
+          source === "thread"
+            ? [conversation, history.recent(2)]
+            : [history.recent(2)],
+        prompt: "current question",
+      });
+
+      const result = await harness.runtime.generate(reply, {
+        model: "model-1",
+        ...(source === "caller-messages"
+          ? { messages: [...prior, { role: "user", content: "current question" }] }
+          : {}),
+      });
+
+      expect(harness.requests[0]?.messages).toEqual(
+        source === "thread"
+          ? [...prior.slice(-2), { role: "user", content: "current question" }]
+          : [{ role: "user", content: "current question" }],
+      );
+      expect(result.steps[0]?.request?.history).toMatchObject({ source });
+    },
+  );
+
   it("selects the newest messages without preparatory work", async () => {
     const harness = historyAdapter();
     const reply = prompt({

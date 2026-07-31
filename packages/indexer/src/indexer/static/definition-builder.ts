@@ -334,6 +334,11 @@ function runtimeJoinMetadata(
       spanAttributes.workspaceId = id.slice("workspace:".length);
       runtimeJoin.workspaceId = spanAttributes.workspaceId;
       break;
+    case "thread":
+      runtimeJoin.primitive = "thread.operation";
+      spanAttributes.threadId = id.slice("thread:".length);
+      runtimeJoin.threadId = spanAttributes.threadId;
+      break;
   }
 
   return { runtimeJoin };

@@ -60,7 +60,7 @@ describe.sequential("request preview", () => {
         supportsInline: true,
         retain,
       },
-      persistence: { records },
+      storage: { records },
     });
     const primary = context({
       id: "preview-source",

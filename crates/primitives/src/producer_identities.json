@@ -10,6 +10,7 @@
   {"matchKind":"call","name":"retry","importFrom":["@use-crux/core/routing"]},
   {"matchKind":"call","name":"router","importFrom":["@use-crux/core/routing"]},
   {"matchKind":"call","name":"split","importFrom":["@use-crux/core/routing"]},
+  {"matchKind":"call","name":"thread","importFrom":["@use-crux/core/thread"]},
   {"matchKind":"call","name":"tool","importFrom":["@use-crux/core","@use-crux/core/tools"]},
   {"matchKind":"new","name":"Agent","importFrom":["@use-crux/convex/agent"]}
 ]

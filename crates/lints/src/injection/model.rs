@@ -87,6 +87,7 @@ fn visit<'a>(
         if entry.get("variable").and_then(Value::as_str).is_some()
             && entry.get("targetDefinitionId").is_none()
             && !is_dynamic_use_entry(&entry)
+            && !has_resolving_relation(definition, &entry, by_id, outgoing)
         {
             model
                 .unresolved_entries
@@ -138,6 +139,25 @@ fn visit<'a>(
             );
         }
     }
+}
+
+fn has_resolving_relation<'a>(
+    definition: &'a StaticIndexDefinition,
+    entry: &Value,
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+    outgoing: &BTreeMap<&'a str, Vec<&'a StaticIndexRelation>>,
+) -> bool {
+    outgoing
+        .get(definition.id.as_str())
+        .into_iter()
+        .flatten()
+        .any(|relation| {
+            by_id
+                .get(relation.to.as_str())
+                .and_then(|target| use_entry_for_target(definition, target, relation))
+                .as_ref()
+                == Some(entry)
+        })
 }
 
 fn append_tool_contributions(

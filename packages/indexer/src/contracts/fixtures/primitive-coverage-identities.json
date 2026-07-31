@@ -586,6 +586,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "thread",
+      "family": "thread",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "thread-native-static.test.ts",
+        "relations": "thread-native-static.test.ts",
+        "sourceRefs": "thread-native-static.test.ts",
+        "diagnostics": "thread-native-static.test.ts",
+        "dependencies": "thread-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "thread-native-static.test.ts",
+        "sourceGraph": "thread-native-static.test.ts",
+        "runtimeMetadata": "thread-native-static.test.ts",
+        "degradedBehavior": "thread-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "thread-native-static.test.ts",
+        "negative": "thread-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "rag.indexer",
       "family": "rag.indexer",
       "nativeCovered": true,
