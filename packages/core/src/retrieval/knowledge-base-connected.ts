@@ -11,9 +11,14 @@
 import { indexedNamespacePrefix, indexedSourcePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
 import { compileKnowledgeGeneration, deleteKnowledgeClaimsForSource } from '../knowledge/compile'
 import { runDeriveStages } from '../knowledge/derive/runner'
+import type { DeriveStage } from '../knowledge/derive/stage'
 import { createKnowledgeGraphStore } from '../knowledge/graph-store'
+import { communityScopeKey } from '../knowledge/communities/keys'
+import { createCommunityStore } from '../knowledge/communities/store'
+import type { CommunitiesConfig } from '../knowledge/communities/communities'
 import { createKnowledgeViewRegistry, type KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { KnowledgeGenerationRetention } from '../knowledge/generation'
+import { relateEntities } from '../knowledge/relate/entities'
 import type { CruxChunk, CruxDocument, IndexingPipeline } from '../indexing'
 import type { JsonObject, RecordStore } from '../storage'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
@@ -24,6 +29,7 @@ export interface ConnectedKnowledgeIntegrationConfig {
   readonly indexerId: string
   readonly namespace: string
   readonly pipeline?: IndexingPipeline
+  readonly communities?: CommunitiesConfig
   readonly retention: KnowledgeGenerationRetention
 }
 
@@ -46,6 +52,7 @@ export function createConnectedKnowledgeIntegration(
   const { records, indexerId, namespace } = config
   let graphStore: ReturnType<typeof createKnowledgeGraphStore> | undefined
   const views = createKnowledgeViewRegistry({ records, indexerId, namespace })
+  const deriveStages = effectiveDeriveStages(config.pipeline, config.communities)
 
   function binding(): RetrievalKnowledgeBinding | undefined {
     if (!records) return undefined
@@ -58,14 +65,15 @@ export function createConnectedKnowledgeIntegration(
   }
 
   async function compile(): Promise<void> {
-    if (!records || !hasDeriveStages(config.pipeline)) return
+    if (!records || !hasConnectedFeature(deriveStages, config.communities)) return
     await compileKnowledgeGeneration({ records, indexerId, namespace, retention: config.retention })
     graphStore = undefined
   }
 
   async function afterIndex(sourceIds?: readonly string[]): Promise<void> {
     await views.afterIndex(sourceIds)
-    if (records && hasDeriveStages(config.pipeline)) {
+    if (records && hasConnectedFeature(deriveStages, config.communities)) {
+      await markCommunitiesDirty(sourceIds ?? await activeSourceIds(records, indexerId, namespace), 'indexed')
       for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
         const source = await activeSource(records, indexerId, namespace, sourceId)
         if (!source) continue
@@ -73,7 +81,7 @@ export function createConnectedKnowledgeIntegration(
           records,
           indexerId,
           namespace,
-          stages: config.pipeline.derive,
+          stages: deriveStages,
           document: source.document,
           chunks: source.chunks,
         })
@@ -84,13 +92,14 @@ export function createConnectedKnowledgeIntegration(
 
   async function afterRemove(sourceId: string): Promise<void> {
     await views.afterRemove(sourceId)
-    if (records && hasDeriveStages(config.pipeline)) {
+    if (records && hasConnectedFeature(deriveStages, config.communities)) {
+      await markCommunitiesDirty([sourceId], 'removed')
       await deleteKnowledgeClaimsForSource({
         records,
         indexerId,
         namespace,
         sourceId,
-        stageIds: config.pipeline.derive.map((stage) => stage.id),
+        stageIds: deriveStages.map((stage) => stage.id),
       })
       await compile()
     }
@@ -100,13 +109,48 @@ export function createConnectedKnowledgeIntegration(
     return views
   }
 
+  async function markCommunitiesDirty(sourceIds: readonly string[], reason: 'indexed' | 'removed'): Promise<void> {
+    if (!records || !config.communities) return
+    const scopeKey = communityScopeKey({
+      strategyFingerprint: config.communities.strategyFingerprint,
+    })
+    const store = createCommunityStore({ records, indexerId, namespace, scopeKey, retention: config.retention })
+    await Promise.all(Array.from(new Set(sourceIds)).sort().map((sourceId) => store.markDirty(sourceId, reason)))
+  }
+
   return Object.freeze({ binding, viewRegistry, afterIndex, afterRemove })
 }
 
-function hasDeriveStages(pipeline: IndexingPipeline | undefined): pipeline is IndexingPipeline & {
-  readonly derive: readonly [IndexingPipeline['derive'][number], ...IndexingPipeline['derive'][number][]]
-} {
-  return Boolean(pipeline?.derive.length)
+function hasConnectedFeature(stages: readonly DeriveStage[], communities: CommunitiesConfig | undefined): boolean {
+  return stages.length > 0 || communities !== undefined
+}
+
+function effectiveDeriveStages(
+  pipeline: IndexingPipeline | undefined,
+  communities: CommunitiesConfig | undefined,
+): readonly DeriveStage[] {
+  const authored = [...(pipeline?.derive ?? [])]
+  if (!communities || hasAuthoredEntityMapping(authored)) return authored
+  return [...authored, relateEntities({ id: '__communities_entities', model: communities.model })]
+}
+
+function hasAuthoredEntityMapping(stages: readonly DeriveStage[]): boolean {
+  return stages.some((stage) => {
+    const value = stage as DeriveStage & { readonly types?: unknown }
+    if (stage._tag !== 'RelationStage' || !isRecord(value.types)) return false
+    const mentions = value.types.mentions
+    const related = value.types.related
+    return isRecord(mentions) &&
+      Array.isArray(mentions.from) &&
+      Array.isArray(mentions.to) &&
+      mentions.from.includes('chunk') &&
+      mentions.to.includes('entity') &&
+      isRecord(related) &&
+      Array.isArray(related.from) &&
+      Array.isArray(related.to) &&
+      related.from.includes('entity') &&
+      related.to.includes('entity')
+  })
 }
 
 async function activeSourceIds(records: RecordStore, indexerId: string, namespace: string): Promise<readonly string[]> {

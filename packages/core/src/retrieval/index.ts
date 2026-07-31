@@ -10,6 +10,7 @@
  */
 
 export { knowledgeBase } from './knowledge-base'
+export { communities } from '../knowledge/communities/communities'
 export { retriever } from './define-retriever'
 export { retrievalRecipe } from './recipe/recipe'
 export { retrievalStep } from './recipe/step'
@@ -22,6 +23,24 @@ export { grounding } from '../citations'
 
 export type { Grounding } from '../citations'
 export type { RetrievalConfigErrorCode, RetrievalRunErrorCode } from './errors'
+export type {
+  CommunitiesConfig,
+  CommunitiesFactoryConfig,
+} from '../knowledge/communities/communities'
+export type {
+  CommunityBuildDescriptor,
+  CommunityReadinessStatus,
+  CommunityRefreshHost,
+  CommunityReportsOptions,
+  CommunityReportsPage,
+  KnowledgeCommunitiesSurface,
+} from '../knowledge/communities/lifecycle'
+export type {
+  CommunityReport,
+  CommunityReportCounts,
+  CommunityReportFinding,
+  CommunityReportLineage,
+} from '../knowledge/communities/records'
 export type {
   KnowledgeBase,
   KnowledgeBaseConfig,

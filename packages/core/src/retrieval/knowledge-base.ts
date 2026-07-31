@@ -33,6 +33,11 @@ import type { CorpusSyncResult } from '../indexing'
 import type { KnowledgeBaseViewConfig, KnowledgeView } from '../knowledge/view/view'
 import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from '../knowledge/assertions/set'
 import type { AssertionStage } from '../knowledge/assertions/assertions'
+import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import {
+  createKnowledgeCommunitiesSurface,
+  type KnowledgeCommunitiesSurface,
+} from '../knowledge/communities/lifecycle'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -122,6 +127,8 @@ export interface KnowledgeBaseConfig<
   chunking?: ChunkingOptions
   /** Explicit indexing pipeline used for document indexing. */
   pipeline?: IndexingPipeline
+  /** Connected knowledge community report configuration. */
+  communities?: CommunitiesConfig
   /** Metadata schema used to type retrieval filters and validate indexed metadata. */
   metadataSchema?: TMetadataSchema
   /** Lifecycle policy for inactive generations and vector retention. */
@@ -160,6 +167,8 @@ export interface KnowledgeBase<
     const TTypes extends Record<string, z.ZodType<unknown>>,
     const TSelected extends keyof TTypes & string = keyof TTypes & string,
   >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>): AssertionSet<TTypes, TSelected>
+  /** Connected knowledge community lifecycle and reports, when configured. */
+  readonly communities?: KnowledgeCommunitiesSurface
   /** Return this knowledge base as a retriever. */
   retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>, TModality>
   /** Return this knowledge base as a retrieval recipe. */
@@ -199,6 +208,7 @@ function createKnowledgeBaseHandle<
   includeScope: boolean,
 ): KnowledgeBase<TMetadataSchema, TModality> {
   const runtime = createKnowledgeBaseRuntime(config)
+  const records = config.records ?? config.storage?.records
 
   const handle = {
     id: config.id,
@@ -214,16 +224,18 @@ function createKnowledgeBaseHandle<
         namespace: config.namespace,
         metadataSchema: config.metadataSchema,
         view: viewConfig,
-        records: config.records ?? config.storage?.records,
+        records,
         registry: runtime.viewRegistry(),
         retriever: runtime.retriever,
         knowledgeBinding: runtime.knowledgeBinding,
+        ...(config.communities ? { communities: config.communities } : {}),
+        ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
       }),
     assertions: <
       const TTypes extends Record<string, z.ZodType<unknown>>,
       const TSelected extends keyof TTypes & string = keyof TTypes & string,
     >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>) => createAssertionSet({
-      records: config.records ?? config.storage?.records,
+      records,
       indexerId: config.id,
       namespace: config.namespace,
       stage,
@@ -287,8 +299,20 @@ function createKnowledgeBaseHandle<
       lifecycle: { ...runtime.lifecycle },
     }),
   }
+  const communityHandle = config.communities
+    ? {
+        communities: createKnowledgeCommunitiesSurface({
+          records,
+          indexerId: config.id,
+          namespace: config.namespace,
+          config: config.communities,
+          ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
+        }),
+      }
+    : {}
+  const completeHandle = { ...handle, ...communityHandle }
   if (!includeScope) {
-    delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>>).scope
+    delete (completeHandle as Partial<Pick<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>>).scope
   }
-  return Object.freeze(handle) as KnowledgeBase<TMetadataSchema, TModality>
+  return Object.freeze(completeHandle) as KnowledgeBase<TMetadataSchema, TModality>
 }

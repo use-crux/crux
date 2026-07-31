@@ -360,11 +360,63 @@ const answer = prompt({
 
 Resolution never mutates the source assertions. Assertion relations are separate records, not graph edges, so `expandRelations()` does not traverse assertion supports or assertion relations.
 
+## Communities
+
+Use `communities()` when a knowledge base should materialize a browsable topic map over its connected graph. Communities cluster visible entities, attach every visible chunk to exactly one leaf, and publish structured reports you can read from the knowledge base or from a view.
+
+```ts
+import { communities, knowledgeBase, knowledgeModel } from '@use-crux/core/knowledge'
+
+const reporter = knowledgeModel({
+  name: 'docs-community-reports',
+  version: '2026-07-docs',
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+})
+
+const docs = knowledgeBase({
+  id: 'docs',
+  storage,
+  communities: communities({ model: reporter }),
+})
+```
+
+`prepare()` builds or refreshes the materialization. `status()` reports whether the current generation is missing, building, ready, or stale:
+
+```ts
+await docs.index(sources)
+
+await docs.communities?.status()
+await docs.communities?.prepare()
+
+const page = await docs.communities?.reports({ level: 0, limit: 25 })
+```
+
+Views expose the same surface, scoped to the resolved revision:
+
+```ts
+const published = docs.view({
+  id: 'published-docs',
+  where: { status: 'published' },
+})
+
+await published.communities?.prepare()
+
+const children = await published.communities?.reports({
+  parentId: 'community_abc123',
+  limit: 20,
+})
+```
+
+If no entity relation stage is configured, communities run the built-in generic entity mapping pass through the same connected knowledge pipeline used by `relateEntities()`. If you already authored `relateEntities({ model })`, that published graph is reused as the community input.
+
+Reports are generation-scoped records. A failed refresh never replaces the prior published generation, and unchanged communities reuse their prior report content during later refreshes.
+
 ## What Runs When
 
 Plain `knowledgeBase()` indexing and retrieval behave as before. Passing a pipeline adds the connected knowledge work you configured.
 
-No model calls happen unless a relation vocabulary is configured with an explicit `model` from `knowledgeModel()`. Deterministic `run` relations execute from your code during indexing.
+No model calls happen unless a relation vocabulary or communities are configured with an explicit `model` from `knowledgeModel()`. Deterministic `run` relations execute from your code during indexing.
 
 `expandRelations()` runs at query time inside the retrieval recipe. It reads the graph visible to that knowledge base and does not create new relations.
 

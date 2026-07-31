@@ -9,6 +9,7 @@
 
 export { knowledgeBase } from '../retrieval/knowledge-base'
 export { assertions } from './assertions/assertions'
+export { communities } from './communities/communities'
 export { knowledgeModel } from './model'
 export { relate } from './relate/relate'
 export { relateEntities } from './relate/entities'
@@ -25,6 +26,24 @@ export type {
   KnowledgeBaseScopeConfig,
   ScopedKnowledgeBase,
 } from '../retrieval/knowledge-base'
+export type {
+  CommunitiesConfig,
+  CommunitiesFactoryConfig,
+} from './communities/communities'
+export type {
+  CommunityBuildDescriptor,
+  CommunityReadinessStatus,
+  CommunityRefreshHost,
+  CommunityReportsOptions,
+  CommunityReportsPage,
+  KnowledgeCommunitiesSurface,
+} from './communities/lifecycle'
+export type {
+  CommunityReport,
+  CommunityReportCounts,
+  CommunityReportFinding,
+  CommunityReportLineage,
+} from './communities/records'
 export type { AssertionDeriveStage, BaseDeriveStage, DeriveStage, RelationDeriveStage } from './derive/stage'
 export type {
   AssertionEmitApi,

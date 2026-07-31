@@ -12,6 +12,8 @@ import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
 import { loadViewRevision, type ViewRevision } from '../knowledge/view/revision'
 import { createAssertionSet } from '../knowledge/assertions/set'
+import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import { createKnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
 import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
@@ -38,6 +40,8 @@ interface KnowledgeBaseViewFactoryConfig<
   readonly registry: KnowledgeViewRegistry
   readonly retriever: <TFilter extends ExactFilter>(config?: KnowledgeViewRetrieverConfig<TFilter>) => Retriever<TFilter, TModality>
   readonly knowledgeBinding: () => RetrievalKnowledgeBinding | undefined
+  readonly communities?: CommunitiesConfig
+  readonly retention?: 'cleanup' | 'retain-inactive'
   readonly pinnedRevisionHash?: string
 }
 
@@ -192,7 +196,20 @@ function createViewHandle<
       ...(resolved ? { revisionHash: resolved.revisionHash } : {}),
     }),
   }
-  return Object.freeze(handle)
+  const communityHandle = config.communities
+    ? {
+        communities: createKnowledgeCommunitiesSurface({
+          records: config.records,
+          indexerId: config.id,
+          namespace: config.namespace,
+          config: config.communities,
+          viewId: registration.viewId,
+          resolveView: availableRevision,
+          ...(config.retention ? { retention: config.retention } : {}),
+        }),
+      }
+    : {}
+  return Object.freeze({ ...handle, ...communityHandle }) as KnowledgeView<TMetadataSchema, TModality>
 }
 
 function createViewRetriever<TModality extends EmbeddingModality>(config: {

@@ -15,6 +15,7 @@ import type { RetrievalToolConfig, Retriever, RetrieverTools } from '../../retri
 import type { KnowledgeBaseFilter, KnowledgeBaseGroundingConfig, KnowledgeBaseRetrieverConfig } from '../../retrieval/knowledge-base'
 import type { AssertionStage } from '../assertions/assertions'
 import type { AssertionSet, AssertionSetOptions } from '../assertions/set'
+import type { KnowledgeCommunitiesSurface } from '../communities/lifecycle'
 import type { NormalizedViewWhere, ViewWhere } from './where'
 
 /** Configuration accepted by {@link KnowledgeView.retriever}. */
@@ -85,6 +86,8 @@ export interface KnowledgeView<
     const TTypes extends Record<string, z.ZodType<unknown>>,
     const TSelected extends keyof TTypes & string = keyof TTypes & string,
   >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>): AssertionSet<TTypes, TSelected>
+  /** Connected knowledge community lifecycle and reports, when configured. */
+  readonly communities?: KnowledgeCommunitiesSurface
   /** Inspect this view handle without forcing a resolve. */
   inspect(): KnowledgeViewInspection
 }

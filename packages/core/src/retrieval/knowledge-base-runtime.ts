@@ -34,6 +34,7 @@ import type { KnowledgeBaseRetrieverConfig } from './knowledge-base'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import type { Retriever } from './types'
 import type { KnowledgeViewRegistry } from '../knowledge/view/registry'
+import type { CommunitiesConfig } from '../knowledge/communities/communities'
 
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
 export type KnowledgeBaseIndexInput =
@@ -96,6 +97,8 @@ export interface KnowledgeBaseRuntimeConfig<
   chunking?: ChunkingOptions
   /** Explicit indexing pipeline used for document indexing. */
   pipeline?: IndexingPipeline
+  /** Connected knowledge communities configuration. */
+  communities?: CommunitiesConfig
   /** Metadata schema used to validate indexed metadata. */
   metadataSchema?: z.ZodType<unknown>
   /** Indexing cache configuration. */
@@ -144,6 +147,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     indexerId: config.id,
     namespace: config.namespace,
     pipeline: config.pipeline,
+    communities: config.communities,
     retention,
   })
 
