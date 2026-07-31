@@ -106,9 +106,9 @@ strips. `thresholds[id]` overrides the required global `threshold`.
 | `unsupported` | throw | Explicit `"allow"`, `"warn"`, `"block"`, or `"strip"` capability handling. |
 
 `file` is the canonical document/general-file part, including PDFs. An
-enforced strip removes only the current part. If that part is required—such as
+enforced strip removes only the current part. If that part is required, such as
 the final generated image, generated speech audio, transcription audio, or an
-edit mask's final reference—the existing media lifecycle escalates the strip
+an edit mask's final reference, the existing media lifecycle escalates the strip
 to a block and retains the original location and findings.
 
 ## Choose any structured-generation provider
@@ -217,7 +217,7 @@ evidence, and Run Detail renders it as `category · score ≥ threshold`.
 
 Descriptions, rubric text, media sources, filenames, URLs, payloads, and
 provider options never enter findings. OpenTelemetry attributes receive only
-bounded finding counts—not category IDs, scores, or thresholds. Project Index
+bounded finding counts. Category IDs, scores, and thresholds are excluded. Project Index
 records only complete literal safe config (IDs, thresholds, action,
 modalities, and unsupported policy) and omits classifier source snippets so
 literal descriptions cannot leak through Catalog facts.

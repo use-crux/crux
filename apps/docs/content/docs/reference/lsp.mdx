@@ -329,7 +329,7 @@ Semantic indexing publishes three exact error diagnostics:
 
 | Code                                     | Meaning                                  | Quick fix                                                                                                                                               |
 | ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | A supported sequence is used inline.     | Wrap the exact expression as `(<expression>).join(", ")`, or use the Rust-proven **Put sequence on its own line — changes layout** edit when available. |
+| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | A supported sequence is used inline.     | Wrap the exact expression as `(<expression>).join(", ")`, or use the Rust-proven **Put sequence on its own line (changes layout)** edit when available. |
 | `CRUX_PROMPT_TEXT_INVALID_INTERPOLATION` | The value is proven always invalid.      | **Serialize with `md.json()`** only when the expression is proven applicable.                                                                           |
 | `CRUX_PROMPT_TEXT_JSON_SERIALIZATION`    | `md.json()` is proven to return no text. | Correct the authored value; no automatic rewrite is offered.                                                                                            |
 
@@ -356,7 +356,7 @@ while preserving indentation. Save the file to reindex it.
 
 Some manual fixes also declare `crux runtime generate` as a companion command.
 In a trusted VS Code workspace, their quick fix is titled
-**Run `crux runtime generate` — _fix title_**. The server resolves the current
+**Run `crux runtime generate` (_fix title_)**. The server resolves the current
 finding and fix from its read model, accepts only the exact built-in command,
 and starts its own binary directly without a shell. It reports command success
 or failure in the editor.

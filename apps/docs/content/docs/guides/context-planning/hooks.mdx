@@ -1,35 +1,271 @@
 ---
 title: Adaptive preparation hooks
-description: Amend a request at provider-step or managed-child boundaries.
+description: Amend provider calls and composition children at explicit execution boundaries.
 ---
 
-`prepareStep` runs before every semantic provider call, including later Tool
-rounds and structured-output retries. It receives immutable input, transcript,
-prior request evidence, honest run statistics, and only the resources declared
-for that callback.
+```ts
+const responder = agent({
+  id: "support-responder",
+  prompt: supportReply,
+  model: standardModel,
+  prepareStep: ({ reason }) =>
+    reason === "validation-retry"
+      ? { model: reviewModel }
+      : undefined,
+});
+```
+
+Preparation hooks return constrained deltas before provider or managed-child
+I/O. They observe immutable execution facts and cannot rewrite canonical
+messages, credentials, safety policy, or output contracts.
+
+## Use static configuration first
+
+Put stable context on the Prompt and stable models or budgets on the Agent:
 
 ```ts
-const result = await generate(reply, {
-  model,
-  prepareStep: async ({ reason, stats, previousReceipt }) => {
-    if (reason === "tool-result" && stats.run.usage.inputTokens > 20_000) {
-      return { inputBudget: { max: 24_000 } };
+const configuredReply = prompt({
+  id: "configured-support-reply",
+  use: [supportPolicy],
+  prompt: "Answer the support ticket.",
+});
+
+const responder = agent({
+  id: "support-responder",
+  prompt: configuredReply,
+  model: standardModel,
+  inputBudget: { max: 24_000 },
+});
+```
+
+Add a hook only when the decision depends on facts that exist at an execution
+boundary, such as a Tool result, validation retry, committed Blackboard state,
+or Pipeline output.
+
+| Decision point | Hook |
+| --- | --- |
+| Before each semantic provider call | `prepareStep` |
+| Before a composition invokes one managed Agent | `prepareInvocation` |
+
+## Prepare each provider call
+
+`prepareStep` runs before the initial provider call, later Tool rounds, and
+validation retries:
+
+```ts
+const responder = agent({
+  id: "tool-aware-support",
+  prompt: supportReply,
+  model: standardModel,
+  prepareStep: ({ reason, toolHistory, previousReceipt }) => {
+    const searched = toolHistory.some(
+      (entry) => entry.name === "searchKnowledge" && entry.result !== undefined,
+    );
+
+    if (reason === "tool-result" && searched) {
+      return {
+        use: { add: [answerVerification] },
+        activeTools: ["verifyAnswer"],
+        inputBudget: { max: 22_000 },
+      };
     }
-    return {};
+
+    if (previousReceipt?.warnings.length) {
+      return { model: reviewModel };
+    }
   },
 });
 ```
 
-Amendments are boundary-local and constrained: add or remove declared
-contributors and Tools, choose a concrete model, or narrow the input budget.
-They do not accumulate accidentally across steps. Invalid amendments, timeouts,
-and unavailable declared resources fail before provider dispatch.
+The context includes original input, canonical messages for observation,
+normalized Tool history, prior request evidence, honest statistics, declared
+resources, and a deadline signal. The callback receives no mutable provider
+request.
 
-`prepareInvocation` applies one immutable child baseline before a managed
-Pipeline, Parallel, Consensus, or Swarm child runs. The child's `prepareStep`
-decisions then layer on top for each provider call. Function-only stages and
-nested orchestration wrappers do not create a false preparation boundary.
+An invocation-level callback replaces the Agent default:
 
-Resource reads are revision-pinned. Blackboard or working-state content is
-available to the callback and same-boundary resolution, but raw values never
-enter receipts, diagnostics, or errors.
+```ts
+await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+  prepareStep: ({ reason }) =>
+    reason === "initial"
+      ? { use: { add: [priorityCustomerContext] } }
+      : undefined,
+});
+```
+
+Transport retries do not run the callback again. They reuse the exact sealed
+request. A new semantic call receives a fresh non-accumulating amendment.
+
+## Return a constrained amendment
+
+```ts
+return {
+  use: {
+    add: [answerVerification],
+    remove: [{ id: "optional-reply-examples" }],
+  },
+  tools: { verifyAnswer },
+  activeTools: ["verifyAnswer"],
+  model: reviewModel,
+  inputBudget: { optimizeAt: 18_000, max: 22_000 },
+};
+```
+
+| Field | Use |
+| --- | --- |
+| `use.add` | Add an amendable top-level contributor for this boundary. |
+| `use.remove` | Remove a top-level contributor by original object or unique id. |
+| `tools` | Add exact Tool definitions with unique names. |
+| `activeTools` | Select available Tool names after contributor resolution. |
+| `model` | Select a compatible concrete model. |
+| `inputBudget` | Replace whole-request pressure for this boundary. |
+
+History ownership cannot change inside a hook. A ladder root is one removal
+unit; you cannot remove a nested rung. Removing a contributor also removes its
+owned capabilities only when the contributor's policy allows complete
+omission.
+
+Unknown Tool names, Tool collisions, add-and-remove conflicts, or protected
+capability removal throw `RequestCompositionError` with code
+`INVALID_COMPOSITION` before provider dispatch.
+
+## Read declared resources
+
+Preparation can read supported structured state from the inherited graph:
+
+```ts
+const supportState = workingState({
+  id: "support-control",
+  schema: supportControlSchema,
+});
+
+const supportMemory = memory({
+  id: "support-memory",
+  records,
+  namespace: ({ input }) => `ticket:${input.ticketId}`,
+  blocks: [supportState],
+});
+
+const stateAwareReply = prompt({
+  id: "state-aware-support-reply",
+  use: [supportMemory],
+  prompt: "Answer the support ticket.",
+});
+
+const responder = agent({
+  id: "state-aware-support",
+  prompt: stateAwareReply,
+  async prepareStep({ resources }) {
+    const state = await resources.read(supportState);
+    return state?.escalated ? { model: reviewModel } : undefined;
+  },
+});
+```
+
+The first read pins the value and revision for that boundary. Repeated reads
+return the same immutable value. A declared resource with no value returns
+`null`.
+
+Do not use `resources` as general Storage access. It supports declared
+`workingState()` and Blackboard handles, not transcript history, retrieval,
+assets, arbitrary loaders, or writes. A resource added by the current callback
+becomes readable at the next boundary.
+
+Abnormal reads throw `ResourceReadError`:
+
+| Reason | Meaning |
+| --- | --- |
+| `undeclared` | The handle is outside the inherited contributor graph. |
+| `unauthorized` | The current execution boundary cannot read it. |
+| `unresolved` | The reader produced neither a value nor `null`. |
+| `storage-unavailable` | Backing storage failed. |
+
+Catch a reason only when your application has an explicit safe fallback.
+
+## Use statistics honestly
+
+```ts
+prepareStep: ({ stats }) => {
+  const usage = stats.run.usage;
+
+  if (usage.coverage.tokens === "complete" &&
+      usage.inputTokens !== undefined &&
+      usage.inputTokens > 18_000) {
+    return { inputBudget: { max: 22_000 } };
+  }
+}
+```
+
+`stats.run` describes the managed run, while `stats.root` describes the outer
+activity root. Usage coverage is `complete`, `partial`, or `none`. Do not treat
+an absent token value as zero. Model-call counters include exact transport
+retries reported by adapters.
+
+These values are in-memory control facts, not a durable billing ledger.
+
+## Prepare composition children
+
+`prepareInvocation` runs before one managed Agent child:
+
+```ts
+const result = await pipeline({
+  id: "support-resolution",
+  context: { ticketId: "ticket_4821" },
+  model: standardModel,
+  steps: [
+    { name: "classify", agent: classifier },
+    { name: "reply", agent: responder },
+  ],
+  prepareInvocation: ({ step, context }) => {
+    if (step.name !== "reply") return;
+
+    return {
+      use: { add: [resolutionContext(context.classify)] },
+      model: reviewModel,
+    };
+  },
+});
+```
+
+Pipeline callbacks receive stage identity and accumulated context. Parallel
+callbacks receive branch identity and shared context. Consensus callbacks
+receive candidate identity and input. Swarm callbacks receive hop and handoff
+facts.
+
+The accepted amendment becomes the child baseline. The child's `prepareStep`
+then starts from that baseline before each provider call. Function-only stages
+and nested composition wrappers do not trigger an outer callback because they
+do not identify one managed provider operation.
+
+## Understand failure and timing
+
+A callback failure, automatic 30-second ceiling, or caller cancellation throws
+`PreparationError` with reason `callback`, `timeout`, or `aborted`. Unhandled
+resource failures remain `ResourceReadError`. Invalid amendments remain
+`RequestCompositionError: INVALID_COMPOSITION`.
+
+No provider or child I/O starts after a boundary failure. Keep preparation
+small. Start or join long work earlier, persist a compact result, then read it
+through a declared resource.
+
+## Inspect accepted decisions
+
+```ts
+const inspection = await result.steps[0].request.inspect();
+console.log(inspection.preparation);
+```
+
+Inspection records amendment counts, change flags, pinned resource identities
+and hashes, and the sealed request id. It never contains resource values,
+messages, Tool payloads, or raw callback errors.
+
+Composition results expose a causal `requestReceipts` tree. Each managed leaf
+contains its ordered provider receipts, and nested compositions remain nested.
+
+## Related
+
+- Reference: [Request preparation](/docs/reference/crux-core/request-preparation)
+- Guide: [Input budgets](/docs/guides/context-planning/budgets)
+- Guide: [Receipts and preview](/docs/guides/context-planning/receipts-preview)
+- Guide: [Compositions](/docs/guides/compositions)

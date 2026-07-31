@@ -157,9 +157,9 @@ const inspection = pass.inspect();
 Ports are `observability`, `skills`, `cache`, `clock`, `tokenizer`, `policy`,
 `diagnostics`, and `instrumentation`. Omitted ports use production runtime
 adapters. `createResolverFakes()` provides a complete deterministic set for
-tests. Individual fakes—such as `recordingObservability`,
+tests. Individual fakes such as `recordingObservability`,
 `inMemoryContextCache`, `fixedClock`, `staticTokenizer`,
-`collectingDiagnostics`, and `recordingInstrumentation`—can replace one port.
+`collectingDiagnostics`, and `recordingInstrumentation` can replace one port.
 
 The tokenizer port owns every reported token count. `compiled.inspect()` runs
 quietly; `pass.inspect()` never reruns the pipeline. `compilePrompt()` returns

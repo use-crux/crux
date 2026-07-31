@@ -1,0 +1,228 @@
+---
+title: Request history
+description: Exact, recent, and managed history projections with summary strategy contracts.
+---
+
+```ts
+import { history, summarize } from "@use-crux/core";
+import type {
+  HistoryOptions,
+  RecentHistoryOptions,
+  SummarizeStrategy,
+} from "@use-crux/core";
+```
+
+History planning chooses a model-facing projection of a complete canonical
+transcript. It never mutates or replaces the caller-owned messages.
+
+## Choose a history policy
+
+| Policy | Use when | Do not use when |
+| --- | --- | --- |
+| Bare caller-owned messages | The complete transcript must remain exact and fits comfortably. | The conversation can grow without a fixed bound. |
+| `history.recent()` | You want a stateless exact suffix with no model call or persistence. | Older turns must remain available as derived evidence. |
+| `history()` | Older turns may become a summary and you can accept support-call preparation. | Every historical detail must remain exact. |
+
+Exactly one history projection may be active after conditional resolution.
+Using `history()` and `history.recent()` together throws
+`RequestCompositionError` with code `INVALID_COMPOSITION`.
+
+## Bare exact history
+
+Pass caller-owned messages without a projection when the full transcript is
+required:
+
+```ts
+const result = await generate(supportReply, {
+  model,
+  messages,
+  input: { ticketId: "ticket_4821" },
+});
+```
+
+Crux never invents a recent-message window. Near the optimization watermark,
+development warnings point to `history.recent()` or `history()`. If the exact
+transcript cannot fit, execution fails before provider dispatch with
+`REQUEST_TOO_LARGE`.
+
+## `history.recent(limit?)`
+
+`history.recent()` selects the newest exact causal-group-safe suffix.
+
+```ts
+const reply = prompt({
+  id: "support-reply",
+  use: [history.recent({ messages: 12, tokens: 8_000 })],
+  prompt: "Continue the support conversation.",
+});
+```
+
+Use it for chat endpoints where recent exact turns are enough and no summary
+artifact should be generated. Use managed `history()` when older context must
+remain represented. Construction and projection perform no model call,
+Storage write, deferred work, or transcript capture.
+
+`limit` accepts a number as a message cap or a `RecentHistoryOptions` object:
+
+| Field | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `messages` | `number?` | No message cap | Soft maximum for conversational messages. |
+| `tokens` | `number?` | No token cap | Soft estimated-token maximum for conversational messages. |
+
+When both fields are present, the suffix satisfies both when causal grouping
+allows it. A leading system-only prefix is retained outside the caps. Tool
+calls stay with their results. If the newest indivisible group exceeds a cap,
+Crux retains the group and adds a content-free warning to the receipt.
+
+Both limits must be positive safe integers. Invalid limits throw `TypeError`.
+An empty options object is invalid because it would not define a projection.
+
+## `history(options?)`
+
+`history()` authorizes a derived summary prefix plus an exact recent suffix.
+
+```ts
+const reply = prompt({
+  id: "managed-support-reply",
+  use: [
+    history({
+      recent: { messages: 10, tokens: 8_000 },
+      summary: {
+        model: summaryModel,
+        strategy: summarize.adaptive(),
+      },
+      onMiss: "inline",
+      providerNative: false,
+    }),
+  ],
+  prompt: "Continue the support conversation.",
+});
+```
+
+Use it for long-running conversations where older turns may lose detail but
+must not disappear. Use `history.recent()` when you want no support model call
+or derived artifact. A zero-option `history()` is the normal starting point.
+
+### `HistoryOptions`
+
+| Field | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `recent` | `number \| RecentHistoryOptions?` | Derived from the concrete request | Exact suffix policy. |
+| `summary.model` | `unknown?` | Resolved response model | Model used for support calls. |
+| `summary.strategy` | `SummarizeStrategy?` | `summarize.adaptive()` | Versioned artifact and partitioning strategy. |
+| `onMiss` | `inline \| recent-only \| fail` | `inline` | Behavior when a needed summary artifact is absent. |
+| `providerNative` | `boolean` | `true` | Allow a compatible adapter-native summary path. |
+
+`providerNative: false` forces portable Core-managed summary generation. Use it
+when replay or compliance requires provider-independent lowering.
+
+### Artifact miss behavior
+
+| `onMiss` | Behavior |
+| --- | --- |
+| `inline` | Join matching preparation or generate a required summary before the main dispatch. |
+| `recent-only` | Authorize the exact recent suffix without an older summary. |
+| `fail` | Reject before provider dispatch when the summary is unavailable. |
+
+If full history still fits the strict maximum, a missing summary does not add
+first-call latency only to cross `optimizeAt`. Crux may use full history and
+prepare the derived artifact for a later request. Every support call is linked
+from request inspection.
+
+Invalid `onMiss` values and strategies not created by `summarize` throw
+`TypeError`. A required artifact that cannot be prepared produces
+`RequestCompositionError` with code `REPRESENTATION_UNAVAILABLE`.
+
+## Summary strategies
+
+The `summarize` factory creates inert, versioned `SummarizeStrategy` values.
+It never performs generation at construction time.
+
+| Strategy | Use when | Tradeoff |
+| --- | --- | --- |
+| `summarize.adaptive()` | You want the default strategy for changing history. | Chooses bounded hierarchical work and may regenerate from canonical truth. |
+| `summarize.regenerate()` | Prefixes are small enough to summarize directly and drift must be minimized. | Reprocesses the canonical prefix for each artifact. |
+| `summarize.rolling()` | New ranges arrive frequently and incremental maintenance matters. | Carries prior derived evidence across deterministic ranges. |
+| `summarize.hierarchical()` | The source is too large for one support request. | Uses several bounded calls and reduction levels. |
+
+```ts
+const complianceHistory = history({
+  summary: { strategy: summarize.regenerate() },
+  providerNative: false,
+});
+```
+
+`SummarizeStrategy` exposes `_tag`, `kind`, and `version`. Use the constructors
+instead of creating strategy-shaped objects. Artifact identity includes the
+strategy kind and version.
+
+## Source selection
+
+History projection applies to the first available source:
+
+1. Call-site `messages`.
+2. Prompt-level caller-owned messages.
+3. An active canonical Thread path when Thread support is available.
+4. No history.
+
+Arrays are never merged. Call-site messages are a complete manual transcript
+and suppress Prompt-level message content for that invocation. Manual messages
+do not imply a Thread commit. A projection with no source emits an actionable
+diagnostic instead of pretending that work occurred.
+
+## Provider history adapter port
+
+Provider authors may implement `AdapterSpec.compactHistory` for a compatible
+native summary path:
+
+```ts
+async compactHistory(client, input) {
+  const summary = await client.compact({
+    model: input.model,
+    messages: input.messages,
+  });
+  return { summary, requestId: client.lastRequestId };
+}
+```
+
+`ProviderHistorySummaryInput` contains the exact canonical prefix, concrete
+summary model, versioned strategy, and native-path permission.
+`ProviderHistorySummaryResult` contains derived summary text and an optional
+linked support request id. The adapter must not mutate canonical messages.
+
+## Framework-neutral support functions
+
+The root package exports small generation contracts used by portable summary
+support and provider integrations:
+
+| Type | Contract | When to use |
+| --- | --- | --- |
+| `GenerateTextFn` | Accepts exactly one of `prompt` or canonical `messages`, plus model, optional system text, and output limit. Returns `{ text, routing? }`. | Bind portable text support to a provider without importing its SDK into Core. |
+| `GenerateObjectFn` | Accepts `GenerateObjectCommonOptions<T>` plus `GenerateObjectInput`. Returns schema-validated `{ object, routing? }`. | Build provider-neutral structured support helpers. |
+| `GenerateObjectCommonOptions<T>` | Model, optional system text, Zod schema, temperature, and top-p. | Type a reusable structured support wrapper. |
+| `GenerateObjectInput` | Exclusive text prompt or canonical messages. | Preserve canonical multimodal messages without allowing two input modes. |
+
+These types do not add Prompt resolution, Tools, validation retry, safety,
+memory capture, or observability by themselves. Use a managed adapter execution
+surface when you need the full runtime.
+
+## Public type inventory
+
+| Area | Public exports |
+| --- | --- |
+| Factory | `HistoryFactory`, `SummarizeFactory` |
+| Policy | `HistoryOptions`, `HistoryProjection`, `RecentHistoryOptions`, `RecentHistoryProjection`, `ManagedHistoryProjection`, `ManagedHistoryRecent`, `ManagedHistorySummaryOptions` |
+| Strategy | `SummarizeStrategy` |
+| Provider port | `ProviderHistorySummaryInput`, `ProviderHistorySummaryResult` |
+| Support generation | `GenerateTextFn`, `GenerateObjectFn`, `GenerateObjectCommonOptions`, `GenerateObjectInput` |
+
+Applications normally use `history`, `history.recent`, and `summarize` and let
+TypeScript infer the projection types. Exported interfaces are intended for
+libraries, adapter implementations, and reusable configuration builders.
+
+## Related
+
+- Guide: [History planning](/docs/guides/context-planning/history)
+- Guide: [Input budgets](/docs/guides/context-planning/budgets)
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Reference: [Preparation hooks](/docs/reference/crux-core/request-preparation)

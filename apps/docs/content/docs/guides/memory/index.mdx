@@ -64,7 +64,7 @@ Catalog and Runs answer different questions about capture:
 
 A configured `deferred` mode can therefore appear as `inline-fallback` in Runs. That means no retained host accepted the work, so Crux preserved the capture by running and awaiting it inline. `eval-captured` means Eval recorded the deferred intent without running memory hooks.
 
-Capture lifecycle evidence is deliberately payload-free. It retains the authored memory id, lifecycle enums, counts, duration, and an optional stable failure code—not messages, tool payloads, namespaces, raw errors, or stacks. Storage work remains visible in nested `memory.write` spans under `memory.capture`.
+Capture lifecycle evidence is deliberately payload-free. It retains the authored memory id, lifecycle enums, counts, duration, and an optional stable failure code. It does not retain messages, tool payloads, namespaces, raw errors, or stacks. Storage work remains visible in nested `memory.write` spans under `memory.capture`.
 
 ## How to Think About Blocks
 

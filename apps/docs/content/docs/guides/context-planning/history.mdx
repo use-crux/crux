@@ -1,50 +1,204 @@
 ---
 title: History planning
-description: Keep canonical history exact while authorizing safe projections.
+description: Choose exact, recent, or managed projections without mutating canonical messages.
 ---
 
-Caller-owned `messages` are the canonical transcript. Bare history is complete
-and exact; Crux never infers a ten-message window or mutates the source under
-pressure.
+```ts
+const result = await generate(supportReply, {
+  model,
+  messages,
+  input: { ticketId: "ticket_4821" },
+});
+```
 
-Use `history.recent()` for a stateless exact suffix:
+Caller-owned `messages` are the canonical transcript. Crux may project a
+model-facing view when you declare a history policy, but it never changes the
+source array or infers a hidden transcript window.
+
+## Choose one policy
+
+| Requirement | Policy |
+| --- | --- |
+| Every historical detail must stay exact | Bare caller-owned messages |
+| Only the newest exact turns matter | `history.recent()` |
+| Older turns may become derived evidence | `history()` |
+
+Do not add more than one projection. If conditional resolution activates both
+`history.recent()` and `history()`, planning fails with
+`RequestCompositionError: INVALID_COMPOSITION`.
+
+## Keep complete exact history
+
+Use bare messages when every prior turn is required:
+
+```ts
+await generate(supportReply, {
+  model,
+  messages: transcript,
+  input: { ticketId: "ticket_4821" },
+});
+```
+
+This is the safest choice for short conversations or regulated records that
+cannot lose detail. It is not bounded. Development warnings appear as exact
+history approaches the optimization watermark. When it no longer fits, Crux
+throws `REQUEST_TOO_LARGE` before provider dispatch.
+
+## Keep a recent exact suffix
+
+Use `history.recent()` when older turns can be omitted but retained turns must
+stay byte-for-byte canonical:
 
 ```ts
 import { history, prompt } from "@use-crux/core";
 
-const reply = prompt({
-  id: "reply",
-  use: [history.recent({ messages: 12 })],
-  prompt: "Continue the conversation.",
+const supportReply = prompt({
+  id: "recent-support",
+  use: [history.recent({ messages: 12, tokens: 8_000 })],
+  prompt: "Continue the support conversation.",
 });
 ```
 
-The projection keeps leading system directives and never splits a Tool call
-from its result. Message and token limits are soft when the newest causal group
-is larger than the limit.
+Use a number for a message-only cap:
 
-Use managed `history()` when older turns may become a derived summary:
+```ts
+history.recent(12)
+```
+
+`messages` and `tokens` are soft at causal-group boundaries. The projection
+keeps a Tool call with its result and retains the newest indivisible group even
+when that group exceeds a cap. A contiguous leading system-only prefix stays
+outside the conversational caps.
+
+Use this policy when you want no support model call, no summary artifact, and
+no Storage requirement. Do not use it when older decisions must remain visible
+in some form.
+
+Invalid, zero, negative, or fractional caps throw `TypeError`. A soft boundary
+adjustment appears as a content-free warning in the request receipt.
+
+## Manage long-running history
+
+Use `history()` when old turns may become a summary while recent turns remain
+exact:
 
 ```ts
 import { history, prompt, summarize } from "@use-crux/core";
 
-const reply = prompt({
-  id: "managed-reply",
+const supportReply = prompt({
+  id: "managed-support",
   use: [
     history({
-      recent: { messages: 8 },
-      summary: { strategy: summarize.adaptive() },
+      recent: { messages: 10, tokens: 8_000 },
+      summary: {
+        model: summaryModel,
+        strategy: summarize.adaptive(),
+      },
       onMiss: "inline",
     }),
   ],
-  prompt: "Continue the conversation.",
+  prompt: "Continue the support conversation.",
 });
 ```
 
-Summaries are assistant-role derived evidence, not system authority. Their
-identity includes the canonical prefix, strategy version, model, and
-governance. `onMiss` controls whether a missing artifact is prepared inline,
-falls back to the recent exact suffix, or fails before dispatch.
+A managed summary is assistant-role derived evidence. It never becomes a
+system instruction. The exact leading system prefix remains canonical.
 
-Canonical messages remain unchanged in every mode. A later request can plan
-from them again at full fidelity.
+### Start with defaults
+
+```ts
+const supportReply = prompt({
+  id: "managed-support",
+  use: [history()],
+  prompt: "Continue the support conversation.",
+});
+```
+
+The default recent suffix is derived from the resolved model and complete
+request. The default support model is the response model, the strategy is
+`summarize.adaptive()`, `onMiss` is `inline`, and compatible provider-native
+summary paths are allowed.
+
+### Choose a miss policy
+
+| Value | Use when | Behavior |
+| --- | --- | --- |
+| `inline` | Correctness requires older evidence and first-use latency is acceptable. | Joins or runs required preparation before the main request. |
+| `recent-only` | The exact recent suffix is an acceptable degraded view. | Proceeds without an older summary. |
+| `fail` | Missing derived evidence should stop the request. | Throws before provider dispatch. |
+
+Missing infrastructure does not silently change `inline` into `recent-only`.
+If the full transcript fits the strict maximum, Crux may use it for the current
+call and prepare a summary for later without adding latency only to cross the
+soft watermark.
+
+### Choose a summary strategy
+
+| Strategy | Good fit |
+| --- | --- |
+| `summarize.adaptive()` | Default for conversations whose size and update pattern vary. |
+| `summarize.regenerate()` | Smaller prefixes where minimizing derived drift matters. |
+| `summarize.rolling()` | Frequent incremental growth over deterministic ranges. |
+| `summarize.hierarchical()` | Prefixes too large for one support call. |
+
+```ts
+history({
+  summary: { strategy: summarize.hierarchical() },
+  providerNative: false,
+})
+```
+
+Set `providerNative: false` when replay or compliance requires portable
+Core-managed lowering. Every support call remains linked through receipt
+inspection.
+
+## Understand source precedence
+
+Crux projects the first source present for the invocation:
+
+1. Call-site `messages`.
+2. Prompt-level messages.
+3. An active canonical Thread path when available.
+4. No history.
+
+Arrays are never merged. Call-site messages are a complete manual transcript
+and suppress Prompt-level message content for that invocation. Manual
+transcripts do not imply a commit to another owner.
+
+When a projection has no source, Crux emits an actionable diagnostic rather
+than silently doing nothing.
+
+## Inspect the selected view
+
+```ts
+const result = await generate(supportReply, {
+  model,
+  messages: transcript,
+});
+
+const receipt = result.steps[0].request;
+const inspection = await receipt.inspect();
+
+console.log(receipt.adaptations);
+console.log(inspection.artifacts);
+console.log(inspection.supportRequests);
+```
+
+Receipts identify summary selection, boundary warnings, and support request
+ids. Inspection never includes transcript or summary text.
+
+## Error behavior
+
+| Error | Cause |
+| --- | --- |
+| `TypeError` | Invalid recent limits, miss policy, or strategy value. |
+| `RequestCompositionError: INVALID_COMPOSITION` | Multiple active projections or an invalid history placement. |
+| `RequestCompositionError: REPRESENTATION_UNAVAILABLE` | A required summary cannot be prepared or accessed. |
+| `RequestCompositionError: REQUEST_TOO_LARGE` | The minimum legal history view still exceeds the strict limit. |
+
+## Related
+
+- Reference: [Request history](/docs/reference/crux-core/request-history)
+- Guide: [Input budgets](/docs/guides/context-planning/budgets)
+- Guide: [Representation ladders](/docs/guides/context-planning/representations)
+- Guide: [Receipts and preview](/docs/guides/context-planning/receipts-preview)

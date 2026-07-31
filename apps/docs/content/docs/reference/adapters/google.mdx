@@ -36,6 +36,36 @@ import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/google";
   see the [Execution guide](/docs/guides/prompts/execution).
 </Callout>
 
+## Request capacity and counting
+
+The adapter exposes `adapter.capacity(model)` and the standalone
+`googleModelCapacity(model)` helper. Capacity lookup is synchronous and does
+not create or read CachedContent.
+
+```ts
+import { googleModelCapacity } from "@use-crux/google";
+
+const profile = googleModelCapacity("gemini-2.5-flash");
+```
+
+| Known model-id prefix | Context window | Default output reserve |
+| --- | ---: | ---: |
+| `gemini-3` | 1,048,576 | 65,536 |
+| `gemini-2.5` | 1,048,576 | 65,536 |
+| `gemini-2.0` | 1,048,576 | 8,192 |
+| `gemini-1.5-pro` | 2,097,152 | 8,192 |
+| `gemini-1.5-flash` | 1,048,576 | 8,192 |
+
+Versioned aliases inherit their family profile. Unknown identifiers use a
+conservative 32,768-token window with an 8,192-token reserve. Known profiles
+report `countingConfidence: "estimated"`; the fallback reports
+`"conservative"`.
+
+The adapter does not call a provider token-count endpoint. Crux estimates the
+complete request and reports the applied margin in request inspection. Cached
+input can reduce provider billing, but it does not reduce the model context
+capacity used for fit.
+
 ### `createGoogle(client, opts?)`
 
 Create an adapter bound to a Google GenAI client with optional CachedContent configuration.

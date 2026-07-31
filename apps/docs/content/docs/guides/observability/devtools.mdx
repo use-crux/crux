@@ -44,7 +44,7 @@ artifact levels. The inspector names only the affected broad surfaces:
 A badge proves that a configured pattern changed the named telemetry surface;
 it does not prove that the record contains no other sensitive data.
 
-Runs render each bounded media stream—image or speech—as one logical operation
+Runs render each bounded media stream, image or speech, as one logical operation
 with a separate physical-attempt timeline. The card shows safe route, progress,
 byte-count, MIME, timing, cancellation, timeout, and Safety provenance only; it
 never renders media payloads, prompts, URLs, filenames, hashes, refs, or raw
@@ -57,7 +57,7 @@ For ordinary captured generations built from `PromptText`, Run Detail keeps the
 exact resolved user-prompt text and highlights authored/static regions versus
 interpolated/dynamic regions. Provenance labels are shown when the segment
 supplied one, alongside static, dynamic, and total token attribution. This is
-still the normal captured input artifact—not a second telemetry channel.
+still the normal captured input artifact, not a second telemetry channel.
 Ordinary string prompts use the existing plain-text card. Missing, malformed,
 disabled, truncated, or redacted provenance also fails closed to plain text
 when captured prompt text remains available.

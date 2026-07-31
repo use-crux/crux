@@ -75,7 +75,7 @@ one policy has one unit on both `generate()` and `stream()`. See
 | `guardrail({ stream: { segment } })` | `on: boundary.output.text().segments({ maxCharacters, next })` |
 | `guardrail({ stream: false })`      | `enabled: false` via `safety.tune`, or omit the policy    |
 | `safety.tune[id].stream`            | Removed. Tune accepts only `mode` and `enabled`.          |
-| `constraint({ onChunk })`           | `on: boundary.output.object<T>().path('a.b')` — note this is not a like-for-like swap: `onChunk` was report-only, while an `assert` on a path gates release and can discard the attempt. Use `severity: 'suggest'` to keep the old report-only behavior. |
+| `constraint({ onChunk })`           | `on: boundary.output.object<T>().path('a.b')`. This is not a like-for-like swap: `onChunk` was report-only, while an `assert` on a path gates release and can discard the attempt. Use `severity: 'suggest'` to keep the old report-only behavior. |
 | `onHoldLimit: 'release'`            | Removed. Reaching a hold limit always fails closed with `StreamHoldLimitError`. |
 
 `stream: false` and `onHoldLimit: 'release'` were the two ways a stream could
@@ -99,7 +99,7 @@ no longer reachable from it.
 
 A provider stream resolves before terminal Safety and describes only one physical
 attempt, so reading it bypassed guardrail holds, structured occurrence gating,
-commit gates, and validation retry — including the content of an attempt Crux
+commit gates, and validation retry. This includes the content of an attempt Crux
 discarded and re-streamed. That is the bypass this rollout removes, so there is no
 `acceptedRaw`, `providerResult`, or `unsafe` replacement.
 
@@ -119,7 +119,7 @@ an `unknown` subject.
 
 ## Behavior changes
 
-These are not renames — the same code now does something different.
+These are not renames. The same code now does something different.
 
 | Before                                              | Now                                                                 |
 | --------------------------------------------------- | ------------------------------------------------------------------- |
