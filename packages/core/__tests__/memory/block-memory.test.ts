@@ -9,7 +9,6 @@ import {
   memory,
   memoryBlock,
   procedures,
-  recentMessages,
   workingState,
 } from '../../src/memory'
 import { testAdapter } from './capture/fixtures'
@@ -47,9 +46,14 @@ describe('memory block system', () => {
     await expect(second.asContext().systemFn({})).resolves.toContain('Namespace: agent:reviewer')
   })
 
-  it('uses one dynamic namespace across context, capture, direct block reads, and proposals', async () => {
+  it('uses one dynamic namespace across context, capture, and proposals', async () => {
     const store = inMemoryRecordStore()
-    const recent = recentMessages({ id: 'recent', maxMessages: 5 })
+    const capture = vi.fn(async () => {})
+    const captureBlock = memoryBlock({
+      id: 'capture',
+      kind: 'custom',
+      captureTurn: capture,
+    })
     const factBlock = facts({
       id: 'facts',
       extract: async (_turn, ctx) => [{ content: `Captured in ${ctx.namespace}` }],
@@ -63,7 +67,7 @@ describe('memory block system', () => {
       id: 'dynamic-contract',
       records: store,
       namespace: ({ input }) => `tenant:${input.tenantId}:thread:${input.threadId}`,
-      blocks: [inspector, recent, factBlock],
+      blocks: [inspector, captureBlock, factBlock],
     })
     const input = { tenantId: 'acme', threadId: 'support-1' }
     const namespace = 'tenant:acme:thread:support-1'
@@ -79,8 +83,16 @@ describe('memory block system', () => {
     )
     await mem.flush({ input })
 
-    const turns = await recent.list({ records: store, namespace, memoryId: 'dynamic-contract' })
-    expect(turns.map((turn) => turn.content)).toContain('Remember my billing preference')
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: 'Remember my billing preference',
+          }),
+        ],
+      }),
+      expect.objectContaining({ namespace, memoryId: 'dynamic-contract' }),
+    )
 
     const proposals = await mem.proposals.list({ input })
     expect(proposals).toHaveLength(1)

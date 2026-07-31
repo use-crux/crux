@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runEvalCellScope, runEvalScope } from '../../../src/eval/internal/scope'
-import { memory, memoryBlock, recentMessages } from '../../../src/memory'
+import { memory, memoryBlock } from '../../../src/memory'
 import { inMemoryRecordStore } from '../../../src/storage'
 
 describe('memory capture in Eval', () => {
@@ -33,13 +33,19 @@ describe('memory capture in Eval', () => {
 
   it('executes explicit inline capture against isolated Eval storage', async () => {
     const records = inMemoryRecordStore()
-    const recent = recentMessages({ id: 'recent', maxMessages: 5 })
+    const capture = vi.fn(async () => {})
     const mem = memory({
       id: 'eval-inline',
       records,
       namespace: 'thread:1',
       capture: { mode: 'inline' },
-      blocks: [recent],
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          kind: 'custom',
+          captureTurn: capture,
+        }),
+      ],
     })
 
     await runEvalScope('memory-inline', () =>
@@ -52,13 +58,17 @@ describe('memory capture in Eval', () => {
       ),
     )
 
-    const entries = await recent.list({
-      records,
-      namespace: 'thread:1',
-      memoryId: mem.id,
-    })
-    expect(entries.map((entry) => entry.content)).toEqual([
-      'Persist in this Eval',
-    ])
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({ content: 'Persist in this Eval' }),
+        ],
+      }),
+      expect.objectContaining({
+        records,
+        namespace: 'thread:1',
+        memoryId: mem.id,
+      }),
+    )
   })
 })

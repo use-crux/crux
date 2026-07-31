@@ -51,6 +51,11 @@ import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { guardStreamCompletion } from "./stream-completion";
 import { observe } from "../../observability";
 import { sumUsageWhenComplete } from "../result-usage";
+import type { SealedRequestPlan } from "../../request/planner/plan";
+import {
+  recordRequestRetryCount,
+  type RequestReceipt,
+} from "../../request/receipt/receipt";
 
 /** Everything the coordinated route needs from the prepared streaming call. */
 export interface CoordinatedStreamRouteOptions<
@@ -70,6 +75,13 @@ export interface CoordinatedStreamRouteOptions<
    */
   readonly providerRawStream: TRawStream | undefined;
   readonly callArgs: CallArgs<TExtra>;
+  /** Receipt for attempt zero, which was sealed before orchestration. */
+  readonly initialRequest: RequestReceipt;
+  /** Measure and seal every corrective retry before provider dispatch. */
+  readonly sealAttempt: (
+    request: CallArgs<TExtra>,
+    previousRequestId: string,
+  ) => Promise<SealedRequestPlan<TExtra>>;
   readonly safety: Safety;
   /** Authored schema, when the stream is structured. Absent for a text stream. */
   readonly schema?: z.ZodType;
@@ -165,6 +177,7 @@ export function openCoordinatedStructuredStream<
 
   let steps = 0;
   let priorMessages: Message[] = [...messages];
+  let lastRequest = options.initialRequest;
   let accepted:
     | {
         readonly meta: Awaited<ReturnType<typeof handle.completion>>;
@@ -258,11 +271,16 @@ export function openCoordinatedStructuredStream<
       const retryMessages = await normalizeInvocationMessages(priorMessages, {
         provider: modelInfo.provider,
       });
-      providerHandle = await withBudget(
+      const sealed = await options.sealAttempt(
+        { ...callArgs, messages: retryMessages },
+        lastRequest.id,
+      );
+      lastRequest = sealed.receipt;
+      const rawHandle = await withBudget(
         (budgetSignal) =>
           dialect.stream(
             dialect.client,
-            { ...callArgs, messages: retryMessages },
+            sealed.request,
             { signal: composeAbortSignals(signal, budgetSignal) },
           ),
         { budget: "step", limitMs: options.stepTimeoutMs },
@@ -273,6 +291,17 @@ export function openCoordinatedStructuredStream<
           mapError: dialect.mapError,
         });
       });
+      providerHandle = {
+        ...rawHandle,
+        completion: async () => {
+          const completion = await rawHandle.completion();
+          recordRequestRetryCount(
+            sealed.receipt,
+            completion?.transportRetries,
+          );
+          return { ...completion, request: sealed.receipt };
+        },
+      };
     }
     // A structured stream gates object occurrences; a text stream gates whole-text
     // asserts. Both raise the same non-terminal rejection for the coordinator.

@@ -59,9 +59,36 @@ export interface CruxRunDetailRequestMessages {
   previousStepMessages?: unknown
 }
 
+/** One representation change recorded on an executed request receipt. */
+export interface CruxRunDetailRequestAdaptation {
+  contributor: string
+  representation: 'authored' | 'summary' | 'offload' | 'omitted' | string
+  fullTokens?: number
+  selectedTokens?: number
+  supportRequestId?: string
+  supportRequestIds?: readonly string[]
+}
+
+/** Small executed-request receipt retained with a run-detail request. */
+export interface CruxRunDetailRequestPlan {
+  artifactId?: CruxArtifactId | string
+  requestId: string
+  model: string
+  inputTokens?: number
+  maxInputTokens?: number
+  measurement: 'exact' | 'estimated' | 'conservative' | string
+  adaptations: readonly CruxRunDetailRequestAdaptation[]
+  warnings: readonly { code: string; message: string }[]
+  previousRequestId?: string
+}
+
 /** Context contribution included in the effective request projection. */
 export interface CruxRunDetailRequestContribution extends CruxContextContributionPreview {
   artifactId?: CruxArtifactId | string
+  boundary?: 'required' | 'sticky' | 'elastic'
+  representations?: readonly string[]
+  selectedRepresentation?: string
+  adaptation?: CruxRunDetailRequestAdaptation
   order: number
 }
 
@@ -100,6 +127,7 @@ export interface CruxRunDetailRequest {
   /** Exact captured user PromptText, absent for strings and invalid/redacted evidence. */
   userPrompt?: CruxPromptTextUserPromptPreview
   messages?: CruxRunDetailRequestMessages
+  plan?: CruxRunDetailRequestPlan
   contributions: CruxRunDetailRequestContribution[]
   budget?: CruxRunDetailRequestBudget
   tools: CruxRunDetailRequestTool[]

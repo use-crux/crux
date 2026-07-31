@@ -1,5 +1,6 @@
 import { isAgent } from '../agent'
 import type { AgentResult, AgentResultPayload } from '../executor'
+import type { ExecuteOptions } from '../executor'
 import { executeWithRetry } from '../../generation/retry'
 import { observe } from '../../observability'
 import type { DefinitionRef } from '../../observability'
@@ -14,6 +15,11 @@ import type {
   CompositionFunctionExecution,
   CompositionStepContextInput,
 } from './types'
+import {
+  prepareInvocation as prepareChildInvocation,
+  type PrepareInvocation,
+  type PrepareInvocationState,
+} from '../../request/prepare/invocation'
 
 function agentIdFor(input: CompositionAgentExecution): string {
   return isAgent(input.agent) ? input.agent.id : input.label
@@ -91,6 +97,8 @@ export async function executeAgent<TOutput>(
   childContext: (input: CompositionStepContextInput) => ExecutionContext,
   input: CompositionAgentExecution<TOutput>,
   childDefinitionRef?: DefinitionRef,
+  prepareInvocation?: PrepareInvocation,
+  preparationState?: PrepareInvocationState,
 ): Promise<AgentResult<TOutput>> {
   if (input.flowStep) {
     const stepId = `${compositionId}-${input.label}-${input.index}`
@@ -113,6 +121,8 @@ export async function executeAgent<TOutput>(
           input,
           stepId,
           childDefinitionRef,
+          prepareInvocation,
+          preparationState,
         ),
     )
   }
@@ -122,6 +132,8 @@ export async function executeAgent<TOutput>(
     input,
     undefined,
     childDefinitionRef,
+    prepareInvocation,
+    preparationState,
   )
 }
 
@@ -131,6 +143,8 @@ async function executeAgentRun<TOutput>(
   input: CompositionAgentExecution<TOutput>,
   stepId?: string,
   childDefinitionRef?: DefinitionRef,
+  prepareInvocation?: PrepareInvocation,
+  preparationState?: PrepareInvocationState,
 ): Promise<AgentResult<TOutput>> {
   const startedAt = Date.now()
   const stepCtx = childContext({
@@ -144,6 +158,19 @@ async function executeAgentRun<TOutput>(
     ...(isAgent(input.agent) ? [agentDefinitionRef(input.agent.id)] : []),
     ...(childDefinitionRef ? [childDefinitionRef] : []),
   ]
+  const prepared =
+    isAgent(input.agent) &&
+    input.invocation &&
+    prepareInvocation &&
+    preparationState
+      ? await prepareChildInvocation({
+          callback: prepareInvocation,
+          state: preparationState,
+          seed: input.invocation,
+          agent: input.agent,
+          options: executorOptions(input),
+        })
+      : undefined
   return observeAgentRun({
     compositionId,
     label: input.label,
@@ -156,25 +183,22 @@ async function executeAgentRun<TOutput>(
     sourceRef: isAgent(input.agent)
       ? promptScopeSourceRef(input.agent.prompt)
       : undefined,
-    invoke: () => invokeAgent(input, startedAt),
+    invoke: () => invokeAgent(input, startedAt, prepared),
   })
 }
 
 async function invokeAgent<TOutput>(
   input: CompositionAgentExecution<TOutput>,
   startedAt: number,
+  prepared?: {
+    readonly agent: import('../agent').AnyAgent
+    readonly options: ExecuteOptions
+  },
 ): Promise<AgentResultPayload<TOutput>> {
-  const agent = input.agent
+  const agent = prepared?.agent ?? input.agent
   if (isAgent(agent)) {
     return (await executeWithRetry(
-      () =>
-        input.executor(agent, {
-          input: input.input,
-          model: input.model,
-          tools: input.tools,
-          maxSteps: input.maxSteps,
-          validationRetry: input.validationRetry,
-        }),
+      () => input.executor(agent, prepared?.options ?? executorOptions(input)),
       input.retry,
     )) as AgentResultPayload<TOutput>
   }
@@ -185,6 +209,16 @@ async function invokeAgent<TOutput>(
     agentId: input.label,
     output: output as TOutput,
     durationMs: Date.now() - startedAt,
+  }
+}
+
+function executorOptions(input: CompositionAgentExecution): ExecuteOptions {
+  return {
+    input: input.input,
+    model: input.model,
+    tools: input.tools,
+    maxSteps: input.maxSteps,
+    validationRetry: input.validationRetry,
   }
 }
 

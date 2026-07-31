@@ -222,6 +222,8 @@ export interface CruxPersistenceConfig {
    * storage backend, or data-locality policy from source discovery.
    */
   readonly records?: RecordStore;
+  /** Existing asset backing reused by exact-recovery references. */
+  readonly assets?: import("../asset").AssetStore;
 }
 
 export interface CruxGenerationConfig {

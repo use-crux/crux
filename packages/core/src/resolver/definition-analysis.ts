@@ -18,10 +18,42 @@ import type {
 } from "../prompt/context-types";
 import { isContributorEntry } from "../prompt/contributor";
 import { isInternalInjectableEntry } from "../prompt/internal-injection";
+import {
+  compileRepresentationLadder,
+  isForcedOffload,
+  isRepresentationLadder,
+  representationSources,
+} from "../request/representation/ladder";
 import type { DiagnosticsPort } from "./ports";
 
 interface StaticEntryId {
   id: string;
+}
+
+/** Validate every statically reachable representation ladder. */
+export function assertValidRepresentationLadders(
+  entries: readonly ContextEntry[],
+): void {
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (isForcedOffload(entry)) continue;
+    if (isRepresentationLadder(entry)) {
+      compileRepresentationLadder(entry);
+      continue;
+    }
+    if (isContributorEntry(entry)) {
+      assertValidRepresentationLadders(entry.useEntries);
+      continue;
+    }
+    if (
+      !isInternalInjectableEntry(entry) &&
+      entry._tag === "Context"
+    ) {
+      assertValidRepresentationLadders(
+        (entry as Context<z.ZodType>).useEntries,
+      );
+    }
+  }
 }
 
 /**
@@ -92,6 +124,13 @@ function* walkStaticEntries(
     }
 
     if (isInternalInjectableEntry(entry)) continue;
+
+    if (isForcedOffload(entry)) continue;
+
+    if (isRepresentationLadder(entry)) {
+      yield* walkStaticEntries(representationSources(entry));
+      continue;
+    }
 
     if (entry._tag === "MatchSpec") {
       const spec = entry as MatchSpec;

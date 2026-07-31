@@ -4,7 +4,7 @@ import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from '../src/agent/lifecycle'
-import { inMemoryRecordStore, memory, recentMessages } from '../src/memory'
+import { inMemoryRecordStore, memory, memoryBlock } from '../src/memory'
 import { skill } from '../src/skill'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
@@ -90,7 +90,16 @@ describe('profile-backed Convex Agent persistence lifecycle', () => {
     }
     const turnMemory = memory({
       id: 'turn-memory',
-      blocks: [recentMessages({ id: 'recent' })],
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          captureTurn: async (turn, context) => {
+            await context.records.put('captured-turn', {
+              messages: turn.messages.map((message) => message.content),
+            })
+          },
+        }),
+      ],
     })
     const basePrompt = prompt({
       id: 'memory-agent',

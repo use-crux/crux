@@ -165,10 +165,6 @@
       "types": "./src/memory/index.ts",
       "import": "./src/memory/index.ts"
     },
-    "./compaction": {
-      "types": "./src/compaction/index.ts",
-      "import": "./src/compaction/index.ts"
-    },
     "./scoring": {
       "types": "./src/scoring/index.ts",
       "import": "./src/scoring/index.ts"
@@ -347,9 +343,6 @@
       ],
       "memory": [
         "src/memory/index.ts"
-      ],
-      "compaction": [
-        "src/compaction/index.ts"
       ],
       "scoring": [
         "src/scoring/index.ts"

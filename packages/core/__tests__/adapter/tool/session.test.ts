@@ -71,9 +71,14 @@ describe('createToolLifecycle — preparation', () => {
       promptId: 'p1',
     })
 
-    expect(lifecycle.descriptors).toBeUndefined()
+    // Descriptors stay readable in the sdk regime so request planning can
+    // measure tool schemas; execution still goes through the armed tool map.
+    expect(lifecycle.descriptors?.map((d) => d.name)).toEqual(['echo'])
     expect(lifecycle.tools).toBeDefined()
-    expect(Object.keys(lifecycle.tools!)).toEqual(['echo'])
+    expect(Object.keys(lifecycle.tools!)).toEqual([
+      'echo',
+      '__crux_ReadOffload',
+    ])
     await expect(
       lifecycle.executeRound(
         {

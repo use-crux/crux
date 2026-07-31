@@ -310,13 +310,6 @@ packages/core/src/       Published as @use-crux/core
 │   └── helpers.ts      deriveTaskListStatus(), key conventions
 ├── tasks/
 │   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs and types, incl. TaskCompleteArgs, from plan/)
-├── compaction/
-│   ├── types.ts        GenerateTextFn, GenerateObjectFn (SDK-agnostic)
-│   ├── compact-conversation.ts  Core-owned observed conversation compaction; Convex name-identically re-exports it
-│   ├── summarize.ts    summarizeMessages() — stateless batch LLM summarization
-│   ├── sliding-window.ts  createSlidingWindow() — rolling window with auto-eviction
-│   ├── budget.ts       createBudgetManager() — advisory pressure tracking
-│   └── extract.ts      extractKeyFacts() — structured extraction from conversations
 ├── scoring/
 │   ├── judge.ts        llmJudge() — LLM-as-a-judge with CoT, rubrics, few-shot
 │   ├── metrics.ts      Pre-built judges (relevance, faithfulness, coherence, etc.)
@@ -1416,34 +1409,6 @@ Both paths respect `filter` for metadata matching.
 
 `facts()` and `procedures()` share the extractive block path. Capture extracts candidates, applies policy, then proposes them by default; `write.mode` can instead be `auto` for immediate writes or `manual`, where capture extracts nothing automatically and writes happen only through direct methods. Direct `add()`, `find()`, `list()`, `delete()`, and `render()` methods use `MemoryRuntimeOptions` with a required `records` store and optional `storage` and `vectors`.
 
-## Compaction Primitives
-
-### summarizeMessages
-
-Stateless: formats messages into a numbered transcript, sends to an LLM with a structured system prompt requesting preservation of key facts, decisions, and context. Returns the summary with before/after token counts. It opens a canonical `compaction.run` span and attaches a bounded output artifact with summary preview, before/after token counts, compression ratio, focus, and model metadata.
-
-### Sliding Window
-
-Stateful, backed by `RecordStore`. Maintains a running summary under `compact:{id}:summary` and message entries under `compact:{id}:msg:{index}`.
-
-When `push()` exceeds `windowSize`:
-
-1. Collect evicted messages (oldest beyond window)
-2. Emit `onCompactStart` hook with input stats
-3. Call `summarizeMessages()` with evicted messages + existing summary as focus
-4. Replace summary in store, remove evicted message keys
-5. Emit `onCompactEnd` hook with compression stats
-
-`getMessages()` returns `[summaryMessage, ...windowedMessages]` or just `windowedMessages` if no summary exists.
-
-### Budget Manager
-
-Pure synchronous computation — no storage, no LLM calls. Tracks token usage by named source. `check()` computes pressure as `used / limit` and maps to levels via configurable thresholds. It emits the legacy `onBudgetCheck` instrumentation hook and a canonical `prompt.budget` span containing the pressure level, thresholds, source breakdown, used tokens, and available tokens.
-
-### extractKeyFacts
-
-One-shot: sends the full conversation to an LLM with a Zod schema, gets back structured output. No memory, no state — just `generateObject()` with a system prompt.
-
 ## Scoring Primitives
 
 ### LLM Judge
@@ -1649,7 +1614,7 @@ Internally, all four composition utilities route shared lifecycle through `agent
 
 **Cost tracking:** `onCost` callback fires after each agent execution with accumulated `{ inputTokens, outputTokens, totalTokens, abort() }`. `abort()` stops the swarm cleanly. `dryRun: true` returns `{ agentCount, maxPossibleHops }` without executing agents.
 
-**Context summarization:** In `'accumulate'` mode, `summarize: { generate, model, after }` compresses `_previousOutput` via LLM after N handoffs. Uses `GenerateTextFn` from `@use-crux/core/compaction/types`.
+**Context summarization:** In `'accumulate'` mode, `summarize: { generate, model, after }` compresses `_previousOutput` via LLM after N handoffs. Uses `GenerateTextFn` from `@use-crux/core`.
 
 ### Shared Infrastructure
 
@@ -1785,7 +1750,7 @@ Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` imple
 
 The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic object factories bind a specific client and require a model per call; their text factories still bind client and model. The helper factories are generated from the same single-turn provider runtimes that power `createOpenAI()`, `createGoogle()`, and `createAnthropic()`. Google keeps `CachedContent` lifecycle in `@use-crux/google` by passing a narrow cache resolver through runtime dependencies instead of moving provider cache policy into core.
 
-These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, Eval evidence reuse, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@use-crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
+These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, Eval evidence reuse, tools, memory capture, or instrumentation.
 
 ### Result Envelope And Metadata Normalization
 
@@ -1841,12 +1806,6 @@ result = {
 `convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared vector index, while dense search requires an explicit `VectorStore` (`convexVectorStore()` throws `unsupported_capability` with migration guidance). `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
 `createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, and capability reporting.
-
-Conversation compaction is Core-owned in `compaction/compact-conversation.ts`.
-`@use-crux/convex` name-identically re-exports `compactConversation()` and its
-argument type for compatibility; it does not own a separate lifecycle or
-result finalizer. The operation takes evicted messages plus an existing summary
-and returns the outer `compaction.run` result while the caller owns persistence.
 
 ### Upstash (`upstash/`)
 

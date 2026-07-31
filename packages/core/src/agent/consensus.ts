@@ -18,6 +18,11 @@ import type { AgentExecutor, AgentResult } from './executor'
 import { createCompositionRuntime } from './composition-runtime'
 import type { OperationResultMeta } from '../observability'
 import type { RetryOptions } from '../generation/retry'
+import type {
+  ConsensusInvocationContext,
+  PrepareInvocation,
+} from '../request/prepare/invocation'
+import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -71,6 +76,8 @@ export interface ConsensusOptions<
    * Applied to all voter agents.
    */
   validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
+  /** Prepare each managed voter invocation before child I/O. */
+  prepareInvocation?: PrepareInvocation<unknown, ConsensusInvocationContext>
 }
 
 /** The result of a consensus vote. */
@@ -87,6 +94,8 @@ export interface ConsensusResult<TVote extends string = string> {
   agreement: number
   /** Total duration in milliseconds. */
   durationMs: number
+  /** Linked provider-request evidence for managed candidates. */
+  requestReceipts: CompositionRequestReceiptTree
 }
 
 /** Error thrown when quorum is not met. */
@@ -144,6 +153,7 @@ export function createConsensus(executor: AgentExecutor) {
       sessionId,
       retry,
       validationRetry,
+      prepareInvocation,
     } = options
     const start = Date.now()
     const agentIds = agents.map((a, i) => (isAgent(a) ? a.id : `voter-${i}`))
@@ -153,6 +163,7 @@ export function createConsensus(executor: AgentExecutor) {
       agentIds,
       sessionId,
       attributes: { quorum },
+      prepareInvocation: prepareInvocation as PrepareInvocation | undefined,
     })
 
     return runtime.run(async (scope) => {
@@ -171,6 +182,11 @@ export function createConsensus(executor: AgentExecutor) {
             model,
             retry,
             validationRetry,
+            invocation: {
+              composition: { id, kind: 'consensus' },
+              candidate: { index },
+              input: voterInput,
+            },
           }),
         ),
       )) as AgentResult<ConsensusOutput<TAgents>>[]
@@ -253,6 +269,7 @@ export function createConsensus(executor: AgentExecutor) {
         details: allResults,
         agreement,
         durationMs: Date.now() - start,
+        requestReceipts: scope.requestReceipts(),
       }
     })
   }

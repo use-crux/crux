@@ -7,7 +7,6 @@ description: Block-based memory primitives for prompts, agents, stores, and obse
 import {
   memory,
   memoryBlock,
-  recentMessages,
   workingState,
   episodes,
   facts,
@@ -28,7 +27,6 @@ const mem = memory({
   capture: { mode: "deferred" },
   budget: { maxTokens: 1200 },
   blocks: [
-    recentMessages({ id: "recent" }),
     facts({
       id: "facts",
       embed: dense,
@@ -92,9 +90,9 @@ A block can implement render, tools, turn capture, tool-event capture, flush, an
 
 ## Built-In Blocks
 
-`recentMessages({ id, maxMessages?, priority? })` stores a bounded rolling message window.
-
-Methods: `addTurn(turn, options)`, `list(options)`, `clear(options)`.
+Canonical conversation history is not a MemoryBlock. Supply caller-owned
+messages or a Thread, and project it with `history.recent()` or managed
+`history()` in Prompt composition.
 
 `workingState({ id, schema, priority? })` stores one Zod-validated value.
 

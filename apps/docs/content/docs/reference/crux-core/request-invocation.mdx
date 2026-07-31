@@ -1,0 +1,148 @@
+---
+title: Invocation preparation
+description: Prepare composition children and inspect their causal request receipt trees.
+---
+
+```ts
+import type {
+  PrepareInvocation,
+  PipelineInvocationContext,
+} from "@use-crux/core";
+```
+
+`prepareInvocation` prepares one managed Agent child before a Pipeline,
+Parallel group, Consensus run, or Swarm dispatches it. The accepted amendment
+becomes the child's baseline beneath later `prepareStep` decisions.
+
+Use this hook when the baseline depends on composition progress. Put stable
+context on the Prompt or composition stage when no runtime decision is needed.
+Function-only stages and nested composition wrappers do not create a managed
+leaf boundary.
+
+## Configure `prepareInvocation`
+
+```ts
+const result = await pipeline({
+  id: "support-resolution",
+  context: { ticketId: "ticket_4821" },
+  model: standardModel,
+  steps: [
+    { name: "classify", agent: classifier },
+    { name: "reply", agent: responder },
+  ],
+  prepareInvocation: ({ step, context }) => {
+    if (step.name !== "reply") return;
+
+    return {
+      use: { add: [resolutionContext(context.classify)] },
+      model: reviewModel,
+    };
+  },
+});
+```
+
+`PrepareInvocation<TModel, TContext>` may return `ExecutionAmendment`,
+`undefined`, or a promise of either. The amendment can change contributors,
+Tools, active Tool names, model, or input pressure according to the same rules
+as `prepareStep`.
+
+An invocation callback can read resources inherited before the boundary. A
+resource it adds becomes readable by the child `prepareStep`, not by the same
+invocation callback.
+
+## Typed invocation contexts
+
+| Context | Composition-specific fields |
+| --- | --- |
+| `PipelineInvocationContext` | `step: { name, index }`, accumulated `context` |
+| `ParallelInvocationContext` | `branch: { name, index }`, shared `context` |
+| `ConsensusInvocationContext` | `candidate: { index }`, candidate `input` |
+| `SwarmInvocationContext` | `hop: { index, path, fromAgent?, reason? }`, selected `input` |
+
+Every context also contains:
+
+| Field | Meaning |
+| --- | --- |
+| `operation` | Managed operation family. This surface prepares language Agents. |
+| `target` | `InvocationTarget` with stable child id and operation. |
+| `composition` | Parent id and narrowed composition kind. |
+| `stats` | `InvocationPreparationStats` captured before the child. |
+| `resources` | Read-only pinned `PreparationResources`. |
+| `signal` | Cancellation and deadline signal. |
+
+`InvocationContext` is the union of all four shapes. Annotate a reusable
+callback when it serves one composition family:
+
+```ts
+const prepareReply: PrepareInvocation<
+  typeof reviewModel,
+  PipelineInvocationContext
+> = ({ step }) =>
+  step.name === "reply" ? { model: reviewModel } : undefined;
+```
+
+## Layer with `prepareStep`
+
+```text
+Prompt and Agent definition
++ direct composition inputs
++ fresh prepareInvocation amendment
+= child baseline
+
+child baseline
++ fresh prepareStep amendment
+= one provider-call candidate graph
+```
+
+The invocation callback runs once for the managed leaf. A child's
+`prepareStep` runs before each semantic provider call. Neither amendment leaks
+into a later child or provider boundary.
+
+## Failures
+
+Callback failure, timeout, or cancellation throws `PreparationError` before
+child I/O. Unhandled structured-resource reads throw `ResourceReadError`.
+Invalid amendments throw `RequestCompositionError` with code
+`INVALID_COMPOSITION`.
+
+The automatic 30-second preparation ceiling applies. A composition may retry
+or fallback only through its explicit policy.
+
+## Composition receipt trees
+
+Composition results expose `requestReceipts: CompositionRequestReceiptTree`.
+The tree preserves child causality.
+
+```ts
+for (const child of result.requestReceipts.children) {
+  if (child.kind === "invocation") {
+    console.log(child.label, child.receipts.map((receipt) => receipt.id));
+  }
+}
+```
+
+| Type | Purpose |
+| --- | --- |
+| `CompositionRequestReceiptTree` | Parent composition identity and ordered child nodes. |
+| `InvocationRequestReceiptNode` | One managed leaf with ordered provider receipts. |
+| `NestedRequestReceiptNode` | A nested composition returned by a function-only wrapper. |
+| `CompositionRequestReceiptNode` | Union of invocation and nested nodes. |
+| `ReceiptCompositionKind` | `pipeline`, `parallel`, `consensus`, or `swarm`. |
+
+Provider calls within one child remain linked by `previousRequestId`.
+
+## Public type inventory
+
+| Area | Public exports |
+| --- | --- |
+| Callback | `PrepareInvocation` |
+| Context | `InvocationContext`, `InvocationTarget`, `PipelineInvocationContext`, `ParallelInvocationContext`, `ConsensusInvocationContext`, `SwarmInvocationContext` |
+| Statistics | `InvocationPreparationStats` |
+| Evidence | `CompositionRequestReceiptTree`, `CompositionRequestReceiptNode`, `InvocationRequestReceiptNode`, `NestedRequestReceiptNode`, `ReceiptCompositionKind` |
+
+## Related
+
+- Guide: [Adaptive hooks](/docs/guides/context-planning/hooks)
+- Reference: [Request preparation](/docs/reference/crux-core/request-preparation)
+- Reference: [Request evidence](/docs/reference/crux-core/request-evidence)
+- Guide: [Compositions](/docs/guides/compositions)

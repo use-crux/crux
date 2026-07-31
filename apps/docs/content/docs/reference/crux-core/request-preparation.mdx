@@ -1,0 +1,305 @@
+---
+title: Request preparation
+description: prepareStep, prepareInvocation, constrained amendments, resources, statistics, and composition receipt trees.
+---
+
+```ts
+import {
+  PreparationError,
+  ResourceReadError,
+} from "@use-crux/core";
+import type {
+  ExecutionAmendment,
+  PrepareInvocation,
+  PrepareStep,
+} from "@use-crux/core";
+```
+
+Preparation hooks make a constrained decision at a real execution boundary.
+They can add or remove declared contributors, select Tools, change the concrete
+model, or adjust input pressure. They cannot replace canonical messages, raw
+provider requests, credentials, safety policy, or output contracts.
+
+Use hooks when a decision depends on current Tool history, committed resource
+state, or composition progress. Use static Agent, invocation, or composition
+configuration when the decision is known before execution.
+
+## Choose a boundary
+
+| Hook | Boundary | Use when | Do not use when |
+| --- | --- | --- | --- |
+| `prepareStep` | Before one semantic language provider call | A later Tool result, usage fact, or pinned resource changes the next request. | One static configuration works for the whole Agent activation. |
+| `prepareInvocation` | Before a composition invokes one managed Agent leaf | A Pipeline stage, Parallel branch, Consensus candidate, or Swarm hop needs a different child baseline. | The target is a function-only stage or nested composition wrapper. |
+
+The boundaries layer in this order:
+
+```text
+definition and direct invocation
+  -> prepareInvocation child baseline
+    -> prepareStep provider-call amendment
+      -> sealed request and provider dispatch
+```
+
+Both callbacks are non-accumulating. Each decision starts from its inherited
+baseline. Exact transport retries reuse the accepted sealed decision and do
+not invoke either callback again.
+
+## `prepareStep`
+
+Set a default on an Agent:
+
+```ts
+const responder = agent({
+  id: "support-responder",
+  prompt: supportReply,
+  model: standardModel,
+  prepareStep: async ({ reason, stats, resources }) => {
+    const control = await resources.read(supportState);
+
+    if (control?.escalated || reason === "validation-retry") {
+      return {
+        model: reviewModel,
+        use: { add: [reviewChecklist] },
+        inputBudget: { max: 24_000 },
+      };
+    }
+
+    if (stats.run.usage.inputTokens &&
+        stats.run.usage.inputTokens > 18_000) {
+      return { activeTools: ["searchKnowledge"] };
+    }
+  },
+});
+```
+
+An invocation can override the Agent default:
+
+```ts
+await generate(responder, {
+  input: { ticketId: "ticket_4821" },
+  prepareStep: ({ reason }) =>
+    reason === "tool-result"
+      ? { use: { add: [toolReviewContext] } }
+      : undefined,
+});
+```
+
+Use `prepareStep` for boundary-local decisions after Tool rounds and validation
+retries. Do not use it to maintain hidden mutable policy across calls. Store
+durable control state in a supported resource and read it at the boundary.
+
+`PrepareStep<TModel>` may return an `ExecutionAmendment<TModel>`, `undefined`,
+or a promise of either. The invocation callback replaces the Agent callback;
+they do not form a middleware chain.
+
+### `StepContext`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `operation` | `"language"` | Managed operation family for this surface. |
+| `input` | `Readonly<Record<string, unknown>>` | Original normalized invocation input. |
+| `index` | `number` | Zero-based semantic provider-call index. |
+| `reason` | `StepReason` | `initial`, `tool-result`, or `validation-retry`. |
+| `previousReceipt` | `RequestReceipt \| undefined` | Evidence from the previous semantic call. |
+| `messages` | `readonly Message[]` | Immutable canonical transcript for observation. |
+| `toolHistory` | `readonly StepToolHistoryEntry[]` | Normalized Tool call and result facts. |
+| `stats` | `StepPreparationStats` | Immutable in-memory statistics snapshot. |
+| `resources` | `PreparationResources` | Read-only mediator for declared structured resources. |
+| `signal` | `AbortSignal` | Cancellation and deadline signal for the callback. |
+
+`messages` is observation-only. There is no amendment field that replaces it.
+`StepToolHistoryEntry` exposes `callId`, Tool `name`, and the canonical `result`
+after completion.
+
+## `ExecutionAmendment`
+
+An amendment is a delta for one boundary:
+
+```ts
+const amendment = {
+  use: {
+    add: [reviewChecklist],
+    remove: [{ id: "optional-examples" }],
+  },
+  tools: { verifyPolicy },
+  activeTools: ["verifyPolicy"],
+  model: reviewModel,
+  inputBudget: { optimizeAt: 18_000, max: 24_000 },
+} satisfies ExecutionAmendment<typeof reviewModel>;
+```
+
+| Field | Type | Behavior |
+| --- | --- | --- |
+| `use.add` | `readonly AmendableContextEntry[]?` | Adds top-level contributors for this boundary. History ownership entries are excluded. |
+| `use.remove` | `readonly ContributorSelector[]?` | Removes a top-level contributor by object identity or unique `{ id }`. |
+| `tools` | `AnyToolSet?` | Adds exact Tool definitions for this boundary. Names must be unique. |
+| `activeTools` | `readonly string[]?` | Selects names after the complete capability graph resolves. |
+| `model` | `TModel?` | Chooses a compatible concrete model. |
+| `inputBudget` | `InputBudget?` | Replaces the boundary's whole-request pressure settings. |
+
+`ContributorSelector` is the original `AmendableContextEntry` or `{ id }`.
+Removing a ladder root removes its entire subtree. Add and remove of the same
+identity is invalid. Removing an inactive contributor is an observable no-op.
+
+`OperationKind` contains `language`, `image`, `speech`, `transcription`, and
+`embedding` for operation-facet typing. The shipped request-planning hooks on
+this page prepare managed language calls and managed Agent leaves.
+`ExecutionAmendment<TModel, Operation>` rejects language-only `tools`,
+`activeTools`, and `inputBudget` fields for other operation kinds.
+
+Invalid return values, unknown active Tool names, Tool collisions, transcript
+ownership changes, or protected capability removal fail before provider
+dispatch. They produce `RequestCompositionError` with code
+`INVALID_COMPOSITION`.
+
+## Preparation resources
+
+`PreparationResources.read()` reads only supported structured resources that
+belong to the inherited declared contributor graph.
+
+```ts
+const supportState = workingState({
+  id: "support-control",
+  schema: supportControlSchema,
+});
+
+const memory = memory({
+  id: "support-memory",
+  records,
+  namespace: ({ input }) => `ticket:${input.ticketId}`,
+  blocks: [supportState],
+});
+
+const stateAwareReply = prompt({
+  id: "state-aware-support-reply",
+  use: [memory],
+  prompt: "Answer the support ticket.",
+});
+
+const responder = agent({
+  id: "support-responder",
+  prompt: stateAwareReply,
+  async prepareStep({ resources }) {
+    const state = await resources.read(supportState);
+    return state?.escalated ? { model: reviewModel } : undefined;
+  },
+});
+```
+
+Use resource reads for a `workingState()` value or Blackboard state already
+declared by the inherited graph. Do not use the mediator for arbitrary Storage,
+retrieval, transcript history, assets, or writes.
+
+The first read pins the value and a revision for the boundary. Repeated reads
+return the same immutable value. A readable resource with no value returns
+`null`. A resource added by the current callback is not readable until the next
+boundary.
+
+`ControlReadable<T>` is the public handle contract implemented by supported
+factories. Applications normally receive one from those factories instead of
+implementing it.
+
+### `ResourceReadError`
+
+| `reason` | Meaning |
+| --- | --- |
+| `undeclared` | The handle is not in the inherited declared graph. |
+| `unauthorized` | The execution boundary cannot read the resource. |
+| `unresolved` | The reader did not produce a value or `null`. |
+| `storage-unavailable` | Backing storage could not serve the read. |
+
+Handle only the failure where your application has an explicit safe fallback:
+
+```ts
+async function prepare({ resources }: StepContext) {
+  try {
+    const state = await resources.read(supportState);
+    return state?.escalated ? { model: reviewModel } : undefined;
+  } catch (error) {
+    if (error instanceof ResourceReadError &&
+        error.reason === "storage-unavailable") {
+      return { model: safeDefaultModel };
+    }
+    throw error;
+  }
+}
+```
+
+## Preparation statistics
+
+Statistics describe committed activity before the current boundary. They are
+honest about missing provider usage.
+
+### `StepPreparationStats`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `at` | `Date` | Snapshot time. |
+| `cursor` | `number` | Execution-local activity cursor. |
+| `attempt` | `PreparationAttemptStats` | One-based attempt number and safe reason. |
+| `run` | `PreparationScopeStats` | Current managed run aggregate. |
+| `root` | `PreparationScopeStats` | Outer activity root aggregate. |
+| `stepIndex` | `number` | Zero-based semantic provider-call index. |
+
+`PreparationScopeStats` contains `usage` and `modelCalls`.
+`PreparationUsageStats` exposes optional input, output, and total tokens plus
+`coverage.tokens` and `coverage.cost`. `PreparationCoverage` is `complete`,
+`partial`, or `none`. Check coverage before treating an absent token value as
+zero.
+
+`PreparationModelCallStats` counts started, succeeded, failed, and cancelled
+calls plus exact transport retries. `PreparationAttemptStats.reason` is
+`initial`, `retry`, `fallback`, or `validation-retry`.
+
+These are execution-local V1 aggregates, not a durable billing ledger. Use
+provider billing data or a durable statistics surface for accounting.
+
+## Failures and deadlines
+
+Callback throws, callback timeout, and caller cancellation produce
+`PreparationError` with `reason` equal to `callback`, `timeout`, or `aborted`.
+The message is content-free. An unhandled resource failure remains a typed
+`ResourceReadError`.
+
+Preparation runs under the caller deadline and an automatic 30-second safety
+ceiling. A late callback result is ignored, and no provider or child I/O starts
+after the boundary fails. Long-running work should finish before preparation
+and expose a small committed state value for the callback to read.
+
+## Decision inspection
+
+An accepted decision is committed after its request is sealed. Full request
+inspection may include `PreparationDecisionInspection`:
+
+```ts
+const inspection = await result.steps[0].request.inspect();
+console.log(inspection.preparation?.amendment);
+```
+
+The record contains operation, step index, reason, amendment counts, model and
+budget change flags, pinned resource identities and hashes, and the sealed
+request id. It excludes resource values, prompts, messages, Tool arguments and
+results, provider bodies, and raw errors.
+
+## Public type inventory
+
+| Area | Public exports |
+| --- | --- |
+| Callback | `PrepareStep` |
+| Amendment | `ExecutionAmendment`, `AmendableContextEntry`, `ContributorSelector`, `OperationKind` |
+| Step context | `StepContext`, `StepReason`, `StepToolHistoryEntry` |
+| Statistics | `StepPreparationStats`, `PreparationAttemptStats`, `PreparationScopeStats`, `PreparationUsageStats`, `PreparationModelCallStats`, `PreparationCoverage` |
+| Resources | `PreparationResources`, `ControlReadable`, `ResourceReadErrorReason` |
+| Failure | `PreparationErrorReason` |
+| Evidence | `PreparationDecisionInspection` |
+
+Applications usually annotate reusable callbacks and let TypeScript infer the
+individual context types from the composition configuration.
+
+## Related
+
+- Guide: [Adaptive hooks](/docs/guides/context-planning/hooks)
+- Reference: [Invocation preparation](/docs/reference/crux-core/request-invocation)
+- Reference: [Request planning](/docs/reference/crux-core/request-planning)
+- Reference: [Request history](/docs/reference/crux-core/request-history)
+- Guide: [Compositions](/docs/guides/compositions)

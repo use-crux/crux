@@ -156,7 +156,7 @@ describe("language step Safety — core continuation", () => {
     ]);
     const origins: unknown[] = [];
 
-    await adapter(scripted.spec)(scripted.client).generate(skillPrompt(), {
+    const result = await adapter(scripted.spec)(scripted.client).generate(skillPrompt(), {
       model: "test-model",
       input: { message: "go" },
       maxSteps: 1,
@@ -176,6 +176,10 @@ describe("language step Safety — core continuation", () => {
       { kind: "step", stepIndex: 0, partIndex: 0 },
       { kind: "step", stepIndex: 1, partIndex: 0 },
     ]);
+    expect(result.steps).toHaveLength(2);
+    expect(result.steps[1]?.request?.previousRequestId).toBe(
+      result.steps[0]?.request?.id,
+    );
     expect(scripted.calls).toBe(2);
   });
 });

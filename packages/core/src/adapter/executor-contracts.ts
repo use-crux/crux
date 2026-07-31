@@ -26,6 +26,9 @@ import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { AnyPrompt } from "../prompt/prompt-types";
 import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
 import type { GenerateResult } from "./result-accumulator";
+import type { ModelCapacityProfile } from "../request/capacity/model-profile";
+import type { InputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 /**
  * Model argument accepted by a loop-owning executor.
@@ -66,7 +69,10 @@ export interface ExecutorGenerateBaseOptions<
   /** Call-site generation settings with highest precedence. */
   settings?: GenerationSettings;
   /** Token budget for the system message. */
-  tokenBudget?: number;
+  /** Whole-request input pressure settings for each provider call. */
+  inputBudget?: InputBudget;
+  /** Boundary-local callback evaluated before every semantic provider call. */
+  prepareStep?: PrepareStep<TModel>;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
   /**
@@ -129,6 +135,13 @@ export interface CruxExecutor<
 > {
   /** Stable provider-runtime identifier. */
   readonly executorId: string;
+  /**
+   * Report capacity facts for a concrete SDK model reference without I/O.
+   *
+   * @param model - Concrete model understood by the SDK runtime.
+   * @returns Capacity facts used for whole-request budget derivation.
+   */
+  capacity(model: TModel): ModelCapacityProfile;
   /** Execute a prompt through the provider-owned language loop. */
   generate(
     prompt: AnyPrompt,

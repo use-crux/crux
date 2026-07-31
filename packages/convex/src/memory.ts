@@ -17,7 +17,6 @@ export {
   inMemoryStorage,
   inMemoryVectorStore,
   memoryBlock,
-  recentMessages,
   workingState,
   episodes,
   facts,

@@ -301,7 +301,7 @@ application code.
 **Crux: Preview PromptText in Application Runtime** is available only for a
 current semantic Prompt owner and an active `crux dev` runtime that published
 that exact Prompt through `configure({ prompts })`. Devtools shows an explicit
-confirmation before dispatch. Dispatch invokes `Prompt.inspect()` once. It
+confirmation before dispatch. Dispatch invokes observational `preview()` once. It
 does not call a model, invoke tools, or create a Run or observability record,
 but authored callbacks are trusted application code and may perform their own
 I/O or side effects. Inputs and results remain in the active in-memory preview
@@ -329,7 +329,7 @@ Semantic indexing publishes three exact error diagnostics:
 
 | Code                                     | Meaning                                  | Quick fix                                                                                                                                               |
 | ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | A supported sequence is used inline.     | Wrap the exact expression as `(<expression>).join(", ")`, or use the Rust-proven **Put sequence on its own line — changes layout** edit when available. |
+| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | A supported sequence is used inline.     | Wrap the exact expression as `(<expression>).join(", ")`, or use the Rust-proven **Put sequence on its own line (changes layout)** edit when available. |
 | `CRUX_PROMPT_TEXT_INVALID_INTERPOLATION` | The value is proven always invalid.      | **Serialize with `md.json()`** only when the expression is proven applicable.                                                                           |
 | `CRUX_PROMPT_TEXT_JSON_SERIALIZATION`    | `md.json()` is proven to return no text. | Correct the authored value; no automatic rewrite is offered.                                                                                            |
 
@@ -356,7 +356,7 @@ while preserving indentation. Save the file to reindex it.
 
 Some manual fixes also declare `crux runtime generate` as a companion command.
 In a trusted VS Code workspace, their quick fix is titled
-**Run `crux runtime generate` — _fix title_**. The server resolves the current
+**Run `crux runtime generate` (_fix title_)**. The server resolves the current
 finding and fix from its read model, accepts only the exact built-in command,
 and starts its own binary directly without a shell. It reports command success
 or failure in the editor.

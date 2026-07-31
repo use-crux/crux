@@ -67,45 +67,42 @@ export type PromptPreviewBrowserErrorCode =
   | "response_limit_exceeded"
   | "internal_error";
 
-export interface PromptPreviewSegment {
-  readonly kind: "static" | "dynamic" | "unknown";
-  readonly startUtf16: number;
-  readonly endUtf16: number;
-  readonly source?: string;
-  readonly observedAt?: number;
-  readonly sourceVersion?: string;
-}
-
-export interface PromptPreviewText {
-  readonly text: string;
-  readonly tokens: number;
-  readonly segments: readonly PromptPreviewSegment[];
-  readonly staticTokens?: number;
-  readonly dynamicTokens?: number;
-}
-
-export interface PromptPreviewInspection {
-  readonly system: {
-    readonly text: string;
-    readonly tokens: number;
-    readonly coverage: "complete" | "partial";
-    readonly parts: readonly (PromptPreviewText & {
-      readonly source: string;
-      readonly skipped: boolean;
-    })[];
-  };
-  readonly prompt?: PromptPreviewText;
-  readonly totalTokens: number;
-  readonly tokenBudget?: number;
-  readonly droppedContexts: readonly (PromptPreviewText & {
-    readonly source: string;
-    readonly priority: number;
-  })[];
-  readonly excludedContexts: readonly {
-    readonly source: string;
-    readonly reason: string;
+export interface PromptRequestPreview {
+  readonly status: "fits" | "over-limit" | "unknown";
+  readonly model?: string;
+  readonly inputTokens?: number;
+  readonly maxInputTokens?: number;
+  readonly measurement: "exact" | "estimated" | "conservative" | "incomplete";
+  readonly adaptations: readonly {
+    readonly contributor: string;
+    readonly representation: "authored" | "summary" | "offload" | "omitted";
+    readonly state: "selected" | "unprepared";
+    readonly fullTokens?: number;
+    readonly selectedTokens?: number;
   }[];
-  readonly tools?: readonly string[];
+  readonly warnings: readonly {
+    readonly code: string;
+    readonly message: string;
+  }[];
+  readonly diagnostics: readonly {
+    readonly id: string;
+    readonly code: string;
+    readonly message: string;
+    readonly contributor?: string;
+    readonly tokens?: number;
+  }[];
+}
+
+export interface PromptPreviewContribution {
+  readonly id: string;
+  readonly boundary: "required" | "sticky" | "elastic";
+  readonly representations: readonly (
+    | "full"
+    | "authored"
+    | "summary"
+    | "offload"
+    | "omitted"
+  )[];
 }
 
 export interface PromptPreviewValidationIssue {
@@ -123,7 +120,8 @@ export type PromptPreviewBrowserResponse =
         readonly environment: PromptPreviewEnvironment;
       };
       readonly catalogueRevision: number;
-      readonly inspection: PromptPreviewInspection;
+      readonly preview: PromptRequestPreview;
+      readonly contributions: readonly PromptPreviewContribution[];
     }
   | {
       readonly status: "validation-error";

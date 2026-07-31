@@ -17,6 +17,11 @@ import type { AgentExecutor, AgentResult } from './executor'
 import { createCompositionRuntime } from './composition-runtime'
 import type { RetryOptions } from '../generation/retry'
 import type { OperationResultMeta } from '../observability'
+import type {
+  ParallelInvocationContext,
+  PrepareInvocation,
+} from '../request/prepare/invocation'
+import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
 
 /**
  * Intersect the input shapes of every agent in a `parallel()` map.
@@ -49,6 +54,8 @@ export interface ParallelResult<TResults extends Record<string, AgentResult>> {
   settled?: { [K in keyof TResults]: SettledResult<TResults[K]> }
   /** Total execution duration in milliseconds. */
   durationMs: number
+  /** Linked provider-request evidence for managed branches. */
+  requestReceipts: CompositionRequestReceiptTree
 }
 
 /** Options for `parallel()`. */
@@ -77,6 +84,8 @@ export interface ParallelOptions<TAgents extends Record<string, AgentLike>> {
    * Applied to all agents in this parallel group.
    */
   validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
+  /** Prepare each managed branch invocation before child I/O. */
+  prepareInvocation?: PrepareInvocation<unknown, ParallelInvocationContext>
 }
 
 // ── Factory ─────────────────────────────────────────────────────────
@@ -118,6 +127,7 @@ export function createParallel(executor: AgentExecutor) {
       sessionId,
       retry,
       validationRetry,
+      prepareInvocation,
     } = options
     const entries = Object.entries(agents)
 
@@ -133,6 +143,7 @@ export function createParallel(executor: AgentExecutor) {
       agentIds,
       sessionId,
       attributes: { onError },
+      prepareInvocation: prepareInvocation as PrepareInvocation | undefined,
     })
 
     return runtime.run(async (scope) => {
@@ -150,6 +161,11 @@ export function createParallel(executor: AgentExecutor) {
           model,
           retry,
           validationRetry,
+          invocation: {
+            composition: { id, kind: 'parallel' },
+            branch: { name: key, index },
+            context,
+          },
         })
 
       try {
@@ -237,6 +253,7 @@ export function createParallel(executor: AgentExecutor) {
               [K in keyof TypedResults]: SettledResult<TypedResults[K]>
             },
             durationMs,
+            requestReceipts: scope.requestReceipts(),
           }
         }
 
@@ -290,6 +307,7 @@ export function createParallel(executor: AgentExecutor) {
         return {
           results: results as TypedResults,
           durationMs,
+          requestReceipts: scope.requestReceipts(),
         }
       } catch (err) {
         throw err

@@ -14,6 +14,9 @@ import type { AnyModel, AnyToolSet } from '../types'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { TokenUsage } from '../generation/types'
 import type { WithOperationResultMeta } from '../observability'
+import type { InputBudget } from '../request/budget/input-budget'
+import type { PrepareStep } from '../request/prepare/step'
+import type { RequestReceipt } from '../request/receipt/receipt'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -32,6 +35,8 @@ export interface AgentResultPayload<TOutput = unknown> {
   readonly durationMs: number
   /** Token usage if available. */
   readonly usage?: TokenUsage
+  /** Ordered provider requests executed by this managed child. */
+  readonly requests?: readonly RequestReceipt[]
 }
 
 /**
@@ -68,6 +73,12 @@ export interface ExecuteOptions {
    * @default 1 — single generation, no tool loop (backward compatible).
    */
   maxSteps?: number
+  /** Invocation-level whole-request input pressure overrides. */
+  inputBudget?: InputBudget
+  /** Invocation callback overriding the Agent default for this run. */
+  prepareStep?: PrepareStep<AnyModel>
+  /** Tool names exposed from the prepared child baseline. */
+  activeTools?: readonly string[]
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.

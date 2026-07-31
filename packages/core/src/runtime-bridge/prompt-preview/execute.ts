@@ -1,5 +1,5 @@
 /**
- * Explicit exact-preview execution through canonical `Prompt.inspect()`.
+ * Explicit observational request preview for one canonical Prompt.
  *
  * The command captures one catalogue publication and races its single
  * inspection against deadline and retirement. Application callbacks are not
@@ -9,6 +9,7 @@
  */
 
 import { PromptInputValidationError } from "../../resolver/input-validation-error";
+import { preview } from "../../request/preview/preview";
 import {
   activePromptCatalogue,
   subscribePromptCatalogue,
@@ -26,7 +27,7 @@ import {
   type PromptPreviewResult,
 } from "./result-protocol";
 import {
-  projectPromptInspection,
+  projectRequestPreview,
   PromptPreviewResultLimitError,
 } from "./projection";
 import {
@@ -148,15 +149,16 @@ export async function executePromptPreview(
   try {
     const inspected = Promise.resolve()
       .then(() =>
-        entry.prompt.inspect({
+        preview(entry.prompt, {
           input: request.payload.input,
-          ...request.payload.options,
-        } as never),
+          provider: request.payload.options?.provider,
+          model: request.payload.options?.modelId ?? "unknown",
+        }),
       )
       .then(
         (inspection) => {
           try {
-            return projectPromptInspection(
+            return projectRequestPreview(
               request.targetId,
               request.catalogueRevision,
               inspection,

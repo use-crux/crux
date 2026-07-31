@@ -15,6 +15,13 @@ import { createCompositionRuntime } from './composition-runtime'
 import type { RetryOptions } from '../generation/retry'
 import type { OperationResultMeta } from '../observability'
 import { isCreationToolNotCreatedError } from '../types/tool'
+import type {
+  PipelineInvocationContext,
+  PrepareInvocation,
+} from '../request/prepare/invocation'
+import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
+import { PreparationError } from '../request/prepare/step'
+import { ResourceReadError } from '../request/prepare/resources'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -43,6 +50,8 @@ export interface PipelineResult<TContext = unknown> {
   finalOutput: unknown
   results: AgentResult[]
   durationMs: number
+  /** Linked provider-request evidence for managed stages. */
+  requestReceipts: CompositionRequestReceiptTree
 }
 
 /** Runtime step type — the implementation works with this union. */
@@ -52,6 +61,11 @@ interface RuntimeStep {
   fn?: (ctx: Record<string, unknown>) => Promise<unknown>
   input?: (ctx: Record<string, unknown>) => unknown
   retry?: RetryOptions
+}
+
+/** Composition-boundary preparation accepted by `pipeline()` definitions. */
+export interface PipelinePreparationOptions {
+  prepareInvocation?: PrepareInvocation<unknown, PipelineInvocationContext>
 }
 
 function isAgentStep(
@@ -179,7 +193,7 @@ export function createPipeline(executor: AgentExecutor) {
   function pipeline<
     TCtx extends Record<string, unknown>,
     const S1 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -198,7 +212,7 @@ export function createPipeline(executor: AgentExecutor) {
     TCtx extends Record<string, unknown>,
     const S1 extends { name: string },
     const S2 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -218,7 +232,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S1 extends { name: string },
     const S2 extends { name: string },
     const S3 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -243,7 +257,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S2 extends { name: string },
     const S3 extends { name: string },
     const S4 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -270,7 +284,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S3 extends { name: string },
     const S4 extends { name: string },
     const S5 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -299,7 +313,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S4 extends { name: string },
     const S5 extends { name: string },
     const S6 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -330,7 +344,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S5 extends { name: string },
     const S6 extends { name: string },
     const S7 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -363,7 +377,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S6 extends { name: string },
     const S7 extends { name: string },
     const S8 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -398,7 +412,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S7 extends { name: string },
     const S8 extends { name: string },
     const S9 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -435,7 +449,7 @@ export function createPipeline(executor: AgentExecutor) {
     const S8 extends { name: string },
     const S9 extends { name: string },
     const S10 extends { name: string },
-  >(options: {
+  >(options: PipelinePreparationOptions & {
     /**
      * Stable author-supplied definition id, used to join this composition
      * with its Project Index definition and observability evidence. Distinct
@@ -463,7 +477,7 @@ export function createPipeline(executor: AgentExecutor) {
   >
 
   // Fallback: 11+ steps
-  function pipeline(options: {
+  function pipeline(options: PipelinePreparationOptions & {
     id: string
     context: Record<string, unknown>
     model?: unknown
@@ -474,7 +488,7 @@ export function createPipeline(executor: AgentExecutor) {
 
   // ── Implementation (must immediately follow overloads) ────────
 
-  async function pipeline(options: {
+  async function pipeline(options: PipelinePreparationOptions & {
     id: string
     context: Record<string, unknown>
     model?: unknown
@@ -482,7 +496,15 @@ export function createPipeline(executor: AgentExecutor) {
     sessionId?: string
     validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
   }): Promise<PipelineResult<Record<string, unknown>>> {
-    const { id, context, model, steps, sessionId, validationRetry } = options
+    const {
+      id,
+      context,
+      model,
+      steps,
+      sessionId,
+      validationRetry,
+      prepareInvocation,
+    } = options
 
     const pipelineStart = Date.now()
     const results: AgentResult[] = []
@@ -494,6 +516,7 @@ export function createPipeline(executor: AgentExecutor) {
       id,
       agentIds,
       sessionId,
+      prepareInvocation: prepareInvocation as PrepareInvocation | undefined,
     })
 
     return runtime.run(async (scope) => {
@@ -529,6 +552,11 @@ export function createPipeline(executor: AgentExecutor) {
               retry: step.retry,
               validationRetry,
               flowStep: true,
+              invocation: {
+                composition: { id, kind: 'pipeline' },
+                step: { name: step.name, index: i },
+                context: accumulatedContext,
+              },
             })
           } else {
             throw new Error(
@@ -562,6 +590,12 @@ export function createPipeline(executor: AgentExecutor) {
             [step.name]: stepOutput,
           }
         } catch (err) {
+          if (
+            err instanceof PreparationError ||
+            err instanceof ResourceReadError
+          ) {
+            throw err
+          }
           const message = err instanceof Error ? err.message : String(err)
           throw new Error(`Pipeline step "${step.name}" failed: ${message}`)
         }
@@ -597,6 +631,7 @@ export function createPipeline(executor: AgentExecutor) {
           results.length > 0 ? results[results.length - 1].output : undefined,
         results,
         durationMs,
+        requestReceipts: scope.requestReceipts(),
       }
     })
   }

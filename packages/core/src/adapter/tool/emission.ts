@@ -34,6 +34,11 @@ import {
   nativeEvidenceArtifactRef,
   recordNativeEvidence,
 } from "../../evidence/internal";
+import {
+  activateOffloadSupport,
+  offloadedToolModelOutput,
+} from "../../request/offload/tool-output";
+import type { ToolOutputOffloadPolicy } from "../../request/representation/ladder-types";
 
 // ─────────────────────────────────────────────────────────────────
 // Tool model output helpers
@@ -46,6 +51,8 @@ export interface ModelOutputCapableTool {
     input: Record<string, unknown>;
     output: unknown;
   }) => ToolModelOutput | Promise<ToolModelOutput>;
+  output?: ToolOutputOffloadPolicy;
+  [activateOffloadSupport]?: () => void;
 }
 
 /**
@@ -63,6 +70,12 @@ export async function createToolModelOutput(args: {
   input: Record<string, unknown>;
   output: unknown;
 }): Promise<ToolModelOutput> {
+  const offloaded = await offloadedToolModelOutput({
+    output: args.output,
+    policy: args.tool.output,
+    activateSupport: args.tool[activateOffloadSupport],
+  });
+  if (offloaded) return offloaded;
   if (args.tool.toModelOutput) {
     return args.tool.toModelOutput({
       toolCallId: args.toolCallId,

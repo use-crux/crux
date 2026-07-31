@@ -20,12 +20,18 @@ prompt({ tools: { search: ... } })
 Three common causes:
 
 1. **Dynamic system returning empty string**: If a context's `system` function returns `''`, it's omitted. Check your conditional logic.
-2. **Dropped by token budget**: Contexts with lower `priority` are dropped first when the system message exceeds `tokenBudget`. Use `.inspect()` to check.
+2. **A conditional entry was excluded**: Check the `when()` or `match()` predicate and its input.
 3. **Not included in `use`**: The context must be listed in the prompt's `use` array.
 
 ```ts
-const debug = myPrompt.inspect({ input, tokenBudget: 4000 });
-debug.droppedContexts; // [{ id, reason, priority }]
+import { preview } from "@use-crux/core";
+
+const result = await preview(myPrompt, {
+  input,
+  model,
+  inputBudget: { max: 4000 },
+});
+result.diagnostics;
 ```
 
 ## How do I use the same prompt with different SDKs?
@@ -63,7 +69,9 @@ console.log(resolved.system); // composed system message
 console.log(resolved.tools); // merged tool set
 ```
 
-Use `.inspect()` for token-level detail including which contexts were dropped.
+Use `preview()` before execution to inspect fit and prospective adaptations.
+After execution, use `receipt.inspect()` for full redacted candidate and token
+evidence.
 
 ## Why is my input type wrong?
 
@@ -78,15 +86,15 @@ prompt({ use: [a, b], ... }) // ✗ Type conflict on `name`
 
 ## Do I need a tokenizer?
 
-Only if you use `tokenBudget` for context dropping. Without a tokenizer, Crux estimates tokens at ~4 characters per token. For accurate budget management, provide a real tokenizer:
+Crux always estimates the complete request before dispatch. Provider adapters
+can supply authoritative counting when an estimate would otherwise reject an
+exact request. Application code normally does not configure a tokenizer.
 
 ```ts
-import { encode } from "gpt-tokenizer";
-
-config({
-  generation: {
-    tokenizer: (text) => encode(text).length,
-  },
+const result = await preview(myPrompt, {
+  input,
+  model,
+  inputBudget: { optimizeAt: 32000, max: 64000 },
 });
 ```
 

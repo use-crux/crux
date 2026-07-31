@@ -9,7 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from '../src/agent/lifecycle'
-import { inMemoryRecordStore, memory, recentMessages } from '../src/memory'
+import { inMemoryRecordStore, memory, memoryBlock } from '../src/memory'
 import { getConvexCruxRuntime } from '../src/runtime'
 import { tool } from '../src/tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
@@ -65,7 +65,16 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
     }
     const turnMemory = memory({
       id: 'request-scope-memory',
-      blocks: [recentMessages({ id: 'recent' })],
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          captureTurn: async (turn, context) => {
+            await context.records.put('captured-turn', {
+              messages: turn.messages.map((message) => message.content),
+            })
+          },
+        }),
+      ],
     })
     const basePrompt = prompt({
       id: 'request-scope-agent',
@@ -143,7 +152,16 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
     }
     const turnMemory = memory({
       id: 'stream-memory',
-      blocks: [recentMessages({ id: 'recent' })],
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          captureTurn: async (turn, context) => {
+            await context.records.put('captured-turn', {
+              messages: turn.messages.map((message) => message.content),
+            })
+          },
+        }),
+      ],
     })
     const basePrompt = prompt({
       id: 'stream-agent',

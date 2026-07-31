@@ -122,7 +122,11 @@ describe("lifecycle tool wire schemas", () => {
     });
 
     const wire = lifecycle.toolWireSchemas;
-    expect(Object.keys(wire ?? {}).sort()).toEqual(["wrapped", "zod"]);
+    expect(Object.keys(wire ?? {}).sort()).toEqual([
+      "__crux_ReadOffload",
+      "wrapped",
+      "zod",
+    ]);
     expect(wire?.zod).toMatchObject({ type: "object" });
     // Each tool selects only its own manifest/schema — no nested wrapper.
     expect(wire?.wrapped).toEqual({

@@ -39,6 +39,16 @@ import type {
   MemoryEntry,
   SkillEntry,
 } from '../prompt/context-types'
+import type { HistoryProjection } from '../request/history/source'
+import {
+  compileRepresentationLadder,
+  isForcedOffload,
+  isRepresentationLadder,
+} from '../request/representation/ladder'
+import type {
+  ForcedOffload,
+  RepresentationLadder,
+} from '../request/representation/ladder-types'
 import type { InternalInjectableEntry, InternalPromptInjection } from '../prompt/internal-injection'
 import type { CruxContextInjectableKind, CruxContextInjects } from '../observability/contract'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
@@ -499,10 +509,19 @@ export function lowerEntry(entry: ContextEntry, index: number): LoweredContribut
 }
 
 function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, index: number): LoweredContributor {
+  if (isForcedOffload(entry)) {
+    return lowerForcedOffload(entry, index)
+  }
+  if (isRepresentationLadder(entry)) {
+    return lowerRepresentation(entry, index)
+  }
   if (isContributorEntry(entry)) return lowerContributorEntry(entry, index)
   if (isInternalInjectableEntry(entry)) return lowerInjectable(entry, index)
   if (isToolSource(entry)) return lowerToolSource(entry, index)
   switch (entry._tag) {
+    case 'HistoryRecent':
+    case 'HistoryManaged':
+      return lowerHistory(entry as HistoryProjection, index)
     case 'Skill':
       return lowerSkill(entry as SkillEntry, index)
     case 'Memory':
@@ -515,6 +534,57 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
       return lowerConditional(entry as ConditionalContext<Context<z.ZodType>>, index)
     default:
       return lowerContext(entry as Context<z.ZodType>, index)
+  }
+}
+
+function lowerForcedOffload(
+  entry: ForcedOffload<unknown>,
+  index: number,
+): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: undefined,
+    family: 'representation',
+    index,
+    mergeSourceId: `offload[${index}]`,
+    toolOwnerLabel: undefined,
+    representation: entry,
+    contribute: () => ({ representations: [entry] }),
+  }
+}
+
+function lowerRepresentation(
+  ladder: RepresentationLadder,
+  index: number,
+): LoweredContributor {
+  const compiled = compileRepresentationLadder(ladder)
+  return {
+    [CONTRIBUTOR]: true,
+    id: compiled.primary.id,
+    family: 'representation',
+    index,
+    mergeSourceId: compiled.primary.id
+      ? `context:${compiled.primary.id}`
+      : `context[${index}]`,
+    toolOwnerLabel: undefined,
+    representation: ladder,
+    children: () => compiled.primarySources,
+    contribute: () => ({ representations: [ladder] }),
+  }
+}
+
+function lowerHistory(
+  projection: HistoryProjection,
+  index: number,
+): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: undefined,
+    family: 'history',
+    index,
+    mergeSourceId: `history[${index}]`,
+    toolOwnerLabel: undefined,
+    contribute: () => ({ history: projection }),
   }
 }
 

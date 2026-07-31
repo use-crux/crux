@@ -92,7 +92,7 @@ describe("system cache and budget composition", () => {
     ]);
   });
 
-  it("tail drops by priority, prefix never", async () => {
+  it("keeps cache prefix and exact tail regardless of priority", async () => {
     const fakes = createResolverFakes({ tokenizer: charTokenizer() });
     const cachedLowestPriority = context({
       id: "cached",
@@ -119,20 +119,14 @@ describe("system cache and budget composition", () => {
       { ports: fakes.ports },
     );
 
-    const resolved = await compiled.resolve({ tokenBudget: 8 });
-    const inspected = await compiled.inspect({ tokenBudget: 8 });
+    const resolved = await compiled.resolve();
+    const inspected = await compiled.inspect();
 
-    expect(resolved.args.system).toBe(["X", "CC", "BB"].join("\n\n"));
-    expect(inspected.droppedContexts).toEqual([
-      expect.objectContaining({
-        source: "context:tail-low",
-        priority: 10,
-        tokens: 2,
-      }),
-    ]);
+    expect(resolved.args.system).toBe(["X", "CC", "AA", "BB"].join("\n\n"));
+    expect(inspected.droppedContexts).toEqual([]);
   });
 
-  it("prefix overflow keeps prefix and warns", async () => {
+  it("keeps exact tail without a resolver overflow warning", async () => {
     const fakes = createResolverFakes({ tokenizer: charTokenizer() });
     const cached = context({
       id: "cached",
@@ -151,21 +145,10 @@ describe("system cache and budget composition", () => {
         use: [cached, tail],
       } satisfies AnyPromptConfig,
       { ports: fakes.ports },
-    ).resolve({ tokenBudget: 3 });
+    ).resolve();
 
-    expect(resolved.args.system).toBe(["X", "CCCC"].join("\n\n"));
-    expect(fakes.diagnostics.warnings).toEqual([
-      {
-        message:
-          'prompt "overflowing": token budget 3 is smaller than the stable prefix (6 tokens); uncached contexts were dropped entirely. Shrink cached contexts or raise the budget.',
-      },
-    ]);
-    expect(fakes.observability.artifacts.at(-1)?.record.preview).toMatchObject({
-      kind: "prompt.budget",
-      totalTokens: 3,
-      prefixOverflow: true,
-      dropped: [expect.objectContaining({ sourceId: "context:tail" })],
-    });
+    expect(resolved.args.system).toBe(["X", "CCCC", "TT"].join("\n\n"));
+    expect(fakes.diagnostics.warnings).toEqual([]);
   });
 
   it("dynamic own system with cached contexts warns", async () => {

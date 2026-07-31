@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setTokenizer } from '@use-crux/core'
 import { mediaConformanceFixture } from '@use-crux/core/adapter/testing'
-import { compactConversation as compactCoreConversation } from '@use-crux/core/compaction'
 import { afterPreparedAgentCall } from '../src/agent/lifecycle-persistence'
-import { compactConversation, contentText, messageText, textPart } from '../src'
+import { contentText, messageText, textPart } from '../src'
 
 afterEach(() => {
   setTokenizer((text) => Math.ceil(text.length / 4))
@@ -11,43 +10,11 @@ afterEach(() => {
 })
 
 describe('@use-crux/convex multimodal content helpers', () => {
-  it('re-exports the Core conversation compaction operation unchanged', () => {
-    expect(compactConversation).toBe(compactCoreConversation)
-  })
-
   it('re-exports the core content builders and projection helpers', () => {
     const content = mediaConformanceFixture('convex-agent').supported[0]!.content
 
     expect(contentText(content)).toContain('[image image/png 3B sha256:')
     expect(messageText({ content })).toBe(contentText(content))
-  })
-
-  it('compacts multimodal conversations through string projections', async () => {
-    setTokenizer((text) => {
-      expect(typeof text).toBe('string')
-      return text.length
-    })
-    let prompt = ''
-
-    await compactConversation({
-      evictedMessages: [
-        {
-          role: 'user',
-          content: [textPart('summarize this chart'), { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }],
-        },
-      ],
-      existingSummary: '',
-      generate: async (args) => {
-        prompt = args.prompt ?? ''
-        return { text: 'summary' }
-      },
-      model: 'summary-model',
-    })
-
-    expect(prompt).toContain('summarize this chart')
-    expect(prompt).toContain('[image description] summary')
-    expect(prompt).not.toContain('[object Object]')
-    expect(prompt).not.toContain('AQID')
   })
 
   it('captures Convex Agent multimodal user messages with media placeholders', async () => {

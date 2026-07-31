@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { CruxUnsupportedStructuredOutputError } from '../../src/adapter/structured-output'
-import type { GenerateObjectFn } from '../../src/compaction'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import { createUnsupportedCapabilityError } from '../../src/content'
 import {
   guardrail,

@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { GenerateObjectFn } from '../../../../compaction'
+import type { GenerateObjectFn } from '../../../../generation/support-types'
 import type { MediaPart } from '../../../boundary'
 import type { MediaGuardrailRunResult } from '../../types'
 
