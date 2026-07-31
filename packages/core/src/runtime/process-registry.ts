@@ -36,6 +36,7 @@ const CRUX_HOOK_KEYS = new Set<keyof CruxHooks>([
   "telemetryFlushHook",
   "telemetryResumeAttributesHook",
   "records",
+  "assets",
   "runtimeEngine",
   "hostBinding",
   "globalConstraints",

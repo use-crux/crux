@@ -30,9 +30,6 @@ func MarshalRequestJSON(request Request) ([]byte, error) {
 		if payload.Options.ModelID != nil {
 			options["modelId"] = *payload.Options.ModelID
 		}
-		if payload.Options.TokenBudget != nil {
-			options["tokenBudget"] = *payload.Options.TokenBudget
-		}
 		payloadValue["options"] = options
 	}
 	return appendCanonicalJSON(nil, map[string]any{

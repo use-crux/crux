@@ -127,8 +127,8 @@ func TestSelectCoversEveryZeroMatchStageAndExplicitPeer(t *testing.T) {
 func TestDecodeResponseRejectsForeignFieldsAndRunIDs(t *testing.T) {
 	result := `{"type":"command.result","commandId":"cmd","result":{
 		"status":"ready","targetId":"prompt:x","catalogueRevision":1,
-		"inspection":{"system":{"text":"","tokens":0,"coverage":"complete","parts":[]},
-		"totalTokens":0,"droppedContexts":[],"excludedContexts":[]}
+		"preview":{"status":"fits","measurement":"exact","adaptations":[],
+		"warnings":[],"diagnostics":[]},"contributions":[]
 	}}`
 	if _, err := DecodeResponse([]byte(result), "cmd", "prompt:x", 1); err != nil {
 		t.Fatalf("DecodeResponse: %v", err)
@@ -162,7 +162,7 @@ func TestValidateDispatchRejectsNullOptionalsAndUnsafeRevision(t *testing.T) {
 	}{
 		{name: "provider null", revision: 1, payload: `{"input":{},"options":{"provider":null}}`},
 		{name: "model null", revision: 1, payload: `{"input":{},"options":{"modelId":null}}`},
-		{name: "budget null", revision: 1, payload: `{"input":{},"options":{"tokenBudget":null}}`},
+		{name: "unknown budget", revision: 1, payload: `{"input":{},"options":{"tokenBudget":1}}`},
 		{name: "unsafe revision", revision: 9_007_199_254_740_992, payload: `{"input":{}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -174,20 +174,18 @@ func TestValidateDispatchRejectsNullOptionalsAndUnsafeRevision(t *testing.T) {
 }
 
 func TestDecodeResponseUsesUTF16BoundsAndRejectsExplicitEmptyOptionals(t *testing.T) {
-	source := strings.Repeat("é", 512)
+	model := strings.Repeat("é", 512)
 	valid := `{"type":"command.result","commandId":"cmd","result":{
 		"status":"ready","targetId":"prompt:x","catalogueRevision":1,
-		"inspection":{"system":{"text":"x","tokens":1,"coverage":"complete","parts":[{
-			"source":"prompt","text":"x","tokens":1,"skipped":false,
-			"segments":[{"kind":"static","startUtf16":0,"endUtf16":1,"source":"` + source + `"}]
-		}]},"totalTokens":1,"droppedContexts":[],"excludedContexts":[]}
+		"preview":{"status":"fits","model":"` + model + `","measurement":"exact",
+		"adaptations":[],"warnings":[],"diagnostics":[]},"contributions":[]
 	}}`
 	if _, err := DecodeResponse([]byte(valid), "cmd", "prompt:x", 1); err != nil {
 		t.Fatalf("DecodeResponse rejected UTF-16-bounded source: %v", err)
 	}
 
 	for _, invalid := range []string{
-		strings.Replace(valid, `"source":"`+source+`"`, `"source":""`, 1),
+		strings.Replace(valid, `"model":"`+model+`"`, `"model":null`, 1),
 		`{"type":"command.error","commandId":"cmd","error":{
 			"code":"inspection_failed","message":"failed","details":{"targetId":""}
 		}}`,

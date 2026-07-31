@@ -27,9 +27,14 @@ export async function readThreadHistory(
   const messages = snapshot.entries.flatMap((entry) =>
     entry.kind === "message" ? [messageFromEntry(entry)] : [],
   );
+  const messageIds = snapshot.entries.flatMap((entry) =>
+    entry.kind === "message" ? [entry.id] : [],
+  );
   return {
     ...(snapshot.head ? { head: snapshot.head } : {}),
+    revision: snapshot.revision,
     messages: Object.freeze(messages),
+    messageIds: Object.freeze(messageIds),
   };
 }
 

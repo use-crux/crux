@@ -3,6 +3,7 @@ import type { Message } from '@use-crux/core'
 import type { ExecutorRequest } from '@use-crux/core/adapter'
 import { buildSystemArg } from '../provider-profile'
 import { toModelMessages } from '../messages'
+import { TOOL_ERROR_REPORTER } from './tool-call-repair'
 
 /** Mutable SDK-argument bag used while planning a call. */
 export type LoopArgs = Record<string, unknown>
@@ -37,12 +38,8 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   }
 
   if (options.includeTools) {
-    if (request.tools && Object.keys(request.tools).length > 0) {
-      const approvalTools = request.toolApproval
-        ? withSdkToolApproval(request.tools, request.toolApproval)
-        : request.tools
-      args.tools = installToolWireSchemas(approvalTools, request.toolWireSchemas)
-    }
+    if (request.planStep) args.tools = {}
+    syncToolArgs(args, request)
     if (request.activeTools && request.activeTools.length > 0) args.activeTools = [...request.activeTools]
     const toolChoice = request.extra?.toolChoice
     if (toolChoice !== undefined) args.toolChoice = toolChoice
@@ -55,6 +52,33 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   if (request.extra?.maxRetries !== undefined) args.maxRetries = request.extra.maxRetries
   if (request.abortSignal) args.abortSignal = request.abortSignal
   return args
+}
+
+/** Refresh the stable Tool map observed by an SDK-owned native loop. @internal */
+export function syncToolArgs(
+  args: LoopArgs,
+  request: ExecutorRequest<LanguageModel>,
+): void {
+  const current = isRecord(args.tools) ? args.tools : undefined
+  const approvalTools = request.tools
+    ? request.toolApproval
+      ? withSdkToolApproval(request.tools, request.toolApproval)
+      : request.tools
+    : {}
+  const next = installToolWireSchemas(
+    approvalTools,
+    request.toolWireSchemas,
+  )
+  if (!current) {
+    if (Object.keys(next).length > 0) args.tools = next
+    return
+  }
+  const repairReporter = current[TOOL_ERROR_REPORTER]
+  for (const name of Object.keys(current)) delete current[name]
+  Object.assign(current, next)
+  if (repairReporter !== undefined) {
+    current[TOOL_ERROR_REPORTER] = repairReporter
+  }
 }
 
 function copyNativeMessage(message: unknown): unknown {

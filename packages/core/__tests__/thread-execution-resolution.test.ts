@@ -33,6 +33,7 @@ describe("thread managed execution resolution", () => {
         reads++;
         return conversation.readHistory();
       },
+      validateRevision: (revision) => conversation.validateRevision(revision),
       commitTurn: async (turn) => {
         commits++;
         return conversation.commitTurn(turn);
@@ -82,6 +83,114 @@ describe("thread managed execution resolution", () => {
               role: "invoked-thread",
             },
           ],
+        }),
+      );
+    } finally {
+      resetObservabilityRuntime();
+    }
+  });
+
+  it("treats an empty call-site transcript as an explicit Thread override", async () => {
+    const conversation = thread({
+      id: "managed-empty-shadow",
+      storage: inMemoryStorage(),
+    });
+    await conversation.append({
+      id: "existing",
+      role: "user",
+      content: "Canonical history",
+    });
+    let reads = 0;
+    let commits = 0;
+    const binding = {
+      _tag: "Thread",
+      id: conversation.id,
+      readHistory: async () => {
+        reads++;
+        return conversation.readHistory();
+      },
+      validateRevision: (revision) => conversation.validateRevision(revision),
+      commitTurn: async (turn) => {
+        commits++;
+        return conversation.commitTurn(turn);
+      },
+    } satisfies ThreadHistoryEntry;
+    const calls: Array<readonly unknown[]> = [];
+    const spec = simpleSpec("Empty override answer");
+    const runtime = adapter({
+      ...spec,
+      call: async (client, args, options) => {
+        calls.push(args.messages);
+        return spec.call(client, args, options);
+      },
+    })({});
+    const answer = prompt({
+      id: "managed-empty-shadow-answer",
+      use: [binding],
+      prompt: "Ignored authored turn",
+    });
+
+    await runtime.generate(answer, {
+      model: "test-model",
+      messages: [],
+    });
+
+    expect(calls).toEqual([[]]);
+    expect(reads).toBe(0);
+    expect(commits).toBe(0);
+  });
+
+  it("lets prompt-level messages shadow Thread I/O", async () => {
+    const conversation = thread({
+      id: "managed-prompt-shadow",
+      storage: inMemoryStorage(),
+    });
+    await conversation.append({
+      id: "existing",
+      role: "user",
+      content: "Canonical history",
+    });
+    const before = JSON.stringify(await conversation.read());
+    let reads = 0;
+    let commits = 0;
+    const binding = {
+      _tag: "Thread",
+      id: conversation.id,
+      readHistory: async () => {
+        reads++;
+        return conversation.readHistory();
+      },
+      validateRevision: (revision) => conversation.validateRevision(revision),
+      commitTurn: async (turn) => {
+        commits++;
+        return conversation.commitTurn(turn);
+      },
+    } satisfies ThreadHistoryEntry;
+    const transport = createInMemoryObservabilityTransport();
+    setObservabilityTransport(transport);
+    try {
+      const runtime = adapter(simpleSpec("Prompt answer"))({});
+      const answer = prompt({
+        id: "managed-prompt-shadow-answer",
+        use: [binding],
+        messages: () => [{ role: "user", content: "Prompt-owned turn" }],
+      });
+
+      await runtime.generate(answer, { model: "test-model" });
+      await observe.flush();
+
+      expect(reads).toBe(0);
+      expect(commits).toBe(0);
+      expect(JSON.stringify(await conversation.read())).toBe(before);
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: "span:event",
+          name: "thread.history.override",
+          attributes: expect.objectContaining({
+            threadId: "managed-prompt-shadow",
+            state: "shadowed",
+            reason: "prompt-messages",
+          }),
         }),
       );
     } finally {

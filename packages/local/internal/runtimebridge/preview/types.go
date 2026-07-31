@@ -15,7 +15,6 @@ const (
 	MaxCapabilityBytes    = 1_048_576
 	MaxSchemaBytes        = 65_536
 	MaxResultStringBytes  = 1_048_576
-	MaxResultSegments     = 10_000
 	MaxResultBytes        = 2_097_152
 	MaxDepth              = 32
 	MaxNodes              = 10_000
@@ -46,9 +45,8 @@ type Capability struct {
 }
 
 type Options struct {
-	Provider    *string `json:"provider,omitempty"`
-	ModelID     *string `json:"modelId,omitempty"`
-	TokenBudget *int    `json:"tokenBudget,omitempty"`
+	Provider *string `json:"provider,omitempty"`
+	ModelID  *string `json:"modelId,omitempty"`
 }
 
 type Payload struct {

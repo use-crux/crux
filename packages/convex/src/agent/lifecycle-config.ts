@@ -17,7 +17,6 @@ export function agentOptionsFromConfig<TPrompt extends AnyConvexPrompt>(
     prepare: _prepare,
     prompt: _prompt,
     store: _store,
-    tokenBudget: _tokenBudget,
     tools: _tools,
     ...agentOptions
   } = config
@@ -32,7 +31,6 @@ export function agentOptionsFromConfig<TPrompt extends AnyConvexPrompt>(
   void _prepare
   void _prompt
   void _store
-  void _tokenBudget
   void _tools
   return agentOptions
 }

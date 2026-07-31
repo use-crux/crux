@@ -433,7 +433,7 @@ describe("tokenizer port", () => {
     expect(inspect.system.totalTokens).toBe(3);
   });
 
-  it("drops the lowest-priority context by the injected tokenizer budget", async () => {
+  it("keeps lower-priority exact context with the injected tokenizer", async () => {
     const f = fakePorts();
     f.ports.tokenizer = staticTokenizer(wordCount);
     const resolver = compiledResolver(f.ports);
@@ -445,17 +445,12 @@ describe("tokenizer port", () => {
       ],
     };
 
-    const inspect = await resolver.inspect(config, { tokenBudget: 8 });
-    expect(inspect.droppedContexts.map((d) => d.source)).toEqual([
-      "context:drop",
-    ]);
-    expect(inspect.droppedContexts[0]).toMatchObject({
-      tokens: 5,
-      priority: 10,
-    });
+    const inspect = await resolver.inspect(config, {});
+    expect(inspect.system.total).toContain("b b b b b");
+    expect(inspect.droppedContexts).toEqual([]);
   });
 
-  it("treats memory context as a budgeted resolver contribution", async () => {
+  it("keeps memory as an exact resolver contribution", async () => {
     const f = fakePorts();
     f.ports.tokenizer = staticTokenizer(wordCount);
     const resolver = compiledResolver(f.ports);
@@ -478,17 +473,11 @@ describe("tokenizer port", () => {
       ],
     };
 
-    const inspect = await resolver.inspect(config, { tokenBudget: 8 });
+    const inspect = await resolver.inspect(config, {});
 
     expect(inspect.system.total).toContain("must follow policy");
-    expect(inspect.system.total).not.toContain("memory details consume budget");
-    expect(inspect.droppedContexts.map((d) => d.source)).toEqual([
-      "context:memory:budget-memory",
-    ]);
-    expect(inspect.droppedContexts[0]).toMatchObject({
-      injectableKind: "memory",
-      priority: 55,
-    });
+    expect(inspect.system.total).toContain("memory details consume budget");
+    expect(inspect.droppedContexts).toEqual([]);
   });
 
   it("refreshes a cached context split for the active tokenizer on a cache hit", async () => {

@@ -2,6 +2,7 @@ import { Output, jsonSchema, stepCountIs, type LanguageModel } from "ai";
 import { repairJsonText } from "@use-crux/core";
 import type {
   AdapterResponse,
+  RequestReceipt,
   StructuredRequest,
 } from "@use-crux/core/adapter";
 import type { SdkGateway } from "../gateway";
@@ -14,6 +15,11 @@ import { extractResponse } from "../result-shape";
 import { buildBaseArgs } from "./request-args";
 import { createStepTransformModelWrapper } from "./step-transform";
 import type { AiSdkStructuredPlan, SdkLoopResultLike } from "./types";
+import {
+  lowerSealedAiSdkMessages,
+  normalizeAiSdkMessages,
+} from "../messages";
+import { buildSystemArg, extractModelInfo } from "../provider-profile";
 
 /**
  * Plan one AI SDK structured-output attempt.
@@ -34,6 +40,7 @@ import type { AiSdkStructuredPlan, SdkLoopResultLike } from "./types";
 export async function createStructuredCallPlan(
   request: StructuredRequest<LanguageModel>,
 ): Promise<AiSdkStructuredPlan> {
+  const planStep = request.planStep;
   if (!request.outputSchema) {
     throw new Error(
       "Structured generation requires a compiled wire outputSchema; core installs it before transport.",
@@ -72,18 +79,54 @@ export async function createStructuredCallPlan(
   };
   args.stopWhen = stepCountIs(1);
 
-  if (request.stepTransformer) {
-    const wrapStepModel = createStepTransformModelWrapper(
-      request.stepTransformer,
-    );
-    args.prepareStep = ({
-      model,
-    }: {
-      model: Parameters<typeof wrapStepModel>[0];
-    }) => ({
-      model: wrapStepModel(model),
+  const wrapStepModel = request.stepTransformer
+    ? createStepTransformModelWrapper(request.stepTransformer)
+    : undefined;
+  let requestReceipt: RequestReceipt | undefined;
+  args.prepareStep = async ({
+    model,
+    messages,
+  }: {
+    model: Parameters<NonNullable<typeof wrapStepModel>>[0];
+    messages: Array<{ role: string; content: unknown }>;
+  }) => {
+    const stepModel: LanguageModel = wrapStepModel
+      ? wrapStepModel(model)
+      : model;
+    if (!planStep) {
+      return wrapStepModel ? { model: stepModel } : undefined;
+    }
+    const normalizedMessages = normalizeAiSdkMessages(messages);
+    const planned = await planStep({
+      model: stepModel,
+      modelInfo: extractModelInfo(stepModel),
+      system: request.system,
+      systemBlocks: request.systemBlocks,
+      messages: normalizedMessages,
     });
-  }
+    await planned.validate?.();
+    requestReceipt = planned.receipt;
+    return {
+      model: planned.model,
+      system: buildSystemArg(
+        planned.systemBlocks,
+        planned.system,
+        planned.modelInfo,
+      ),
+      ...(planned.activeTools
+        ? { activeTools: [...planned.activeTools] }
+        : {}),
+      messages: lowerSealedAiSdkMessages(
+        messages,
+        normalizedMessages,
+        planned.messages,
+        {
+          provider: planned.modelInfo.provider || "ai-sdk",
+          diagnostics: request.diagnostics,
+        },
+      ),
+    };
+  };
 
   return {
     method: "generateText",
@@ -94,6 +137,7 @@ export async function createStructuredCallPlan(
       const text = parsedText ?? response.text;
       return {
         status: "ok",
+        ...(requestReceipt ? { request: requestReceipt } : {}),
         raw: result,
         response:
           text === response.text
@@ -102,7 +146,15 @@ export async function createStructuredCallPlan(
         wireValue: result.output,
       };
     },
-    decodeError,
+    async decodeError(error) {
+      const invalid = await decodeError(error);
+      return invalid
+        ? {
+            ...invalid,
+            ...(requestReceipt ? { request: requestReceipt } : {}),
+          }
+        : undefined;
+    },
   };
 }
 

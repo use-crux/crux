@@ -22,6 +22,12 @@ import type {
 } from "./types";
 import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
 import { fromResponseMessages } from "../messages";
+import {
+  lowerSealedAiSdkMessages,
+  normalizeAiSdkMessages,
+} from "../messages";
+import { buildSystemArg, extractModelInfo } from "../provider-profile";
+import type { RequestReceipt } from "@use-crux/core/adapter";
 
 interface StreamPlanDeps {
   readonly clock: () => number;
@@ -46,7 +52,48 @@ export async function createStreamCallPlan(
   },
   deps: StreamPlanDeps,
 ): Promise<AiSdkStreamPlan> {
+  const planStep = request.planStep;
   const args = buildBaseArgs(request, { includeTools: !request.schema });
+  const requestReceipts: RequestReceipt[] = [];
+  args.prepareStep = async ({
+    model,
+    messages,
+  }: {
+    model: LanguageModel;
+    messages: Array<{ role: string; content: unknown }>;
+  }) => {
+    if (!planStep) return undefined;
+    const normalizedMessages = normalizeAiSdkMessages(messages);
+    const planned = await planStep({
+      model,
+      modelInfo: extractModelInfo(model),
+      system: request.system,
+      systemBlocks: request.systemBlocks,
+      messages: normalizedMessages,
+    });
+    await planned.validate?.();
+    requestReceipts.push(planned.receipt);
+    return {
+      model: planned.model,
+      system: buildSystemArg(
+        planned.systemBlocks,
+        planned.system,
+        planned.modelInfo,
+      ),
+      ...(planned.activeTools
+        ? { activeTools: [...planned.activeTools] }
+        : {}),
+      messages: lowerSealedAiSdkMessages(
+        messages,
+        normalizedMessages,
+        planned.messages,
+        {
+          provider: planned.modelInfo.provider || "ai-sdk",
+          diagnostics: request.diagnostics,
+        },
+      ),
+    };
+  };
   if (!request.schema) {
     withToolCallRepair(args);
     const explicitStop = (request.extra?.stopWhen ??
@@ -131,6 +178,7 @@ export async function createStreamCallPlan(
           ? decodeAssistantContentFromAiSdkParts(event.content)
           : undefined;
         resolveCompletion({
+          requestReceipts: [...requestReceipts],
           // `output` is `Output.object`'s parse of the streamed text. With a
           // structured Safety transform that text is canonical, so core consumes
           // the sealed canonical value directly (no re-decode); without one it is
@@ -217,6 +265,7 @@ export async function createStreamCallPlan(
         : undefined;
 
       resolveCompletion({
+        requestReceipts: [...requestReceipts],
         usage,
         finishReason: event.finishReason,
         toolCalls:

@@ -26,7 +26,10 @@ describe("language step Safety — SDK continuation", () => {
     });
     const runtime = loopRuntimeAdapter({
       ...fake.runtime,
-      capabilities: { stepTransform: "before-client-tools" },
+      capabilities: {
+        requestPlanning: "per-step",
+        stepTransform: "before-client-tools",
+      },
     });
 
     await expect(

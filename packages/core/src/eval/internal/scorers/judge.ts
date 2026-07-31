@@ -17,8 +17,8 @@ import { judge as createJudge } from "../../../scoring";
 import type { JudgeInput, JudgeResult } from "../../../scoring";
 import {
   createGenerateObjectFnFromGenerate,
-  type GenerateObjectFn,
-} from "../../../compaction";
+} from "../../../generation/generate-object-bridge";
+import type { GenerateObjectFn } from "../../../generation/support-types";
 import { canonicalJson } from "../evidence/canonical-json";
 import { JUDGE_PROMPT_VERSION } from "../evidence/cache-epochs";
 import { fingerprintPortableValue } from "../evidence/portable-fingerprint";

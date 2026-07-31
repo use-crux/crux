@@ -42,7 +42,9 @@ export function registerThreadRemovalConformance(
     ]);
     expect(await conversation.readHistory()).toEqual({
       head: "kept-user",
+      revision: expect.any(String),
       messages: [{ role: "user", content: "Keep this" }],
+      messageIds: ["kept-user"],
     });
     await expect(conversation.append(removedGroup)).resolves.toEqual({
       ...original,

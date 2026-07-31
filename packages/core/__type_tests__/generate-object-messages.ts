@@ -1,7 +1,7 @@
 /** Compile-time contract for canonical structured-generation inputs. */
 
 import { z } from "zod";
-import type { GenerateObjectFn } from "../src/compaction";
+import type { GenerateObjectFn } from "../src/generation/support-types";
 import type { Message } from "../src/generation/messages";
 
 declare const generateObject: GenerateObjectFn;

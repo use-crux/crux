@@ -38,6 +38,8 @@ import type {
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyMessage, AnyToolSet } from "../types";
 import type { GenerationSettings } from "../generation/types";
+import type { HistoryProjection } from "../request/history/source";
+import type { ResolvedRepresentationPolicy } from "../request/representation/ladder-types";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 
@@ -85,12 +87,16 @@ export interface SystemBlock {
  *
  * @example
  * ```ts
- * const resolved = myPrompt.resolve({ input: { ... }, tokenBudget: 4000 })
+ * const resolved = myPrompt.resolve({ input: { ... } })
  * // Use with any SDK:
  * await generateObject({ model: myModel, ...resolved })
  * ```
  */
 export interface ResolvedPrompt {
+  /** Stateless history policy selected by the resolved `use` graph. */
+  historyProjection?: HistoryProjection;
+  /** Resolved representation policy consumed by managed request planning. @internal */
+  representations?: readonly ResolvedRepresentationPolicy[];
   /** The assembled system message (own system + context contributions + adaptations). */
   system?: string;
   /** The user prompt text (if using system+prompt mode). */
@@ -124,8 +130,6 @@ export interface ResolvedPrompt {
    * `\n\n` produces the `system` string.
    */
   systemBlocks?: readonly SystemBlock[];
-  /** Prompt budget artifact emitted while resolving this prompt, when token-budget decisions were recorded. */
-  promptBudgetArtifactId?: CruxArtifactId;
   /** Constraints collected from prompt config + contexts (merged at resolution). */
   constraints?: Constraint[];
   /** Guardrails collected from prompt config + contexts (merged at resolution). */
@@ -147,7 +151,7 @@ export interface ResolvedPrompt {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Options passed to `.resolve()` and `.inspect()`.
+ * Options passed to Prompt resolution and compiler inspection.
  *
  * SDK-agnostic — no model reference. Adapters add model and SDK-specific
  * fields in their own options types.
@@ -166,12 +170,6 @@ export type ResolveOptions<
    * Used for OpenRouter-style `modelId` prefix matching in the `adapt` map.
    */
   modelId?: string;
-  /**
-   * Optional token budget for the system message. When set, contexts are
-   * sorted by priority and lowest-priority ones are dropped until the
-   * assembled system message fits within the budget.
-   */
-  tokenBudget?: number;
 } & GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
@@ -250,7 +248,7 @@ export interface ExcludedContext {
 }
 
 /**
- * Structured breakdown of the assembled prompt, returned by `.inspect()`.
+ * Structured breakdown of an assembled prompt returned by compiler inspection.
  *
  * Provides per-part text and token counts, dropped contexts, and totals.
  * Uses the same resolution pipeline as `.resolve()` but returns the trace.
@@ -284,8 +282,6 @@ export interface InspectResult {
   droppedContexts: DroppedContext[];
   /** Contexts that were excluded by `when` or `match` conditions (never resolved). */
   excludedContexts: ExcludedContext[];
-  /** The token budget that was applied, if any. */
-  tokenBudget: number | undefined;
   /** Names of all tools that would be included (context + config), if any. */
   tools: string[] | undefined;
   /** Effective prompt-time approval policy per composed tool. */

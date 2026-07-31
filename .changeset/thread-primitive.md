@@ -23,9 +23,12 @@ metadata. Adapter authors can run the shared Thread conformance suite from
 Integrate Threads with managed Prompt and Agent execution through `use`.
 Execution reads one exact history snapshot, publishes the rendered user turn
 and accepted assistant/tool exchange atomically, and exposes the receipt as
-`threadCommit`. Explicit call-site messages shadow Thread I/O, streams await
-publication before final completion, and publication failures reject with
-`ThreadCommitError`.
+`threadCommit`. Call-site and Prompt-level messages shadow Thread I/O without
+merging transcripts. Bare Threads remain complete exact history, while
+`history.recent()` and `history()` project the Thread through whole-request
+planning. Sealed plans pin the Thread revision, managed summary artifacts use
+revision/range identity, streams await publication before final completion,
+and publication failures reject with `ThreadCommitError`.
 
 Add irreversible atomic message redaction, structural causal-group removal,
 and owner-safe whole-Thread deletion. Redaction permanently poisons replay and

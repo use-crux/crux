@@ -75,6 +75,75 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "authored-context-planning-shared-analyzer",
+      workspacePackages: ["core"],
+      files: {
+        "src/planning.ts": `
+          import {
+            Agent,
+            context,
+            droppable,
+            history,
+            pipeline,
+            prefer,
+            prompt,
+          } from '@use-crux/core'
+
+          const full = context({ id: 'full', system: 'PRIVATE_PLANNING_SENTINEL' })
+          const compact = context({ id: 'compact', system: 'Compact' })
+          export const writer = prompt({
+            id: 'writer',
+            use: [full, droppable(prefer(full, compact)), history(), history.recent(3)],
+          })
+          export const writerAgent = new Agent({
+            name: 'writer-agent',
+            prompt: writer,
+            model: 'provider:model',
+            inputBudget: { max: 4096 },
+            prepareStep: () => ({}),
+          })
+          export const workflow = pipeline({
+            id: 'workflow',
+            agents: [writerAgent],
+            prepareInvocation: () => ({}),
+          })
+        `,
+      },
+      expect: {
+        definitionIds: [
+          "prompt:writer",
+          "agent:writer-agent",
+          "composition.pipeline:workflow",
+        ],
+        definitionFacts: {
+          "prompt:writer": {
+            contextPlanning: {
+              history: { managed: 1, recent: 1 },
+              contributions: [
+                { index: 0, boundary: "required", wrappers: [] },
+                {
+                  index: 1,
+                  boundary: "elastic",
+                  wrappers: ["droppable", "prefer"],
+                },
+              ],
+            },
+          },
+          "agent:writer-agent": {
+            contextPlanning: {
+              inputBudget: { scope: "definition", max: 4096 },
+              hooks: ["prepareStep"],
+            },
+          },
+          "composition.pipeline:workflow": {
+            contextPlanning: { hooks: ["prepareInvocation"] },
+          },
+        },
+        sourceRefRoles: ["callback", "config"],
+        lintRuleIds: ["context-planning.history-cardinality"],
+      },
+    },
+    {
       // Locks the semantic-backend-emitted DefinitionRef kinds — prompt,
       // context, and rag.retriever, the config-bearing primitives that produce
       // standalone semantic definitions — to the exact `ProjectDefinition.ID`

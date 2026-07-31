@@ -11,20 +11,17 @@
 import type { Message } from "../../generation/messages";
 import type { ResolvedPrompt } from "../../resolver/types";
 import {
-  attachSystemIngressCarrier,
-  systemIngressCarrierFor,
-} from "../../resolver/system-ingress-provenance";
+  threadHistorySource,
+  type HistorySource,
+} from "../../request/history/source";
 import { ThreadCommitError } from "../../thread/errors";
 import type { ThreadCommit } from "../../thread/types";
-import type {
-  AssistantContentPart,
-  ToolCallPart,
-} from "../../types/content";
+import type { AssistantContentPart, ToolCallPart } from "../../types/content";
 
 /** Observable reason a resolved Thread did not participate in one invocation. */
 export interface ThreadHistoryOverride {
   readonly threadId: string;
-  readonly reason: "explicit-messages";
+  readonly reason: "explicit-messages" | "prompt-messages";
 }
 
 /** Exact Thread state retained for one managed invocation. */
@@ -35,6 +32,7 @@ export interface ManagedThreadInvocation {
   readonly userMessage?: Message;
   readonly head?: string;
   readonly binding?: NonNullable<ResolvedPrompt["threadBinding"]>;
+  readonly source?: HistorySource;
   readonly override?: ThreadHistoryOverride;
 }
 
@@ -54,16 +52,34 @@ export async function prepareThreadInvocation(
     };
   }
 
+  if (resolved.messages !== undefined) {
+    return {
+      resolved,
+      historyLength: 0,
+      responseOffset: 0,
+      override: { threadId: binding.id, reason: "prompt-messages" },
+    };
+  }
+
   const history = await binding.readHistory();
   const authored = authoredMessages(resolved);
   const userMessage = findRenderedUserMessage(authored);
+  const source = threadHistorySource({
+    id: binding.id,
+    revision: history.revision,
+    messages: history.messages,
+    messageIds: history.messageIds,
+    current: authored,
+    validate: () => binding.validateRevision(history.revision),
+  });
   return {
-    resolved: projectExactThreadHistory(resolved, history.messages, authored),
+    resolved,
     historyLength: history.messages.length,
     responseOffset: history.messages.length + authored.length,
     ...(userMessage ? { userMessage } : {}),
     ...(history.head ? { head: history.head } : {}),
     binding,
+    source,
   };
 }
 
@@ -74,6 +90,29 @@ export interface ManagedThreadResult {
   readonly text?: string;
 }
 
+/** Reject a cached replay when its observed Thread revision is no longer current. */
+export async function validateThreadReplay(
+  invocation: ManagedThreadInvocation,
+  replay: boolean,
+): Promise<void> {
+  if (replay) await invocation.source?.validate?.();
+}
+
+/** Return whether a generated result came from semantic-cache replay. */
+export function isThreadReplay(result: { readonly _meta?: unknown }): boolean {
+  if (
+    typeof result._meta !== "object" ||
+    result._meta === null ||
+    !("semanticCache" in result._meta)
+  ) {
+    return false;
+  }
+  const cache = result._meta.semanticCache;
+  if (typeof cache !== "object" || cache === null) return false;
+  const facts = cache as Readonly<Record<string, unknown>>;
+  return facts.hit === true || facts.replay === true;
+}
+
 /** Align the managed turn boundary with the post-Safety provider input. */
 export function alignThreadInvocationInput(
   invocation: ManagedThreadInvocation,
@@ -81,15 +120,14 @@ export function alignThreadInvocationInput(
     readonly messages: readonly Message[];
     readonly prompt?: string;
   },
+  historyLength = invocation.historyLength,
 ): ManagedThreadInvocation {
   if (!invocation.binding) return invocation;
   const canonical = [
     ...input.messages,
     ...(input.prompt ? [{ role: "user" as const, content: input.prompt }] : []),
   ];
-  const userMessage = findRenderedUserMessage(
-    canonical.slice(invocation.historyLength),
-  );
+  const userMessage = findRenderedUserMessage(canonical.slice(historyLength));
   const { userMessage: _previousUser, ...withoutUser } = invocation;
   return {
     ...withoutUser,
@@ -124,9 +162,7 @@ export async function commitThreadInvocation(
   }
 }
 
-function acceptedAssistant(
-  result: ManagedThreadResult,
-): Message | undefined {
+function acceptedAssistant(result: ManagedThreadResult): Message | undefined {
   const content =
     result.content !== undefined
       ? result.content
@@ -157,7 +193,11 @@ function acceptedTurnMessages(
     }
     const pending = new Set(calls.map((call) => call.toolCallId));
     const results: Message[] = [];
-    for (let resultIndex = index + 1; resultIndex < tail.length; resultIndex++) {
+    for (
+      let resultIndex = index + 1;
+      resultIndex < tail.length;
+      resultIndex++
+    ) {
       const result = tail[resultIndex];
       if (result?.role !== "tool") break;
       const toolCallId = result.metadata?.toolCallId;
@@ -171,7 +211,8 @@ function acceptedTurnMessages(
     }
   }
   const finalAcceptedAssistant =
-    finalAssistant ?? (tail.length === 0 ? acceptedAssistant(result) : undefined);
+    finalAssistant ??
+    (tail.length === 0 ? acceptedAssistant(result) : undefined);
   return [
     ...(userMessage ? [userMessage] : []),
     ...rounds,
@@ -181,11 +222,12 @@ function acceptedTurnMessages(
 
 function assistantToolCalls(message: Message): readonly ToolCallPart[] {
   if (message.role !== "assistant") return [];
-  const contentCalls = typeof message.content === "string"
-    ? []
-    : message.content.filter(
-        (part): part is ToolCallPart => part.type === "tool-call",
-      );
+  const contentCalls =
+    typeof message.content === "string"
+      ? []
+      : message.content.filter(
+          (part): part is ToolCallPart => part.type === "tool-call",
+        );
   if (contentCalls.length > 0) return contentCalls;
   const metadataCalls = message.metadata?.toolCalls;
   if (!Array.isArray(metadataCalls)) return [];
@@ -200,12 +242,14 @@ function assistantToolCalls(message: Message): readonly ToolCallPart[] {
     ) {
       return [];
     }
-    return [{
-      type: "tool-call" as const,
-      toolCallId: call.id,
-      toolName: call.name,
-      input: "args" in call ? call.args : undefined,
-    }];
+    return [
+      {
+        type: "tool-call" as const,
+        toolCallId: call.id,
+        toolName: call.name,
+        input: "args" in call ? call.args : undefined,
+      },
+    ];
   });
 }
 
@@ -213,63 +257,19 @@ function canonicalToolCallMessage(
   message: Extract<Message, { role: "assistant" }>,
   calls: readonly ToolCallPart[],
 ): Message {
-  const content = typeof message.content === "string"
-    ? [
-        ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
-        ...calls,
-      ]
-    : [
-        ...message.content.filter((part) => part.type !== "tool-call"),
-        ...calls,
-      ];
+  const content =
+    typeof message.content === "string"
+      ? [
+          ...(message.content
+            ? [{ type: "text" as const, text: message.content }]
+            : []),
+          ...calls,
+        ]
+      : [
+          ...message.content.filter((part) => part.type !== "tool-call"),
+          ...calls,
+        ];
   return { ...message, content };
-}
-
-/**
- * Exact-history projection seam.
- *
- * Future context policies may substitute a lossy model projection here;
- * canonical Thread history remains untouched.
- */
-function projectExactThreadHistory(
-  resolved: ResolvedPrompt,
-  history: readonly Message[],
-  authored: readonly Message[],
-): ResolvedPrompt {
-  const descriptors = Object.getOwnPropertyDescriptors(resolved);
-  const ingress = systemIngressCarrierFor(resolved);
-  const ingressKey = ingress
-    ? Reflect.ownKeys(resolved).find(
-        (key) =>
-          typeof key === "symbol" &&
-          Object.getOwnPropertyDescriptor(resolved, key)?.value === ingress,
-      )
-    : undefined;
-  delete descriptors.prompt;
-  delete descriptors.messages;
-  if (ingressKey) Reflect.deleteProperty(descriptors, ingressKey);
-  const projected = Object.create(
-    Object.getPrototypeOf(resolved),
-  ) as ResolvedPrompt;
-  Object.defineProperties(projected, descriptors);
-  Object.defineProperty(projected, "messages", {
-    configurable: true,
-    enumerable: true,
-    writable: true,
-    value: [...history, ...authored],
-  });
-  if (ingress) {
-    attachSystemIngressCarrier(
-      projected,
-      ingress.mode === "messages"
-        ? {
-            ...ingress,
-            targetMessageIndex: ingress.targetMessageIndex + history.length,
-          }
-        : ingress,
-    );
-  }
-  return projected;
 }
 
 function authoredMessages(resolved: ResolvedPrompt): readonly Message[] {

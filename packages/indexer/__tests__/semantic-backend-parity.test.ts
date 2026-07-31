@@ -65,10 +65,11 @@ describe("semantic backend parity", () => {
         fixture.name === "authored-media-shared-analyzer" ||
         fixture.name === "authored-mcp-shared-analyzer" ||
         fixture.name === "authored-embedding-shared-analyzer" ||
-        fixture.name === "authored-evidence-record-shared-analyzer"
+        fixture.name === "authored-evidence-record-shared-analyzer" ||
+        fixture.name === "authored-context-planning-shared-analyzer"
       ) {
         expect(JSON.stringify(nativePatch.facts)).not.toMatch(
-          /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN|PHASE7_PRIVATE_SENTINEL|PRIVATE_EVIDENCE_PARITY_SENTINEL|PRIVATE_EVIDENCE_REF|mediaBytes/,
+          /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN|PHASE7_PRIVATE_SENTINEL|PRIVATE_EVIDENCE_PARITY_SENTINEL|PRIVATE_EVIDENCE_REF|PRIVATE_PLANNING_SENTINEL|mediaBytes/,
         );
       }
     }, 60_000);

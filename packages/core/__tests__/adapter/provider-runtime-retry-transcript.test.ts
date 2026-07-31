@@ -128,6 +128,7 @@ function createLoopRuntime(fake: FakeLoopRuntime) {
       settings: fake.runtime.mapSettings,
       structuredOutput: fake.runtime.structuredOutput,
       bind: () => ({
+        capabilities: fake.runtime.capabilities,
         runTextLoop: fake.runtime.runTextLoop,
         runStructuredAttempt: fake.runtime.runStructuredAttempt,
         runStream: fake.runtime.runStream,

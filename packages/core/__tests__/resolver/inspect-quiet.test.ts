@@ -88,7 +88,6 @@ describe("inspect quiet mode", () => {
       ports: fakes.ports,
     }).inspect({
       input: { topic: "billing" },
-      tokenBudget: 8,
     });
 
     expect(inspection.system.total).toContain("system identity");
@@ -111,7 +110,6 @@ describe("inspect quiet mode", () => {
 
     await compilePrompt(fullFeatureConfig(), { ports: fakes.ports }).resolve({
       input: { topic: "billing" },
-      tokenBudget: 8,
     });
 
     expect(fakes.observability.scopes.map((scope) => scope.primitive)).toEqual([
@@ -130,7 +128,6 @@ describe("inspect quiet mode", () => {
       "context.contribution",
       "context.contribution",
       "context.contribution",
-      "prompt.budget",
     ]);
     expect(fakes.instrumentation.events).toEqual([
       {
@@ -160,13 +157,11 @@ describe("inspect quiet mode", () => {
     await compilePrompt(warningConfig(), { ports: inspectFakes.ports }).inspect(
       {
         input,
-        tokenBudget: 3,
       },
     );
     await compilePrompt(warningConfig(), { ports: resolveFakes.ports }).resolve(
       {
         input,
-        tokenBudget: 3,
       },
     );
 
@@ -176,7 +171,6 @@ describe("inspect quiet mode", () => {
     ).toEqual([
       'auto-escape: input field "profile" contains nested string values; auto-escape covers top-level strings only. Escape nested content explicitly or restructure the input.',
       'prompt "inspect-warning-fixture": contexts request provider caching but the prompt-level system is dynamic; content before a cache breakpoint must be byte-stable. Make `system` static or move dynamic parts into an uncached context.',
-      'prompt "inspect-warning-fixture": token budget 3 is smaller than the stable prefix (48 tokens); uncached contexts were dropped entirely. Shrink cached contexts or raise the budget.',
     ]);
   });
 });

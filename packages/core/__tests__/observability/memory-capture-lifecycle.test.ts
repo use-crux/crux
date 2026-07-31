@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runEvalCellScope, runEvalScope } from "../../src/eval/internal/scope";
-import { memory, memoryBlock, recentMessages } from "../../src/memory";
+import { facts, memory, memoryBlock } from "../../src/memory";
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -25,7 +25,13 @@ describe("memory capture observation lifecycle", () => {
     const mem = memory({
       id: "fallback-conversation",
       namespace: "thread:1",
-      blocks: [recentMessages({ id: "recent" })],
+      blocks: [
+        facts({
+          id: "captured-facts",
+          extract: async () => [{ content: "Captured turn" }],
+          write: { mode: "auto" },
+        }),
+      ],
     });
     const boundPrompt = prompt({
       id: "fallback-memory-capture-observation",
@@ -261,7 +267,13 @@ describe("memory capture observation lifecycle", () => {
       id: "direct-conversation",
       namespace: "thread:1",
       capture: { mode: "inline" },
-      blocks: [recentMessages({ id: "recent" })],
+      blocks: [
+        facts({
+          id: "captured-facts",
+          extract: async () => [{ content: "Captured turn" }],
+          write: { mode: "auto" },
+        }),
+      ],
     });
 
     await mem.captureTurn({

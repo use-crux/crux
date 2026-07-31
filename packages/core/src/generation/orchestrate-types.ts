@@ -62,7 +62,7 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   /** Internal observability fact when explicit messages shadow a resolved Thread. */
   threadHistoryOverride?: {
     readonly threadId: string
-    readonly reason: 'explicit-messages'
+    readonly reason: 'explicit-messages' | 'prompt-messages'
   }
   /** @internal Adapter-owned release gate for hydrated cached candidates. */
   readonly [cachedCandidateFinalizer]?: CachedCandidateFinalizer

@@ -282,6 +282,16 @@
       "ruleId": "embedding.sparse-media",
       "positiveFixture": "semantic-embedding-evidence.test.ts",
       "negativeFixture": "semantic-embedding-evidence.test.ts"
+    },
+    {
+      "ruleId": "context-planning.history-cardinality",
+      "positiveFixture": "request-context-planning-semantic.test.ts",
+      "negativeFixture": "request-context-planning-semantic.test.ts"
+    },
+    {
+      "ruleId": "context-planning.invalid-wrapper-order",
+      "positiveFixture": "request-context-planning-semantic.test.ts",
+      "negativeFixture": "request-context-planning-semantic.test.ts"
     }
   ]
 }

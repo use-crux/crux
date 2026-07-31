@@ -36,7 +36,7 @@ describe("resolved retrieval delivery selection", () => {
     expect(calls[0]?.messages).toEqual(history);
   });
 
-  it("retains the messages carrier when empty history falls back to resolved messages", async () => {
+  it("treats empty call-site history as an explicit source", async () => {
     const calls: CallArgs[] = [];
     const retrievalSeen: string[] = [];
 
@@ -49,8 +49,8 @@ describe("resolved retrieval delivery selection", () => {
       },
     );
 
-    expect(retrievalSeen).toHaveLength(1);
-    expect(calls[0]?.messages[0]?.content).toContain("safe selected retrieval");
+    expect(retrievalSeen).toEqual([]);
+    expect(calls[0]?.messages).toEqual([]);
   });
 
   it("keeps standalone system provenance alongside explicit history", async () => {

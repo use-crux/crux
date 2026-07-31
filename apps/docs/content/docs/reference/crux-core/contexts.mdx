@@ -87,7 +87,13 @@ const workspace = context({
 });
 ```
 
-The runtime concatenates the segment text into the final system message. `.inspect().system.parts[]`, `context.contribution` artifacts, and `prompt.budget` dropped previews preserve `segments`, `staticTokens`, and `dynamicTokens`. Segments can also carry `observedAt` and `sourceVersion` when a primitive knows when the source data was observed. Plain static strings are reported as one static segment, and dynamic string functions are reported as one dynamic segment without a source key.
+The runtime concatenates the segment text into the final system message.
+Resolver instrumentation can preserve `segments`, `staticTokens`, and
+`dynamicTokens`. Executed-request inspection exposes only redacted contribution
+and token evidence, never segment content. Segments can also carry `observedAt`
+and `sourceVersion` when a primitive knows when the source data was observed.
+Plain static strings are reported as one static segment, and dynamic string
+functions are reported as one dynamic segment without a source key.
 
 ### Nested `use`
 

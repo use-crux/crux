@@ -21,6 +21,8 @@ import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { AnyToolSet } from "../types";
 import type { InternalInjectableEntry } from "./internal-injection";
 import type { ToolSource } from "../tools/tool-source";
+import type { HistoryProjection } from "../request/history/source";
+import type { RepresentationEntry } from "../request/representation/ladder-types";
 import type { PromptText } from "../prompt-text";
 import type { Message } from "../generation/messages";
 import type { ThreadCommit } from "../thread/types";
@@ -310,6 +312,8 @@ export type ContextEntry =
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
   | ToolSource
+  | HistoryProjection
+  | RepresentationEntry
   | false
   | null
   | undefined;
@@ -455,8 +459,12 @@ export interface ThreadHistoryEntry {
   /** Read the exact selected revision observed by one managed invocation. */
   readHistory(): Promise<{
     readonly head?: string;
+    readonly revision: string;
     readonly messages: readonly Message[];
+    readonly messageIds: readonly string[];
   }>;
+  /** Revalidate an observed revision before provider dispatch or replay. */
+  validateRevision(revision: string): Promise<void>;
   /** Atomically publish one accepted turn after the observed revision. */
   commitTurn(turn: ThreadTurnCommitInput): Promise<ThreadCommit>;
 }

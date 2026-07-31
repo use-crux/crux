@@ -1,7 +1,7 @@
 /** Public type contract for media-classifier options and media boundaries. */
 
 import { expectTypeOf } from 'vitest'
-import type { GenerateObjectFn } from '../src/compaction'
+import type { GenerateObjectFn } from '../src/generation/support-types'
 import {
   boundary,
   guardrail,

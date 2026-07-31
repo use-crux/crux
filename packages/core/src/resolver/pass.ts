@@ -70,9 +70,15 @@ import {
   attachSystemIngressCarrier,
 } from "./system-ingress-provenance";
 import { resolveSystemContent } from "./system-content";
+import { resolveRepresentationPolicies } from "./representation-policy";
 import { inspectPromptText, resolvePromptText } from "./prompt-content";
 import { attachPromptTextObservation } from "./prompt-text-observation";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
+import {
+  hasOffloadOutputPolicy,
+  OFFLOAD_SUPPORT_TOOL_NAME,
+  offloadSupportTools,
+} from "../request/offload/support-tool";
 import type {
   PromptResolutionPass,
   ProjectionMode,
@@ -110,6 +116,10 @@ export async function runPromptPass(
 ): Promise<PromptResolutionPass> {
   let input = opts.input ?? {};
   const resolverPrivateInput = collectResolverPrivateInput(input);
+  if (Object.keys(resolverPrivateInput).length > 0) {
+    input = { ...input };
+    for (const key of Object.keys(resolverPrivateInput)) delete input[key];
+  }
 
   if (mergedSchema) {
     const parseResult = safeParseSchema(mergedSchema, input);
@@ -220,7 +230,6 @@ export async function runPromptPass(
     ownSystem,
     postMerge.contexts,
     guardedInput,
-    opts.tokenBudget,
     ports,
     {
       ownProviderCache: config.cache?.provider === true,
@@ -229,6 +238,16 @@ export async function runPromptPass(
       ownSystemIsDynamic: typeof config.system === "function",
       promptId: config.id,
     },
+  );
+  const representations = await resolveRepresentationPolicies(
+    postMerge.representationLadders,
+    postMerge.representationOwnership,
+    postMerge.skills,
+    (skills) => ports.skills.index(skills),
+    postMerge.contexts,
+    composed.parts,
+    guardedInput,
+    ports.tokenizer.count,
   );
   let system = composed.system;
   let systemBlocks = composed.blocks;
@@ -283,13 +302,11 @@ export async function runPromptPass(
     input: _input,
     provider: _provider,
     modelId: _modelId,
-    tokenBudget: _tokenBudget,
     ...callSettings
   } = opts;
   void _input;
   void _provider;
   void _modelId;
-  void _tokenBudget;
   const settings = mergeSettings(
     config.settings,
     adaptation?.adaptation.settings,
@@ -299,13 +316,14 @@ export async function runPromptPass(
   const resolved: ResolvedPrompt = {
     ...(system ? { system } : {}),
     ...(!config.messages && systemBlocks.length > 0 ? { systemBlocks } : {}),
-    ...(composed.promptBudgetArtifactId
-      ? { promptBudgetArtifactId: composed.promptBudgetArtifactId }
-      : {}),
     ...(promptText ? { prompt: promptText } : {}),
     ...(messages ? { messages } : {}),
     ...(config.output ? { schema: config.output } : {}),
     settings,
+    ...(postMerge.historyProjection
+      ? { historyProjection: postMerge.historyProjection }
+      : {}),
+    ...(representations.length > 0 ? { representations } : {}),
   };
   attachPromptTextObservation(resolved, promptInfo);
   if (systemIngressBlocks.length > 0) {
@@ -344,7 +362,16 @@ export async function runPromptPass(
   ];
   toolMerge.mergeOwned(postMerge.injectedTools, postMerge.injectedToolOwners);
   mergeBlackboardTools(toolMerge, postMerge.blackboards);
+  if (representations.some((policy) => policy.offload)) {
+    toolMerge.merge(offloadSupportTools(), "request support");
+  }
   toolMerge.merge(configTools, "prompt config");
+  if (
+    hasOffloadOutputPolicy(toolMerge.tools) &&
+    !(OFFLOAD_SUPPORT_TOOL_NAME in toolMerge.tools)
+  ) {
+    toolMerge.merge(offloadSupportTools(), "request support");
+  }
 
   if (skillSession !== undefined) {
     (resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession =
@@ -417,7 +444,6 @@ export async function runPromptPass(
       totalTokens: systemTokens + promptTokens,
       droppedContexts: composed.droppedContexts,
       excludedContexts: postMerge.excluded,
-      tokenBudget: opts.tokenBudget,
       tools: toolNames.length > 0 ? toolNames : undefined,
       ...(toolNames.length > 0
         ? {

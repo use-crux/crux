@@ -21,6 +21,7 @@ const exemptArtifactKinds = new Set([
   'corpus.report',
   'security.report',
   'media.report',
+  'request.plan',
 ])
 
 describe('observability privacy capture policy', () => {

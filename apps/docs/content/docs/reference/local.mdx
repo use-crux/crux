@@ -83,7 +83,7 @@ When the VS Code PromptText commands are used with an attached `crux dev`,
 Local also owns two transient browser routes:
 
 - exact preview discovers a currently published `configure({ prompts })`
-  target and dispatches `Prompt.inspect()` only after explicit confirmation;
+  target and dispatches observational `preview()` only after explicit confirmation;
 - latest Run resolves the current Prompt owner and newest captured operation
   at click time, or shows the Prompt's Catalog empty state.
 

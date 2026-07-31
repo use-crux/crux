@@ -19,6 +19,24 @@ export type { Delegate, DelegateConfig, DelegateResult } from './delegate'
 
 export { agent, isAgent } from './agent'
 export type { Agent, AnyAgent, AgentConfig, AgentLike, HandoffTarget, InferAgentInput, InferAgentOutput, RoutableModel } from './agent'
+export type { InputBudget } from '../request/budget/input-budget'
+export type { PrepareStep } from '../request/prepare/step'
+export type {
+  ConsensusInvocationContext,
+  InvocationContext,
+  InvocationPreparationStats,
+  InvocationTarget,
+  ParallelInvocationContext,
+  PipelineInvocationContext,
+  PrepareInvocation,
+  SwarmInvocationContext,
+} from '../request/prepare/invocation'
+export type {
+  CompositionRequestReceiptNode,
+  CompositionRequestReceiptTree,
+  InvocationRequestReceiptNode,
+  NestedRequestReceiptNode,
+} from '../request/receipt/tree'
 
 export { createParallel } from './parallel'
 export type { ParallelOptions, ParallelResult, SettledResult } from './parallel'

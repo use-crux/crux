@@ -20,6 +20,30 @@ const model = {
 } as unknown as LanguageModel;
 
 describe("managed AI task identity", () => {
+  it("fails closed when adaptive preparation inputs cannot be projected", () => {
+    const task = createCruxAi().generate.task(
+      prompt({
+        input: z.object({ topic: z.string() }),
+        prompt: "Summarize.",
+      }),
+      {
+        model: "test:model",
+        prepareStep: () => ({ inputBudget: { max: 1_000 } }),
+      },
+    );
+
+    expect(
+      getEvalTaskDescriptorForInternalUse(task).projectIdentity({
+        phase: "plan",
+        input: { topic: "refunds" },
+        overrides: {},
+      }),
+    ).toEqual({
+      reusable: false,
+      reason: "untracked_external_dependency",
+    });
+  });
+
   it("changes a deployed arm fingerprint when a projected prompt override changes", () => {
     const task = createCruxAi().generate.task(
       prompt({

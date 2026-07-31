@@ -61,10 +61,12 @@ export function describeThreadConformance(
         "readHistory",
         "redact",
         "select",
+        "validateRevision",
       ]);
       expect(Object.isFrozen(commit)).toBe(true);
       expect(await conversation.read()).toEqual({
         threadId: "support-42",
+        revision: expect.any(String),
         head: commit.messageIds[0],
         entries: [{
           kind: "message",

@@ -129,8 +129,8 @@ Contexts, memory, retrieval, grounding, skills, and other contributors use the
 same composition surface:
 
 ```ts title="composition.ts"
-import { context, prompt } from "@use-crux/core";
-import { memory, recentMessages } from "@use-crux/core/memory";
+import { context, history, prompt } from "@use-crux/core";
+import { memory, facts } from "@use-crux/core/memory";
 import { grounding } from "@use-crux/core/retrieval";
 
 const policy = context({
@@ -142,7 +142,7 @@ const userMemory = memory({
   id: "user-memory",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [recentMessages({ id: "recent", maxMessages: 8 })],
+  blocks: [facts({ id: "facts", embed: dense })],
 });
 
 const docsGrounding = grounding({
@@ -154,7 +154,7 @@ const docsGrounding = grounding({
 
 const support = prompt({
   id: "support",
-  use: [policy, userMemory, docsGrounding],
+  use: [history.recent({ messages: 8 }), policy, userMemory, docsGrounding],
   input: z.object({
     userId: z.string(),
     question: z.string(),
@@ -219,21 +219,22 @@ Do not combine `messages` with `system` or `prompt`.
 
 ## Inspect Before You Run
 
-Use `.resolve()` to inspect the provider-neutral request, or `.inspect()` for
-composition, token, and source details. Neither method calls a model.
+Use `.resolve()` for provider-neutral prompt data or `preview()` for
+whole-request fit and prospective adaptations. Neither calls a model.
 
 ```ts
-const inspection = await support.inspect({
+const inspection = await preview(support, {
+  model,
   input: {
     userId: "user_123",
     question: "How do I configure SSO?",
   },
-  tokenBudget: 4000,
+  inputBudget: { max: 4000 },
 });
 
-console.log(inspection.system.parts);
-console.log(inspection.droppedContexts);
-console.log(inspection.excludedContexts);
+console.log(inspection.status);
+console.log(inspection.adaptations);
+console.log(inspection.diagnostics);
 ```
 
 For Markdown-aware source previews and captured runtime evidence, see

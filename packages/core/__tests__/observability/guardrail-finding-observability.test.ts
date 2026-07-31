@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { GenerateObjectFn } from '../../src/compaction'
+import type { GenerateObjectFn } from '../../src/generation/support-types'
 import { createUnsupportedCapabilityError } from '../../src/content'
 import {
   createInMemoryObservabilityTransport,

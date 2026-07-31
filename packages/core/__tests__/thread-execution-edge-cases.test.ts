@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  adapter,
-  loopRuntimeAdapter,
-  type AdapterSpec,
-} from "../src/adapter";
+import { adapter, loopRuntimeAdapter, type AdapterSpec } from "../src/adapter";
 import { fakeLoopRuntime } from "../src/adapter/testing";
 import type { CallArgs } from "../src/adapter/types";
 import { createSemanticCache } from "../src/cache";
@@ -21,10 +17,7 @@ import {
   generateCachedPair,
   type GenerateRegime,
 } from "./cache/semantic-cache-generate-safety.fixtures";
-import {
-  replaceLastAssistant,
-  response,
-} from "./thread-execution-fixtures";
+import { replaceLastAssistant, response } from "./thread-execution-fixtures";
 
 const regimes: readonly GenerateRegime[] = ["core", "sdk"];
 
@@ -33,7 +26,7 @@ afterEach(() => {
 });
 
 describe.each(regimes)("thread managed generate edge cases — %s", (regime) => {
-  it("does not commit authored assistant/tool preamble messages", async () => {
+  it("publishes only the rendered current turn and accepted answer", async () => {
     const conversation = thread({
       id: `authored-preamble-${regime}`,
       storage: inMemoryStorage(),
@@ -41,27 +34,7 @@ describe.each(regimes)("thread managed generate edge cases — %s", (regime) => 
     const answer = prompt({
       id: `authored-preamble-answer-${regime}`,
       use: [conversation],
-      messages: () => [
-        { role: "user", content: "Authored setup" },
-        {
-          role: "assistant",
-          content: [{
-            type: "tool-call",
-            toolCallId: "authored-call",
-            toolName: "lookup",
-            input: {},
-          }],
-        },
-        {
-          role: "tool",
-          content: "Authored result",
-          metadata: {
-            toolCallId: "authored-call",
-            toolName: "lookup",
-          },
-        },
-        { role: "user", content: "Rendered current turn" },
-      ],
+      prompt: "Rendered current turn",
     });
 
     await generate(regime, answer);
@@ -113,6 +86,62 @@ describe.each(regimes)("thread managed generate edge cases — %s", (regime) => 
       ["user", "billing help"],
       ["assistant", "Cached answer"],
     ]);
+  });
+
+  it("rejects a cached replay after its observed Thread revision changes", async () => {
+    const storage = inMemoryStorage();
+    const conversation = thread({
+      id: `cached-revision-${regime}`,
+      storage,
+    });
+    let mutateAfterRead = false;
+    let mutated = false;
+    let providerCalls = 0;
+    const binding = {
+      _tag: "Thread",
+      id: conversation.id,
+      readHistory: async () => {
+        const history = await conversation.readHistory();
+        if (mutateAfterRead && !mutated) {
+          mutated = true;
+          await conversation.append({
+            id: `concurrent-${regime}`,
+            role: "user",
+            content: "Concurrent mutation",
+          });
+        }
+        return history;
+      },
+      validateRevision: (revision) => conversation.validateRevision(revision),
+      commitTurn: (turn) => conversation.commitTurn(turn),
+    } satisfies ThreadHistoryEntry;
+    const answer = prompt({
+      id: `cached-revision-answer-${regime}`,
+      use: [binding],
+      input: z.object({ message: z.string() }),
+      cache: {
+        semantic: {
+          version: "v1",
+          query: ({ input }) => String(input.message),
+        },
+      },
+      prompt: ({ input }) => input.message,
+    });
+
+    await expect(
+      generateCachedPair({
+        regime,
+        kind: "text",
+        prompt: answer,
+        providerOutputs: ["Cached answer"],
+        storage,
+        onProviderCall: () => providerCalls++,
+        between: () => {
+          mutateAfterRead = true;
+        },
+      }),
+    ).rejects.toMatchObject({ code: "identity_conflict" });
+    expect(providerCalls).toBe(1);
   });
 
   it("preserves structured cache evidence while attaching Thread receipts", async () => {
@@ -209,6 +238,7 @@ describe.each(regimes)("thread managed generate edge cases — %s", (regime) => 
       _tag: "Thread",
       id: conversation.id,
       readHistory: () => conversation.readHistory(),
+      validateRevision: (revision) => conversation.validateRevision(revision),
       commitTurn: (turn) =>
         failCommit
           ? Promise.reject(new Error("publication failed"))
@@ -253,7 +283,6 @@ describe.each(regimes)("thread managed generate edge cases — %s", (regime) => 
     await generate(regime, answer, input);
     expect(successes).toBe(1);
   });
-
 });
 
 async function generate(

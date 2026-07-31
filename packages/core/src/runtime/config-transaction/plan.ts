@@ -29,6 +29,7 @@ export function planRuntimeConfig(
   const config = Object.freeze({ ...input.config });
   const inert = isIndexMode(input.env);
   const records = config.storage?.records;
+  const assets = config.storage?.assets;
   const observability = config.observability;
   const hasIdentity =
     observability !== undefined && Object.hasOwn(observability, "identity");
@@ -43,6 +44,7 @@ export function planRuntimeConfig(
 
   const hooksPatch: Partial<CruxHooks> = {
     ...(records ? { records } : {}),
+    ...(assets ? { assets } : {}),
     ...(config.runtime ? { runtimeEngine: config.runtime } : {}),
     ...(config.host ? { hostBinding: config.host } : {}),
     ...(config.generation?.middleware

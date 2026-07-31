@@ -42,6 +42,8 @@ import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { ToolSource } from '../tools/tool-source'
 import type { ToolOwnerLabel } from './tool-merge'
+import type { HistoryProjection } from '../request/history/source'
+import type { RepresentationEntry } from '../request/representation/ladder-types'
 import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
@@ -159,6 +161,8 @@ export interface Contribution {
   thread?: ThreadHistoryEntry
   skill?: SkillEntry
   blackboard?: BlackboardEntry
+  history?: HistoryProjection
+  representations?: readonly RepresentationEntry[]
   facts?: ContributionFacts
 }
 
@@ -212,6 +216,8 @@ export interface LoweredContributor {
    * Owner label used in tool-collision diagnostics.
    */
   readonly toolOwnerLabel: ToolOwnerLabel | undefined
+  /** Representation entry that owns this contributor's complete child graph. */
+  readonly representation?: RepresentationEntry
   gate?(input: Record<string, unknown>): GateResult
   children?(input: Record<string, unknown>): readonly ContextEntry[]
   contribute?(args: ContributeArgs): Contribution | Promise<Contribution>
@@ -230,6 +236,12 @@ export interface MergedResolution {
   memories: MemoryEntry[]
   thread?: ThreadHistoryEntry
   blackboards: BlackboardEntry[]
+  history: HistoryProjection[]
+  representations: RepresentationEntry[]
+  representationOwnership: Map<
+    RepresentationEntry,
+    RepresentationOwnership
+  >
   tools: AnyToolSet
   toolSources: ToolSource[]
   toolOwners: Map<string, ToolOwnerLabel>
@@ -237,6 +249,16 @@ export interface MergedResolution {
   constraints: Constraint[]
   guardrails: Guardrail[]
   metadata: Record<string, unknown>
+}
+
+/** Resolved channels owned by one representation root. */
+export interface RepresentationOwnership {
+  readonly contexts: readonly Context<z.ZodType>[]
+  readonly skills: readonly SkillEntry[]
+  readonly toolNames: readonly string[]
+  readonly constraints: readonly Constraint[]
+  readonly guardrails: readonly Guardrail[]
+  readonly toolMiddleware: readonly ToolMiddleware[]
 }
 
 /** Create an empty {@link MergedResolution} accumulator. */
@@ -247,6 +269,9 @@ export function emptyMergedResolution(): MergedResolution {
     skills: [],
     memories: [],
     blackboards: [],
+    history: [],
+    representations: [],
+    representationOwnership: new Map(),
     tools: {},
     toolSources: [],
     toolOwners: new Map(),

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  adapter,
-  loopRuntimeAdapter,
-  type AdapterSpec,
-} from "../src/adapter";
+import { adapter, loopRuntimeAdapter, type AdapterSpec } from "../src/adapter";
 import { fakeLoopRuntime } from "../src/adapter/testing";
 import { prompt } from "../src/prompt";
 import { inMemoryStorage } from "../src/storage";
@@ -14,7 +10,7 @@ import { response } from "./thread-execution-fixtures";
 const regimes: readonly GenerateRegime[] = ["core", "sdk"];
 
 describe.each(regimes)("thread managed turn boundaries — %s", (regime) => {
-  it("does not reuse a historical user for an assistant-only authored prompt", async () => {
+  it("does not synthesize a user message for an empty current turn", async () => {
     const conversation = thread({
       id: `assistant-only-${regime}`,
       storage: inMemoryStorage(),
@@ -26,10 +22,7 @@ describe.each(regimes)("thread managed turn boundaries — %s", (regime) => {
     const answer = prompt({
       id: `assistant-only-answer-${regime}`,
       use: [conversation],
-      messages: () => [
-        { role: "system", content: "Continue the conversation." },
-        { role: "assistant", content: "Authored handoff" },
-      ],
+      prompt: "",
     });
 
     await generate(regime, answer);
@@ -104,14 +97,20 @@ async function generateCompleteToolRound(
   };
   if (regime === "sdk") {
     const fake = fakeLoopRuntime({
-      loops: [[{
-        text: "Checking",
-        toolCalls: [{
-          id: "weather-1",
-          name: "weather",
-          args: { city: "Amsterdam" },
-        }],
-      }]],
+      loops: [
+        [
+          {
+            text: "Checking",
+            toolCalls: [
+              {
+                id: "weather-1",
+                name: "weather",
+                args: { city: "Amsterdam" },
+              },
+            ],
+          },
+        ],
+      ],
     });
     await loopRuntimeAdapter(fake.runtime).generate(answer as never, {
       model: "fake:test-model",
@@ -147,11 +146,13 @@ function toolSpec(): AdapterSpec<object, object, never> {
     async call() {
       return {
         raw: {},
-        extracted: response("Checking", [{
-          id: "weather-1",
-          name: "weather",
-          args: { city: "Amsterdam" },
-        }]),
+        extracted: response("Checking", [
+          {
+            id: "weather-1",
+            name: "weather",
+            args: { city: "Amsterdam" },
+          },
+        ]),
       };
     },
     appendToolRound(messages, assistant, results) {

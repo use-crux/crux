@@ -14,7 +14,12 @@ describe("thread managed completion timeout", () => {
     const binding = {
       _tag: "Thread",
       id: "slow-publication",
-      readHistory: async () => ({ messages: [] }),
+      readHistory: async () => ({
+        revision: "revision-1",
+        messages: [],
+        messageIds: [],
+      }),
+      validateRevision: async () => undefined,
       commitTurn: async () => {
         commitStarted.resolve();
         await releaseCommit.promise;

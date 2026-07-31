@@ -13,7 +13,7 @@
  *
  * **Resolution & Inspection:**
  * - `.resolve()` — Get SDK-agnostic resolved prompt data (system, prompt, schema, tools)
- * - `.inspect()` — See per-part token breakdown and what was dropped
+ * - `preview()` — Measure a prospective request without executing it
  *
  * **Adapter packages (execution):**
  * - `@use-crux/ai` — Vercel AI SDK adapter (`generate()`, `stream()`)
@@ -691,12 +691,57 @@ export type {
   UnsupportedCapabilityIssue,
 } from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";
+export { history } from "./request/history/managed";
+export type { HistoryFactory } from "./request/history/managed";
+export { summarize } from "./request/history/strategies";
+export type {
+  SummarizeFactory,
+  SummarizeStrategy,
+} from "./request/history/strategies";
+export type {
+  HistoryOptions,
+  HistoryProjection,
+  ManagedHistoryProjection,
+  ManagedHistoryRecent,
+  ManagedHistorySummaryOptions,
+  ProviderHistorySummaryInput,
+  ProviderHistorySummaryResult,
+  RecentHistoryOptions,
+  RecentHistoryProjection,
+} from "./request/history/source";
+export type {
+  GenerateObjectCommonOptions,
+  GenerateObjectFn,
+  GenerateObjectInput,
+  GenerateTextFn,
+} from "./generation/support-types";
+export {
+  droppable,
+  offload,
+  offloadable,
+  prefer,
+  summarizable,
+} from "./request/representation/wrappers";
+export type { OffloadReceipt } from "./request/offload/handle";
+export type {
+  DroppableLadder,
+  ForcedOffload,
+  OffloadableLadder,
+  OffloadableOptions,
+  PreferLadder,
+  RepresentationLadder,
+  RepresentationEntry,
+  RepresentationSource,
+  RepresentationSourceSchema,
+  SummarizableLadder,
+  SummarizableOptions,
+  ToolOutputOffloadPolicy,
+} from "./request/representation/ladder-types";
 
 // Memory
 export {
   memory,
   memoryBlock,
-  recentMessages,
   workingState,
   episodes,
   facts,
@@ -919,6 +964,9 @@ export type {
 export { adapter } from "./adapter/define-adapter";
 export type {
   AdapterSpec,
+  ModelCapacityProfile,
+  ModelCapacityResolver,
+  ModelCountingConfidence,
   AdapterResponse,
   CallArgs,
   StreamHandle,
@@ -934,6 +982,100 @@ export type {
   StreamCompletionPayload,
   StreamResult,
 } from "./adapter/index";
+// Value exports come from the source module: a value re-export through the
+// adapter barrel would pull its testing helpers (and vitest) into
+// platform-neutral runtime bundles.
+export {
+  CONSERVATIVE_MODEL_CAPACITY,
+  resolveModelCapacityProfile,
+} from "./request/capacity/model-profile";
+export { RequestCompositionError } from "./request/errors";
+export { mergeInputBudget } from "./request/budget/input-budget";
+export { PreparationError } from "./request/prepare/step";
+export { ResourceReadError } from "./request/prepare/resources";
+export type {
+  InputBudget,
+} from "./request/budget/input-budget";
+export type {
+  PreparationErrorReason,
+  PrepareStep,
+} from "./request/prepare/step";
+export type {
+  ControlReadable,
+  PreparationResources,
+  ResourceReadErrorReason,
+} from "./request/prepare/resources";
+export type {
+  AmendableContextEntry,
+  ContributorSelector,
+  ExecutionAmendment,
+  OperationKind,
+} from "./request/prepare/amendment";
+export type {
+  ConsensusInvocationContext,
+  InvocationContext,
+  InvocationPreparationStats,
+  InvocationTarget,
+  ParallelInvocationContext,
+  PipelineInvocationContext,
+  PrepareInvocation,
+  SwarmInvocationContext,
+} from "./request/prepare/invocation";
+export type {
+  PreparationAttemptStats,
+  PreparationCoverage,
+  PreparationModelCallStats,
+  PreparationScopeStats,
+  PreparationUsageStats,
+  StepContext,
+  StepPreparationStats,
+  StepReason,
+  StepToolHistoryEntry,
+} from "./request/prepare/step-context";
+export type { PreparationDecisionInspection } from "./request/prepare/journal";
+export { preview } from "./request/preview/preview";
+export type {
+  RequestPreviewTarget,
+} from "./request/preview/preview";
+export type {
+  PreviewAdaptation,
+  PreviewAdaptationState,
+  RequestPreview,
+  RequestPreviewOptions,
+} from "./request/preview/types";
+export type {
+  RequestCompositionErrorCode,
+  RequestDiagnostic,
+} from "./request/errors";
+export type {
+  RequestAdaptation,
+  RequestWarning,
+} from "./request/receipt/adaptations";
+export type {
+  RequestInspection,
+  RequestReceipt,
+} from "./request/receipt/receipt";
+export {
+  inspectRequest,
+  RequestInspectionUnavailableError,
+} from "./request/receipt/inspection";
+export type {
+  RequestArtifactInspection,
+  RequestCandidateInspection,
+  RequestContributionInspection,
+  RequestSupportReceipt,
+} from "./request/receipt/inspection";
+export type {
+  CompositionRequestReceiptNode,
+  CompositionRequestReceiptTree,
+  InvocationRequestReceiptNode,
+  NestedRequestReceiptNode,
+  ReceiptCompositionKind,
+} from "./request/receipt/tree";
+export type {
+  RequestTokenBreakdown,
+  RequestTokenBreakdownEntry,
+} from "./request/measure/breakdown";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { loopRuntimeAdapter } from "./adapter/define-executor";
@@ -942,6 +1084,9 @@ export type {
   BoundLoopRuntime,
   CachedStreamPayload,
   ExecutorRequest,
+  ExecutorRequestStepInput,
+  ExecutorRequestStepPlanner,
+  SealedExecutorRequestStep,
   StructuredRequest,
   ExecutorStep,
   ExecutorModelStep,

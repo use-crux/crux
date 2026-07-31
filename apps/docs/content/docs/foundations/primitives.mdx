@@ -118,16 +118,21 @@ const hits = await docs.retrieve("How do deployments work?");
 → [Embeddings guide](/docs/guides/retrieval/embeddings)
 → [Corpus sync guide](/docs/guides/retrieval/corpus-sync)
 
-## Compaction
+## Managed history
 
-When conversations get long, you need to compress. Crux gives you four primitives, pick the one that matches your access pattern:
+`history()` keeps a summarized prefix and an exact recent suffix when a
+conversation no longer fits the resolved model. Canonical messages remain
+unchanged; generated summaries are reusable derived artifacts.
 
-- **`createSlidingWindow`**: stateful, manages its own summary, evicts oldest messages
-- **`createBudgetManager`**: advisory, no LLM calls, fires hooks at pressure thresholds
-- **`extractKeyFacts`**: one-shot structured extraction
-- **`summarizeMessages`**: stateless one-shot summarization
+```ts
+import { history, summarize } from "@use-crux/core";
 
-→ [Compaction guide](/docs/guides/compaction)
+const conversation = history({
+  recent: { messages: 20 },
+  summary: { strategy: summarize.adaptive() },
+  onMiss: "inline",
+});
+```
 
 ## Agents
 

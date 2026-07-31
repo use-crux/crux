@@ -296,6 +296,7 @@ describe("Crux observability graph contract", () => {
         "stream.timeline",
         "context.contribution",
         "prompt.budget",
+        "request.plan",
         "validation.feedback",
         "retrieval.hits",
         "citation.report",

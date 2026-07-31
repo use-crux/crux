@@ -35,8 +35,16 @@ selected history once, sends that exact revision to the provider, then appends
 the rendered user turn and accepted assistant/tool exchange atomically. The
 operation result exposes the publication receipt as `threadCommit`.
 
-Explicit call-site `messages` shadow the Thread for that invocation: Crux
-neither reads nor writes Thread history.
+Call-site `messages` and Prompt-level messages shadow the Thread for that
+invocation, in that order. Crux uses the first complete transcript and never
+merges sources; a caller-owned transcript does not imply a Thread commit.
+
+A bare Thread remains complete exact history. Add `history.recent()` or
+`history()` to opt into a bounded projection; Crux never applies an implicit
+recent window. Managed summary artifacts use the Thread revision and selected
+message range as their source identity. Sealed request plans pin that revision,
+so an intervening edit, selection, redaction, or deletion fails before provider
+dispatch instead of replaying a stale plan.
 
 ## Append and read
 

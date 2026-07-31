@@ -59,10 +59,11 @@ import { stampCruxRunId } from "../../generation/run-id";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, SdkLoopDialect } from "./types";
 import { initialMessageState } from "./messages";
+import { sdkHistorySummaryGenerator } from "./history-summary";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
-  inspectForDevtools,
+  previewForDevtools,
   resolveToolInputCapabilities,
   withSkillActivationInput,
 } from "./shared";
@@ -83,9 +84,21 @@ import { attachCachedCandidateFinalizer } from "../../runtime/internal/cached-ca
 import { readCachedReleaseSeal } from "../../runtime/internal/cached-release-seal";
 import { createCachedStreamCandidateFinalizer } from "./cached-stream-candidate";
 import {
+  assertSdkRequestPlanning,
+  createSdkRequestStepPlanner,
+} from "./sdk-request-planner";
+import {
+  guardRepresentedRequest,
+  selectRepresentationCapabilities,
+  selectRepresentationMiddleware,
+  selectRepresentationSkills,
+} from "./representation-safety";
+import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
+import {
   alignThreadInvocationInput,
   commitThreadInvocation,
   prepareThreadInvocation,
+  validateThreadReplay,
 } from "./thread-history";
 
 /**
@@ -105,30 +118,32 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
 ): Promise<ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId }> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
+  assertSdkRequestPlanning(dialect);
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: modelInfo.provider,
     modelId: modelInfo.modelId,
-    tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
+  let boundaryResolveOpts = resolveOpts;
   let resolved = await prompt.resolve(resolveOpts);
   let threadInvocation = await prepareThreadInvocation(
     resolved,
-    args.messages,
+    args.messages ?? (args.nativeMessages !== undefined ? [] : undefined),
   );
-  resolved = threadInvocation.resolved;
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const initialMessages = initialMessageState(
     resolved,
     args.messages,
-    threadInvocation.binding ? undefined : args.nativeMessages,
+    args.nativeMessages,
+    threadInvocation.source,
   );
   let { messages, promptText } = initialMessages;
-  let nativeMessages = threadInvocation.binding
-    ? undefined
-    : args.nativeMessages;
+  let nativeMessages =
+    threadInvocation.source || initialMessages.history?.changed
+      ? undefined
+      : args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafetyWithBindingApplicability(
@@ -150,6 +165,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
+  selectRepresentationCapabilities(safety, resolved.representations ?? []);
+  selectRepresentationSkills(resolved, resolved.representations ?? []);
   const guardedInput = await guardSafetySessionResolvedInput(
     safety,
     resolved,
@@ -172,10 +189,14 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
-  threadInvocation = alignThreadInvocationInput(threadInvocation, {
-    messages,
-    ...(promptText ? { prompt: promptText } : {}),
-  });
+  threadInvocation = alignThreadInvocationInput(
+    threadInvocation,
+    {
+      messages,
+      ...(promptText ? { prompt: promptText } : {}),
+    },
+    initialMessages.historyMessageCount,
+  );
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
 
@@ -192,7 +213,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
+  selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
+  let representationSelections: ReadonlyMap<string, number> | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -217,8 +240,24 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       memoryWriteGuard: safetySessionMemoryWriteGuard(safety),
       sdkModelIngress: dialect[toolModelIngressDialect],
       modelIngressProvider: modelInfo.provider,
-      reresolve: (skillSession) =>
-        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      reresolve: async (skillSession) => {
+        boundaryResolveOpts = withSkillActivationInput(
+          resolveOpts,
+          skillSession,
+        );
+        resolved = await prompt.resolve(boundaryResolveOpts);
+        selectRepresentationSkills(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        selectRepresentationMiddleware(
+          resolved,
+          resolved.representations ?? [],
+          representationSelections,
+        );
+        return resolved;
+      },
     });
     await lifecycle.guardExposure({
       root: safetySessionToolDefinitionGuard(safety),
@@ -231,7 +270,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     await closeSources();
     throw error;
   }
-  const tools = lifecycle.tools;
+  let tools = lifecycle.tools;
   // Text streams gate here; the structured stream is created after compilation
   // below (it needs the canonical schema + decode manifest).
   let trackedSafety =
@@ -396,6 +435,76 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           ...(callerSignal ? { signal: callerSignal } : {}),
         })
       : undefined;
+  const planStep = createSdkRequestStepPlanner({
+    dialect,
+    prompt,
+    resolveOptions: () => boundaryResolveOpts,
+    resolved: () => resolved,
+    rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
+    configuredActiveTools: args.activeTools,
+    inputBudget: args.inputBudget,
+    prepareStep: args.prepareStep,
+    requestInput: args.input ?? {},
+    signal: args.signal,
+    schema: resolved.schema,
+    outputSchema: structuredOutputSchema,
+    tools: () =>
+      lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
+    activeTools: activeToolNames,
+    extra: args.extra,
+    history: initialMessages.history,
+    generateHistorySummary: sdkHistorySummaryGenerator(dialect),
+    prepareRequest: (candidate, selections) => {
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      return guardRepresentedRequest(safety, candidate);
+    },
+    applyRepresentationSelection: async (selections) => {
+      representationSelections = selections;
+      selectRepresentationCapabilities(
+        safety,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationSkills(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      selectRepresentationMiddleware(
+        resolved,
+        resolved.representations ?? [],
+        selections,
+      );
+      await lifecycle.rearm(resolved);
+    },
+  });
+
+  if (args.prepareStep) {
+    await planStep.prime({
+      model: args.model,
+      modelInfo,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
+      messages:
+        providerMessages ??
+        (promptText ? [{ role: "user", content: promptText }] : []),
+    });
+    tools = lifecycle.tools;
+  }
 
   const request: ExecutorRequest<TModel> & {
     schema?: z.ZodType;
@@ -403,6 +512,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   } = {
     model: args.model,
     modelInfo,
+    planStep,
     system: currentSystem,
     systemBlocks: currentSystemBlocks,
     prompt: promptText,
@@ -418,7 +528,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         { id: call.toolCallId, name: call.toolName, args: call.input },
         call.messages ?? messages,
       ),
-    activeTools: args.activeTools,
+    activeTools: activeToolNames(),
     maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
     abortSignal: composeAbortSignals(callerSignal, stepBudget.signal),
@@ -435,6 +545,18 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     ...(resolved.schema ? { schema: resolved.schema } : {}),
     ...(structuredOutputSchema ? { outputSchema: structuredOutputSchema } : {}),
   };
+
+  function activeToolNames(): readonly string[] | undefined {
+    const visible =
+      lifecycle.descriptors?.map((descriptor) => descriptor.name) ?? [];
+    if (!args.activeTools) {
+      return visible.length > 0 ? visible : undefined;
+    }
+    return visible.filter(
+      (name) =>
+        args.activeTools!.includes(name) || name === OFFLOAD_SUPPORT_TOOL_NAME,
+    );
+  }
 
   let handle: WithOperationResultMeta<
     ExecutorProviderStreamHandle<TRawStream>
@@ -460,7 +582,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
               schema: resolved.schema,
               tools,
               input: args.input ?? {},
-              ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+              ...(await previewForDevtools(prompt, resolveOpts, tools)),
             },
             input: args.input ?? {},
             provider: modelInfo.provider || dialect.id,
@@ -493,7 +615,6 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             provider: modelInfo.provider,
             model: modelInfo.modelId,
             media: dialect.media,
-            tokenBudget: args.tokenBudget,
           });
           return dialect.runStream(request);
         },
@@ -506,6 +627,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   }
 
   const cachedRelease = readCachedReleaseSeal(handle);
+  try {
+    await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
+  } catch (error) {
+    stepBudget.dispose();
+    await closeSources();
+    throw error;
+  }
   const innerCompletion = handle.completion.bind(handle);
   const wrappedCompletion = async (): Promise<
     ExecutorStreamMeta | undefined
@@ -569,6 +697,12 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       });
+      await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
+      const threadCommit = await commitThreadInvocation(threadInvocation, {
+        messages: guarded?.messages ?? messages,
+        ...(guarded?.content ? { content: guarded.content } : {}),
+        ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
+      });
       await runInStreamObservationContext(handle, () =>
         lifecycle.captureTurn({
           messages,
@@ -576,17 +710,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           toolCalls: guarded?.toolCalls,
         }),
       );
-      const threadCommit = await commitThreadInvocation(
-        threadInvocation,
-        {
-          messages: guarded?.messages ?? messages,
-          ...(guarded?.content ? { content: guarded.content } : {}),
-          ...(guarded?.text !== undefined ? { text: guarded.text } : {}),
-        },
-      );
-      const completed = threadCommit
-        ? { ...guarded, threadCommit }
-        : guarded;
+      const completed = threadCommit ? { ...guarded, threadCommit } : guarded;
       return completed
         ? stampCruxRunId(
             withOperationResultMeta(

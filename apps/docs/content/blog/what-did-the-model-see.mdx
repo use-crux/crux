@@ -24,22 +24,23 @@ const chat = memory({
   id: 'assistant',
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
-    facts({ id: 'about-user', embed }),
-  ],
+  blocks: [facts({ id: 'about-user', embed })],
 })
 
 const reply = prompt({
   id: 'reply',
-  use: [chat, docs.grounding({ query: ({ input }) => input.question })],
+  use: [
+    history.recent({ messages: 12 }),
+    chat,
+    docs.grounding({ query: ({ input }) => input.question }),
+  ],
   input: z.object({ userId: z.string(), question: z.string() }),
   system: 'Answer from memory and project docs. Do not invent facts.',
   prompt: ({ input }) => input.question,
 })
 ```
 
-Nothing exotic. Memory, retrieval, one prompt. And yet: wrong launch.
+Nothing exotic. Caller-owned recent history, learned memory, retrieval, one prompt. And yet: wrong launch.
 
 Before opening any tool, it is worth listing the suspects. For a memory-plus-retrieval prompt there are only a handful of failure classes:
 

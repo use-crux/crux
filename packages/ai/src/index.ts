@@ -41,6 +41,8 @@ import type {
   AnyPrompt,
   AnyToolSet,
   ContextEntry,
+  GenerateObjectFn,
+  GenerateTextFn,
   MergedInput,
   GenerationSettings,
   Message,
@@ -67,10 +69,6 @@ import type {
   PromptInputOf,
   StreamOf,
 } from "@use-crux/core/routing";
-import type {
-  GenerateObjectFn,
-  GenerateTextFn,
-} from "@use-crux/core/compaction";
 import type { SdkGateway } from "./gateway";
 import { liveSdkGateway } from "./gateway";
 import type {
@@ -89,6 +87,7 @@ import type {
 } from "./extensions";
 import { aiSdkProviderRuntime } from "./profile";
 import { extractModelInfo } from "./provider-profile";
+import { aiSdkModelCapacity } from "./capacity";
 import { createAiStreamResult } from "./stream-result";
 import { createStructuredGenerateObjectFn } from "./structured-generation";
 import {
@@ -111,6 +110,7 @@ import {
 export { stableModel } from "./stable-model";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
+export { aiSdkModelCapacity } from "./capacity";
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
@@ -304,6 +304,15 @@ interface AIStream {
 
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
+  /**
+   * Report capacity facts for a concrete AI SDK language model without I/O.
+   *
+   * @param model - Concrete AI SDK language model.
+   * @returns Capacity facts used for whole-request budget derivation.
+   */
+  capacity(
+    model: LanguageModel,
+  ): import("@use-crux/core/adapter").ModelCapacityProfile;
   /** Run one stateless AI SDK image operation without entering a language loop. */
   generateImage: AIGenerateImage;
   /** Run one stateless AI SDK transcription operation. */
@@ -408,7 +417,6 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       maxSteps,
       extra,
       activeTools,
-      tokenBudget,
       timeout,
       signal,
       routing,
@@ -416,6 +424,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       validationRetry,
       constraints,
       constraintMaxRetries,
+      inputBudget,
+      prepareStep,
       guardrails,
       safety,
       input,
@@ -436,12 +446,13 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       toolApproval,
       messages: messagePlan.messages,
       nativeMessages: messagePlan.nativeMessages,
-      tokenBudget,
       timeout,
       signal,
       validationRetry,
       constraints,
       constraintMaxRetries,
+      inputBudget,
+      prepareStep,
       guardrails,
       safety,
       activeTools,
@@ -522,7 +533,6 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       maxSteps,
       extra,
       activeTools,
-      tokenBudget,
       timeout,
       signal,
       routing,
@@ -530,6 +540,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       validationRetry,
       constraints,
       constraintMaxRetries,
+      inputBudget,
+      prepareStep,
       guardrails,
       safety,
       input,
@@ -558,11 +570,12 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       toolApproval,
       messages: messagePlan.messages,
       nativeMessages: messagePlan.nativeMessages,
-      tokenBudget,
       timeout,
       signal,
       constraints,
       constraintMaxRetries,
+      inputBudget,
+      prepareStep,
       guardrails,
       safety,
       activeTools,
@@ -651,6 +664,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   };
 
   return {
+    capacity: (model: LanguageModel) =>
+      aiSdkModelCapacity(extractModelInfo(model)),
     generateImage: executor.generateImage,
     generateSpeech: executor.generateSpeech,
     transcribe: executor.transcribe,
@@ -756,16 +771,7 @@ export const prepare = defaultAi.prepare!;
 /**
  * AI SDK `generateText` wrapped as a `GenerateTextFn`.
  *
- * Use this when calling `@use-crux/core` APIs that expect a `GenerateTextFn`
- * (e.g., `compactConversation()`, `summarizeMessages()`).
- *
- * @example
- * ```ts
- * import { generateTextFn } from '@use-crux/ai'
- * import { compactConversation } from '@use-crux/convex'
- *
- * await compactConversation({ generate: generateTextFn, model, ... })
- * ```
+ * Use this when calling `@use-crux/core` APIs that expect a `GenerateTextFn`.
  */
 export const generateTextFn = defaultAi.generateTextFn;
 
@@ -773,14 +779,12 @@ export const generateTextFn = defaultAi.generateTextFn;
  * AI SDK `generateObject` wrapped as a `GenerateObjectFn`.
  *
  * Use this when calling `@use-crux/core` APIs that expect a `GenerateObjectFn`
- * (e.g., `judge().score()`, `extractKeyFacts()`).
+ * (e.g., `judge().score()`).
  *
  * This helper shares the same AI SDK structured-attempt mechanics used by
  * prompt structured generation: provider schema sanitation, core-backed JSON
  * repair, and router/cascade model resolution. It still exposes only the
- * lightweight `GenerateObjectFn` result shape. Use
- * `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`
- * when the helper call must also run through full adapter prompt execution.
+ * lightweight `GenerateObjectFn` result shape.
  *
  * @example
  * ```ts

@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 import type { JudgeConfig, JudgeInstance, JudgeInput, JudgeResult, JudgeScoreOptions } from './types'
-import type { GenerateObjectFn } from '../compaction/types'
+import type { GenerateObjectFn } from '../generation/support-types'
 import { observe } from '../observability'
 import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { scorerDefinitionRef } from '../observability/definition-ref'

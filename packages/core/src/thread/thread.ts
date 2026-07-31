@@ -23,6 +23,7 @@ import { registerThreadInspectableResource } from "./runtime-bridge";
 import { commitThreadEdit } from "./store/alternatives";
 import { commitThreadAppend } from "./store/commit";
 import { readThread } from "./store/read";
+import { readThreadRevision } from "./store/revision";
 import { selectThread } from "./store/select";
 import type { Thread, ThreadOptions } from "./types";
 
@@ -117,6 +118,15 @@ export function createThreadHandle(
       }),
     });
   const readHistory: Thread["readHistory"] = () => readThreadHistory(read);
+  const validateRevision: Thread["validateRevision"] = async (revision) => {
+    const current = await readThreadRevision(resolveStorage(), options.id);
+    if (current !== revision) {
+      throw new ThreadError(
+        "identity_conflict",
+        `Thread "${options.id}" changed after its request plan was sealed.`,
+      );
+    }
+  };
   const commitTurn: Thread["commitTurn"] = (turn) =>
     observeThreadOperation({
       threadId: options.id,
@@ -190,6 +200,7 @@ export function createThreadHandle(
     append,
     read,
     readHistory,
+    validateRevision,
     commitTurn,
     edit,
     select,

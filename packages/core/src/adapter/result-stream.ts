@@ -85,6 +85,7 @@ export function createStreamResult<
     const text = typeof meta?.text === "string" ? meta.text : streamedText;
     const accumulator = createResultAccumulator();
     accumulator.addStep({
+      ...(meta?.request !== undefined ? { request: meta.request } : {}),
       content:
         meta?.content !== undefined ? meta.content : [{ type: "text", text }],
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),

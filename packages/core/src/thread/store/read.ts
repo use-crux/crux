@@ -27,6 +27,7 @@ import {
   parseThreadControlRecord,
   type ThreadNodeRecord,
 } from "./records";
+import { threadControlRevision } from "./revision";
 
 /** Read one exact Thread path, optionally as a whole-group page. */
 export async function readThread(
@@ -36,13 +37,21 @@ export async function readThread(
 ): Promise<ThreadSnapshot> {
   validateReadOptions(options);
   const rawControl = await storage.records.get(threadControlKey(threadId));
-  if (!rawControl) return frozenSnapshot(threadId, undefined, []);
+  if (!rawControl) {
+    return frozenSnapshot(
+      threadId,
+      threadControlRevision(undefined),
+      undefined,
+      [],
+    );
+  }
   const control = parseThreadControlRecord(rawControl);
   if (control.state === "deleted") {
     throw new ThreadError("deleted", `Thread "${threadId}" has been deleted.`);
   }
   const head = options.at ?? control.heads.main;
-  if (!head) return frozenSnapshot(threadId, undefined, []);
+  const revision = threadControlRevision(control);
+  if (!head) return frozenSnapshot(threadId, revision, undefined, []);
   if (options.at && !(await isNodePublished(storage, threadId, control, head))) {
     throw new ThreadError(
       "not_found",
@@ -69,7 +78,7 @@ export async function readThread(
         control.removals[node.id] === true,
       )),
   );
-  return frozenSnapshot(threadId, head, entries, page.cursor);
+  return frozenSnapshot(threadId, revision, head, entries, page.cursor);
 }
 
 function applyBefore(
@@ -170,12 +179,14 @@ function validateReadOptions(options: ThreadReadOptions): void {
 
 function frozenSnapshot(
   threadId: string,
+  revision: string,
   head: string | undefined,
   entries: readonly ThreadEntry[],
   cursor?: string,
 ): ThreadSnapshot {
   return Object.freeze({
     threadId,
+    revision,
     ...(head ? { head } : {}),
     entries: Object.freeze([...entries]),
     ...(cursor ? { cursor } : {}),

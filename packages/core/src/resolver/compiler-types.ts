@@ -27,9 +27,7 @@ export interface ResolveCallOptions extends GenerationSettings {
   /** Provider identifier used to select prompt adaptation blocks. */
   provider?: string
   /** Model identifier used for model-prefix adaptation and inspect metadata. */
-  modelId?: string
-  /** Maximum token budget for the composed system message. */
-  tokenBudget?: number
+  modelId?: string;
 }
 
 /**

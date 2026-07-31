@@ -66,6 +66,8 @@ export type ThreadEntry =
 /** An exact, root-to-head view of one Thread path. */
 export interface ThreadSnapshot {
   readonly threadId: string;
+  /** Control-record revision pinned by this exact read. */
+  readonly revision: string;
   readonly head?: string;
   readonly entries: readonly ThreadEntry[];
   /** Cursor for the next older group-safe page. */
@@ -133,8 +135,12 @@ export interface Thread {
   /** Read the exact selected revision for one managed invocation. */
   readHistory(): Promise<{
     readonly head?: string;
+    readonly revision: string;
     readonly messages: readonly Message[];
+    readonly messageIds: readonly string[];
   }>;
+  /** Revalidate a revision before dispatching its sealed request plan. */
+  validateRevision(revision: string): Promise<void>;
   /** Atomically publish one accepted managed turn after its observed head. */
   commitTurn(turn: {
     readonly messages: readonly Message[];

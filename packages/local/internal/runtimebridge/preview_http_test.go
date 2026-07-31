@@ -28,14 +28,11 @@ func TestPreviewHTTPRevalidatesManifestBeforePOST(t *testing.T) {
 			"type": "command.result", "commandId": command.CommandID,
 			"result": map[string]any{
 				"status": "ready", "targetId": target, "catalogueRevision": 3,
-				"inspection": map[string]any{
-					"system": map[string]any{
-						"text": "", "tokens": 0, "coverage": "complete",
-						"parts": []any{},
-					},
-					"totalTokens": 0, "droppedContexts": []any{},
-					"excludedContexts": []any{},
+				"preview": map[string]any{
+					"status": "fits", "measurement": "exact",
+					"adaptations": []any{}, "warnings": []any{}, "diagnostics": []any{},
 				},
+				"contributions": []any{},
 			},
 		})
 	}))
@@ -102,12 +99,11 @@ func TestPreviewHTTPRevalidatesManifestAfterTerminalResponse(t *testing.T) {
 			"result": map[string]any{
 				"status": "ready", "targetId": command.TargetID,
 				"catalogueRevision": command.CatalogueRevision,
-				"inspection": map[string]any{
-					"system": map[string]any{
-						"text": "", "tokens": 0, "coverage": "complete", "parts": []any{},
-					},
-					"totalTokens": 0, "droppedContexts": []any{}, "excludedContexts": []any{},
+				"preview": map[string]any{
+					"status": "fits", "measurement": "exact",
+					"adaptations": []any{}, "warnings": []any{}, "diagnostics": []any{},
 				},
+				"contributions": []any{},
 			},
 		})
 	}))

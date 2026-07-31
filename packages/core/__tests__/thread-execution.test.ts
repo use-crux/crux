@@ -168,6 +168,7 @@ describe("thread managed execution", () => {
         reads++;
         return conversation.readHistory();
       },
+      validateRevision: (revision) => conversation.validateRevision(revision),
       commitTurn: (turn) => conversation.commitTurn(turn),
     } satisfies ThreadHistoryEntry;
     const fake = fakeLoopRuntime({
@@ -223,7 +224,12 @@ describe("thread managed execution", () => {
     const failing = {
       _tag: "Thread",
       id: "failing-thread",
-      readHistory: async () => ({ messages: [] }),
+      readHistory: async () => ({
+        revision: "revision-1",
+        messages: [],
+        messageIds: [],
+      }),
+      validateRevision: async () => undefined,
       commitTurn: async () => {
         throw new Error("storage unavailable");
       },

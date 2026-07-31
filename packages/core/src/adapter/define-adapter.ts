@@ -26,6 +26,7 @@ import type { AnyToolSet } from "../types";
  */
 type AdapterResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 import type { AdapterSpec } from "./spec";
+import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
@@ -43,6 +44,8 @@ import type {
   CruxAdapter,
 } from "./define-adapter-types";
 import { createStreamResult } from "./result-accumulator";
+import { mergeInputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 export type {
   AdapterGenerateOptions,
@@ -147,7 +150,8 @@ export function adapter<
         },
         input: opts.input,
         provider: opts.provider,
-        tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -187,7 +191,8 @@ export function adapter<
         },
         input: opts.input,
         provider: opts.provider,
-        tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -233,7 +238,8 @@ export function adapter<
         },
         input: opts.input,
         provider: opts.provider,
-        tokenBudget: opts.tokenBudget,
+        inputBudget: opts.inputBudget,
+        prepareStep: opts.prepareStep,
         maxSteps: opts.maxSteps,
         settings: opts.settings,
         extra: opts.extra,
@@ -271,6 +277,11 @@ export function adapter<
         input: options.input as Record<string, unknown>,
         maxSteps: options.maxSteps,
         validationRetry: options.validationRetry,
+        inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
+        prepareStep: (options.prepareStep ?? agent.prepareStep) as
+          | PrepareStep<string>
+          | undefined,
+        activeTools: options.activeTools,
         extra: {} as TExtra,
       };
 
@@ -281,6 +292,11 @@ export function adapter<
         output: result.text,
         durationMs: Date.now() - start,
         usage: result._meta.usage,
+        requests: Object.freeze(
+          result.steps.flatMap((step) =>
+            step.request ? [step.request] : [],
+          ),
+        ),
         ...(result.threadCommit
           ? { threadCommit: result.threadCommit }
           : {}),
@@ -293,6 +309,8 @@ export function adapter<
 
     return Object.freeze({
       providerId: spec.providerId,
+      capacity: (model: string) =>
+        resolveModelCapacityProfile(model, spec.capacity),
       generate,
       stream: streamFn,
       ...(execution.prepare ? { prepare } : {}),

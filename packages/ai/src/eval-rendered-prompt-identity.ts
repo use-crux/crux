@@ -28,7 +28,6 @@ const NON_SETTING_KEYS = [
   "toolApproval",
   "messages",
   "nativeMessages",
-  "tokenBudget",
   "timeout",
   "validationRetry",
   "constraints",
@@ -194,7 +193,6 @@ function promptResolveOptions(
     input,
     provider: info.provider,
     modelId: info.modelId,
-    tokenBudget: options.tokenBudget,
     ...settings,
   });
 }
