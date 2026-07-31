@@ -6,6 +6,7 @@
  */
 
 import {
+  effectDefinitionRef,
   observe,
   type CruxEffectReceiptSummary,
   type CruxEffectResourceSummary,
@@ -45,6 +46,9 @@ export function observeEffectRun(
         : input.effectId,
       primitive: "effect.run",
       attributes,
+      definitionRefs: [
+        effectDefinitionRef(input.effectId, input.effectVersion),
+      ],
     });
     let terminal: EffectReceipt | undefined;
 
@@ -164,9 +168,7 @@ function endSpan(
   } catch {}
 }
 
-function receiptSummary(
-  receipt: EffectReceipt,
-): CruxEffectReceiptSummary {
+function receiptSummary(receipt: EffectReceipt): CruxEffectReceiptSummary {
   return {
     kind: "effect.receipt",
     receiptId: receipt.id,
@@ -200,9 +202,7 @@ function singleResourceSummary(
   return {
     type: item.type,
     ...(item.id === undefined ? {} : { id: item.id }),
-    ...(item.namespace === undefined
-      ? {}
-      : { namespace: item.namespace }),
+    ...(item.namespace === undefined ? {} : { namespace: item.namespace }),
     ...(item.attributes === undefined
       ? {}
       : { attributes: { ...item.attributes } }),

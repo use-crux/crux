@@ -626,6 +626,7 @@ export type DefinitionRefRole =
   | "invoked-guardrail"
   | "invoked-constraint"
   | "invoked-task"
+  | "invoked-effect"
   | "invoked-workspace"
   | "invoked-memory"
   | "invoked-recipe"

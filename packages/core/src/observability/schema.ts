@@ -191,6 +191,7 @@ export const DefinitionRefRoleSchema = z.enum([
   "invoked-guardrail",
   "invoked-constraint",
   "invoked-task",
+  "invoked-effect",
   "invoked-workspace",
   "invoked-memory",
   "invoked-recipe",
@@ -227,7 +228,7 @@ export const CruxErrorSummarySchema = z.object({
 
 export const CruxObservabilityRedactionSurfaceSchema = z.enum(
   CRUX_OBSERVABILITY_REDACTION_SURFACES,
-)
+);
 
 export const CruxObservabilityRedactionEvidenceSchema = z
   .object({
@@ -237,7 +238,7 @@ export const CruxObservabilityRedactionEvidenceSchema = z
       .min(1)
       .readonly(),
   })
-  .readonly()
+  .readonly();
 
 const CruxRecordBaseSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),

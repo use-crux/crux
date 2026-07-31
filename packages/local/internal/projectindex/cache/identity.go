@@ -19,6 +19,10 @@ package cache
 // Epoch 54 adds PromptText refactor source-ref metadata and compiler-owned
 // source classification across restart boundaries. Epoch 55 adds authored
 // evidence.record definitions, safe facts, refs, relations, and lints.
+// Epoch 56 adds Effect definitions, call-site evidence, duplicate-identity
+// lints, and runtime-observability identity across restart boundaries.
+// Epoch 57 preserves distinct same-identity Effect call-site evidence through
+// native analysis so duplicate-identity lints survive restart boundaries.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 55
+const ProjectIndexSnapshotCacheEpoch = 57

@@ -498,6 +498,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "effect",
+      "family": "effect",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "first-party-shared-fixtures.test.ts",
+        "relations": "first-party-shared-fixtures.test.ts",
+        "sourceRefs": "first-party-shared-fixtures.test.ts",
+        "diagnostics": "first-party-shared-fixtures.test.ts",
+        "dependencies": "first-party-shared-fixtures.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-shared-fixtures.test.ts",
+        "sourceGraph": "first-party-shared-fixtures.test.ts",
+        "runtimeMetadata": "first-party-shared-fixtures.test.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-shared-fixtures.test.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "runtime.task",
       "family": "runtime.task",
       "nativeCovered": true,

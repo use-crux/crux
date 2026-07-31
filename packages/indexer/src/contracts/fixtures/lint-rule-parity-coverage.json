@@ -134,6 +134,11 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "effect.duplicate_identity",
+      "positiveFixture": "first-party-shared-fixtures.test.ts",
+      "negativeFixture": "first-party-shared-fixtures.test.ts"
+    },
+    {
       "ruleId": "safety.duplicate_policy_id",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

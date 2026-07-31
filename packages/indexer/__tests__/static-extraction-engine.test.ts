@@ -49,7 +49,7 @@ describe("static extraction engine", () => {
         {
           kind: "compiler-profile",
           name: "@use-crux/indexer/crux-core-profile",
-          version: "3",
+          version: "4",
         },
         { kind: "syntax-frontend", name: "typescript", version: ts.version },
       ]),
@@ -131,7 +131,7 @@ describe("static extraction engine", () => {
           {
             kind: "syntax-frontend",
             name: "oxc-rust",
-            version: "oxc_parser@0.139.0+crux_native_group3.9",
+            version: "oxc_parser@0.139.0+crux_native_group3.10",
           },
         ]),
       );

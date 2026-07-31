@@ -40,9 +40,11 @@ describe("effect observability emission", () => {
     });
     await observe.flush();
 
-    expect(CruxGraphRecordBatchSchema.safeParse({
-      records: transport.records,
-    }).success).toBe(true);
+    expect(
+      CruxGraphRecordBatchSchema.safeParse({
+        records: transport.records,
+      }).success,
+    ).toBe(true);
     const start = effectStarts(transport.records)[0];
     expect(start).toMatchObject({
       family: "effect",
@@ -55,6 +57,13 @@ describe("effect observability emission", () => {
         "crux.effect.outcome": "preparing",
         "crux.effect.recovery": "irreversible",
       },
+      definitionRefs: [
+        {
+          id: "effect:customer.observed-update:v1",
+          kind: "effect",
+          role: "invoked-effect",
+        },
+      ],
     });
     expect(transport.records).toContainEqual(
       expect.objectContaining({
@@ -110,8 +119,7 @@ describe("effect observability emission", () => {
     expect(starts).toHaveLength(2);
     const original = starts.find(
       (record) =>
-        record.attributes?.["crux.effect.receipt.id"] ===
-        execution.receipt.id,
+        record.attributes?.["crux.effect.receipt.id"] === execution.receipt.id,
     );
     const attempt = starts.find(
       (record) =>
@@ -139,9 +147,7 @@ describe("effect observability emission", () => {
         }),
       }),
     );
-    expect(JSON.stringify(transport.records)).not.toContain(
-      "recovery-secret",
-    );
+    expect(JSON.stringify(transport.records)).not.toContain("recovery-secret");
   });
 });
 
@@ -149,10 +155,7 @@ function effectStarts(
   records: readonly CruxGraphRecord[],
 ): readonly Extract<CruxGraphRecord, { type: "span:start" }>[] {
   return records.filter(
-    (
-      record,
-    ): record is Extract<CruxGraphRecord, { type: "span:start" }> =>
-      record.type === "span:start" &&
-      record.primitive === "effect.run",
+    (record): record is Extract<CruxGraphRecord, { type: "span:start" }> =>
+      record.type === "span:start" && record.primitive === "effect.run",
   );
 }

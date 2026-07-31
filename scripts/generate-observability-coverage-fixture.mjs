@@ -15,6 +15,7 @@ const directRoles = {
   agent: "invoked-agent",
   flow: "invoked-flow",
   task: "invoked-task",
+  effect: "invoked-effect",
   "composition.parallel": "invoked-composition",
   "composition.pipeline": "invoked-composition",
   "composition.consensus": "invoked-composition",
@@ -38,6 +39,8 @@ const directRoles = {
 const ref = (id, kind, role) => ({ id, kind, role });
 
 function canonicalRef(kind) {
+  if (kind === "effect")
+    return ref(`effect:${authoredId}:v1`, kind, "invoked-effect");
   if (kind in directRoles)
     return ref(`${kind}:${authoredId}`, kind, directRoles[kind]);
   switch (kind) {

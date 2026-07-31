@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 905,
-    "definitions": 151,
+    "files": 911,
+    "definitions": 162,
     "relations": 6,
     "diagnostics": 36,
-    "dependencies": 1764,
-    "canonicalBytes": 315922
+    "dependencies": 1766,
+    "canonicalBytes": 336195
   },
   "files": [
     {
@@ -60,6 +60,15 @@
     },
     {
       "file": "apps/docs/lib/layout.shared.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "apps/docs/scripts/check-effect-docs.mjs",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -1904,6 +1913,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/effect.test-d.ts",
+      "sha256": "5184de875f37e8c1c78cb9af8e71fef476e78836692c7e823c111f4c4861f6a3",
+      "bytes": 11360,
+      "definitions": 6,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/eval-authoring.test-d.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2885,6 +2903,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/effect/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/embedding/index.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3416,6 +3443,15 @@
       "dependencies": 6
     },
     {
+      "file": "packages/core/src/observability/effect-schema.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/observability/node.ts",
       "sha256": "09149ddffad80ba808feade32f4a6b16d92983977ad2bb243a575af522b8baa1",
       "bytes": 119,
@@ -3426,12 +3462,12 @@
     },
     {
       "file": "packages/core/src/observability/schema.ts",
-      "sha256": "ee92c2f2591d040240124b5fc7226b575cb7a68a22ddd9c5458470dd4491a9ab",
-      "bytes": 442,
+      "sha256": "5ec276378033fdaf8a612b4221325196dc80ddb69c34b81ca0980a53e2bb28d6",
+      "bytes": 500,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/core/src/plan/agent.ts",
@@ -5270,6 +5306,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/indexer/fixtures/effect-static-project/effects.ts",
+      "sha256": "18491d2932b077c5f16b6053b1bcdb2f645d949800290f3b24402a733a126131",
+      "bytes": 8531,
+      "definitions": 5,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/indexer/src/contracts/fixtures/shared.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -6720,6 +6765,15 @@
     },
     {
       "file": "packages/indexer/src/indexer/static-index/syntax/record/defer-native-facts.ts",
+      "sha256": "b2c388a11122de46deaacba9c188ea2826f28a3318a15a1c18d5985cd5ea43e6",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/src/indexer/static-index/syntax/record/effect-native-facts.ts",
       "sha256": "b2c388a11122de46deaacba9c188ea2826f28a3318a15a1c18d5985cd5ea43e6",
       "bytes": 120,
       "definitions": 0,

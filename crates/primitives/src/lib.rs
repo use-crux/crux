@@ -27,6 +27,7 @@ mod data {
 }
 mod defer;
 mod definition;
+mod effect;
 mod embedding {
     pub(crate) mod call;
     pub(crate) mod core;
