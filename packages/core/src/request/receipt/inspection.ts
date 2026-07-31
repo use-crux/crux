@@ -12,6 +12,8 @@ import {
 } from "../prepare/journal";
 import type { RequestReceipt } from "./receipt";
 import { supportRequestReceipt } from "./support";
+import { currentObservabilityTransport } from "../../observability/observe";
+import { validatedRequestInspection } from "./inspection-validation";
 
 const RETENTION_LIMIT = 256;
 const RETENTION_MS = 5 * 60_000;
@@ -25,6 +27,8 @@ export interface RequestContributionInspection {
   readonly sources: readonly string[];
   /** Selection priority. */
   readonly priority: number;
+  /** Highest pressure boundary authorized by the contributor. */
+  readonly boundary: "required" | "sticky" | "elastic";
   /** Authorized representation kinds in fidelity order. */
   readonly representations: readonly string[];
 }
@@ -150,11 +154,25 @@ export async function inspectRequest(
   const id =
     typeof receiptOrId === "string" ? receiptOrId : receiptOrId.id;
   const entry = retained.get(id);
-  if (!entry || entry.expiresAt <= Date.now()) {
-    retained.delete(id);
-    throw new RequestInspectionUnavailableError();
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.inspect();
   }
-  return entry.inspect();
+  if (entry) {
+    retained.delete(id);
+  }
+  const destination = currentObservabilityTransport()?.requestInspection;
+  if (destination) {
+    try {
+      const inspection = validatedRequestInspection(
+        await destination.inspectRequest(id),
+        id,
+      );
+      if (inspection) return inspection;
+    } catch {
+      // The public failure remains content-free and destination-agnostic.
+    }
+  }
+  throw new RequestInspectionUnavailableError();
 }
 
 /** Retain one lazy inspection builder and return its live reader. @internal */

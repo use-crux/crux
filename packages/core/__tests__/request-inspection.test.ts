@@ -9,9 +9,16 @@ import {
   type AdapterSpec,
 } from "../src";
 import { historyResponse as response } from "./request-history-harness";
+import {
+  acceptedDeliveryReceipt,
+  createHttpObservabilityTransport,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from "../src/observability";
 
 afterEach(() => {
   vi.useRealTimers();
+  resetObservabilityRuntime();
 });
 
 describe("request inspection", () => {
@@ -120,5 +127,127 @@ describe("request inspection", () => {
       RequestInspectionUnavailableError,
     );
     await expect(receipt.inspect()).resolves.toMatchObject({ id: receipt.id });
+  });
+
+  it("loads retained inspection through the configured observability destination", async () => {
+    const retained = {
+      id: "request_remote_retained",
+      contributions: [{
+        id: "prompt",
+        sources: ["prompt"],
+        priority: 0,
+        boundary: "required" as const,
+        representations: ["full"],
+      }],
+      candidates: [],
+      breakdown: {
+        total: 4,
+        attribution: "estimated" as const,
+        contributions: [
+          { contributor: "messages", tokens: 4 },
+        ],
+      },
+      measurement: "estimated" as const,
+      counting: {
+        measurement: "estimated" as const,
+        attribution: "estimated" as const,
+        safetyMarginTokens: 1,
+        providerOverheadTokens: 1,
+      },
+      retryCount: 0,
+      artifacts: [],
+      supportTools: [],
+      supportRequests: [],
+      linkedRequestIds: [],
+      preparation: {
+        operation: "language" as const,
+        stepIndex: 0,
+        reason: "initial" as const,
+        amendment: {
+          addedContributors: 0,
+          removedContributors: 0,
+          contributedTools: 0,
+          activeTools: undefined,
+          modelChanged: false,
+          inputBudgetChanged: false,
+        },
+        resources: [{
+          identity: "working-state:control",
+          revision: "revision-1",
+          valueHash: "hash-1",
+        }],
+        sealedRequestId: "request_remote_retained",
+      },
+      retention: "requires observability retention" as const,
+    };
+    const privateContent = "PRIVATE_DESTINATION_CONTENT";
+    const inspectRetained = vi.fn(async () => ({
+      ...retained,
+      privateContent,
+      contributions: retained.contributions.map((contribution) => ({
+        ...contribution,
+        privateContent,
+      })),
+      preparation: {
+        ...retained.preparation,
+        privateContent,
+        resources: retained.preparation.resources.map((resource) => ({
+          ...resource,
+          privateContent,
+        })),
+      },
+    }));
+    setObservabilityTransport({
+      send: (records) => acceptedDeliveryReceipt(records),
+      requestInspection: { inspectRequest: inspectRetained },
+    });
+
+    await expect(inspectRequest(retained.id)).resolves.toEqual(retained);
+    expect(inspectRetained).toHaveBeenCalledWith(retained.id);
+    expect(JSON.stringify(await inspectRequest(retained.id))).not.toContain(
+      privateContent,
+    );
+  });
+
+  it("uses the Local request-inspection endpoint for serialized receipts", async () => {
+    const retained = {
+      id: "request_http_retained",
+      contributions: [],
+      candidates: [],
+      breakdown: {
+        total: 4,
+        attribution: "estimated" as const,
+        contributions: [{ contributor: "messages", tokens: 4 }],
+      },
+      measurement: "estimated" as const,
+      counting: {
+        measurement: "estimated" as const,
+        attribution: "estimated" as const,
+        safetyMarginTokens: 1,
+        providerOverheadTokens: 1,
+      },
+      retryCount: 0,
+      artifacts: [],
+      supportTools: [],
+      supportRequests: [],
+      linkedRequestIds: [],
+      retention: "requires observability retention" as const,
+    };
+    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(
+        "http://127.0.0.1:4400/api/observability/requests/inspect",
+      );
+      expect(JSON.parse(String(init?.body))).toEqual({ id: retained.id });
+      return new Response(JSON.stringify(retained), { status: 200 });
+    });
+    setObservabilityTransport(
+      createHttpObservabilityTransport({
+        serverUrl: "http://127.0.0.1:4400",
+        fetch,
+      }),
+    );
+
+    await expect(inspectRequest(retained.id)).resolves.toEqual(retained);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

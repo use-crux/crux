@@ -6,7 +6,9 @@ import {
 } from "../src";
 
 /** Build a deterministic Core-owned representation-planning harness. */
-export function representationAdapter() {
+export function representationAdapter(options: {
+  readonly transportRetries?: number;
+} = {}) {
   const requests: CallArgs<Record<string, unknown>>[] = [];
   const call = vi.fn(
     async (client: object, args: CallArgs<Record<string, unknown>>) => {
@@ -20,6 +22,7 @@ export function representationAdapter() {
           finishReason: "stop" as const,
           responseId: "response-1",
           actualModelId: "model-1",
+          transportRetries: options.transportRetries,
         },
       };
     },

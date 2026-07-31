@@ -113,3 +113,15 @@ preview responses now expose the redacted fit result and required, sticky, or
 elastic contribution map used by Devtools, with restart-safe cache invalidation
 and conclusive diagnostics for duplicate history projections or invalid wrapper
 order.
+
+Emit content-free executed request-planning evidence as `request.plan`
+artifacts on the canonical observability spine. Local retains and projects
+receipt identities, representation boundaries, selected adaptations, and
+omissions into run detail so Devtools explains the exact request and counts
+budget drops. Configured observability destinations can now serve retained
+inspection to `inspectRequest()` after receipt serialization or across
+processes.
+
+Migrate the published memory, request-debugging, and silent-truncation articles
+to caller-owned history, whole-request `inputBudget`, explicit representation
+ladders, `preview()`, and executed request receipts.

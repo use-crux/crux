@@ -101,6 +101,7 @@ func exactRequestForSpan(span SpanSummary, index requestProjectionIndex) *RunDet
 	requestArtifacts := appendMissingArtifacts(artifacts, ambientArtifacts...)
 	contributionArtifacts := requestContributionArtifactsForMessages(messages, requestArtifacts, index)
 	budgetArtifact := firstArtifactOfKind(requestArtifacts, "prompt.budget")
+	planArtifact := lastArtifactOfKind(requestArtifacts, "request.plan")
 	request := &RunDetailRequest{
 		Mode:          "exact",
 		Messages:      requestMessagesFromArtifact(messages),
@@ -108,6 +109,7 @@ func exactRequestForSpan(span SpanSummary, index requestProjectionIndex) *RunDet
 		Contributions: requestContributionsForGeneration(messages, contributionArtifacts, budgetArtifact),
 		Budget:        requestBudgetFromArtifact(budgetArtifact),
 	}
+	applyRequestPlan(request, planArtifact)
 	request.BasePrompt = requestBasePromptFromMessages(messages, span)
 	request.Tools = requestToolsForSpan(messages, request.Contributions, span, index)
 	return request
@@ -971,12 +973,29 @@ func cloneRequest(request *RunDetailRequest) *RunDetailRequest {
 		messages.PreviousStepMessages = cloneRaw(request.Messages.PreviousStepMessages)
 		copy.Messages = &messages
 	}
+	if request.Plan != nil {
+		plan := *request.Plan
+		plan.Adaptations = append([]RunDetailRequestAdaptation(nil), request.Plan.Adaptations...)
+		for index := range plan.Adaptations {
+			plan.Adaptations[index].SupportRequestIDs = append([]string(nil), plan.Adaptations[index].SupportRequestIDs...)
+		}
+		plan.Warnings = append([]RunDetailRequestWarning(nil), request.Plan.Warnings...)
+		copy.Plan = &plan
+	}
 	if request.Budget != nil {
 		budget := *request.Budget
 		budget.Dropped = append([]RunDetailRequestContribution(nil), request.Budget.Dropped...)
 		copy.Budget = &budget
 	}
 	copy.Contributions = append([]RunDetailRequestContribution(nil), request.Contributions...)
+	for index := range copy.Contributions {
+		copy.Contributions[index].Representations = append([]string(nil), request.Contributions[index].Representations...)
+		if request.Contributions[index].Adaptation != nil {
+			adaptation := *request.Contributions[index].Adaptation
+			adaptation.SupportRequestIDs = append([]string(nil), adaptation.SupportRequestIDs...)
+			copy.Contributions[index].Adaptation = &adaptation
+		}
+	}
 	copy.Tools = append([]RunDetailRequestTool(nil), request.Tools...)
 	copy.Turns = append([]RunDetailRequestTurn(nil), request.Turns...)
 	copy.Diagnostics = append([]string(nil), request.Diagnostics...)
@@ -987,6 +1006,15 @@ func firstArtifactOfKind(artifacts []ArtifactSummary, kind string) ArtifactSumma
 	for _, artifact := range artifacts {
 		if artifact.Kind == kind {
 			return artifact
+		}
+	}
+	return ArtifactSummary{}
+}
+
+func lastArtifactOfKind(artifacts []ArtifactSummary, kind string) ArtifactSummary {
+	for index := len(artifacts) - 1; index >= 0; index-- {
+		if artifacts[index].Kind == kind {
+			return artifacts[index]
 		}
 	}
 	return ArtifactSummary{}

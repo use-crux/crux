@@ -14,6 +14,7 @@ import {
   type RequestInspectionEvidence,
   type RequestSupportReceipt,
 } from "./inspection";
+import { emitRequestPlan } from "./observability";
 
 export type {
   RequestInspection,
@@ -22,6 +23,11 @@ export type {
 
 let fallbackRequestId = 0;
 const retryCounts = new WeakMap<RequestReceipt, { value: number }>();
+const inspectionReaders = new WeakMap<
+  RequestReceipt,
+  () => RequestInspection
+>();
+const completedObservability = new WeakSet<RequestReceipt>();
 
 /**
  * Executed-request evidence attached to one provider-call step.
@@ -113,6 +119,8 @@ export function createRequestReceipt(
     value: receipt.inspect,
   });
   retryCounts.set(receipt, retryCount);
+  inspectionReaders.set(receipt, inspect);
+  emitRequestPlan(receipt, inspect(), "sealed");
   return Object.freeze(receipt);
 }
 
@@ -121,14 +129,20 @@ export function recordRequestRetryCount(
   receipt: RequestReceipt,
   count: number | undefined,
 ): void {
-  if (count === undefined) return;
-  if (!Number.isSafeInteger(count) || count < 0) {
-    throw new TypeError(
-      "Adapter transportRetries must be a non-negative safe integer.",
-    );
+  if (count !== undefined) {
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new TypeError(
+        "Adapter transportRetries must be a non-negative safe integer.",
+      );
+    }
+    const state = retryCounts.get(receipt);
+    if (state) state.value = count;
   }
-  const state = retryCounts.get(receipt);
-  if (state) state.value = count;
+  if (completedObservability.has(receipt)) return;
+  const inspect = inspectionReaders.get(receipt);
+  if (!inspect) return;
+  completedObservability.add(receipt);
+  emitRequestPlan(receipt, inspect(), "completed");
 }
 
 /** Create a unique request identity before planning or dispatch. @internal */

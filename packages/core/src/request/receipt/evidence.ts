@@ -32,16 +32,39 @@ export function requestInspectionEvidence<
   const selectedVector = policies.map(
     (policy) => input.selections.get(policy.contributor) ?? 0,
   );
-  const contributions = policies.map((policy) =>
-    Object.freeze({
+  const contributions = new Map<string, {
+    readonly id: string;
+    readonly sources: readonly string[];
+    readonly priority: number;
+    readonly boundary: "required" | "sticky" | "elastic";
+    readonly representations: readonly string[];
+  }>();
+  const ownedSources = new Set(
+    policies.flatMap((policy) => policy.sources),
+  );
+  for (const block of input.request.systemBlocks ?? []) {
+    if (ownedSources.has(block.source) || contributions.has(block.source)) {
+      continue;
+    }
+    contributions.set(block.source, Object.freeze({
+      id: block.source,
+      sources: Object.freeze([block.source]),
+      priority: 0,
+      boundary: "required" as const,
+      representations: Object.freeze(["full"]),
+    }));
+  }
+  for (const policy of policies) {
+    contributions.set(policy.contributor, Object.freeze({
       id: policy.contributor,
       sources: Object.freeze([...policy.sources]),
       priority: policy.priority,
+      boundary: contributionBoundary(policy),
       representations: Object.freeze(
         policy.rungs.map((rung) => rung.kind),
       ),
-    }),
-  );
+    }));
+  }
   const candidates = policies.flatMap((policy, policyIndex) =>
     policy.rungs.map((rung, rungIndex) => {
       const selected = selectedVector[policyIndex] === rungIndex;
@@ -102,10 +125,21 @@ export function requestInspectionEvidence<
     ...artifacts.flatMap((artifact) => artifact.supportRequestIds),
   ];
   return Object.freeze({
-    contributions: Object.freeze(contributions),
+    contributions: Object.freeze([...contributions.values()]),
     candidates: Object.freeze(candidates),
     artifacts: Object.freeze(artifacts),
     supportTools: Object.freeze(supportTools),
     linkedRequestIds: Object.freeze([...new Set(linkedRequestIds)]),
   });
+}
+
+function contributionBoundary(
+  policy: ResolvedRepresentationPolicy,
+): "required" | "sticky" | "elastic" {
+  const representations = policy.rungs.map((rung) => rung.kind);
+  return representations.includes("omitted")
+    ? "elastic"
+    : representations.length > 1
+      ? "sticky"
+      : "required";
 }

@@ -40,6 +40,11 @@ never contains authored prompt, message, Tool-result, or resource content.
 
 `inspect` is non-enumerable, so receipts round-trip through JSON. For a
 serialized receipt, use `inspectRequest(receiptOrId)` while evidence remains in
-the bounded process buffer. Cross-process or longer retention uses the existing
-observability pipeline; expiry leaves the small receipt useful and produces a
-typed `RequestInspectionUnavailableError`.
+the bounded process buffer. When the configured observability transport points
+at Local, `inspectRequest()` falls through to Local's retained `request.plan`
+evidence, including from another process. Expiry leaves the small receipt useful
+and produces a typed `RequestInspectionUnavailableError`.
+
+The same content-free plan evidence appears in the Runs Context view: required,
+sticky, and elastic boundaries; the selected representation per contributor;
+and every omission counted as a budget drop.
