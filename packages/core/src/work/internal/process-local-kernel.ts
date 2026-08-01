@@ -7,6 +7,12 @@
 
 import type { EffectScopeRef } from "../../effect/types";
 import { runPassiveEffectBoundary } from "../../effect/internal/boundary";
+import {
+  createInternalWorkCancellation,
+  currentInternalWorkAttachment,
+  runWithInternalWorkContext,
+  type InternalWorkAttachment,
+} from "./attached-context";
 import type {
   InternalWorkExecutionContext,
   InternalWorkTargetDriver,
@@ -63,9 +69,10 @@ export interface ProcessLocalWorkKernelOptions {
 
 /** Explicitly instantiated, isolated Work registry and execution kernel. @internal */
 export interface ProcessLocalWorkKernel {
-  /** Accept and schedule one bound first-party target execution. */
+  /** Accept and schedule one bound target, optionally attached to a parent. */
   spawn<TOutput>(
     driver: InternalWorkTargetDriver<TOutput>,
+    attachment?: InternalWorkAttachment,
   ): Promise<InternalWorkHandle<TOutput>>;
 }
 
@@ -163,6 +170,7 @@ export function createProcessLocalWorkKernel(
   return Object.freeze({
     async spawn<TOutput>(
       driver: InternalWorkTargetDriver<TOutput>,
+      attachment = currentInternalWorkAttachment(),
     ): Promise<InternalWorkHandle<TOutput>> {
       const id = createId();
       if (registry.has(id)) {
@@ -178,6 +186,7 @@ export function createProcessLocalWorkKernel(
         }),
       };
       registry.set(id, record);
+      const cancellation = createInternalWorkCancellation(attachment?.signal);
 
       let acceptEffects!: (effects: EffectScopeRef) => void;
       const effectsAllocated = new Promise<EffectScopeRef>((resolve) => {
@@ -202,11 +211,19 @@ export function createProcessLocalWorkKernel(
         });
         const context: InternalWorkExecutionContext = Object.freeze({
           id,
+          ...(attachment
+            ? { attachedParentId: attachment.parentId }
+            : undefined),
+          signal: cancellation.signal,
           effects: boundary.ref,
         });
         let output: TOutput;
         try {
-          output = await driver.run(context);
+          output = await runWithInternalWorkContext(
+            id,
+            cancellation.signal,
+            () => driver.run(context),
+          );
         } catch (failure) {
           const failedAt = now().getTime();
           record.status = Object.freeze({
@@ -231,6 +248,7 @@ export function createProcessLocalWorkKernel(
         });
         return output;
       });
+      void execution.then(cancellation.dispose, cancellation.dispose);
       void execution.catch(() => undefined);
       let effects: EffectScopeRef;
       try {
