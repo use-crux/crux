@@ -73,7 +73,7 @@ function collectEntryRawFields(entry: ContextEntry, rawFields: Set<string>): voi
 
   if (isRepresentationLadder(entry)) {
     for (const source of compileRepresentationLadder(entry).primarySources) {
-      collectContextRawFields(source, rawFields)
+      collectEntryRawFields(source, rawFields)
     }
     return
   }

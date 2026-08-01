@@ -402,6 +402,7 @@ export async function generateCore<
       history: initialMessages.history,
       generateHistorySummary,
       representations: boundary.resolved.representations,
+      metadata: boundary.resolved.metadata,
       representationEpoch,
       prepareRequest: (candidate, selections) => {
         selectRepresentationCapabilities(

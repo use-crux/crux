@@ -73,6 +73,50 @@ func TestDefaultManifestIncludesImportQualifiedThread(t *testing.T) {
 	}
 }
 
+func TestDefaultManifestIncludesImportQualifiedConnectedKnowledge(t *testing.T) {
+	for _, name := range []string{"assertions", "communities", "knowledgeBase", "knowledgeModel", "relate", "relateEntities", "relateReferences", "view"} {
+		if !contains(defaultCallNames, name) {
+			t.Fatalf("defaultCallNames missing %q", name)
+		}
+		if !contains(defaultCallInterestNames, name) {
+			t.Fatalf("defaultCallInterestNames missing %q", name)
+		}
+	}
+
+	interests := map[string]projectindex.StaticCallInterest{}
+	for _, interest := range defaultCallInterests() {
+		interests[interest.Name] = interest
+	}
+	for _, name := range []string{"assertions", "communities", "knowledgeModel", "relate", "relateEntities", "relateReferences"} {
+		interest := interests[name]
+		if !contains(interest.ImportFrom, "@use-crux/core/knowledge") {
+			t.Fatalf("%s interest = %+v, want @use-crux/core/knowledge", name, interest)
+		}
+	}
+	knowledgeBase := interests["knowledgeBase"]
+	for _, module := range []string{"@use-crux/core/knowledge", "@use-crux/core/retrieval", "@use-crux/core"} {
+		if !contains(knowledgeBase.ImportFrom, module) {
+			t.Fatalf("knowledgeBase interest = %+v, missing %s", knowledgeBase, module)
+		}
+	}
+
+	var host struct {
+		Extractors []struct {
+			Name string `json:"name"`
+		} `json:"extractors"`
+	}
+	if err := json.Unmarshal(defaultHost(), &host); err != nil {
+		t.Fatalf("decode default host: %v", err)
+	}
+	names := make([]string, 0, len(host.Extractors))
+	for _, extractor := range host.Extractors {
+		names = append(names, extractor.Name)
+	}
+	if !contains(names, "knowledge") {
+		t.Fatal("default host extractors missing knowledge")
+	}
+}
+
 func contains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

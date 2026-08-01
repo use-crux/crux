@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 60 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 60", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 62 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 62", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -60,6 +60,11 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Effect export metadata",
 		"Epoch 60",
 		"independently advanced Effect LSP and canonical Thread history",
+		"Epoch 61",
+		"Connected Knowledge definitions",
+		"Connected Knowledge lint findings",
+		"Epoch 62",
+		"independently advanced Effects and Connected Knowledge",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -70,7 +75,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-60", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-62", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -107,6 +112,14 @@ func TestProjectIndexFactStoreMissesPreMergedSnapshotEpoch(t *testing.T) {
 
 func TestProjectIndexFactStoreMissesPreEffectCompletionSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 58, "pre-Effect-completion snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreConnectedKnowledgeSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 60, "pre-connected-knowledge snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreConnectedKnowledgeLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 61, "pre-connected-knowledge-lint snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {

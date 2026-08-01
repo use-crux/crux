@@ -6,7 +6,7 @@
 
 import type { RetrieveRequest } from '../request'
 import { projectErrorForObservation } from '../../observability/error-projection'
-import type { RetrievalSourceTrace, RetrievalStepKind } from './step'
+import type { KnowledgeStepTrace, RetrievalSourceTrace, RetrievalStepKind } from './step'
 
 /** Serializable error details captured on failed recipe steps. */
 export interface RecipeTraceError {
@@ -26,6 +26,7 @@ export interface StepTrace {
   outputHitCount?: number
   warnings: readonly string[]
   sources?: readonly RetrievalSourceTrace[]
+  knowledge?: KnowledgeStepTrace
   error?: RecipeTraceError
 }
 
@@ -33,6 +34,7 @@ export interface StepTrace {
 export interface RecipeTrace {
   id: string
   recipeId: string
+  fingerprint: string
   retrieverId: string
   startedAt: number
   durationMs: number

@@ -2,6 +2,7 @@ import type { RetrieverHit, RetrieverSource } from './types'
 
 /** Validate one application-provided hit and remove fields outside the public source contract. */
 export function normalizeRetrieverHit(hit: RetrieverHit): RetrieverHit {
+  if (hit.kind === 'finding') return hit
   return { ...hit, source: normalizeRetrieverSource(hit.source) }
 }
 

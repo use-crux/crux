@@ -1,0 +1,207 @@
+---
+title: Global Search
+description: Search Connected Knowledge community reports and return cited finding hits.
+---
+
+`globalSearch()` is a retrieval recipe producer. It scans community reports and
+returns finding hits with citations to original evidence refs. Use it when the
+question is broad enough that starting from vector hits would miss the shape of
+the corpus.
+
+Do not use `globalSearch()` for a normal filtered chunk lookup. Use a retriever,
+a view, or a recipe with `retrieve()` and `expandRelations()` for that.
+
+## Configure The Producer
+
+`globalSearch()` must run through `knowledgeBase().recipe()` or `view.recipe()`
+on a knowledge base configured with `communities({ model })`.
+
+```ts
+import { communities, knowledgeBase } from "@use-crux/core/knowledge";
+import { globalSearch } from "@use-crux/core/retrieval";
+import { z } from "zod";
+
+const metadataSchema = z.object({
+  application: z.enum(["auto", "home"]),
+  status: z.enum(["draft", "published"]),
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  metadataSchema,
+  communities: communities({ model }),
+});
+
+await docs.index([
+  {
+    namespace: "docs",
+    sourceId: "policy.md",
+    content: "Billing changes affect renewal notices.",
+    metadata: { application: "auto", status: "published" },
+  },
+]);
+
+await docs.communities?.prepare();
+
+const reportSearch = docs.recipe({
+  id: "policy-global-search",
+  steps: [
+    globalSearch({
+      model,
+      detail: "overview",
+      scan: "all",
+      limit: 10,
+    }),
+  ],
+});
+
+const hits = await reportSearch.retrieve("Which renewal risks affect billing?");
+```
+
+A recipe can have only one producer step. Use either `retrieve()` or
+`globalSearch()`, not both.
+
+## Scan And Detail
+
+| Option | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `detail` | `auto`, `overview`, `detailed` | `auto` | Select parent reports, leaf reports, or a deterministic choice. |
+| `scan` | `all`, `adaptive` | `all` | Scan all selected reports, or use the adaptive path. |
+| `limit` | positive number | `20` | Maximum finding hits returned. |
+
+`overview` uses parent-level reports. `detailed` uses leaf reports. `auto`
+selects one deterministically from the normalized query, generations, strategy
+fingerprint, step config, and model fingerprint.
+
+`scan: "adaptive"` is an explicit recall tradeoff. It records which communities
+were visited or skipped in the recipe trace.
+
+## Use Views Instead Of Request Filters
+
+`globalSearch()` rejects request-level filters because a report may summarize
+evidence outside the filter. Create a typed view and run the recipe from the
+view.
+
+```ts
+const autoPolicies = docs.view({
+  id: "auto-policies",
+  where: { application: "auto", status: "published" },
+});
+
+const autoReportSearch = autoPolicies.recipe({
+  id: "auto-policy-global-search",
+  steps: [globalSearch({ model, detail: "detailed" })],
+});
+```
+
+The receipt includes the view id and resolved view revision when the step is
+view-scoped.
+
+## Preflight And The Safety Ceiling
+
+Before any map call, the step computes a preflight estimate:
+
+- selected report count
+- batch count
+- input characters
+- model call count
+
+If no admission hook is provided and the estimate exceeds the built-in ceiling
+of 32 calls, the step fails before any map call. The remedies are to use
+`detail: "overview"`, use `scan: "adaptive"`, or search a narrower view.
+
+Applications can pass an admission hook through the retrieve request. Returning
+`false` rejects the step before map calls:
+
+```ts
+await reportSearch.retrieve({
+  query: "Which renewal risks affect billing?",
+  admit: (estimate) => {
+    if (estimate.kind !== "global-search") return true;
+    return estimate.calls <= 8;
+  },
+});
+```
+
+## Freshness And Coverage
+
+Global search resolves freshness against the bound knowledge base or view before
+it scans:
+
+| Coverage | Meaning |
+| --- | --- |
+| `exact` | Current community reports match the visible graph, strategy, and view revision. |
+| `compensated` | Older reports are combined with direct mapping for small additions. |
+| `raw-fallback` | No usable reports exist, but current evidence fits a direct mapping batch. |
+| `materialization-wait` | The step waited for community materialization, then searched the fresh reports. |
+
+The step does not search stale reports while claiming current coverage.
+
+## Finding Hits And Citations
+
+Global search returns `kind: "finding"` hits:
+
+```ts
+for (const hit of hits) {
+  if (hit.kind === "finding") {
+    console.log(hit.content);
+    console.log(hit.citation.findingTarget);
+    console.log(hit.citation.supports);
+    console.log(hit.citation.lineage);
+  }
+}
+```
+
+A finding citation contains:
+
+- `findingTarget`, an opaque handle issued by the step
+- `supports`, original knowledge refs behind the finding
+- `assertionRefs`, assertion ids referenced by the report finding
+- `lineage`, including view revision, community generation, and report id
+
+A finding is not a verbatim quote. When an answer needs quotes, resolve the
+support refs through the ordinary evidence path.
+
+## Inspect Receipts
+
+Use `retrieveWithTrace()` for immediate recipe debugging:
+
+```ts
+const { hits: findings, trace } = await reportSearch.retrieveWithTrace(
+  "Which renewal risks affect billing?",
+);
+
+console.log(trace.steps[0]?.knowledge);
+```
+
+When a recipe is used as prompt context, request inspection exposes redacted
+knowledge receipts:
+
+```ts
+import { inspectRequest, prompt } from "@use-crux/core";
+
+const answer = prompt({
+  id: "policy-answer",
+  use: [reportSearch],
+  prompt: "Answer from the retrieved findings.",
+});
+
+const result = await runtime.generate(answer, {
+  input: { question: "Which renewal risks affect billing?" },
+});
+
+const inspection = await inspectRequest(result.steps[0].request);
+console.table(inspection.knowledge);
+```
+
+Inspection includes identities, coverage, counts, preflight, detail, scan, and
+generation ids. It does not include the raw retrieved content.
+
+## Related
+
+<Cards>
+  <Card title="Communities" description="Prepare the reports searched by global search." href="/docs/guides/retrieval/communities" />
+  <Card title="Views" description="Narrow report search with typed source membership." href="/docs/guides/retrieval/views" />
+  <Card title="Planning" description="Read knowledge receipts from executed requests." href="/docs/guides/retrieval/planning" />
+</Cards>

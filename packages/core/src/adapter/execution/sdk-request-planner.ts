@@ -208,6 +208,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
       history: options.history,
       generateHistorySummary: options.generateHistorySummary,
       representations: boundary.resolved.representations,
+      metadata: boundary.resolved.metadata,
       representationEpoch,
       prepareRequest: options.prepareRequest,
       applyRepresentationSelection: options.applyRepresentationSelection,

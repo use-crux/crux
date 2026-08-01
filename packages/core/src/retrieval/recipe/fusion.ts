@@ -5,7 +5,7 @@
  */
 
 import type { RetrieveOptions, RetrieveRequest } from '../request'
-import type { HitProvenance, RetrieverHit } from '../types'
+import type { EvidenceHit, HitProvenance, RetrieverHit } from '../types'
 import type { NormalizedRecipeSource } from './source'
 import type { PlannedQuery } from './step'
 
@@ -39,15 +39,17 @@ export function fuseQueryGroups(
   k = 60,
 ): RetrieverHit[] {
   if (groups.length === 1) {
-    return groups[0].hits.map((hit, rank) => ({
-      ...hit,
-      provenance: {
-        ...hit.provenance,
-        rawScore: hit.provenance?.rawScore ?? hit.score,
-        matchedQueries: [groups[0].planned.query],
-        ranks: [rank + 1],
-      },
-    }))
+    return groups[0].hits.map((hit, rank) => hit.kind === 'finding'
+      ? hit
+      : ({
+          ...hit,
+          provenance: {
+            ...hit.provenance,
+            rawScore: hit.provenance?.rawScore ?? hit.score,
+            matchedQueries: [groups[0].planned.query],
+            ranks: [rank + 1],
+          },
+        }))
   }
 
   const merged = new Map<
@@ -95,21 +97,29 @@ export function fuseQueryGroups(
   }
 
   return [...merged.values()]
-    .map((item) => ({
-      ...item.hit,
-      score: item.fusedScore,
-      provenance: {
-        ...item.hit.provenance,
-        rawScore: item.hit.provenance?.rawScore ?? Math.max(...item.rawScores),
-        matchedQueries: item.matchedQueries,
-        ranks: item.ranks,
-        fusedScore: item.fusedScore,
-        ...(item.perSource.length ? { perSource: item.perSource } : {}),
-      },
-    }))
+    .map((item) => item.hit.kind === 'finding'
+      ? { ...item.hit, score: item.fusedScore }
+      : ({
+          ...item.hit,
+          score: item.fusedScore,
+          provenance: {
+            ...item.hit.provenance,
+            rawScore: item.hit.provenance?.rawScore ?? Math.max(...item.rawScores),
+            matchedQueries: item.matchedQueries,
+            ranks: item.ranks,
+            fusedScore: item.fusedScore,
+            ...(item.perSource.length ? { perSource: item.perSource } : {}),
+          },
+        }))
     .sort((left, right) => right.score - left.score)
 }
 
-function hitIdentity(hit: Pick<RetrieverHit, 'namespace' | 'source' | 'chunkId'>): string {
+function hitIdentity(hit: RetrieverHit): string {
+  return hit.kind === 'finding'
+    ? `${hit.namespace}/finding/${hit.citation.findingTarget}`
+    : evidenceHitIdentity(hit)
+}
+
+function evidenceHitIdentity(hit: Pick<EvidenceHit, 'namespace' | 'source' | 'chunkId'>): string {
   return `${hit.namespace}/${hit.source.id}/${hit.chunkId}`
 }

@@ -101,12 +101,14 @@ export function indexingPipeline(config: IndexingPipelineConfig = {}): IndexingP
   const pipelineChunker = config.chunker ?? chunker.structured()
   const documents = Object.freeze([...(config.documents ?? [])])
   const chunks = Object.freeze([...(config.chunks ?? [])])
+  const derive = Object.freeze([...(config.derive ?? [])])
 
   return Object.freeze({
     _tag: 'IndexingPipeline' as const,
     documents,
     chunker: pipelineChunker,
     chunks,
+    derive,
     fingerprint(): string {
       return stableHash({
         documents: documents.map(stageFingerprint),
@@ -116,6 +118,7 @@ export function indexingPipeline(config: IndexingPipelineConfig = {}): IndexingP
           fingerprint: pipelineChunker.fingerprint(),
         },
         chunks: chunks.map(stageFingerprint),
+        ...(derive.length > 0 ? { derive: derive.map(deriveStageFingerprint) } : {}),
       })
     },
   })
@@ -157,6 +160,20 @@ export function stageFingerprint(stage: {
     version: stage.version,
     ...(stage.options ? { options: stage.options } : {}),
     ...(stage.fingerprint !== undefined ? { fingerprint: sanitizeFingerprint(stage.fingerprint) as JsonObject[string] } : {}),
+  }
+}
+
+function deriveStageFingerprint(stage: {
+  kind: 'relation' | 'assertion'
+  id: string
+  version: number
+  fingerprint(): string
+}): JsonObject {
+  return {
+    kind: stage.kind,
+    id: stage.id,
+    version: stage.version,
+    fingerprint: stage.fingerprint(),
   }
 }
 

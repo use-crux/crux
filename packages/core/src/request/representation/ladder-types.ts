@@ -6,7 +6,7 @@
 
 import type { z } from "zod";
 import type { Message } from "../../generation/messages";
-import type { Context } from "../../prompt/context-types";
+import type { Context, ContributorEntry } from "../../prompt/context-types";
 import type { ToolMiddleware } from "../../tools/types";
 import type { SummarizeStrategy } from "../history/strategies";
 
@@ -15,12 +15,34 @@ declare const REPRESENTATION_LADDER: unique symbol;
 /** An exact context source that may begin a representation ladder. */
 export type RepresentationSource<
   TInput extends z.ZodType = z.ZodType,
-> = Context<TInput>;
+> = Context<TInput> | ContributorEntry<TInput>;
+
+/** A handle that can produce an exact context source with default settings. */
+export interface RepresentationContextSource<
+  TSource extends RepresentationSource = RepresentationSource,
+> {
+  asContext(): TSource;
+}
+
+/** Contexts and first-party handles accepted by representation wrappers. */
+export type RepresentationSourceInput<
+  TSource extends RepresentationSource = RepresentationSource,
+> = TSource | RepresentationContextSource<TSource>;
+
+/** Context type produced after a wrapper normalizes a source input. */
+export type NormalizedRepresentationSource<TSource> =
+  TSource extends RepresentationSource
+    ? TSource
+    : TSource extends RepresentationContextSource<infer TContext>
+      ? TContext
+      : never;
 
 /** Input schema carried by one canonical representation source. */
 export type RepresentationSourceSchema<TSource extends RepresentationSource> =
-  TSource extends RepresentationSource<infer TInput>
+  TSource extends Context<infer TInput>
     ? TInput
+    : TSource extends ContributorEntry<infer TInput>
+      ? TInput
     : z.ZodType;
 
 /** Options reserved for generated summary representations. */
@@ -183,6 +205,8 @@ export interface ResolvedRepresentationPolicy {
   /** Canonical derived-summary policy retained for request-time preparation. */
   readonly summary?: {
     readonly sourceTexts: readonly string[];
+    /** Content-free source revision digests included in derived artifact identity. */
+    readonly sourceDigests?: readonly string[];
     readonly model?: unknown;
     readonly strategy: SummarizeStrategy;
   };
@@ -197,25 +221,25 @@ export interface ResolvedRepresentationPolicy {
 
 /** Legal input to {@link summarizable}. */
 export type SummarizableInput<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 > =
   | TSource
-  | PreferLadder<TSource>
-  | readonly RepresentationSource[];
+  | PreferLadder<NormalizedRepresentationSource<TSource>>
+  | readonly RepresentationSourceInput[];
 
 /** Legal input to {@link offloadable}. */
 export type OffloadableInput<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 > =
   | TSource
-  | PreferLadder<TSource>
-  | SummarizableLadder<TSource>;
+  | PreferLadder<NormalizedRepresentationSource<TSource>>
+  | SummarizableLadder<NormalizedRepresentationSource<TSource>>;
 
 /** Legal input to {@link droppable}. */
 export type DroppableInput<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 > =
   | TSource
-  | PreferLadder<TSource>
-  | SummarizableLadder<TSource>
-  | OffloadableLadder<TSource>;
+  | PreferLadder<NormalizedRepresentationSource<TSource>>
+  | SummarizableLadder<NormalizedRepresentationSource<TSource>>
+  | OffloadableLadder<NormalizedRepresentationSource<TSource>>;

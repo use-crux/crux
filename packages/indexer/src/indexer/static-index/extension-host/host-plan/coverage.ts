@@ -101,6 +101,10 @@ const staticIndexExtractorIds = new Set([
   }),
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'knowledge',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'thread',
   }),
 ])

@@ -94,13 +94,13 @@ function compileNode(
   value: unknown,
   seen: Set<object>,
 ): CompiledRepresentationRung[] {
-  if (isContext(value)) {
+  if (isContext(value) || isContributor(value)) {
     return [{ kind: "full", source: value, available: true }];
   }
   if (
     Array.isArray(value) &&
     value.length > 0 &&
-    value.every(isContext)
+    value.every(isContextSource)
   ) {
     return [{
       kind: "full",
@@ -109,7 +109,7 @@ function compileNode(
     }];
   }
   if (!value || typeof value !== "object") {
-    throw new TypeError("representation source must be a Context");
+    throw new TypeError("representation source must be a context source");
   }
   if (seen.has(value)) throw new TypeError("representation ladder is cyclic");
   seen.add(value);
@@ -177,7 +177,9 @@ function compileNonTerminal(
 ): CompiledRepresentationRung[] {
   const tag = isContext(source)
     ? "Context"
-    : Array.isArray(source) && source.length > 0 && source.every(isContext)
+    : isContributor(source)
+      ? "Context"
+    : Array.isArray(source) && source.length > 0 && source.every(isContextSource)
       ? "ContextArray"
     : (source as { readonly _tag?: unknown } | undefined)?._tag;
   if (typeof tag !== "string" || !allowed.includes(tag)) {
@@ -194,6 +196,19 @@ function isContext(
     typeof value === "object" &&
     (value as { readonly _tag?: unknown })._tag === "Context" &&
     typeof (value as { readonly systemFn?: unknown }).systemFn === "function"
+  );
+}
+
+function isContextSource(value: unknown): value is import("./ladder-types").RepresentationSource {
+  return isContext(value) || isContributor(value);
+}
+
+function isContributor(value: unknown): value is import("../../prompt/context-types").ContributorEntry<z.ZodType> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Contributor" &&
+    typeof (value as { readonly contribute?: unknown }).contribute === "function"
   );
 }
 
