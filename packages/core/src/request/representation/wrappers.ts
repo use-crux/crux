@@ -191,6 +191,7 @@ function isRepresentationInput(
   const tag = (value as { readonly _tag?: unknown })._tag;
   return (
     tag === "Context" ||
+    tag === "Contributor" ||
     tag === "prefer" ||
     tag === "summarizable" ||
     hasAsContext(value)
@@ -219,7 +220,7 @@ function normalizeSource<TSource extends RepresentationSourceInput>(
 }
 
 function isSourceInput(value: unknown): value is RepresentationSourceInput {
-  return isContext(value) || hasAsContext(value);
+  return isContext(value) || isContributor(value) || hasAsContext(value);
 }
 
 function isContext(value: unknown): value is RepresentationSource {
@@ -227,6 +228,14 @@ function isContext(value: unknown): value is RepresentationSource {
     !!value &&
     typeof value === "object" &&
     (value as { readonly _tag?: unknown })._tag === "Context"
+  );
+}
+
+function isContributor(value: unknown): value is RepresentationSource {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Contributor"
   );
 }
 

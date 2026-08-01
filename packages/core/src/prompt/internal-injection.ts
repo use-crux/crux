@@ -3,7 +3,7 @@ import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { AnyToolSet } from '../types'
-import type { Context } from './context-types'
+import type { ContextEntry } from './context-types'
 
 /**
  * Private structural contribution shape for first-party primitives that still
@@ -14,7 +14,7 @@ import type { Context } from './context-types'
  * @internal
  */
 export interface InternalPromptInjection {
-  contexts?: readonly Context<z.ZodType>[]
+  contexts?: readonly ContextEntry[]
   tools?: AnyToolSet
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]

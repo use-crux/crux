@@ -6,7 +6,7 @@
 
 import type { z } from "zod";
 import type { Message } from "../../generation/messages";
-import type { Context } from "../../prompt/context-types";
+import type { Context, ContributorEntry } from "../../prompt/context-types";
 import type { ToolMiddleware } from "../../tools/types";
 import type { SummarizeStrategy } from "../history/strategies";
 
@@ -15,7 +15,7 @@ declare const REPRESENTATION_LADDER: unique symbol;
 /** An exact context source that may begin a representation ladder. */
 export type RepresentationSource<
   TInput extends z.ZodType = z.ZodType,
-> = Context<TInput>;
+> = Context<TInput> | ContributorEntry<TInput>;
 
 /** A handle that can produce an exact context source with default settings. */
 export interface RepresentationContextSource<
@@ -39,7 +39,7 @@ export type NormalizedRepresentationSource<TSource> =
 
 /** Input schema carried by one canonical representation source. */
 export type RepresentationSourceSchema<TSource extends RepresentationSource> =
-  TSource extends RepresentationSource<infer TInput>
+  TSource extends Context<infer TInput>
     ? TInput
     : z.ZodType;
 

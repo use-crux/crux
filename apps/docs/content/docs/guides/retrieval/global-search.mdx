@@ -183,11 +183,7 @@ import { inspectRequest, prompt } from "@use-crux/core";
 
 const answer = prompt({
   id: "policy-answer",
-  use: [
-    reportSearch.asContext({
-      query: ({ question }) => question as string,
-    }),
-  ],
+  use: [reportSearch],
   prompt: "Answer from the retrieved findings.",
 });
 

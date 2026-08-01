@@ -7,12 +7,11 @@ Knowledge contributors follow the same request-planning rules as other prompt
 context. Plain knowledge context is exact and required. Crux only chooses a
 summary, exact reference, or omission when you authorize that representation.
 
-Knowledge sources go into `use` directly: knowledge bases, views, assertion
-sets, and resolutions resolve their query from the prompt input (a string
-field named `query`, `question`, `message`, or `prompt`). Recipes compose
-query processing, so they enter through `asContext({ query })`. Use
-`asContext()` on a source only to override defaults such as the query
-mapping, limit, or priority.
+Knowledge sources and recipes go into `use` directly. Knowledge bases, views,
+recipes, assertion sets, and resolutions resolve their query from the prompt
+input (a string field named `query`, `question`, `message`, or `prompt`). Use
+`asContext()` only to override defaults such as the query mapping, limit, or
+priority.
 
 Use planning when retrieved context, assertion context, or global-search
 findings can grow enough to pressure the model input window.
@@ -57,11 +56,7 @@ const resolvedFacts = offloadable(
   summarizable(published.assertions(policyFacts).resolve()),
 );
 
-const optionalThemes = droppable(
-  reportSearch.asContext({
-    query: ({ question }) => question as string,
-  }),
-);
+const optionalThemes = droppable(reportSearch);
 
 const answer = prompt({
   id: "planned-policy-answer",
@@ -73,6 +68,15 @@ const answer = prompt({
 Use `summarizable()` for descriptive retrieved content or assertion summaries.
 Use `offloadable()` when exact recovery matters. Use `droppable()` only when the
 request is still correct without that contributor and its tools.
+
+Use `asContext({ query })` when the default prompt-input fields are not the
+right query:
+
+```ts
+const themesFromTitle = reportSearch.asContext({
+  query: ({ title }) => title as string,
+});
+```
 
 ## Keep Retriever Tools Sticky
 
@@ -116,11 +120,7 @@ Recipes can contribute knowledge receipts when used as context:
 ```ts
 const answer = prompt({
   id: "theme-answer",
-  use: [
-    reportSearch.asContext({
-      query: ({ question }) => question as string,
-    }),
-  ],
+  use: [reportSearch],
   prompt: ({ input }) => input.question as string,
 });
 
