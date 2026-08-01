@@ -32,3 +32,8 @@ Export Effect spans through the OpenTelemetry adapter with the canonical
 
 Preserve optional in-process Flow Effect scope references in Postgres and
 Convex Runtime snapshots without implying durable recovery support.
+
+Keep Flow results and snapshots on the live in-process Effect boundary across
+Runtime retries and legacy RecordStore recovery, so Effects from an earlier
+attempt remain available for rollback while unresolvable persisted refs rotate
+safely.

@@ -105,9 +105,10 @@ the original callback error as `cause` and the honest per-unit result in
 `error.result`.
 
 <Callout type="info">
-  Effects are currently in-process. Receipts, scope refs, captured state, and
-  recovery handlers do not survive a restart. Use them to make present-tense
-  execution honest and observable, not as a durable transaction log.
+  Effect recovery is currently in-process. A Flow snapshot may persist its
+  JSON-safe scope ref, but receipts, captured state, recovery handlers, and
+  ledger state do not survive a restart. The persisted ref alone is not a
+  durable transaction log and cannot restore recovery.
 </Callout>
 
 ## Keep identities stable and safe

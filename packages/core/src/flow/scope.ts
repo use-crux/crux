@@ -811,6 +811,9 @@ async function executeFlow<
         deliveredSignalsForSnapshot(deliveredSignals);
       const completedSnapshot: FlowSnapshot = {
         ...snapshot,
+        effects: effectScopeRefForFlowSnapshot(
+          requireFlowEffectBoundary(effectBoundary).ref,
+        ),
         status: "completed",
         completedSteps: completedStepsForSnapshot(completedSteps),
         ...(deliveredSignalsSnapshot
@@ -1086,6 +1089,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const snapshotData = {
           ...(snapshot ?? {}),
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           status: "expired",
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot
@@ -1123,6 +1129,9 @@ async function executeFlow<
       if (flowStore) {
         const retryableSnapshot: FlowSnapshot = {
           ...snapshot,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           continuation: flowRun.captureContinuation(),
           updatedAt: currentTimeMs(),
         };
@@ -1146,6 +1155,7 @@ async function executeFlow<
       runtimeExecution.work.attempt < runtimeExecution.work.maxAttempts
     ) {
       const retrySnapshot = runtimeFlowRetrySnapshot(runtimeExecution, {
+        effects: requireFlowEffectBoundary(effectBoundary).ref,
         completedSteps,
         continuation: flowRun.captureContinuation(),
       });
@@ -1164,6 +1174,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const retryableSnapshot: FlowSnapshot = {
           ...snapshot,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot
             ? { deliveredSignals: deliveredSignalsSnapshot }

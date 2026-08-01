@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { config, flow, signal } from "@use-crux/core";
-import type { EffectScopeRef } from "@use-crux/core/effect";
+import {
+  effect,
+  rollback,
+  type EffectScopeRef,
+} from "@use-crux/core/effect";
 import { node } from "@use-crux/core/runtime";
 import { resetHooks } from "../src/runtime/runtime";
 import { z } from "zod";
@@ -29,11 +33,18 @@ describe("durable Signal Flow Effects integration", () => {
       schema: z.object({ approved: z.literal(true) }),
     });
     const observedScopes: EffectScopeRef[] = [];
+    let recoveries = 0;
+    const recordApproval = effect(
+      "publication.effects.record-approval",
+      async () => "recorded",
+      { recover: async () => void (recoveries += 1) },
+    );
     const publication = flow(
       "effects-preserving publication",
       { signals: { approved } },
       async (scope) => {
         observedScopes.push(scope.effects);
+        await scope.step("record approval", () => recordApproval());
         await scope.waitFor(approved);
       },
     );
@@ -65,6 +76,12 @@ describe("durable Signal Flow Effects integration", () => {
       );
       expect(completedSnapshot?.effects).toEqual(suspended.effects);
       expect(observedScopes).toEqual([suspended.effects, suspended.effects]);
+      await expect(rollback(suspended.effects)).resolves.toMatchObject({
+        status: "completed",
+        scope: suspended.effects,
+        units: [{ status: "recovered" }],
+      });
+      expect(recoveries).toBe(1);
     } finally {
       crux.dispose();
     }

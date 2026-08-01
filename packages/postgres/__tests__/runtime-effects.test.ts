@@ -59,4 +59,63 @@ describe("Postgres Runtime Flow Effects snapshots", () => {
       await pool.end();
     }
   });
+
+  it("additively migrates snapshots missing Effects and continuation", async () => {
+    const pool = createPostgresTestPool(database.url);
+    const schema = `crux_runtime_effects_migration_${Date.now()}`;
+    const store = postgres({ pool, schema });
+
+    try {
+      await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      await pool.query(`CREATE TABLE "${schema}".snapshots (
+        namespace text NOT NULL,
+        flow_id text NOT NULL,
+        work_id text NOT NULL,
+        target_id text NOT NULL,
+        status text NOT NULL,
+        input jsonb NOT NULL,
+        completed_steps jsonb NOT NULL,
+        fingerprint jsonb NOT NULL,
+        pending_suspends jsonb NOT NULL,
+        delivered_suspends jsonb,
+        scheduled_work jsonb,
+        updated_at timestamptz NOT NULL,
+        PRIMARY KEY (namespace, flow_id)
+      )`);
+
+      await store.setup.apply();
+      const snapshot: FlowSnapshot = {
+        flowId: "flow_migrated_effects" as FlowId,
+        workId: "work_migrated_effects" as WorkId,
+        targetId: "review" as RuntimeTargetId,
+        namespace: "tenant-a",
+        status: "suspended",
+        effects: {
+          kind: "effect.scope",
+          id: "effect-boundary:migrated",
+          runId: "flow_migrated_effects",
+        },
+        input: {},
+        continuation: { traceparent: "migrated" },
+        completedSteps: {},
+        fingerprint: [],
+        pendingSuspends: [],
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+      };
+      await store.state.putSnapshot(snapshot);
+
+      await expect(
+        store.state.getSnapshot(snapshot.flowId, {
+          namespace: snapshot.namespace,
+        }),
+      ).resolves.toMatchObject({
+        effects: snapshot.effects,
+        continuation: snapshot.continuation,
+      });
+    } finally {
+      await store.close();
+      await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      await pool.end();
+    }
+  });
 });

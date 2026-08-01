@@ -19,8 +19,9 @@ Effects make external state changes explicit. Every execution records an
 immutable receipt, recoverable definitions register one recovery unit per
 receipt, and rollback boundaries recover completed units in causal LIFO order.
 
-This surface is in-process. Receipt refs, scope refs, captured state, and
-recovery handlers do not survive a restart.
+Recovery is in-process. A Flow snapshot may persist its JSON-safe scope ref,
+but receipts, captured state, recovery handlers, and Effect ledger state do not
+survive a restart, so the persisted ref alone cannot restore recovery.
 
 ## `effect()`
 
