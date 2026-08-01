@@ -41,6 +41,8 @@ export type NormalizedRepresentationSource<TSource> =
 export type RepresentationSourceSchema<TSource extends RepresentationSource> =
   TSource extends Context<infer TInput>
     ? TInput
+    : TSource extends ContributorEntry<infer TInput>
+      ? TInput
     : z.ZodType;
 
 /** Options reserved for generated summary representations. */

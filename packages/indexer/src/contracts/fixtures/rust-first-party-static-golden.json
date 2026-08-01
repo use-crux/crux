@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 947,
+    "files": 948,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1932,
-    "canonicalBytes": 400686
+    "dependencies": 1933,
+    "canonicalBytes": 400789
   },
   "files": [
     {
@@ -2253,6 +2253,15 @@
       "relations": 5,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/request-representation-contributor-source.ts",
+      "sha256": "8df06b6e294eb8eb4bcd31ea07576cb15047239af5c4d635d4014349d6fb16dd",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/__type_tests__/result-meta-contract.ts",

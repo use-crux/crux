@@ -27,21 +27,36 @@ export const metadataSchema = z.object({
 
 ```ts
 import { indexingPipeline } from "@use-crux/core/indexing";
-import {
-  assertions,
-  communities,
-  knowledgeBase,
-  relate,
-  relateReferences,
-} from "@use-crux/core/knowledge";
+import { embedding } from "@use-crux/core/embedding";
+import { assertions, communities, knowledgeBase, knowledgeModel, relate, relateReferences } from "@use-crux/core/knowledge";
 import { expandRelations, globalSearch, retrieve } from "@use-crux/core/retrieval";
 import { inMemoryStorage } from "@use-crux/core/storage";
 import { z } from "zod";
 
 import { metadataSchema } from "./schema";
 
-declare const dense: import("@use-crux/core/embedding").DenseEmbedding;
-declare const knowledgeReporter: import("@use-crux/core/knowledge").KnowledgeModel;
+export const dense = embedding({
+  kind: "dense",
+  name: "compliance-example-embedding",
+  dimensions: 2,
+  maxInputTokens: 8191,
+  batch: { maxSize: 8 },
+  embed: async (inputs) => inputs.map(() => [1, 0]),
+});
+
+export const knowledgeReporter = knowledgeModel({
+  name: "compliance-reporter",
+  version: "example-v1",
+  generateText: async () => ({ text: "" }),
+  generateObject: async ({ schema, system }) => {
+    const object = system?.includes("entity mentions")
+      ? { mentions: [], related: [] }
+      : system?.includes("community report")
+        ? { title: "Compliance policies", summary: "No generated summary configured.", findings: [] }
+        : { findings: [] };
+    return { object: schema.parse(object) };
+  },
+});
 
 export const policyRelations = relate({
   id: "policy-relations",
@@ -145,21 +160,14 @@ export const compliance = knowledgeBase({
   embeddings: dense,
   metadataSchema,
   pipeline: indexingPipeline({
-    derive: [
-      relateReferences(),
-      policyRelations,
-      requirements,
-    ],
+    derive: [relateReferences(), policyRelations, requirements],
   }),
   communities: communities({ model: knowledgeReporter }),
 });
 
 export const autoPolicies = compliance.view({
   id: "auto-policies",
-  where: {
-    application: "auto",
-    status: "published",
-  },
+  where: { application: "auto", status: "published" },
 });
 
 export const autoEvidence = autoPolicies.recipe({
@@ -204,36 +212,21 @@ export async function indexCompliancePolicies() {
         "This supersedes 2025 rule.",
         "See [General Notices](https://example.test/notices).",
       ].join("\n\n"),
-      metadata: {
-        application: "auto",
-        jurisdiction: "CA",
-        status: "published",
-        effectiveDate: "2026-01-01",
-      },
+      metadata: { application: "auto", jurisdiction: "CA", status: "published", effectiveDate: "2026-01-01" },
     },
     {
       namespace: "compliance",
       sourceId: "auto-ny-2026.md",
       title: "New York Auto 2026",
       content: "Auto applicants must acknowledge renewal notices within 10 days.",
-      metadata: {
-        application: "auto",
-        jurisdiction: "NY",
-        status: "published",
-        effectiveDate: "2026-02-01",
-      },
+      metadata: { application: "auto", jurisdiction: "NY", status: "published", effectiveDate: "2026-02-01" },
     },
     {
       namespace: "compliance",
       sourceId: "home-ca-draft.md",
       title: "California Home Draft",
       content: "Home applicants must provide inspection records.",
-      metadata: {
-        application: "home",
-        jurisdiction: "CA",
-        status: "draft",
-        effectiveDate: "2026-03-01",
-      },
+      metadata: { application: "home", jurisdiction: "CA", status: "draft", effectiveDate: "2026-03-01" },
     },
   ]);
 
@@ -287,13 +280,3 @@ export async function inspectAnswerReceipt(result: {
   return inspectRequest(request);
 }
 ```
-
-## How it works
-
-`metadataSchema` gates source membership before documents enter the view.
-`autoPolicies` keeps every downstream read scoped to published auto documents.
-`requirements` emits typed propositions, while the resolution handles
-supersession. `autoEvidence` retrieves local evidence and expands graph
-neighbors; `autoThemes` scans community reports for broad cited findings.
-Request inspection reports redacted contributor and knowledge receipts, not raw
-policy text.

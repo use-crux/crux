@@ -189,6 +189,7 @@ function isRepresentationInput(
 ): value is OffloadableInput<RepresentationSource> {
   if (!value || typeof value !== "object") return false;
   const tag = (value as { readonly _tag?: unknown })._tag;
+  assertValidContributorTag(value);
   return (
     tag === "Context" ||
     tag === "Contributor" ||
@@ -208,6 +209,7 @@ function normalizeInput<TSource extends RepresentationSourceInput>(
 function normalizeSource<TSource extends RepresentationSourceInput>(
   source: TSource,
 ): NormalizedRepresentationSource<TSource> {
+  assertValidContributorTag(source);
   if (isContext(source)) {
     return source as NormalizedRepresentationSource<TSource>;
   }
@@ -220,6 +222,7 @@ function normalizeSource<TSource extends RepresentationSourceInput>(
 }
 
 function isSourceInput(value: unknown): value is RepresentationSourceInput {
+  assertValidContributorTag(value);
   return isContext(value) || isContributor(value) || hasAsContext(value);
 }
 
@@ -235,7 +238,8 @@ function isContributor(value: unknown): value is RepresentationSource {
   return (
     !!value &&
     typeof value === "object" &&
-    (value as { readonly _tag?: unknown })._tag === "Contributor"
+    (value as { readonly _tag?: unknown })._tag === "Contributor" &&
+    typeof (value as { readonly contribute?: unknown }).contribute === "function"
   );
 }
 
@@ -245,4 +249,17 @@ function hasAsContext(value: unknown): value is RepresentationContextSource {
     typeof value === "object" &&
     typeof (value as { readonly asContext?: unknown }).asContext === "function"
   );
+}
+
+function assertValidContributorTag(value: unknown): void {
+  if (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Contributor" &&
+    typeof (value as { readonly contribute?: unknown }).contribute !== "function"
+  ) {
+    throw new TypeError(
+      "Contributor representation source must include a callable contribute().",
+    );
+  }
 }
