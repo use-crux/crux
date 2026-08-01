@@ -106,21 +106,20 @@ func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T
 	assertSnapshotEpochMiss(t, 55, "pre-context-planning snapshot")
 }
 
-<<<<<<< HEAD
-func TestProjectIndexFactStoreMissesPreConnectedKnowledgeSnapshotEpoch(t *testing.T) {
-	assertSnapshotEpochMiss(t, 59, "pre-connected-knowledge snapshot")
-}
-
-func TestProjectIndexFactStoreMissesPreConnectedKnowledgeLintSnapshotEpoch(t *testing.T) {
-	assertSnapshotEpochMiss(t, 60, "pre-connected-knowledge-lint snapshot")
-=======
 func TestProjectIndexFactStoreMissesPreMergedSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 57, "pre-merged Effects/context-planning snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreEffectCompletionSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 58, "pre-Effect-completion snapshot")
->>>>>>> origin/main
+}
+
+func TestProjectIndexFactStoreMissesPreConnectedKnowledgeSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 60, "pre-connected-knowledge snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreConnectedKnowledgeLintSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 61, "pre-connected-knowledge-lint snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {
