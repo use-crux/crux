@@ -63,6 +63,7 @@ import {
   flowDefinitionRef,
   flowStepDefinitionRef,
 } from "../observability/definition-ref";
+import { CruxDeferError } from "../defer/errors";
 import { runWithDeferReplayGuard } from "../defer/internal/replay-guard";
 import { runScope } from "../scope/kernel";
 import {
@@ -1151,6 +1152,7 @@ async function executeFlow<
     if (
       runtimeExecution &&
       !(error instanceof CruxRuntimeError) &&
+      !(error instanceof CruxDeferError) &&
       runtimeExecution.work.attempt < runtimeExecution.work.maxAttempts
     ) {
       const retrySnapshot = runtimeFlowRetrySnapshot(runtimeExecution, {
