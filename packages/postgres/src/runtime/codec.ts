@@ -20,7 +20,7 @@ import type {
   FlowSnapshot,
   RuntimePendingSuspend,
   RuntimeWork,
-  WorkItem,
+  RuntimeWorkItem,
   WorkItemError,
 } from '@use-crux/core/runtime'
 
@@ -30,13 +30,13 @@ export function encodeJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-export function decodeWorkItem(row: JsonRecord): WorkItem {
+export function decodeWorkItem(row: JsonRecord): RuntimeWorkItem {
   return Object.freeze({
     workId: row.work_id as WorkId,
     namespace: row.namespace as string,
     work: row.work as RuntimeWork,
     targetId: row.target_id as RuntimeTargetId,
-    status: row.status as WorkItem['status'],
+    status: row.status as RuntimeWorkItem['status'],
     attempt: Number(row.attempt),
     maxAttempts: Number(row.max_attempts),
     idempotencyKey: row.idempotency_key as string,

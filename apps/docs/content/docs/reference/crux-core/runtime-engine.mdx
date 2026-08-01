@@ -205,6 +205,11 @@ crux runtime cancel <workId>
 
 `@use-crux/core/runtime` exports provider-agnostic port contracts, branded ids, wake envelope helpers, retry/state helpers, the in-memory reference store, and kernel APIs. Community adapters should keep correctness in the kernel and implement only persistence/delivery ports.
 
+The [Runtime work records](/docs/reference/crux-core/runtime-work-records)
+reference defines every `RuntimeWorkItem` field, every `RuntimeWorkState`, the
+kernel/store ownership boundary, and the supported declaration-merging path for
+adapter-owned metadata.
+
 Store adapters must persist the full delivered-suspend record written by `state.markSnapshotDelivered()`, including both `eventId` and the copied JSON `payload`.
 
 Store adapters must implement `outbox.listByWork(workId, { namespace?, state?, limit? })`. The kernel uses it for targeted orphan-work recovery instead of namespace-wide outbox scans; adapters should index by work id when their substrate supports it.
@@ -235,6 +240,7 @@ Use `createTestRuntime()` for app-level flow and task tests. Use the conformance
 - Guide: [Long-lived Node Runtime](/docs/guides/durable-execution/node)
 - Guide: [Convex Runtime](/docs/guides/durable-execution/convex)
 - Guide: [Testing Runtime Flows](/docs/guides/durable-execution/testing)
+- Reference: [Runtime work records](/docs/reference/crux-core/runtime-work-records)
 - Reference: [@use-crux/postgres](/docs/reference/postgres)
 - Reference: [@use-crux/upstash](/docs/reference/storage/upstash)
 - Reference: [@use-crux/convex](/docs/reference/storage/convex)

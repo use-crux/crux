@@ -1,11 +1,11 @@
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../engine/retry'
 import type { WakeEnvelope } from '../engine/envelope'
-import type { WorkItem } from '../engine/work'
+import type { RuntimeWorkItem } from '../engine/work'
 import type { RuntimeTargetId, TaskId, WorkId } from '../ports'
 
 export function makeConformanceWorkItem(
-  overrides: Partial<WorkItem> = {},
-): WorkItem {
+  overrides: Partial<RuntimeWorkItem> = {},
+): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_1' as WorkId,
@@ -26,7 +26,7 @@ export function makeConformanceWorkItem(
   }
 }
 
-export function makeConformanceWakeEnvelope(work: WorkItem): WakeEnvelope {
+export function makeConformanceWakeEnvelope(work: RuntimeWorkItem): WakeEnvelope {
   return {
     v: 1,
     ns: work.namespace,

@@ -12,7 +12,7 @@ import {
   type RuntimeTargetId,
   type TaskId,
   type WorkId,
-  type WorkItem,
+  type RuntimeWorkItem,
 } from '@use-crux/core/runtime'
 import { config, resetHooks } from '@use-crux/core'
 import { flow } from '@use-crux/core/flow'
@@ -246,7 +246,7 @@ describe('node() Runtime Engine composer', () => {
   })
 })
 
-function makeFlowWork(workId: string, flowId: FlowId = 'flow_event_1' as FlowId): WorkItem {
+function makeFlowWork(workId: string, flowId: FlowId = 'flow_event_1' as FlowId): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: workId as WorkId,

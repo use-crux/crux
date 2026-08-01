@@ -12,7 +12,7 @@ import {
   type RuntimeSetupPort,
   type RuntimeTargetRuntimeRef,
   type WorkId,
-  type WorkStatus,
+  type RuntimeWorkState,
 } from '@use-crux/core/runtime'
 import { loadProjectConfig } from './config'
 import { importUserModule } from './imports'
@@ -48,7 +48,7 @@ const WORK_STATUSES = [
   'cancelled',
   'blocked',
   'dead-letter',
-] as const satisfies readonly WorkStatus[]
+] as const satisfies readonly RuntimeWorkState[]
 
 /** Execute one runtime operation against the configured Runtime Engine. */
 export async function runRuntimeOperation(

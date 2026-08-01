@@ -47,9 +47,9 @@ export type {
 
 export { transition } from "./engine/work";
 export type {
-  WorkItem,
+  RuntimeWorkItem,
+  RuntimeWorkState,
   WorkItemError,
-  WorkStatus,
   WorkTransition,
 } from "./engine/work";
 

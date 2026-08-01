@@ -1,5 +1,5 @@
 import type { JsonValue } from "../../storage";
-import type { WorkItem } from "../engine/work";
+import type { RuntimeWorkItem } from "../engine/work";
 import type { WorkId } from "../ports/ids";
 import type { RuntimeWork } from "../ports/work";
 import type { EvalHostTimeoutV2, SubmitEvalJob } from "./types";
@@ -89,7 +89,7 @@ export async function projectEvalJobStatus(input: {
   }
 }
 
-function timeoutFromWork(work: WorkItem): JsonValue | undefined {
+function timeoutFromWork(work: RuntimeWorkItem): JsonValue | undefined {
   const details = work.lastError?.details;
   if (
     !isRecord(details) ||
@@ -133,7 +133,7 @@ export function workId(jobId: string): WorkId {
   return `eval-job:${jobId}` as WorkId;
 }
 
-function isEvalJobWork(work: WorkItem): work is WorkItem & {
+function isEvalJobWork(work: RuntimeWorkItem): work is RuntimeWorkItem & {
   readonly work: Extract<RuntimeWork, { readonly kind: "task.run" }> & {
     readonly input: JsonValue;
   };
@@ -147,7 +147,7 @@ function isEvalJobWork(work: WorkItem): work is WorkItem & {
 
 async function completedStatus(
   store: EvalHostStore,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   common: Readonly<Record<string, JsonValue>>,
 ): Promise<{ readonly statusCode: number; readonly body: JsonValue }> {
   if (work.resultRef === undefined) return corruptResult(common);

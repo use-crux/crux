@@ -14,7 +14,7 @@ import { putWorkWithIdleAccounting } from './kernel-idle'
 import type { CancelWorkInput, CancelWorkResult } from './kernel-types'
 import { isTerminalWork } from './kernel-shared'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
-import { transition, type WorkItem } from './work'
+import { transition, type RuntimeWorkItem } from './work'
 
 /** Dependencies for cancellation. */
 export interface KernelCancellationDeps extends RuntimeCompositeDeps {
@@ -74,7 +74,7 @@ export async function cancelWorkInTransaction(
 
 async function cancelFlowSnapshot(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   now: Date,
 ): Promise<void> {
   if (work.work.kind !== 'flow.resume' && work.work.kind !== 'flow.timeout') return

@@ -28,7 +28,7 @@ import type {
   RuntimeCompositeRunner,
 } from "./composites";
 import { classifyRuntimeFailure } from "./retry";
-import { transition, type WorkItem } from "./work";
+import { transition, type RuntimeWorkItem } from "./work";
 import { recordSignalDeliveryAttempt } from "../reactive/delivery-state";
 import { runtimeRetrySnapshotForError } from "./target-retry";
 import { persistMergedRetrySnapshot } from "./kernel-predicate-suspension";
@@ -54,7 +54,7 @@ export type WakeFailureInput =
     };
 interface FailWorkOptions {
   readonly runComposite: RuntimeCompositeRunner;
-  readonly work: WorkItem;
+  readonly work: RuntimeWorkItem;
   readonly leaseToken: LeaseToken;
   readonly error: unknown;
   readonly now: () => Date;
@@ -114,7 +114,7 @@ export async function failWork(
 
 interface CompleteWorkOptions {
   readonly runComposite: RuntimeCompositeRunner;
-  readonly work: WorkItem;
+  readonly work: RuntimeWorkItem;
   readonly leaseToken: LeaseToken;
   readonly outcome: RuntimeTargetOutcome;
   readonly idempotencyKey: string;
@@ -153,7 +153,7 @@ export async function retryWorkAfterFailureInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly retryAt: Date;
     readonly retrySnapshot?: FlowSnapshot;
@@ -182,7 +182,7 @@ export async function failWorkInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly failure: WakeFailureInput;
   },
@@ -231,7 +231,7 @@ export async function completeWorkInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly outcome: RuntimeTargetOutcome;
     readonly idempotencyKey: string;

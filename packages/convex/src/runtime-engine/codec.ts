@@ -13,7 +13,7 @@ import type {
   RuntimeTimerRecord,
   RuntimeWaiter,
   WorkId,
-  WorkItem,
+  RuntimeWorkItem,
   RuntimeDeferredIntent,
   RuntimeDeferredScope,
 } from '@use-crux/core/runtime'
@@ -38,7 +38,7 @@ export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown>
   })
 }
 
-export function encodeWork(work: WorkItem): Record<string, unknown> {
+export function encodeWork(work: RuntimeWorkItem): Record<string, unknown> {
   return clean({
     ...work,
     notBefore: work.notBefore?.getTime(),
@@ -48,7 +48,7 @@ export function encodeWork(work: WorkItem): Record<string, unknown> {
   })
 }
 
-export function decodeWork(value: unknown): WorkItem {
+export function decodeWork(value: unknown): RuntimeWorkItem {
   const record = objectRecord(value)
   return Object.freeze(
     clean({
@@ -58,7 +58,7 @@ export function decodeWork(value: unknown): WorkItem {
       lastError: decodeLastError(record.lastError),
       createdAt: requiredDate(record.createdAt),
       updatedAt: requiredDate(record.updatedAt),
-    }) as WorkItem,
+    }) as RuntimeWorkItem,
   )
 }
 
@@ -237,7 +237,7 @@ function decodeCompositeUnknown(value: unknown): unknown {
   return Object.fromEntries(Object.entries(record).map(([key, entry]) => [key, decodeCompositeUnknown(entry)]))
 }
 
-function decodeLastError(value: unknown): WorkItem['lastError'] {
+function decodeLastError(value: unknown): RuntimeWorkItem['lastError'] {
   if (!value || typeof value !== 'object') return undefined
   const record = value as Record<string, unknown>
   return {

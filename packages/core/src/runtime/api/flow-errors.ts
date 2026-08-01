@@ -5,7 +5,7 @@
  */
 
 import { createRuntimeError } from '../engine/errors'
-import type { WorkStatus } from '../engine/work'
+import type { RuntimeWorkState } from '../engine/work'
 import type { FlowSnapshot } from '../ports/state'
 
 /** Create a `TARGET_NOT_FOUND` diagnostic for an unknown flow id. */
@@ -61,7 +61,7 @@ export function runtimeFlowWorkNotFoundError(input: {
 export function runtimeFlowNotResumableError(input: {
   readonly api: string
   readonly flowId: string
-  readonly status: WorkStatus | FlowSnapshot['status']
+  readonly status: RuntimeWorkState | FlowSnapshot['status']
   readonly subject?: 'work' | 'flow snapshot'
 }): ReturnType<typeof createRuntimeError> {
   const subject = input.subject ?? 'work'

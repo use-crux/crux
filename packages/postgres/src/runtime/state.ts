@@ -9,7 +9,7 @@ import type {
   SetWorkPendingOptions,
   WorkStatusCount,
   WorkId,
-  WorkItem,
+  RuntimeWorkItem,
 } from '@use-crux/core/runtime'
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '@use-crux/core/runtime'
 import type { PostgresStoreFaults } from './faults'
@@ -33,7 +33,7 @@ export function createPostgresStatePort(
   const idleCounters = createPostgresIdleCounterPort(db, schema, faults)
 
   return {
-    async createWork(input: NewWorkItem): Promise<WorkItem> {
+    async createWork(input: NewWorkItem): Promise<RuntimeWorkItem> {
       const now = input.now ?? new Date()
       recordWrite(faults)
       const result = await db.query(
@@ -68,7 +68,7 @@ export function createPostgresStatePort(
 
     getWork,
 
-    async putWork(work: WorkItem): Promise<void> {
+    async putWork(work: RuntimeWorkItem): Promise<void> {
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${workTable}
@@ -108,7 +108,7 @@ export function createPostgresStatePort(
       )
     },
 
-    async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
+    async listWork(options: ListWorkOptions): Promise<readonly RuntimeWorkItem[]> {
       const values: unknown[] = [options.namespace, options.status]
       const filters = ['namespace = $1', 'status = $2']
       if (options.updatedBefore) {
@@ -160,7 +160,7 @@ export function createPostgresStatePort(
     async setWorkPending(
       workId: WorkId,
       options: SetWorkPendingOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const from = allowedStatuses(options.from)
       recordWrite(faults)
       const result = await db.query(
@@ -335,7 +335,7 @@ export function createPostgresStatePort(
   async function getWork(
     workId: WorkId,
     options: RuntimeStateReadOptions,
-  ): Promise<WorkItem | null> {
+  ): Promise<RuntimeWorkItem | null> {
     const result = await db.query(
       `SELECT * FROM ${workTable} WHERE namespace = $1 AND work_id = $2`,
       [options.namespace, workId],
@@ -365,7 +365,7 @@ function deliveredSuspend(
 
 function allowedStatuses(
   from: SetWorkPendingOptions['from'],
-): readonly WorkItem['status'][] {
+): readonly RuntimeWorkItem['status'][] {
   if (from === undefined) return ['suspended']
   return typeof from === 'string' ? [from] : from
 }

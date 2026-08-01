@@ -13,14 +13,14 @@ import {
   type EmitEventInTransactionDeps,
 } from './kernel-events'
 import { isTerminalWork } from './kernel-shared'
-import type { WorkItem } from './work'
+import type { RuntimeWorkItem } from './work'
 
 /** Persist a work transition and emit scoped idle when it reaches zero. */
 export async function putWorkWithIdleAccounting(
   tx: RuntimeStoreTransaction,
   deps: EmitEventInTransactionDeps,
-  previous: WorkItem,
-  next: WorkItem,
+  previous: RuntimeWorkItem,
+  next: RuntimeWorkItem,
 ): Promise<void> {
   await tx.state.putWork(next)
   if (!previous.idleScope || !enteredTerminal(previous, next)) return
@@ -38,6 +38,6 @@ export async function putWorkWithIdleAccounting(
   })
 }
 
-function enteredTerminal(previous: WorkItem, next: WorkItem): boolean {
+function enteredTerminal(previous: RuntimeWorkItem, next: RuntimeWorkItem): boolean {
   return !isTerminalWork(previous) && isTerminalWork(next)
 }

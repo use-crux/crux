@@ -2,8 +2,8 @@ import type {
   RuntimeOutboxItem,
   RuntimeSetupPort,
   RuntimeTimerRecord,
-  WorkItem,
-  WorkStatus,
+  RuntimeWorkItem,
+  RuntimeWorkState,
 } from '@use-crux/core/runtime'
 
 /** Runtime operation command executed by Crux Local's TypeScript worker. */
@@ -52,13 +52,13 @@ export interface RuntimeStatusOperationResult {
   readonly ok: true
   readonly namespace: string
   readonly counts: readonly RuntimeStatusCount[]
-  readonly work?: readonly WorkItem[]
+  readonly work?: readonly RuntimeWorkItem[]
   readonly timers?: readonly RuntimeTimerRecord[]
   readonly outbox?: readonly RuntimeOutboxItem[]
 }
 
 export interface RuntimeStatusCount {
-  readonly status: WorkStatus
+  readonly status: RuntimeWorkState
   readonly namespace: string
   readonly targetId: string
   readonly count: number
@@ -69,7 +69,7 @@ export interface RuntimeInspectOperationResult {
   readonly operation: 'inspect'
   readonly ok: boolean
   readonly namespace: string
-  readonly work?: WorkItem
+  readonly work?: RuntimeWorkItem
   readonly flow?: {
     readonly flowId: string
     readonly status: string
@@ -83,7 +83,7 @@ export interface RuntimeRetryOperationResult {
   readonly ok: boolean
   readonly namespace: string
   readonly retried: boolean
-  readonly work?: WorkItem
+  readonly work?: RuntimeWorkItem
   readonly dispatch?: { readonly delivered: number; readonly failed: number }
 }
 

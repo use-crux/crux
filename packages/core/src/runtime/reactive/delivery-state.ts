@@ -2,7 +2,7 @@
 
 import type { RuntimeStoreTransaction } from "../store";
 import type { SignalDeliveryRecord } from "./records";
-import type { WorkItem } from "../engine/work";
+import type { RuntimeWorkItem } from "../engine/work";
 import { signalDeliveryId } from "./identity";
 
 type SettledSignalDeliveryState = Extract<
@@ -13,7 +13,7 @@ type SettledSignalDeliveryState = Extract<
 /** Record one consumer attempt for Signal deliveries carried by Flow work. */
 export async function recordSignalDeliveryAttempt(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   state: SettledSignalDeliveryState,
   updatedAt: Date,
   options: { readonly settleAllPredicateCandidates?: boolean } = {},

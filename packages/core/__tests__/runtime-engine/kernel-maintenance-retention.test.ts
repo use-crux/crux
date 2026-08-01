@@ -3,7 +3,7 @@ import { config, flow } from '@use-crux/core'
 import { createRuntime, node } from '@use-crux/core/runtime'
 import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
 import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
-import type { WorkItem } from '../../src/runtime/engine/work'
+import type { RuntimeWorkItem } from '../../src/runtime/engine/work'
 import { runtimeTargetMap } from '../../src/runtime/api/target-registry'
 import type {
   FlowId,
@@ -239,7 +239,7 @@ describe('RuntimeKernel retention maintenance', () => {
   })
 })
 
-function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {
+function makeFlowWork(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_flow_1' as WorkId,

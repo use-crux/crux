@@ -11,7 +11,7 @@ import { taskRunKey } from './idempotency'
 import type { EnqueueTaskInput } from './kernel-types'
 import { wakeEnvelopeForWork } from './kernel-shared'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
-import type { WorkItem } from './work'
+import type { RuntimeWorkItem } from './work'
 
 /** Dependencies for task enqueue. */
 export interface EnqueueTaskDeps extends RuntimeCompositeDeps {
@@ -23,7 +23,7 @@ export interface EnqueueTaskDeps extends RuntimeCompositeDeps {
 export async function enqueueTask(
   deps: EnqueueTaskDeps,
   input: EnqueueTaskInput,
-): Promise<WorkItem> {
+): Promise<RuntimeWorkItem> {
   return await deps.runComposite('task.enqueue', input)
 }
 
@@ -32,7 +32,7 @@ export async function enqueueTaskInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: EnqueueTaskInput,
-): Promise<WorkItem> {
+): Promise<RuntimeWorkItem> {
   const workId = deps.newWorkId()
   const work: RuntimeWork = {
     kind: 'task.run',

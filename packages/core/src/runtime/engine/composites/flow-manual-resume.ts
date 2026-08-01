@@ -4,7 +4,7 @@ import type { FlowId, WorkId } from "../../ports/ids";
 import type { RuntimeWork } from "../../ports/work";
 import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
-import type { WorkItem } from "../work";
+import type { RuntimeWorkItem } from "../work";
 
 /** Input accepted by the `flow.manual-resume` composite. */
 export interface FlowManualResumeInput {
@@ -31,7 +31,7 @@ export async function resumeFlowManuallyInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: FlowManualResumeInput,
-): Promise<WorkItem | null> {
+): Promise<RuntimeWorkItem | null> {
   const snapshot = await tx.state.getSnapshot(input.flowId, {
     namespace: input.namespace,
   });
