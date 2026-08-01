@@ -67,7 +67,7 @@ func TestRunsFilterFooterAdvertisesApplyAndClear(t *testing.T) {
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-filter", Name: "refund"})
 	runs.filteringRuns = true
-	runs.runQuery = "refund"
+	runs.filters.Query = "refund"
 
 	labels := strings.Join(keybindLabels(runs.Keybinds()), " · ")
 	for _, want := range []string{"esc apply", "^x clear"} {
@@ -76,15 +76,15 @@ func TestRunsFilterFooterAdvertisesApplyAndClear(t *testing.T) {
 		}
 	}
 	runs.Update(testContext, tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}, nil)
-	if runs.runQuery != "" {
-		t.Fatalf("^x left filter query %q, want cleared", runs.runQuery)
+	if runs.filters.Query != "" {
+		t.Fatalf("^x left filter query %q, want cleared", runs.filters.Query)
 	}
 }
 
 func TestRunsModelFilterStatesNewestPageScope(t *testing.T) {
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "model run", Model: "openai/gpt-5"})
-	runs.modelFilter = "openai/gpt-5"
+	runs.filters.Model = "openai/gpt-5"
 
 	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
 	if !strings.Contains(view, "model: gpt-5 · newest 100") {
@@ -95,9 +95,9 @@ func TestRunsModelFilterStatesNewestPageScope(t *testing.T) {
 func TestRunsModelFilterScopeSurvivesCombinedFilterMetadata(t *testing.T) {
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "refund", Model: "openai/gpt-5"})
-	runs.modelFilter = "openai/gpt-5"
-	runs.sessionFilter = "session-refund"
-	runs.runQuery = "refund"
+	runs.filters.Model = "openai/gpt-5"
+	runs.filters.Session = "session-refund"
+	runs.filters.Query = "refund"
 
 	view := stripANSI(viewRunsForTest(runs, Size{Width: 160, Height: 24}))
 	for _, want := range []string{"model: gpt-5 · newest 100", "session: session-refund", "/refund"} {

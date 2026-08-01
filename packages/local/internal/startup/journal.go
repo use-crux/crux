@@ -3,6 +3,7 @@ package startup
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -18,6 +19,38 @@ const (
 
 func (d Disposition) terminal() bool {
 	return d == Succeeded || d == Degraded || d == Failed
+}
+
+// WaitTask blocks until one named startup task reaches a terminal disposition.
+// Callers use it to keep optional worker-heavy work from competing with the
+// initial Project Index pass.
+func (j *Journal) WaitTask(ctx context.Context, taskID string) error {
+	snapshot, updates := j.SnapshotAndSubscribe(ctx)
+	for {
+		found := false
+		for _, task := range snapshot.Tasks {
+			if task.ID != taskID {
+				continue
+			}
+			found = true
+			if task.Disposition.terminal() {
+				return nil
+			}
+			break
+		}
+		if !found {
+			return fmt.Errorf("startup task %q is not registered", taskID)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case next, ok := <-updates:
+			if !ok {
+				return ctx.Err()
+			}
+			snapshot = next
+		}
+	}
 }
 
 type TaskSpec struct {

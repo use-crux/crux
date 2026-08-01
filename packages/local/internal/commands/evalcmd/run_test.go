@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 )
 
 func TestConsumeStreamPreservesBindingExitCodes(t *testing.T) {
@@ -92,6 +95,16 @@ func TestEvalCoordinatorJSONIsOneDocumentWithEventsAndExitCode(t *testing.T) {
 	}
 	if payload.ExitCode != 0 || len(payload.Events) != 2 || !bytes.Contains(payload.Events[0], []byte(`"support"`)) {
 		t.Fatalf("JSON payload = %#v", payload)
+	}
+}
+
+func TestSuccessfulCLICollectionPublishesSharedCatalogCache(t *testing.T) {
+	root := t.TempDir()
+	raw := json.RawMessage(`{"type":"collect:done","evals":[{"id":"shared","future":true}],"errors":[]}`)
+	cacheSuccessfulCatalog(root)(raw, coordinatorEvent{Type: "collect:done"})
+	manifests, _, err := evalserver.LoadCatalogCache(root, time.Now())
+	if err != nil || len(manifests) != 1 || string(manifests[0]) != `{"id":"shared","future":true}` {
+		t.Fatalf("shared cache = %s, err = %v", manifests, err)
 	}
 }
 

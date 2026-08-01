@@ -92,18 +92,18 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
-	s.runStatusIndex = (s.runStatusIndex + 1) % len(runStatusFilters)
+	s.filters.Status = (s.filters.Status + 1) % len(runStatusFilters)
 	return s.refreshFilteredRuns(ctx, c)
 }
 
 func (s *Runs) cycleRunWindow(ctx context.Context, c DataClient) tea.Cmd {
-	s.runWindowIndex = (s.runWindowIndex + 1) % len(runWindows)
+	s.filters.Window = (s.filters.Window + 1) % len(runWindows)
 	return s.refreshFilteredRuns(ctx, c)
 }
 
 func (s *Runs) cycleRunGroup(ctx context.Context, c DataClient) tea.Cmd {
 	selectedID := s.SelectedRunID()
-	s.runGroupIndex = (s.runGroupIndex + 1) % len(runGroups)
+	s.filters.Group = (s.filters.Group + 1) % len(runGroups)
 	s.syncVisibleRuns()
 	if selectedID != "" {
 		s.runList.Select(selectedID)
@@ -118,35 +118,35 @@ func (s *Runs) cycleRunModel(ctx context.Context, c DataClient) tea.Cmd {
 	if len(s.knownModels) == 0 {
 		return nil
 	}
-	if s.modelFilter == "" {
-		s.modelFilter = s.knownModels[0]
+	if s.filters.Model == "" {
+		s.filters.Model = s.knownModels[0]
 	} else {
 		next := 0
 		for index, model := range s.knownModels {
-			if model == s.modelFilter {
+			if model == s.filters.Model {
 				next = index + 1
 				break
 			}
 		}
 		if next < len(s.knownModels) {
-			s.modelFilter = s.knownModels[next]
+			s.filters.Model = s.knownModels[next]
 		} else {
-			s.modelFilter = ""
+			s.filters.Model = ""
 		}
 	}
 	return s.refreshFilteredRuns(ctx, c)
 }
 
 func (s *Runs) toggleSelectedSessionFilter(ctx context.Context, c DataClient) tea.Cmd {
-	if s.sessionFilter != "" {
-		s.sessionFilter = ""
+	if s.filters.Session != "" {
+		s.filters.Session = ""
 		return s.refreshFilteredRuns(ctx, c)
 	}
 	selected, _, ok := s.runList.Selected()
 	if !ok || selected.SessionID == "" {
 		return nil
 	}
-	s.sessionFilter = selected.SessionID
+	s.filters.Session = selected.SessionID
 	return s.refreshFilteredRuns(ctx, c)
 }
 
@@ -181,6 +181,8 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 
 func (s *Runs) clearRunSelection() {
 	s.detailIntent++
+	s.detailPending = false
+	s.detailPendingRun = ""
 	s.runList.SetItems(nil)
 	s.spanList.SetItems(nil)
 	s.routedRun = nil

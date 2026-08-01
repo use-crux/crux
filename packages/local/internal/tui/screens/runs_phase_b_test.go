@@ -76,10 +76,10 @@ func TestRunsServerFilterOptionsRoundTrip(t *testing.T) {
 	runsListNow = func() time.Time { return now }
 	t.Cleanup(func() { runsListNow = previousNow })
 
-	runs.runStatusIndex = 2
-	runs.runWindowIndex = 1
-	runs.sessionFilter = "session_docs"
-	runs.modelFilter = "gpt-5"
+	runs.filters.Status = 2
+	runs.filters.Window = 1
+	runs.filters.Session = "session_docs"
+	runs.filters.Model = "gpt-5"
 	msg := runs.fetchRunsList(testContext, client)()
 	if msg == nil {
 		t.Fatal("filtered Runs request returned no message")
@@ -98,17 +98,25 @@ func TestRunsServerFilterOptionsRoundTrip(t *testing.T) {
 	if len(got.Session) != 1 || got.Session[0] != "session_docs" {
 		t.Fatalf("session round-trip = %#v", got.Session)
 	}
-	if len(client.inspectOptions) != 1 {
-		t.Fatalf("model RunsWithOptions round-trip = %#v", client.inspectOptions)
+	if len(got.Model) != 1 || got.Model[0] != "gpt-5" {
+		t.Fatalf("model round-trip = %#v", got.Model)
 	}
-	inspect := client.inspectOptions[0]
-	if len(inspect.Model) != 1 ||
-		inspect.Model[0] != "gpt-5" ||
-		len(inspect.Status) == 0 ||
-		inspect.Since != got.Since ||
-		len(inspect.Session) != 1 ||
-		inspect.Session[0] != "session_docs" {
-		t.Fatalf("RunsWithOptions round-trip = %#v", inspect)
+	if len(client.inspectOptions) != 0 {
+		t.Fatalf("canonical Runs page was intersected with a second read model: %#v", client.inspectOptions)
+	}
+}
+
+func TestRunsSessionFilterTrustsCanonicalPageWithoutDivergentInspectIntersection(t *testing.T) {
+	client := &phaseBFilterClient{FixtureClient: uitest.NewFixtureClient()}
+	runs := NewRuns()
+	runs.filters.Session = "session_docs"
+	runs.Update(testContext, runs.fetchRunsList(testContext, client)(), client)
+
+	if got := len(runs.filteredRuns()); got == 0 {
+		t.Fatal("canonical session page became false-empty")
+	}
+	if len(client.inspectOptions) != 0 {
+		t.Fatalf("session page was intersected with Inspect: %#v", client.inspectOptions)
 	}
 }
 
@@ -135,10 +143,10 @@ func (c *boundedModelFilterClient) RunsWithOptions(context.Context, api.InspectR
 func TestRunsModelFilterHonestlyStatesCanonicalPageTruncation(t *testing.T) {
 	client := &boundedModelFilterClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
-	runs.modelFilter = "model-a"
+	runs.filters.Model = "model-a"
 	runs.Update(testContext, runs.fetchRunsList(testContext, client)(), client)
 
-	if got := len(runs.runSummaries()); got != 0 {
+	if got := len(runs.filteredRuns()); got != 0 {
 		t.Fatalf("bounded canonical page fabricated %d older model matches", got)
 	}
 	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
@@ -154,7 +162,7 @@ func TestRunsSelectedSessionFilterToggles(t *testing.T) {
 	run := phaseBRun("run-session", "session-selected", "flow.run", "flow", "ok", 100, 10, 0.001)
 	setRunsForTest(runs, run)
 	selectRunForTest(runs, run.RunID)
-	runs.runGroupIndex = 3
+	runs.filters.Group = 3
 
 	action := runsActionByID(t, runs.Actions(testContext, nil), "runs.session-filter")
 	if action.Enabled() {
@@ -167,12 +175,12 @@ func TestRunsSelectedSessionFilterToggles(t *testing.T) {
 	}
 
 	runs.toggleSelectedSessionFilter(testContext, nil)
-	if runs.sessionFilter != "session-selected" || runs.SelectedRunID() != run.RunID {
-		t.Fatalf("selected session filter = %q, selection = %q", runs.sessionFilter, runs.SelectedRunID())
+	if runs.filters.Session != "session-selected" || runs.SelectedRunID() != run.RunID {
+		t.Fatalf("selected session filter = %q, selection = %q", runs.filters.Session, runs.SelectedRunID())
 	}
 	runs.toggleSelectedSessionFilter(testContext, nil)
-	if runs.sessionFilter != "" || runs.SelectedRunID() != run.RunID {
-		t.Fatalf("cleared session filter = %q, selection = %q", runs.sessionFilter, runs.SelectedRunID())
+	if runs.filters.Session != "" || runs.SelectedRunID() != run.RunID {
+		t.Fatalf("cleared session filter = %q, selection = %q", runs.filters.Session, runs.SelectedRunID())
 	}
 }
 

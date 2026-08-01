@@ -25,15 +25,15 @@ Outputs land in `packages/local/tapes/out/shots/` (gitignored):
 
 ```
 out/shots/
-  160x45/   overview|insights|runs|index|palette|help|diagnostics .{txt,png}
-  100x30/   overview|insights|runs|index .{txt,png}
-  70x24/    overview|insights|runs|index .{txt,png}
+  160x45/   overview|insights|runs|evals|index|palette|help|diagnostics .{txt,png}
+  100x30/   overview|insights|runs|evals|index .{txt,png}
+  70x24/    overview|insights|runs|evals|index .{txt,png}
 ```
 
 - **ANSI text**: `tmux capture-pane -p -e` at exact cell sizes `160x45`, `100x30`, `70x24`.
 - **Images**: VHS `Screenshot` PNGs (plus a per-size `_session.gif`) when VHS+ttyd work headless. If image capture is unavailable, text captures still run and the script prints a TODO.
 
-Screens driven: Overview (`1`), Insights (`2`), Runs (`3`), Index (`4`). At `160x45` only: command palette (`:`), help (`?`), diagnostics (`!`).
+Screens driven: Overview (`1`), Insights (`2`), Runs (`3`), Evals (`4`), Index (`5`). At `160x45` only: command palette (`:`), help (`?`), diagnostics (`!`).
 
 ## Implementation
 

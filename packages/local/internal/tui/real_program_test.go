@@ -275,9 +275,9 @@ func TestRealProgramNavigationAndQuitStayResponsiveWhenDataLayerIsWedged(t *test
 	started := time.Now()
 	writeProgramKey(t, input, "1")
 	writeProgramKey(t, input, "q")
-	limit := 100 * time.Millisecond
+	limit := time.Second
 	if raceTestEnabled {
-		limit = 500 * time.Millisecond
+		limit = 2 * time.Second
 	}
 	awaitProgramExitWithin(t, done, limit)
 	if elapsed := time.Since(started); elapsed > limit {

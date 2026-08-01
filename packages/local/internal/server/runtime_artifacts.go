@@ -98,13 +98,22 @@ func (d *DevServer) refreshProjectIndex(ctx context.Context, root string) bool {
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, nil)
 		return false
 	}
-	index, err = d.Devtools.EnrichProjectRuntime(ctx, root, "", "", index)
+	// The source/AST Project Index is now usable. Runtime enrichment and
+	// generated artifacts have their own startup task and must not leave the
+	// Project Index gate Active when either optional phase degrades.
+	d.startup.Update("project-index", "Indexing project", startup.Succeeded, nil)
+	enrich := d.enrichProjectRuntime
+	if enrich == nil {
+		enrich = func(ctx context.Context, root string, previous store.IndexData) (store.IndexData, error) {
+			return d.Devtools.EnrichProjectRuntime(ctx, root, "", "", previous)
+		}
+	}
+	index, err = enrich(ctx, root, index)
 	if err != nil {
 		d.logger.Warn("project runtime enrichment failed", "error", err)
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{runtimeArtifactStartupDiagnostic(err)})
 		return true
 	}
-	d.startup.Update("project-index", "Indexing project", startup.Succeeded, nil)
 	d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Active, nil)
 	if d.runtimeArtifacts != nil {
 		if err := d.runtimeArtifacts(ctx, root, index.Definitions); err != nil {

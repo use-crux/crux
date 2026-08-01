@@ -14,6 +14,28 @@ func (s *Index) lintFindingsForDefinition(definitionID string) []api.IndexLintFi
 	return activeLintFindingsForDefinition(s.indexData(), definitionID)
 }
 
+func (s *Index) cacheLintCounts() {
+	s.activeLintCounts = make(map[string]int)
+	s.suppressedLintIDs = make(map[string]bool)
+	for _, finding := range s.indexData().LintFindings {
+		seen := make(map[string]bool)
+		ids := append([]string{finding.PrimaryDefinitionID}, finding.RelatedDefinitionIDs...)
+		ids = append(ids, finding.AffectedDefinitionIDs...)
+		ids = append(ids, finding.PropagatedDefinitionIDs...)
+		for _, id := range ids {
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			if finding.Suppressed {
+				s.suppressedLintIDs[id] = true
+			} else {
+				s.activeLintCounts[id]++
+			}
+		}
+	}
+}
+
 func activeLintFindingsForDefinition(index api.IndexData, definitionID string) []api.IndexLintFinding {
 	return lintFindingsForDefinition(index, definitionID, false)
 }
@@ -35,12 +57,7 @@ func lintFindingsForDefinition(index api.IndexData, definitionID string, include
 }
 
 func (s *Index) hasSuppressedFindings() bool {
-	for _, finding := range s.indexData().LintFindings {
-		if finding.Suppressed && indexLintFindingReferencesDefinition(finding, s.SelectedDefinitionID()) {
-			return true
-		}
-	}
-	return false
+	return s.suppressedLintIDs[s.SelectedDefinitionID()]
 }
 
 func (s *Index) suppressedActionLabel() string {

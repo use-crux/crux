@@ -34,11 +34,14 @@ func (s *Index) groupedDefinitions() []api.ProjectDefinition {
 func (s *Index) setGroupedDefinitions() {
 	definitions := s.groupedDefinitions()
 	s.groupStartIDs = make(map[string]bool, len(definitions))
+	s.groupCounts = make(map[string]int)
 	for index, definition := range definitions {
+		s.groupCounts[s.definitionGroup(definition)]++
 		if index == 0 || s.definitionGroup(definitions[index-1]) != s.definitionGroup(definition) {
 			s.groupStartIDs[definition.ID] = true
 		}
 	}
+	s.cacheLintCounts()
 	s.definitions.SetItems(definitions)
 }
 
@@ -71,13 +74,7 @@ func (s *Index) definitionRowHeight(definition api.ProjectDefinition) int {
 }
 
 func (s *Index) groupCount(group string) int {
-	count := 0
-	for _, definition := range s.indexData().Definitions {
-		if s.definitionGroup(definition) == group {
-			count++
-		}
-	}
-	return count
+	return s.groupCounts[group]
 }
 
 func (s *Index) groupAxisLabel() string {
@@ -103,5 +100,4 @@ func (s *Index) toggleGroupAxis() {
 	}
 	s.setGroupedDefinitions()
 	s.definitions.Select(selected)
-	s.syncDetail()
 }

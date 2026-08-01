@@ -166,6 +166,35 @@ func TestOpenFirstMemberRoutesToChildRun(t *testing.T) {
 	}
 }
 
+func TestOpenFirstMemberKeepsPaneOnCanonicalFilteredProjection(t *testing.T) {
+	runs := NewRuns()
+	child := api.ObservabilityRunSummary{
+		RunID: "child", Name: "Research member", SessionID: "session-a", Status: "ok",
+	}
+	setRunsForTest(runs,
+		child,
+		api.ObservabilityRunSummary{RunID: "other", Name: "Unrelated", SessionID: "session-b", Status: "ok"},
+	)
+	runs.filters.Query = "research"
+	runs.filters.Session = "session-a"
+	runs.filters.Group = 3
+	runs.diagnosis = &RunDiagnosis{Raw: api.ObservabilityRunDetail{
+		Run:        api.ObservabilityRunSummary{RunID: "root"},
+		MemberRuns: []observability.OperationRunDetail{{Run: child}},
+	}}
+
+	runs.openFirstMember(testContext, &detailRaceClient{})
+	if got := runs.runList.Position().Total; got != 1 {
+		t.Fatalf("member drill pane rows = %d, want one canonical filtered row", got)
+	}
+	if got := runs.SelectedRunID(); got != child.RunID {
+		t.Fatalf("member drill selected %q, want %q", got, child.RunID)
+	}
+	if got := runs.filteredRuns(); len(got) != 1 || got[0].RunID != child.RunID {
+		t.Fatalf("member drill projection = %#v, want filtered child", got)
+	}
+}
+
 func TestChildRunRefreshKeepsEmbeddedMemberSelected(t *testing.T) {
 	runs := NewRuns()
 	selectRunForTest(runs, "child")

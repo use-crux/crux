@@ -42,13 +42,15 @@ type Evals struct {
 	run       evalRunItem
 	baselines []evalBaselineItem
 
-	selectedRunID string
-	cellRow       int
-	cellColumn    int
-	focus         evalsFocus
-	size          Size
-	layout        evalsLayout
-	now           func() time.Time
+	selectedRunID  string
+	cellRow        int
+	cellColumn     int
+	focus          evalsFocus
+	size           Size
+	layout         evalsLayout
+	now            func() time.Time
+	catalogSince   time.Time
+	catalogElapsed time.Duration
 }
 
 func NewEvals() *Evals {
@@ -147,6 +149,10 @@ func (s *Evals) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.
 	switch message := msg.(type) {
 	case evalCatalogLoadedMsg:
 		if s.catalogResource.Apply(resource.ResourceResult[[]json.RawMessage](message)) {
+			if !s.catalogSince.IsZero() {
+				s.catalogElapsed = s.now().Sub(s.catalogSince)
+			}
+			s.catalogSince = time.Time{}
 			s.items = projectEvalCatalog(s.catalogResource.Snapshot().Value)
 			s.catalog.SetItems(s.items)
 			s.syncSelection()
@@ -174,6 +180,16 @@ func (s *Evals) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.
 		if s.localRunResource.Apply(resource.ResourceResult[evalRunAvailability](message)) {
 			s.syncDetail(false)
 		}
+	case evalCatalogProgressMsg:
+		snapshot := s.catalogResource.Snapshot()
+		if snapshot.State != resource.ResourceLoading && !snapshot.Refreshing || snapshot.Token.Request != message.request {
+			return nil
+		}
+		s.catalogElapsed = s.now().Sub(s.catalogSince)
+		if s.catalogElapsed < 0 {
+			s.catalogElapsed = 0
+		}
+		return evalCatalogProgressTick(message.request)
 	case tea.KeyPressMsg:
 		command, _ := interaction.Dispatch(s.Actions(ctx, client), message)
 		return command
@@ -215,6 +231,10 @@ func (s *Evals) View(_ Size) string {
 	}
 	snapshot := s.catalogResource.Snapshot()
 	if !snapshot.HasValue {
+		if snapshot.State == resource.ResourceLoading {
+			elapsed := s.catalogElapsed.Round(time.Second)
+			return s.centerMessage(fmt.Sprintf("Discovering Eval catalog · %s elapsed · up to 30s", elapsed))
+		}
 		message := resourceStateMessage(snapshot.State, snapshot.Err, "Eval catalog")
 		if snapshot.State == resource.ResourceFailed {
 			message += " · press R to retry"
@@ -222,6 +242,10 @@ func (s *Evals) View(_ Size) string {
 		return s.centerMessage(message)
 	}
 	if len(s.items) == 0 {
+		if snapshot.Refreshing {
+			elapsed := s.catalogElapsed.Round(time.Second)
+			return s.centerMessage(fmt.Sprintf("Refreshing Eval catalog · %s elapsed · up to 30s", elapsed))
+		}
 		return s.centerMessage("No Evals discovered — run `crux eval`; discovery scans `.crux/evals`.")
 	}
 	if s.layout.mode == evalsLayoutNarrow {

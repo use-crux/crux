@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
 func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
@@ -97,6 +98,61 @@ func TestIndexCursorCyclesDefinitions(t *testing.T) {
 	c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
 	if got := c.SelectedDefinitionID(); got != "prompt:writer.prompt" {
 		t.Errorf("after k = %q, want %q", got, "prompt:writer.prompt")
+	}
+}
+
+func TestIndexSixtyMovementBacklogProjectsOnlyFinalSelection(t *testing.T) {
+	definitions := make([]api.ProjectDefinition, 100)
+	for i := range definitions {
+		definitions[i] = api.ProjectDefinition{
+			ID: "prompt:" + fmt.Sprint(i), Kind: "prompt", Name: fmt.Sprint(i), Fidelity: "resolved",
+		}
+	}
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{Definitions: definitions})
+	client := uitest.NewFixtureClient()
+
+	commands := 0
+	for _, key := range strings.Repeat("j", 30) + strings.Repeat("k", 30) {
+		if cmd := index.Update(testContext, tea.KeyPressMsg{Text: string(key), Code: key}, client); cmd != nil {
+			commands++
+		}
+	}
+	if commands != 1 {
+		t.Fatalf("movement burst scheduled %d detail intents, want one", commands)
+	}
+	if got := index.SelectedDefinitionID(); got != definitions[0].ID {
+		t.Fatalf("final selection = %q, want %q", got, definitions[0].ID)
+	}
+
+	index.selectionMovedAt = indexSelectionNow().Add(-indexSelectionIntentDelay)
+	if cmd := index.Update(testContext, indexSelectionIntentMsg{intent: index.selectionIntent}, client); cmd == nil {
+		t.Fatal("final selection intent did not schedule its activity read")
+	}
+	if index.selectionPending {
+		t.Fatal("final selection intent remained pending")
+	}
+}
+
+func BenchmarkIndexMovementAtRepoScale(b *testing.B) {
+	definitions := make([]api.ProjectDefinition, 741)
+	for i := range definitions {
+		definitions[i] = api.ProjectDefinition{
+			ID: "prompt:" + fmt.Sprint(i), Kind: "prompt", Name: "definition " + fmt.Sprint(i), Fidelity: "resolved",
+		}
+	}
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{Definitions: definitions})
+	index.Resize(Size{Width: 140, Height: 43})
+	client := uitest.NewFixtureClient()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := 'j'
+		if i%2 == 1 {
+			key = 'k'
+		}
+		index.Update(testContext, tea.KeyPressMsg{Text: string(key), Code: key}, client)
+		_ = index.View(Size{})
 	}
 }
 

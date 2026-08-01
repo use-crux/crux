@@ -218,3 +218,131 @@ func TestFreshCollectorCoalescesOneLoadThenRefreshes(t *testing.T) {
 		t.Fatalf("refreshed read = %s, calls = %d", third, freshCalls)
 	}
 }
+
+func TestCollectorReusesRecentCatalogWrittenByAnotherProcess(t *testing.T) {
+	root := t.TempDir()
+	want := []json.RawMessage{json.RawMessage(`{"id":"shared"}`)}
+	if err := StoreCatalogCache(root, want, time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	collector := NewFreshCollector(root, CollectorDeps{})
+	collector.collect = func(context.Context) ([]json.RawMessage, error) {
+		t.Fatal("recent shared cache started a discovery worker")
+		return nil, nil
+	}
+	got, err := collector.EvalManifests(t.Context())
+	if err != nil || len(got) != 1 || string(got[0]) != string(want[0]) {
+		t.Fatalf("shared catalog = %s, err = %v", got, err)
+	}
+}
+
+func TestCatalogCacheRejectsExpiredCrossProcessSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if err := StoreCatalogCache(root, []json.RawMessage{json.RawMessage(`{"id":"stale"}`)}, time.Now().Add(-catalogCacheTTL-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := LoadCatalogCache(root, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("expired shared catalog = %s, want cache miss", got)
+	}
+}
+
+func TestCollectorReusesAuthoritativeEmptyCatalog(t *testing.T) {
+	root := t.TempDir()
+	if err := StoreCatalogCache(root, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	collector := NewFreshCollector(root, CollectorDeps{})
+	collector.collect = func(context.Context) ([]json.RawMessage, error) {
+		t.Fatal("authoritative empty cache started a discovery worker")
+		return nil, nil
+	}
+	got, err := collector.EvalManifests(t.Context())
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("shared empty catalog = %#v, err = %v", got, err)
+	}
+}
+
+func TestCollectorWaitsForStartupBeforeStartingNodeDiscovery(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{})
+	collector := NewCollector("", CollectorDeps{WaitForStartup: func(ctx context.Context) error {
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}})
+	collector.timeout = time.Second
+	collector.deps.FindNode = func() (string, error) {
+		close(started)
+		return "", errors.New("stop after admission check")
+	}
+	collector.collect = collector.collectFromWorker
+	done := make(chan error, 1)
+	go func() {
+		_, err := collector.EvalManifests(t.Context())
+		done <- err
+	}()
+	select {
+	case <-started:
+		t.Fatal("Node discovery competed with startup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	if err := <-done; err == nil || !strings.Contains(err.Error(), "stop after admission") {
+		t.Fatalf("post-startup discovery error = %v", err)
+	}
+}
+
+func TestCollectorFlightEndsWithOwningSession(t *testing.T) {
+	lifetime, cancelLifetime := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	collector := NewCollector("", CollectorDeps{Lifetime: lifetime})
+	collector.collect = func(ctx context.Context) ([]json.RawMessage, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := collector.EvalManifests(context.Background())
+		done <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("catalog flight did not start")
+	}
+	cancelLifetime()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("session-ended catalog error = %v, want canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("catalog flight outlived its owning session")
+	}
+}
+
+func TestCollectorFlightUsesSessionWorkerAdmission(t *testing.T) {
+	admitted := make(chan struct{}, 1)
+	collector := NewCollector("", CollectorDeps{StartFlight: func(run func()) bool {
+		admitted <- struct{}{}
+		go run()
+		return true
+	}})
+	collector.collect = func(context.Context) ([]json.RawMessage, error) { return []json.RawMessage{}, nil }
+	if _, err := collector.EvalManifests(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-admitted:
+	default:
+		t.Fatal("catalog flight bypassed session worker admission")
+	}
+}

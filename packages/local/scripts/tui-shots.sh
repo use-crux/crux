@@ -378,7 +378,7 @@ capture_screen_set_tmux() {
   settle
   capture_pane_to "$SESSION" "${out_dir}/runs.txt"
 
-  send_key "$SESSION" "5"
+  send_key "$SESSION" "4"
   settle 30000
   send_key "$SESSION" "Enter"
   settle
@@ -386,7 +386,7 @@ capture_screen_set_tmux() {
   settle
   capture_pane_to "$SESSION" "${out_dir}/evals.txt"
 
-  send_key "$SESSION" "4"
+  send_key "$SESSION" "5"
   settle
   capture_pane_to "$SESSION" "${out_dir}/index.txt"
 
@@ -469,14 +469,14 @@ Screenshot ${rel_out}/insights-cases.png
 Type "3"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/runs.png
-Type "5"
+Type "4"
 Sleep 30s
 Enter
 Sleep ${settle_sleep}
 Type "l"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/evals.png
-Type "4"
+Type "5"
 Sleep ${settle_sleep}
 Screenshot ${rel_out}/index.png
 EOF

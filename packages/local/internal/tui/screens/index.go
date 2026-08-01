@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -30,6 +31,9 @@ type Index struct {
 	pendingSnapshotRevision       uint64
 	snapshotRequestActive         bool
 	groupStartIDs                 map[string]bool
+	groupCounts                   map[string]int
+	activeLintCounts              map[string]int
+	suppressedLintIDs             map[string]bool
 	definitions                   *kit.ListPane[api.ProjectDefinition]
 	detail                        *kit.DocumentPane
 	focus                         indexFocus
@@ -43,6 +47,9 @@ type Index struct {
 	routedDefinitionID            string
 	routedDefinitionAnchorPending bool
 	unavailableDefinitionID       string
+	selectionIntent               uint64
+	selectionPending              bool
+	selectionMovedAt              time.Time
 }
 
 // NewIndex constructs an empty Index screen.
@@ -60,10 +67,13 @@ func NewIndex() *Index {
 		activity: resource.New(func(activity api.CatalogRuntimeActivityV1) bool {
 			return activity.DefinitionID == ""
 		}),
-		groupStartIDs: map[string]bool{},
-		definitions:   definitions,
-		detail:        kit.NewDocumentPane(),
-		exportRoot:    defaultIndexExportRoot,
+		groupStartIDs:     map[string]bool{},
+		groupCounts:       map[string]int{},
+		activeLintCounts:  map[string]int{},
+		suppressedLintIDs: map[string]bool{},
+		definitions:       definitions,
+		detail:            kit.NewDocumentPane(),
+		exportRoot:        defaultIndexExportRoot,
 	}
 	definitions.SetRowHeight(index.definitionRowHeight)
 	index.setFocus(indexFocusDefinitions)
@@ -109,6 +119,8 @@ func (s *Index) Init(ctx context.Context, c DataClient) tea.Cmd {
 
 // Deactivate cancels an in-flight snapshot and returns its exact retry name.
 func (s *Index) Deactivate() bridge.Invalidations {
+	s.selectionIntent++
+	s.selectionPending = false
 	invalidations := bridge.Invalidations{}
 	cancelPendingResource(invalidations, bridge.IndexSnapshotResource, s.snapshot)
 	if s.pendingSnapshotRefresh {
@@ -178,11 +190,25 @@ func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if s.activity.Apply(resource.ResourceResult[api.CatalogRuntimeActivityV1](m)) {
 			s.syncDetail()
 		}
+	case indexSelectionIntentMsg:
+		if m.intent != s.selectionIntent || !s.selectionPending {
+			return nil
+		}
+		if remaining := indexSelectionIntentDelay - indexSelectionNow().Sub(s.selectionMovedAt); remaining > 0 {
+			return indexSelectionIntentTick(remaining, m.intent)
+		}
+		s.selectionPending = false
+		s.syncDetail()
+		return s.fetchDefinitionActivity(ctx, c)
 	case tea.KeyPressMsg:
 		cmd, _ := interaction.Dispatch(s.Actions(ctx, c), m)
 		return cmd
 	case tea.MouseWheelMsg:
+		before := s.SelectedDefinitionID()
 		s.updateFocusedPane(m)
+		if before != s.SelectedDefinitionID() {
+			return s.scheduleSelectionDetail()
+		}
 	case definitionExportedMsg:
 		if m.err != nil {
 			s.exportState = indexExportState{definitionID: m.defID, message: "export failed · " + sanitizeIndexInline(m.err.Error())}
@@ -191,6 +217,21 @@ func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func (s *Index) UpdateMovementBurst(_ context.Context, keys []tea.KeyPressMsg, _ DataClient) tea.Cmd {
+	before := s.SelectedDefinitionID()
+	for _, key := range keys {
+		if s.focus == indexFocusDetail && s.moveRelation(key.String()) {
+			continue
+		}
+		s.updateFocusedPane(key)
+	}
+	if before == s.SelectedDefinitionID() {
+		return nil
+	}
+	s.relationCursor = 0
+	return s.scheduleSelectionDetail()
 }
 
 func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) bool {

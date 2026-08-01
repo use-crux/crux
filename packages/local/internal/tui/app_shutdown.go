@@ -63,24 +63,18 @@ func (a *App) watchRootCancellation() tea.Cmd {
 
 func (a *App) beginShutdown(cause ShutdownCause) tea.Cmd {
 	if !a.shutdownStarted.CompareAndSwap(false, true) {
-		return nil
+		return tea.Quit
 	}
 	a.quitRequested = true
 	a.shutdownMu.Lock()
 	a.shutdownResult.Cause = cause
 	a.shutdownMu.Unlock()
 
-	// Cleanup can wait for an unrelated in-flight server request. Restore the
-	// terminal immediately and let the command root join cleanup after Run
-	// returns; otherwise the App suppresses input while keeping the user trapped
-	// in the alternate screen for the entire request timeout.
-	return tea.Batch(
-		func() tea.Msg {
-			a.FinishShutdown()
-			return nil
-		},
-		tea.Quit,
-	)
+	// Program.Run is the terminal-ownership boundary. Do not start cleanup from
+	// the Bubble Tea command queue: a blocked cleanup command can race tea.Quit
+	// and strand the alternate screen. The command root calls FinishShutdown
+	// immediately after Run returns.
+	return tea.Quit
 }
 
 // FinishShutdown runs the App cleanup exactly once. It is safe to call after

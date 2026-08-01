@@ -56,6 +56,42 @@ func TestNewDevServerDoesNotWaitForInitialRuntimeArtifacts(t *testing.T) {
 	}
 }
 
+func TestRuntimeEnrichmentFailureStillSettlesProjectIndexStartupGate(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	journal := startup.NewJournal([]startup.TaskSpec{
+		{ID: "project-index", Phase: "Indexing project"},
+		{ID: "runtime-artifacts", Phase: "Generating runtime artifacts"},
+	})
+	opts := devServerTestOptions(t, findFreePort())
+	opts.StartupJournal = journal
+	opts.ProjectIndexer = fakeProjectIndexer{index: store.IndexData{
+		Definitions: []store.ProjectDefinition{{ID: "prompt:ready", Kind: "prompt"}},
+	}}
+	srv := NewDevServer(opts)
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	srv.enrichProjectRuntime = func(context.Context, string, store.IndexData) (store.IndexData, error) {
+		return store.IndexData{}, errors.New("runtime enrichment unavailable")
+	}
+	if ok := srv.refreshProjectIndex(t.Context(), root); !ok {
+		t.Fatal("runtime-only degradation invalidated the successful source index")
+	}
+	waitCtx, cancelWait := context.WithTimeout(t.Context(), time.Second)
+	defer cancelWait()
+	if err := journal.WaitTask(waitCtx, "project-index"); err != nil {
+		t.Fatalf("runtime enrichment failure left Project Index gate active: %v", err)
+	}
+	snapshot, _ := journal.SnapshotAndSubscribe(t.Context())
+	for _, task := range snapshot.Tasks {
+		if task.ID == "project-index" && task.Disposition != startup.Succeeded {
+			t.Fatalf("Project Index disposition = %v, want succeeded", task.Disposition)
+		}
+		if task.ID == "runtime-artifacts" && task.Disposition != startup.Degraded {
+			t.Fatalf("runtime artifacts disposition = %v, want degraded", task.Disposition)
+		}
+	}
+}
+
 func TestDevServerAppliesEditsCapturedDuringInitialProjectIndex(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)

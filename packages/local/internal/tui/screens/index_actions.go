@@ -58,7 +58,7 @@ func (s *Index) Actions(ctx context.Context, client DataClient) []interaction.Ac
 			DisabledReason: disabledUnless(len(s.indexData().Definitions) > 0, "no definitions to group"),
 			Run: func() tea.Cmd {
 				s.toggleGroupAxis()
-				return nil
+				return s.scheduleSelectionDetail()
 			},
 		},
 		{
@@ -110,8 +110,8 @@ func (s *Index) Actions(ctx context.Context, client DataClient) []interaction.Ac
 }
 
 func (s *Index) indexNavigationAction(
-	ctx context.Context,
-	client DataClient,
+	_ context.Context,
+	_ DataClient,
 	id string,
 	keys []string,
 	helpKey string,
@@ -129,7 +129,7 @@ func (s *Index) indexNavigationAction(
 			s.updateFocusedPane(tea.KeyPressMsg{Code: keyCode(keys[0]), Text: keyText(keys[0])})
 			if before != s.SelectedDefinitionID() {
 				s.relationCursor = 0
-				return s.fetchDefinitionActivity(ctx, client)
+				return s.scheduleSelectionDetail()
 			}
 			return nil
 		},
@@ -156,7 +156,6 @@ func (s *Index) updateFocusedPane(msg tea.Msg) bool {
 		s.routedDefinitionID = ""
 		s.routedDefinitionAnchorPending = false
 		s.unavailableDefinitionID = ""
-		s.syncDetail()
 	}
 	return handled
 }
@@ -174,6 +173,11 @@ func (s *Index) shiftFocus(delta int) {
 	}
 	if next > int(indexFocusDetail) {
 		next = int(indexFocusDetail)
+	}
+	if indexFocus(next) == indexFocusDetail && s.selectionPending {
+		// Pane activation needs the selected row's document immediately. Keep
+		// the pending intent alive so the coalesced activity read still runs.
+		s.syncDetail()
 	}
 	s.setFocus(indexFocus(next))
 }

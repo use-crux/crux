@@ -167,6 +167,41 @@ func TestDevOwnedServerBrowserBehaviorAcrossModes(t *testing.T) {
 	}
 }
 
+func TestDevTUIShutdownReturnsAfterOneBoundedJoin(t *testing.T) {
+	var out, errOut bytes.Buffer
+	streams := output.NewTestIO(&out, &errOut, interactiveDevTestIO())
+	releaseWorker := make(chan struct{})
+	defer close(releaseWorker)
+	session := &fakeDevServerSession{}
+	cmd := newDevCmd(cli.NewFactoryWithStreams(streams), devDependencies{
+		serverRunning:    func(int) bool { return false },
+		portAvailable:    func(int) bool { return true },
+		runtimePreflight: func(context.Context, *output.IO) {},
+		shutdownTimeout:  30 * time.Millisecond,
+		newServer: func(options server.DevServerOptions) devServerSession {
+			session.shutdownFunc = func(ctx context.Context) error {
+				return options.SessionWorkers.Wait(ctx)
+			}
+			if !options.SessionWorkers.Go(func() { <-releaseWorker }) {
+				t.Fatal("test worker was not admitted")
+			}
+			return session
+		},
+		runTUI: func(_ context.Context, _ *output.IO, _ devServerSession, _ string, _ int, _ *startupTracker, _ <-chan string, _ tui.BrowserOpener, shutdown func() error) error {
+			return shutdown()
+		},
+	})
+	cmd.SetArgs([]string{"--tui"})
+	started := time.Now()
+	err := cmd.ExecuteContext(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("dev error = %v, want bounded cleanup deadline", err)
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("bounded TUI cleanup took %s", elapsed)
+	}
+}
+
 func TestDevPlainTunnelStartupFailureReportsPromptlyAndRemainsNonfatal(t *testing.T) {
 	var out, errOut bytes.Buffer
 	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
@@ -316,9 +351,10 @@ func interactiveDevTestIO() output.TestIOOptions {
 }
 
 type fakeDevServerSession struct {
-	started     int
-	shutdown    int
-	startTunnel func(context.Context, func(server.TunnelStartupResult))
+	started      int
+	shutdown     int
+	startTunnel  func(context.Context, func(server.TunnelStartupResult))
+	shutdownFunc func(context.Context) error
 }
 
 func (server *fakeDevServerSession) Start() error {
@@ -326,8 +362,11 @@ func (server *fakeDevServerSession) Start() error {
 	return nil
 }
 
-func (server *fakeDevServerSession) Shutdown(context.Context) error {
+func (server *fakeDevServerSession) Shutdown(ctx context.Context) error {
 	server.shutdown++
+	if server.shutdownFunc != nil {
+		return server.shutdownFunc(ctx)
+	}
 	return nil
 }
 

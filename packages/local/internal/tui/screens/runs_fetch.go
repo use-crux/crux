@@ -13,20 +13,24 @@ import (
 
 // --- fetch -------------------------------------------------------------------
 
-type runsListLoadedMsg resource.ResourceResult[[]api.ObservabilityRunSummary]
+type runsListLoadedMsg struct {
+	resource.ResourceResult[[]api.ObservabilityRunSummary]
+	filters runsFilterState
+}
 type runDetailLoadedMsg resource.ResourceResult[api.ObservabilityRunDetail]
 type runDetailIntentMsg struct {
-	runID  string
 	intent uint64
 }
 type runsSessionsLoadedMsg struct {
 	sessions map[string]bool
 }
 
-const runDetailIntentDelay = 10 * time.Millisecond
+const runDetailIntentDelay = 35 * time.Millisecond
+
+var runsDetailNow = time.Now
 
 func (m runsListLoadedMsg) ResourceOwner() resource.ResourceOwner {
-	return resource.ResourceResult[[]api.ObservabilityRunSummary](m).Token.Owner
+	return m.Token.Owner
 }
 
 func (m runDetailLoadedMsg) ResourceOwner() resource.ResourceOwner {
@@ -49,15 +53,17 @@ func (s *Runs) fetchRunsList(parent context.Context, c DataClient) tea.Cmd {
 
 func (s *Runs) fetchRunsListAtRevision(parent context.Context, c DataClient, revision uint64) tea.Cmd {
 	snapshot := s.runsResource.Snapshot()
-	owner := runsListOwnerForDefinition(s.definitionFilter)
+	filters := s.filters
+	owner := runsListOwnerForDefinition(filters.Definition)
 	ctx, token := s.runsResource.Begin(parent, owner, maxRevisionFloor(snapshot.Token.Revision, revision))
-	return fetchRunsList(ctx, c, token, s.inspectRunsOptions(runsListNow()))
+	return fetchRunsList(ctx, c, token, filters, s.projectRunsFilters(runsListNow()).request)
 }
 
 func fetchRunsList(
 	ctx context.Context,
 	c DataClient,
 	token resource.RequestToken,
+	filterState runsFilterState,
 	filters api.InspectRunsOptions,
 ) tea.Cmd {
 	return func() tea.Msg {
@@ -69,47 +75,17 @@ func fetchRunsList(
 			page, err = c.ObservabilityRunsPageWithOptions(ctx, filters, token.Owner.RecordID)
 		}
 		if err != nil {
-			return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
+			return runsListLoadedMsg{ResourceResult: resource.ResourceResult[[]api.ObservabilityRunSummary]{
 				Token: token,
 				Err:   err,
-			})
-		}
-		if !inspectRunsOptionsEmpty(filters) {
-			inspectRows, inspectErr := c.RunsWithOptions(ctx, filters)
-			if inspectErr != nil {
-				return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
-					Token: token,
-					Err:   inspectErr,
-				})
-			}
-			page.Rows = runsAllowedByInspect(page.Rows, inspectRows)
+			}, filters: filterState}
 		}
 		token.Revision = maxRunRevision(uint64Revision(page.Revision), page.Rows)
-		return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
+		return runsListLoadedMsg{ResourceResult: resource.ResourceResult[[]api.ObservabilityRunSummary]{
 			Token: token,
 			Value: page.Rows,
-		})
+		}, filters: filterState}
 	}
-}
-
-func runsAllowedByInspect(
-	runs []api.ObservabilityRunSummary,
-	inspectRows []api.InspectRunRecord,
-) []api.ObservabilityRunSummary {
-	allowed := make(map[string]bool, len(inspectRows))
-	for _, run := range inspectRows {
-		id := firstNonEmpty(run.OperationID, run.TraceID)
-		if id != "" {
-			allowed[id] = true
-		}
-	}
-	filtered := runs[:0]
-	for _, run := range runs {
-		if allowed[firstNonEmpty(run.OperationID, run.RunID)] {
-			filtered = append(filtered, run)
-		}
-	}
-	return filtered
 }
 
 func fetchRunsSessions(ctx context.Context, c DataClient) tea.Cmd {
@@ -170,10 +146,19 @@ func (s *Runs) scheduleRunDetail(runID string) tea.Cmd {
 	if runID == "" {
 		return nil
 	}
+	s.detailPendingRun = runID
+	s.detailMovedAt = runsDetailNow()
+	if s.detailPending {
+		return nil
+	}
+	s.detailPending = true
 	s.detailIntent++
-	intent := s.detailIntent
-	return tea.Tick(runDetailIntentDelay, func(time.Time) tea.Msg {
-		return runDetailIntentMsg{runID: runID, intent: intent}
+	return s.detailIntentTick(runDetailIntentDelay, s.detailIntent)
+}
+
+func (s *Runs) detailIntentTick(delay time.Duration, intent uint64) tea.Cmd {
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return runDetailIntentMsg{intent: intent}
 	})
 }
 

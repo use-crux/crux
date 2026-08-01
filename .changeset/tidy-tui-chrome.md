@@ -24,6 +24,8 @@ Add an Evals workbench with catalog readiness, a navigable Case-by-Variant resul
 
 Unify TUI surfaces and pane seams across every screen, replace noisy braille trends with honest block-ramp sparklines, add terminal-safe TypeScript and JSON syntax color, and renumber navigation in visual order.
 
-Keep navigation and terminal quit responsive while a hard Project Index refresh and workspace cleanup are wedged, and cover the production bridge flood with a real-program latency regression. Derive Runs rows from one versioned resource-and-filter projection so accepted refresh values cannot retain a false-empty cache, tighten cold cursor-detail coalescing, and preserve complete compact Index status names.
+Keep navigation and terminal quit responsive while a hard Project Index refresh and workspace cleanup are wedged. Quit now restores the terminal before cleanup, repeated quit requests remain effective, and the command root bounds every cleanup join. Coalesce cursor-detail work to the final position in an input burst, derive Runs requests, filter labels, and visible rows from one filter state, and let `R` discard local derivations before an authoritative reload.
 
-Use the same bounded Eval catalog discovery mode as `crux eval list`, surface readable timeout failures within 15 seconds, and provide an on-screen retry action.
+Use the same Eval catalog discovery mode and short-lived shared result cache as `crux eval list`, defer Node discovery until Project Index startup settles, show elapsed loading progress, surface readable timeout failures within 30 seconds, and provide an on-screen retry action.
+
+Correct the TUI capture walk so Evals uses screen key `4` and Index uses screen key `5` in both tmux text captures and generated VHS tapes.

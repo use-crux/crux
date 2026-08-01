@@ -212,6 +212,24 @@ func (w *Workbench) activeScreen() screens.Screen {
 	return w.screens["overview"]
 }
 
+func (w *Workbench) coalescesIndexMovement() bool {
+	return w.activeNav == "index" &&
+		!w.palette.IsOpen() && !w.help.IsOpen() && !w.inspect.IsOpen() && !w.definitionChooser.IsOpen()
+}
+
+func (w *Workbench) updateMovementBurst(keys []tea.KeyPressMsg) tea.Cmd {
+	if screen, ok := w.activeScreen().(screens.MovementBurstScreen); ok {
+		return screen.UpdateMovementBurst(w.ctx, keys, w.client)
+	}
+	commands := make([]tea.Cmd, 0, len(keys))
+	for _, key := range keys {
+		if cmd := w.Update(key); cmd != nil {
+			commands = append(commands, cmd)
+		}
+	}
+	return tea.Batch(commands...)
+}
+
 func (w *Workbench) refreshCounts() {
 	if c := w.activeScreen().Counts(); len(c) > 0 {
 		for k, v := range c {

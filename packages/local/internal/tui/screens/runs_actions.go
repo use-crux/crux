@@ -65,7 +65,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		modelReason = disabledUnless(len(s.knownModels) > 0, "no models in the current page")
 	}
 	sessionReason := listFocusReason
-	if sessionReason == "" && s.sessionFilter == "" {
+	if sessionReason == "" && s.filters.Session == "" {
 		selected, _, ok := s.runList.Selected()
 		sessionReason = disabledUnless(
 			s.activeRunGroup().label == "session" &&
@@ -196,13 +196,13 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:             "runs.model-filter",
-			Binding:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "model: "+shortRunModel(firstNonEmpty(s.modelFilter, "all")))),
+			Binding:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "model: "+shortRunModel(firstNonEmpty(s.filters.Model, "all")))),
 			DisabledReason: modelReason,
 			Run:            func() tea.Cmd { return s.cycleRunModel(ctx, client) },
 		},
 		{
 			ID:             "runs.session-filter",
-			Binding:        key.NewBinding(key.WithKeys("s"), key.WithHelp("s", selectedSessionActionLabel(s.sessionFilter))),
+			Binding:        key.NewBinding(key.WithKeys("s"), key.WithHelp("s", selectedSessionActionLabel(s.filters.Session))),
 			DisabledReason: sessionReason,
 			Run:            func() tea.Cmd { return s.toggleSelectedSessionFilter(ctx, client) },
 		},
@@ -261,6 +261,17 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 			Run:            s.openInspect,
 		},
 		{
+			ID:      "runs.reload",
+			Binding: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "reload runs")),
+			Run: func() tea.Cmd {
+				s.runsResource.Discard()
+				s.projection = runsListProjection{}
+				s.runList.SetItems(nil)
+				s.clearRunSelection()
+				return s.fetchRunsList(ctx, client)
+			},
+		},
+		{
 			ID:             "runs.export",
 			Binding:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "export run")),
 			DisabledReason: exportReason,
@@ -282,19 +293,19 @@ func (s *Runs) filterActions(ctx context.Context, client DataClient) []interacti
 		{
 			ID:             "runs.filter.clear",
 			Binding:        key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("^x", "clear")),
-			DisabledReason: disabledUnless(s.runQuery != "", "filter is empty"),
+			DisabledReason: disabledUnless(s.filters.Query != "", "filter is empty"),
 			Run: func() tea.Cmd {
-				s.runQuery = ""
+				s.filters.Query = ""
 				return s.ensureFilteredRunSelection(ctx, client)
 			},
 		},
 		{
 			ID:             "runs.filter.delete",
 			Binding:        key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "delete")),
-			DisabledReason: disabledUnless(s.runQuery != "", "filter is empty"),
+			DisabledReason: disabledUnless(s.filters.Query != "", "filter is empty"),
 			Run: func() tea.Cmd {
-				runes := []rune(s.runQuery)
-				s.runQuery = string(runes[:len(runes)-1])
+				runes := []rune(s.filters.Query)
+				s.filters.Query = string(runes[:len(runes)-1])
 				return s.ensureFilteredRunSelection(ctx, client)
 			},
 		},
@@ -339,7 +350,7 @@ func (s *Runs) openFirstMember(ctx context.Context, client DataClient) tea.Cmd {
 	}
 	detail := detailForMember(s.diagnosis.Raw.SchemaVersion, *member)
 	s.ensureSelectedRunVisible(member.Run.RunID)
-	s.runList.SetItems(s.selectableRuns())
+	s.syncVisibleRuns()
 	s.runList.Select(member.Run.RunID)
 	s.spanList.SetItems(nil)
 	s.diagnosis = nil

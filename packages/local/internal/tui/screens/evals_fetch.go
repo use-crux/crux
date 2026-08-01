@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
@@ -31,6 +32,9 @@ type evalRunsLoadedMsg resource.ResourceResult[[]json.RawMessage]
 type evalRunLoadedMsg resource.ResourceResult[json.RawMessage]
 type evalBaselinesLoadedMsg resource.ResourceResult[[]json.RawMessage]
 type evalLocalRunLoadedMsg resource.ResourceResult[evalRunAvailability]
+type evalCatalogProgressMsg struct{ request uint64 }
+
+const evalCatalogProgressInterval = time.Second
 
 func (message evalCatalogLoadedMsg) ResourceOwner() resource.ResourceOwner {
 	return resource.ResourceResult[[]json.RawMessage](message).Token.Owner
@@ -60,10 +64,19 @@ func (s *Evals) fetchCatalog(parent context.Context, client DataClient, revision
 	ctx, token := s.catalogResource.Begin(
 		parent, evalCatalogResourceOwner, maxRevisionFloor(snapshot.Token.Revision, revision),
 	)
-	return func() tea.Msg {
+	s.catalogSince = s.now()
+	s.catalogElapsed = 0
+	fetch := func() tea.Msg {
 		value, err := client.EvalCatalog(ctx)
 		return evalCatalogLoadedMsg(resource.ResourceResult[[]json.RawMessage]{Token: token, Value: value, Err: err})
 	}
+	return tea.Batch(fetch, evalCatalogProgressTick(token.Request))
+}
+
+func evalCatalogProgressTick(request uint64) tea.Cmd {
+	return tea.Tick(evalCatalogProgressInterval, func(time.Time) tea.Msg {
+		return evalCatalogProgressMsg{request: request}
+	})
 }
 
 func (s *Evals) fetchRuns(parent context.Context, client DataClient, revision uint64) tea.Cmd {

@@ -145,11 +145,11 @@ func TestEvalCatalogFailureIsReadableAndRetryable(t *testing.T) {
 	_, token := screen.catalogResource.Begin(testContext, evalCatalogResourceOwner, 0)
 	screen.catalogResource.Apply(resource.ResourceResult[[]json.RawMessage]{
 		Token: token,
-		Err:   errors.New("discovery timed out after 14s"),
+		Err:   errors.New("discovery timed out after 30s"),
 	})
 
 	view := stripANSI(screen.View(Size{}))
-	for _, want := range []string{"failed Eval catalog", "discovery timed out after 14s", "press R to retry"} {
+	for _, want := range []string{"failed Eval catalog", "discovery timed out after 30s", "press R to retry"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("failed catalog omitted %q:\n%s", want, view)
 		}
@@ -161,6 +161,39 @@ func TestEvalCatalogFailureIsReadableAndRetryable(t *testing.T) {
 	}
 	if state := screen.catalogResource.Snapshot().State; state != resource.ResourceLoading {
 		t.Fatalf("catalog state after retry = %v, want loading", state)
+	}
+}
+
+func TestEvalCatalogLoadingShowsElapsedProgress(t *testing.T) {
+	screen := NewEvals()
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	screen.now = func() time.Time { return now }
+	screen.Resize(Size{Width: 100, Height: 30})
+	client := uitest.NewFixtureClient()
+	command := screen.fetchCatalog(testContext, client, 0)
+	batch := command().(tea.BatchMsg)
+	_ = batch
+	now = now.Add(12 * time.Second)
+	screen.Update(testContext, evalCatalogProgressMsg{request: screen.catalogResource.Snapshot().Token.Request}, client)
+	view := stripANSI(screen.View(Size{}))
+	if !strings.Contains(view, "Discovering Eval catalog · 12s elapsed · up to 30s") {
+		t.Fatalf("loading view omitted elapsed progress:\n%s", view)
+	}
+}
+
+func TestEvalCatalogRefreshShowsElapsedProgressWithRetainedCatalog(t *testing.T) {
+	client := uitest.NewFixtureClient()
+	screen := loadedFixtureEvals(t, client)
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	screen.now = func() time.Time { return now }
+	screen.Resize(Size{Width: 100, Height: 30})
+	_ = screen.fetchCatalog(testContext, client, 0)
+	request := screen.catalogResource.Snapshot().Token.Request
+	now = now.Add(12 * time.Second)
+	screen.Update(testContext, evalCatalogProgressMsg{request: request}, client)
+	view := stripANSI(screen.View(Size{}))
+	if !strings.Contains(view, "refresh 12s/30s") {
+		t.Fatalf("refreshing catalog omitted elapsed progress:\n%s", view)
 	}
 }
 

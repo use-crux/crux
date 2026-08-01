@@ -103,6 +103,13 @@ type Screen interface {
 	Counts() map[string]int
 }
 
+// MovementBurstScreen applies already-coalesced cursor input behind one
+// Bubble Tea render boundary.
+type MovementBurstScreen interface {
+	Screen
+	UpdateMovementBurst(context.Context, []tea.KeyPressMsg, DataClient) tea.Cmd
+}
+
 // LegacyInvalidationScreen is the temporary domain-level refresh adapter for
 // screens that have not migrated to named resources.
 type LegacyInvalidationScreen interface {

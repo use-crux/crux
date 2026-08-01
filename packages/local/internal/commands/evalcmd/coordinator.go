@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectroot"
+	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 )
 
 const evalCoordinatorMaxEventBytes = 64 * 1024 * 1024
@@ -123,6 +125,9 @@ type evalRunEvent struct {
 }
 
 func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bool) error {
+	if cwd == "" {
+		cwd = projectroot.Dir()
+	}
 	node, err := assets.FindNode()
 	if err != nil {
 		return err
@@ -133,9 +138,6 @@ func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bo
 	}
 	child := exec.Command(node, append([]string{worker}, args...)...)
 	child.Env = coordinatorEnvironment(os.Environ())
-	if cwd == "" {
-		cwd = projectroot.Dir()
-	}
 	child.Dir = cwd
 	stdout, err := child.StdoutPipe()
 	if err != nil {
@@ -167,10 +169,11 @@ func runCoordinator(streams *output.IO, cwd string, args []string, jsonOutput bo
 	}
 	var exitCode int
 	var streamErr error
+	observe := cacheSuccessfulCatalog(cwd)
 	if jsonOutput {
-		exitCode, streamErr = consumeJSONStreamWithConfirmation(streams.Out, stdout, confirm)
+		exitCode, streamErr = consumeJSONStream(streams.Out, stdout, confirm, observe)
 	} else {
-		exitCode, streamErr = consumeStreamWithConfirmation(streams.Out, stdout, confirm)
+		exitCode, streamErr = consumeObservedStream(streams.Out, stdout, confirm, observe)
 	}
 	_ = stdin.Close()
 	waitErr := child.Wait()
@@ -209,10 +212,14 @@ func consumeStream(out io.Writer, stream io.Reader) (int, error) {
 }
 
 func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func() error) (int, error) {
+	return consumeObservedStream(out, stream, confirm, nil)
+}
+
+func consumeObservedStream(out io.Writer, stream io.Reader, confirm func() error, observe func(json.RawMessage, coordinatorEvent)) (int, error) {
 	unattestedGuidance := make(map[string]bool)
 	sourceGuidance := make(map[string]bool)
 	taskBindingGuidance := make(map[string]bool)
-	return scanCoordinatorStream(stream, confirm, func(_ json.RawMessage, event coordinatorEvent) error {
+	return scanCoordinatorStream(stream, confirm, observe, func(_ json.RawMessage, event coordinatorEvent) error {
 		switch event.Type {
 		case "collect:done":
 			for _, discovered := range event.Evals {
@@ -268,8 +275,12 @@ func consumeStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func
 }
 
 func consumeJSONStreamWithConfirmation(out io.Writer, stream io.Reader, confirm func() error) (int, error) {
+	return consumeJSONStream(out, stream, confirm, nil)
+}
+
+func consumeJSONStream(out io.Writer, stream io.Reader, confirm func() error, observe func(json.RawMessage, coordinatorEvent)) (int, error) {
 	events := []json.RawMessage{}
-	exitCode, err := scanCoordinatorStream(stream, confirm, func(raw json.RawMessage, _ coordinatorEvent) error {
+	exitCode, err := scanCoordinatorStream(stream, confirm, observe, func(raw json.RawMessage, _ coordinatorEvent) error {
 		events = append(events, append(json.RawMessage(nil), raw...))
 		return nil
 	})
@@ -294,6 +305,7 @@ func consumeJSONStreamWithConfirmation(out io.Writer, stream io.Reader, confirm 
 func scanCoordinatorStream(
 	stream io.Reader,
 	confirm func() error,
+	observe func(json.RawMessage, coordinatorEvent),
 	handle func(json.RawMessage, coordinatorEvent) error,
 ) (int, error) {
 	exitCode := 2
@@ -305,6 +317,9 @@ func scanCoordinatorStream(
 		var event coordinatorEvent
 		if err := json.Unmarshal(raw, &event); err != nil {
 			return 2, fmt.Errorf("invalid Eval coordinator event: %w", err)
+		}
+		if observe != nil {
+			observe(raw, event)
 		}
 		switch event.Type {
 		case "cost:confirmation-required":
@@ -335,4 +350,19 @@ func scanCoordinatorStream(
 		return 2, fmt.Errorf("Eval coordinator stopped before a terminal run event")
 	}
 	return exitCode, nil
+}
+
+func cacheSuccessfulCatalog(projectRoot string) func(json.RawMessage, coordinatorEvent) {
+	return func(raw json.RawMessage, event coordinatorEvent) {
+		if event.Type != "collect:done" || len(event.Errors) > 0 {
+			return
+		}
+		var catalog struct {
+			Evals []json.RawMessage `json:"evals"`
+		}
+		if json.Unmarshal(raw, &catalog) != nil {
+			return
+		}
+		_ = evalserver.StoreCatalogCache(projectRoot, catalog.Evals, time.Now())
+	}
 }

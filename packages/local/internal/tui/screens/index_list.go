@@ -35,10 +35,9 @@ func (s *Index) renderList(width, height int) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	grouped := s.groupedDefinitions()
 	rows := s.definitions.Render(func(d api.ProjectDefinition, index int, selected bool, rowWidth int) string {
 		row := s.renderListRow(d, rowWidth, selected && s.focus == indexFocusDefinitions)
-		if index == 0 || s.definitionGroup(grouped[index-1]) != s.definitionGroup(d) {
+		if s.groupStartIDs[d.ID] {
 			return s.renderDefinitionGroupHeader(d, rowWidth) + "\n" + row
 		}
 		return row
@@ -73,7 +72,7 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 	if d.Fidelity != "" && d.Fidelity != "resolved" {
 		parts = append(parts, " ", indexFidelityChip(d.Fidelity))
 	}
-	if count := len(s.lintFindingsForDefinition(d.ID)); count > 0 {
+	if count := s.activeLintCounts[d.ID]; count > 0 {
 		parts = append(parts, " ", kit.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
 	}
 	return padRow(strings.Join(parts, ""), width)

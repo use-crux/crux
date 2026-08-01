@@ -123,7 +123,7 @@ func TestDevRendersRealTUIFrameBeforeWarmupCompletes(t *testing.T) {
 	}
 }
 
-func TestDevRestoresRealTUIBeforeJoiningWorkers(t *testing.T) {
+func TestDevRestoresRealTUIAndBoundsWorkerJoin(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	master, terminal, err := pty.Open()
@@ -185,10 +185,15 @@ func TestDevRestoresRealTUIBeforeJoiningWorkers(t *testing.T) {
 	waitForSignalBy(t, sessionCanceled, time.Now().Add(time.Second), "session cancellation")
 
 	time.Sleep(75 * time.Millisecond) // Past the bounded server-cleanup timeout.
+	var shutdownErr error
 	select {
 	case err := <-returned:
-		t.Fatalf("dev returned before its admitted worker: %v\n%s", err, transcript.String())
-	default:
+		shutdownErr = err
+	case <-time.After(time.Second):
+		t.Fatalf("dev did not return after its bounded worker join\n%s", transcript.String())
+	}
+	if !errors.Is(shutdownErr, context.DeadlineExceeded) {
+		t.Fatalf("execute dev error = %v, want surfaced cleanup deadline\n%s", shutdownErr, transcript.String())
 	}
 	if tryLateAdmission == nil {
 		t.Fatal("server did not receive the session worker boundary")
@@ -205,14 +210,6 @@ func TestDevRestoresRealTUIBeforeJoiningWorkers(t *testing.T) {
 	}
 
 	close(releasePreflight)
-	select {
-	case err := <-returned:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("execute dev error = %v, want surfaced cleanup deadline\n%s", err, transcript.String())
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatalf("dev did not stop after worker release\n%s", transcript.String())
-	}
 	restoredTTY, err := xterm.GetState(master.Fd())
 	if err != nil {
 		t.Fatalf("capture restored PTY state: %v", err)

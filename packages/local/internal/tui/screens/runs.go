@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -45,14 +46,8 @@ type Runs struct {
 	spanDocument     *kit.DocumentPane
 	size             Size
 	layout           runsLayout
-	definitionFilter string
 	filteringRuns    bool
-	runQuery         string
-	runStatusIndex   int
-	runWindowIndex   int
-	runGroupIndex    int
-	sessionFilter    string
-	modelFilter      string
+	filters          runsFilterState
 	knownModels      []string
 	sessions         map[string]bool
 	expandedRows     map[string]bool
@@ -60,6 +55,9 @@ type Runs struct {
 	showAllSpans     bool
 	exportState      runExportState
 	detailIntent     uint64
+	detailPending    bool
+	detailPendingRun string
+	detailMovedAt    time.Time
 	runsValueVersion uint64
 	projection       runsListProjection
 }
@@ -86,8 +84,8 @@ func NewRuns() *Runs {
 		spanList: kit.NewListPane(func(row RunRow) string {
 			return row.ID
 		}),
-		spanDocument:   kit.NewDocumentPane(),
-		runWindowIndex: len(runWindows) - 1,
+		spanDocument: kit.NewDocumentPane(),
+		filters:      defaultRunsFilterState(),
 	}
 	r.runList.SetRowHeight(func(run api.ObservabilityRunSummary) int {
 		if r.isRunGroupStart(run) {
@@ -112,21 +110,17 @@ func (s *Runs) Focus(kind, id string) {
 		return
 	}
 	if kind == "status-filter" && id == "failures" {
-		s.definitionFilter = ""
+		s.filters.Definition = ""
 		s.clearRunSelection()
 		s.runList.SetItems(nil)
 		s.runsResource.Cancel()
-		s.runStatusIndex = runStatusFilterIndex(id)
-		s.runWindowIndex = len(runWindows) - 1
-		s.runGroupIndex = 0
-		s.sessionFilter = ""
-		s.modelFilter = ""
+		s.filters = defaultRunsFilterState()
+		s.filters.Status = runStatusFilterIndex(id)
 		s.filteringRuns = false
-		s.runQuery = ""
 		return
 	}
 	if kind == "definition" {
-		s.definitionFilter = id
+		s.filters.Definition = id
 		s.clearRunSelection()
 		s.runList.SetItems(nil)
 		s.runsResource.Cancel()
@@ -135,30 +129,25 @@ func (s *Runs) Focus(kind, id string) {
 	if kind != "run" {
 		return
 	}
-	s.definitionFilter = ""
+	s.filters.Definition = ""
 	s.spanList.SetItems(nil)
 	s.detailResource.Cancel()
 	s.diagnosis = nil
 	s.routedRun = nil
 	s.pendingLocation = nil
 	s.filteringRuns = false
-	s.runQuery = ""
-	s.runStatusIndex = 0
-	s.runWindowIndex = len(runWindows) - 1
-	s.runGroupIndex = 0
-	s.sessionFilter = ""
-	s.modelFilter = ""
+	s.filters = defaultRunsFilterState()
 	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
 	s.runList.Select(id)
 }
 
 func (s *Runs) FocusRoot() {
-	if s.definitionFilter == "" && s.runStatusIndex == 0 {
+	if s.filters.Definition == "" && s.filters.Status == 0 {
 		return
 	}
-	s.definitionFilter = ""
-	s.runStatusIndex = 0
+	s.filters.Definition = ""
+	s.filters.Status = 0
 	s.clearRunSelection()
 	s.runList.SetItems(nil)
 	s.runsResource.Cancel()
@@ -209,7 +198,7 @@ func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.I
 	listRevision, listInvalid := invalidations.Revision(bridge.RunsListResource)
 	if listInvalid || s.runsResource.Snapshot().State == resource.ResourceIdle {
 		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
-	} else if s.runsResource.Snapshot().Token.Owner != runsListOwnerForDefinition(s.definitionFilter) {
+	} else if s.runsResource.Snapshot().Token.Owner != runsListOwnerForDefinition(s.filters.Definition) {
 		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
 	}
 
@@ -233,7 +222,10 @@ func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.I
 func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
-		if !s.runsResource.Apply(resource.ResourceResult[[]api.ObservabilityRunSummary](m)) {
+		if m.filters.requestIdentity() != s.filters.requestIdentity() {
+			return nil
+		}
+		if !s.runsResource.Apply(m.ResourceResult) {
 			return nil
 		}
 		s.runsValueVersion++
@@ -263,10 +255,19 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	case runDetailLoadedMsg:
 		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
 	case runDetailIntentMsg:
-		if m.intent != s.detailIntent || m.runID != s.SelectedRunID() {
+		if m.intent != s.detailIntent || !s.detailPending {
 			return nil
 		}
-		return s.fetchRunDetail(ctx, c, m.runID)
+		if remaining := runDetailIntentDelay - runsDetailNow().Sub(s.detailMovedAt); remaining > 0 {
+			return s.detailIntentTick(remaining, m.intent)
+		}
+		s.detailPending = false
+		runID := s.detailPendingRun
+		s.detailPendingRun = ""
+		if runID == "" || runID != s.SelectedRunID() {
+			return nil
+		}
+		return s.fetchRunDetail(ctx, c, runID)
 	case runsSessionsLoadedMsg:
 		s.sessions = m.sessions
 	case runExportedMsg:
@@ -351,9 +352,10 @@ func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 }
 
 func (s *Runs) Breadcrumb() ([]string, string) {
+	filters := s.projectRunsFilters(runsListNow())
 	path := []string{"runs"}
-	if s.definitionFilter != "" {
-		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 36, "…"))
+	if filters.summary.Definition != "" {
+		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(filters.summary.Definition), 36, "…"))
 	}
 	if selected, _, ok := s.runList.Selected(); ok {
 		name := firstNonEmpty(selected.Name, selected.RunID)
@@ -367,8 +369,8 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	if listSnapshot.HasValue {
 		count := len(s.filteredRuns())
 		window := "all time"
-		if s.activeRunWindow().label != "all" {
-			window = "last " + s.activeRunWindow().label
+		if filters.summary.Window != "all" {
+			window = "last " + filters.summary.Window
 		}
 		right = fmt.Sprintf("%d %s · %s", count, kit.Pluralize(count, "run"), window)
 	}

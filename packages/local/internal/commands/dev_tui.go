@@ -10,12 +10,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/evalfs"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
-	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 	"github.com/use-crux/crux/packages/local/internal/tui"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
@@ -33,11 +31,15 @@ func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, sta
 }
 
 func newTUIProgram(io *output.IO, app *tui.App) *tea.Program {
-	return tea.NewProgram(app,
+	var program *tea.Program
+	filter := tui.NewInputCoalescer(func(msg tea.Msg) { program.Send(msg) })
+	program = tea.NewProgram(app,
 		tea.WithInput(io.In),
 		tea.WithOutput(tuiOutput(io.Out)),
 		tea.WithoutSignalHandler(),
+		tea.WithFilter(filter.Filter),
 	)
+	return program
 }
 
 // Bubble Tea probes synchronized-output and Unicode-width modes on startup.
@@ -98,9 +100,7 @@ func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, server
 		WithObservability(devSrv.Observability).
 		WithEvalReads(
 			evalfs.OpenProject(devSrv.ProjectRoot()),
-			evalserver.NewFreshCollector(devSrv.ProjectRoot(), evalserver.CollectorDeps{
-				FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
-			}),
+			devSrv.EvalCatalog,
 		)
 	app := newTUIApp(ctx, serverURL, c, startup)
 	app.SetBrowserOpener(devSrv.LocalURL(), opener)

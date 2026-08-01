@@ -253,3 +253,21 @@ func TestResourceCancelIsIdempotentAndRejectsLateResult(t *testing.T) {
 		t.Fatal("result arriving after Cancel was accepted")
 	}
 }
+
+func TestResourceDiscardForgetsLastGoodAndRejectsPreDiscardResult(t *testing.T) {
+	res := New(func(value string) bool { return value == "" })
+	owner := ResourceOwner{Screen: "runs", Resource: "list"}
+	_, initial := res.Begin(context.Background(), owner, 1)
+	res.Apply(ResourceResult[string]{Token: initial, Value: "last good"})
+	_, obsolete := res.Begin(context.Background(), owner, 2)
+
+	res.Discard()
+	_, current := res.Begin(context.Background(), owner, 3)
+	if accepted := res.Apply(ResourceResult[string]{Token: obsolete, Value: "obsolete"}); accepted {
+		t.Fatal("pre-discard result was accepted")
+	}
+	snapshot := res.Snapshot()
+	if snapshot.State != ResourceLoading || snapshot.HasValue || snapshot.Token != current {
+		t.Fatalf("post-discard snapshot = %#v, want fresh loading request", snapshot)
+	}
+}

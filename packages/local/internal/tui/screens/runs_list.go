@@ -14,22 +14,23 @@ import (
 // --- left pane: run list ----------------------------------------------------
 
 func (s *Runs) renderList(width, height int) string {
+	filters := s.projectRunsFilters(runsListNow())
 	meta := make([]string, 0, 7)
 	listSnapshot := s.runsResource.Snapshot()
-	if group := s.activeRunGroup(); group.label != "none" {
-		meta = append(meta, "group: "+group.label)
+	if filters.summary.Group != "none" {
+		meta = append(meta, "group: "+filters.summary.Group)
 	}
-	if filter := s.activeRunStatusFilter(); filter.label != "all" {
-		meta = append(meta, "filter: "+filter.label)
+	if filters.summary.Status != "all" {
+		meta = append(meta, "filter: "+filters.summary.Status)
 	}
-	if s.sessionFilter != "" {
-		meta = append(meta, "session: "+kit.TruncateMiddle(sanitizeRunsInline(s.sessionFilter), 18, "…"))
+	if filters.summary.Session != "" {
+		meta = append(meta, "session: "+kit.TruncateMiddle(sanitizeRunsInline(filters.summary.Session), 18, "…"))
 	}
-	if s.definitionFilter != "" {
-		meta = append(meta, "definition: "+kit.TruncateMiddle(sanitizeRunsInline(s.definitionFilter), 24, "…"))
+	if filters.summary.Definition != "" {
+		meta = append(meta, "definition: "+kit.TruncateMiddle(sanitizeRunsInline(filters.summary.Definition), 24, "…"))
 	}
-	if s.runQuery != "" {
-		meta = append(meta, "/"+sanitizeRunsInline(s.runQuery))
+	if filters.summary.Query != "" {
+		meta = append(meta, "/"+sanitizeRunsInline(filters.summary.Query))
 	}
 	if export := s.currentRunExportState(); export != "" {
 		meta = append(meta, export)
@@ -39,17 +40,17 @@ func (s *Runs) renderList(width, height int) string {
 	}
 	right := shell.TextMuted.Render(strings.Join(meta, " · "))
 	modelScope := ""
-	if s.modelFilter != "" {
+	if filters.summary.Model != "" {
 		// The canonical observability list cannot apply model metadata before
 		// its bounded page yet. Keep the scope on a dedicated row so combined
 		// filter metadata cannot crowd it out or be replaced by it.
 		modelBudget := max(1, width-lipgloss.Width(" model:  · newest 100"))
-		model := kit.TruncateMiddle(shortRunModel(s.modelFilter), modelBudget, "…")
+		model := kit.TruncateMiddle(shortRunModel(filters.summary.Model), modelBudget, "…")
 		modelScope = "model: " + model + " · newest 100"
 	}
 	window := "all time"
-	if s.activeRunWindow().label != "all" {
-		window = "last " + s.activeRunWindow().label
+	if filters.summary.Window != "all" {
+		window = "last " + filters.summary.Window
 	}
 	header := shell.PaneHeader(width,
 		focusTitle("Runs", s.focus == focusRuns),
@@ -203,12 +204,9 @@ func (s *Runs) runGroupRows(run api.ObservabilityRunSummary) []api.Observability
 }
 
 func (s *Runs) hasActiveRunFilters() bool {
-	return s.runQuery != "" ||
-		s.activeRunStatusFilter().label != "all" ||
-		s.activeRunWindow().label != "all" ||
-		s.modelFilter != "" ||
-		s.sessionFilter != "" ||
-		s.definitionFilter != ""
+	filters := s.projectRunsFilters(runsListNow()).summary
+	return filters.Query != "" || filters.Status != "all" || filters.Window != "all" ||
+		filters.Model != "" || filters.Session != "" || filters.Definition != ""
 }
 
 func runMetric(metrics map[string]any, keys ...string) (float64, bool) {

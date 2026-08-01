@@ -143,7 +143,7 @@ func TestRunsListRefreshShowsStatusWithoutHidingQueryOrRows(t *testing.T) {
 	runs := NewRuns()
 	runs.Resize(Size{Width: 70, Height: 24})
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-a", Name: "retained run"})
-	runs.runQuery = "retained"
+	runs.filters.Query = "retained"
 	client := uitest.NewFixtureClient()
 
 	_ = runs.Refresh(testContext, client, bridge.Invalidations{bridge.RunsListResource: 1})

@@ -2,6 +2,7 @@ package screens
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -75,19 +76,57 @@ func TestRunsNavigationCoalescesDetailIntentBursts(t *testing.T) {
 
 	first := runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, client)
 	second := runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, client)
-	if first == nil || second == nil {
-		t.Fatal("navigation did not schedule detail intents")
+	if first == nil || second != nil {
+		t.Fatal("navigation did not retain exactly one pending detail intent")
 	}
-	if cmd := runs.Update(testContext, first(), client); cmd != nil {
-		t.Fatal("stale navigation intent started a detail read")
-	}
-	fetch := runs.Update(testContext, second(), client)
+	// Drive the single timer after the quiet period. Intermediate cursor moves
+	// must not allocate one timer/fetch command each.
+	runs.detailMovedAt = runsDetailNow().Add(-runDetailIntentDelay)
+	fetch := runs.Update(testContext, first(), client)
 	if fetch == nil {
 		t.Fatal("latest navigation intent did not start a detail read")
 	}
 	runs.Update(testContext, fetch(), client)
 	if client.calls != 1 {
 		t.Fatalf("detail reads = %d, want one coalesced read", client.calls)
+	}
+}
+
+func TestRunsSixtyMovementBacklogSchedulesOnlyFinalDetail(t *testing.T) {
+	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
+	runs := NewRuns()
+	values := make([]api.ObservabilityRunSummary, 100)
+	for index := range values {
+		values[index] = api.ObservabilityRunSummary{RunID: fmt.Sprintf("run-%03d", index)}
+	}
+	setRunsForTest(runs, values...)
+	selectRunForTest(runs, values[0].RunID)
+
+	var pending tea.Cmd
+	for index := range 60 {
+		key := "j"
+		if index >= 30 {
+			key = "k"
+		}
+		cmd := runs.Update(testContext, tea.KeyPressMsg{Text: key, Code: rune(key[0])}, client)
+		if cmd != nil {
+			if pending != nil {
+				t.Fatal("movement backlog scheduled more than one detail timer")
+			}
+			pending = cmd
+		}
+	}
+	if pending == nil {
+		t.Fatal("movement backlog did not schedule final detail")
+	}
+	runs.detailMovedAt = runsDetailNow().Add(-runDetailIntentDelay)
+	fetch := runs.Update(testContext, pending(), client)
+	if fetch == nil {
+		t.Fatal("settled movement backlog did not fetch its final selection")
+	}
+	runs.Update(testContext, fetch(), client)
+	if client.calls != 1 {
+		t.Fatalf("detail calls = %d, want one", client.calls)
 	}
 }
 
@@ -174,7 +213,7 @@ func TestRunsClearedSelectionRejectsPendingDetail(t *testing.T) {
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-a", Revision: 91})
 	selectRunForTest(runs, "run-a")
 	requestA := runs.fetchRunDetail(ctx, client, "run-a")
-	runs.runQuery = "does-not-match"
+	runs.filters.Query = "does-not-match"
 	runs.ensureFilteredRunSelection(ctx, nil)
 
 	runs.Update(ctx, requestA(), client)
@@ -199,7 +238,7 @@ func TestRunsRefreshToEmptyFilterClearsAndCancelsSelection(t *testing.T) {
 	})
 	selectSpanForTest(runs, "span-run-a")
 	pending := runs.fetchRunDetail(ctx, client, "run-a")
-	runs.runQuery = "visible"
+	runs.filters.Query = "visible"
 
 	runs.Update(ctx, runsListLoadedForTest(runs,
 		api.ObservabilityRunSummary{RunID: "run-a", Name: "hidden", Revision: 92},
@@ -223,7 +262,7 @@ func TestRunsRoutedDetailMetadataReconcilesActiveFilter(t *testing.T) {
 	t.Run("clears when no rows remain", func(t *testing.T) {
 		runs := NewRuns()
 		runs.Focus("run", "routed")
-		runs.runQuery = "unknown"
+		runs.filters.Query = "unknown"
 		runs.ensureFilteredRunSelection(testContext, nil)
 
 		runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
@@ -238,7 +277,7 @@ func TestRunsRoutedDetailMetadataReconcilesActiveFilter(t *testing.T) {
 		runs := NewRuns()
 		setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "neighbor", Status: "unknown"})
 		runs.Focus("run", "routed")
-		runs.runQuery = "unknown"
+		runs.filters.Query = "unknown"
 		runs.ensureFilteredRunSelection(testContext, nil)
 
 		cmd := runs.Update(testContext, runDetailLoadedForTest(runs, detail), client)
@@ -307,7 +346,7 @@ func TestRunsRefreshReconcilesFilteredListAfterNavigation(t *testing.T) {
 		api.ObservabilityRunSummary{RunID: "run-visible", Name: "200-span deep trace"},
 		api.ObservabilityRunSummary{RunID: "run-hidden", Name: "ordinary trace"},
 	)
-	runs.runQuery = "200-span"
+	runs.filters.Query = "200-span"
 	runs.ensureFilteredRunSelection(testContext, nil)
 	if got := runs.SelectedRunID(); got != "run-visible" {
 		t.Fatalf("initial filtered selection = %q, want run-visible", got)

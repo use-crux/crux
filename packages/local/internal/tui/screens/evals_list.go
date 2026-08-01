@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
@@ -17,10 +18,14 @@ func (s *Evals) renderListLines(rect kit.Rect) []string {
 func (s *Evals) renderList(width, height int) string {
 	snapshot := s.catalogResource.Snapshot()
 	meta := appendResourceStatus(evalsListPosition(s.catalog.Position()), resourceStatus(snapshot))
+	subtitle := fmt.Sprintf("%d discovered", len(s.items))
+	if snapshot.Refreshing {
+		subtitle = fmt.Sprintf("refresh %s/30s", s.catalogElapsed.Round(time.Second))
+	}
 	header := overviewPaneHeader(
 		width,
 		focusTitle("Eval catalog", s.focus == evalsFocusCatalog),
-		fmt.Sprintf("%d discovered", len(s.items)),
+		subtitle,
 		meta,
 	)
 	headerHeight := strings.Count(header, "\n") + 1

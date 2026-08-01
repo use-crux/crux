@@ -15,6 +15,11 @@ import (
 type CollectorDeps struct {
 	FindNode           func() (string, error)
 	ExtractCoordinator func() (string, error)
+	WaitForStartup     func(context.Context) error
+	// Lifetime cancels shared flights when their owning dev session ends.
+	Lifetime context.Context
+	// StartFlight admits a discovery flight to the owning session worker group.
+	StartFlight func(func()) bool
 }
 
 type Collector struct {
@@ -28,6 +33,7 @@ type Collector struct {
 	cached    []json.RawMessage
 	fetchedAt time.Time
 	inflight  *collectorFlight
+	diskOnce  sync.Once
 }
 
 type collectorFlight struct {
@@ -39,7 +45,7 @@ type collectorFlight struct {
 
 const collectorTTL = 15 * time.Second
 const freshCollectorBurstTTL = 250 * time.Millisecond
-const collectorTimeout = 14 * time.Second
+const collectorTimeout = 30 * time.Second
 
 // NewCollector creates a cached, discovery-only Eval catalog reader.
 func NewCollector(projectRoot string, deps CollectorDeps) *Collector {
@@ -59,6 +65,7 @@ func NewFreshCollector(projectRoot string, deps CollectorDeps) *Collector {
 
 // EvalManifests returns additive worker projections without reinterpreting them.
 func (c *Collector) EvalManifests(ctx context.Context) ([]json.RawMessage, error) {
+	c.loadDiskCache()
 	c.mu.Lock()
 	if c.cached != nil && time.Since(c.fetchedAt) < c.ttl {
 		cached := cloneRaw(c.cached)
@@ -78,7 +85,24 @@ func (c *Collector) EvalManifests(ctx context.Context) ([]json.RawMessage, error
 	flight := &collectorFlight{done: make(chan struct{})}
 	c.inflight = flight
 	c.mu.Unlock()
-	go c.runFlight(context.WithoutCancel(ctx), flight)
+	flightCtx, cancelFlight := context.WithCancel(context.WithoutCancel(ctx))
+	stopLifetime := func() bool { return false }
+	if c.deps.Lifetime != nil {
+		stopLifetime = context.AfterFunc(c.deps.Lifetime, cancelFlight)
+	}
+	run := func() {
+		defer cancelFlight()
+		defer stopLifetime()
+		c.runFlight(flightCtx, flight)
+	}
+	if c.deps.StartFlight != nil {
+		if !c.deps.StartFlight(run) {
+			cancelFlight()
+			c.rejectFlight(flight, errors.New("Eval catalog collector is shutting down"))
+		}
+	} else {
+		go run()
+	}
 
 	select {
 	case <-ctx.Done():
@@ -86,6 +110,17 @@ func (c *Collector) EvalManifests(ctx context.Context) ([]json.RawMessage, error
 	case <-flight.done:
 		return cloneRaw(flight.manifests), flight.err
 	}
+}
+
+func (c *Collector) rejectFlight(flight *collectorFlight, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.inflight != flight {
+		return
+	}
+	flight.err = err
+	c.inflight = nil
+	close(flight.done)
 }
 
 func (c *Collector) runFlight(ctx context.Context, flight *collectorFlight) {
@@ -98,6 +133,7 @@ func (c *Collector) runFlight(ctx context.Context, flight *collectorFlight) {
 	} else {
 		c.cached = cloneRaw(manifests)
 		c.fetchedAt = time.Now()
+		_ = StoreCatalogCache(c.projectRoot, manifests, c.fetchedAt)
 	}
 	flight.manifests = cloneRaw(manifests)
 	flight.err = err
@@ -109,6 +145,11 @@ func (c *Collector) runFlight(ctx context.Context, flight *collectorFlight) {
 func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+	if c.deps.WaitForStartup != nil {
+		if err := c.deps.WaitForStartup(ctx); err != nil {
+			return nil, fmt.Errorf("wait for startup before Eval catalog discovery: %w", err)
+		}
+	}
 	node, err := c.deps.FindNode()
 	if err != nil {
 		return nil, err
@@ -158,6 +199,22 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 		manifests = []json.RawMessage{}
 	}
 	return manifests, nil
+}
+
+func (c *Collector) loadDiskCache() {
+	c.diskOnce.Do(func() {
+		manifests, _, err := LoadCatalogCache(c.projectRoot, time.Now())
+		if err != nil || manifests == nil {
+			return
+		}
+		c.mu.Lock()
+		c.cached = manifests
+		// The disk layer already enforced its longer cross-process TTL. Treat
+		// an accepted snapshot as newly admitted to this collector so the
+		// fresh TUI collector can share it for its short burst window too.
+		c.fetchedAt = time.Now()
+		c.mu.Unlock()
+	})
 }
 
 func cloneRaw(values []json.RawMessage) []json.RawMessage {
