@@ -5,6 +5,12 @@ description: Build Runtime Engine store, wake, or full host adapters with the sh
 
 Most runtime adapters should implement one composable piece rather than a whole engine. Keep correctness in the core kernel; adapters persist rows, deliver wake messages, verify setup, and expose honest capabilities.
 
+For durable Signal-to-Flow delivery, use the exact
+[Runtime Signal adapter surface](/docs/reference/crux-core/runtime-adapter).
+The bundled in-memory Runtime is process-local, and no bundled durable Signal
+provider is certified in this release. Custom implementations must pass the
+reactive composite conformance suite before declaring support.
+
 ## Adapter shapes
 
 | Shape              | Implement when                                                                               |
@@ -95,5 +101,6 @@ Implement `runComposite(kind, input)` only when your platform has a stronger nat
 ## Related
 
 - Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- Reference: [Runtime Signal adapter surface](/docs/reference/crux-core/runtime-adapter)
 - Guide: [Building Custom Adapters](/docs/guides/advanced/building-adapters)
 - Recipe: [Generic Queue and BullMQ](/docs/cookbook/runtime/generic-queue-bullmq)

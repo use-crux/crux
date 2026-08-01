@@ -1,0 +1,66 @@
+---
+title: Signals API
+description: Exact public API for typed Signal definitions, publication, filtering, and durable Flow waits.
+---
+
+Create Signal definitions from the root package:
+
+```ts
+import { signal } from "@use-crux/core";
+```
+
+Import the complete Signal type and error surface from the focused subpath:
+
+```ts
+import {
+  SignalError,
+  SignalValidationError,
+  type Signal,
+  type SignalOccurrence,
+} from "@use-crux/core/signal";
+```
+
+Static Flow wait types and methods live on the existing Flow surface:
+
+```ts
+import { flow, type FlowWaitForSignalOptions } from "@use-crux/core/flow";
+```
+
+<Callout type="info">
+  `publish()` resolves at acceptance, never consumer completion. The default
+  in-memory `node()` Runtime is process-local and cannot activate a durable
+  Signal-to-Flow wait.
+</Callout>
+
+## Reference map
+
+<Cards>
+  <Card
+    title="Definitions and publication"
+    description="signal(), Signal, schema inference, occurrences, receipts, listeners, and options."
+    href="/docs/reference/crux-core/signal/definitions-and-publication"
+  />
+  <Card
+    title="Filters and helper types"
+    description="Match and predicate views, StaticSignalSource, and occurrence inference."
+    href="/docs/reference/crux-core/signal/filters-and-types"
+  />
+  <Card
+    title="Flow integration"
+    description="Flow signal maps, waitFor(source), local Flow signals, and their exact separation."
+    href="/docs/reference/crux-core/signal/flow-integration"
+  />
+  <Card
+    title="Errors"
+    description="SignalError, SignalValidationError, and Runtime errors around durable waits."
+    href="/docs/reference/crux-core/signal/errors"
+  />
+</Cards>
+
+Start with the [Signals guide](/docs/guides/durable-execution/signals) for the
+recommended learning path and deployment boundaries.
+
+Adapter authors should use the exact
+[Runtime Signal adapter surface](/docs/reference/crux-core/runtime-adapter) for
+the shipped records, payload codec, atomic composites, and required
+certification suite.

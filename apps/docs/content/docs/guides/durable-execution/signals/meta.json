@@ -1,0 +1,13 @@
+{
+  "title": "Signals",
+  "description": "Typed process-local events and durable Flow waits.",
+  "pages": [
+    "index",
+    "publish-and-subscribe",
+    "filters-and-idempotency",
+    "durable-flow-waits",
+    "retries-effects-and-evals",
+    "operations-and-errors",
+    "recipes"
+  ]
+}

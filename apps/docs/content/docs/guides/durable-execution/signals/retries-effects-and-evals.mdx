@@ -1,0 +1,67 @@
+---
+title: Retries, Effects, storage, and Evals
+description: Know what durable Signal delivery preserves, retries, and deliberately refuses to claim.
+---
+
+## Delivery is at least once
+
+Durable publication gives each occurrence and required delivery a stable
+identity. Wake delivery is at least once, so a worker can retry after failure
+without creating a new occurrence or delivery identity.
+
+Flow replay remains the execution model. Completed named steps reuse their
+recorded output; code after the wait may run again after a failed attempt.
+Keep Flow code deterministic, use stable step labels, and make external writes
+idempotent or model them as [Effects](/docs/guides/effects).
+
+Consumer failure is isolated to that delivery. It cannot retroactively reject
+an accepted publication or prevent other required deliveries from proceeding.
+
+## Effects remain in-process recovery
+
+A Signal-driven resume keeps the Flow's `EffectScopeRef` consistent across
+suspension and retry snapshots while the same process still owns the live
+Effect ledger. That prevents one retry from silently switching to another
+in-process rollback boundary.
+
+<Callout type="warn" title="A persisted EffectScopeRef is not a recovery ledger">
+  The ref is JSON-safe, but Effect receipts, captured state, recovery handlers,
+  and ledger state are process-local. Persisting the ref does not make rollback
+  restart-safe and cannot reconstruct recovery after process loss.
+</Callout>
+
+Signal durability and Effect recovery therefore answer different questions:
+
+| Concern | Shipped guarantee |
+| --- | --- |
+| Signal occurrence and required Flow delivery | Atomic and restart-safe only with a qualifying deployment/store |
+| Flow wake | At least once, with stable occurrence and delivery identities |
+| Completed Flow steps | Replayed from the durable Flow snapshot |
+| `EffectScopeRef` field | JSON-safe snapshot metadata |
+| Effect receipts, captures, handlers, ledger | In-process only |
+
+## Storage owns the durable boundary
+
+The Runtime store owns occurrence records, required delivery records, waiters,
+events, leases, outbox work, and Flow snapshots. The store must implement these
+under the exact transaction and durability contract; Core does not import a
+provider SDK or infer support from an adapter package name.
+
+Payloads and match data must remain JSON-safe. Idempotency state is keyed by a
+versioned hash, but storage still contains normalized application payloads.
+Choose retention, access control, encryption, and tenancy boundaries suitable
+for that data. Do not put credentials or secrets in Signal payloads merely
+because public errors redact them.
+
+## Evals cannot wake durable reactive work
+
+Evals may publish a Signal when no durable binding participates; the receipt is
+then `process-local`. If an armed durable Flow wait would receive the
+occurrence, publication fails before allocation with
+`EVAL_REACTIVE_DISPATCH_FORBIDDEN`.
+
+This prevents an Eval case from dispatching real durable application work
+without an isolated execution/evidence contract. Run end-to-end reactive tests
+outside Eval execution, using a dedicated namespace and conformant test store.
+
+Next, prepare for [operations and errors](/docs/guides/durable-execution/signals/operations-and-errors).

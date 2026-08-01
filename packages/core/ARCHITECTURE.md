@@ -959,7 +959,7 @@ Generated and hand-written wake entries meet the kernel through `createRuntimeHa
 
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 
-Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, `RUNTIME_HOST_ONLY`, and `EVAL_REACTIVE_DISPATCH_FORBIDDEN`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline
 
@@ -1466,6 +1466,10 @@ Example: a brand alignment judge with `detailSchema: z.object({ notes: z.array(z
 `scorers.judge()` in `@use-crux/core/eval` reuses this machinery: it builds an ad-hoc structured prompt over `llmJudge`, bridging an explicit eval-local adapter `generate` binding to the judge's `generateObject` expectation. Rubric mode maps to criteria + a 0–1 scale; `choiceScores` mode supplies a `detailSchema` choice enum and maps the chosen label to its score. Judge calls pin `temperature: 0` and `topP: 1`; runtime output/reference/context are wrapped as untrusted prompt content; and chain-of-thought reasoning is persisted to `Score.metadata.rationale` alongside `Score.metadata.judge` provenance (`model`, prompt version, rubric fingerprint). Judge model resolution starts with the scorer's explicit `model` option, with internal runner setup reserved for programmatic tests and first-party compatibility seams. Managed judges are planner-admitted dependent actions and reuse their own output-keyed evidence independently from task execution.
 
 ## Flow Suspend/Resume
+
+Static Signal-to-Flow waits share the Flow lifecycle but have their own
+acceptance, capability, retry, and privacy laws. See the focused
+[Signal architecture](src/signal/ARCHITECTURE.md).
 
 ### flow and FlowHandle
 

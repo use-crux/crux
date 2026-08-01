@@ -85,7 +85,15 @@ export default defineSchema({
     targetId: v.string(),
     namespace: v.string(),
     status: v.string(),
+    effects: v.optional(
+      v.object({
+        kind: v.literal('effect.scope'),
+        id: v.string(),
+        runId: v.string(),
+      }),
+    ),
     input: v.any(),
+    continuation: v.optional(v.any()),
     completedSteps: v.any(),
     fingerprint: v.array(v.string()),
     pendingSuspends: v.any(),

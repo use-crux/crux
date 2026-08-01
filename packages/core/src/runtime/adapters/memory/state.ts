@@ -20,6 +20,11 @@ import { scopedKey } from "./data";
 import { cloneJsonValue } from "./json";
 import { matchesPruneNamespace, olderThan, pruneMapValues } from "./retention";
 import { cloneRuntimeResultRef } from "../../results/types";
+import {
+  appendPredicateCandidate,
+  cloneMemoryDeliveredSuspend,
+  cloneMemoryPendingSuspend,
+} from "./predicate-candidates";
 
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
@@ -182,12 +187,17 @@ export function createMemoryStatePort(
       const [key, snapshot] = entry;
       const pendingSuspends = snapshot.pendingSuspends.map((suspend) => {
         if (suspend.waiterId !== options.waiterId) return suspend;
+        if (options.predicateCandidate) {
+          return appendPredicateCandidate(suspend, options);
+        }
         return Object.freeze({
-          ...clonePendingSuspend(suspend),
+          ...cloneMemoryPendingSuspend(suspend),
           delivered: deliveredSuspend(options),
         });
       });
-      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options);
+      const deliveredSuspends = options.predicateCandidate
+        ? snapshot.deliveredSuspends
+        : mergeDeliveredSuspend(snapshot, options);
       recordWrite?.();
       data.snapshots.set(
         key,
@@ -316,6 +326,15 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     targetId: snapshot.targetId,
     namespace: snapshot.namespace,
     status: snapshot.status,
+    ...(snapshot.effects
+      ? {
+          effects: Object.freeze({
+            kind: snapshot.effects.kind,
+            id: snapshot.effects.id,
+            runId: snapshot.effects.runId,
+          }),
+        }
+      : {}),
     input: cloneJsonValue(snapshot.input, "flow snapshot input"),
     ...(snapshot.continuation
       ? {
@@ -331,7 +350,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     ) as Readonly<Record<string, JsonValue>>,
     fingerprint: [...snapshot.fingerprint],
     pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
-      clonePendingSuspend(suspend),
+      cloneMemoryPendingSuspend(suspend),
     ),
     deliveredSuspends: snapshot.deliveredSuspends
       ? Object.freeze(
@@ -340,7 +359,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
               ([deliveryKey, delivery]) => [
                 deliveryKey,
                 delivery
-                  ? cloneDeliveredSuspend(
+                  ? cloneMemoryDeliveredSuspend(
                       delivery,
                       `flow snapshot deliveredSuspends.${deliveryKey}.payload`,
                     )
@@ -370,44 +389,6 @@ function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
     completedAt: new Date(record.completedAt),
   });
 }
-function clonePendingSuspend(
-  suspend: RuntimePendingSuspend,
-): RuntimePendingSuspend {
-  return Object.freeze({
-    label: suspend.label,
-    deliveryKey: suspend.deliveryKey,
-    waiterId: suspend.waiterId,
-    timerId: suspend.timerId,
-    timeoutAt: suspend.timeoutAt ? new Date(suspend.timeoutAt) : undefined,
-    delivered: suspend.delivered
-      ? cloneDeliveredSuspend(
-          suspend.delivered,
-          `flow snapshot pendingSuspends.${suspend.label}.delivered.payload`,
-        )
-      : undefined,
-  });
-}
-
-function cloneDeliveredSuspend(
-  delivery: NonNullable<RuntimePendingSuspend["delivered"]>,
-  path: string,
-): NonNullable<RuntimePendingSuspend["delivered"]> {
-  const payload = (
-    delivery as NonNullable<RuntimePendingSuspend["delivered"]> & {
-      readonly payload?: JsonValue;
-    }
-  ).payload;
-  if (payload === undefined) {
-    return { eventId: delivery.eventId } as unknown as NonNullable<
-      RuntimePendingSuspend["delivered"]
-    >;
-  }
-  return {
-    eventId: delivery.eventId,
-    payload: cloneJsonValue(payload, path),
-  };
-}
-
 function mergeDeliveredSuspend(
   snapshot: FlowSnapshot,
   options: MarkSnapshotDeliveredOptions,
@@ -425,7 +406,7 @@ function mergeDeliveredSuspend(
 
 function deliveredSuspend(
   options: MarkSnapshotDeliveredOptions,
-): FlowSnapshot["pendingSuspends"][number]["delivered"] {
+): NonNullable<RuntimePendingSuspend["delivered"]> {
   return {
     eventId: options.eventId as EventCursor,
     payload: cloneJsonValue(options.payload, "flow snapshot delivered payload"),

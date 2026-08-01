@@ -8,197 +8,124 @@
  * @module
  */
 
-import type { JsonValue } from '../../storage'
-import type { EffectScopeRef } from '../../effect/types'
-import type { WorkItem } from '../engine/work'
+import type { JsonValue } from "../../storage";
+import type { WorkItem } from "../engine/work";
 import type {
   EventCursor,
   FlowId,
   RuntimeTargetId,
   WaiterId,
-  TimerId,
   WorkId,
-} from './ids'
-import type { RuntimeWork } from './work'
-import type { WorkStatus } from '../engine/work'
-import type { RuntimePruneOptions, RuntimePruneResult } from './retention'
-
-/** Flow snapshot shape persisted by runtime-backed flow replay. */
-export interface FlowSnapshot {
-  /** Durable flow instance id. */
-  readonly flowId: FlowId
-  /** In-process Effect boundary retained across flow execution segments. */
-  readonly effects?: EffectScopeRef
-  /** Owning runtime work item for this flow occurrence. */
-  readonly workId: WorkId
-  /** Name-based target id for the flow definition. */
-  readonly targetId: RuntimeTargetId
-  /** Runtime namespace. */
-  readonly namespace: string
-  /** Flow lifecycle status. */
-  readonly status:
-    | 'running'
-    | 'suspended'
-    | 'completed'
-    | 'blocked'
-    | 'expired'
-    | 'cancelled'
-  /** JSON input captured at first run. */
-  readonly input: JsonValue
-  /** Serializable observability carrier for the next execution segment. */
-  readonly continuation?: JsonValue
-  /** Existing label-keyed step cache, unchanged by the runtime engine. */
-  readonly completedSteps: Readonly<Record<string, JsonValue>>
-  /** Ordered replay-structure labels observed so far. */
-  readonly fingerprint: readonly string[]
-  /** Suspensions currently owned by this snapshot. */
-  readonly pendingSuspends: readonly RuntimePendingSuspend[]
-  /**
-   * Event cursors for suspend deliveries already consumed by replay.
-   *
-   * Keys use the source-order delivery key emitted by the flow executor, so
-   * repeated same-label suspends replay the payload that belongs to their
-   * exact occurrence.
-   */
-  readonly deliveredSuspends?: RuntimeDeliveredSuspends
-  /** Durable work already flushed for replay-visible defer/after calls. */
-  readonly scheduledWork?: Readonly<Record<string, RuntimeScheduledWork>>
-  /** Last update time. */
-  readonly updatedAt: Date
-}
-
-/** Committed replay-visible scheduled-work metadata. */
-export interface RuntimeScheduledWork {
-  /** Child work id for `flow.defer()` work. */
-  readonly workId?: WorkId
-  /** Timer id for `flow.after()` work. */
-  readonly timerId?: TimerId
-}
-
-/** Suspension metadata stored with a flow snapshot. */
-export interface RuntimePendingSuspend {
-  /** User-authored suspend/wait label. */
-  readonly label: string
-  /** Source-order replay key for disambiguating repeated labels. */
-  readonly deliveryKey?: string
-  /** Waiter registered for event/signal delivery. */
-  readonly waiterId?: WaiterId
-  /** Timer registered for timeout delivery. */
-  readonly timerId?: TimerId
-  /** Deadline that makes this suspend occurrence eligible for timeout replay. */
-  readonly timeoutAt?: Date
-  /** Event delivery selected for this suspend point. */
-  readonly delivered?: RuntimeDeliveredSuspend
-}
-
-/** Delivered event metadata recorded for replay to consume later. */
-export interface RuntimeDeliveredSuspend {
-  /** Durable event cursor that produced the replay payload. */
-  readonly eventId: EventCursor
-  /** JSON payload copied from the delivered event for snapshot-only replay. */
-  readonly payload: JsonValue
-}
-
-/** Occurrence-keyed delivered suspend cursors retained across replay barriers. */
-export interface RuntimeDeliveredSuspends {
-  readonly [deliveryKey: string]: RuntimeDeliveredSuspend | undefined
-}
+} from "./ids";
+import type { RuntimeWork } from "./work";
+import type { WorkStatus } from "../engine/work";
+import type { RuntimePruneOptions, RuntimePruneResult } from "./retention";
+import type { FlowSnapshot } from "./flow-state";
+export type {
+  FlowSnapshot,
+  RuntimeDeliveredSuspend,
+  RuntimeDeliveredSuspends,
+  RuntimePendingSuspend,
+  RuntimeScheduledWork,
+} from "./flow-state";
 
 /** Idempotency marker written atomically with completed transitions. */
 export interface IdempotencyRecord {
   /** Runtime namespace. */
-  readonly namespace: string
+  readonly namespace: string;
   /** Stable idempotency key. */
-  readonly key: string
+  readonly key: string;
   /** Time when the guarded operation completed durably. */
-  readonly completedAt: Date
+  readonly completedAt: Date;
 }
 
 /** Durable state read options. */
 export interface RuntimeStateReadOptions {
   /** Runtime namespace. */
-  readonly namespace: string
+  readonly namespace: string;
 }
 
 /** Input for creating a fresh pending runtime work item. */
 export interface NewWorkItem {
   /** Kernel-minted stable work id. */
-  readonly workId: WorkId
+  readonly workId: WorkId;
   /** Runtime namespace. */
-  readonly namespace: string
+  readonly namespace: string;
   /** Small routing payload describing the work to execute. */
-  readonly work: RuntimeWork
+  readonly work: RuntimeWork;
   /** Name-based runtime target id. */
-  readonly targetId: RuntimeTargetId
+  readonly targetId: RuntimeTargetId;
   /** Stable idempotency key for the first delivery. */
-  readonly idempotencyKey: string
+  readonly idempotencyKey: string;
   /** Earliest time this work should be delivered. */
-  readonly notBefore?: Date
+  readonly notBefore?: Date;
   /** Attempts allowed before dead-letter. Defaults to the engine default. */
-  readonly maxAttempts?: number
+  readonly maxAttempts?: number;
   /** Timestamp override for deterministic tests. Defaults to now. */
-  readonly now?: Date
+  readonly now?: Date;
   /** Scoped-idle counter group this work keeps busy until terminal. */
-  readonly idleScope?: string
+  readonly idleScope?: string;
 }
 
 /** Options for moving an existing suspended item back to pending. */
 export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
   /** Work payload to carry on the fresh delivery intent. */
-  readonly work: RuntimeWork
+  readonly work: RuntimeWork;
   /** Stable idempotency key for the fresh delivery intent. */
-  readonly idempotencyKey: string
+  readonly idempotencyKey: string;
   /** Timestamp override for deterministic runtimes. Defaults to now. */
-  readonly now?: Date
+  readonly now?: Date;
   /**
    * Current statuses that may be moved back to pending.
    *
    * Defaults to `suspended`, which is the flow waiter/timer resume path.
    * Operator retry uses `blocked` and `dead-letter` through the same store CAS.
    */
-  readonly from?: WorkStatus | readonly WorkStatus[]
+  readonly from?: WorkStatus | readonly WorkStatus[];
 }
 
 /** Delivered event metadata to attach to a pending suspend by waiter id. */
 export interface MarkSnapshotDeliveredOptions extends RuntimeStateReadOptions {
   /** Waiter that won the event/timeout race. */
-  readonly waiterId: WaiterId
+  readonly waiterId: WaiterId;
   /** Durable event cursor that produced the delivered payload. */
-  readonly eventId: EventCursor
+  readonly eventId: EventCursor;
   /** JSON payload copied into the snapshot for future replay. */
-  readonly payload: JsonValue
+  readonly payload: JsonValue;
+  /** Append a predicate candidate without consuming its logical waiter. */
+  readonly predicateCandidate?: true;
 }
 
 /** Bounded work-listing options used by kernel-owned maintenance. */
 export interface ListWorkOptions {
   /** Runtime namespace to list within. */
-  readonly namespace: string
+  readonly namespace: string;
   /** Work status to list. */
-  readonly status: WorkStatus
+  readonly status: WorkStatus;
   /** Only include records updated before this time. */
-  readonly updatedBefore?: Date
+  readonly updatedBefore?: Date;
   /** Maximum number of records to return. */
-  readonly limit?: number
+  readonly limit?: number;
 }
 
 /** Grouped work-count query used by operator status surfaces. */
 export interface CountWorkOptions {
   /** Runtime namespace to count within. */
-  readonly namespace: string
+  readonly namespace: string;
 }
 
 /** Count of work rows grouped by status and target. */
 export interface WorkStatusCount {
   /** Runtime namespace for this count bucket. */
-  readonly namespace: string
+  readonly namespace: string;
   /** Work status for this count bucket. */
-  readonly status: WorkStatus
+  readonly status: WorkStatus;
   /** Runtime target id for this count bucket. */
-  readonly targetId: RuntimeTargetId
+  readonly targetId: RuntimeTargetId;
   /** Number of rows in this bucket. */
-  readonly count: number
+  readonly count: number;
   /** True when an adapter hit a bounded-read cap before proving the exact count. */
-  readonly truncated?: boolean
+  readonly truncated?: boolean;
 }
 
 /** Durable state port used by the runtime kernel. */
@@ -216,7 +143,7 @@ export interface RuntimeStatePort {
    * transitions decrement the same counter through `putWork()`/transactional
    * state updates; counters must never go below zero.
    */
-  createWork(work: NewWorkItem): Promise<WorkItem>
+  createWork(work: NewWorkItem): Promise<WorkItem>;
 
   /**
    * Load a work item by id.
@@ -227,14 +154,14 @@ export interface RuntimeStatePort {
   getWork(
     workId: WorkId,
     options: RuntimeStateReadOptions,
-  ): Promise<WorkItem | null>
+  ): Promise<WorkItem | null>;
 
   /**
    * Persist a work item produced by the kernel state machine.
    *
    * Adapters must not perform their own status transitions or retry decisions.
    */
-  putWork(work: WorkItem): Promise<void>
+  putWork(work: WorkItem): Promise<void>;
 
   /**
    * List bounded work records for kernel-owned maintenance.
@@ -242,16 +169,14 @@ export interface RuntimeStatePort {
    * Adapters only filter and return records; expiry-vs-failure decisions,
    * cancellation legality, retry, and retention policy stay in the kernel.
    */
-  listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>
+  listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>;
 
   /**
    * Delete completed, cancelled, and dead-lettered work updated before a cutoff.
    *
    * Pending, leased, suspended, and blocked work is never pruned by retention.
    */
-  pruneTerminalWork(
-    options: RuntimePruneOptions,
-  ): Promise<RuntimePruneResult>
+  pruneTerminalWork(options: RuntimePruneOptions): Promise<RuntimePruneResult>;
 
   /**
    * Count work records for operator/devtools status without sampling rows.
@@ -260,7 +185,7 @@ export interface RuntimeStatePort {
    * set `truncated` when they hit a platform read cap before proving the exact
    * count, so callers never mistake a capped sample for an exact total.
    */
-  countWork(options: CountWorkOptions): Promise<readonly WorkStatusCount[]>
+  countWork(options: CountWorkOptions): Promise<readonly WorkStatusCount[]>;
 
   /**
    * Move an existing suspended work item back to pending.
@@ -273,7 +198,7 @@ export interface RuntimeStatePort {
   setWorkPending(
     workId: WorkId,
     options: SetWorkPendingOptions,
-  ): Promise<WorkItem | null>
+  ): Promise<WorkItem | null>;
 
   /**
    * Load a flow snapshot by id.
@@ -284,7 +209,7 @@ export interface RuntimeStatePort {
   getSnapshot(
     flowId: FlowId,
     options: RuntimeStateReadOptions,
-  ): Promise<FlowSnapshot | null>
+  ): Promise<FlowSnapshot | null>;
 
   /**
    * Persist a runtime-backed flow snapshot.
@@ -292,7 +217,7 @@ export interface RuntimeStatePort {
    * Snapshot writes participate in composite transactions in store adapters
    * that support atomic multi-record updates.
    */
-  putSnapshot(snapshot: FlowSnapshot): Promise<void>
+  putSnapshot(snapshot: FlowSnapshot): Promise<void>;
 
   /**
    * Delete terminal flow snapshots updated before a cutoff.
@@ -301,7 +226,7 @@ export interface RuntimeStatePort {
    */
   pruneTerminalSnapshots(
     options: RuntimePruneOptions,
-  ): Promise<RuntimePruneResult>
+  ): Promise<RuntimePruneResult>;
 
   /**
    * Record which durable event delivered a pending suspend point.
@@ -313,14 +238,14 @@ export interface RuntimeStatePort {
   markSnapshotDelivered(
     workId: WorkId,
     options: MarkSnapshotDeliveredOptions,
-  ): Promise<void>
+  ): Promise<void>;
 
   /**
    * Check whether a stable idempotency key has already completed.
    *
    * Idempotency records are generated by the kernel and scoped by namespace.
    */
-  hasIdempotencyKey(namespace: string, key: string): Promise<boolean>
+  hasIdempotencyKey(namespace: string, key: string): Promise<boolean>;
 
   /**
    * Persist a completed idempotency record.
@@ -328,12 +253,12 @@ export interface RuntimeStatePort {
    * Composite operations write this atomically with their state transition so a
    * crash can never record one without the other.
    */
-  putIdempotencyKey(record: IdempotencyRecord): Promise<void>
+  putIdempotencyKey(record: IdempotencyRecord): Promise<void>;
 
   /** Delete completed idempotency markers older than the retention cutoff. */
   pruneIdempotencyKeys(
     options: RuntimePruneOptions,
-  ): Promise<RuntimePruneResult>
+  ): Promise<RuntimePruneResult>;
 
   /**
    * Increment a scoped-idle counter and return the new count.
@@ -341,7 +266,7 @@ export interface RuntimeStatePort {
    * Called from work creation transactions when a newly minted item carries an
    * idle scope. The counter represents non-terminal work in that scope.
    */
-  incrementIdle(namespace: string, scope: string): Promise<number>
+  incrementIdle(namespace: string, scope: string): Promise<number>;
 
   /**
    * Decrement a scoped-idle counter and return the new count.
@@ -349,7 +274,7 @@ export interface RuntimeStatePort {
    * Called by kernel terminal transitions. Implementations should reject
    * negative counts because that indicates a kernel accounting bug.
    */
-  decrementIdle(namespace: string, scope: string): Promise<number>
+  decrementIdle(namespace: string, scope: string): Promise<number>;
 
   /**
    * Read the current scoped-idle counter.
@@ -357,5 +282,5 @@ export interface RuntimeStatePort {
    * Used by future `untilIdle` registration to avoid lost wakeups when the
    * scope is already idle.
    */
-  getIdleCount(namespace: string, scope: string): Promise<number>
+  getIdleCount(namespace: string, scope: string): Promise<number>;
 }

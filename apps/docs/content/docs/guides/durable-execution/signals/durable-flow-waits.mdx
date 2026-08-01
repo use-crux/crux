@@ -1,0 +1,112 @@
+---
+title: Durable Flow waits
+description: Declare a static Signal source and suspend a Flow without an acceptance-to-registration race.
+---
+
+A Flow can wait for a bare Signal, a match view, or a predicate view declared
+in its `signals` map. `waitFor(source)` returns the complete normalized
+occurrence:
+
+```ts
+import { flow, signal } from "@use-crux/core";
+import { z } from "zod";
+
+export const checksChanged = signal({
+  id: "ci.checks.changed",
+  schema: z.object({
+    sha: z.string(),
+    status: z.enum(["passed", "failed"]),
+  }),
+});
+
+export const release = flow(
+  "release",
+  { signals: { checksChanged } },
+  async (scope) => {
+    const occurrence = await scope.waitFor(checksChanged);
+    return occurrence.payload.sha;
+  },
+);
+```
+
+Declare the source you pass to `waitFor()` in this Flow's map. The overload is
+constrained to the map's static source types, so a distinct undeclared Signal
+contract is rejected. Static Signal values do not become local names for
+`scope.suspend(name)` or `handle.signal(flowId, name, ...)`.
+
+## Configure a qualifying deployment
+
+The Flow definition is inert. When the Flow is activated, Crux checks the
+resolved Runtime before allocating work or running the handler:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { durableRuntimeStore } from "./deployment-runtime";
+
+config({
+  runtime: node({ store: durableRuntimeStore }),
+});
+```
+
+`durableRuntimeStore` is intentionally application/deployment supplied in this
+example. It must declare durable storage, implement the optional Signal record
+port, provide atomic transactions plus durable events, cursor reads, waiters,
+leases, and at-least-once wake delivery, and pass the reactive composite
+conformance suite. A TypeScript shape or a `durability: "durable"` assertion is
+not certification by itself.
+
+This release does not name a bundled production store as Signal-certified.
+Check the adapter's current documentation and conformance evidence before
+making a durability claim. The default store created by `node()` is in-memory
+and process-local, so activating the Flow above with that default throws
+`CAPABILITY_MISSING`.
+
+## Understand the atomic acceptance law
+
+Registering the Flow suspension and its required Signal delivery binding is one
+atomic Runtime composite. Publishing a matching occurrence is another: the
+occurrence and every currently required durable delivery commit together, or
+publication rejects without accepting anything.
+
+That closes the race where publication could land after the Flow decided to
+wait but before the waiter existed. It still does not make publication wait for
+the Flow:
+
+```ts
+const receipt = await checksChanged.publish({
+  sha: "abc123",
+  status: "passed",
+});
+
+receipt.guarantee; // "durable" when the armed wait participated
+```
+
+The receipt may resolve before the Flow wakes, retries, or completes. A
+nonmatching canonical match can remain `process-local` when no durable waiter
+participates. Predicate candidates are different: they commit durably before
+deployed code evaluates the predicate, so a later `false` result does not
+downgrade the receipt.
+
+## Match or run deployed predicate code
+
+```ts
+const passed = checksChanged.when({ status: "passed" });
+
+export const releasePassed = flow(
+  "release-passed",
+  { signals: { passed } },
+  async (scope) => {
+    const occurrence = await scope.waitFor(passed, { timeout: "24h" });
+    return occurrence.payload.sha;
+  },
+);
+```
+
+Bare and match waits persist portable identity and canonical match data.
+Predicate waits persist no function; the deployed Flow target evaluates each
+candidate. `timeout` uses the existing Flow timer race. If the timeout wins,
+the invocation reaches the existing `expired` Flow result rather than returning
+a fabricated occurrence.
+
+Next, understand [retry, Effects, storage, and Eval boundaries](/docs/guides/durable-execution/signals/retries-effects-and-evals).

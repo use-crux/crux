@@ -23,6 +23,7 @@ import type {
   ScheduleTimerInput,
 } from './kernel-types'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
+import { shouldDeferPredicateTimeout } from './kernel-predicate-timeout'
 
 /** Dependencies for timer kernel operations. */
 export interface KernelTimerDeps extends RuntimeCompositeDeps {
@@ -113,6 +114,9 @@ export async function fireTimerRecord(options: {
   readonly deps: RuntimeCompositeDeps
   readonly timer: RuntimeTimerRecord
 }): Promise<FireTimerRecordResult> {
+  if (await timerMustWaitForPredicateCandidates(options)) {
+    return { fired: false }
+  }
   const transitioned = await options.tx.timers.transition(
     options.timer.timerId,
     'scheduled',
@@ -145,6 +149,18 @@ export async function fireTimerRecord(options: {
       deliverAt: options.deps.now(),
     }),
   }
+}
+
+async function timerMustWaitForPredicateCandidates(options: {
+  readonly tx: RuntimeStoreTransaction
+  readonly timer: RuntimeTimerRecord
+}): Promise<boolean> {
+  if (!options.timer.waiterId || !options.timer.workId) return false
+  const waiters = await options.tx.waiters.listByWork(options.timer.workId)
+  const waiter = waiters.find(
+    ({ waiterId }) => waiterId === options.timer.waiterId,
+  )
+  return waiter ? await shouldDeferPredicateTimeout(options.tx, waiter) : false
 }
 
 async function createTimerMintedWork(options: {

@@ -5,7 +5,7 @@
  * @module
  */
 
-import type { StandardSchemaV1 } from "./schema";
+import type { StandardSchemaV1 } from "../../internal/standard-schema";
 import type { JsonValue } from "../../storage";
 import type { EvalCoverageTargetId } from "../evaluate";
 import type { AnyEval } from "../evaluate";

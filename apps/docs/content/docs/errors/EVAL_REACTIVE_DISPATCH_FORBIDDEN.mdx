@@ -1,0 +1,20 @@
+---
+title: EVAL_REACTIVE_DISPATCH_FORBIDDEN
+description: Eval execution attempted to dispatch a Signal to durable reactive work.
+---
+
+## What failed
+
+A Signal published during Eval execution matched an armed durable Flow.
+
+## Why
+
+Durable reactive work started inside an Eval has no isolated execution or evidence contract, so Crux rejects the publication before allocating an occurrence, delivery, event, or outbox row.
+
+## What still works
+
+Process-local Signal publication and ordinary Eval task execution continue to work.
+
+## Fix
+
+Publish the Signal outside Eval execution, or remove the armed durable consumer before running the Eval.

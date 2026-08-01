@@ -6,7 +6,7 @@ import type { EvalCapability } from "../task";
 import type { GenerateFn } from "./capabilities";
 import type { EvalCostEstimate, EvalCostEstimationRequest } from "./cost-types";
 import type { ScorerRunContext } from "./scorers/runtime";
-import type { StandardSchemaV1 } from "./schema";
+import type { StandardSchemaV1 } from "../../internal/standard-schema";
 import type { EvalTaskExecutionContext } from "./task-execution-context";
 
 /** Global storage key shared by compatible Core module copies. */

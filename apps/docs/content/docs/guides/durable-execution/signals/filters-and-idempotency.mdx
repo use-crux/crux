@@ -1,0 +1,83 @@
+---
+title: Filters and idempotency
+description: Build inert match or predicate views and make publication retries safe.
+---
+
+## Match normalized data
+
+`when()` creates a frozen, inert view. A match view stores canonical JSON data:
+
+```ts
+const checksChanged = signal({
+  id: "ci.checks.changed",
+  schema: z.object({
+    sha: z.string(),
+    status: z.enum(["pending", "passed", "failed"]),
+    labels: z.array(z.string()),
+    repository: z.object({ owner: z.string(), name: z.string() }),
+  }),
+});
+
+const passed = checksChanged.when({ status: "passed" });
+const acmeChecks = checksChanged.when({
+  repository: { owner: "acme" },
+});
+```
+
+Match semantics are deliberately small:
+
+- omitted object fields are unrestricted;
+- included object fields recurse;
+- scalar values use exact equality;
+- an included array must equal the complete array in the same order;
+- matching uses normalized schema output, not authored input.
+
+## Keep predicates with deployed code
+
+Use a predicate for logic that partial equality cannot express:
+
+```ts
+const releaseCandidate = checksChanged.when(
+  (payload) => payload.status === "passed" && payload.labels.includes("release"),
+);
+```
+
+The predicate is code, not persisted data. It is evaluated by the deployed
+Flow target and must be available anywhere that target resumes. Use predicates
+only as statically declared Flow sources. Prefer a match view when equality is
+enough because its identity is portable JSON.
+
+Because the transaction cannot run deployed predicate code, each occurrence
+for that Signal is durably accepted as a candidate before the Flow evaluates
+it. A false result leaves the waiter armed; it does not downgrade that
+candidate's receipt to `process-local`.
+
+Filtered views have no `publish()`, `subscribe()`, or chained `when()` methods.
+Publish through the base Signal. Creating a view activates no consumer and
+does not strengthen a publication guarantee.
+
+## Make retries idempotent
+
+Pass a stable key owned by the external occurrence:
+
+```ts
+const receipt = await checksChanged.publish(payload, {
+  idempotencyKey: providerEventId,
+});
+```
+
+Within one Signal identity, replaying the same key with the same canonical
+normalized payload returns the original receipt and creates no second
+occurrence or callback delivery. Reusing the key with different normalized
+data throws `SignalError` with `code === "idempotency_conflict"`.
+
+Scope the key to the event source, not to a delivery attempt. A provider event
+ID, inbox record ID, or stable application command ID is appropriate. A random
+value generated inside each retry is not.
+
+Crux stores a versioned hash for durable idempotency and never includes the raw
+key in receipts or public errors. Process-local idempotency state is lost with
+the process; only a participating durable binding can make replay state survive
+restart.
+
+Next, [wait from a Flow](/docs/guides/durable-execution/signals/durable-flow-waits).

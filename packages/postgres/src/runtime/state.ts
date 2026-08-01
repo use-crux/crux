@@ -204,14 +204,18 @@ export function createPostgresStatePort(
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${snapshotTable}
-          (namespace, flow_id, work_id, target_id, status, input,
-           completed_steps, fingerprint, pending_suspends, delivered_suspends, scheduled_work, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)
+          (namespace, flow_id, work_id, target_id, status, effects, input,
+           continuation, completed_steps, fingerprint, pending_suspends,
+           delivered_suspends, scheduled_work, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb,
+                 $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14)
          ON CONFLICT (namespace, flow_id) DO UPDATE SET
            work_id = EXCLUDED.work_id,
            target_id = EXCLUDED.target_id,
            status = EXCLUDED.status,
+           effects = EXCLUDED.effects,
            input = EXCLUDED.input,
+           continuation = EXCLUDED.continuation,
            completed_steps = EXCLUDED.completed_steps,
            fingerprint = EXCLUDED.fingerprint,
            pending_suspends = EXCLUDED.pending_suspends,
@@ -224,7 +228,11 @@ export function createPostgresStatePort(
           snapshot.workId,
           snapshot.targetId,
           snapshot.status,
+          snapshot.effects ? encodeJson(snapshot.effects) : null,
           encodeJson(snapshot.input),
+          snapshot.continuation !== undefined
+            ? encodeJson(snapshot.continuation)
+            : null,
           encodeJson(snapshot.completedSteps),
           encodeJson(snapshot.fingerprint),
           encodeJson(snapshot.pendingSuspends),

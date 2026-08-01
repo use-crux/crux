@@ -4,18 +4,22 @@
  * @module
  */
 
-export { runStoreAdapterTests } from './store'
-export type { RunStoreAdapterTestsOptions } from './store'
-export { runRuntimeEngineAdapterTests } from './engine'
+export { runStoreAdapterTests } from "./store";
+export type { RunStoreAdapterTestsOptions } from "./store";
+export { runRuntimeEngineAdapterTests } from "./engine";
 export type {
   RunRuntimeEngineAdapterTestsOptions,
   RuntimeEngineAdapterTestHarness,
-} from './engine'
-export { createTestRuntime } from './test-runtime'
+} from "./engine";
+export { runReactiveCompositeAdapterTests } from "./reactive-composites";
+export type {
+  RunReactiveCompositeAdapterTestsOptions,
+} from "./reactive-composites";
+export { createTestRuntime } from "./test-runtime";
 export type {
   CreateTestRuntimeOptions,
   TestRuntime,
   TestRuntimeClock,
   TestRuntimeSettleOptions,
   TestRuntimeSettleResult,
-} from './test-runtime'
+} from "./test-runtime";

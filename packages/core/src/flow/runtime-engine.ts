@@ -11,8 +11,7 @@
 import type { JsonValue } from "../storage";
 import type { EffectScopeRef } from "../effect/types";
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
-import type { RuntimeTargetOutcome } from "../runtime/engine/kernel";
-import type { RuntimeScheduledWorkIntent } from "../runtime/engine/kernel";
+import type { RuntimeScheduledWorkIntent, RuntimeTargetOutcome } from "../runtime/engine/kernel";
 import type { ReplayFingerprint } from "../runtime/engine/replay";
 import type { WorkItem } from "../runtime/engine/work";
 import type { RuntimeWork } from "../runtime/ports/work";
@@ -48,6 +47,30 @@ export interface RuntimeFlowExecution {
   outcome?: RuntimeTargetOutcome;
 }
 
+type FlowCompletedSteps = Record<
+  string,
+  { readonly output: JsonValue; readonly durationMs: number }
+>;
+
+/** Rotate retry-owned Flow state without disturbing its delivered bindings. @internal */
+export function runtimeFlowRetrySnapshot(
+  execution: RuntimeFlowExecution,
+  options: {
+    readonly effects: EffectScopeRef;
+    readonly completedSteps: FlowCompletedSteps;
+    readonly continuation: JsonValue;
+  },
+): RuntimeFlowSnapshot {
+  return {
+    ...execution.snapshot,
+    effects: options.effects,
+    completedSteps: runtimeCompletedSteps(options.completedSteps),
+    fingerprint: execution.fingerprint.observed,
+    continuation: options.continuation,
+    updatedAt: execution.runtime.now(),
+  };
+}
+
 /** Shared state between a resolved runtime and its flow target closure. */
 export interface RuntimeFlowTargetRef {
   /** Resolved runtime instance. */
@@ -63,11 +86,8 @@ export interface RuntimeFlowTargetRef {
 /** Convert a runtime snapshot's output-only step cache into object-bound executor cache records. */
 export function completedStepsFromRuntimeSnapshot(
   snapshot: RuntimeFlowSnapshot,
-): Record<string, { output: JsonValue; durationMs: number }> {
-  const completedSteps: Record<
-    string,
-    { output: JsonValue; durationMs: number }
-  > = {};
+): FlowCompletedSteps {
+  const completedSteps: FlowCompletedSteps = {};
   for (const [label, output] of Object.entries(snapshot.completedSteps)) {
     completedSteps[label] = {
       output: flowOutputForPersistence(output, `step "${label}" output`),
@@ -79,7 +99,7 @@ export function completedStepsFromRuntimeSnapshot(
 
 /** Convert object-bound executor cache records into the runtime snapshot shape. */
 export function runtimeCompletedSteps(
-  completedSteps: Record<string, { output: JsonValue; durationMs: number }>,
+  completedSteps: FlowCompletedSteps,
 ): Record<string, JsonValue> {
   const runtimeSteps: Record<string, JsonValue> = {};
   for (const [label, completed] of Object.entries(completedSteps)) {
@@ -134,10 +154,7 @@ export function runtimeFlowSnapshot(
     readonly status: RuntimeFlowSnapshot["status"];
     readonly effects: EffectScopeRef;
     readonly input: unknown;
-    readonly completedSteps: Record<
-      string,
-      { output: JsonValue; durationMs: number }
-    >;
+    readonly completedSteps: FlowCompletedSteps;
     readonly continuation?: JsonValue;
     readonly scheduledWork?: RuntimeFlowSnapshot["scheduledWork"];
   },
@@ -225,12 +242,10 @@ export async function deliveredRuntimePayloads(
     delivered.set(deliveryKey, deliveredPayload(delivery, deliveryKey));
   }
   for (const suspend of snapshot.pendingSuspends) {
-    if (!suspend.delivered) continue;
+    const selected = suspend.candidates?.[0] ?? suspend.delivered;
+    if (!selected) continue;
     const deliveryKey = suspend.deliveryKey ?? suspend.label;
-    delivered.set(
-      deliveryKey,
-      deliveredPayload(suspend.delivered, deliveryKey),
-    );
+    delivered.set(deliveryKey, deliveredPayload(selected, deliveryKey));
   }
   return delivered;
 }
