@@ -95,6 +95,12 @@ results expose a causal tree of ordered child request receipts, and
 operation-narrowed amendment types reject language-only facets for other
 managed operation families.
 
+Add the provider-neutral owner statistics ledger and its zero-configuration
+memory implementation. The ledger returns content-free frozen aggregates,
+bounds model, Tool, and Work attribution to the first 64 identities, ignores
+committed-cursor redelivery, and supports versioned export and restore so hosts
+can persist the same state without a Core-owned store.
+
 Add observational `preview()` for Prompt and Agent requests. Preview reports
 `fits`, `over-limit`, or `unknown` with redacted prospective adaptations and
 never executes providers, Tools, representation preparation, publication,

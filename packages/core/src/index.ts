@@ -1095,6 +1095,32 @@ export type {
   StepToolHistoryEntry,
 } from "./request/prepare/step-context";
 export type { PreparationDecisionInspection } from "./request/prepare/journal";
+export { createMemoryStatisticsLedger } from "./statistics";
+export type {
+  ApprovalStats,
+  AttributionCoverage,
+  FailureKind,
+  FailureStats,
+  LifecycleStats,
+  ModelCallStats,
+  ModelUsageStats,
+  ScopeStats,
+  StatisticsCoverage,
+  StatisticsFact,
+  StatisticsLedger,
+  StatisticsLedgerExport,
+  StatisticsOwner,
+  StatisticsRecord,
+  StatisticsSnapshot,
+  StatisticsUsageReport,
+  TimingStats,
+  ToolOutcomeStats,
+  ToolStats,
+  UsageStats,
+  WorkCurrentState,
+  WorkOutcomeStats,
+  WorkStats,
+} from "./statistics";
 export { preview } from "./request/preview/preview";
 export type {
   RequestPreviewTarget,
