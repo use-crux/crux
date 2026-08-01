@@ -79,7 +79,7 @@ export async function resolveRepresentationPolicies(
     const ownership = ownershipByEntry.get(entry);
     const ownedSources = ownership?.contexts.length
       ? ownership.contexts
-      : collectOwnedSources(compiled.primarySources, contexts);
+      : collectOwnedSources(compiled.primarySources.filter(isContext), contexts);
     const sources = ownedSources.map((source) => {
       const contextIndex = contexts.indexOf(source);
       return source.id
@@ -115,6 +115,9 @@ export async function resolveRepresentationPolicies(
         }));
         continue;
       }
+      if (!isContext(rung.source)) {
+        throw new TypeError("authored representation rungs must be exact Context sources");
+      }
       assertAlternativeCapabilities(ownedSources, rung.source, input);
       const content = normalizeSystemContent(
         await rung.source.systemFn(input),
@@ -129,10 +132,13 @@ export async function resolveRepresentationPolicies(
         available: rung.available,
       }));
     }
-    const contextIndex = contexts.indexOf(compiled.primary);
+    const primaryContext = isContext(compiled.primary)
+      ? compiled.primary
+      : ownedSources[0];
+    const contextIndex = primaryContext ? contexts.indexOf(primaryContext) : -1;
     policies.push(Object.freeze({
       contributor:
-        compiled.primary.id ?? `context[${contextIndex}]`,
+        primaryContext?.id ?? `context[${contextIndex}]`,
       sources: Object.freeze(sources),
       fullTexts: Object.freeze(fullTexts),
       priority: Math.max(
@@ -195,6 +201,14 @@ export async function resolveRepresentationPolicies(
     }));
   }
   return Object.freeze(policies);
+}
+
+function isContext(value: unknown): value is Context<z.ZodType> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Context"
+  );
 }
 
 function summaryPolicy(

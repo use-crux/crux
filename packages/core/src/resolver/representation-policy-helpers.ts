@@ -137,7 +137,7 @@ export function collectOwnedSources(
   const visitEntry = (value: unknown): void => {
     if (!value || typeof value !== "object") return;
     if (isRepresentationLadder(value)) {
-      compileRepresentationLadder(value).primarySources.forEach(visitContext);
+      compileRepresentationLadder(value).primarySources.forEach(visitEntry);
       return;
     }
     const entry = value as {

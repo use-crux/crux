@@ -6,11 +6,13 @@
  * @module
  */
 
+import type { z } from 'zod'
 import { grounding } from '../../citations'
 import type { Grounding, GroundingConfig } from '../../citations'
 import { contextWithFamily } from '../../prompt/context'
 import { contributor } from '../../prompt/contributor'
-import type { ContextEntry } from '../../prompt/context-types'
+import type { ContributorEntry } from '../../prompt/context-types'
+import type { InternalPromptInjection } from '../../prompt/internal-injection'
 import { KNOWLEDGE_TRACE_METADATA_KEY } from '../../request/receipt/knowledge'
 import type { RetrievalModel } from '../model'
 import type { EmbeddingModality } from '../../embedding'
@@ -18,6 +20,7 @@ import type { ExactFilter } from '../../storage'
 import type { RetrievalToolConfig, Retriever, RetrieverHit, RetrieverTools, RetrieveInput, RetrieveOptions } from '../types'
 import { createRetrieverTools } from '../tools'
 import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
+import { promptInputQuery } from '../knowledge-base-context'
 import { normalizeRetrieveRequest } from '../request'
 import { runRetrievalRecipe } from './run'
 import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
@@ -55,7 +58,10 @@ export interface RetrievalRecipe {
     query: RetrieveInput,
     options?: RetrieveOptions,
   ): Promise<{ hits: RetrieverHit[]; trace: import('./trace').RecipeTrace }>
-  asContext(options: RetrievalRecipeContextOptions): ContextEntry
+  /** Return this recipe as retrieval prompt context. */
+  asContext(options?: RetrievalRecipeContextOptions): ContributorEntry<z.ZodType>
+  /** Contribute default recipe context when used directly in `use`. */
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
   asRetriever(): Retriever<ExactFilter, EmbeddingModality> & Retriever
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   asGrounding(config?: RetrievalRecipeGroundingConfig): Grounding
@@ -65,7 +71,7 @@ export interface RetrievalRecipe {
 /** Options for rendering a retrieval recipe as prompt context. */
 export interface RetrievalRecipeContextOptions {
   readonly priority?: number
-  readonly query: string | ((input: Record<string, unknown>) => string)
+  readonly query?: string | ((input: Record<string, unknown>) => string)
   readonly limit?: number
   readonly renderContext?: (hits: RetrieverHit[], meta: { query: string; recipeId: string; namespace: string }) => string
 }
@@ -111,8 +117,11 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     run: retrieve,
     retrieve,
     retrieveWithTrace,
-    asContext: (options: RetrievalRecipeContextOptions) =>
+    asContext: (options?: RetrievalRecipeContextOptions) =>
       recipeContext(config.id, sources[0].retriever.namespace, retrieveWithTrace, options),
+    inject: async (_args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> => ({
+      contexts: [recipeContext(config.id, sources[0].retriever.namespace, retrieveWithTrace)],
+    }),
     asRetriever: () => recipeRetriever,
     asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
@@ -135,12 +144,13 @@ function recipeContext(
   recipeId: string,
   namespace: string,
   retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'],
-  options: RetrievalRecipeContextOptions,
-): ContextEntry {
+  options: RetrievalRecipeContextOptions = {},
+): ContributorEntry<z.ZodType> {
   return contributor({
     id: `retrieval-recipe:${recipeId}`,
     contribute: async ({ input }) => {
-      const query = typeof options.query === 'function' ? options.query(input) : options.query
+      const querySource = options.query ?? promptInputQuery
+      const query = typeof querySource === 'function' ? querySource(input) : querySource
       const { hits, trace } = await retrieveWithTrace(query, { limit: options.limit })
       const rendered = (options.renderContext ?? defaultRenderRecipeContext)(
         hits,

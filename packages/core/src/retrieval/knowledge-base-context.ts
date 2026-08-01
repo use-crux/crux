@@ -39,7 +39,8 @@ export async function injectKnowledgeRetrievalContext(
 
 const promptInputKeys = ['query', 'question', 'message', 'prompt'] as const
 
-function promptInputQuery(input: Record<string, unknown>): string {
+/** Read the default retrieval query from common prompt input fields. */
+export function promptInputQuery(input: Record<string, unknown>): string {
   for (const key of promptInputKeys) {
     const value = input[key]
     if (typeof value === 'string' && value.trim()) return value
