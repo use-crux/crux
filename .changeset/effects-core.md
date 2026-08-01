@@ -35,5 +35,6 @@ Convex Runtime snapshots without implying durable recovery support.
 
 Keep Flow results and snapshots on the live in-process Effect boundary across
 Runtime retries and legacy RecordStore recovery, so Effects from an earlier
-attempt remain available for rollback while unresolvable persisted refs rotate
-safely.
+attempt remain available for rollback. Persisted refs reuse a live scope only
+when both id and run match; stale or colliding refs rotate to collision-resistant
+IDs so another Flow's recovery stack remains isolated.

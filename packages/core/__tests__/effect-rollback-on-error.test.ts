@@ -78,7 +78,7 @@ describe("rollbackOnError", () => {
       expect.objectContaining<Partial<CruxEffectError>>({
         code: "EFFECT_RECOVERY_REQUIRED",
         message: expect.stringMatching(
-          /email\.rollback-required[\s\S]*effect-boundary:\d+[\s\S]*Define recovery[\s\S]*move the effect out[\s\S]*best-effort/,
+          /email\.rollback-required[\s\S]*effect-boundary:[^\s]+[\s\S]*Define recovery[\s\S]*move the effect out[\s\S]*best-effort/,
         ),
       }),
     );

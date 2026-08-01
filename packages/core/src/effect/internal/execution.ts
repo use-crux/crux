@@ -22,10 +22,12 @@ import {
 } from "../errors";
 import {
   assertEffectBoundaryOpen,
-  closeImplicitRootBoundary,
-  createImplicitRootBoundary,
   currentEffectBoundary,
 } from "./boundary";
+import {
+  closeImplicitRootBoundary,
+  createImplicitRootBoundary,
+} from "./boundary-identity";
 import { isEffectJsonSafe } from "./json-safety";
 import { effectLedger } from "./ledger";
 import { recordEffectReceiptSettlement } from "./evidence";

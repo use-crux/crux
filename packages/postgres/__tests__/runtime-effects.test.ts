@@ -83,7 +83,38 @@ describe("Postgres Runtime Flow Effects snapshots", () => {
         PRIMARY KEY (namespace, flow_id)
       )`);
 
+      const legacyFlowId = "flow_legacy_effects" as FlowId;
+      await pool.query(
+        `INSERT INTO "${schema}".snapshots (
+          namespace, flow_id, work_id, target_id, status, input,
+          completed_steps, fingerprint, pending_suspends, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          "tenant-a",
+          legacyFlowId,
+          "work_legacy_effects",
+          "review",
+          "suspended",
+          JSON.stringify({ source: "legacy" }),
+          JSON.stringify({}),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          new Date("2026-07-31T23:59:00.000Z"),
+        ],
+      );
+
       await store.setup.apply();
+      const legacySnapshot = await store.state.getSnapshot(legacyFlowId, {
+        namespace: "tenant-a",
+      });
+      expect(legacySnapshot).toMatchObject({
+        flowId: legacyFlowId,
+        namespace: "tenant-a",
+        input: { source: "legacy" },
+      });
+      expect(legacySnapshot?.effects).toBeUndefined();
+      expect(legacySnapshot?.continuation).toBeUndefined();
+
       const snapshot: FlowSnapshot = {
         flowId: "flow_migrated_effects" as FlowId,
         workId: "work_migrated_effects" as WorkId,

@@ -24,12 +24,14 @@ import type {
 } from "../types";
 import {
   assertEffectBoundaryOpen,
-  closeImplicitRootBoundary,
-  createImplicitRootBoundary,
   currentEffectBoundary,
   trackEffectBoundaryOperation,
   type EffectBoundaryState,
 } from "./boundary";
+import {
+  closeImplicitRootBoundary,
+  createImplicitRootBoundary,
+} from "./boundary-identity";
 import { recordEffectReceiptSettlement } from "./evidence";
 import { effectLedger } from "./ledger";
 import { observeNativeEffectReceipt } from "./observability";
