@@ -7,7 +7,7 @@ import type {
 
 export type * from "./aggregates";
 
-/** Stable identity for one statistics-owning execution scope. */
+/** Stable identity for one statistics-owning execution scope. @internal */
 export interface StatisticsOwner {
   /** Kind of execution scope that owns the aggregate. */
   readonly kind: "run" | "flow" | "session" | "composition" | "work" | "media";
@@ -20,6 +20,7 @@ export interface StatisticsOwner {
  *
  * Facts intentionally have no fields for messages, model output, Tool
  * arguments/results, media, URLs, error messages, or raw activity events.
+ * @internal
  */
 export type StatisticsFact =
   | {
@@ -30,7 +31,13 @@ export type StatisticsFact =
       /** Provider-normalized usage accompanying a terminal outcome. */
       readonly usage?: StatisticsUsageReport;
     }
-  | { readonly kind: "transport-retry" }
+  | {
+      readonly kind: "transport-retry";
+      /** Normalized model identity from the sealed semantic plan. */
+      readonly model: string;
+      /** Provider-normalized usage physically incurred by this retry. */
+      readonly usage?: StatisticsUsageReport;
+    }
   | {
       readonly kind: "tool";
       /** Registered Tool identity. */
@@ -43,20 +50,11 @@ export type StatisticsFact =
         | "cancelled";
     }
   | {
-      readonly kind: "work";
+      readonly kind: "work-accepted";
       /** Normalized child target identity, never a Work id. */
       readonly target: string;
-      readonly outcome:
-        | "started"
-        | "completed"
-        | "failed"
-        | "cancelled"
-        | "detached";
-      /** Optional gauge transition committed with this cumulative outcome. */
-      readonly current?: {
-        readonly from?: WorkCurrentState;
-        readonly to?: WorkCurrentState;
-      };
+      /** Initial nonterminal state of the accepted logical Work. */
+      readonly state: Exclude<WorkCurrentState, "suspended">;
     }
   | {
       readonly kind: "work-state";
@@ -64,6 +62,13 @@ export type StatisticsFact =
       readonly target: string;
       readonly from: WorkCurrentState;
       readonly to: WorkCurrentState;
+    }
+  | {
+      readonly kind: "work-outcome";
+      /** Normalized child target identity, never a Work id. */
+      readonly target: string;
+      readonly from: WorkCurrentState;
+      readonly outcome: "completed" | "failed" | "cancelled" | "detached";
     }
   | { readonly kind: "failure"; readonly failureKind: FailureKind }
   | {
@@ -88,7 +93,7 @@ export type StatisticsFact =
       readonly completed?: boolean;
     };
 
-/** Input used to commit one ordered fact to an owner aggregate. */
+/** Input used to commit one ordered fact to an owner aggregate. @internal */
 export interface StatisticsRecord {
   /** Owner receiving this fact and no other owner's facts. */
   readonly owner: StatisticsOwner;
@@ -100,7 +105,7 @@ export interface StatisticsRecord {
   readonly fact: StatisticsFact;
 }
 
-/** Immutable point-in-time view of one owner's committed aggregate. */
+/** Immutable point-in-time view of one owner's committed aggregate. @internal */
 export interface StatisticsSnapshot {
   /** Addressed owner whose identity remains stable while totals grow. */
   readonly owner: StatisticsOwner;
@@ -118,6 +123,7 @@ export interface StatisticsSnapshot {
  * Durable hosts may persist this value and later pass it to
  * {@link StatisticsLedger.restore}. Its `state` payload is opaque to hosts and
  * contains only Core's content-free aggregate state.
+ * @internal
  */
 export interface StatisticsLedgerExport {
   /** Export format version understood by Core. */
@@ -136,6 +142,7 @@ export interface StatisticsLedgerExport {
  * The port is synchronous because it owns only the incremental read model.
  * Durable hosts persist {@link StatisticsLedgerExport} values through their
  * existing lifecycle and storage contracts.
+ * @internal
  */
 export interface StatisticsLedger {
   /** Commit one mechanical fact in activity-cursor order. */
@@ -144,6 +151,6 @@ export interface StatisticsLedger {
   snapshot(owner: StatisticsOwner): StatisticsSnapshot | undefined;
   /** Export one owner's JSON-safe state for host-managed persistence. */
   export(owner: StatisticsOwner): StatisticsLedgerExport | undefined;
-  /** Restore a previously exported owner without replacing newer local state. */
-  restore(value: StatisticsLedgerExport): void;
+  /** Restore validated persisted input without replacing newer local state. */
+  restore(value: unknown): void;
 }

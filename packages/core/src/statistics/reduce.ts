@@ -19,19 +19,23 @@ export function applyFact(
       applyModelCall(state, fact);
       return;
     case "transport-retry":
-      increment(state.modelCalls, "transportRetries");
+      applyTransportRetry(state, fact);
       return;
     case "tool":
       applyTool(state.tools, fact.outcome);
       applyTool(toolTarget(state, fact.name), fact.outcome);
       return;
-    case "work":
-      applyWork(state.work, fact);
-      applyWork(workTarget(state, fact.target), fact);
+    case "work-accepted":
+      applyWorkAccepted(state.work, fact.state);
+      applyWorkAccepted(workTarget(state, fact.target), fact.state);
       return;
     case "work-state":
       applyWorkState(state.work, fact.from, fact.to);
       applyWorkState(workTarget(state, fact.target), fact.from, fact.to);
+      return;
+    case "work-outcome":
+      applyWorkOutcome(state.work, fact.from, fact.outcome);
+      applyWorkOutcome(workTarget(state, fact.target), fact.from, fact.outcome);
       return;
     case "failure":
       state.failures[fact.failureKind] += 1;
@@ -49,6 +53,23 @@ export function applyFact(
   }
 }
 
+function applyTransportRetry(
+  state: OwnerState,
+  fact: Extract<StatisticsFact, { kind: "transport-retry" }>,
+): void {
+  let usage = state.models.get(fact.model);
+  if (!usage) {
+    usage = state.otherModels ??= emptyUsage();
+  }
+  increment(state.modelCalls, "transportRetries");
+  usage.usageAttempts += 1;
+  state.usage.usageAttempts += 1;
+  if (fact.usage) {
+    addUsage(usage, fact.usage);
+    addUsage(state.usage, fact.usage);
+  }
+}
+
 function applyModelCall(
   state: OwnerState,
   fact: Extract<StatisticsFact, { kind: "model-call" }>,
@@ -57,7 +78,9 @@ function applyModelCall(
   if (fact.outcome === "started") {
     increment(state.modelCalls, "started");
     usage.calls += 1;
+    usage.usageAttempts += 1;
     state.usage.calls += 1;
+    state.usage.usageAttempts += 1;
     return;
   }
   increment(state.modelCalls, fact.outcome);
@@ -95,7 +118,7 @@ function workTarget(state: OwnerState, target: string): MutableWorkOutcome {
 }
 
 function emptyUsage(): MutableUsage {
-  return { calls: 0, tokenReports: 0, costReports: 0 };
+  return { calls: 0, usageAttempts: 0, tokenReports: 0, costReports: 0 };
 }
 
 function addUsage(target: MutableUsage, report: StatisticsUsageReport): void {
@@ -122,13 +145,12 @@ function applyTool(
   increment(target, outcome);
 }
 
-function applyWork(
+function applyWorkAccepted(
   target: MutableWorkOutcome,
-  fact: Extract<StatisticsFact, { kind: "work" }>,
+  state: keyof MutableWorkOutcome["current"],
 ): void {
-  increment(target, fact.outcome);
-  if (fact.current?.from) target.current[fact.current.from] -= 1;
-  if (fact.current?.to) target.current[fact.current.to] += 1;
+  increment(target, "started");
+  target.current[state] += 1;
 }
 
 function applyWorkState(
@@ -138,6 +160,15 @@ function applyWorkState(
 ): void {
   target.current[from] -= 1;
   target.current[to] += 1;
+}
+
+function applyWorkOutcome(
+  target: MutableWorkOutcome,
+  from: keyof MutableWorkOutcome["current"],
+  outcome: "completed" | "failed" | "cancelled" | "detached",
+): void {
+  target.current[from] -= 1;
+  increment(target, outcome);
 }
 
 function lifecycleKey(

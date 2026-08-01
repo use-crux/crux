@@ -14,6 +14,7 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export interface MutableUsage extends Mutable<StatisticsUsageReport> {
   calls: number;
+  usageAttempts: number;
   tokenReports: number;
   costReports: number;
 }
@@ -32,6 +33,7 @@ export interface OwnerState {
   updatedAt: Date;
   completedAt?: Date;
   cursor: number;
+  lastRecordFingerprint: string;
   activeTimeMs: number;
   suspendedTimeMs: number;
   readonly usage: MutableUsage;
@@ -53,15 +55,17 @@ export function createOwnerState(
   owner: StatisticsOwner,
   at: Date,
   cursor: number,
+  lastRecordFingerprint: string,
 ): OwnerState {
   return {
     owner: { ...owner },
     startedAt: new Date(at),
     updatedAt: new Date(at),
     cursor,
+    lastRecordFingerprint,
     activeTimeMs: 0,
     suspendedTimeMs: 0,
-    usage: { calls: 0, tokenReports: 0, costReports: 0 },
+    usage: { calls: 0, usageAttempts: 0, tokenReports: 0, costReports: 0 },
     models: new Map(),
     modelCalls: {
       started: 0,

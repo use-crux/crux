@@ -7,7 +7,19 @@ import type {
 } from "./types";
 
 export function createSnapshot(state: OwnerState): StatisticsSnapshot {
-  return deepFreeze({
+  const timing: ScopeStats["timing"] = {
+    startedAt: new Date(state.startedAt),
+    updatedAt: new Date(state.updatedAt),
+    ...(state.completedAt ? { completedAt: new Date(state.completedAt) } : {}),
+    wallTimeMs: state.updatedAt.getTime() - state.startedAt.getTime(),
+    activeTimeMs: state.activeTimeMs,
+    suspendedTimeMs: state.suspendedTimeMs,
+  };
+  defineDate(timing, "startedAt", state.startedAt);
+  defineDate(timing, "updatedAt", state.updatedAt);
+  if (state.completedAt) defineDate(timing, "completedAt", state.completedAt);
+
+  const snapshot: StatisticsSnapshot = {
     owner: { ...state.owner },
     at: new Date(state.updatedAt),
     cursor: state.cursor,
@@ -23,16 +35,7 @@ export function createSnapshot(state: OwnerState): StatisticsSnapshot {
           : {}),
         modelAttribution: state.otherModels ? "truncated" : "complete",
       },
-      timing: {
-        startedAt: new Date(state.startedAt),
-        updatedAt: new Date(state.updatedAt),
-        ...(state.completedAt
-          ? { completedAt: new Date(state.completedAt) }
-          : {}),
-        wallTimeMs: state.updatedAt.getTime() - state.startedAt.getTime(),
-        activeTimeMs: state.activeTimeMs,
-        suspendedTimeMs: state.suspendedTimeMs,
-      },
+      timing,
       modelCalls: { ...state.modelCalls },
       tools: {
         total: copyTool(state.tools),
@@ -66,7 +69,9 @@ export function createSnapshot(state: OwnerState): StatisticsSnapshot {
       approvals: { ...state.approvals },
       lifecycle: { ...state.lifecycle },
     },
-  });
+  };
+  defineDate(snapshot, "at", state.updatedAt);
+  return deepFreeze(snapshot);
 }
 
 function modelUsage(usage: MutableUsage): ModelUsageStats {
@@ -80,6 +85,7 @@ function modelUsage(usage: MutableUsage): ModelUsageStats {
 function usageValues(usage: MutableUsage) {
   const {
     calls: _calls,
+    usageAttempts: _attempts,
     tokenReports: _tokens,
     costReports: _cost,
     ...values
@@ -92,14 +98,14 @@ function usageCoverage(usage: MutableUsage): {
   cost: StatisticsCoverage;
 } {
   return {
-    tokens: coverage(usage.tokenReports, usage.calls),
-    cost: coverage(usage.costReports, usage.calls),
+    tokens: coverage(usage.tokenReports, usage.usageAttempts),
+    cost: coverage(usage.costReports, usage.usageAttempts),
   };
 }
 
-function coverage(reports: number, calls: number): StatisticsCoverage {
-  if (reports === 0 || calls === 0) return "none";
-  return reports >= calls ? "complete" : "partial";
+function coverage(reports: number, attempts: number): StatisticsCoverage {
+  if (reports === 0 || attempts === 0) return "none";
+  return reports >= attempts ? "complete" : "partial";
 }
 
 function copyTool(value: ScopeStats["tools"]["total"]) {
@@ -115,4 +121,13 @@ function deepFreeze<T>(value: T, seen = new Set<object>()): T {
   seen.add(value);
   for (const child of Object.values(value)) deepFreeze(child, seen);
   return Object.freeze(value);
+}
+
+function defineDate(target: object, key: string, value: Date): void {
+  const time = value.getTime();
+  Object.defineProperty(target, key, {
+    enumerable: true,
+    configurable: false,
+    get: () => Object.freeze(new Date(time)),
+  });
 }

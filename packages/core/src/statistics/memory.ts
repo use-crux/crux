@@ -1,4 +1,7 @@
+import { decodeOwnerState, encodeOwnerState } from "./codec";
+import { assertFactCanApply } from "./fact-invariants";
 import { createOwnerState, type OwnerState } from "./internal";
+import { fingerprintRecord, normalizeStatisticsRecord } from "./record";
 import { applyFact } from "./reduce";
 import { createSnapshot } from "./snapshot";
 import type {
@@ -9,20 +12,46 @@ import type {
   StatisticsSnapshot,
 } from "./types";
 
-/** Create a zero-configuration, process-local statistics ledger. */
+/** Create Core's process-local statistics read model. @internal */
 export function createMemoryStatisticsLedger(): StatisticsLedger {
   const owners = new Map<string, OwnerState>();
 
   return {
     record(record: StatisticsRecord): void {
-      const key = ownerKey(record.owner);
+      const normalized = normalizeStatisticsRecord(record);
+      const fingerprint = fingerprintRecord(normalized);
+      const key = ownerKey(normalized.owner);
       const existing = owners.get(key);
-      if (existing && record.cursor <= existing.cursor) return;
+      if (existing) {
+        if (normalized.cursor === existing.cursor) {
+          if (fingerprint === existing.lastRecordFingerprint) return;
+          throw new TypeError("Statistics ledger divergent cursor reuse.");
+        }
+        if (normalized.cursor < existing.cursor) {
+          throw new TypeError("Statistics ledger out-of-order cursor.");
+        }
+        if (normalized.cursor !== existing.cursor + 1) {
+          throw new TypeError("Statistics ledger cursor gap.");
+        }
+      } else if (normalized.cursor !== 1) {
+        throw new TypeError("Statistics ledger cursor gap.");
+      }
+      if (existing && normalized.at < existing.updatedAt) {
+        throw new TypeError("Statistics ledger out-of-order timestamp.");
+      }
       const state =
-        existing ?? createOwnerState(record.owner, record.at, record.cursor);
+        existing ??
+        createOwnerState(
+          normalized.owner,
+          normalized.at,
+          normalized.cursor,
+          fingerprint,
+        );
+      assertFactCanApply(state, normalized.fact);
+      applyFact(state, normalized.fact, normalized.at);
+      state.cursor = normalized.cursor;
+      state.lastRecordFingerprint = fingerprint;
       owners.set(key, state);
-      state.cursor = record.cursor;
-      applyFact(state, record.fact, record.at);
     },
 
     snapshot(owner: StatisticsOwner): StatisticsSnapshot | undefined {
@@ -35,11 +64,21 @@ export function createMemoryStatisticsLedger(): StatisticsLedger {
       return state ? encodeOwnerState(state) : undefined;
     },
 
-    restore(value: StatisticsLedgerExport): void {
-      const key = ownerKey(value.owner);
+    restore(value: unknown): void {
+      const decoded = decodeOwnerState(value);
+      const key = ownerKey(decoded.owner);
       const current = owners.get(key);
-      if (current && current.cursor >= value.cursor) return;
-      owners.set(key, decodeOwnerState(value));
+      if (current?.cursor === decoded.cursor) {
+        if (
+          current.lastRecordFingerprint !== decoded.lastRecordFingerprint ||
+          encodeOwnerState(current).state !== encodeOwnerState(decoded).state
+        ) {
+          throw new TypeError("Statistics ledger divergent cursor reuse.");
+        }
+        return;
+      }
+      if (current && current.cursor > decoded.cursor) return;
+      owners.set(key, decoded);
     },
   };
 }
@@ -47,4 +86,3 @@ export function createMemoryStatisticsLedger(): StatisticsLedger {
 function ownerKey(owner: StatisticsOwner): string {
   return `${owner.kind}:${owner.id}`;
 }
-import { decodeOwnerState, encodeOwnerState } from "./codec";

@@ -1,37 +1,45 @@
-import type {
-  MutableApprovals,
-  MutableLifecycle,
-  MutableModelCalls,
-  MutableToolOutcome,
-  MutableUsage,
-  MutableWorkOutcome,
-  OwnerState,
-} from "./internal";
-import type { FailureKind, StatisticsLedgerExport } from "./types";
+import type { OwnerState } from "./internal";
+import { readOwner } from "./record";
+import { decodeState } from "./state-validation";
+import type { StatisticsLedgerExport } from "./types";
+import {
+  exactKeys,
+  invalid,
+  readInteger,
+  readObject,
+  readString,
+} from "./validation";
 
 interface EncodedOwnerState {
+  readonly owner: OwnerState["owner"];
+  readonly cursor: number;
+  readonly lastRecordFingerprint: string;
   readonly startedAt: string;
   readonly updatedAt: string;
   readonly completedAt?: string;
   readonly activeTimeMs: number;
   readonly suspendedTimeMs: number;
-  readonly usage: MutableUsage;
-  readonly models: readonly (readonly [string, MutableUsage])[];
-  readonly otherModels?: MutableUsage;
-  readonly modelCalls: MutableModelCalls;
-  readonly tools: MutableToolOutcome;
-  readonly toolsByName: readonly (readonly [string, MutableToolOutcome])[];
-  readonly otherTools?: MutableToolOutcome;
-  readonly work: MutableWorkOutcome;
-  readonly workByTarget: readonly (readonly [string, MutableWorkOutcome])[];
-  readonly otherWork?: MutableWorkOutcome;
-  readonly failures: Record<FailureKind, number>;
-  readonly approvals: MutableApprovals;
-  readonly lifecycle: MutableLifecycle;
+  readonly usage: OwnerState["usage"];
+  readonly models: readonly (readonly [string, OwnerState["usage"]])[];
+  readonly otherModels?: OwnerState["usage"];
+  readonly modelCalls: OwnerState["modelCalls"];
+  readonly tools: OwnerState["tools"];
+  readonly toolsByName: readonly (readonly [string, OwnerState["tools"]])[];
+  readonly otherTools?: OwnerState["tools"];
+  readonly work: OwnerState["work"];
+  readonly workByTarget: readonly (readonly [string, OwnerState["work"]])[];
+  readonly otherWork?: OwnerState["work"];
+  readonly failures: OwnerState["failures"];
+  readonly approvals: OwnerState["approvals"];
+  readonly lifecycle: OwnerState["lifecycle"];
 }
 
+/** Encode one validated owner read model for host persistence. @internal */
 export function encodeOwnerState(state: OwnerState): StatisticsLedgerExport {
   const encoded: EncodedOwnerState = {
+    owner: { ...state.owner },
+    cursor: state.cursor,
+    lastRecordFingerprint: state.lastRecordFingerprint,
     startedAt: state.startedAt.toISOString(),
     updatedAt: state.updatedAt.toISOString(),
     ...(state.completedAt
@@ -61,39 +69,32 @@ export function encodeOwnerState(state: OwnerState): StatisticsLedgerExport {
   };
 }
 
-export function decodeOwnerState(value: StatisticsLedgerExport): OwnerState {
-  if (value.version !== 1)
-    throw new TypeError("Unsupported statistics ledger export version.");
-  const encoded = JSON.parse(value.state) as EncodedOwnerState;
-  return {
-    owner: { ...value.owner },
-    cursor: value.cursor,
-    startedAt: parseDate(encoded.startedAt),
-    updatedAt: parseDate(encoded.updatedAt),
-    ...(encoded.completedAt
-      ? { completedAt: parseDate(encoded.completedAt) }
-      : {}),
-    activeTimeMs: encoded.activeTimeMs,
-    suspendedTimeMs: encoded.suspendedTimeMs,
-    usage: encoded.usage,
-    models: new Map(encoded.models),
-    ...(encoded.otherModels ? { otherModels: encoded.otherModels } : {}),
-    modelCalls: encoded.modelCalls,
-    tools: encoded.tools,
-    toolsByName: new Map(encoded.toolsByName),
-    ...(encoded.otherTools ? { otherTools: encoded.otherTools } : {}),
-    work: encoded.work,
-    workByTarget: new Map(encoded.workByTarget),
-    ...(encoded.otherWork ? { otherWork: encoded.otherWork } : {}),
-    failures: encoded.failures,
-    approvals: encoded.approvals,
-    lifecycle: encoded.lifecycle,
-  };
-}
-
-function parseDate(value: string): Date {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime()))
-    throw new TypeError("Invalid statistics ledger timestamp.");
-  return date;
+/** Decode an untrusted host value without mutating ledger state. @internal */
+export function decodeOwnerState(value: unknown): OwnerState {
+  const envelope = readObject(value, "export envelope");
+  exactKeys(
+    envelope,
+    ["version", "owner", "cursor", "state"],
+    [],
+    "export envelope",
+  );
+  if (envelope.version !== 1) invalid("export version");
+  const owner = readOwner(envelope.owner, "export owner");
+  const cursor = readInteger(envelope.cursor, "export cursor");
+  const text = readString(envelope.state, "export state");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    invalid("export state");
+  }
+  const state = decodeState(parsed);
+  if (
+    state.cursor !== cursor ||
+    state.owner.kind !== owner.kind ||
+    state.owner.id !== owner.id
+  ) {
+    invalid("owner/cursor consistency");
+  }
+  return state;
 }

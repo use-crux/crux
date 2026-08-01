@@ -1,4 +1,4 @@
-/** Owner-scoped execution statistics and process-local ledger support. */
+/** Core-internal statistics host/runtime machinery. @internal @module */
 
 export { createMemoryStatisticsLedger } from "./memory";
 export type {
