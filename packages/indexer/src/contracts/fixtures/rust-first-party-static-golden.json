@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 957,
+    "files": 958,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1949,
-    "canonicalBytes": 403102
+    "dependencies": 1950,
+    "canonicalBytes": 403221
   },
   "files": [
     {
@@ -4197,6 +4197,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/runtime/engine/work.ts",
+      "sha256": "f0aa3c6cfb2ba079e540c2a5d3fbde83a3ec1097f84a396c8c9a5e92a2c269b2",
+      "bytes": 119,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/runtime/eval-host/connection-inference.ts",
