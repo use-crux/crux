@@ -62,8 +62,55 @@ export interface ProcessLocalWorkKernel {
   ): Promise<InternalWorkHandle<TOutput>>;
 }
 
+interface StoredWorkStatusBase {
+  readonly id: string;
+  readonly acceptedAt: number;
+  readonly updatedAt: number;
+}
+
+type StoredWorkStatus =
+  | (StoredWorkStatusBase & { readonly state: "queued" })
+  | (StoredWorkStatusBase & {
+      readonly state: "running";
+      readonly startedAt: number;
+    })
+  | (StoredWorkStatusBase & {
+      readonly state: "completed";
+      readonly startedAt: number;
+      readonly completedAt: number;
+      readonly resultAvailable: true;
+    });
+
 interface MutableWorkRecord {
-  status: InternalWorkStatus;
+  status: StoredWorkStatus;
+}
+
+/** Materialize a detached lifecycle snapshot from immutable timestamps. */
+function workStatusSnapshot(status: StoredWorkStatus): InternalWorkStatus {
+  const base = {
+    id: status.id,
+    acceptedAt: new Date(status.acceptedAt),
+    updatedAt: new Date(status.updatedAt),
+  };
+
+  switch (status.state) {
+    case "queued":
+      return Object.freeze({ ...base, state: status.state });
+    case "running":
+      return Object.freeze({
+        ...base,
+        state: status.state,
+        startedAt: new Date(status.startedAt),
+      });
+    case "completed":
+      return Object.freeze({
+        ...base,
+        state: status.state,
+        startedAt: new Date(status.startedAt),
+        completedAt: new Date(status.completedAt),
+        resultAvailable: status.resultAvailable,
+      });
+  }
 }
 
 /**
@@ -100,7 +147,7 @@ export function createProcessLocalWorkKernel(
       if (registry.has(id)) {
         throw new TypeError(`Process-local Work id \`${id}\` already exists.`);
       }
-      const acceptedAt = now();
+      const acceptedAt = now().getTime();
       const record: MutableWorkRecord = {
         status: Object.freeze({
           id,
@@ -124,7 +171,7 @@ export function createProcessLocalWorkKernel(
         schedule(start);
         await scheduled;
 
-        const startedAt = now();
+        const startedAt = now().getTime();
         record.status = Object.freeze({
           id,
           state: "running",
@@ -137,7 +184,7 @@ export function createProcessLocalWorkKernel(
           effects: boundary.ref,
         });
         const output = await driver.run(context);
-        const completedAt = now();
+        const completedAt = now().getTime();
         record.status = Object.freeze({
           id,
           state: "completed",
@@ -155,7 +202,7 @@ export function createProcessLocalWorkKernel(
       return Object.freeze({
         id,
         effects,
-        status: () => Promise.resolve(record.status),
+        status: () => Promise.resolve(workStatusSnapshot(record.status)),
         result: () => execution,
       });
     },
