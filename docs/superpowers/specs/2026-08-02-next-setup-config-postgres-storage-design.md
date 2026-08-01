@@ -140,14 +140,29 @@ for an authored import session:
    content fingerprinting, transpilation, timeout, and import-session identity.
 
 Cache parsed config state by config path plus content identity during an import
-session. Do not prebundle user configuration and do not install a second loader.
+session. Every config file consulted while resolving `extends` participates in
+that identity. `LoadedProjectConfigResult.sources` records the complete parsed
+config closure rather than only the selected root config.
+
+The executable Static Index config artifact gains a bounded, root-relative
+`configDependencies` list for the same closure. The Go protocol mirror and
+Static Index planner hash every listed file into the plan/cache inputs, watch
+them as index boundaries, and invalidate on change or deletion. This is a
+durable dependency contract; a one-time epoch bump is not a substitute for
+tracking future edits to extended configs. Paths outside the project root may
+be used by TypeScript resolution only when the authored config explicitly
+extends them, but are rejected from the root-relative artifact and disable
+cache reuse for that config load.
+
+Do not prebundle user configuration and do not install a second loader.
 
 Tests cover a root config whose relative transitive import uses `@/*`, an
-extended config, `jsconfig.json`, a missing alias, and containment. A built
+extended config, `jsconfig.json`, a missing alias, and containment. Cache tests
+change and delete an extended config while authored source stays unchanged and
+prove that the config artifact and Static Index plan are not reused. A built
 worker smoke test proves the embedded Local path, not only the source test
-environment. The implementation will audit Project Index cache identity; if
-existing worker/config hashes do not invalidate the affected output, the
-relevant static cache epoch must be bumped in the same change.
+environment. The implementation will also audit the hard cache epoch and bump
+it if the first alias-aware release could otherwise reuse a pre-feature entry.
 
 ### PostgreSQL storage API
 
@@ -228,6 +243,10 @@ produce redacted setup findings rather than leaking connection information.
 - Expose versioned compare-and-set through `getVersioned` and `putVersioned`;
   report `mutate: "cas"` and let Core's bounded `mutateRecord()` helper provide
   linearizable mutations.
+- `putVersioned(key, value, null)` atomically inserts when no live row exists
+  and replaces an expired physical row in the same statement/transaction.
+  A non-null expected version never matches an expired row. This keeps the
+  logical absence observed by `getVersioned()` consistent with subsequent CAS.
 - Report `{ ttl: "lazy", filter: "native", watch: false, batch: true,
   mutate: "cas" }`.
 - Wrap backend failures in privacy-safe `StorageError` values.
@@ -271,6 +290,35 @@ pgvector dimension/non-zero limits, and how exact scans differ. Tests use
 deterministic small fixtures while still verifying that setup creates the
 declared indexes.
 
+Hybrid search uses fixed portable semantics. For requested `limit = n`, each
+modality retrieves `min(1000, max(50, 4 * n))` candidates after metadata
+filtering; `limit = 0` returns immediately. RRF uses `k = 60`. The raw sum is
+normalized by the theoretical two-modality maximum `2 / (k + 1)`, producing a
+score in `[0, 1]`; a hit present in only one modality can score at most `0.5`.
+The query `threshold` applies to this normalized post-fusion score, then results
+sort by score descending and key ascending before applying the final limit.
+Dense and sparse modes continue to apply threshold to cosine similarity.
+
+### Project Index storage discovery
+
+Treat the three new factories as first-party Storage definitions:
+
+- `postgresRecordStore` produces `storage.recordStore` with PostgreSQL record
+  capabilities;
+- `postgresVectorStore` produces `storage.vectorStore`; statically known
+  `sparseDimensions` controls sparse/hybrid/RRF capability projection, while
+  non-literal configuration remains conservative;
+- `postgresStorage` produces `storage.bundle` with record and vector
+  capabilities.
+
+Update the compiler-owned storage descriptor table, semantic/native call-name
+manifests, direct projector coverage, backend parity fixtures, static syntax
+interests/goldens where applicable, and Project Index capability assertions.
+Because changing the descriptor manifest changes Project Index output for
+unchanged authored calls, update its structured compiler identity and bump the
+static/semantic cache epochs only where existing identity inputs do not already
+capture the new manifest version.
+
 ## Error handling and privacy
 
 - Package resolution and type failures receive compile/load regression tests,
@@ -297,6 +345,8 @@ Focused verification includes:
   equivalent rules, negation, empty files, missing final newlines, read-only
   checks, ordering, and repeated apply.
 - Source and built-worker config import tests for alias resolution.
+- Project Index JS/native parity tests for all PostgreSQL storage factories and
+  literal versus dynamic sparse capability configuration.
 - PostgreSQL `RecordStore` conformance.
 - Both shared `VectorStore` conformance suites for dense, sparse, hybrid,
   filtering, thresholds, deletion, unsupported DBSF, and hydration failures.
@@ -324,6 +374,10 @@ Update `.changeset/connected-knowledge-foundations.md` with
 changeset for the directly affected Core, Indexer, and Local compatibility and
 safety fixes because no current pending changeset describes that release
 theme.
+
+Add the new `.` export for `@use-crux/postgres` to
+`scripts/portable-entrypoints.json` as `node-only`, retain `./runtime`, and
+extend staged-package validation to cover both entrypoints.
 
 No Project Index snapshot shape changes are intended. Cache epochs change only
 if the alias-resolution cache audit shows that existing structured identities
