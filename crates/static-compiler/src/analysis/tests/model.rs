@@ -222,7 +222,7 @@ fn analyze_finds_only_certain_irreversible_effects_in_required_boundaries() {
     assert_eq!(findings.len(), 1, "findings={findings:?}");
     let finding = findings[0];
     assert!(finding.message.contains("inventory.reserve"));
-    assert!(finding.message.contains("src/effects.ts:35"));
+    assert!(finding.message.contains("src/effects.ts:33"));
     for action in ["Define recovery", "move the Effect outside", "best-effort"] {
         assert!(
             finding.message.contains(action),

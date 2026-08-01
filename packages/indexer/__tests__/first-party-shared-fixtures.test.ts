@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
 import { builtInIndexRuleDescriptors } from "../src/indexer/lints/rules";
 import { indexRelationPolicies } from "../src/indexer/relations";
+import { finalizeStaticIndexFactsWithWorker } from "../src/testing/static-index-worker";
 import {
   extractNativeAndFallback,
   itWithRustOxc,
@@ -139,6 +140,45 @@ describe("first-party shared static index fixtures", () => {
           ).size,
         ).toBe(2);
       }
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
+    "finalizes the irreversible required-boundary finding identically from both frontends",
+    async () => {
+      const source = await readFile(effectFixtureUrl, "utf8");
+      const result = await extractNativeAndFallback({
+        source,
+        primaryPath: "src/effects.ts",
+        callNames: ["effect", "rollbackOnError"],
+      });
+      const finalize = (output: typeof result.nativeOut) =>
+        finalizeStaticIndexFactsWithWorker({
+          root: "/workspace/acme",
+          nativeFacts: [{ definitions: output.definitions }],
+        });
+      const nativeFacts = await finalize(result.nativeOut);
+      const typescriptFacts = await finalize(result.typescriptOut);
+      const findings = (facts: typeof nativeFacts) =>
+        (facts.lintFindings ?? []).filter(
+          (finding) =>
+            finding.ruleId ===
+            "effect.irreversible_in_required_boundary",
+        );
+
+      expect(findings(typescriptFacts)).toEqual(findings(nativeFacts));
+      expect(findings(typescriptFacts)).toEqual([
+        expect.objectContaining({
+          source: expect.objectContaining({
+            file: expect.stringMatching(/src\/effects\.ts$/),
+            line: 33,
+          }),
+          message: expect.stringMatching(
+            /inventory\.reserve.*src\/effects\.ts:33.*Define recovery.*move the Effect outside.*best-effort/,
+          ),
+        }),
+      ]);
     },
     30_000,
   );
