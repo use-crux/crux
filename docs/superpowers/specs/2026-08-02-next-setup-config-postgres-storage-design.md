@@ -127,14 +127,19 @@ work, but command-specific Git mutations are outside this change.
 ### TypeScript path aliases in user imports
 
 Extend the registered user-module resolver in
-`packages/indexer/src/indexer/imports.ts`. After normal Node resolution fails
-for an authored import session:
+`packages/indexer/src/indexer/imports.ts`. For an authored import session:
 
 1. Find the nearest `tsconfig.json` or `jsconfig.json` from the importing
    module, bounded by the project import root.
 2. Parse it with TypeScript configuration APIs so `extends`, `baseUrl`,
    `paths`, and the selected module-resolution mode retain TypeScript meaning.
-3. Resolve the specifier with `ts.resolveModuleName()`.
+3. For non-relative specifiers, resolve with `ts.resolveModuleName()` before
+   Node when the parsed configuration contains a matching `paths` mapping or
+   applicable `baseUrl`. This preserves TypeScript precedence when an alias
+   intentionally shadows an installed package. Built-ins and `node:` imports
+   bypass authored path mapping. When no authored mapping applies, or mapped
+   resolution produces no source file, continue through normal Node package
+   resolution.
 4. Reject declaration-only results and paths outside the authored project.
 5. Feed the resolved source file through the existing extension handling,
    content fingerprinting, transpilation, timeout, and import-session identity.
@@ -157,12 +162,13 @@ cache reuse for that config load.
 Do not prebundle user configuration and do not install a second loader.
 
 Tests cover a root config whose relative transitive import uses `@/*`, an
-extended config, `jsconfig.json`, a missing alias, and containment. Cache tests
-change and delete an extended config while authored source stays unchanged and
-prove that the config artifact and Static Index plan are not reused. A built
-worker smoke test proves the embedded Local path, not only the source test
-environment. The implementation will also audit the hard cache epoch and bump
-it if the first alias-aware release could otherwise reuse a pre-feature entry.
+extended config, `jsconfig.json`, a missing alias, containment, and a path alias
+that deliberately shadows an installed package. Cache tests change and delete
+an extended config while authored source stays unchanged and prove that the
+config artifact and Static Index plan are not reused. A built worker smoke test
+proves the embedded Local path, not only the source test environment. The
+implementation will also audit the hard cache epoch and bump it if the first
+alias-aware release could otherwise reuse a pre-feature entry.
 
 ### PostgreSQL storage API
 
@@ -357,10 +363,16 @@ Focused verification includes:
 - Root build workflows appropriate to changed Local/indexer assets before
   final handoff.
 
-Real PostgreSQL vector tests may use `CRUX_TEST_DATABASE_URL` when it points to
-a pgvector-capable database. The default embedded harness must either install
-pgvector for vector cases or skip only those integration cases with an explicit
-reason; record conformance must remain runnable independently.
+Local PostgreSQL vector tests may use `CRUX_TEST_DATABASE_URL` when it points to
+a pgvector-capable database. A missing local extension may skip vector-only
+cases with an explicit reason, while record conformance remains independently
+runnable.
+
+Release CI must not skip the vector suite. Add a mandatory pgvector-backed job
+or service using a supported PostgreSQL/pgvector version and run setup,
+dense/sparse/hybrid searches, metadata filtering, HNSW index verification,
+Connected Knowledge hydration, and unsupported-DBSF assertions. Publication
+and merge validation fail if this job is absent, skipped, or unsuccessful.
 
 ## Documentation and release notes
 
