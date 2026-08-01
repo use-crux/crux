@@ -19,10 +19,23 @@ type NextWebpackHook = (
   context: NextWebpackContext,
 ) => NextWebpackConfig
 
+type ConfiguredWebpackHook<TConfig> = 'webpack' extends keyof TConfig
+  ? TConfig['webpack']
+  : never
+
+type WrappedWebpackHook<TConfig> = [
+  NonNullable<ConfiguredWebpackHook<TConfig>>,
+] extends [never]
+  ? NextWebpackHook
+  : NonNullable<ConfiguredWebpackHook<TConfig>> extends (
+        ...args: infer TArgs
+      ) => infer TResult
+    ? (...args: TArgs) => TResult
+    : NextWebpackHook
+
 /** Minimal Next config shape accepted by {@link withCruxBuild}. */
 export interface CruxNextConfig {
-  webpack?: NextWebpackHook | null
-  [key: string]: unknown
+  webpack?: unknown
 }
 
 /** Options for {@link withCruxBuild}. */
@@ -44,27 +57,31 @@ export interface WithCruxBuildOptions {
  * throws `ARTIFACTS_STALE`, which fails CI/builds before stale runtime entry
  * files can deploy.
  */
-export function withCruxBuild<TConfig extends CruxNextConfig>(
+export function withCruxBuild<TConfig extends object>(
   nextConfig: TConfig = {} as TConfig,
   options: WithCruxBuildOptions = {},
-): Omit<TConfig, 'webpack'> & { webpack: NextWebpackHook } {
+): Omit<TConfig, 'webpack'> & { webpack: WrappedWebpackHook<TConfig> } {
   const command = options.command ?? ['crux', 'runtime', 'generate']
   runCruxRuntimeGenerate({
     command,
     cwd: options.cwd,
     env: options.env,
   })
+  const userWebpack = (nextConfig as CruxNextConfig).webpack as
+    | NextWebpackHook
+    | null
+    | undefined
   return {
     ...nextConfig,
     webpack(
       config: NextWebpackConfig,
       context: NextWebpackContext,
     ): NextWebpackConfig {
-      return typeof nextConfig.webpack === 'function'
-        ? nextConfig.webpack(config, context)
+      return typeof userWebpack === 'function'
+        ? userWebpack(config, context)
         : config
     },
-  }
+  } as Omit<TConfig, 'webpack'> & { webpack: WrappedWebpackHook<TConfig> }
 }
 
 function runCruxRuntimeGenerate(

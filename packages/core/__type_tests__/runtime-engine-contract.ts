@@ -238,8 +238,26 @@ const nextConfigWithCallableWebpack = withCruxBuild(
   },
   { command: ['node', '-e', 'process.exit(0)'] },
 )
-expectTypeOf(nextConfigWithCallableWebpack.webpack).toEqualTypeOf<
-  (config: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>
+expectTypeOf(nextConfigWithCallableWebpack.webpack).toMatchTypeOf<
+  (config: Record<string, unknown>) => Record<string, unknown>
+>()
+
+interface DeclaredNextConfig {
+  distDir?: string
+  webpack?:
+    | null
+    | ((
+        config: { entry?: string },
+        context: { dev: boolean },
+      ) => { entry?: string })
+}
+declare const declaredNextConfig: DeclaredNextConfig
+const wrappedDeclaredNextConfig = withCruxBuild(declaredNextConfig, {
+  command: ['node', '-e', 'process.exit(0)'],
+})
+expectTypeOf(wrappedDeclaredNextConfig).toMatchTypeOf<DeclaredNextConfig>()
+expectTypeOf(wrappedDeclaredNextConfig.webpack).toEqualTypeOf<
+  NonNullable<DeclaredNextConfig['webpack']>
 >()
 
 declare const lifecycleStorage: CruxContextStorage<{ requestId: string }>
