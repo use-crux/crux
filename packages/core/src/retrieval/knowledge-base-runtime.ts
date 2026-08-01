@@ -1,14 +1,16 @@
-import { indexer } from '../indexing'
 import { retriever } from './define-retriever'
 import { createConnectedKnowledgeIntegration } from './knowledge-base-connected'
+import { runKnowledgeBaseMutationEffect } from './knowledge-base-effects'
 import {
   KnowledgeBaseMetadataValidationError,
   applyKnowledgeBaseCorpusMetadataSchema,
   partitionKnowledgeBaseChunksByMetadata,
   partitionKnowledgeBaseDocumentsByMetadata,
-  type KnowledgeBaseMetadataFailure,
 } from './knowledge-base-metadata'
 import {
+  cleanupKnowledgeBaseSources,
+  createKnowledgeBaseIndexer,
+  emptyMetadataFailureRun,
   isKnowledgeBaseChunk,
   knowledgeBaseSourceIds,
   refreshKnowledgeBaseLifecycleState,
@@ -16,6 +18,7 @@ import {
   toKnowledgeBaseCorpusInput,
   toKnowledgeBaseDocument,
   uniqueStrings,
+  type KnowledgeBaseIndexRun,
 } from './knowledge-base-runtime-utils'
 import type { z } from 'zod'
 import type {
@@ -37,17 +40,13 @@ import type { KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
 
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
-export type KnowledgeBaseIndexInput =
-  | readonly KnowledgeBaseIndexItem[]
-  | AsyncIterable<KnowledgeBaseIndexItem>
+export type KnowledgeBaseIndexInput = readonly KnowledgeBaseIndexItem[] | AsyncIterable<KnowledgeBaseIndexItem>
 
 /** A single item accepted by `knowledgeBase().index()`. */
 export type KnowledgeBaseIndexItem = CruxDocument | CruxChunk | CruxIngestLoadResultLike
 
 /** Deferred source input configured on a knowledge base. */
-export type KnowledgeBaseSource =
-  | KnowledgeBaseIndexInput
-  | (() => KnowledgeBaseIndexInput | Promise<KnowledgeBaseIndexInput>)
+export type KnowledgeBaseSource = KnowledgeBaseIndexInput | (() => KnowledgeBaseIndexInput | Promise<KnowledgeBaseIndexInput>)
 
 /** Result returned by `knowledgeBase().remove()`. */
 export interface KnowledgeBaseRemoveResult {
@@ -72,9 +71,7 @@ export interface KnowledgeBaseLifecycleState {
   lastIndexedAt?: number
 }
 
-export interface KnowledgeBaseRuntimeConfig<
-  TModality extends EmbeddingModality = 'text',
-> {
+export interface KnowledgeBaseRuntimeConfig<TModality extends EmbeddingModality = 'text'> {
   /** Stable knowledge base and indexer id. */
   id: string
   /** Structural namespace bound to this handle. */
@@ -180,27 +177,45 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     items: readonly KnowledgeBaseIndexItem[],
     completeSourceSet: boolean,
   ): Promise<KnowledgeBaseIndexRun> {
-    if (config.corpus) {
+    const corpus = config.corpus
+    if (corpus) {
       const prepared = applyKnowledgeBaseCorpusMetadataSchema(
         config.id,
         config.metadataSchema,
         items.map(toKnowledgeBaseCorpusInput),
       )
-      const result = await config.corpus.sync([...prepared.inputs], {
-        chunking: config.chunking,
-        sourceSet: completeSourceSet ? 'complete' : 'partial',
-        stale: completeSourceSet ? 'delete' : 'keep',
-      })
-      return { result, failures: [], indexed: true, sourceIds: uniqueStrings(prepared.inputs.flatMap(knowledgeBaseSourceIds)) }
+      const sourceIds = uniqueStrings(prepared.inputs.flatMap(knowledgeBaseSourceIds))
+      const result = await runKnowledgeBaseMutationEffect({
+        knowledgeBaseId: config.id,
+        namespace: config.namespace,
+        operation: 'corpus.sync',
+        sourceIds,
+        nativePrimitive: 'corpus.sync',
+        recovery: completeSourceSet ? 'irreversible' : 'unavailable',
+      }, () => corpus.sync([...prepared.inputs], {
+          chunking: config.chunking,
+          sourceSet: completeSourceSet ? 'complete' : 'partial',
+          stale: completeSourceSet ? 'delete' : 'keep',
+        }))
+      return { result, failures: [], indexed: true, sourceIds }
     }
 
-    const index = createIndexer(config, records, vectors)
+    const index = createKnowledgeBaseIndexer(config, records, vectors)
     if (items.every(isKnowledgeBaseChunk)) {
       const prepared = partitionKnowledgeBaseChunksByMetadata(config.id, config.metadataSchema, items)
       if (prepared.chunks.length > 0 || prepared.failures.length === 0) {
-        if (retention === 'cleanup') await cleanupSources(index, uniqueStrings(prepared.chunks.map((item) => item.sourceId)))
-        const result = await index.indexChunks([...prepared.chunks], { replaceSources: true })
-        return { result, failures: prepared.failures, indexed: true, sourceIds: uniqueStrings(prepared.chunks.map((item) => item.sourceId)) }
+        const sourceIds = uniqueStrings(prepared.chunks.map((item) => item.sourceId))
+        const result = await runKnowledgeBaseMutationEffect({
+          knowledgeBaseId: config.id,
+          namespace: config.namespace,
+          operation: completeSourceSet ? 'reindex' : 'index',
+          sourceIds,
+          nativePrimitive: 'indexing.pipeline',
+        }, async () => {
+          if (retention === 'cleanup') await cleanupKnowledgeBaseSources(index, sourceIds)
+          return index.indexChunks([...prepared.chunks], { replaceSources: true })
+        })
+        return { result, failures: prepared.failures, indexed: true, sourceIds }
       }
       return emptyMetadataFailureRun(prepared.failures)
     }
@@ -210,26 +225,39 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     if (prepared.documents.length === 0 && prepared.failures.length > 0) {
       return emptyMetadataFailureRun(prepared.failures)
     }
-    if (retention === 'cleanup') await cleanupSources(index, uniqueStrings(prepared.documents.map((item) => item.sourceId)))
-    const result = await index.indexDocuments([...prepared.documents], {
-      replaceSources: true,
-      chunking: config.chunking,
+    const sourceIds = uniqueStrings(prepared.documents.map((item) => item.sourceId))
+    const result = await runKnowledgeBaseMutationEffect({
+      knowledgeBaseId: config.id,
+      namespace: config.namespace,
+      operation: completeSourceSet ? 'reindex' : 'index',
+      sourceIds,
+      nativePrimitive: 'indexing.pipeline',
+    }, async () => {
+      if (retention === 'cleanup') await cleanupKnowledgeBaseSources(index, sourceIds)
+      return index.indexDocuments([...prepared.documents], {
+        replaceSources: true,
+        chunking: config.chunking,
+      })
     })
-    return { result, failures: prepared.failures, indexed: true, sourceIds: uniqueStrings(prepared.documents.map((item) => item.sourceId)) }
+    return { result, failures: prepared.failures, indexed: true, sourceIds }
   }
 
   async function remove(sourceId: string): Promise<KnowledgeBaseRemoveResult> {
-    const result = config.corpus
-      ? await config.corpus.deleteSource(sourceId)
-      : { sourceId, deletedCount: await createIndexer(config, records, vectors).deleteSource(sourceId) }
+    const result = await runKnowledgeBaseMutationEffect({
+      knowledgeBaseId: config.id,
+      namespace: config.namespace,
+      operation: 'remove',
+      sourceIds: [sourceId],
+      nativePrimitive: 'indexing.pipeline',
+    }, async () => config.corpus
+      ? config.corpus.deleteSource(sourceId)
+      : { sourceId, deletedCount: await createKnowledgeBaseIndexer(config, records, vectors).deleteSource(sourceId) })
     await connected.afterRemove(sourceId)
     await refreshKnowledgeBaseLifecycleState(lifecycle, config.id, config.namespace, records)
     return result
   }
 
-  function createRetriever<TFilter extends ExactFilter>(
-    retrieverConfig?: KnowledgeBaseRetrieverConfig<TFilter>,
-  ): Retriever<TFilter, TModality> {
+  function createRetriever<TFilter extends ExactFilter>(retrieverConfig?: KnowledgeBaseRetrieverConfig<TFilter>): Retriever<TFilter, TModality> {
     return retriever({
       id: config.id,
       knowledgeBaseId: config.id,
@@ -267,37 +295,4 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     viewRegistry: connected.viewRegistry,
     knowledgeBinding: connected.binding,
   })
-}
-
-interface KnowledgeBaseIndexRun {
-  readonly result?: IndexResult | CorpusSyncResult
-  readonly failures: readonly KnowledgeBaseMetadataFailure[]
-  readonly indexed: boolean
-  readonly sourceIds?: readonly string[]
-}
-
-function emptyMetadataFailureRun(failures: readonly KnowledgeBaseMetadataFailure[]): KnowledgeBaseIndexRun {
-  return { failures, indexed: false }
-}
-
-function createIndexer<TModality extends EmbeddingModality>(
-  config: KnowledgeBaseRuntimeConfig<TModality>,
-  records: RecordStore | undefined,
-  vectors: VectorStore | undefined,
-) {
-  return indexer({
-    id: config.id,
-    namespace: config.namespace,
-    records,
-    vectors,
-    storage: config.storage,
-    dense: config.embeddings,
-    sparse: config.sparseEmbeddings,
-    pipeline: config.pipeline,
-    cache: config.cache,
-  })
-}
-
-async function cleanupSources(index: ReturnType<typeof indexer>, sourceIds: readonly string[]): Promise<void> {
-  await Promise.all(sourceIds.map((sourceId) => index.deleteSource(sourceId)))
 }

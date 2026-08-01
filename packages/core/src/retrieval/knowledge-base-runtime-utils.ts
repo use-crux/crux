@@ -5,14 +5,26 @@
  */
 
 import { indexedNamespacePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
-import type { CruxChunk, CruxDocument, CruxIngestLoadResultLike } from '../indexing'
+import { indexer } from '../indexing'
+import type { CorpusSyncResult, CruxChunk, CruxDocument, CruxIngestLoadResultLike, IndexResult } from '../indexing'
+import type { EmbeddingModality } from '../embedding'
 import type { JsonObject, RecordStore } from '../storage'
+import type { KnowledgeBaseMetadataFailure } from './knowledge-base-metadata'
 import type {
   KnowledgeBaseIndexInput,
   KnowledgeBaseIndexItem,
   KnowledgeBaseLifecycleState,
+  KnowledgeBaseRuntimeConfig,
   KnowledgeBaseSource,
 } from './knowledge-base-runtime'
+
+/** Result of a knowledge-base indexing attempt after metadata partitioning. */
+export interface KnowledgeBaseIndexRun {
+  readonly result?: IndexResult | CorpusSyncResult
+  readonly failures: readonly KnowledgeBaseMetadataFailure[]
+  readonly indexed: boolean
+  readonly sourceIds?: readonly string[]
+}
 
 /** Resolve direct or configured index input into an array. Internal. */
 export async function resolveKnowledgeBaseInput(
@@ -84,6 +96,38 @@ export function isKnowledgeBaseChunk(item: KnowledgeBaseIndexItem): item is Crux
 /** Dedupe strings while preserving first occurrence order. Internal. */
 export function uniqueStrings(values: readonly string[]): string[] {
   return Array.from(new Set(values))
+}
+
+/** Return an indexing result for a batch whose metadata all failed. Internal. */
+export function emptyMetadataFailureRun(failures: readonly KnowledgeBaseMetadataFailure[]): KnowledgeBaseIndexRun {
+  return { failures, indexed: false }
+}
+
+/** Create the indexer backing direct knowledge-base source mutations. Internal. */
+export function createKnowledgeBaseIndexer<TModality extends EmbeddingModality>(
+  config: KnowledgeBaseRuntimeConfig<TModality>,
+  records: RecordStore | undefined,
+  vectors: Parameters<typeof indexer>[0]['vectors'] | undefined,
+) {
+  return indexer({
+    id: config.id,
+    namespace: config.namespace,
+    records,
+    vectors,
+    storage: config.storage,
+    dense: config.embeddings,
+    sparse: config.sparseEmbeddings,
+    pipeline: config.pipeline,
+    cache: config.cache,
+  })
+}
+
+/** Physically delete replaced sources when lifecycle retention requests cleanup. Internal. */
+export async function cleanupKnowledgeBaseSources(
+  index: ReturnType<typeof indexer>,
+  sourceIds: readonly string[],
+): Promise<void> {
+  await Promise.all(sourceIds.map((sourceId) => index.deleteSource(sourceId)))
 }
 
 function isLoadResult(item: KnowledgeBaseIndexItem): item is CruxIngestLoadResultLike {

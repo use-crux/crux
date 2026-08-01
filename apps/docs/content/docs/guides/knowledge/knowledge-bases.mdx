@@ -111,6 +111,28 @@ Direct indexing can write valid sources and then throw an aggregate metadata
 error for invalid sources. Corpus-backed indexing reports invalid sources as
 failed source outcomes.
 
+## Mutation Effects
+
+Public source mutations emit native Effect receipts for the durable mutation:
+`index()`, `reindex()`, `remove(sourceId)`, and corpus-backed sync. The receipt
+uses the knowledge-base id, namespace, operation, source ids, and safe outcome
+counts as its resource summary. Inspect and recover these receipts through the
+[Effects](/docs/guides/effects) APIs; knowledge bases do not keep a separate
+receipt store.
+
+Recovery is audit-first. `index()` reports recovery unavailable: an interrupted
+generation replacement normally leaves the prior active records serving until a
+new generation durably publishes, but Crux does not keep a generic restore
+handler for the mutation. `reindex()` and `remove()` report irreversible because
+they can delete active sources or stale sources that cannot be reconstructed
+from the receipt. Corpus-backed `index()` reports unavailable, while
+corpus-backed `reindex()` reports irreversible when it deletes stale sources.
+
+Connected Knowledge derivation, claim compilation, view maintenance, retrieval,
+and community materialization are ordinary internal work. They run after the
+mutation receipt settles, and their failures do not change the mutation Effect
+outcome.
+
 ## Read Surfaces
 
 A knowledge base exposes the Retrieval surfaces directly:
