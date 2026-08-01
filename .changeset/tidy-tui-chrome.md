@@ -18,6 +18,8 @@ Make the Runs list operationally useful with bounded token/cost rollups, model a
 
 Turn Overview into an operational dashboard with Stats-backed pass-rate, cost, and latency series, an honest Stats-derived cost KPI, conditional mean score, run-count jump chips, failure-filter navigation, and session-aware recent runs.
 
+Keep Runs interactions responsive at thousand-run scale by coalescing detail reads and memoizing stable list projections. Make Overview and `crux stats` aggregate the complete observability history through a shared revision-aware snapshot instead of silently truncating their inputs.
+
 Add an Evals workbench with catalog readiness, a navigable Case-by-Variant result grid, reusable-evidence detail, local Runs drill-through, run history, and committed Baseline compatibility. Join Insights Cases to the same persisted Eval evidence, and expand the deterministic Local demo with a mixed 3-by-2 Eval matrix and Baseline.
 
 Unify TUI surfaces and pane seams across every screen, replace noisy braille trends with honest block-ramp sparklines, add terminal-safe TypeScript and JSON syntax color, and renumber navigation in visual order.

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
@@ -47,9 +48,11 @@ func TestRunsListFetchRetainsSummaryRevision(t *testing.T) {
 
 type detailRaceClient struct {
 	*uitest.FixtureClient
+	calls int
 }
 
 func (c *detailRaceClient) ObservabilityRunDetail(_ context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {
+	c.calls++
 	revision := int64(9)
 	if runID == "run-a" {
 		revision = 91
@@ -58,6 +61,34 @@ func (c *detailRaceClient) ObservabilityRunDetail(_ context.Context, runID strin
 		Run:  api.ObservabilityRunSummary{RunID: runID, Revision: revision},
 		Root: api.ObservabilityRunDetailNode{ID: "span-" + runID},
 	}, true, nil
+}
+
+func TestRunsNavigationCoalescesDetailIntentBursts(t *testing.T) {
+	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
+	runs := NewRuns()
+	setRunsForTest(runs,
+		api.ObservabilityRunSummary{RunID: "run-a"},
+		api.ObservabilityRunSummary{RunID: "run-b"},
+		api.ObservabilityRunSummary{RunID: "run-c"},
+	)
+	selectRunForTest(runs, "run-a")
+
+	first := runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, client)
+	second := runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, client)
+	if first == nil || second == nil {
+		t.Fatal("navigation did not schedule detail intents")
+	}
+	if cmd := runs.Update(testContext, first(), client); cmd != nil {
+		t.Fatal("stale navigation intent started a detail read")
+	}
+	fetch := runs.Update(testContext, second(), client)
+	if fetch == nil {
+		t.Fatal("latest navigation intent did not start a detail read")
+	}
+	runs.Update(testContext, fetch(), client)
+	if client.calls != 1 {
+		t.Fatalf("detail reads = %d, want one coalesced read", client.calls)
+	}
 }
 
 func TestRunsDetailRejectsLateResultFromPreviousSelection(t *testing.T) {

@@ -458,10 +458,7 @@ func observabilityTimeline(ctx context.Context, obs *observability.Service, sess
 }
 
 func observabilityReadModelRuns(ctx context.Context, obs *observability.Service) ([]observability.RunSummary, error) {
-	return obs.RunsWithOptions(ctx, observability.RunListOptions{
-		Limit:                   500,
-		IncludeExpensiveRollups: true,
-	})
+	return obs.RunSummarySnapshot(ctx)
 }
 
 func flattenObservabilityDetailNodes(root observability.RunDetailNode) []observability.RunDetailNode {
@@ -522,14 +519,10 @@ func emptyStats() store.StatsResult {
 }
 
 func normalizedStatus(status string) string {
-	switch status {
-	case "ok", "success", "completed":
-		return "ok"
-	case "error", "failed", "fail":
-		return "error"
-	default:
-		return status
+	if normalized, ok := observability.NormalizeExecutionStatus(status); ok {
+		return normalized
 	}
+	return status
 }
 
 func rawMap(raw json.RawMessage) map[string]any {

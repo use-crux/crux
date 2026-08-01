@@ -44,6 +44,11 @@ type Service struct {
 	mutationMu    sync.Mutex
 	manifestStore deploymentManifestReader
 
+	summarySnapshotMu       sync.Mutex
+	summarySnapshotRevision int64
+	summarySnapshotReady    bool
+	summarySnapshot         []RunSummary
+
 	retentionSettings     retentionSettings
 	evidenceSettings      evidenceSettings
 	evidenceNow           func() time.Time
@@ -172,6 +177,22 @@ type RunSummary struct {
 	Attributes     json.RawMessage    `json:"attributes,omitempty"`
 	Metrics        json.RawMessage    `json:"metrics,omitempty"`
 	Error          json.RawMessage    `json:"error,omitempty"`
+}
+
+// NormalizeExecutionStatus defines the shared headline execution denominator
+// used by Local Stats and Overview. The boolean is false for lifecycle states
+// that remain visible in the catalog but are not completed/live executions.
+func NormalizeExecutionStatus(status string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "ok", "success", "completed", "passed":
+		return "ok", true
+	case "error", "failed", "fail":
+		return "error", true
+	case "running":
+		return "running", true
+	default:
+		return "", false
+	}
 }
 
 // RunDeliveryHealth reports what is truthfully known about ingest/delivery

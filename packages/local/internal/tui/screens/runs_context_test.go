@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -43,9 +44,18 @@ func TestRunsActionThreadsRootContextIntoDetailFetch(t *testing.T) {
 	if !handled || cmd == nil {
 		t.Fatal("next-run action did not schedule a detail fetch")
 	}
-	cmd()
+	fetch := runs.Update(root, cmd(), client)
+	if fetch == nil {
+		t.Fatal("latest detail intent did not schedule a detail fetch")
+	}
+	fetch()
 
-	if observed := <-client.observed; !observed {
-		t.Fatal("Runs action did not preserve the canceled, value-tagged root context")
+	select {
+	case observed := <-client.observed:
+		if !observed {
+			t.Fatal("Runs action did not preserve the canceled, value-tagged root context")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the detail fetch")
 	}
 }

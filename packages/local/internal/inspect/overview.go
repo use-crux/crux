@@ -21,16 +21,17 @@ func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api
 		return api.InspectOverviewRecord{}, err
 	}
 	runs = filterRunsForOverviewWindow(runs, window)
+	executions := inspectExecutionRuns(runs)
 	insights, err := s.Insights(ctx)
 	if err != nil {
 		return api.InspectOverviewRecord{}, err
 	}
 
-	passRate := runPassRate(runs)
-	totalCost := inspectTotalCost(runs)
+	passRate := runPassRate(executions)
+	totalCost := inspectTotalCost(executions)
 	var costPer100 *float64
-	if len(runs) > 0 {
-		value := totalCost / float64(len(runs)) * 100
+	if len(executions) > 0 {
+		value := totalCost / float64(len(executions)) * 100
 		costPer100 = &value
 	}
 	severityCounts := map[string]int{}
@@ -51,16 +52,16 @@ func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api
 		RunCount:                  len(runs),
 		InsightCount:              openInsights,
 		PassRate:                  passRate,
-		MeanScore:                 inspectMeanRunScore(runs),
+		MeanScore:                 inspectMeanRunScore(executions),
 		TotalCost:                 totalCost,
-		P50LatencyMs:              inspectP50Latency(runs),
-		P95LatencyMs:              inspectP95Latency(runs),
+		P50LatencyMs:              inspectP50Latency(executions),
+		P95LatencyMs:              inspectP95Latency(executions),
 		CostPer100Runs:            costPer100,
-		PassRateHistory:           inspectOverviewPassRateSpark(runs, window),
+		PassRateHistory:           inspectOverviewPassRateSpark(executions, window),
 		OpenInsightsHistory:       inspectOpenInsightsHistory(insights),
-		PassRateSpark:             inspectOverviewPassRateSpark(runs, window),
-		CostSpark:                 inspectOverviewCostSpark(runs, window),
-		LatencySpark:              inspectOverviewLatencySpark(runs, window),
+		PassRateSpark:             inspectOverviewPassRateSpark(executions, window),
+		CostSpark:                 inspectOverviewCostSpark(executions, window),
+		LatencySpark:              inspectOverviewLatencySpark(executions, window),
 		OpenInsightSeverityCounts: severityCounts,
 		RunTabCounts: api.InspectRunTabCounts{
 			All: counts.All, Live: counts.Live, Failures: counts.Failures,

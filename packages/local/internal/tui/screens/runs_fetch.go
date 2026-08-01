@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"errors"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -14,6 +15,10 @@ import (
 
 type runsListLoadedMsg resource.ResourceResult[[]api.ObservabilityRunSummary]
 type runDetailLoadedMsg resource.ResourceResult[api.ObservabilityRunDetail]
+type runDetailIntentMsg struct {
+	runID  string
+	intent uint64
+}
 type runsSessionsLoadedMsg struct {
 	sessions map[string]bool
 }
@@ -157,6 +162,17 @@ func maxRevisionFloor(left, right uint64) uint64 {
 
 func (s *Runs) fetchRunDetail(parent context.Context, c DataClient, runID string) tea.Cmd {
 	return s.fetchRunDetailAtRevision(parent, c, runID, 0)
+}
+
+func (s *Runs) scheduleRunDetail(runID string) tea.Cmd {
+	if runID == "" {
+		return nil
+	}
+	s.detailIntent++
+	intent := s.detailIntent
+	return tea.Tick(35*time.Millisecond, func(time.Time) tea.Msg {
+		return runDetailIntentMsg{runID: runID, intent: intent}
+	})
 }
 
 func (s *Runs) fetchRunDetailAtRevision(parent context.Context, c DataClient, runID string, revision uint64) tea.Cmd {

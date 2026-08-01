@@ -59,6 +59,8 @@ type Runs struct {
 	expandedPayloads map[string]bool
 	showAllSpans     bool
 	exportState      runExportState
+	detailIntent     uint64
+	projection       runsListProjection
 }
 
 type runsFocus int
@@ -258,6 +260,11 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 	case runDetailLoadedMsg:
 		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
+	case runDetailIntentMsg:
+		if m.intent != s.detailIntent || m.runID != s.SelectedRunID() {
+			return nil
+		}
+		return s.fetchRunDetail(ctx, c, m.runID)
 	case runsSessionsLoadedMsg:
 		s.sessions = m.sessions
 	case runExportedMsg:

@@ -198,14 +198,8 @@ func (s *Runs) renderRunGroupHeader(run api.ObservabilityRunSummary, width int) 
 
 func (s *Runs) runGroupRows(run api.ObservabilityRunSummary) []api.ObservabilityRunSummary {
 	key := s.runGroupKey(run)
-	runs := s.filteredRuns()
-	group := make([]api.ObservabilityRunSummary, 0)
-	for _, candidate := range runs {
-		if s.runGroupKey(candidate) == key {
-			group = append(group, candidate)
-		}
-	}
-	return group
+	s.filteredRuns()
+	return s.projection.groups[key]
 }
 
 func (s *Runs) hasActiveRunFilters() bool {

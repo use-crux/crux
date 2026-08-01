@@ -60,6 +60,35 @@ var runGroups = []runGroup{
 
 var runsListNow = time.Now
 
+type runsListProjectionKey struct {
+	request, revision uint64
+	ownerScreen       string
+	ownerResource     string
+	ownerRecord       string
+	query             string
+	status, window    int
+	group             int
+	session, model    string
+	routed            string
+	routedRevision    int64
+	routedName        string
+	routedPrimitive   string
+	routedStatus      string
+	routedModel       string
+	routedProvider    string
+	routedSession     string
+	routedStartedAt   string
+	cutoff            int64
+}
+
+type runsListProjection struct {
+	valid       bool
+	key         runsListProjectionKey
+	rows        []api.ObservabilityRunSummary
+	groupStarts map[string]bool
+	groups      map[string][]api.ObservabilityRunSummary
+}
+
 func (s *Runs) activeRunWindow() runWindow {
 	if s.runWindowIndex < 0 || s.runWindowIndex >= len(runWindows) {
 		return runWindows[len(runWindows)-1]
@@ -100,13 +129,46 @@ func inspectRunsOptionsEmpty(options api.InspectRunsOptions) bool {
 }
 
 func (s *Runs) filteredRuns() []api.ObservabilityRunSummary {
+	now := runsListNow()
+	snapshot := s.runsResource.Snapshot()
+	key := runsListProjectionKey{
+		request:       snapshot.Token.Request,
+		revision:      snapshot.Token.Revision,
+		ownerScreen:   snapshot.Token.Owner.Screen,
+		ownerResource: snapshot.Token.Owner.Resource,
+		ownerRecord:   snapshot.Token.Owner.RecordID,
+		query:         s.runQuery,
+		status:        s.runStatusIndex,
+		window:        s.runWindowIndex,
+		group:         s.runGroupIndex,
+		session:       s.sessionFilter,
+		model:         s.modelFilter,
+	}
+	if s.routedRun != nil {
+		key.routed = s.routedRun.RunID
+		key.routedRevision = s.routedRun.Revision
+		key.routedName = s.routedRun.Name
+		key.routedPrimitive = s.routedRun.RootPrimitive
+		key.routedStatus = s.routedRun.Status
+		key.routedModel = s.routedRun.Model
+		key.routedProvider = s.routedRun.Provider
+		key.routedSession = s.routedRun.SessionID
+		key.routedStartedAt = s.routedRun.StartedAt
+	}
+	if window := s.activeRunWindow(); window.duration > 0 {
+		key.cutoff = now.Add(-window.duration).Unix()
+	}
+	if s.projection.valid && s.projection.key == key {
+		return s.projection.rows
+	}
+
 	filter := s.activeRunStatusFilter()
 	query := strings.ToLower(strings.TrimSpace(s.runQuery))
 	runs := s.selectableRuns()
 	out := make([]api.ObservabilityRunSummary, 0, len(runs))
 	cutoff := int64(0)
 	if window := s.activeRunWindow(); window.duration > 0 {
-		cutoff = runsListNow().Add(-window.duration).UnixMilli()
+		cutoff = now.Add(-window.duration).UnixMilli()
 	}
 	for _, run := range runs {
 		if len(filter.statuses) > 0 && !runStatusMatches(run.Status, filter.statuses) {
@@ -126,7 +188,27 @@ func (s *Runs) filteredRuns() []api.ObservabilityRunSummary {
 		}
 		out = append(out, run)
 	}
-	return s.groupRuns(out)
+	rows := s.groupRuns(out)
+	projection := runsListProjection{
+		valid:       true,
+		key:         key,
+		rows:        rows,
+		groupStarts: map[string]bool{},
+		groups:      map[string][]api.ObservabilityRunSummary{},
+	}
+	if s.runGroupIndex != 0 {
+		previous := ""
+		for index, run := range rows {
+			groupKey := s.runGroupKey(run)
+			projection.groups[groupKey] = append(projection.groups[groupKey], run)
+			if index == 0 || groupKey != previous {
+				projection.groupStarts[run.RunID] = true
+			}
+			previous = groupKey
+		}
+	}
+	s.projection = projection
+	return s.projection.rows
 }
 
 func runStatusMatches(status string, accepted []string) bool {
@@ -175,14 +257,8 @@ func (s *Runs) isRunGroupStart(run api.ObservabilityRunSummary) bool {
 	if s.runGroupIndex == 0 {
 		return false
 	}
-	runs := s.filteredRuns()
-	for index, candidate := range runs {
-		if candidate.RunID != run.RunID {
-			continue
-		}
-		return index == 0 || s.runGroupKey(runs[index-1]) != s.runGroupKey(candidate)
-	}
-	return false
+	s.filteredRuns()
+	return s.projection.groupStarts[run.RunID]
 }
 
 func (s *Runs) rememberRunModels(runs []api.ObservabilityRunSummary) {

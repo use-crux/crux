@@ -126,6 +126,84 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	return runs, err
 }
 
+// RunSummarySnapshot returns the complete cheap aggregate projection for the
+// current observability revision. Overview, stats, and Inspect all consume
+// this same immutable read model, so concurrent screen fan-out pays for the
+// all-history query once instead of rebuilding it per KPI.
+func (s *Service) RunSummarySnapshot(ctx context.Context) ([]RunSummary, error) {
+	revision, err := s.CurrentRevision(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.summarySnapshotMu.Lock()
+	defer s.summarySnapshotMu.Unlock()
+	if s.summarySnapshotReady && s.summarySnapshotRevision == revision {
+		return cloneRunSummaries(s.summarySnapshot), nil
+	}
+	runs, err := s.RunsWithOptions(ctx, RunListOptions{Limit: -1})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enrichAggregateUsageFallbacks(ctx, runs); err != nil {
+		return nil, err
+	}
+	s.summarySnapshot = append(s.summarySnapshot[:0], runs...)
+	s.summarySnapshotRevision = revision
+	s.summarySnapshotReady = true
+	return cloneRunSummaries(s.summarySnapshot), nil
+}
+
+func cloneRunSummaries(runs []RunSummary) []RunSummary {
+	cloned := make([]RunSummary, len(runs))
+	for i, run := range runs {
+		cloned[i] = run
+		if run.Deployment != nil {
+			deployment := *run.Deployment
+			cloned[i].Deployment = &deployment
+		}
+		if run.DeliveryHealth != nil {
+			health := *run.DeliveryHealth
+			cloned[i].DeliveryHealth = &health
+		}
+		cloned[i].Attributes = cloneRaw(run.Attributes)
+		cloned[i].Metrics = cloneRaw(run.Metrics)
+		cloned[i].Error = cloneRaw(run.Error)
+	}
+	return cloned
+}
+
+// enrichAggregateUsageFallbacks preserves exact aggregate metrics for older
+// rows whose stored rollup columns predate complete cost/token accounting.
+// Current rows with populated rollups stay on the cheap path and never scan
+// their spans or usage events.
+func (s *Service) enrichAggregateUsageFallbacks(ctx context.Context, runs []RunSummary) error {
+	byOperationID := make(map[string]*RunSummary)
+	for i := range runs {
+		metrics := numericMetricsFromRaw(runs[i].Metrics)
+		if metrics["totalTokens"] != 0 && metrics["costUsd"] != 0 {
+			continue
+		}
+		byOperationID[runs[i].OperationID] = &runs[i]
+	}
+	if len(byOperationID) == 0 {
+		return nil
+	}
+	for _, batch := range runIDBatches(mapKeys(byOperationID), runSummaryRollupBatchSize) {
+		if err := s.enrichOperationIdentityBatch(ctx, batch, byOperationID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mapKeys(values map[string]*RunSummary) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 // runsWithOptions is the shared core behind RunsWithOptions and RunsPage. All
 // status/time-range/session filtering and cursor pagination happen in SQL,
 // before any row is truncated by LIMIT, so a filtered query is never silently

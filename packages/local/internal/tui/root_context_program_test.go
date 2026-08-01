@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -99,11 +100,20 @@ func TestWorkbenchThreadsRootContextThroughRunsActionDispatch(t *testing.T) {
 	workbench.Update(loadRuns())
 	detail := workbench.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}))
 	if detail == nil {
-		t.Fatal("Workbench Runs action did not schedule the selected detail fetch")
+		t.Fatal("Workbench Runs action did not schedule the selected detail intent")
 	}
-	detail()
+	fetch := workbench.Update(detail())
+	if fetch == nil {
+		t.Fatal("Workbench Runs detail intent did not schedule the selected detail fetch")
+	}
+	fetch()
 
-	if observed := <-client.observed; !observed {
-		t.Fatal("Workbench dispatch did not preserve the canceled, value-tagged root context")
+	select {
+	case observed := <-client.observed:
+		if !observed {
+			t.Fatal("Workbench dispatch did not preserve the canceled, value-tagged root context")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the detail fetch")
 	}
 }

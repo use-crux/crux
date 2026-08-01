@@ -64,11 +64,9 @@ func (s *Runs) updateSpanDocumentInput(msg tea.Msg) (tea.Cmd, bool) {
 }
 
 func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {
-	runs := s.filteredRuns()
-	if len(runs) == 0 {
+	if len(s.filteredRuns()) == 0 {
 		return nil
 	}
-	s.runList.SetItems(runs)
 	var msg tea.KeyPressMsg
 	if delta > 0 {
 		msg = tea.KeyPressMsg{Text: "j", Code: 'j'}
@@ -90,7 +88,7 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 		return nil, true
 	}
 	s.diagnosis = nil
-	return s.fetchRunDetail(ctx, c, selectedID), true
+	return s.scheduleRunDetail(selectedID), true
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
@@ -179,10 +177,11 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 		return nil
 	}
 	s.diagnosis = nil
-	return s.fetchRunDetail(ctx, c, selectedID)
+	return s.scheduleRunDetail(selectedID)
 }
 
 func (s *Runs) clearRunSelection() {
+	s.detailIntent++
 	s.runList.SetItems(nil)
 	s.spanList.SetItems(nil)
 	s.routedRun = nil
