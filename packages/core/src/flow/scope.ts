@@ -1324,6 +1324,14 @@ export function flow<THandler extends InferredFlowHandler>(
   name: string,
   handler: THandler,
 ): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>;
+/**
+ * Define a Flow with local signal contracts, static Signal wait sources, or both.
+ *
+ * @param name - Stable Flow target name.
+ * @param options - Signal declarations available to this Flow.
+ * @param handler - Flow execution function receiving the inferred scope.
+ * @returns A frozen handle whose static sources are accepted only by `waitFor()`.
+ */
 export function flow<
   const TSignals extends FlowSignalMap,
   THandler extends InferredFlowHandler<TSignals>,

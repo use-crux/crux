@@ -1,0 +1,68 @@
+---
+title: Signal errors
+description: Exact public Signal error classes, stable codes, and Runtime errors around durable delivery.
+---
+
+Import Signal domain errors from `@use-crux/core/signal`.
+
+## `SignalErrorCode`
+
+```ts
+type SignalErrorCode =
+  | "invalid_payload"
+  | "idempotency_conflict"
+  | "publication_rejected";
+```
+
+| Code | Meaning |
+| --- | --- |
+| `invalid_payload` | Authored input failed the Signal schema. |
+| `idempotency_conflict` | One Signal reused a key with different canonical normalized data. |
+| `publication_rejected` | Schema execution or required durable acceptance could not finish safely. |
+
+## `SignalError`
+
+```ts
+class SignalError extends Error {
+  readonly code: SignalErrorCode;
+  constructor(code: SignalErrorCode, message: string);
+}
+```
+
+Base domain error for validation and publication. Publicly thrown instances
+omit raw idempotency keys, payload fields, credentials, and consumer internals.
+Callers normally catch instances produced by `publish()` rather than construct
+their own.
+
+## `SignalValidationError`
+
+```ts
+class SignalValidationError extends SignalError {
+  readonly issues: readonly StandardSchemaV1.Issue[];
+  constructor(issues: readonly StandardSchemaV1.Issue[]);
+}
+```
+
+`code` is always `invalid_payload`. `issues` is detached, deeply frozen,
+bounded to 20 entries and 20 path segments per entry, and uses a sanitized
+message without rejected payload values. Unsupported path values are omitted.
+
+## Related `CruxRuntimeError` codes
+
+Durable infrastructure and target failures reuse the Runtime error contract:
+
+| Code | When |
+| --- | --- |
+| [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING) | A static Signal Flow activates without the complete durable capability profile. |
+| [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND) | Durable resume cannot resolve its Flow target or snapshot. |
+| [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED) | The deployed target cannot be imported as required. |
+| [`PAYLOAD_NOT_JSON`](/docs/errors/PAYLOAD_NOT_JSON) | Normalized output, match data, or a persisted occurrence is not valid Signal JSON. |
+| [`EVAL_REACTIVE_DISPATCH_FORBIDDEN`](/docs/errors/EVAL_REACTIVE_DISPATCH_FORBIDDEN) | Eval publication would dispatch to an armed durable Flow. |
+
+These errors expose structured `code`, `whatFailed`, `why`, `whatStillWorks`,
+`nextStep`, and `docsUrl` fields. Validation and capability errors happen
+before acceptance. Publication acceptance never waits for a later consumer
+error, retry, or completion.
+
+See [Operations and errors](/docs/guides/durable-execution/signals/operations-and-errors)
+for handling patterns.

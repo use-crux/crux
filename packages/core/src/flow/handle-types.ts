@@ -1,4 +1,8 @@
-/** Public Flow handle, invocation, and result contracts. */
+/**
+ * Public Flow handle, invocation, result, and local signal contracts.
+ *
+ * @module
+ */
 
 import type { EffectScopeRef } from "../effect";
 import type { WithOperationResultMeta } from "../observability";
@@ -128,7 +132,9 @@ export interface FlowHandle<
    * Send a declared local signal to one suspended Flow instance.
    *
    * @remarks Static Signal sources are deliberately excluded from this method;
-   * publish them through their Signal definition instead.
+   * publish them through their Signal definition instead. An omitted options
+   * object nudges a configured Runtime immediately; `{ resume: false }` records
+   * through that Runtime for a later explicit resume.
    */
   signal: FlowHandleSignal<TSignals>;
   /**

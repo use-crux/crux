@@ -6,10 +6,12 @@
 
 import type { JsonValue } from "../storage/types";
 
-/** Optional retry identity supplied when publishing a Signal. */
+/** Options for retry-safe {@link Signal.publish} acceptance. */
 export interface SignalPublishOptions {
   /**
-   * Caller-owned retry key used only for definition-scoped replay comparison.
+   * Caller-owned retry key used for definition-scoped canonical replay.
+   *
+   * @remarks Public receipts and errors never expose the raw key.
    * @defaultValue `undefined`
    */
   readonly idempotencyKey?: string;
@@ -27,6 +29,7 @@ export type SignalPublishGuarantee = "durable" | "process-local";
  *
  * @remarks A receipt confirms acceptance, never listener or consumer
  * completion.
+ * @typeParam TId - Literal identity of the published Signal.
  */
 export interface SignalPublishReceipt<TId extends string = string> {
   /** Stable identity of the accepted occurrence. */
@@ -39,7 +42,13 @@ export interface SignalPublishReceipt<TId extends string = string> {
   readonly guarantee: SignalPublishGuarantee;
 }
 
-/** Normalized payload and identity delivered to a Signal listener. */
+/**
+ * Normalized payload and identity delivered to a Signal listener or Flow.
+ *
+ * @remarks Values are detached and frozen at acceptance.
+ * @typeParam TId - Literal identity of the published Signal.
+ * @typeParam TPayload - Normalized JSON-safe schema output.
+ */
 export interface SignalOccurrence<
   TId extends string = string,
   TPayload extends JsonValue = JsonValue,
@@ -63,5 +72,10 @@ export type SignalListener<TId extends string, TPayload extends JsonValue> = (
   occurrence: SignalOccurrence<TId, TPayload>,
 ) => void | Promise<void>;
 
-/** Idempotent function that stops one process-local Signal subscription. */
+/**
+ * Idempotent function that stops one process-local Signal subscription.
+ *
+ * @remarks Calling it cannot cancel callbacks already scheduled for an
+ * accepted occurrence.
+ */
 export type SignalUnsubscribe = () => void;

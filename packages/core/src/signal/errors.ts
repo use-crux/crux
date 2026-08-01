@@ -6,18 +6,28 @@
 
 import type { StandardSchemaV1 } from "../internal/standard-schema";
 
-/** Stable domain code for a Signal publication failure. */
+/** Stable machine-readable code for a Signal publication failure. */
 export type SignalErrorCode =
   | "invalid_payload"
   | "idempotency_conflict"
   | "publication_rejected";
 
-/** Base error for Signal validation and publication failures. */
+/**
+ * Base error for Signal validation and publication failures.
+ *
+ * @remarks Crux-produced messages never include raw idempotency keys, payload
+ * fields, credentials, or consumer internals. Prefer branching on {@link code}.
+ */
 export class SignalError extends Error {
   /** Stable machine-readable failure code. */
   readonly code: SignalErrorCode;
 
-  /** Create a payload-safe Signal error. */
+  /**
+   * Create a payload-safe Signal error.
+   *
+   * @param code - Stable domain failure code.
+   * @param message - Payload-safe description without private values.
+   */
   constructor(code: SignalErrorCode, message: string) {
     super(message);
     this.name = "SignalError";
@@ -25,12 +35,21 @@ export class SignalError extends Error {
   }
 }
 
-/** Error returned when an authored payload fails its Signal schema. */
+/**
+ * Error returned when authored input fails its Signal schema.
+ *
+ * @remarks Issue snapshots are detached, frozen, bounded, and stripped of
+ * rejected payload values.
+ */
 export class SignalValidationError extends SignalError {
   /** Deeply frozen, bounded Standard Schema issues without payload values. */
   declare readonly issues: readonly StandardSchemaV1.Issue[];
 
-  /** Create a validation error from Standard Schema issues. */
+  /**
+   * Create a validation error from Standard Schema issues.
+   *
+   * @param issues - Schema-owned issues to sanitize and snapshot.
+   */
   constructor(issues: readonly StandardSchemaV1.Issue[]) {
     super("invalid_payload", "Signal payload failed schema validation.");
     this.name = "SignalValidationError";

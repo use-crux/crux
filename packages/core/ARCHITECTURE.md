@@ -1467,6 +1467,10 @@ Example: a brand alignment judge with `detailSchema: z.object({ notes: z.array(z
 
 ## Flow Suspend/Resume
 
+Static Signal-to-Flow waits share the Flow lifecycle but have their own
+acceptance, capability, retry, and privacy laws. See the focused
+[Signal architecture](src/signal/ARCHITECTURE.md).
+
 ### flow and FlowHandle
 
 `flow(name, handler)` returns a frozen `FlowHandle<T, TInput>` that separates flow definition from execution. The handler is captured once; `.run(options?)` can be called repeatedly with different inputs. `.signal(flowId, name, payload?)` delegates to `signalFlow()` for resume. The internal execution engine remains private — `flow` is the public API.

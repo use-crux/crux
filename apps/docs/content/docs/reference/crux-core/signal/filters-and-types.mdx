@@ -1,0 +1,109 @@
+---
+title: Filters and helper types
+description: Exact signatures for Signal match data, predicates, filtered views, and static-source occurrence inference.
+---
+
+All types on this page are exported from `@use-crux/core/signal`.
+
+## `SignalPredicate<TPayload>`
+
+```ts
+type SignalPredicate<TPayload> = (payload: TPayload) => boolean;
+```
+
+Predicates receive normalized schema output. Predicate code is retained with
+the deployed static Flow definition; it is not persisted as data.
+
+## `SignalMatch<T>`
+
+```ts
+type SignalMatch<T> =
+  T extends JsonPrimitive
+    ? T
+    : T extends readonly JsonValue[]
+      ? T
+      : T extends object
+        ? {
+            readonly [K in keyof T]?: SignalMatch<Exclude<T[K], undefined>>;
+          }
+        : never;
+```
+
+Object fields are recursive and optional. Included arrays and scalar values
+match exactly. Match values are detached, canonicalized, and frozen when the
+view is created.
+
+## `PredicateSignalView<TId, TSchema>`
+
+```ts
+interface PredicateSignalView<
+  TId extends string = string,
+  TSchema extends SignalSchema = SignalSchema,
+> {
+  readonly _tag: "FilteredSignal";
+  readonly filterKind: "predicate";
+  readonly signal: Signal<TId, TSchema>;
+  readonly predicate: SignalPredicate<InferSignalSchemaOutput<TSchema>>;
+}
+```
+
+Returned by `baseSignal.when(predicate)`.
+
+## `MatchSignalView<TId, TSchema>`
+
+```ts
+interface MatchSignalView<
+  TId extends string = string,
+  TSchema extends SignalSchema = SignalSchema,
+> {
+  readonly _tag: "FilteredSignal";
+  readonly filterKind: "match";
+  readonly signal: Signal<TId, TSchema>;
+  readonly match: SignalMatch<InferSignalSchemaOutput<TSchema>>;
+}
+```
+
+Returned by `baseSignal.when(match)`. Both filtered views are inert and expose
+no `publish()`, `subscribe()`, or chaining methods.
+
+## `StaticSignalSource`
+
+```ts
+type StaticSignalSource =
+  | {
+      readonly _tag: "Signal";
+      readonly id: string;
+      readonly schema: SignalSchema;
+    }
+  | {
+      readonly _tag: "FilteredSignal";
+      readonly filterKind: "predicate" | "match";
+      readonly signal: {
+        readonly _tag: "Signal";
+        readonly id: string;
+        readonly schema: SignalSchema;
+      };
+    };
+```
+
+This is the minimal structural bound accepted in a static Flow `signals` map.
+It is not a public extension or registration protocol.
+
+## `SignalOccurrenceFor<TSource>`
+
+```ts
+type SignalOccurrenceFor<TSource> =
+  TSource extends Signal<infer TId, infer TSchema>
+    ? SignalOccurrence<TId, InferSignalSchemaOutput<TSchema>>
+    : TSource extends
+          | MatchSignalView<infer TId, infer TSchema>
+          | PredicateSignalView<infer TId, infer TSchema>
+      ? SignalOccurrence<TId, InferSignalSchemaOutput<TSchema>>
+      : never;
+```
+
+Preserves the base Signal's literal ID and normalized payload type for bare and
+filtered sources. It is the return inference used by `FlowScope.waitFor(source)`.
+
+See [Flow integration](/docs/reference/crux-core/signal/flow-integration) for
+the declaration map and wait overload.

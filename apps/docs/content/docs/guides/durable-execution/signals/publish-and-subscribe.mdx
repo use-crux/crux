@@ -1,0 +1,89 @@
+---
+title: Publish and subscribe
+description: Define a Signal, normalize payloads, publish at acceptance, and observe future occurrences in one process.
+---
+
+## Define the contract
+
+Give the Signal a stable ID and a Standard Schema. Authored input types
+`publish()`, while normalized schema output types occurrences and filters:
+
+```ts
+import { signal } from "@use-crux/core";
+import { z } from "zod";
+
+const quantityChanged = signal({
+  id: "inventory.quantity.changed",
+  schema: z.object({
+    sku: z.string(),
+    quantity: z.coerce.number().int().nonnegative(),
+  }),
+});
+```
+
+Here callers may publish a string quantity, but consumers always receive a
+number.
+
+## Subscribe to future occurrences
+
+```ts
+const unsubscribe = quantityChanged.subscribe(async (occurrence) => {
+  occurrence.id; // stable occurrence ID
+  occurrence.signalId; // "inventory.quantity.changed"
+  occurrence.payload.quantity; // number
+  occurrence.acceptedAt; // Date
+
+  await updateLocalProjection(occurrence.payload);
+});
+```
+
+`subscribe()` is process-local and future-only. It does not replay earlier
+occurrences. Its return value is idempotent:
+
+```ts
+unsubscribe();
+unsubscribe(); // safe
+```
+
+Listeners are scheduled after acceptance. A slow or failing listener cannot
+reject the accepted publication, and one listener failure does not stop other
+listeners.
+
+## Publish and inspect acceptance
+
+```ts
+const receipt = await quantityChanged.publish({
+  sku: "sku_123",
+  quantity: "4",
+});
+
+receipt.occurrenceId; // same identity delivered to listeners
+receipt.signalId; // "inventory.quantity.changed"
+receipt.acceptedAt; // Date
+receipt.guarantee; // "process-local" or "durable"
+```
+
+The guarantee is derived from the bindings that participate in this specific
+occurrence. Callers cannot request one. With only local callbacks, the receipt
+is `process-local`.
+
+Publication acceptance never waits for consumer completion. If your endpoint
+must return the consumer's output or failure, call that operation directly
+instead of using a Signal.
+
+## Keep normalized output JSON-safe
+
+Schema normalization must produce finite, acyclic, plain JSON data: `null`,
+booleans, strings, finite numbers, arrays without holes, and plain objects.
+Convert dates, class instances, maps, and sets in the schema. Functions,
+symbols, non-finite numbers, cycles, sparse arrays, and non-plain objects
+reject before acceptance.
+
+The accepted payload is detached and recursively frozen, so later caller
+mutation cannot change what listeners or durable consumers observe.
+
+Invalid schema input throws `SignalValidationError`. JSON-unsafe normalized
+output throws a `CruxRuntimeError` with `PAYLOAD_NOT_JSON`. Neither failure
+consumes an occurrence identity or invokes a listener.
+
+Next, add [filters and idempotency](/docs/guides/durable-execution/signals/filters-and-idempotency).

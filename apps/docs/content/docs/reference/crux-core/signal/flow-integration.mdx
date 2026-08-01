@@ -1,0 +1,143 @@
+---
+title: Flow Signal integration
+description: Exact signatures for static Signal waits and existing local Flow signal delivery.
+---
+
+Public named exports on this page come from `@use-crux/core/flow`. Helper names
+shown inside the `flow()` overload describe compiler inference and are not
+additional named exports.
+
+## Static and local declarations
+
+```ts
+type FlowSignalSpec<TPayload = unknown> =
+  | ZodType<TPayload>
+  | NoPayloadSignal;
+
+type FlowSignalDeclaration = FlowSignalSpec | StaticSignalSource;
+
+type FlowSignalMap = Readonly<
+  Record<string, FlowSignalDeclaration>
+>;
+
+interface FlowDefinitionOptions<
+  TSignals extends FlowSignalMap = FlowSignalMap,
+> {
+  readonly signals: TSignals;
+}
+```
+
+`FlowSignalSpec` declares an existing local Flow signal addressed by name and
+`flowId`. `StaticSignalSource` declares a Signal definition or filtered view
+that the Flow may pass to `waitFor(source)`. One map may contain both.
+
+```ts
+type DeclaredFlowSignalSource<TSignals extends FlowSignalMap> = Extract<
+  TSignals[keyof TSignals],
+  StaticSignalSource
+>;
+
+type FlowSignalPayload<TSpec> =
+  TSpec extends ZodType<infer TPayload>
+    ? TPayload
+    : TSpec extends NoPayloadSignal
+      ? void
+      : never;
+```
+
+`DeclaredFlowSignalSource` restricts a static wait to source types represented
+in that Flow's map. `FlowSignalPayload` infers only local signal payloads.
+
+## `flow(name, options, handler)`
+
+```ts
+function flow<
+  const TSignals extends FlowSignalMap,
+  THandler extends InferredFlowHandler<TSignals>,
+>(
+  name: string,
+  options: FlowDefinitionOptions<TSignals>,
+  handler: THandler,
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals>;
+```
+
+`InferredFlowHandler`, `HandlerOutput`, and `HandlerInput` represent the
+factory's inference internals; callers provide an ordinary handler. Definition
+is inert. Activating a Flow with any static Signal source performs durable
+capability preflight before allocating work or invoking the handler.
+
+## `FlowScope.waitFor(source, options?)`
+
+```ts
+interface FlowWaitForSignalOptions {
+  readonly timeout?: string;
+}
+
+waitFor<const TSource extends DeclaredFlowSignalSource<TSignals>>(
+  source: TSource,
+  options?: FlowWaitForSignalOptions,
+): Promise<SignalOccurrenceFor<TSource>>;
+```
+
+Registers the Flow suspension and required durable Signal delivery atomically.
+The Promise resolves during Flow execution with the complete occurrence after
+a matching delivery wins. `timeout` uses existing Flow duration syntax such as
+`"30m"` or `"24h"`; omission waits without a deadline.
+
+This overload is structurally separate from the existing event overload:
+
+```ts
+waitFor<TPayload = JsonValue>(
+  event: string | FlowWaitForEvent<TPayload>,
+  options?: FlowWaitForOptions,
+): Promise<TPayload>;
+```
+
+## Local Flow signals
+
+```ts
+interface NoPayloadSignal {
+  readonly _tag: "crux.flow.no_payload";
+}
+
+function noPayload(): NoPayloadSignal;
+
+interface FlowSignalOptions {
+  readonly resume: boolean;
+}
+```
+
+`noPayload()` creates the reusable marker for a local signal-map entry.
+`FlowSignalOptions.resume` controls whether local delivery nudges the configured
+Runtime immediately; `false` records it for a later explicit resume.
+
+For a local schema entry, `FlowHandle.signal` has this inferred shape:
+
+```ts
+signal<TName extends keyof TSignals & string>(
+  flowId: string,
+  signalName: TSignals[TName] extends FlowSignalSpec ? TName : never,
+  ...args: [FlowSignalPayload<TSignals[TName]>] extends [void]
+    ? [options?: FlowSignalOptions]
+    : [
+        payload: FlowSignalPayload<TSignals[TName]>,
+        options?: FlowSignalOptions,
+      ]
+): Promise<void>;
+```
+
+For `noPayload()` the payload argument is omitted. Static Signal entries are
+excluded from `FlowHandle.signal`; publish them through `Signal.publish()`.
+
+## `InvalidSignalPayloadError`
+
+```ts
+class InvalidSignalPayloadError extends Error {
+  readonly signalName: string;
+  constructor(signalName: string, detail: string);
+}
+```
+
+Thrown when a local Flow signal payload fails its declared Zod schema or sends
+data to a `noPayload()` entry. It does not represent Signal publication schema
+failure; that uses `SignalValidationError`.

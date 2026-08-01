@@ -1,0 +1,94 @@
+---
+title: Signals
+description: Start with typed process-local events, then add durable Flow waits when the deployment can support them.
+---
+
+A Signal is a named, typed occurrence that one part of your application can
+publish and another can observe. Use one when the publisher should know the
+event contract, but should not call or wait for every consumer directly.
+
+Start process-local. This complete example needs no Runtime configuration:
+
+```ts
+import { signal } from "@use-crux/core";
+import { z } from "zod";
+
+const orderSubmitted = signal({
+  id: "order.submitted",
+  schema: z.object({ orderId: z.string() }),
+});
+
+const unsubscribe = orderSubmitted.subscribe((occurrence) => {
+  console.log(occurrence.payload.orderId);
+});
+
+const receipt = await orderSubmitted.publish({ orderId: "order_123" });
+console.log(receipt.guarantee); // "process-local"
+
+unsubscribe();
+```
+
+`signal()` only creates a frozen definition. It performs no I/O and starts no
+worker. The `id` is your stable application identity. The `schema` can be any
+[Standard Schema v1](https://standardschema.dev/)-compatible schema whose
+normalized output is JSON-safe.
+
+The Promise from `publish()` resolves when Crux accepts the occurrence. It
+never waits for this callback—or any durable consumer—to finish.
+
+## When Signals fit
+
+Signals are useful for:
+
+- typed application events with one or more future-only local callbacks;
+- retry-safe ingestion through a caller-owned idempotency key;
+- a Flow that must suspend until a matching occurrence is accepted;
+- keeping publication separate from consumer completion and retry policy.
+
+Use a direct function call when the caller needs the callee's return value or
+must know that the work completed. Use an ordinary Flow local signal when code
+already addresses one Flow instance by `flowId` and local signal name.
+
+## Choose the guarantee deliberately
+
+Process-local subscriptions live only in the current JavaScript process. They
+have no history and do not survive process exit, serverless suspension, or a
+request landing on another worker.
+
+A Signal publication is durable only when an already-armed Flow wait requires
+delivery and the configured deployment and store satisfy the exact durable
+Signal capability preflight. The default in-memory `node()` Runtime remains
+process-local and cannot activate that wait.
+
+<Callout type="warn" title="Durable acceptance is not completion">
+  A `durable` receipt proves that the occurrence and every currently required
+  durable delivery committed atomically. It does not prove that a Flow resumed
+  or completed.
+</Callout>
+
+## Learn in order
+
+<Cards>
+  <Card
+    title="Publish and subscribe"
+    description="Normalize payloads, inspect receipts, and manage future-only callbacks."
+    href="/docs/guides/durable-execution/signals/publish-and-subscribe"
+  />
+  <Card
+    title="Filters and idempotency"
+    description="Select occurrences and make external retries safe."
+    href="/docs/guides/durable-execution/signals/filters-and-idempotency"
+  />
+  <Card
+    title="Durable Flow waits"
+    description="Declare a static source, pass capability preflight, and wait without races."
+    href="/docs/guides/durable-execution/signals/durable-flow-waits"
+  />
+  <Card
+    title="Operations and errors"
+    description="Diagnose capability, payload, target, and Eval failures safely."
+    href="/docs/guides/durable-execution/signals/operations-and-errors"
+  />
+</Cards>
+
+For every signature, see the [Signals API reference](/docs/reference/crux-core/signal).

@@ -37,6 +37,7 @@
     "cache",
     "agent",
     "flow",
+    "signal",
     "effect",
     "defer",
     "runtime-engine",

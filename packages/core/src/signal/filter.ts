@@ -17,14 +17,21 @@ import type {
   SignalSchema,
 } from "./schema-types";
 
-/** Predicate over a normalized Signal payload. */
+/**
+ * Predicate over a normalized Signal payload.
+ *
+ * @remarks Predicate code is deployed with a static Flow target and is never
+ * persisted as match data.
+ */
 export type SignalPredicate<TPayload> = (payload: TPayload) => boolean;
 
 /**
  * An inert Signal view carrying a deployed predicate function.
  *
  * @remarks Predicate views contain identity only and expose no operational
- * Signal methods.
+ * Signal methods. Creating a view activates no consumer.
+ * @typeParam TId - Literal identity of the base Signal.
+ * @typeParam TSchema - Schema retained by the base Signal.
  */
 export interface PredicateSignalView<
   TId extends string = string,
@@ -44,7 +51,9 @@ export interface PredicateSignalView<
  * An inert Signal view carrying canonical partial-equality data.
  *
  * @remarks Match data is detached, JSON-safe, and frozen. The view exposes no
- * operational Signal methods.
+ * operational Signal methods and activates no consumer.
+ * @typeParam TId - Literal identity of the base Signal.
+ * @typeParam TSchema - Schema retained by the base Signal.
  */
 export interface MatchSignalView<
   TId extends string = string,

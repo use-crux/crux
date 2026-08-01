@@ -7,7 +7,11 @@
 import type { StandardSchemaV1 } from "../internal/standard-schema";
 import type { JsonValue } from "../storage/types";
 
-/** Standard Schema v1 contract accepted by {@link signal}. */
+/**
+ * Standard Schema v1 contract accepted by {@link signal}.
+ *
+ * @remarks Normalized output is constrained to provider-neutral JSON values.
+ */
 export type SignalSchema = StandardSchemaV1<unknown, JsonValue>;
 
 /** Authored payload accepted by {@link Signal.publish}. */

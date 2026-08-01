@@ -28,14 +28,19 @@ import type {
 import { validateSignalPayload } from "./validation";
 import { publishAcceptedSignal } from "./durable-publication";
 
-/** Options for declaring an inert {@link Signal}. */
+/**
+ * Options for declaring an inert {@link Signal}.
+ *
+ * @typeParam TId - Literal application-owned Signal identity.
+ * @typeParam TSchema - Standard Schema that normalizes authored input to JSON.
+ */
 export interface SignalOptions<
   TId extends string,
   TSchema extends SignalSchema,
 > {
   /** Stable application-authored Signal identity. */
   readonly id: TId;
-  /** Standard Schema used when payloads are published. */
+  /** Standard Schema used to validate input and produce JSON-safe output. */
   readonly schema: TSchema;
 }
 
@@ -45,6 +50,9 @@ export interface SignalOptions<
  * @remarks Definitions are frozen and inert. Publication resolves at
  * acceptance and derives its durable or process-local guarantee from the
  * active Runtime bindings; it never waits for consumer completion.
+ *
+ * @typeParam TId - Literal application-owned Signal identity.
+ * @typeParam TSchema - Schema that types input and normalized occurrences.
  */
 export interface Signal<TId extends string, TSchema extends SignalSchema> {
   /** Stable definition discriminant. */
@@ -65,7 +73,7 @@ export interface Signal<TId extends string, TSchema extends SignalSchema> {
    * `CruxRuntimeError` with `PAYLOAD_NOT_JSON` for unsafe normalized output,
    * `EVAL_REACTIVE_DISPATCH_FORBIDDEN` when Eval execution would wake a
    * durable Flow,
-   * or {@link SignalError} when publication is rejected.
+   * or {@link SignalError} for idempotency conflict or rejected publication.
    */
   publish(
     payload: InferSignalSchemaInput<TSchema>,
@@ -96,8 +104,9 @@ export interface Signal<TId extends string, TSchema extends SignalSchema> {
   /**
    * Subscribe to future occurrences in this process.
    *
-   * @remarks No historical occurrences are replayed. Listener completion and
-   * failures cannot change an accepted publication.
+   * @remarks No historical occurrences are replayed, and the registration is
+   * lost when this process exits. Listener completion and failures cannot
+   * change an accepted publication.
    * @param listener - Callback receiving normalized accepted occurrences.
    * @returns An idempotent unsubscribe function.
    */
@@ -111,8 +120,8 @@ export interface Signal<TId extends string, TSchema extends SignalSchema> {
  *
  * @remarks The returned definition is frozen and inert. Use
  * {@link Signal.publish} to accept an occurrence and {@link Signal.subscribe}
- * for future callbacks in this process. Durable Session subscriptions are a
- * separate lifecycle and are never implied by `subscribe()`.
+ * for future callbacks in this process. Durable Flow waits are declared
+ * separately in a Flow's static `signals` map.
  *
  * @param options - Stable Signal identity and its Standard Schema.
  * @returns A frozen typed Signal definition.

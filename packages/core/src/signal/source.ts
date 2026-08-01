@@ -18,7 +18,12 @@ interface AnySignalSource {
   readonly schema: SignalSchema;
 }
 
-/** A bare or filtered Signal source deployable as a static consumer binding. */
+/**
+ * A bare or filtered Signal source deployable as a static Flow binding.
+ *
+ * @remarks This minimal structural bound preserves assignability for specific
+ * schemas. It is not an extension protocol or mutable registry.
+ */
 export type StaticSignalSource =
   | AnySignalSource
   | {
@@ -27,7 +32,12 @@ export type StaticSignalSource =
       readonly signal: AnySignalSource;
     };
 
-/** Infer the normalized occurrence returned for a static Signal source. */
+/**
+ * Infer the normalized occurrence returned for a static Signal source.
+ *
+ * @remarks Filtered sources retain the base Signal's literal ID and normalized
+ * payload type.
+ */
 export type SignalOccurrenceFor<TSource> =
   TSource extends Signal<infer TId, infer TSchema>
     ? SignalOccurrence<TId, InferSignalSchemaOutput<TSchema>>

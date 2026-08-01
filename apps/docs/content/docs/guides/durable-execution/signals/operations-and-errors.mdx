@@ -1,0 +1,77 @@
+---
+title: Operations and errors
+description: Diagnose Signal failures and deploy durable waits without overstating what acceptance proves.
+---
+
+## Deployment checklist
+
+Before relying on a durable Signal-to-Flow wait:
+
+1. Keep Signal IDs and Flow names stable across deployments.
+2. Deploy the Flow target wherever wake delivery can execute it.
+3. Use a Runtime store that declares durable storage, implements Signal
+   records, and has passed reactive composite conformance including transaction
+   rollback at every write boundary.
+4. Confirm the Runtime supplies durable events, cursor reads, waiters, leases,
+   atomic transactions, and at-least-once wake delivery.
+5. Use an explicit namespace appropriate for the deployment.
+6. Treat consumer code as retryable and keep external writes idempotent.
+7. Keep normalized payloads small, JSON-safe, and within your data policy.
+
+The default in-memory `node()` store is appropriate for process-local examples
+and tests that do not activate static Signal waits. It is not production
+durability.
+
+## Signal domain errors
+
+| Error | Code | Meaning |
+| --- | --- | --- |
+| `SignalValidationError` | `invalid_payload` | The authored payload failed its schema. `issues` contains bounded, sanitized issue paths. |
+| `SignalError` | `idempotency_conflict` | One Signal reused a key with different canonical normalized data. |
+| `SignalError` | `publication_rejected` | Validation or durable acceptance could not complete safely. |
+
+Branch on the class and stable code, not the message:
+
+```ts
+import { SignalError, SignalValidationError } from "@use-crux/core/signal";
+
+try {
+  await orderSubmitted.publish(payload, { idempotencyKey });
+} catch (error) {
+  if (error instanceof SignalValidationError) {
+    return { status: 400, issues: error.issues };
+  }
+  if (error instanceof SignalError && error.code === "idempotency_conflict") {
+    return { status: 409 };
+  }
+  throw error;
+}
+```
+
+## Runtime errors around durable waits
+
+| Code | Boundary | Typical action |
+| --- | --- | --- |
+| [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING) | Flow activation | Supply the missing certified Runtime/store capability. |
+| [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND) | Resume or wake | Deploy the named Flow target and compatible snapshot. |
+| [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED) | Target loading | Export the deployed Flow definition from its module. |
+| [`PAYLOAD_NOT_JSON`](/docs/errors/PAYLOAD_NOT_JSON) | Validation or replay | Normalize to finite, acyclic plain JSON and repair incompatible records. |
+| [`EVAL_REACTIVE_DISPATCH_FORBIDDEN`](/docs/errors/EVAL_REACTIVE_DISPATCH_FORBIDDEN) | Eval publication | Publish outside Eval or remove the armed durable consumer. |
+
+Capability and validation failures occur before acceptance and consume no
+occurrence identity. An accepted consumer attempt can later fail, retry, or
+dead-letter without changing the publication receipt.
+
+## Privacy boundary
+
+Signal receipts and public errors omit raw idempotency keys, credentials,
+private payload fields, prompts, and consumer internals. Validation issue
+messages are sanitized and bounded. This protects diagnostics; it does not
+make stored payload data public-safe or secret-safe automatically.
+
+No Signal API in this release promises historical subscription replay,
+consumer-completion acknowledgment, cross-process local callbacks, restart-safe
+Effect rollback, or a transport integration.
+
+Finish with [practical recipes](/docs/guides/durable-execution/signals/recipes),
+or use the [exact API reference](/docs/reference/crux-core/signal).

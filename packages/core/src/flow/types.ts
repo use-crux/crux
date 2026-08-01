@@ -87,9 +87,9 @@ export interface FlowWaitForOptions {
   readonly timeout?: string;
 }
 
-/** Deadline options for waiting on a declared static Signal source. */
+/** Options for {@link FlowScope.waitFor} with a declared static Signal source. */
 export interface FlowWaitForSignalOptions {
-  /** Existing Flow duration syntax; omission waits without a deadline. */
+  /** Flow duration syntax. @defaultValue `undefined` (no deadline). */
   readonly timeout?: string;
 }
 
@@ -210,9 +210,15 @@ export interface FlowScope<
    * occurrence. Event waits retain their existing payload-only behavior. Both
    * forms register a durable waiter and replay the delivery that won its race.
    *
+   * @remarks Registration of the Flow suspension and its required durable
+   * delivery binding is atomic. Resumption is at least once, while Signal
+   * publication itself resolves earlier at acceptance.
+   *
    * @param source - Static Signal source declared by this Flow.
    * @param options - Optional durable wait deadline.
    * @returns The complete typed Signal occurrence selected for this wait.
+   * @throws `CruxRuntimeError` with `CAPABILITY_MISSING` when the configured
+   * deployment or store cannot honor durable Signal delivery.
    */
   waitFor<const TSource extends FlowScopeStaticSignalSource<TSignals>>(
     source: TSource,

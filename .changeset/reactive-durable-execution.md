@@ -27,3 +27,9 @@ including multiple required deliveries.
 
 Signal-driven Flow resumes retain the same in-process Effects scope reference
 across suspension snapshots without claiming cross-process Effects recovery.
+
+Document the shipped surface with a progressive Signals guide, copy-pasteable
+current-API recipes, exact Signal and Flow-wait reference pages, public JSDoc,
+and provider-neutral architecture guidance. The documentation distinguishes
+process-local acceptance, certified durable delivery, consumer completion,
+and a persisted Effect scope reference from restart-safe recovery.

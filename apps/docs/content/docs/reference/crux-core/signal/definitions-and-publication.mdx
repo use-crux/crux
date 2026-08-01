@@ -1,0 +1,126 @@
+---
+title: Definitions and publication
+description: Exact signatures for Signal definitions, schema inference, occurrences, receipts, and subscriptions.
+---
+
+All types on this page are exported from `@use-crux/core/signal`. Only
+`signal()` is also exported from `@use-crux/core`.
+
+## `signal(options)`
+
+```ts
+function signal<
+  const TId extends string,
+  const TSchema extends SignalSchema,
+>(options: SignalOptions<TId, TSchema>): Signal<TId, TSchema>;
+
+interface SignalOptions<
+  TId extends string,
+  TSchema extends SignalSchema,
+> {
+  readonly id: TId;
+  readonly schema: TSchema;
+}
+```
+
+Creates a frozen, inert definition. Construction performs no storage access,
+publication, subscription, or worker startup. `id` remains a literal type.
+
+## `Signal<TId, TSchema>`
+
+```ts
+interface Signal<TId extends string, TSchema extends SignalSchema> {
+  readonly _tag: "Signal";
+  readonly id: TId;
+  readonly schema: TSchema;
+
+  publish(
+    payload: InferSignalSchemaInput<TSchema>,
+    options?: SignalPublishOptions,
+  ): Promise<SignalPublishReceipt<TId>>;
+
+  when(
+    predicate: SignalPredicate<InferSignalSchemaOutput<TSchema>>,
+  ): PredicateSignalView<TId, TSchema>;
+
+  when(
+    match: SignalMatch<InferSignalSchemaOutput<TSchema>>,
+  ): MatchSignalView<TId, TSchema>;
+
+  subscribe(
+    listener: SignalListener<TId, InferSignalSchemaOutput<TSchema>>,
+  ): SignalUnsubscribe;
+}
+```
+
+`publish()` validates and normalizes input, then resolves at acceptance. The
+Runtime derives the guarantee. `subscribe()` registers a future-only callback
+in this process. See [Filters and helper types](/docs/reference/crux-core/signal/filters-and-types)
+for both `when()` overloads.
+
+## Schema types
+
+```ts
+type SignalSchema = StandardSchemaV1<unknown, JsonValue>;
+
+type InferSignalSchemaInput<TSchema extends SignalSchema> =
+  StandardSchemaV1.InferInput<TSchema>;
+
+type InferSignalSchemaOutput<TSchema extends SignalSchema> =
+  StandardSchemaV1.InferOutput<TSchema>;
+```
+
+Authored input types `publish()`. Normalized, JSON-safe output types listeners,
+filters, and Flow occurrences. `StandardSchemaV1` and `JsonValue` describe the
+structural bounds; Signals do not add a public schema package.
+
+## Publication options and guarantee
+
+```ts
+interface SignalPublishOptions {
+  readonly idempotencyKey?: string;
+}
+
+type SignalPublishGuarantee = "durable" | "process-local";
+```
+
+The key is scoped to one Signal identity. Same key plus same canonical
+normalized payload returns the original receipt; different payload throws
+`idempotency_conflict`. Callers cannot set `SignalPublishGuarantee`.
+
+## Receipt and occurrence
+
+```ts
+interface SignalPublishReceipt<TId extends string = string> {
+  readonly occurrenceId: string;
+  readonly signalId: TId;
+  readonly acceptedAt: Date;
+  readonly guarantee: SignalPublishGuarantee;
+}
+
+interface SignalOccurrence<
+  TId extends string = string,
+  TPayload extends JsonValue = JsonValue,
+> {
+  readonly id: string;
+  readonly signalId: TId;
+  readonly payload: TPayload;
+  readonly acceptedAt: Date;
+}
+```
+
+`receipt.occurrenceId === occurrence.id` for the same acceptance. Dates are
+public process values; persisted records encode the acceptance time.
+
+## Listener and unsubscribe
+
+```ts
+type SignalListener<TId extends string, TPayload extends JsonValue> = (
+  occurrence: SignalOccurrence<TId, TPayload>,
+) => void | Promise<void>;
+
+type SignalUnsubscribe = () => void;
+```
+
+Listener failures are isolated after acceptance. `SignalUnsubscribe` is
+idempotent and stops only future callback scheduling.
