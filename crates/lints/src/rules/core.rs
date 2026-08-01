@@ -19,6 +19,7 @@ use crate::helpers::{
     should_require_coverage, targets_by_relation,
 };
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
+use crate::rules::effect::irreversible_required_boundary_findings;
 use crate::rules::evidence::evidence_record_findings;
 use crate::rules::relation::relation_lint_findings;
 use crate::rules::thread::thread_lint_findings;
@@ -53,6 +54,7 @@ pub(crate) fn core_lint_findings(
         &facts.definitions,
     ));
     findings.extend(effect_duplicate_identity_findings(builder, facts));
+    findings.extend(irreversible_required_boundary_findings(builder, facts));
 
     for definition in &facts.definitions {
         append_definition_findings(

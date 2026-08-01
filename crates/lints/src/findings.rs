@@ -210,4 +210,51 @@ mod tests {
                 .all(|finding| finding.rule_id != "effect.duplicate_identity")
         );
     }
+
+    #[test]
+    fn irreversible_effect_requires_explicit_required_boundary_evidence() {
+        let mut facts: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "definitions": [{
+                "id": "effect:inventory.reserve:v1",
+                "kind": "effect",
+                "name": "inventory.reserve",
+                "fidelity": "resolved",
+                "metadata": {
+                    "facts": {
+                        "kind": "effect",
+                        "effectId": "inventory.reserve",
+                        "version": 1,
+                        "recoverable": false,
+                        "capture": false,
+                        "resource": false
+                    }
+                },
+                "sourceRefs": [{
+                    "id": "effect:inventory.reserve:v1:required-boundary:1",
+                    "role": "config",
+                    "property": "rollbackOnError.recovery",
+                    "symbol": "rollbackOnError",
+                    "source": { "file": "src/effects.ts", "line": 8, "column": 1 },
+                    "fidelity": "resolved"
+                }]
+            }]
+        }))
+        .expect("effect boundary fixture facts decode");
+
+        append_builtin_lint_findings(&mut facts, &StaticIndexLintOptions::default());
+        let finding = facts
+            .lint_findings
+            .iter()
+            .find(|finding| finding.rule_id == "effect.irreversible_in_required_boundary")
+            .expect("irreversible Effect boundary finding");
+        assert!(finding.message.contains("inventory.reserve"));
+        assert!(finding.message.contains("src/effects.ts:8"));
+        for action in ["Define recovery", "move the Effect outside", "best-effort"] {
+            assert!(
+                finding.message.contains(action),
+                "message={}",
+                finding.message
+            );
+        }
+    }
 }

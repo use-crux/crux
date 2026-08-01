@@ -835,6 +835,51 @@
       "title": "Effect identity is defined more than once"
     },
     {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "A statically identified Effect with no recovery is called inside a statically required rollbackOnError() boundary.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/effect-irreversible-in-required-boundary",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a recovery handler to the Effect definition.",
+          "kind": "manual",
+          "title": "Define recovery"
+        },
+        {
+          "description": "Call the irreversible Effect outside the required-recovery boundary.",
+          "kind": "manual",
+          "title": "Move the Effect outside"
+        },
+        {
+          "description": "Set the boundary option to { recovery: 'best-effort' } when partial rollback is acceptable.",
+          "kind": "manual",
+          "title": "Choose best-effort recovery"
+        }
+      ],
+      "id": "effect.irreversible_in_required_boundary",
+      "impact": "The required boundary blocks the irreversible Effect before mutation, so the authored operation cannot proceed as written.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A required-recovery boundary promises that every contained Effect can be recovered, and the strict default must teach every valid escape hatch.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line effect.irreversible_in_required_boundary -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Irreversible Effect is inside a required-recovery boundary"
+    },
+    {
       "category": "safety",
       "confidence": "high",
       "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",

@@ -13,7 +13,8 @@ use serde::Deserialize;
 use crate::completion::{CompletionInsertion, CompletionSlot, completion_site_manifest};
 use crate::manifest::{
     FIRST_PARTY_PRIMITIVE_MANIFEST, FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
-    FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, first_party_primitive_manifest_digest,
+    FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, LocalReferenceForm,
+    first_party_primitive_manifest_digest,
 };
 use crate::producer_identity::producer_identity_manifest;
 
@@ -119,7 +120,25 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "19");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "20");
+}
+
+#[test]
+fn effect_manifest_declares_boundary_calls_and_local_only_references() {
+    let effect = FIRST_PARTY_PRIMITIVE_MANIFEST
+        .iter()
+        .find(|entry| entry.extractor == "effect")
+        .expect("Effect manifest entry");
+
+    assert_eq!(effect.call_names, ["effect", "rollbackOnError"]);
+    assert_eq!(
+        effect.local_reference_forms,
+        [
+            LocalReferenceForm::LocalInitializer,
+            LocalReferenceForm::PropertyAccess,
+        ]
+    );
+    assert!(!effect.resolves_imported_records());
 }
 
 #[test]
@@ -129,7 +148,7 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:c7cefbc38f8d68f5d0ded921acc8001446894c6d200226e32d7c286f9d9da87c"
+        "sha256:2b7e820f40af54a162d0d208aa274e6ff674b8080313fd4240fcaf3cbe3bcb85"
     );
 }
 
@@ -167,10 +186,10 @@ fn completion_manifest_covers_all_admitted_shapes() {
             && site.exclude_self
     }));
 
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "19");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "20");
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:c7cefbc38f8d68f5d0ded921acc8001446894c6d200226e32d7c286f9d9da87c"
+        "sha256:2b7e820f40af54a162d0d208aa274e6ff674b8080313fd4240fcaf3cbe3bcb85"
     );
 }
 

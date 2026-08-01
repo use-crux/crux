@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.11"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.12"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -30,6 +30,7 @@ var defaultCallNames = []string{
 	"embedMany",
 	"embedding",
 	"effect",
+	"rollbackOnError",
 	"evaluate",
 	"record",
 	"expandParents",
@@ -110,6 +111,7 @@ var defaultCallInterestNames = []string{
 	"embedMany",
 	"embedding",
 	"effect",
+	"rollbackOnError",
 	"evaluate",
 	"record",
 	"expandParents",
@@ -185,6 +187,12 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/effect"}
 			interest.ConfigArg = &arg
 			interest.Properties = []string{"version", "recover", "resource"}
+		}
+		if name == "rollbackOnError" {
+			arg := 1
+			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/effect"}
+			interest.ConfigArg = &arg
+			interest.Properties = []string{"recovery"}
 		}
 		if name == "thread" {
 			interest.ImportFrom = []string{"@use-crux/core/thread"}

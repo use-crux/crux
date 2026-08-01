@@ -27,3 +27,8 @@ reporting unavailable or irreversible recovery honestly.
 
 Export Effect spans through the OpenTelemetry adapter with the canonical
 `crux.effect.run` span name.
+
+Report an `effect.irreversible_in_required_boundary` Project Index error when
+an irreversible Effect is certainly called inside a required-recovery
+`rollbackOnError()` boundary, with guidance for defining recovery, moving the
+Effect outside the boundary, or explicitly choosing best-effort recovery.

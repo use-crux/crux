@@ -14,7 +14,7 @@
         },
         "oxc": {
           "name": "oxc-rust",
-          "version": "oxc_parser@0.139.0+crux_native_group3.11"
+          "version": "oxc_parser@0.139.0+crux_native_group3.12"
         },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
@@ -82,7 +82,7 @@
         },
         "oxc": {
           "name": "oxc-rust",
-          "version": "oxc_parser@0.139.0+crux_native_group3.11"
+          "version": "oxc_parser@0.139.0+crux_native_group3.12"
         },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
@@ -165,7 +165,7 @@
         },
         "oxc": {
           "name": "oxc-rust",
-          "version": "oxc_parser@0.139.0+crux_native_group3.11"
+          "version": "oxc_parser@0.139.0+crux_native_group3.12"
         },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
@@ -335,7 +335,7 @@
         },
         "oxc": {
           "name": "oxc-rust",
-          "version": "oxc_parser@0.139.0+crux_native_group3.11"
+          "version": "oxc_parser@0.139.0+crux_native_group3.12"
         },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",

@@ -349,6 +349,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "flow.undeclared_suspend_signal",
             "workspace.write_without_guardrail",
             "effect.duplicate_identity",
+            "effect.irreversible_in_required_boundary",
             "safety.duplicate_policy_id",
             "thread.conflicting_binding",
             "thread.duplicate_active",

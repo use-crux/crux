@@ -48,11 +48,11 @@ export const cruxCoreCompilerProjections = [
   },
   {
     name: "effect-definition-facts",
-    version: "1",
+    version: "2",
     phase: "extract",
     reason:
-      "Compiler-owned static projection indexes public effect definitions and their runtime identity.",
-    staticCallNames: ["effect"],
+      "Compiler-owned static projection indexes public effect definitions, runtime identity, and required-boundary evidence.",
+    staticCallNames: ["effect", "rollbackOnError"],
   },
   {
     name: "source-ref-projection",
