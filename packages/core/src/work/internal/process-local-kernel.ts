@@ -30,6 +30,11 @@ export type InternalWorkStatus =
       readonly startedAt: Date;
       readonly completedAt: Date;
       readonly resultAvailable: true;
+    })
+  | (InternalWorkStatusBase & {
+      readonly state: "failed";
+      readonly startedAt: Date;
+      readonly failedAt: Date;
     });
 
 /** Typed internal handle for one finite process-local execution. @internal */
@@ -44,7 +49,7 @@ export interface InternalWorkHandle<TOutput> {
   result(): Promise<TOutput>;
 }
 
-/** Injectable process-local identity, clock, and scheduling seams. @internal */
+/** Injectable process-local infrastructure seams. @internal */
 export interface ProcessLocalWorkKernelOptions {
   /** Allocate one Work identity. */
   readonly createId?: () => string;
@@ -52,6 +57,8 @@ export interface ProcessLocalWorkKernelOptions {
   readonly now?: () => Date;
   /** Schedule an accepted execution to start. */
   readonly schedule?: (start: () => void) => void;
+  /** Run the passive Effect boundary; injectable for internal failure tests. */
+  readonly runEffectBoundary?: typeof runPassiveEffectBoundary;
 }
 
 /** Explicitly instantiated, isolated Work registry and execution kernel. @internal */
@@ -79,6 +86,11 @@ type StoredWorkStatus =
       readonly startedAt: number;
       readonly completedAt: number;
       readonly resultAvailable: true;
+    })
+  | (StoredWorkStatusBase & {
+      readonly state: "failed";
+      readonly startedAt: number;
+      readonly failedAt: number;
     });
 
 interface MutableWorkRecord {
@@ -110,6 +122,13 @@ function workStatusSnapshot(status: StoredWorkStatus): InternalWorkStatus {
         completedAt: new Date(status.completedAt),
         resultAvailable: status.resultAvailable,
       });
+    case "failed":
+      return Object.freeze({
+        ...base,
+        state: status.state,
+        startedAt: new Date(status.startedAt),
+        failedAt: new Date(status.failedAt),
+      });
   }
 }
 
@@ -131,6 +150,8 @@ export function createProcessLocalWorkKernel(
   const registry = new Map<string, MutableWorkRecord>();
   const now = options.now ?? (() => new Date());
   const schedule = options.schedule ?? queueMicrotask;
+  const runEffectBoundary =
+    options.runEffectBoundary ?? runPassiveEffectBoundary;
   let nextId = 0;
   const createId =
     options.createId ??
@@ -166,7 +187,7 @@ export function createProcessLocalWorkKernel(
       const scheduled = new Promise<void>((resolve) => {
         start = resolve;
       });
-      const execution = runPassiveEffectBoundary(id, async (boundary) => {
+      const execution = runEffectBoundary(id, async (boundary) => {
         acceptEffects(boundary.ref);
         schedule(start);
         await scheduled;
@@ -183,7 +204,21 @@ export function createProcessLocalWorkKernel(
           id,
           effects: boundary.ref,
         });
-        const output = await driver.run(context);
+        let output: TOutput;
+        try {
+          output = await driver.run(context);
+        } catch (failure) {
+          const failedAt = now().getTime();
+          record.status = Object.freeze({
+            id,
+            state: "failed",
+            acceptedAt,
+            startedAt,
+            failedAt,
+            updatedAt: failedAt,
+          });
+          throw failure;
+        }
         const completedAt = now().getTime();
         record.status = Object.freeze({
           id,
@@ -197,7 +232,16 @@ export function createProcessLocalWorkKernel(
         return output;
       });
       void execution.catch(() => undefined);
-      const effects = await effectsAllocated;
+      let effects: EffectScopeRef;
+      try {
+        effects = await Promise.race([
+          effectsAllocated,
+          execution.then(() => effectsAllocated),
+        ]);
+      } catch (failure) {
+        registry.delete(id);
+        throw failure;
+      }
 
       return Object.freeze({
         id,
