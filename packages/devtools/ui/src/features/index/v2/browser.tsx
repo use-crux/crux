@@ -30,6 +30,7 @@ import {
   useIndexIndex,
 } from "./context";
 import { IndexDetail } from "./detail";
+import { effectCatalogRailLabel } from "./effect-catalog";
 import { IndexGraph } from "./graph";
 
 interface Axis {
@@ -217,6 +218,19 @@ function CatRailRow({
         >
           {def.name}
         </span>
+        {def.effectCatalog ? (
+          <span
+            style={{
+              fontFamily: T.mono,
+              fontSize: 9,
+              color: T.fgFaint,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {effectCatalogRailLabel(def.effectCatalog)}
+          </span>
+        ) : null}
         {children.length > 0 && (
           <span
             style={{

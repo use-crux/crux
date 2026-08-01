@@ -1,6 +1,7 @@
 /** Durable Flow snapshot and replay-delivery records. */
 
 import type { JsonValue } from "../../storage";
+import type { EffectScopeRef } from "../../effect/types";
 import type {
   EventCursor,
   FlowId,
@@ -14,6 +15,8 @@ import type {
 export interface FlowSnapshot {
   /** Durable Flow instance id. */
   readonly flowId: FlowId;
+  /** In-process Effect boundary retained across Flow execution segments. */
+  readonly effects?: EffectScopeRef;
   /** Owning Runtime work item for this Flow occurrence. */
   readonly workId: WorkId;
   /** Name-based target id for the Flow definition. */

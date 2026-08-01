@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 59 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 59", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 60 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want combined integration epoch 60", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -47,14 +47,19 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Epoch 55",
 		"authored evidence.record definitions",
 		"Epoch 56",
-		"authored Thread definitions",
+		"Effect definitions",
+		"Thread definitions",
+		"runtime-observability identity",
 		"context-planning structure",
 		"Epoch 57",
+		"distinct same-identity Effect call-site evidence",
 		"first-class Thread lint findings",
 		"Epoch 58",
 		"sources deleted while offline",
 		"Epoch 59",
-		"independently advanced Thread and context-planning",
+		"Effect export metadata",
+		"Epoch 60",
+		"independently advanced Effect LSP and canonical Thread history",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -65,7 +70,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-59", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-60", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -74,6 +79,14 @@ func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 
 func TestProjectIndexFactStoreMissesPreExecutionEvidenceSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 54, "pre-execution-evidence snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreEffectDefinitionSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 55, "pre-Effect-definition snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreEffectCallSiteSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 56, "pre-Effect-call-site snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreThreadLintSnapshotEpoch(t *testing.T) {
@@ -86,6 +99,14 @@ func TestProjectIndexFactStoreMissesPreStaleDeletionSnapshotEpoch(t *testing.T) 
 
 func TestProjectIndexFactStoreMissesPreContextPlanningSnapshotEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 55, "pre-context-planning snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreMergedSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 57, "pre-merged Effects/context-planning snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreEffectCompletionSnapshotEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 58, "pre-Effect-completion snapshot")
 }
 
 func TestProjectIndexFactStoreMissesPreBoundedMediaStreamSnapshotEpoch(t *testing.T) {

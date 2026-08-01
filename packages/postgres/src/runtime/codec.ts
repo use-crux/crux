@@ -62,7 +62,17 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
     targetId: row.target_id as RuntimeTargetId,
     namespace: row.namespace as string,
     status: row.status as FlowSnapshot['status'],
+    ...(row.effects
+      ? {
+          effects: Object.freeze(
+            row.effects as NonNullable<FlowSnapshot['effects']>,
+          ),
+        }
+      : {}),
     input: row.input as FlowSnapshot['input'],
+    ...(row.continuation !== null && row.continuation !== undefined
+      ? { continuation: row.continuation as FlowSnapshot['continuation'] }
+      : {}),
     completedSteps: Object.freeze(
       (row.completed_steps as Record<string, FlowSnapshot['input']>) ?? {},
     ),

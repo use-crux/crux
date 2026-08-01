@@ -1,0 +1,272 @@
+---
+title: Recovery patterns
+description: Choose a recovery form, use idempotency keys, prevent double recovery, and handle conflicts and contract versions.
+---
+
+Recovery is a compensating action for one completed Effect. It can restore an
+exact prior value, reverse a version, or mitigate the domain change. It does
+not promise to restore every system to a prior instant.
+
+Add `recover` to `effect()` when your application has a safe compensating
+action. Crux then retains the recovery inputs for that receipt and registers
+one recovery unit with the nearest rollback boundary. Choose the recovery form
+based on where the handler can get the state it needs.
+
+## Choose a recovery form
+
+### Derive recovery from input and output
+
+Use a recovery function when the original input and executor output contain
+everything needed to compensate the change. This is the simplest form because
+it performs no extra read before execution.
+
+```ts
+import { effect } from "@use-crux/core/effect";
+
+const createCustomer = effect(
+  "customer.create",
+  async (
+    input: { email: string },
+    { idempotencyKey },
+  ) =>
+    crm.customers.create(input, { idempotencyKey }),
+  {
+    resource: ({ email }) => ({
+      type: "customer-email",
+      id: email,
+    }),
+    recover: async ({ output, idempotencyKey }) => {
+      await crm.customers.archive(output.id, { idempotencyKey });
+    },
+  },
+);
+```
+
+The recovery function receives the original `input`, settled `output`, receipt,
+safe resource identity, conflict mode, cancellation signal, and a recovery
+`idempotencyKey`. Keep the executor output small enough to understand, but
+include any external identifier recovery must address.
+
+### Capture pre-state before execution
+
+Use `{ capture, execute }` when recovery needs the exact state from before the
+change. `capture` runs before the executor so Crux never makes the external
+change without first retaining the state needed to reverse it.
+
+```ts
+const replaceSettings = effect(
+  "settings.replace",
+  async (
+    input: { accountId: string; settings: Settings },
+    { idempotencyKey },
+  ) => {
+    await api.settings.replace(input.accountId, input.settings, {
+      idempotencyKey,
+    });
+  },
+  {
+    resource: ({ accountId }) => ({
+      type: "account-settings",
+      id: accountId,
+    }),
+    recover: {
+      capture: async ({ input }) =>
+        api.settings.get(input.accountId),
+      execute: async ({ input, captured, idempotencyKey }) => {
+        await api.settings.replace(input.accountId, captured, {
+          idempotencyKey,
+        });
+      },
+    },
+  },
+);
+```
+
+If capture fails, Crux records a preparation failure and does not call the
+executor. Keep captured state minimal because it can contain sensitive domain
+data. In this release it stays inside the in-process ledger and does not appear
+in observability or automatic evidence.
+
+## Forward the idempotency keys
+
+Use the execution and recovery `idempotencyKey` values whenever the external
+API supports idempotent operations. The execution key is stable for one Effect
+occurrence, so a provider can recognize duplicate delivery of that change. The
+recovery key is stable for that recovery occurrence and intentionally differs
+from the execution key, so compensation cannot collide with the original
+request.
+
+```ts
+const reserveInventory = effect(
+  "inventory.reserve",
+  async (input: ReservationInput, { idempotencyKey }) =>
+    inventory.reserve(input, { idempotencyKey }),
+  {
+    recover: async ({ output, idempotencyKey }) => {
+      await inventory.release(output.reservationId, {
+        idempotencyKey,
+      });
+    },
+  },
+);
+```
+
+Crux makes keys available but cannot prove that a custom handler forwarded
+them. Unknown recovery outcomes are therefore never retried automatically.
+
+## Recover one receipt directly
+
+Call `.run()` instead of the ordinary callable form when application or
+operator code needs the receipt. It returns the same executor output together
+with an `EffectReceiptRef` that identifies this exact attempt.
+
+Use `recover()` when code has a receipt but not the original definition. Use a
+recoverable definition's `.recover()` convenience when you also want Crux to
+check that the receipt belongs to that definition.
+
+```ts
+import { recover } from "@use-crux/core/effect";
+
+const execution = await updateCustomer.run({
+  id: "cus_123",
+  name: "Ada",
+});
+
+console.log(execution.output);
+
+const result = await recover(execution.receipt, {
+  reason: "The customer cancelled the change",
+});
+```
+
+Individual recovery invokes only the unit for that receipt. It does not roll
+back siblings or the owning scope. Recovery is idempotent at the unit level:
+after a successful recovery, another call reports `already_recovered` instead
+of invoking the handler again.
+
+When the definition is available, the equivalent
+`updateCustomer.recover(execution.receipt, options)` call first checks that the
+receipt belongs to `updateCustomer`.
+
+Prefer [scope rollback](/docs/guides/effects/rollback-boundaries) when several
+effects form one operation. The boundary owns their complete causal plan and
+can explain everything that did or did not recover.
+
+## Prevent double recovery
+
+An Effect that calls nested Effects owns only its direct state. Its recovery
+handler must never recover those children again. Crux already records the
+children as separate recovery units and plans them in causal reverse order.
+
+```ts
+const publishCampaign = effect(
+  "campaign.publish",
+  async (input: CampaignInput) => {
+    await uploadAssets(input);
+    await updateSearchIndex(input);
+    return publishCampaignRecord(input);
+  },
+  {
+    recover: async ({ output, idempotencyKey }) => {
+      // Recover only the campaign record created by this definition.
+      await unpublishCampaignRecord(output.id, { idempotencyKey });
+    },
+  },
+);
+```
+
+If the parent completes after both children, rollback runs the parent's direct
+recovery first, then search-index recovery, then asset recovery. The parent
+handler must not repeat the latter two actions.
+
+If one external call owns a compound operation and one recovery handler
+compensates the whole operation, keep its internal helper calls as plain
+functions. Marking both the compound call and its internal calls as Effects
+would register overlapping recovery units and risk double recovery.
+
+## Make recovery conflict-safe
+
+Recovery must not silently overwrite changes made after the original Effect.
+For a custom Effect, the recovery handler owns this optimistic-concurrency
+check because Crux cannot invent a version rule for an arbitrary API.
+
+Capture or return the provider's post-change version or ETag, compare it with
+the current value before mutation, and refuse recovery when it no longer
+matches. The handler receives `conflict: "fail" | "force"` so it can distinguish
+the safe default from an explicitly authorized override.
+
+```ts
+const updateArticle = effect(
+  "article.update",
+  async (input: ArticleUpdate, { idempotencyKey }) =>
+    articles.update(input.id, input.patch, { idempotencyKey }),
+  {
+    recover: {
+      capture: async ({ input }) => articles.get(input.id),
+      execute: async ({
+        input,
+        output,
+        captured,
+        conflict,
+        idempotencyKey,
+      }) => {
+        const current = await articles.get(input.id);
+        const changedSinceExecution = current.etag !== output.etag;
+
+        if (changedSinceExecution && conflict === "fail") {
+          throw new ArticleRecoveryConflictError(current.etag);
+        }
+
+        await articles.replace(input.id, captured, {
+          ifMatch: conflict === "fail" ? output.etag : undefined,
+          idempotencyKey,
+        });
+      },
+    },
+  },
+);
+```
+
+Request `conflict: "force"` only after separate authorization and review. The
+mode tells the handler what the caller requested; it does not bypass provider
+capabilities, version checks, or application policy by itself.
+
+```ts
+await recover(receipt, {
+  conflict: "force",
+  reason: "Approved operator restore after reviewing the newer edit",
+});
+```
+
+## Version recovery contracts deliberately
+
+`version` defaults to `1`, and `(id, version)` identifies one definition
+object. Bump it when a deployed receipt can no longer be interpreted safely by
+the new execution or recovery contract. Examples include changing captured
+state shape, changing the meaning of executor output used by recovery, or
+replacing the compensation protocol.
+
+```ts
+const chargeCustomer = effect(
+  "billing.charge",
+  executeChargeV2,
+  {
+    version: 2,
+    recover: refundChargeV2,
+  },
+);
+```
+
+Do not bump the version for an internal refactor that preserves receipt and
+recovery compatibility. A version bump creates a new contract; it does not
+upgrade existing receipts. Keep the exact older definition available for as
+long as its receipts may need recovery. In this release those receipts live
+only for the current process, but the compatibility rule keeps the definition
+ready for durable runtimes later.
+
+## Related
+
+- [Effects overview](/docs/guides/effects)
+- [Rollback boundaries](/docs/guides/effects/rollback-boundaries)
+- [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [Effects API reference](/docs/reference/crux-core/effect)

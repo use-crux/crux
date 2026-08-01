@@ -307,7 +307,13 @@ async function publicDocumentationFiles(): Promise<string[]> {
   return (await Promise.all(roots.map(documentationFiles))).flat().sort();
 }
 
+// Dated release posts are a historical record rather than live guidance: their
+// migration tables have to name the APIs a release removed. Live documentation
+// still may not.
+const historicalDocumentationPaths = new Set(["apps/docs/content/blog"]);
+
 async function documentationFiles(path: string): Promise<string[]> {
+  if (historicalDocumentationPaths.has(path)) return [];
   const absolute = resolve(repoRoot, path);
   if ((await stat(absolute)).isFile()) {
     return /\.(?:go|html|json|md|mdx|mjs|rs|ts|tsx)$/u.test(path) ? [path] : [];

@@ -326,6 +326,15 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     targetId: snapshot.targetId,
     namespace: snapshot.namespace,
     status: snapshot.status,
+    ...(snapshot.effects
+      ? {
+          effects: Object.freeze({
+            kind: snapshot.effects.kind,
+            id: snapshot.effects.id,
+            runId: snapshot.effects.runId,
+          }),
+        }
+      : {}),
     input: cloneJsonValue(snapshot.input, "flow snapshot input"),
     ...(snapshot.continuation
       ? {

@@ -65,6 +65,13 @@ import {
 } from "../observability/definition-ref";
 import { runWithDeferReplayGuard } from "../defer/internal/replay-guard";
 import { runScope } from "../scope/kernel";
+import {
+  assertEffectBoundaryRollbackAllowed,
+  runPassiveEffectBoundary,
+  startEffectBoundaryRollback,
+  type EffectBoundaryState,
+} from "../effect/internal/boundary";
+import type { EffectScopeRef, RollbackOptions } from "../effect";
 
 // Import from decomposed modules
 import type {
@@ -265,6 +272,7 @@ async function executeFlow<
   const existing = getExecutionContext();
   const parentFlowId = options?.parentFlowId ?? existing?.flowId;
   const startedAt = currentTimeMs();
+  let effectBoundary: EffectBoundaryState | undefined;
 
   // Load snapshot for resume
   let snapshot: FlowSnapshot | null = null;
@@ -388,6 +396,22 @@ async function executeFlow<
 
   // Create the flow scope
   const scope = {
+    get effects() {
+      if (!effectBoundary) {
+        throw new TypeError("The flow effect boundary is not active.");
+      }
+      return effectBoundary.ref;
+    },
+
+    async rollback(options?: RollbackOptions) {
+      if (!effectBoundary) {
+        throw new TypeError("The flow effect boundary is not active.");
+      }
+      assertEffectBoundaryRollbackAllowed(effectBoundary);
+      return (await startEffectBoundaryRollback(effectBoundary, options))
+        .result;
+    },
+
     flowId,
     input: flowInput,
     results,
@@ -747,12 +771,23 @@ async function executeFlow<
         fn(scope, flowInput),
       );
     const result = await flowSpan.withContext(() =>
-      runtimeExecution
-        ? runWithDeferReplayGuard(invokeHandler)
-        : invokeHandler(),
+      runPassiveEffectBoundary(
+        flowId,
+        (boundary) => {
+          effectBoundary = boundary;
+          return runtimeExecution
+            ? runWithDeferReplayGuard(invokeHandler)
+            : invokeHandler();
+        },
+        runtimeExecution?.snapshot.effects ?? snapshot?.effects,
+      ),
     );
 
-    const completedResult = completedFlowResultPayload(result, flowId);
+    const completedResult = completedFlowResultPayload(
+      result,
+      flowId,
+      requireFlowEffectBoundary(effectBoundary).ref,
+    );
 
     if (runtimeExecution) {
       runtimeExecution.fingerprint.complete();
@@ -760,6 +795,7 @@ async function executeFlow<
         status: "completed",
         flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
           status: "completed",
+          effects: requireFlowEffectBoundary(effectBoundary).ref,
           input: flowInput,
           completedSteps,
           continuation: flowRun.captureContinuation(),
@@ -802,6 +838,7 @@ async function executeFlow<
       const suspendedResult = suspendedFlowResultPayload<T>(
         flowId,
         error.suspendPoint,
+        requireFlowEffectBoundary(effectBoundary).ref,
       );
       if (runtimeExecution) {
         runtimeExecution.fingerprint.complete();
@@ -824,6 +861,7 @@ async function executeFlow<
             targetId: runtimeExecution.work.targetId,
             snapshot: {
               input: runtimeInputValue(flowInput),
+              effects: requireFlowEffectBoundary(effectBoundary).ref,
               completedSteps: runtimeCompletedSteps(completedSteps),
               fingerprint: runtimeExecution.fingerprint.observed,
               deliveredSuspends: runtimeDeliveredSuspendsForPersistence(
@@ -892,6 +930,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const snapshotData: FlowSnapshot = {
           flowId,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           name,
           status: "suspended",
           suspendedAt: error.suspendPoint,
@@ -938,6 +979,7 @@ async function executeFlow<
     if (error instanceof FlowCancelledError) {
       const cancelledResult = cancelledFlowResultPayload<T>(
         flowId,
+        requireFlowEffectBoundary(effectBoundary).ref,
         error.reason,
       );
       if (runtimeExecution) {
@@ -946,6 +988,7 @@ async function executeFlow<
           status: "cancelled",
           flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
             status: "cancelled",
+            effects: requireFlowEffectBoundary(effectBoundary).ref,
             input: flowInput,
             completedSteps,
             continuation: flowRun.captureContinuation(),
@@ -980,6 +1023,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const snapshotData: FlowSnapshot = {
           flowId,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           name,
           status: "cancelled",
           suspendedAt: "",
@@ -1022,6 +1068,7 @@ async function executeFlow<
           status: "completed",
           flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
             status: "expired",
+            effects: requireFlowEffectBoundary(effectBoundary).ref,
             input: flowInput,
             completedSteps,
             continuation: flowRun.captureContinuation(),
@@ -1060,7 +1107,11 @@ async function executeFlow<
       });
       flowRun.error(error);
       return finalizeFlowResult(
-        expiredFlowResultPayload<T>(flowId, error.suspendPoint),
+        expiredFlowResultPayload<T>(
+          flowId,
+          error.suspendPoint,
+          requireFlowEffectBoundary(effectBoundary).ref,
+        ),
         resultOperation,
       );
     }
@@ -1135,6 +1186,21 @@ async function executeFlow<
     flowRun.error(error);
     throw error;
   }
+}
+
+function requireFlowEffectBoundary(
+  boundary: EffectBoundaryState | undefined,
+): EffectBoundaryState {
+  if (!boundary) {
+    throw new TypeError("The flow effect boundary was not initialized.");
+  }
+  return boundary;
+}
+
+function effectScopeRefForFlowSnapshot(
+  ref: EffectScopeRef,
+): NonNullable<FlowSnapshot["effects"]> {
+  return { kind: ref.kind, id: ref.id, runId: ref.runId };
 }
 
 function flowTraceContext(

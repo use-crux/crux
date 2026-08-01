@@ -50,7 +50,9 @@ export const REQUIRED_COLUMNS: Readonly<
     'work_id',
     'target_id',
     'status',
+    'effects',
     'input',
+    'continuation',
     'completed_steps',
     'fingerprint',
     'pending_suspends',
@@ -146,7 +148,9 @@ export function ddlStatements(schema: string): readonly string[] {
       work_id text NOT NULL,
       target_id text NOT NULL,
       status text NOT NULL,
+      effects jsonb,
       input jsonb NOT NULL,
+      continuation jsonb,
       completed_steps jsonb NOT NULL,
 	      fingerprint jsonb NOT NULL,
 	      pending_suspends jsonb NOT NULL,
@@ -155,6 +159,10 @@ export function ddlStatements(schema: string): readonly string[] {
 	      updated_at timestamptz NOT NULL,
 	      PRIMARY KEY (namespace, flow_id)
 	    )`,
+    `ALTER TABLE ${snapshots}
+	      ADD COLUMN IF NOT EXISTS effects jsonb`,
+    `ALTER TABLE ${snapshots}
+      ADD COLUMN IF NOT EXISTS continuation jsonb`,
     `ALTER TABLE ${snapshots}
 	      ADD COLUMN IF NOT EXISTS scheduled_work jsonb`,
     `ALTER TABLE ${snapshots}

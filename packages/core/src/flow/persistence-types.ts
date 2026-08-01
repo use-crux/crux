@@ -2,6 +2,13 @@
 
 import type { JsonObject, JsonValue } from "../storage";
 
+/** JSON-safe Effect boundary reference retained across Flow segments. */
+type FlowSnapshotEffectScopeRef = {
+  readonly kind: "effect.scope";
+  readonly id: string;
+  readonly runId: string;
+};
+
 /** Persisted, occurrence-keyed local signal delivery used for suspend replay. */
 export interface DeliveredFlowSignal extends JsonObject {
   /** Signal name delivered to a suspend point. */
@@ -26,6 +33,8 @@ export interface DeliveredFlowSignals extends JsonObject {
 export interface FlowSnapshot extends JsonObject {
   /** Stable Flow instance identity. */
   flowId: string;
+  /** In-process Effect boundary retained across Flow execution segments. */
+  effects?: FlowSnapshotEffectScopeRef;
   /** Authored Flow definition name. */
   name: string;
   /** Current lifecycle state. */

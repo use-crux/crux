@@ -5,6 +5,7 @@
  */
 
 import type { JsonValue } from "../../storage";
+import type { EffectScopeRef } from "../../effect/types";
 import type { FlowId, RuntimeTargetId, WorkId } from "../ports/ids";
 import type { FlowSnapshot as RuntimeFlowSnapshot } from "../ports/state";
 import type { RuntimeScheduledWorkIntent } from "./kernel-scheduled-types";
@@ -14,6 +15,8 @@ import type { RuntimeSuspendRegistration } from "./kernel-suspension-types";
 export interface RuntimeSuspensionSnapshotInput {
   /** Original Flow input. */
   readonly input: JsonValue;
+  /** In-process Effect boundary retained across Flow execution segments. */
+  readonly effects?: EffectScopeRef;
   /** Existing label-keyed step cache. */
   readonly completedSteps: Readonly<Record<string, JsonValue>>;
   /** Serializable observability carrier for the next execution segment. */

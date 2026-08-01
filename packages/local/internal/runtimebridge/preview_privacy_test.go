@@ -28,7 +28,8 @@ func TestPreviewEventsAndLogsExcludeSensitivePayloads(t *testing.T) {
 			"status":"ready","targetId":"prompt:secret-target","catalogueRevision":1,
 			"preview":{"status":"fits","model":"private-output","measurement":"exact",
 			"adaptations":[{"contributor":"private-source","representation":"authored",
-			"state":"selected"}],"warnings":[],"diagnostics":[]},"contributions":[]}}`
+			"state":"selected"}],"warnings":[],"diagnostics":[{"id":"private-source",
+			"code":"private","message":"private-output"}]},"contributions":[]}}`
 		return service.HandlePeerMessage(peer.PeerID, []byte(result))
 	})
 

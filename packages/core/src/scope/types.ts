@@ -5,6 +5,7 @@ export type ScopeKind =
   | "adapter-call"
   | "flow-step"
   | "tool"
+  | "effect-boundary"
   | "safety-session"
   | "bridge-run"
   | "eval-run"

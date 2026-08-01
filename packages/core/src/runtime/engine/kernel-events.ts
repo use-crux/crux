@@ -100,6 +100,7 @@ export async function recordSuspensionInTransaction(
     namespace: input.namespace,
     status: "suspended",
     input: input.snapshot.input,
+    ...(input.snapshot.effects ? { effects: input.snapshot.effects } : {}),
     ...(input.snapshot.continuation
       ? { continuation: input.snapshot.continuation }
       : {}),

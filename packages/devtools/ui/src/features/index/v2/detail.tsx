@@ -291,6 +291,7 @@ export function indexSectionOrder(def: ViewDef): string[] {
       "health",
     ],
     eval: ["hero", "config", "relations", "source", "health"],
+    effect: ["hero", "source", "observability", "relations", "health"],
   };
   if (map[k]) return map[k];
   if (k.startsWith("routing."))

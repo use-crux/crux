@@ -19,12 +19,16 @@ package cache
 // Epoch 54 adds PromptText refactor source-ref metadata and compiler-owned
 // source classification across restart boundaries. Epoch 55 adds authored
 // evidence.record definitions, safe facts, refs, relations, and lints.
-// Epoch 56 adds authored Thread definitions, bindings, runtime joins,
-// context-planning structure, hook/budget refs, and conclusive lints.
-// Epoch 57 adds first-class Thread lint findings and descriptors.
-// Epoch 58 prevents snapshots from retaining sources deleted while offline.
-// Epoch 59 combines the independently advanced Thread and context-planning
-// snapshot contracts.
+// Epoch 56 adds Effect definitions and Thread definitions, call-site and
+// binding evidence, runtime joins, runtime-observability identity, and
+// context-planning structure.
+// Epoch 57 preserves distinct same-identity Effect call-site evidence and adds
+// first-class Thread lint findings and descriptors.
+// Epoch 58 combines Effects and context-planning snapshots and prevents stale
+// sources deleted while offline from surviving a restart.
+// Epoch 59 adds Effect export metadata and the integrated Thread snapshot.
+// Epoch 60 combines the independently advanced Effect LSP and canonical Thread
+// history snapshot contracts so neither parent cache can mask the other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 59
+const ProjectIndexSnapshotCacheEpoch = 60

@@ -24,3 +24,6 @@ durable reactive dispatch before allocation while retaining process-local
 publication. Reactive adapter conformance now requires deterministic
 transaction-abort injection and verifies rollback across every write boundary,
 including multiple required deliveries.
+
+Signal-driven Flow resumes retain the same in-process Effects scope reference
+across suspension snapshots without claiming cross-process Effects recovery.

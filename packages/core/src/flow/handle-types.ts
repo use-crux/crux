@@ -1,5 +1,6 @@
 /** Public Flow handle, invocation, and result contracts. */
 
+import type { EffectScopeRef } from "../effect";
 import type { WithOperationResultMeta } from "../observability";
 import type {
   FlowSignalMap,
@@ -61,10 +62,30 @@ type FlowHandleSignal<TSignals> = TSignals extends FlowSignalMap
 
 /** @internal Unobserved business outcome produced inside a `flow.run` span. */
 export type FlowResultPayload<T> =
-  | { status: "completed"; output: T; flowId: string }
-  | { status: "suspended"; flowId: string; suspendedAt: string }
-  | { status: "cancelled"; flowId: string; cancelReason?: string }
-  | { status: "expired"; flowId: string; suspendedAt: string };
+  | {
+      status: "completed";
+      output: T;
+      flowId: string;
+      effects: EffectScopeRef;
+    }
+  | {
+      status: "suspended";
+      flowId: string;
+      suspendedAt: string;
+      effects: EffectScopeRef;
+    }
+  | {
+      status: "cancelled";
+      flowId: string;
+      cancelReason?: string;
+      effects: EffectScopeRef;
+    }
+  | {
+      status: "expired";
+      flowId: string;
+      suspendedAt: string;
+      effects: EffectScopeRef;
+    };
 
 /**
  * Result of one Flow invocation, discriminated by lifecycle `status`.

@@ -1920,6 +1920,93 @@ export function IndexHero({ def }: { def: ViewDef }) {
     );
   }
 
+  // EFFECT
+  if (k === "effect") {
+    const view = def.effectCatalog;
+    if (!view) return null;
+    const recoveryLabel =
+      view.recoverable === true
+        ? "Recoverable"
+        : view.recoverable === false
+          ? "Irreversible"
+          : "Recovery unknown";
+    const captureLabel =
+      view.capture === true
+        ? "Captures state"
+        : view.capture === false
+          ? "No capture"
+          : "Capture unknown";
+    return (
+      <HeroFrame
+        title="Effect identity"
+        tone="plum"
+        right={
+          <HWrap>
+            {view.version !== undefined ? (
+              <Chip tone="muted" mono>
+                v{view.version}
+              </Chip>
+            ) : (
+              <Chip tone="warn">Version unknown</Chip>
+            )}
+            <Chip
+              tone={
+                view.recoverable === true
+                  ? "ok"
+                  : view.recoverable === "unknown"
+                    ? "warn"
+                    : "muted"
+              }
+            >
+              {recoveryLabel}
+            </Chip>
+            <Chip tone={view.capture === "unknown" ? "warn" : "muted"}>
+              {captureLabel}
+            </Chip>
+            {view.resource === true ? (
+              <Chip tone="muted">Resource projection</Chip>
+            ) : view.resource === "unknown" ? (
+              <Chip tone="warn">Resource unknown</Chip>
+            ) : null}
+          </HWrap>
+        }
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
+            gap: 16,
+          }}
+        >
+          <HStat
+            label={view.effectId ? "Effect id" : "Binding"}
+            value={view.effectId ?? view.name}
+          />
+          {view.sources?.[0] ? (
+            <HStat
+              label={view.sources.length === 1 ? "Execute source" : "Execute sources"}
+              value={`${view.sources[0].file}:${view.sources[0].line}${
+                view.sources.length === 1 ? "" : ` · +${view.sources.length - 1}`
+              }`}
+            />
+          ) : null}
+        </div>
+        {!view.effectId ? (
+          <p
+            style={{
+              margin: "12px 0 0",
+              fontFamily: T.mono,
+              fontSize: 11.5,
+              color: T.fgMuted,
+            }}
+          >
+            Effect id is not statically analyzable.
+          </p>
+        ) : null}
+      </HeroFrame>
+    );
+  }
+
   // PROMPT / CONTEXT / INJECTABLE — the shared assembly hero
   if (k === "prompt" || k === "context" || k === "injectable") {
     return <AuthoringHero def={def} />;

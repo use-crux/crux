@@ -85,6 +85,7 @@ fn analyze_parsed_file(
     let scoped_definitions =
         scoped_definitions_by_variable(&parsed.record, &native_facts, records_by_file);
     let mut seen_definition_ids = HashSet::<String>::new();
+    let mut seen_definition_source_refs = HashMap::<String, HashSet<String>>::new();
     let mut groups = Vec::new();
     for projection in &native_facts {
         let Some(mut grouped) = grouped_finalize_facts_from_extracted(
@@ -97,9 +98,27 @@ fn analyze_parsed_file(
         };
         attribute_native_fact_extractors(&mut grouped, &projection.replaces);
         if let Some(id) = primary_definition_id(&grouped) {
-            if !seen_definition_ids.insert(id) {
+            let duplicate = !seen_definition_ids.insert(id.clone());
+            let execution_refs = grouped
+                .source_refs
+                .iter()
+                .filter(|source_ref| {
+                    source_ref.definition_id == id
+                        && source_ref.ref_.role == "execute"
+                        && source_ref.ref_.property.as_deref() == Some("executor")
+                })
+                .map(|source_ref| source_ref.ref_.id.clone())
+                .collect::<Vec<_>>();
+            let seen = seen_definition_source_refs.entry(id).or_default();
+            if duplicate
+                && (execution_refs.is_empty()
+                    || execution_refs
+                        .iter()
+                        .all(|source_ref| seen.contains(source_ref)))
+            {
                 continue;
             }
+            seen.extend(execution_refs);
         }
         groups.push(grouped);
     }

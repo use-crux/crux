@@ -5,6 +5,11 @@
  */
 
 import type { RetryOptions } from "../generation/retry";
+import type {
+  EffectScopeRef,
+  RollbackOptions,
+  RollbackResult,
+} from "../effect";
 import type { JsonValue } from "../storage";
 import type { RuntimeTaskInput, RuntimeTaskTarget } from "../runtime/api/task";
 import type { SignalOccurrenceFor, StaticSignalSource } from "../signal/source";
@@ -140,6 +145,12 @@ export interface FlowScope<
 
   /** Accumulated step results keyed by step label. Auto-populated after each step completes. */
   readonly results: Record<string, unknown>;
+
+  /** In-process reference to this flow run's passive rollback boundary. */
+  readonly effects: EffectScopeRef;
+
+  /** Roll back completed recovery units owned by this flow run. */
+  rollback(options?: RollbackOptions): Promise<RollbackResult>;
 
   /**
    * Execute a named step within the flow.

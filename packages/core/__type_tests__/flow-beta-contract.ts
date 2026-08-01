@@ -8,9 +8,12 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { flow, noPayload, task as planTask } from '@use-crux/core'
+import type { EffectScopeRef, RollbackResult } from '@use-crux/core/effect'
 import { durableTask } from '@use-crux/core/runtime'
 
 const review = flow('review', async (scope, input: { docId: string; priority?: 'low' | 'high' }) => {
+  expectTypeOf(scope.effects).toEqualTypeOf<EffectScopeRef>()
+  expectTypeOf(scope.rollback()).toEqualTypeOf<Promise<RollbackResult>>()
   const loaded = await scope.step('load', () => ({ docId: input.docId }))
   const approval = await scope.waitFor<{ docId: string; approvedBy: string }>('document.approved', {
     match: { docId: input.docId },
@@ -27,6 +30,7 @@ expectTypeOf(review.cancel).parameter(0).toEqualTypeOf<string>()
 expectTypeOf(review.cancel('flow_123')).toEqualTypeOf<Promise<void>>()
 
 const reviewResult = await review.run({ docId: 'doc_123', priority: 'high' }, { goal: 'Publish review' })
+expectTypeOf(reviewResult.effects).toEqualTypeOf<EffectScopeRef>()
 if (reviewResult.status === 'completed') {
   expectTypeOf(reviewResult.output).toEqualTypeOf<{
     published: boolean
