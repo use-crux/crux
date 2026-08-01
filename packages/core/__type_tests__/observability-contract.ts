@@ -3,6 +3,7 @@ import type {
   CruxCorrelators,
   CruxArtifactId,
   CruxGraphRecord,
+  CruxEffectReceiptSummary,
   CruxObservabilityChannelMessage,
   CruxObservabilitySubscriber,
   CruxRunId,
@@ -24,6 +25,18 @@ const runId: CruxRunId = createCruxRunId()
 const spanId: CruxSpanId = createCruxSpanId()
 const artifactId: CruxArtifactId = createCruxArtifactId()
 
+const effectReceiptSummary: CruxEffectReceiptSummary = {
+  kind: 'effect.receipt',
+  receiptId: 'effect_receipt_1',
+  effectId: 'customer.update',
+  effectVersion: 1,
+  scopeId: 'scope_1',
+  boundaryId: 'boundary_1',
+  outcome: 'succeeded',
+  recovery: 'available',
+  resource: { type: 'customer', id: 'customer_1' },
+}
+
 const sameRunId: CruxRunId = runId
 const sameSpanId: CruxSpanId = spanId
 const sameArtifactId: CruxArtifactId = artifactId
@@ -31,6 +44,7 @@ const sameArtifactId: CruxArtifactId = artifactId
 void sameRunId
 void sameSpanId
 void sameArtifactId
+void effectReceiptSummary
 
 // @ts-expect-error Run IDs and Span IDs must not be interchangeable.
 const invalidSpanId: CruxSpanId = runId
@@ -108,6 +122,35 @@ observe.openSpan({
   name: 'typed-generation',
   primitive: 'generation.call',
   attributes: { mode: 'text', temperature: 0.2, finishReason: 'stop' },
+})
+
+observe.openSpan({
+  name: 'customer.update',
+  primitive: 'effect.run',
+  attributes: {
+    'crux.effect.id': 'customer.update',
+    'crux.effect.version': 1,
+    'crux.effect.receipt.id': 'effect_receipt_1',
+    'crux.effect.scope.id': 'scope_1',
+    'crux.effect.boundary.id': 'boundary_1',
+    'crux.effect.outcome': 'preparing',
+    'crux.effect.recovery': 'available',
+  },
+})
+
+observe.openSpan({
+  name: 'customer.update',
+  primitive: 'effect.run',
+  attributes: {
+    'crux.effect.id': 'customer.update',
+    // @ts-expect-error Effect versions are positive integer numbers on the wire.
+    'crux.effect.version': '1',
+    'crux.effect.receipt.id': 'effect_receipt_1',
+    'crux.effect.scope.id': 'scope_1',
+    'crux.effect.boundary.id': 'boundary_1',
+    'crux.effect.outcome': 'preparing',
+    'crux.effect.recovery': 'available',
+  },
 })
 
 observe.openSpan({

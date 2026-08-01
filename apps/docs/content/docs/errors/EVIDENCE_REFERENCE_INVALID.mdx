@@ -16,5 +16,6 @@ The diagnostic never echoes raw resource IDs or paths.
 
 ## Fix
 
-Use exact Crux-issued execution and artifact identities. Effect-receipt
-projection remains unavailable until the Effects receipt contract ships.
+Use exact Crux-issued execution, artifact, and effect-receipt identities. Keep
+the receipt returned by an effect definition's `.run()` method instead of
+constructing or editing the reference.

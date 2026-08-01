@@ -38,7 +38,7 @@ describe("MCP package boundary", () => {
         "@use-crux/mcp",
       );
       expect(manifest.peerDependencies ?? {}, packageName).toMatchObject({
-        "@use-crux/mcp": "workspace:^0.5.0 || ^0.6.0 || ^0.7.0",
+        "@use-crux/mcp": "workspace:>=0.5.0 <1.0.0",
       });
       expect(manifest.peerDependenciesMeta ?? {}, packageName).toMatchObject({
         "@use-crux/mcp": { optional: true },

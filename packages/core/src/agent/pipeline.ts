@@ -20,6 +20,7 @@ import type {
   PrepareInvocation,
 } from '../request/prepare/invocation'
 import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
+import type { EffectScopeRef } from '../effect'
 import { PreparationError } from '../request/prepare/step'
 import { ResourceReadError } from '../request/prepare/resources'
 
@@ -45,6 +46,8 @@ export type StepOutput<S> = S extends {
 export interface PipelineResult<TContext = unknown> {
   /** Exact `composition.pipeline` span that produced this parent envelope. */
   readonly _meta: OperationResultMeta
+  /** In-process reference to this pipeline run's passive rollback boundary. */
+  readonly effects: EffectScopeRef
   status: 'completed'
   context: TContext
   finalOutput: unknown

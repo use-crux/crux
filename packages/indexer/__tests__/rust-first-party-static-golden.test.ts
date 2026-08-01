@@ -48,8 +48,8 @@ describe("Rust first-party static golden", () => {
       expect(actual.fileSelection).toBe(expected.fileSelection);
       expect(actual.projection).toBe(expected.projection);
       expect(actual.rootPlaceholder).toBe(expected.rootPlaceholder);
-      expect(actual.totals).toEqual(expected.totals);
       expect(actual.files).toEqual(expected.files);
+      expect(actual.totals).toEqual(expected.totals);
     },
     300_000,
   );

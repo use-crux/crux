@@ -153,6 +153,54 @@ fn analyze_suppresses_duplicate_definition_packets_by_first_source_order() {
 }
 
 #[test]
+fn analyze_retains_duplicate_effect_call_site_evidence_for_finalization() {
+    let source = [
+        "import { effect } from '@use-crux/core/effect'",
+        "const execute = async () => undefined",
+        "export const first = effect('payments.charge', execute, { version: 1.5 })",
+        "const second = effect('payments.charge', execute, { version: 1.5 })",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
+        "/workspace/acme".to_string(),
+        "src/effects.ts".to_string(),
+        vec!["effect".to_string()],
+        &source,
+    ));
+    let facts = facts.into_wire_values();
+    let effect_groups = facts
+        .iter()
+        .filter(|fact| fact["definitions"][0]["id"] == "effect:payments.charge:v1.5")
+        .collect::<Vec<_>>();
+
+    assert_eq!(effect_groups.len(), 2);
+    assert_ne!(
+        effect_groups[0]["sourceRefs"][0]["ref"]["id"],
+        effect_groups[1]["sourceRefs"][0]["ref"]["id"]
+    );
+
+    let finalized = finalize_static_index_values(&facts, &[]);
+    let effect = finalized
+        .model
+        .facts
+        .definitions
+        .iter()
+        .find(|definition| definition.id == "effect:payments.charge:v1.5")
+        .expect("finalized Effect definition");
+    assert_eq!(effect.source_refs.len(), 2);
+    assert!(
+        finalized
+            .model
+            .facts
+            .lint_findings
+            .iter()
+            .any(|finding| finding.rule_id == "effect.duplicate_identity"),
+        "effect={effect:?}, lints={:?}",
+        finalized.model.facts.lint_findings
+    );
+}
+
+#[test]
 fn analyze_relation_refs_are_finalize_compatible() {
     let source = [
         "const supportPrompt = prompt({ id: 'support' })",

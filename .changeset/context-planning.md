@@ -1,7 +1,7 @@
 ---
-"@use-crux/core": major
-"@use-crux/ai": major
-"@use-crux/convex": major
+"@use-crux/core": minor
+"@use-crux/ai": minor
+"@use-crux/convex": minor
 "@use-crux/openai": minor
 "@use-crux/anthropic": minor
 "@use-crux/google": minor

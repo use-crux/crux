@@ -48,8 +48,8 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v85");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v83");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v86");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
   });
 
   it("takes the Connected Knowledge semantic epoch", () => {

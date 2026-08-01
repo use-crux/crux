@@ -22,6 +22,7 @@ import type {
   PrepareInvocation,
 } from '../request/prepare/invocation'
 import type { CompositionRequestReceiptTree } from '../request/receipt/tree'
+import type { EffectScopeRef } from '../effect'
 
 /**
  * Intersect the input shapes of every agent in a `parallel()` map.
@@ -48,6 +49,8 @@ export type SettledResult<T> =
 export interface ParallelResult<TResults extends Record<string, AgentResult>> {
   /** Exact `composition.parallel` span that produced this parent envelope. */
   readonly _meta: OperationResultMeta
+  /** In-process reference to this composition's passive rollback boundary. */
+  readonly effects: EffectScopeRef
   /** Named results keyed by agent name. */
   results: TResults
   /** Settled results when `onError: 'continue'`. Only present in continue mode. */

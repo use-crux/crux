@@ -164,6 +164,38 @@ describe('GenAI semconv projection', () => {
     ).toEqual(['crux.defer.scheduled', 'crux.defer.run'])
   })
 
+  it('exports effect spans with the canonical OTel span name', () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    observe
+      .openSpan({
+        name: 'charge',
+        primitive: 'effect.run',
+        attributes: {
+          'crux.effect.id': 'billing.charge',
+          'crux.effect.version': 1,
+          'crux.effect.receipt.id': 'receipt_1',
+          'crux.effect.scope.id': 'scope_1',
+          'crux.effect.boundary.id': 'boundary_1',
+          'crux.effect.outcome': 'preparing',
+          'crux.effect.recovery': 'available',
+        },
+      })
+      .end()
+    installed.dispose?.()
+
+    expect(
+      spans.find(
+        (span) => span.attributes['crux.primitive.name'] === 'effect.run',
+      )?.name,
+    ).toBe('crux.effect.run')
+  })
+
   it('exports generation message content only when explicitly enabled', async () => {
     const defaultSpans: TraceSpan[] = []
     const defaultInstall = withTelemetry({

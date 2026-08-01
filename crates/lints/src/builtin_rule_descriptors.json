@@ -667,6 +667,35 @@
     "fidelity": "safe"
   },
   {
+    "id": "effect.duplicate_identity",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Effect identity is defined more than once",
+    "description": "Distinct effect() call sites declare the same literal id and version.",
+    "rationale": "Effect receipt and recovery identity is the (id, version) pair and must resolve to one definition.",
+    "impact": "Runtime registration rejects conflicting definitions and Catalog/runtime joins become ambiguous.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/effect-duplicate-identity",
+    "fixes": [
+      {
+        "title": "Make the Effect identity unique",
+        "description": "Change the id or version, or re-export the existing Effect definition instead of calling effect() again.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line effect.duplicate_identity -- reason"
+    },
+    "phase": "index",
+    "requires": ["definitions", "sources"],
+    "fidelity": "safe"
+  },
+  {
     "id": "safety.duplicate_policy_id",
     "source": "builtin",
     "severity": "warning",

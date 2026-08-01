@@ -18,6 +18,7 @@ import type { InputBudget } from '../request/budget/input-budget'
 import type { PrepareStep } from '../request/prepare/step'
 import type { RequestReceipt } from '../request/receipt/receipt'
 import type { ThreadCommit } from '../thread/types'
+import type { EffectScopeRef } from '../effect'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -55,7 +56,7 @@ export interface AgentResultPayload<TOutput = unknown> {
  * ```
  */
 export type AgentResult<TOutput = unknown> = WithOperationResultMeta<
-  AgentResultPayload<TOutput>
+  AgentResultPayload<TOutput> & { readonly effects: EffectScopeRef }
 >
 
 /** Options passed to the executor for a single agent invocation. */

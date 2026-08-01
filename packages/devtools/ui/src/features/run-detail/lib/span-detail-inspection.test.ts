@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { tokenChunks, tokenChunksFromEvents } from "./span-detail-inspection";
+import {
+  classifyPrimitive,
+  tokenChunks,
+  tokenChunksFromEvents,
+} from "./span-detail-inspection";
 import type {
   ObservabilityRunDetailNode,
   ObservabilitySpanEventSummary,
 } from "@/types";
 
 describe("span detail inspection helpers", () => {
+  it("classifies Effect runs distinctly", () => {
+    expect(classifyPrimitive("effect.run")).toBe("effect");
+  });
+
   it("extracts token chunk text from lazy span events in stream order", () => {
     const events = [
       tokenEvent("event-2", "2026-07-03T10:00:00.200Z", " world", 2),

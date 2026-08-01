@@ -272,7 +272,7 @@ fn static_index_identity() -> StaticIndexRunIdentity {
     StaticIndexRunIdentity {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         compiler: version_identity("crux-static-index", "0.1.0"),
-        oxc: version_identity("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.9"),
+        oxc: version_identity("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.11"),
         primitive_manifest: digest_identity("crux-first-party-primitives"),
         relation_policy: digest_identity("crux-relation-policy"),
         extension_manifests: Vec::new(),

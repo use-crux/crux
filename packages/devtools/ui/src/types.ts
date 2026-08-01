@@ -557,6 +557,14 @@ export type PrimitiveSpecificFacts =
       mcp?: McpToolProvenanceFacts;
     }
   | {
+      kind: "effect";
+      effectId?: string;
+      version?: number;
+      recoverable: boolean | "unknown";
+      capture: boolean | "unknown";
+      resource: boolean | "unknown";
+    }
+  | {
       kind: "mcp.server";
       serverId: string;
       transport?: McpTransportFacts;

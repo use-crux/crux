@@ -63,9 +63,7 @@ export type DefinitionKindCoveragePrimary =
  * - `eval-owned` — the kind also correlates through the Eval read model while
  *   remaining a structural child in the Catalog.
  */
-export type DefinitionKindCoverageSecondary =
-  | "direct-runtime"
-  | "eval-owned";
+export type DefinitionKindCoverageSecondary = "direct-runtime" | "eval-owned";
 
 /** Coverage classification for a single `ProjectDefinitionKind`. */
 export interface CoverageDescriptor {
@@ -107,7 +105,7 @@ export interface CoverageDescriptor {
  * above and `01-coverage-contract.md` §1.1/§1.2 for the full rationale.
  */
 export const DEFINITION_KIND_COVERAGE = {
-  // Category A — directly observed execution owner (25 kinds).
+  // Category A — directly observed execution owner (26 kinds).
   prompt: {
     primary: "directly-observed",
     runtimePrimitiveNames: ["prompt.resolve", "prompt.budget"],
@@ -133,6 +131,10 @@ export const DEFINITION_KIND_COVERAGE = {
   task: {
     primary: "directly-observed",
     runtimePrimitiveNames: ["task.operation"],
+  },
+  effect: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["effect.run"],
   },
   thread: {
     primary: "directly-observed",

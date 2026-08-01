@@ -1,0 +1,25 @@
+---
+title: EFFECT_RECEIPT_NOT_FOUND
+description: An effect receipt reference is missing, malformed, or belongs to another definition.
+---
+
+## What failed
+
+`recover()` or a definition's `.recover()` method could not match the supplied
+`EffectReceiptRef` to an in-process receipt.
+
+## Fix
+
+Keep the exact receipt returned by `.run()` and recover it with the matching
+definition:
+
+```ts
+const execution = await updateCustomer.run(input);
+await updateCustomer.recover(execution.receipt);
+```
+
+Do not construct, edit, or pass a scope ref in place of a receipt ref. This
+release does not persist the receipt ledger across restarts.
+
+See [Recover one receipt directly](/docs/guides/effects/recovery-patterns#recover-one-receipt-directly)
+for `.run()`, `recover()`, and definition-scoped recovery.

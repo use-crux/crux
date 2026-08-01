@@ -10,7 +10,7 @@ pub(crate) use crux_indexer_protocol as protocol;
 pub const FRONTEND_NAME: &str = "oxc-rust";
 
 /// Frontend identity version emitted in static syntax records.
-pub const FRONTEND_VERSION: &str = "oxc_parser@0.139.0+crux_native_group3.9";
+pub const FRONTEND_VERSION: &str = "oxc_parser@0.139.0+crux_native_group3.11";
 
 pub mod completion;
 mod completion_ast;

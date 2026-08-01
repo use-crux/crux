@@ -36,6 +36,10 @@ import type {
 } from "@/types";
 import type { EvalTimeoutPolicyProjection } from "@use-crux/core/project-index";
 import { kindMeta, type FamilyId, type LintSeverity } from "./kit";
+import {
+  projectEffectCatalog,
+  type EffectCatalogView,
+} from "./effect-catalog";
 /** Structural/containment relation types — a child rolls up under `from`. */
 const CONTAINMENT_RE =
   /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|includes_view|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
@@ -176,6 +180,12 @@ export interface IndexFacts {
     exposedName: string;
     provenance: "authored-expected" | "runtime-discovered";
   };
+  // effect
+  effectId?: string;
+  version?: number;
+  recoverable?: boolean | "unknown";
+  capture?: boolean | "unknown";
+  resource?: boolean | "unknown";
   // agent
   promptId?: string;
   toolNames?: string[];
@@ -381,6 +391,8 @@ export interface ViewDef {
   sourceRefs?: ProjectSourceRef[];
   confidence: string;
   facts?: IndexFacts;
+  /** Closed, authored-only Effect facts for Catalog presentation. */
+  effectCatalog?: EffectCatalogView;
   /** Flattened config block for the Configuration section: prefers the
    *  structured `metadata.configuration`, falls back to `facts.settings` +
    *  `metadata.settings`. Scalars render as a grid; nested objects (e.g.
@@ -675,6 +687,14 @@ export function toViewDef(
     sourceRefs: def.sourceRefs,
     confidence: intel?.confidence ?? meta.sourceStatus?.confidence ?? "static",
     facts,
+    effectCatalog: projectEffectCatalog({
+      id: def.id,
+      kind: def.kind,
+      name: def.name,
+      facts,
+      sourceRefs: def.sourceRefs,
+      relPath,
+    }),
     config: buildConfig(meta, facts),
     contract: buildContract(meta, intel),
     control: intel?.control,
@@ -1152,6 +1172,26 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       push("name", f.toolName);
       push("execute", f.hasExecute ? "yes" : null);
       if (f.approvalRequired) push("approval", "required");
+      break;
+    case "effect":
+      push("id", f.effectId ?? "dynamic");
+      push("version", f.version);
+      push(
+        "recovery",
+        f.recoverable === true
+          ? "recoverable"
+          : f.recoverable === false
+            ? "irreversible"
+            : "unknown",
+      );
+      push(
+        "capture",
+        f.capture === true
+          ? "yes"
+          : f.capture === false
+            ? "no"
+            : "unknown",
+      );
       break;
     case "agent":
       push("prompt", f.promptId);

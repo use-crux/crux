@@ -3,6 +3,7 @@ import fixture from '../../src/project-index/fixtures/definition-coverage.json'
 import { DefinitionRefSchema } from '../../src/observability/schema'
 import {
   definitionRef,
+  effectDefinitionRef,
   flowStepDefinitionRef,
   knowledgeBaseDefinitionRef,
   parallelBranchDefinitionRef,
@@ -15,6 +16,7 @@ import { DEFINITION_KIND_COVERAGE } from '../../src/project-index/definition-kin
 function expectedDefinitionRef(kind: string) {
   const descriptor = DEFINITION_KIND_COVERAGE[kind as keyof typeof DEFINITION_KIND_COVERAGE]
   if (kind === 'scorer') return scorerDefinitionRef('connected')
+  if (kind === 'effect') return effectDefinitionRef('connected', 1)
   if (descriptor.primary === 'directly-observed') {
     return definitionRef(kind as Parameters<typeof definitionRef>[0], 'connected')
   }

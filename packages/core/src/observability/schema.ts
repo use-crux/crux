@@ -37,6 +37,11 @@ import {
 } from "./evidence-coverage-schema";
 import { validateEvidenceSourceArtifact } from "./evidence-source-artifact-schema";
 import { validateApprovalArtifact } from "./approval-artifact";
+import {
+  EffectRunAttributesSchema,
+  validateEffectReceiptArtifact,
+  validateRecoveryOfEdge,
+} from "./effect-schema";
 
 const nonEmptyString = z.string().min(1);
 const isoTimestamp = z
@@ -186,6 +191,7 @@ export const DefinitionRefRoleSchema = z.enum([
   "invoked-guardrail",
   "invoked-constraint",
   "invoked-task",
+  "invoked-effect",
   "invoked-thread",
   "invoked-workspace",
   "invoked-memory",
@@ -223,7 +229,7 @@ export const CruxErrorSummarySchema = z.object({
 
 export const CruxObservabilityRedactionSurfaceSchema = z.enum(
   CRUX_OBSERVABILITY_REDACTION_SURFACES,
-)
+);
 
 export const CruxObservabilityRedactionEvidenceSchema = z
   .object({
@@ -233,7 +239,7 @@ export const CruxObservabilityRedactionEvidenceSchema = z
       .min(1)
       .readonly(),
   })
-  .readonly()
+  .readonly();
 
 const CruxRecordBaseSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
@@ -356,13 +362,25 @@ export const CruxSpanStartRecordSchema = CruxRecordBaseSchema.extend({
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
   definitionRefs: z.array(DefinitionRefSchema).optional(),
-}).refine(
-  (record) => CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] === record.family,
-  {
-    message: "Span family must match primitive family",
-    path: ["family"],
-  },
-);
+}).superRefine((record, context) => {
+  if (CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] !== record.family) {
+    context.addIssue({
+      code: "custom",
+      message: "Span family must match primitive family",
+      path: ["family"],
+    });
+  }
+  if (record.primitive !== "effect.run") return;
+  const parsed = EffectRunAttributesSchema.safeParse(record.attributes);
+  if (parsed.success) return;
+  for (const issue of parsed.error.issues) {
+    context.addIssue({
+      code: "custom",
+      message: issue.message,
+      path: ["attributes", ...issue.path],
+    });
+  }
+});
 
 export const CruxSpanEndRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal("span:end"),
@@ -440,6 +458,7 @@ export const CruxEdgeRecordSchema = CruxRecordBaseSchema.extend({
   createdAt: isoTimestamp,
   attributes: CruxAttributesSchema.optional(),
 }).superRefine((record, context) => {
+  validateRecoveryOfEdge(record, context);
   if (record.edgeType !== "evidence.for") return;
   const qualified = EvidenceEdgeAttributesSchema.safeParse(record.attributes);
   if (qualified.success) {
@@ -480,6 +499,7 @@ export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
 }).superRefine((artifact, context) => {
   validateEvidenceSourceArtifact(artifact, context);
   validateApprovalArtifact(artifact, context);
+  validateEffectReceiptArtifact(artifact, context);
 });
 
 const CruxGraphRecordV5Schema = z.discriminatedUnion("type", [

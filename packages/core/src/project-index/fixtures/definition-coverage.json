@@ -113,6 +113,20 @@
       }
     },
     {
+      "kind": "effect",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "effect.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "effect:connected:v1",
+        "kind": "effect",
+        "role": "invoked-effect"
+      }
+    },
+    {
       "kind": "thread",
       "primary": "directly-observed",
       "secondary": [],
