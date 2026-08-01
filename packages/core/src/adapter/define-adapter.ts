@@ -29,6 +29,10 @@ import type { AdapterSpec } from "./spec";
 import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
+import {
+  bindForegroundAgentTools,
+  createForegroundChildWorkPort,
+} from "../agent/foreground-tool-binder";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
@@ -46,6 +50,7 @@ import type {
 import { createStreamResult } from "./result-accumulator";
 import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
+import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 
 export type {
   AdapterGenerateOptions,
@@ -127,6 +132,8 @@ export function adapter<
   ): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> => {
     const baseDialect = coreStepDialect(spec, client);
     const execution = createAdapterExecution(baseDialect);
+    const workKernel = createProcessLocalWorkKernel();
+    const foregroundWork = createForegroundChildWorkPort(workKernel);
 
     // ── generate() ──────────────────────────────────────────────
 
@@ -267,9 +274,14 @@ export function adapter<
       // Merge agent tools + composition-level tools into the prompt
       // so the tool loop can pick them up from the resolved prompt.
       const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
+      const boundTools = bindForegroundAgentTools(mergedTools, {
+        executor,
+        model,
+        work: foregroundWork,
+      });
       const promptWithTools: AnyPrompt =
-        Object.keys(mergedTools).length > 0
-          ? withMergedPromptTools(agent.prompt, mergedTools)
+        Object.keys(boundTools).length > 0
+          ? withMergedPromptTools(agent.prompt, boundTools)
           : agent.prompt;
 
       const generateOpts: AdapterGenerateOptions<TExtra, undefined, AnyPrompt, unknown, TParams, TRawResponse> = {
@@ -282,6 +294,7 @@ export function adapter<
           | PrepareStep<string>
           | undefined,
         activeTools: options.activeTools,
+        signal: options.signal,
         extra: {} as TExtra,
       };
 
@@ -289,7 +302,7 @@ export function adapter<
 
       return {
         agentId: agent.id,
-        output: result.text,
+        output: agent.prompt.hasOutput ? result.object : result.text,
         durationMs: Date.now() - start,
         usage: result._meta.usage,
         requests: Object.freeze(

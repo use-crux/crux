@@ -87,7 +87,7 @@ export function compileInputSchema(
     }
   }
 
-  if (Object.keys(mergedShape).length === 0) return undefined
+  if (Object.keys(mergedShape).length === 0) return ownInput
   return z.object(mergedShape)
 }
 

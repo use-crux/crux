@@ -13,6 +13,41 @@ function deferred() {
 }
 
 describe("process-local Work kernel", () => {
+  it("keeps cancellation-only Work distinct from an attached parent", async () => {
+    const kernel = createProcessLocalWorkKernel();
+    const controller = new AbortController();
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const driver = {
+      run: async (context: { readonly attachedParentId?: string; readonly signal: AbortSignal }) => {
+        await hold;
+        return context;
+      },
+    };
+    const cancellationOnly = await kernel.spawn(
+      driver,
+      { kind: "cancellation-only", signal: controller.signal },
+    );
+    const attached = await kernel.spawn(
+      driver,
+      {
+        kind: "attached",
+        attachment: { parentId: "parent-work", signal: controller.signal },
+      },
+    );
+
+    controller.abort("cancelled");
+    release();
+    const cancellationOnlyContext = await cancellationOnly.result();
+    const attachedContext = await attached.result();
+    expect(cancellationOnlyContext.attachedParentId).toBeUndefined();
+    expect(attachedContext.attachedParentId).toBe("parent-work");
+    expect(cancellationOnlyContext.signal.aborted).toBe(true);
+    expect(attachedContext.signal.aborted).toBe(true);
+  });
+
   it("joins an inputless Flow with its exact output and one stable Effect scope", async () => {
     const flowStarted = deferred();
     const releaseFlow = deferred();

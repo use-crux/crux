@@ -94,6 +94,20 @@ describe('resolver input pipeline', () => {
     expect(result.args.system).toBe('&lt;sanitized&gt;&lt;raw&gt;')
   })
 
+  it('passes guarded object union input to prompt callbacks', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    const config = {
+      input: z.union([z.object({ query: z.string() }), z.string()]),
+      prompt: ({ input }: { input: { query: string } }) => input.query,
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: { query: '<raw>' },
+    })
+
+    expect(result.args.prompt).toBe('&lt;raw&gt;')
+  })
+
   it('passes final input to context tool functions', async () => {
     const fakes = createResolverFakes({ policy: { autoEscape: true } })
     let toolInput: string | undefined

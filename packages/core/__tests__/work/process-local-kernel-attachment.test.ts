@@ -54,7 +54,10 @@ describe("process-local attached Work", () => {
           return "unreachable";
         },
       },
-      { parentId: "work_pre_aborted_parent", signal: parent.signal },
+      {
+        kind: "attached",
+        attachment: { parentId: "work_pre_aborted_parent", signal: parent.signal },
+      },
     );
 
     await expect(child.result()).rejects.toBe(cancellation);
@@ -86,7 +89,10 @@ describe("process-local attached Work", () => {
           });
         },
       },
-      { parentId: "work_in_flight_parent", signal: parent.signal },
+      {
+        kind: "attached",
+        attachment: { parentId: "work_in_flight_parent", signal: parent.signal },
+      },
     );
 
     await started;
@@ -137,7 +143,10 @@ describe("process-local attached Work", () => {
           return child.result();
         },
       },
-      { parentId: "work_root", signal: root.signal },
+      {
+        kind: "attached",
+        attachment: { parentId: "work_root", signal: root.signal },
+      },
     );
 
     await grandchildStarted;
@@ -197,7 +206,10 @@ describe("process-local attached Work", () => {
           });
         },
       },
-      { parentId: "work_terminal_parent", signal: parent.signal },
+      {
+        kind: "attached",
+        attachment: { parentId: "work_terminal_parent", signal: parent.signal },
+      },
     );
     const firstResult = child.result();
     const secondResult = child.result();

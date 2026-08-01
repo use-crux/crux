@@ -15,6 +15,17 @@ export interface InternalWorkAttachment {
   readonly signal: AbortSignal;
 }
 
+/** Explicit linkage accepted when cancellation has no owning Work. @internal */
+export interface InternalWorkCancellationOnly {
+  readonly kind: "cancellation-only";
+  readonly signal?: AbortSignal;
+}
+
+/** Explicit linkage supplied when accepting an internal Work. @internal */
+export type InternalWorkSpawnOptions =
+  | { readonly kind: "attached"; readonly attachment: InternalWorkAttachment }
+  | InternalWorkCancellationOnly;
+
 interface AmbientWorkContext {
   readonly id: string;
   readonly signal: AbortSignal;
