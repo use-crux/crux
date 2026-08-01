@@ -20,6 +20,25 @@ Core never depends on their SDKs. Source sessions close in reverse order through
 the bounded invocation cleanup path, including setup failure, cancellation,
 stream disposal, and approval suspension.
 
+## Foreground Agent-tool binding
+
+The Agent foreground-tool binder sits in the adapter execution path after
+authored and call-level Tool maps are merged and before ordinary Tool
+preparation. It replaces only the winning direct Agent entries with ordinary
+Tools, so existing middleware, approvals, guardrails, validation, and provider
+mapping remain the single Tool policy path.
+
+Each adapter owns a process-local, adapter-neutral Work port backed by its local
+Work kernel. A call made inside Work uses the ambient attachment; a root call
+without one uses cancellation-only linkage. Either route accepts one foreground
+child Work, executes the child through the adapter's Agent executor, awaits its
+result, and projects only the exact child output into the Tool result.
+
+Attachment carries lifecycle ancestry and cancellation, not authority. The
+executor receives the child Agent, its declared input, the selected model, and
+the child signal only. Parent prompt state, tools, history, request data, and
+runtime controls never cross the binder boundary.
+
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
 rule options as data only. `@use-crux/indexer` owns extension manifest validation, trust enforcement,

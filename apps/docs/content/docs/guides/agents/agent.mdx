@@ -13,7 +13,7 @@ const reviewer = agent({
   description: "Reviews content for quality and accuracy",
   prompt: reviewPrompt,
   model: gpt4mini, // optional: overrides composition-level model
-  tools: [searchTool], // optional: agent-specific tools
+  tools: { search: searchTool }, // optional: named agent-specific tools
   handoffs: ["editor"], // optional: agents this agent can route to in a swarm
   swarmTools: ["search"], // optional: tool whitelist for swarm context
 });
@@ -50,6 +50,78 @@ results.factChecker.output; // typed from factChecker's output schema
 | `tools`       | Agent-specific tools                                                                     | `undefined` |
 | `handoffs`    | Agent IDs or `{ id, when }` objects for [swarm](/docs/guides/compositions/swarm) routing | `[]`        |
 | `swarmTools`  | Tool name whitelist for [swarm context](/docs/guides/compositions/swarm#tool-filtering)  | All tools   |
+
+## Let an agent call a child agent
+
+Put an Agent directly in another Agent's `tools` map when the parent model
+should decide whether to invoke a specialized child and wait for its answer.
+The map key is the tool name the parent model sees; the child's `id` remains
+its execution identity.
+
+```ts title="foreground-child.ts"
+import { z } from "zod";
+import { agent, prompt } from "@use-crux/ai";
+
+const researcher = agent({
+  id: "research-agent",
+  description: "Research one topic and return a short answer",
+  prompt: prompt({
+    id: "research-prompt",
+    input: z.object({ topic: z.string() }),
+    output: z.object({ answer: z.string() }),
+    prompt: ({ input }) => `Research: ${input.topic}`,
+  }),
+});
+
+const coordinator = agent({
+  id: "coordinator",
+  prompt: prompt({
+    id: "coordinator-prompt",
+    input: z.object({ question: z.string() }),
+    prompt: ({ input }) => input.question,
+  }),
+  tools: {
+    research: researcher,
+  },
+});
+
+const { results } = await parallel({
+  id: "answer-question",
+  agents: { coordinator },
+  context: { question: "Why do leaves change color?" },
+  model,
+});
+
+console.log(results.coordinator.output);
+```
+
+This is progressive disclosure: the parent initially sees only the child's
+name, description, and input schema. The child's prompt, context, tools, and
+execution are used only if the parent calls `research`. Prefer an ordinary Tool
+for a bounded function or API call. Prefer `delegate()` when application code
+must own a custom handoff, execution callback, or typed framework context.
+Use a direct child Agent when the model should choose a self-contained Agent
+whose declared prompt and tools already describe the work.
+
+The child's Prompt input becomes the model-facing Tool schema as follows:
+
+| Child Prompt input | Exposed Tool input | Child receives |
+| ------------------ | ------------------ | -------------- |
+| Object schema | The same object schema | The validated object |
+| No input schema | `{}` | `{}` |
+| Non-object or mixed-root schema | `{ input: childSchema }` | The validated value inside `input` |
+
+The call is foreground: Crux accepts one child Work, waits for it, and returns
+the child's exact validated structured or multimodal output as the Tool result.
+Invalid Tool input is rejected before child Work begins. The child receives
+only its declared input and runs with its own prompt, `use`, and tools; it does
+not inherit the parent's prompt, tools, history, request details, or runtime
+controls. Cancellation follows the attached Work ancestry, while child failure,
+cancellation, and timeout use the ordinary Tool-loop error path.
+
+This surface does not yet provide background or detached Agent-tool calls,
+later joins, steering, Session integration, remote transports, or durable
+recovery. A direct Agent entry is currently one awaited foreground child call.
 
 ## Per-agent model overrides
 
