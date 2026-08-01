@@ -38,6 +38,7 @@
         "./observability/node": "node-only",
         "./embedding": "portable-web",
         "./retrieval": "portable-web",
+        "./knowledge": "portable-web",
         "./citations": "portable-web",
         "./indexing": "portable-web",
         "./cache": "portable-web",

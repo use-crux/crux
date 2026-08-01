@@ -180,9 +180,9 @@ export interface IndexFacts {
     exposedName: string;
     provenance: "authored-expected" | "runtime-discovered";
   };
-  // effect
+  // effect / rag definition version
   effectId?: string;
-  version?: number;
+  version?: string | number;
   recoverable?: boolean | "unknown";
   capture?: boolean | "unknown";
   resource?: boolean | "unknown";
@@ -228,7 +228,6 @@ export interface IndexFacts {
   assertionId?: string;
   communitiesId?: string;
   modelName?: string;
-  version?: string | number;
   typeNames?: readonly string[];
   topK?: number;
   index?: number;
