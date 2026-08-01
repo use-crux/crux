@@ -35,13 +35,13 @@ export async function dispatchSealedProvider<TRequest, TResponse>(input: {
   try {
     const response = await input.call(input.request);
     const settlement = input.settlement(response);
+    input.recordRetries(settlement.transportRetries);
     input.statistics?.recordTerminal({
       model: input.model,
       outcome: "succeeded",
       usage: settlement.usage,
       transportRetries: settlement.transportRetries,
     });
-    input.recordRetries(settlement.transportRetries);
     return response;
   } catch (error) {
     input.statistics?.recordTerminal({

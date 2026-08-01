@@ -38,3 +38,34 @@ it("does not record a semantic call when sealed-plan validation rejects", async 
     },
   });
 });
+
+it("records one failed terminal fact when retry bookkeeping rejects", async () => {
+  const statistics = createPreparationStatistics();
+  const error = new Error("retry receipt rejected");
+
+  await expect(
+    dispatchSealedProvider({
+      request: {},
+      model: "model-1",
+      statistics,
+      validate: async () => undefined,
+      call: async (_request: Readonly<Record<string, never>>) => ({}),
+      settlement: () => ({}),
+      recordRetries: () => {
+        throw error;
+      },
+    }),
+  ).rejects.toBe(error);
+
+  expect(statistics.beforeStep({ stepIndex: 0, reason: "initial" })).toMatchObject({
+    cursor: 2,
+    run: {
+      modelCalls: {
+        started: 1,
+        succeeded: 0,
+        failed: 1,
+        cancelled: 0,
+      },
+    },
+  });
+});
