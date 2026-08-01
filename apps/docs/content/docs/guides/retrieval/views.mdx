@@ -1,0 +1,185 @@
+---
+title: Views
+description: Create typed, live, and pinned read surfaces from knowledge-base metadata.
+---
+
+Views turn indexed metadata into a named read surface. Use them when a subset is
+part of the product model: published docs, one tenant, one application, one
+jurisdiction, or one product line.
+
+Use request-time retrieval filters for one-off narrowing. Use views when
+membership should affect retrieval, tools, relations, assertions, communities,
+global search, and receipts.
+
+## Add A Metadata Schema
+
+Views require an object `metadataSchema`. The schema also validates indexed
+metadata and types retriever filters.
+
+```ts
+import { knowledgeBase } from "@use-crux/core/knowledge";
+import { z } from "zod";
+
+const metadataSchema = z.object({
+  status: z.enum(["draft", "published", "archived"]),
+  application: z.enum(["auto", "home", "life"]),
+  jurisdiction: z.string(),
+  priority: z.enum(["normal", "high"]),
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  metadataSchema,
+});
+
+await docs.index([
+  {
+    namespace: "docs",
+    sourceId: "auto-ca.md",
+    content: "California auto policies require proof of coverage.",
+    metadata: {
+      status: "published",
+      application: "auto",
+      jurisdiction: "CA",
+      priority: "high",
+    },
+  },
+]);
+```
+
+Invalid metadata is rejected at ingestion. Optional schema fields may be absent.
+
+## Create A Typed Where Clause
+
+`view({ id, where })` accepts exact scalar matches. Arrays mean an `IN` match.
+
+```ts
+const autoPublished = docs.view({
+  id: "auto-published",
+  where: {
+    status: "published",
+    application: "auto",
+    jurisdiction: ["CA", "NY"],
+  },
+});
+```
+
+Use `any` for a union of compound clauses:
+
+```ts
+const urgent = docs.view({
+  id: "urgent",
+  where: {
+    any: [
+      { status: "published", priority: "high" },
+      { status: "published", jurisdiction: "CA" },
+    ],
+  },
+});
+```
+
+Only scalar schema fields can appear in `where`: strings, numbers, booleans,
+enums, and scalar literals.
+
+## Use The View Like A Knowledge Base
+
+Views expose the read surfaces you use on a knowledge base:
+
+```ts
+import { expandRelations, retrieve } from "@use-crux/core/retrieval";
+
+const hits = await autoPublished
+  .retriever({ limit: 8 })
+  .retrieve("proof of coverage");
+
+const recipe = autoPublished.recipe({
+  id: "auto-published-answer",
+  steps: [
+    retrieve({ limit: 8 }),
+    expandRelations({ types: ["references"], direction: "out" }),
+  ],
+});
+
+const tools = autoPublished.tools({
+  prefix: "auto",
+  include: ["search", "getSource"],
+});
+
+const grounded = autoPublished.grounding({
+  query: ({ input }) => input.question as string,
+});
+```
+
+Membership is authoritative. Crux may push exact filters to vector storage, but
+returned hits are still checked against the resolved view members.
+
+## Live Revisions And Pinning
+
+A live view resolves to the current member set each time it is used. `resolve()`
+returns a content-addressed revision hash and the source ids in that revision.
+
+```ts
+const revision = await autoPublished.resolve();
+
+console.log(revision.revisionHash);
+console.log(revision.members);
+```
+
+Use `at(revisionHash)` when a workflow must replay the same source set:
+
+```ts
+const pinned = autoPublished.at(revision.revisionHash);
+const replayHits = await pinned.retriever().retrieve("proof of coverage");
+```
+
+Pinned handles check that every member source is still exactly available. If a
+member changed or disappeared, replay fails instead of silently using a
+different source set.
+
+## Relation And Assertion Visibility
+
+View recipes hydrate only member hits. A graph traversal can pass through a
+non-member ref, but a non-member chunk is not returned as a hit.
+
+View-bound assertion sets hide assertions with no visible supports:
+
+```ts
+const limits = autoPublished.assertions(policyFacts, {
+  types: ["requirement"],
+});
+
+const page = await limits.list({ limit: 25 });
+```
+
+## Namespace Scoping
+
+Views are isolated by the structural namespace:
+
+```ts
+const tenantDocs = docs.scope({ namespace: "tenant-a" });
+
+const tenantView = tenantDocs.view({
+  id: "auto-published",
+  where: { status: "published", application: "auto" },
+});
+```
+
+The same view id in another namespace has separate membership, revisions,
+communities, graph traversal, and hydrated hits.
+
+## Branch Ceiling
+
+The portable view retriever expands `any` clauses and `IN` values into exact
+vector filter branches. The built-in ceiling is 16 branches. Narrow a wide
+predicate, split the view, or use storage with view-aware pushdown when a view
+would expand beyond that ceiling.
+
+## Related
+
+<Cards>
+  <Card title="Knowledge bases" description="Configure metadata validation and read surfaces." href="/docs/guides/retrieval/knowledge-bases" />
+  <Card title="Global search" description="Use a view instead of request filters for report search." href="/docs/guides/retrieval/global-search" />
+  <Card title="Assertions" description="Read assertions through view membership." href="/docs/guides/retrieval/assertions" />
+</Cards>

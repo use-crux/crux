@@ -1,7 +1,7 @@
 ---
-"@use-crux/core": major
-"@use-crux/ai": major
-"@use-crux/convex": major
+"@use-crux/core": minor
+"@use-crux/ai": minor
+"@use-crux/convex": minor
 "@use-crux/openai": minor
 "@use-crux/anthropic": minor
 "@use-crux/google": minor
@@ -51,6 +51,9 @@ canonical source's capabilities, remain monotonic within a concrete-model
 epoch, and expose every selected alternative or omission in request receipts.
 Generated-summary and exact-recovery rungs fail explicitly until their backing
 artifacts are prepared.
+Contributor-backed representation sources now preserve their input schema for
+authored alternatives, and malformed Contributor-tagged wrapper inputs fail at
+construction.
 
 Add managed `history()` with derived recent-history defaults, adaptive,
 regenerating, rolling, and hierarchical summary strategies, content-addressed

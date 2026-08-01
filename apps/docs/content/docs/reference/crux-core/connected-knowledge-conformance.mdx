@@ -1,0 +1,105 @@
+---
+title: Connected Knowledge Conformance
+description: runConnectedKnowledgeConformance() for storage adapter authors.
+---
+
+```ts
+import { runConnectedKnowledgeConformance } from "@use-crux/core/knowledge";
+import type {
+  ConnectedKnowledgeConformanceAssertion,
+  ConnectedKnowledgeConformanceExpect,
+  ConnectedKnowledgeConformanceTest,
+  RunConnectedKnowledgeConformanceOptions,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+`runConnectedKnowledgeConformance()` registers shared storage behavior checks
+for connected-knowledge features through the caller's test runner.
+
+It verifies observable behavior through the public `Storage` bundle: record key
+scans, generation publication, graph adjacency, view membership, view
+revisions, community generations, leases, and source removal.
+
+## `runConnectedKnowledgeConformance(options)`
+
+Registers conformance cases. It does not return a value.
+
+```ts
+function runConnectedKnowledgeConformance(
+  options: RunConnectedKnowledgeConformanceOptions,
+): void;
+```
+
+### Parameters
+
+```ts
+interface RunConnectedKnowledgeConformanceOptions {
+  readonly createStorage: () => Storage | Promise<Storage>;
+  readonly test: ConnectedKnowledgeConformanceTest;
+  readonly expect: ConnectedKnowledgeConformanceExpect;
+}
+
+type ConnectedKnowledgeConformanceTest = (
+  name: string,
+  fn: () => void | Promise<void>,
+) => void;
+
+interface ConnectedKnowledgeConformanceExpect {
+  (actual: unknown): ConnectedKnowledgeConformanceAssertion;
+}
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `createStorage` | `() => Storage \| Promise<Storage>` | Required | Must create a fresh isolated storage bundle for each case. Returned storage must include `records`. |
+| `test` | `ConnectedKnowledgeConformanceTest` | Required | Called once for each named case. |
+| `expect` | `ConnectedKnowledgeConformanceExpect` | Required | Must return the matcher subset below. |
+
+```ts
+interface ConnectedKnowledgeConformanceAssertion {
+  readonly not: Pick<ConnectedKnowledgeConformanceAssertion, "toBe">;
+  toBe(expected: unknown): void;
+  toEqual(expected: unknown): void;
+  toMatchObject(expected: object): void;
+}
+```
+
+### Registered Cases
+
+| Case name | Behavior checked |
+| --- | --- |
+| `round-trips knowledge refs and scans knowledge key prefixes` | Reference codecs and namespace-scoped record prefix listing. |
+| `keeps generation publication atomic across publish, abandon, and crash-before-publish` | Current generation pointer, partial generation records, abandon cleanup, and previous-generation cleanup. |
+| `reads adjacency through outbound and inbound scans` | Outbound and inbound adjacency indexes and graph neighbor reads. |
+| `maintains view membership indexes and resolves members from indexes only` | Membership index maintenance and index-only view member resolution. |
+| `creates view revisions idempotently by content address` | Stable content-addressed revisions independent of member order. |
+| `serves community generations atomically and coordinates leases` | Community generation visibility, lease claim, stale lease takeover, and heartbeat ownership. |
+| `removes source-scoped storage from indexed, claim, and view visibility` | Indexed source deletion, claim deletion, hydration miss, and view membership removal. |
+
+### Failures
+
+The runner itself performs no option validation before registering tests.
+Failures surface from the caller's `test` function, `expect` matchers, storage
+operations, or the connected-knowledge stores exercised by each case.
+
+### Example
+
+```ts
+import { expect, test } from "vitest";
+import { runConnectedKnowledgeConformance } from "@use-crux/core/knowledge";
+import { createAdapterStorage } from "../src/storage";
+
+runConnectedKnowledgeConformance({
+  createStorage: createAdapterStorage,
+  test,
+  expect,
+});
+```
+
+## Related
+
+- Reference: [Storage Interfaces](/docs/reference/crux-core/storage)
+- Reference: [Connected Knowledge](/docs/reference/crux-core/connected-knowledge)
+- Reference: [Connected Knowledge model and refs](/docs/reference/crux-core/connected-knowledge-model-and-refs)

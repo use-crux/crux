@@ -1,0 +1,196 @@
+---
+title: Effects and rollback
+description: Make external state changes explicit, recoverable, and observable with receipts and rollback boundaries.
+---
+
+Effects describe intentional changes to durable or external domain state:
+charging a customer, publishing a document, or updating a remote record.
+These changes are harder to reason about than ordinary function calls because
+they can outlive the code that started them.
+
+Define each change once with `effect()` when you want Crux to give the
+operation a stable identity, create a receipt for every attempt, and make its
+recovery behavior explicit. The returned definition still calls like an
+ordinary async function, so adopting Effects does not require a new execution
+style.
+
+## When to use an effect
+
+Use an Effect for an intentional change to domain state that another part of
+your system could observe after the call returns. Common examples include:
+
+- charging, refunding, or reserving money;
+- creating, updating, publishing, or deleting a remote record;
+- sending an email or notification;
+- changing a task, account, subscription, or approval state;
+- writing a durable file or application-owned record.
+
+The useful test is not whether a function performs I/O. Ask whether it changes
+the state your product is responsible for. If a later step fails, would an
+operator need to know that this call already happened? If so, model it as an
+Effect even when it has no safe recovery.
+
+## When not to use an effect
+
+Do not wrap work that only observes, validates, routes, or explains other
+work. These operations do not create domain changes that need receipts:
+
+- reads and searches;
+- model calls and pure computation;
+- input validation and policy checks;
+- telemetry, logs, and traces;
+- caches, derived indexes, and other rebuildable bookkeeping;
+- retry, timeout, approval, authorization, and retention policy.
+
+Keep those concerns in their native APIs. In particular, `effect()` does not
+own retries, timeouts, approvals, authorization, storage selection, or
+automatic rollback policy. Its stable ID and resource identity give runtime
+and policy layers something reliable to select later.
+
+## Quick start
+
+Start with a recoverable Effect when an external change has a compensating
+action. `effect()` records each attempt and supplies stable execution and
+recovery idempotency keys. `rollbackOnError()` creates a boundary when several
+changes should be recovered in causal reverse order if later work fails.
+
+```ts
+import {
+  effect,
+  rollbackOnError,
+} from "@use-crux/core/effect";
+
+const updateCustomer = effect(
+  "customer.update",
+  async (
+    input: { id: string; name: string },
+    { idempotencyKey },
+  ) => {
+    const previous = await crm.customers.get(input.id);
+    await crm.customers.update(
+      input.id,
+      { name: input.name },
+      { idempotencyKey },
+    );
+    return { previousName: previous.name };
+  },
+  {
+    resource: ({ id }) => ({ type: "customer", id }),
+    recover: async ({ input, output, idempotencyKey }) => {
+      await crm.customers.update(
+        input.id,
+        { name: output.previousName },
+        { idempotencyKey },
+      );
+    },
+  },
+);
+
+await rollbackOnError(async () => {
+  await updateCustomer({ id: "cus_123", name: "Ada" });
+  await publishCustomerProfile("cus_123");
+});
+```
+
+Calling `updateCustomer()` returns its ordinary output. Behind that familiar
+call, Crux projects the safe resource identity, runs the external change, and
+settles an immutable receipt. Because this definition has `recover`, a
+successful attempt also adds one recovery unit to the nearest rollback
+boundary.
+
+If `publishCustomerProfile()` throws, Crux runs the registered recovery
+handlers in causal LIFO order. When recovery completes, the original callback
+error is rethrown. If recovery is incomplete, Crux throws `RollbackError` with
+the original callback error as `cause` and the honest per-unit result in
+`error.result`.
+
+<Callout type="info">
+  Effects are currently in-process. Receipts, scope refs, captured state, and
+  recovery handlers do not survive a restart. Use them to make present-tense
+  execution honest and observable, not as a durable transaction log.
+</Callout>
+
+## Keep identities stable and safe
+
+Give every definition a stable dotted domain ID such as `"payments.charge"`
+or `"crm.customer.update"`. The pair `(id, version)` identifies its execution
+and recovery contract. Keep the ID stable across refactors because function
+names, import aliases, and bundle output are not durable identities.
+
+Use `resource` when an operator, policy, or recovery handler needs to know what
+domain object changed. Return the smallest stable, non-secret identity that
+makes the operation understandable:
+
+```ts
+resource: ({ accountId }) => ({
+  type: "account",
+  id: accountId,
+})
+```
+
+Resource projection runs before the executor. If it throws, Crux fails closed
+and does not make the external change. Captured recovery state stays inside the
+in-process ledger. Observability and automatic evidence receive only the safe
+resource summary and receipt status.
+
+## Native Crux effects
+
+Native Crux domains can opt into the internal Effect contract without wrapping
+their mutations in `effect()`. A native mutation keeps its own primitive
+identity, contributes the same receipt-safe intent and change evidence, and
+adds `crux.effect.*` facets to its existing span instead of creating a duplicate
+`effect.run` span.
+
+Native recovery coverage is capability-based. A receipt can honestly report
+`unavailable` or `irreversible` until its owning domain ships a safe recovery
+strategy; individual recovery and rollback preserve that blocked status rather
+than invoking a generic restore path. This is an internal first-party seam, not
+a public provider registry. Application-defined mutations continue to use
+`effect()`.
+
+## Inspect effects in Devtools
+
+Run `crux dev`, then open **Library → Index** to inspect Effects discovered from
+source. For a statically analyzable Effect, the Catalog identifies its authored
+ID and version and shows whether recovery, capture, and resource projection are
+configured. A dynamic ID is shown as an unanalyzable binding instead of being
+given an invented identity, and a non-literal option stays unknown. These are
+static source facts, not inferred runtime behavior. Re-index after changing an
+Effect definition.
+
+Open **Runs** to inspect what happened at runtime. An Effect span card shows its
+resource, outcome, recovery state, and receipt ID. Recovery attempts link back
+to the original Effect through `recovery.of`; when recovery succeeds, the
+original card is marked **Recovered**. The run header summarizes the evidence
+as `N effects · M recoverable · K ambiguous`, making unknown external outcomes
+visible without implying that recovery ran.
+
+The two views deliberately answer different questions: the Catalog explains
+what the current source declares, while Runs preserve the evidence emitted by
+a particular execution. Devtools is read-only for Effects; use the Effects API
+to recover, roll back, or reconcile a receipt.
+
+## Next
+
+<Cards>
+  <Card
+    title="Recovery patterns"
+    description="Choose a recovery form, prevent double recovery, and handle conflicts and versions."
+    href="/docs/guides/effects/recovery-patterns"
+  />
+  <Card
+    title="Rollback boundaries"
+    description="Choose strict or best-effort rollback and interpret every result honestly."
+    href="/docs/guides/effects/rollback-boundaries"
+  />
+  <Card
+    title="Ambiguity and reconciliation"
+    description="Handle external operations whose outcome cannot be known safely."
+    href="/docs/guides/effects/ambiguity-and-reconciliation"
+  />
+  <Card
+    title="Effects API reference"
+    description="Read the complete signatures, result types, and supporting exports."
+    href="/docs/reference/crux-core/effect"
+  />
+</Cards>

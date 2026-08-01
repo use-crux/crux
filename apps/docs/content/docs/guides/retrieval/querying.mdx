@@ -142,17 +142,9 @@ const tools = docs.tools({
 Use context injection when the model should always receive retrieved evidence before generation:
 
 ```ts
-const promptDocs = docs.retriever({
-  limit: 6,
-});
-
 const answerDocs = prompt({
   id: "answer-docs",
-  use: [
-    promptDocs.asContext({
-      query: ({ question }) => question,
-    }),
-  ],
+  use: [docs],
   input: z.object({ question: z.string() }),
   system: "Answer from the retrieved docs.",
 });

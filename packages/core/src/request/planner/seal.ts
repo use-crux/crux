@@ -54,6 +54,7 @@ export interface SealRequestInput<
   readonly history?: RequestHistoryContext;
   readonly generateHistorySummary?: GenerateHistorySummary;
   readonly representations?: readonly ResolvedRepresentationPolicy[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
   readonly representationEpoch?: RequestRepresentationEpoch;
   readonly prepareRequest?: (
     request: CallArgs<TExtra>,
@@ -232,6 +233,7 @@ export async function sealRequest<
       adaptations,
       provider: input.provider,
       maxInputTokens: budget.max,
+      metadata: input.metadata,
       media: input.media,
       previousRequestId: input.previousRequestId,
     }),

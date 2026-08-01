@@ -15,6 +15,7 @@ import type {
   RagIndexerFacts,
 } from "./embedding-facts";
 import type { EvalFacts } from "./eval-facts";
+import type { EffectFacts } from "./effect-facts";
 import type { EvidenceRecordFacts } from "./evidence-record-facts";
 import {
   PromptTextDiagnosticEvidenceSchema,
@@ -47,6 +48,7 @@ export type {
   RagIndexerFacts,
 } from "./embedding-facts";
 export * from "./eval-facts";
+export * from "./effect-facts";
 export * from "./evidence-record-facts";
 export * from "./definition-kind-coverage";
 export * from "./diagnostic-evidence";
@@ -432,7 +434,8 @@ export type ProjectDefinitionIndexPresentationRole =
   | "store"
   | "storage"
   | "case"
-  | "operation";
+  | "operation"
+  | "view";
 
 export interface ProjectDefinitionIndexPresentation {
   standalone: boolean;
@@ -494,6 +497,7 @@ export type ProjectDefinitionKind =
   | "flow"
   | "flow.step"
   | "task"
+  | "effect"
   | "thread"
   | "deferred-work"
   | "composition.parallel"
@@ -513,6 +517,7 @@ export type ProjectDefinitionKind =
   | "routing.fallback"
   | "routing.fallback.option"
   | "rag.knowledgeBase"
+  | "rag.knowledgeBase.view"
   | "rag.recipe"
   | "rag.recipe.step"
   | "rag.pipeline"
@@ -520,6 +525,10 @@ export type ProjectDefinitionKind =
   | "rag.reranker"
   | "rag.retriever"
   | "rag.indexer"
+  | "knowledge.relation"
+  | "knowledge.assertions"
+  | "knowledge.communities"
+  | "knowledge.model"
   | "registry"
   | "skill"
   | "memory"
@@ -874,6 +883,7 @@ export interface RoutingChildFacts {
 export interface RagFacts {
   kind:
     | "rag.knowledgeBase"
+    | "rag.knowledgeBase.view"
     | "rag.recipe"
     | "rag.recipe.step"
     | "rag.pipeline"
@@ -881,6 +891,8 @@ export interface RagFacts {
     | "rag.reranker"
     | "rag.retriever";
   knowledgeBaseId?: string;
+  viewId?: string;
+  whereFields?: readonly string[];
   recipeId?: string;
   stepId?: string;
   rerankerId?: string;
@@ -890,6 +902,26 @@ export interface RagFacts {
   stageId?: string;
   stageKind?: string;
   topK?: number;
+}
+
+export interface KnowledgeDefinitionFacts {
+  kind:
+    | "rag.knowledgeBase"
+    | "rag.knowledgeBase.view"
+    | "knowledge.relation"
+    | "knowledge.assertions"
+    | "knowledge.communities"
+    | "knowledge.model";
+  knowledgeBaseId?: string;
+  viewId?: string;
+  whereFields?: readonly string[];
+  relationId?: string;
+  assertionId?: string;
+  communitiesId?: string;
+  modelName?: string;
+  version?: string | number;
+  typeNames?: readonly string[];
+  namespace?: string;
 }
 
 export interface MemoryFacts {
@@ -1038,6 +1070,7 @@ export type PrimitiveSpecificFacts =
   | CompositionChildFacts
   | RoutingFacts
   | RoutingChildFacts
+  | KnowledgeDefinitionFacts
   | RagFacts
   | MemoryFacts
   | MemoryStoreFacts
@@ -1046,6 +1079,7 @@ export type PrimitiveSpecificFacts =
   | StorageFacts
   | SafetyFacts
   | ScorerFacts
+  | EffectFacts
   | EvalFacts
   | MediaOperationFacts
   | IngestSourceFacts;
@@ -1071,8 +1105,8 @@ export interface ProjectIdentity {
    */
   observability?: {
     /** True when at least one observability redaction pattern is configured. */
-    readonly redactPatternsConfigured: boolean
-  }
+    readonly redactPatternsConfigured: boolean;
+  };
 }
 
 export interface ProjectDefinition {
@@ -1285,6 +1319,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "flow",
   "flow.step",
   "task",
+  "effect",
   "thread",
   "deferred-work",
   "composition.parallel",
@@ -1304,6 +1339,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "routing.fallback",
   "routing.fallback.option",
   "rag.knowledgeBase",
+  "rag.knowledgeBase.view",
   "rag.recipe",
   "rag.recipe.step",
   "rag.pipeline",
@@ -1311,6 +1347,10 @@ export const ProjectDefinitionKindSchema = z.enum([
   "rag.reranker",
   "rag.retriever",
   "rag.indexer",
+  "knowledge.relation",
+  "knowledge.assertions",
+  "knowledge.communities",
+  "knowledge.model",
   "registry",
   "skill",
   "memory",
@@ -1819,6 +1859,7 @@ export const ProjectDefinitionIndexPresentationSchema = z.object({
       "storage",
       "case",
       "operation",
+      "view",
     ])
     .optional(),
   order: z.number().optional(),

@@ -19,7 +19,9 @@ use crate::helpers::{
     should_require_coverage, targets_by_relation,
 };
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
+use crate::rules::effect::irreversible_required_boundary_findings;
 use crate::rules::evidence::evidence_record_findings;
+use crate::rules::knowledge::knowledge_lint_findings;
 use crate::rules::relation::relation_lint_findings;
 use crate::rules::thread::thread_lint_findings;
 
@@ -52,6 +54,14 @@ pub(crate) fn core_lint_findings(
         builder,
         &facts.definitions,
     ));
+    findings.extend(knowledge_lint_findings(
+        builder,
+        &facts.definitions,
+        &facts.relations,
+        by_id,
+    ));
+    findings.extend(effect_duplicate_identity_findings(builder, facts));
+    findings.extend(irreversible_required_boundary_findings(builder, facts));
 
     for definition in &facts.definitions {
         append_definition_findings(
@@ -74,6 +84,81 @@ pub(crate) fn core_lint_findings(
 
     findings.extend(relation_lint_findings(builder, &facts.relations, by_id));
     findings
+}
+
+fn effect_duplicate_identity_findings(
+    builder: &StaticIndexLintBuilder,
+    facts: &StaticIndexPatchFacts,
+) -> Vec<StaticIndexLintFinding> {
+    facts
+        .definitions
+        .iter()
+        .filter(|definition| definition.kind == "effect")
+        .filter_map(|definition| {
+            let effect_facts = definition
+                .metadata
+                .as_ref()?
+                .as_object()?
+                .get("facts")?
+                .as_object()?;
+            let effect_id = effect_facts.get("effectId")?.as_str()?;
+            let version_value = effect_facts.get("version")?;
+            let version = version_value.as_f64().filter(|value| value.is_finite())?;
+            let mut execute_refs = definition
+                .source_refs
+                .iter()
+                .chain(
+                    facts
+                        .source_refs
+                        .iter()
+                        .filter(|source_ref| source_ref.definition_id == definition.id)
+                        .map(|source_ref| &source_ref.ref_),
+                )
+                .filter(|source_ref| {
+                    source_ref.role == "execute"
+                        && source_ref.property.as_deref() == Some("executor")
+                })
+                .collect::<Vec<_>>();
+            execute_refs.sort_by(|left, right| left.id.cmp(&right.id));
+            execute_refs.dedup_by(|left, right| left.id == right.id);
+            if execute_refs.len() < 2 {
+                return None;
+            }
+
+            builder.finding(StaticIndexLintFindingInput {
+                rule_id: "effect.duplicate_identity",
+                key: definition.id.as_str(),
+                message: format!(
+                    "Effect identity \"{}\" version {} is declared at {} call sites.",
+                    effect_id,
+                    version,
+                    execute_refs.len()
+                ),
+                source: execute_refs.first().map(|source_ref| &source_ref.source),
+                primary_definition_id: Some(definition.id.as_str()),
+                related_definition_ids: vec![definition.id.clone()],
+                evidence: execute_refs
+                    .iter()
+                    .map(|source_ref| {
+                        json!({
+                            "kind": "source",
+                            "label": "Effect definition shares this (id, version) identity",
+                            "source": source_ref.source,
+                            "data": {
+                                "definitionId": definition.id,
+                                "effectId": effect_id,
+                                "version": version,
+                                "role": source_ref.role,
+                                "property": source_ref.property,
+                                "symbol": source_ref.symbol,
+                            },
+                        })
+                    })
+                    .collect(),
+                fixes: Vec::new(),
+            })
+        })
+        .collect()
 }
 
 const SAFETY_POLICY_KINDS: &[&str] = &["constraint", "guardrail", "toolPolicy"];

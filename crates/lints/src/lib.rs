@@ -26,8 +26,12 @@ mod rules {
     pub(crate) mod core;
     pub(crate) mod defer;
     pub(crate) mod definition_tail;
+    pub(crate) mod effect;
     pub(crate) mod evidence;
     pub(crate) mod filter;
+    pub(crate) mod knowledge;
+    #[cfg(test)]
+    mod knowledge_tests;
     pub(crate) mod relation;
     pub(crate) mod routing;
     pub(crate) mod runtime;

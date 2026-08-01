@@ -9,6 +9,11 @@
 
 import type { RetryOptions } from '../generation/retry'
 import type { WithOperationResultMeta } from '../observability'
+import type {
+  EffectScopeRef,
+  RollbackOptions,
+  RollbackResult,
+} from '../effect'
 import type { JsonObject, JsonValue } from '../storage'
 import type { RuntimeTaskInput, RuntimeTaskTarget } from '../runtime/api/task'
 import type { ZodType } from 'zod'
@@ -169,10 +174,10 @@ export type StepOptions = RetryOptions
 
 /** @internal Unobserved business outcome produced inside a `flow.run` span. */
 export type FlowResultPayload<T> =
-  | { status: 'completed'; output: T; flowId: string }
-  | { status: 'suspended'; flowId: string; suspendedAt: string }
-  | { status: 'cancelled'; flowId: string; cancelReason?: string }
-  | { status: 'expired'; flowId: string; suspendedAt: string }
+  | { status: 'completed'; output: T; flowId: string; effects: EffectScopeRef }
+  | { status: 'suspended'; flowId: string; suspendedAt: string; effects: EffectScopeRef }
+  | { status: 'cancelled'; flowId: string; cancelReason?: string; effects: EffectScopeRef }
+  | { status: 'expired'; flowId: string; suspendedAt: string; effects: EffectScopeRef }
 
 /**
  * Result of one flow invocation, discriminated by lifecycle `status`.
@@ -181,6 +186,13 @@ export type FlowResultPayload<T> =
  * returned it. A resumed flow keeps its trace but receives a fresh span.
  */
 export type FlowResult<T> = WithOperationResultMeta<FlowResultPayload<T>>
+
+/** @internal JSON-safe Effect boundary reference retained in a flow snapshot. */
+type FlowSnapshotEffectScopeRef = {
+  readonly kind: 'effect.scope'
+  readonly id: string
+  readonly runId: string
+}
 
 /** Persisted, occurrence-keyed signal delivery record used for suspend replay. */
 export interface DeliveredFlowSignal extends JsonObject {
@@ -200,6 +212,8 @@ export interface DeliveredFlowSignals extends JsonObject {
 /** Persisted flow snapshot stored in a RecordStore. */
 export interface FlowSnapshot extends JsonObject {
   flowId: string
+  /** In-process Effect boundary retained across flow execution segments. */
+  effects?: FlowSnapshotEffectScopeRef
   name: string
   status: string
   suspendedAt: string
@@ -240,6 +254,12 @@ export interface FlowScope<TInput = void, TSignals extends FlowSignalMap | undef
 
   /** Accumulated step results keyed by step label. Auto-populated after each step completes. */
   readonly results: Record<string, unknown>
+
+  /** In-process reference to this flow run's passive rollback boundary. */
+  readonly effects: EffectScopeRef
+
+  /** Roll back completed recovery units owned by this flow run. */
+  rollback(options?: RollbackOptions): Promise<RollbackResult>
 
   /**
    * Execute a named step within the flow.

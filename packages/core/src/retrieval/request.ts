@@ -26,7 +26,21 @@ export interface RetrieveOptions<TFilter extends ExactFilter = ExactFilter> {
   trace?: boolean
   /** Opaque caller attribution forwarded to retrieval recipes. */
   caller?: Record<string, unknown>
+  /** Optional request admission hook for bounded retrieval work. */
+  admit?: RetrievalAdmissionHook
 }
+
+/** Content-free retrieval work estimate passed to an admission hook. */
+export interface RetrievalAdmissionEstimate {
+  readonly kind: 'global-search'
+  readonly reports: number
+  readonly batches: number
+  readonly inputChars: number
+  readonly calls: number
+}
+
+/** Return `false` to reject a retrieval step before expensive work starts. */
+export type RetrievalAdmissionHook = (estimate: RetrievalAdmissionEstimate) => boolean | void
 
 /**
  * Structured retrieval request containing exactly one text query or embedding input.

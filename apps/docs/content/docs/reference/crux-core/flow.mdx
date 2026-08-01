@@ -29,7 +29,7 @@ Define a named flow and return a frozen `FlowHandle`. Separates definition from 
 | Parameter | Type                                                    | Description                                                                                            |
 | --------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `name`    | `string`                                                | Human-readable flow name                                                                               |
-| `handler` | `(flow: FlowScope<TInput>, input?: TInput) => T \| ...` | Flow function with access to `flow.step()`, `flow.suspend()`, `flow.cancel()`, and optional input data |
+| `handler` | `(flow: FlowScope<TInput>, input?: TInput) => T \| ...` | Flow function with access to steps, suspension, cancellation, Effect rollback, and optional input data |
 
 **Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.resume()`, `.signal()`, `.cancel()`, and `.name`
 
@@ -95,6 +95,8 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 | `flowId`                                 | `string`                  | The flow's unique identifier                                            |
 | `input`                                  | `TInput`                  | Typed input data restored from the run input                            |
 | `results`                                | `Record<string, unknown>` | Auto-populated after each step completes, keyed by step label           |
+| `effects`                                | `EffectScopeRef`          | In-process reference to the run's passive Effect rollback boundary      |
+| `rollback(options?)`                     | `Promise<RollbackResult>` | Explicitly recover completed units and make the boundary terminal       |
 | `step(label, fn, options?)`              | `Promise<T>`              | Execute a named step. `fn` can be `() => T` or `(flow: FlowScope) => T` |
 | `suspend(name, options?)`                | `Promise<T>`              | Suspend the flow at a named point and wait for an external signal       |
 | `waitUntil(name, conditionFn, options?)` | `Promise<void>`           | Suspend until a condition function returns `true`                       |
@@ -190,12 +192,12 @@ Retry and fallback options for a flow step.
 
 Discriminated union on `status`:
 
-| Variant     | Fields                    | Description                                          |
-| ----------- | ------------------------- | ---------------------------------------------------- |
-| `completed` | `output: T`, `flowId`     | Flow finished normally                               |
-| `suspended` | `flowId`, `suspendedAt`   | Flow paused at a suspend point                       |
-| `cancelled` | `flowId`, `cancelReason?` | Flow cancelled via `flow.cancel()` or `cancelFlow()` |
-| `expired`   | `flowId`, `suspendedAt`   | Suspended flow timed out before a signal arrived     |
+| Variant     | Fields                               | Description                                          |
+| ----------- | ------------------------------------ | ---------------------------------------------------- |
+| `completed` | `output: T`, `flowId`, `effects`     | Flow finished normally                               |
+| `suspended` | `flowId`, `suspendedAt`, `effects`   | Flow paused at a suspend point                       |
+| `cancelled` | `flowId`, `cancelReason?`, `effects` | Flow cancelled via `flow.cancel()` or `cancelFlow()` |
+| `expired`   | `flowId`, `suspendedAt`, `effects`   | Suspended flow timed out before a signal arrived     |
 
 Every variant also carries `_meta: OperationResultMeta` for the current
 `flow.run` invocation. Resume preserves the validated W3C trace and opens a
@@ -204,6 +206,11 @@ Invocation-local result IDs are removed from persisted input, step output,
 signals, and scheduled work; continuation trace carriers remain intact. See
 [Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
 
+The `effects` ref is JSON-safe but resolves only while the current process
+retains the in-memory receipt ledger and recovery handlers. A non-completed
+flow does not roll back automatically; recovery always requires
+`flow.rollback()` or `rollback(result.effects)`.
+
 ## `FlowSnapshot`
 
 Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
@@ -211,6 +218,7 @@ Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
 | Field            | Type                                     | Description                                     |
 | ---------------- | ---------------------------------------- | ----------------------------------------------- |
 | `flowId`         | `string`                                 | Flow identifier                                 |
+| `effects`        | `EffectScopeRef?`                        | In-process rollback boundary retained for resume |
 | `name`           | `string`                                 | Flow name                                       |
 | `status`         | `string`                                 | Current status                                  |
 | `suspendedAt`    | `string`                                 | Suspend point name                              |

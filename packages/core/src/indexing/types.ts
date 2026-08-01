@@ -13,6 +13,7 @@ import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embe
 import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
+import type { DeriveStage } from '../knowledge/derive/stage'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
@@ -252,12 +253,13 @@ export interface ChunkTransform {
   run(chunks: CruxChunk[], ctx: ChunkTransformContext): Promise<CruxChunk[]> | CruxChunk[]
 }
 
-/** A composed indexing pipeline: document transforms, a chunker, chunk transforms. */
+/** A composed indexing pipeline: document transforms, a chunker, chunk transforms, and derive-stage config. */
 export interface IndexingPipeline {
   readonly _tag: 'IndexingPipeline'
   readonly documents: readonly DocumentTransform[]
   readonly chunker: Chunker
   readonly chunks: readonly ChunkTransform[]
+  readonly derive: readonly DeriveStage[]
   fingerprint(): string
 }
 
@@ -266,6 +268,8 @@ export interface IndexingPipelineConfig {
   documents?: DocumentTransform[]
   chunker?: Chunker
   chunks?: ChunkTransform[]
+  /** Post-chunk derivation stages: relations and assertions. */
+  derive?: readonly DeriveStage[]
 }
 
 /** Options for the structured chunker. */

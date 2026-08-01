@@ -11,7 +11,7 @@
 
 import { observe } from '../observability'
 import { withOperationResultMeta } from '../observability/internal/result-meta'
-import type { RetrieverHit } from '../retrieval'
+import type { EvidenceHit, RetrieverHit } from '../retrieval'
 import { citationSchema, type Citation } from './schema'
 import { groundingHitKey } from './session'
 import type {
@@ -45,7 +45,7 @@ export function resolveCitations(
   options: CitationResolveOptions = {},
 ): CitationValidationResult {
   const quotePolicy = options.quotes ?? 'optional'
-  const allowedHits = dedupeHits(hits)
+  const allowedHits = dedupeHits(hits.filter(isEvidenceHit))
   const span = observe.openSpan({
     name: 'citation.resolve',
     primitive: 'citation.check',
@@ -94,7 +94,7 @@ export function resolveCitations(
 /** Core matching/validation loop, run inside the citation span context. */
 function resolveCitationsInner(
   citations: readonly Citation[],
-  hits: readonly RetrieverHit[],
+  hits: readonly EvidenceHit[],
   quotePolicy: CitationQuotePolicy,
 ): CitationValidationPayload {
   const resolved: ResolvedCitation[] = []
@@ -186,8 +186,8 @@ function resolveCitationsInner(
   }
 }
 
-function dedupeHits(hits: readonly RetrieverHit[]): RetrieverHit[] {
-  const deduped = new Map<string, RetrieverHit>()
+function dedupeHits(hits: readonly EvidenceHit[]): EvidenceHit[] {
+  const deduped = new Map<string, EvidenceHit>()
   for (const hit of hits) {
     const key = groundingHitKey(hit)
     if (!deduped.has(key)) deduped.set(key, hit)
@@ -195,8 +195,12 @@ function dedupeHits(hits: readonly RetrieverHit[]): RetrieverHit[] {
   return [...deduped.values()]
 }
 
-function distinctNamespaces(hits: readonly RetrieverHit[]): string[] {
+function distinctNamespaces(hits: readonly EvidenceHit[]): string[] {
   return Array.from(new Set(hits.map((hit) => hit.namespace)))
+}
+
+function isEvidenceHit(hit: RetrieverHit): hit is EvidenceHit {
+  return hit.kind !== 'finding'
 }
 
 /** Emit the citation report artifact and link it to the active span. */

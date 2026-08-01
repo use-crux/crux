@@ -36,9 +36,13 @@ import type {
 } from "@/types";
 import type { EvalTimeoutPolicyProjection } from "@use-crux/core/project-index";
 import { kindMeta, type FamilyId, type LintSeverity } from "./kit";
+import {
+  projectEffectCatalog,
+  type EffectCatalogView,
+} from "./effect-catalog";
 /** Structural/containment relation types — a child rolls up under `from`. */
 const CONTAINMENT_RE =
-  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
+  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|includes_view|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
 
 // ── schema field tree (JSON Schema → typed field nodes) ──────────────────────
 export interface SchemaField {
@@ -176,6 +180,12 @@ export interface IndexFacts {
     exposedName: string;
     provenance: "authored-expected" | "runtime-discovered";
   };
+  // effect / rag definition version
+  effectId?: string;
+  version?: string | number;
+  recoverable?: boolean | "unknown";
+  capture?: boolean | "unknown";
+  resource?: boolean | "unknown";
   // agent
   promptId?: string;
   toolNames?: string[];
@@ -211,6 +221,14 @@ export interface IndexFacts {
   routingContextRequired?: boolean;
   profile?: Record<string, unknown>;
   // rag
+  knowledgeBaseId?: string;
+  viewId?: string;
+  whereFields?: readonly string[];
+  relationId?: string;
+  assertionId?: string;
+  communitiesId?: string;
+  modelName?: string;
+  typeNames?: readonly string[];
   topK?: number;
   index?: number;
   rerankerId?: string;
@@ -372,6 +390,8 @@ export interface ViewDef {
   sourceRefs?: ProjectSourceRef[];
   confidence: string;
   facts?: IndexFacts;
+  /** Closed, authored-only Effect facts for Catalog presentation. */
+  effectCatalog?: EffectCatalogView;
   /** Flattened config block for the Configuration section: prefers the
    *  structured `metadata.configuration`, falls back to `facts.settings` +
    *  `metadata.settings`. Scalars render as a grid; nested objects (e.g.
@@ -666,6 +686,14 @@ export function toViewDef(
     sourceRefs: def.sourceRefs,
     confidence: intel?.confidence ?? meta.sourceStatus?.confidence ?? "static",
     facts,
+    effectCatalog: projectEffectCatalog({
+      id: def.id,
+      kind: def.kind,
+      name: def.name,
+      facts,
+      sourceRefs: def.sourceRefs,
+      relPath,
+    }),
     config: buildConfig(meta, facts),
     contract: buildContract(meta, intel),
     control: intel?.control,
@@ -1144,6 +1172,26 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       push("execute", f.hasExecute ? "yes" : null);
       if (f.approvalRequired) push("approval", "required");
       break;
+    case "effect":
+      push("id", f.effectId ?? "dynamic");
+      push("version", f.version);
+      push(
+        "recovery",
+        f.recoverable === true
+          ? "recoverable"
+          : f.recoverable === false
+            ? "irreversible"
+            : "unknown",
+      );
+      push(
+        "capture",
+        f.capture === true
+          ? "yes"
+          : f.capture === false
+            ? "no"
+            : "unknown",
+      );
+      break;
     case "agent":
       push("prompt", f.promptId);
       push("tools", f.toolNames);
@@ -1152,6 +1200,34 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case "flow":
       push("runtime", f.runtime);
       push("steps", f.stepNames);
+      break;
+    case "rag.knowledgeBase":
+      push("id", f.knowledgeBaseId);
+      push("namespace", f.namespace);
+      break;
+    case "rag.knowledgeBase.view":
+      push("view", f.viewId);
+      push("where", f.whereFields);
+      break;
+    case "knowledge.relation":
+      push("id", f.relationId);
+      push("version", f.version);
+      push("types", f.typeNames);
+      push("model", f.modelName);
+      break;
+    case "knowledge.assertions":
+      push("id", f.assertionId);
+      push("version", f.version);
+      push("types", f.typeNames);
+      push("model", f.modelName);
+      break;
+    case "knowledge.communities":
+      push("id", f.communitiesId);
+      push("model", f.modelName);
+      break;
+    case "knowledge.model":
+      push("model", f.modelName);
+      push("version", f.version);
       break;
     case "composition.swarm":
       push("participants", f.participants);

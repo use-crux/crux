@@ -388,6 +388,11 @@ export interface DependencyFacts {
   blocks?: string[];
   routers?: string[];
   ragPipelines?: string[];
+  knowledgeBases?: string[];
+  knowledgeRelations?: string[];
+  knowledgeAssertions?: string[];
+  knowledgeCommunities?: string[];
+  knowledgeModels?: string[];
   retrievers?: string[];
   guardrails?: string[];
   constraints?: string[];
@@ -552,6 +557,14 @@ export type PrimitiveSpecificFacts =
       mcp?: McpToolProvenanceFacts;
     }
   | {
+      kind: "effect";
+      effectId?: string;
+      version?: number;
+      recoverable: boolean | "unknown";
+      capture: boolean | "unknown";
+      resource: boolean | "unknown";
+    }
+  | {
       kind: "mcp.server";
       serverId: string;
       transport?: McpTransportFacts;
@@ -649,13 +662,26 @@ export type PrimitiveSpecificFacts =
   | {
       kind:
         | "rag.knowledgeBase"
+        | "rag.knowledgeBase.view"
         | "rag.recipe"
         | "rag.recipe.step"
         | "rag.pipeline"
         | "rag.pipeline.stage"
         | "rag.reranker"
-        | "rag.retriever";
+        | "rag.retriever"
+        | "knowledge.relation"
+        | "knowledge.assertions"
+        | "knowledge.communities"
+        | "knowledge.model";
       knowledgeBaseId?: string;
+      viewId?: string;
+      whereFields?: readonly string[];
+      relationId?: string;
+      assertionId?: string;
+      communitiesId?: string;
+      modelName?: string;
+      version?: string | number;
+      typeNames?: string[];
       recipeId?: string;
       stepId?: string;
       rerankerId?: string;
@@ -804,7 +830,8 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
       | "block"
       | "store"
       | "storage"
-      | "case";
+      | "case"
+      | "view";
     order?: number;
   };
   intelligence?: DefinitionIntelligence;

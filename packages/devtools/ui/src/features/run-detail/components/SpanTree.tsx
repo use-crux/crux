@@ -518,6 +518,7 @@ type SemanticKind =
   | "consensus"
   | "trace"
   | "memory"
+  | "effect"
   | "thread"
   | "embed"
   | "security"
@@ -573,6 +574,8 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
     case "memory":
     case "blackboard":
       return "memory";
+    case "effect.run":
+      return "effect";
     case "thread.operation":
     case "thread":
       return "thread";
@@ -594,9 +597,11 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
   // `retrieval.pipeline`, or operation reports) maps to its family instead of
   // falling through to the generic "trace" tag.
   const p = node.primitive ?? "";
-  if (p.startsWith("retrieval.")) return "retrieval";
+  if (p.startsWith("retrieval.") || p.startsWith("knowledge."))
+    return "retrieval";
   if (p.startsWith("embedding.")) return "embed";
   if (p.startsWith("memory.") || p.startsWith("blackboard")) return "memory";
+  if (p.startsWith("effect.")) return "effect";
   if (p.startsWith("thread.")) return "thread";
   if (p.startsWith("generation.")) return "generate";
   if (p.startsWith("tool.")) return "tool";
@@ -640,6 +645,8 @@ function kindHexColor(k: SemanticKind): string {
     case "memory":
     case "thread":
       return "var(--devtools-iris)";
+    case "effect":
+      return "var(--devtools-plum)";
     case "embed":
     case "security":
       return "var(--devtools-danger)";

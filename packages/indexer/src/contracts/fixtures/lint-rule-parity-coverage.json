@@ -1,297 +1,310 @@
 {
-  "requiredEvidence": ["positive", "negative"],
-  "policyFixture": "index-lint-native-policy-parity.test.ts",
   "nativeParityOmittedRules": [
     {
-      "ruleId": "runtime.missing_runtime_config",
-      "reason": "Requires loaded crux.config.ts runtime state, which is not part of native lint fact finalization."
+      "reason": "Requires loaded crux.config.ts runtime state, which is not part of native lint fact finalization.",
+      "ruleId": "runtime.missing_runtime_config"
     }
+  ],
+  "policyFixture": "index-lint-native-policy-parity.test.ts",
+  "requiredEvidence": [
+    "positive",
+    "negative"
   ],
   "rules": [
     {
-      "ruleId": "defer.replay_unsafe",
-      "positiveFixture": "defer-native-fixtures.test.ts",
-      "negativeFixture": "defer-native-fixtures.test.ts"
-    },
-    {
-      "ruleId": "defer.floating_named_promise",
-      "positiveFixture": "defer-native-fixtures.test.ts",
-      "negativeFixture": "defer-native-fixtures.test.ts"
-    },
-    {
-      "ruleId": "definition.missing_eval_coverage",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "definition.missing_eval_coverage"
     },
     {
-      "ruleId": "agent.unobservable_handoff",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "agent.unobservable_handoff"
     },
     {
-      "ruleId": "prompt.missing_input_schema",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "prompt.missing_input_schema"
     },
     {
-      "ruleId": "prompt.missing_output_schema",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "prompt.missing_output_schema"
     },
     {
-      "ruleId": "prompt.hidden_required_input",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "prompt.hidden_required_input"
     },
     {
-      "ruleId": "prompt.conflicting_injected_input",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "prompt.conflicting_injected_input"
     },
     {
-      "ruleId": "prompt.conditional_required_input",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "prompt.conditional_required_input"
     },
     {
-      "ruleId": "context.missing_input_schema",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "context.missing_input_schema"
     },
     {
-      "ruleId": "injection.dynamic_dependency",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "injection.dynamic_dependency"
     },
     {
-      "ruleId": "injection.dynamic_tools",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "injection.dynamic_tools"
     },
     {
-      "ruleId": "prompt.indirect_tool_surface",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "prompt.indirect_tool_surface"
     },
     {
-      "ruleId": "injectable.unused",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "injectable.unused"
     },
     {
-      "ruleId": "context.unused",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "context.unused"
     },
     {
-      "ruleId": "injection.unresolved_target",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "injection.unresolved_target"
     },
     {
-      "ruleId": "injection.deep_schema_chain",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts",
       "positiveFixture": "index-lint-native-injection-parity.test.ts",
-      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+      "ruleId": "injection.deep_schema_chain"
     },
     {
-      "ruleId": "flow.untyped_args",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.untyped_args"
     },
     {
-      "ruleId": "tool.missing_input_schema",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "tool.missing_input_schema"
     },
     {
-      "ruleId": "tool.output_not_inspectable",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "tool.output_not_inspectable"
     },
     {
-      "ruleId": "flow.suspension_without_coverage",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.suspension_without_coverage"
     },
     {
-      "ruleId": "flow.duplicate_step_label",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.duplicate_step_label"
     },
     {
-      "ruleId": "flow.duplicate_suspend_name",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.duplicate_suspend_name"
     },
     {
-      "ruleId": "flow.undeclared_suspend_signal",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.undeclared_suspend_signal"
     },
     {
-      "ruleId": "workspace.write_without_guardrail",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "workspace.write_without_guardrail"
     },
     {
-      "ruleId": "safety.duplicate_policy_id",
+      "negativeFixture": "first-party-shared-fixtures.test.ts",
+      "positiveFixture": "first-party-shared-fixtures.test.ts",
+      "ruleId": "effect.duplicate_identity"
+    },
+    {
+      "negativeFixture": "first-party-shared-fixtures.test.ts",
+      "positiveFixture": "first-party-shared-fixtures.test.ts",
+      "ruleId": "effect.irreversible_in_required_boundary"
+    },
+    {
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "safety.duplicate_policy_id"
     },
     {
-      "ruleId": "thread.conflicting_binding",
+      "negativeFixture": "thread-native-static.test.ts",
       "positiveFixture": "thread-native-static.test.ts",
-      "negativeFixture": "thread-native-static.test.ts"
+      "ruleId": "thread.conflicting_binding"
     },
     {
-      "ruleId": "thread.duplicate_active",
+      "negativeFixture": "thread-native-static.test.ts",
       "positiveFixture": "thread-native-static.test.ts",
-      "negativeFixture": "thread-native-static.test.ts"
+      "ruleId": "thread.duplicate_active"
     },
     {
-      "ruleId": "memory.long_lived_without_retention",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "memory.long_lived_without_retention"
     },
     {
-      "ruleId": "resource.write_without_read",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "resource.write_without_read"
     },
     {
-      "ruleId": "consensus.missing_judge",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "consensus.missing_judge"
     },
     {
-      "ruleId": "shared_blackboard_without_policy",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "shared_blackboard_without_policy"
     },
     {
-      "ruleId": "routing.missing_stable_id",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "routing.missing_stable_id"
     },
     {
-      "ruleId": "routing.router_missing_default",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "routing.router_missing_default"
     },
     {
-      "ruleId": "routing.unresolved_target",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "routing.unresolved_target"
     },
     {
-      "ruleId": "routing.cascade_unreachable_tier",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "routing.cascade_unreachable_tier"
     },
     {
-      "ruleId": "rag.recipe_step_unresolved_target",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "rag.recipe_step_unresolved_target"
     },
     {
-      "ruleId": "runtime.duplicate_target_name",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "runtime.duplicate_target_name"
     },
     {
-      "ruleId": "runtime.non_literal_target_name",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "runtime.non_literal_target_name"
     },
     {
-      "ruleId": "runtime.target_not_exported",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "runtime.target_not_exported"
     },
     {
-      "ruleId": "runtime.closure_defer",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "runtime.closure_defer"
     },
     {
-      "ruleId": "flow.nondeterministic_code",
+      "negativeFixture": "defer-native-fixtures.test.ts",
+      "positiveFixture": "defer-native-fixtures.test.ts",
+      "ruleId": "defer.replay_unsafe"
+    },
+    {
+      "negativeFixture": "defer-native-fixtures.test.ts",
+      "positiveFixture": "defer-native-fixtures.test.ts",
+      "ruleId": "defer.floating_named_promise"
+    },
+    {
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "flow.nondeterministic_code"
     },
     {
-      "ruleId": "runtime.non_serializable_payload",
+      "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
+      "ruleId": "runtime.non_serializable_payload"
     },
     {
-      "ruleId": "media.unsupported-capability",
+      "negativeFixture": "media-lint-contract.test.ts",
       "positiveFixture": "media-lint-contract.test.ts",
-      "negativeFixture": "media-lint-contract.test.ts"
+      "ruleId": "media.unsupported-capability"
     },
     {
-      "ruleId": "media.invalid-provider-file",
+      "negativeFixture": "semantic-media-evidence.test.ts",
       "positiveFixture": "semantic-media-evidence.test.ts",
-      "negativeFixture": "semantic-media-evidence.test.ts"
+      "ruleId": "media.invalid-provider-file"
     },
     {
-      "ruleId": "media.asset-ref-not-hydrated",
+      "negativeFixture": "semantic-media-evidence.test.ts",
       "positiveFixture": "semantic-media-evidence.test.ts",
-      "negativeFixture": "semantic-media-evidence.test.ts"
+      "ruleId": "media.asset-ref-not-hydrated"
     },
     {
-      "ruleId": "media.missing-derivation",
+      "negativeFixture": "media-lint-contract.test.ts",
       "positiveFixture": "media-lint-contract.test.ts",
-      "negativeFixture": "media-lint-contract.test.ts"
+      "ruleId": "media.missing-derivation"
     },
     {
-      "ruleId": "media.missing-attribution",
+      "negativeFixture": "media-lint-contract.test.ts",
       "positiveFixture": "media-lint-contract.test.ts",
-      "negativeFixture": "media-lint-contract.test.ts"
+      "ruleId": "media.missing-attribution"
     },
     {
-      "ruleId": "media.output-discarded",
+      "negativeFixture": "semantic-media-evidence.test.ts",
       "positiveFixture": "semantic-media-evidence.test.ts",
-      "negativeFixture": "semantic-media-evidence.test.ts"
+      "ruleId": "media.output-discarded"
     },
     {
-      "ruleId": "media.raw-retention",
+      "negativeFixture": "media-lint-contract.test.ts",
       "positiveFixture": "media-lint-contract.test.ts",
-      "negativeFixture": "media-lint-contract.test.ts"
+      "ruleId": "media.raw-retention"
     },
     {
-      "ruleId": "evidence.invalid-custom-kind",
+      "negativeFixture": "evidence-record-native-static.test.ts",
       "positiveFixture": "evidence-record-native-static.test.ts",
-      "negativeFixture": "evidence-record-native-static.test.ts"
+      "ruleId": "evidence.invalid-custom-kind"
     },
     {
-      "ruleId": "evidence.reserved-inline-kind",
+      "negativeFixture": "evidence-record-native-static.test.ts",
       "positiveFixture": "evidence-record-native-static.test.ts",
-      "negativeFixture": "evidence-record-native-static.test.ts"
+      "ruleId": "evidence.reserved-inline-kind"
     },
     {
-      "ruleId": "embedding.unsupported-modality",
+      "negativeFixture": "semantic-embedding-evidence.test.ts",
       "positiveFixture": "semantic-embedding-evidence.test.ts",
-      "negativeFixture": "semantic-embedding-evidence.test.ts"
+      "ruleId": "embedding.unsupported-modality"
     },
     {
-      "ruleId": "embedding.namespace-identity-mismatch",
+      "negativeFixture": "semantic-embedding-evidence.test.ts",
       "positiveFixture": "semantic-embedding-evidence.test.ts",
-      "negativeFixture": "semantic-embedding-evidence.test.ts"
+      "ruleId": "embedding.namespace-identity-mismatch"
     },
     {
-      "ruleId": "embedding.sparse-media",
+      "negativeFixture": "semantic-embedding-evidence.test.ts",
       "positiveFixture": "semantic-embedding-evidence.test.ts",
-      "negativeFixture": "semantic-embedding-evidence.test.ts"
+      "ruleId": "embedding.sparse-media"
     },
     {
-      "ruleId": "context-planning.history-cardinality",
+      "negativeFixture": "request-context-planning-semantic.test.ts",
       "positiveFixture": "request-context-planning-semantic.test.ts",
-      "negativeFixture": "request-context-planning-semantic.test.ts"
+      "ruleId": "context-planning.history-cardinality"
     },
     {
-      "ruleId": "context-planning.invalid-wrapper-order",
+      "negativeFixture": "request-context-planning-semantic.test.ts",
       "positiveFixture": "request-context-planning-semantic.test.ts",
-      "negativeFixture": "request-context-planning-semantic.test.ts"
+      "ruleId": "context-planning.invalid-wrapper-order"
     }
   ]
 }

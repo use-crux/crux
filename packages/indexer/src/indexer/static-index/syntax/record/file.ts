@@ -116,9 +116,8 @@ export async function parseStaticFactsFromSyntaxRecords(
         nativeFactsByMatchIndex,
         nativeFactProjection,
         (match) => match.exported,
-        new Set(),
+        new Map(),
       );
-      const seen = new Set(exported.found.map((item) => item.definition.id));
       const discovered = extractRecordMatches(
         input.root,
         input.runtime,
@@ -127,7 +126,7 @@ export async function parseStaticFactsFromSyntaxRecords(
         nativeFactsByMatchIndex,
         nativeFactProjection,
         (match) => !match.exported,
-        seen,
+        exported.sourceRefIdsByDefinition,
       );
       return { exported, discovered };
     },
@@ -248,10 +247,11 @@ function extractRecordMatches(
   nativeFactsByMatchIndex: NativeFactIndex,
   nativeFactProjection: NativeFactProjectionMode,
   predicate: (match: StaticSourceMatch) => boolean,
-  seenDefinitionIds: Set<string>,
+  sourceRefIdsByDefinition: Map<string, Set<string>>,
 ): {
   readonly facts: ExtractedFacts[];
   readonly found: StaticFoundDefinition[];
+  readonly sourceRefIdsByDefinition: Map<string, Set<string>>;
 } {
   const facts: ExtractedFacts[] = [];
   const found: StaticFoundDefinition[] = [];
@@ -282,16 +282,41 @@ function extractRecordMatches(
         extractedWithNewDefinitions.push(extracted);
         continue;
       }
-      if (seenDefinitionIds.has(item.definition.id)) continue;
+      const existingSourceRefIds = sourceRefIdsByDefinition.get(
+        item.definition.id,
+      );
+      if (existingSourceRefIds) {
+        if (hasNovelSourceRefs(existingSourceRefIds, item)) {
+          extractedWithNewDefinitions.push(extracted);
+          foundForMatch.push(item);
+        }
+        continue;
+      }
       extractedWithNewDefinitions.push(extracted);
       foundForMatch.push(item);
     }
     if (extractedWithNewDefinitions.length === 0) continue;
-    for (const item of foundForMatch) seenDefinitionIds.add(item.definition.id);
+    for (const item of foundForMatch) {
+      const sourceRefIds =
+        sourceRefIdsByDefinition.get(item.definition.id) ?? new Set<string>();
+      for (const ref of item.definition.sourceRefs ?? []) {
+        sourceRefIds.add(ref.id);
+      }
+      sourceRefIdsByDefinition.set(item.definition.id, sourceRefIds);
+    }
     facts.push(...extractedWithNewDefinitions);
     found.push(...foundForMatch);
   }
-  return { facts, found };
+  return { facts, found, sourceRefIdsByDefinition };
+}
+
+function hasNovelSourceRefs(
+  existingRefIds: ReadonlySet<string>,
+  duplicate: StaticFoundDefinition,
+): boolean {
+  return (duplicate.definition.sourceRefs ?? []).some(
+    (ref) => !existingRefIds.has(ref.id),
+  );
 }
 
 async function preloadImportedRecords(

@@ -190,11 +190,18 @@ The architectural rule is:
 
 > Explicit construction decides behavior; Crux discovery provides visibility.
 
-The Indexer may infer prompts, contexts, tools, memories, retrieval definitions, flows, agents,
-Evals, `use[]` relationships, source roots, package roots, and stable source references when
+The Indexer may infer prompts, contexts, tools, effects, memories, retrieval definitions, flows,
+agents, Evals, `use[]` relationships, source roots, package roots, and stable source references when
 those facts are visible in code. If a relationship is authored in code, such as a prompt using a
 memory that was constructed with a store, a local tooling config must not also require the user to
 register that prompt, memory, and store in a registry list.
+
+Effect definitions use the composite identity `(effect ID, version)`. Static extraction records
+literal identity, recovery, capture, and resource-projection facts so Catalog can explain the
+authored contract without importing user code. Non-literal options remain unknown. The production
+Rust/Oxc frontend and the TypeScript compatibility extractor must normalize these facts identically;
+runtime receipts, outcomes, and recovery attempts remain observability evidence rather than Project
+Index facts.
 
 Memory definitions include the effective closed capture mode (`inline | deferred`) in their static
 Project Index facts. Omitted mode is normalized to `deferred` by the compiler, so Catalog can explain

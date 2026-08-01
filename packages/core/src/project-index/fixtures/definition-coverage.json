@@ -113,6 +113,20 @@
       }
     },
     {
+      "kind": "effect",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "effect.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "effect:connected:v1",
+        "kind": "effect",
+        "role": "invoked-effect"
+      }
+    },
+    {
       "kind": "thread",
       "primary": "directly-observed",
       "secondary": [],
@@ -630,6 +644,14 @@
       }
     },
     {
+      "kind": "rag.knowledgeBase.view",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
       "kind": "rag.pipeline.stage",
       "primary": "structural-child",
       "secondary": [],
@@ -689,6 +711,38 @@
     },
     {
       "kind": "registry",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "knowledge.relation",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "knowledge.assertions",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "knowledge.communities",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "knowledge.model",
       "primary": "static-only",
       "secondary": [],
       "runtimePrimitiveNames": [],

@@ -19,15 +19,27 @@ package cache
 // Epoch 54 adds PromptText refactor source-ref metadata and compiler-owned
 // source classification across restart boundaries. Epoch 55 adds authored
 // evidence.record definitions, safe facts, refs, relations, and lints.
-// Epoch 56 adds authored Thread definitions, bindings, runtime joins,
-// context-planning structure, hook/budget refs, and conclusive lints.
-// Epoch 57 adds first-class Thread lint findings and descriptors.
-// Epoch 58 prevents snapshots from retaining sources deleted while offline.
-// Epoch 59 combines the independently advanced Thread and context-planning
-// snapshot contracts.
-// Epoch 60 combines main's Epoch 59 lineage with the feature branch's colliding
-// Epoch 55 lineage, which restores runtime-rich Eval execution and timeout facts
-// across the bundled-worker/package-copy boundary.
+// Epoch 56 adds Effect definitions and Thread definitions, call-site and
+// binding evidence, runtime joins, runtime-observability identity, and
+// context-planning structure.
+// Epoch 57 preserves distinct same-identity Effect call-site evidence and adds
+// first-class Thread lint findings and descriptors.
+// Epoch 58 combines Effects and context-planning snapshots and prevents stale
+// sources deleted while offline from surviving a restart.
+// Epoch 59 adds Effect export metadata and the integrated Thread snapshot.
+// Epoch 60 combines the independently advanced Effect LSP and canonical Thread
+// history snapshot contracts so neither parent cache can mask the other.
+// Epoch 61 was independently assigned to evidence-backed irreversible Effect
+// findings on the Effects branch and authored Connected Knowledge definitions,
+// Connected Knowledge lint findings, view children, and static relation facts
+// on main.
+// Epoch 62 advances the integrated Connected Knowledge snapshot contract.
+// Epoch 63 combines the independently advanced Effect boundary lint and
+// Connected Knowledge snapshot contracts so neither parent cache can mask the
+// other.
+// Epoch 64 combines main's Epoch 63 lineage with the feature branch's Epoch 60
+// lineage, which restores runtime-rich Eval execution and timeout facts across
+// the bundled-worker/package-copy boundary.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 60
+const ProjectIndexSnapshotCacheEpoch = 64

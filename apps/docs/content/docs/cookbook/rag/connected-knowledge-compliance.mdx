@@ -1,0 +1,282 @@
+---
+title: Compliance corpus with Connected Knowledge
+description: Build a multi-document policy corpus with typed metadata, views, relations, assertions, and global themes.
+---
+
+This recipe models a small compliance-style corpus for insurance applications.
+It indexes multiple documents, validates typed metadata, creates per-application
+views, extracts requirements, relates conflicts, expands retrieval through
+policy references, and searches global themes.
+
+## Full code
+
+### `lib/compliance/schema.ts`
+
+```ts
+import { z } from "zod";
+
+export const metadataSchema = z.object({
+  application: z.enum(["auto", "home"]),
+  jurisdiction: z.enum(["CA", "NY"]),
+  status: z.enum(["draft", "published", "archived"]),
+  effectiveDate: z.string(),
+});
+```
+
+### `lib/compliance/knowledge.ts`
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { embedding } from "@use-crux/core/embedding";
+import { assertions, communities, knowledgeBase, knowledgeModel, relate, relateReferences } from "@use-crux/core/knowledge";
+import { expandRelations, globalSearch, retrieve } from "@use-crux/core/retrieval";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { z } from "zod";
+
+import { metadataSchema } from "./schema";
+
+export const dense = embedding({
+  kind: "dense",
+  name: "compliance-example-embedding",
+  dimensions: 2,
+  maxInputTokens: 8191,
+  batch: { maxSize: 8 },
+  embed: async (inputs) => inputs.map(() => [1, 0]),
+});
+
+export const knowledgeReporter = knowledgeModel({
+  name: "compliance-reporter",
+  version: "example-v1",
+  generateText: async () => ({ text: "" }),
+  generateObject: async ({ schema, system }) => {
+    const object = system?.includes("entity mentions")
+      ? { mentions: [], related: [] }
+      : system?.includes("community report")
+        ? { title: "Compliance policies", summary: "No generated summary configured.", findings: [] }
+        : { findings: [] };
+    return { object: schema.parse(object) };
+  },
+});
+
+export const policyRelations = relate({
+  id: "policy-relations",
+  version: 1,
+  types: {
+    affectsApplication: {
+      from: ["chunk"],
+      to: ["entity"],
+      direction: "directed",
+      description: "A chunk names an insurance application affected by a policy.",
+    },
+  },
+  run: ({ chunks }, api) => {
+    for (const chunk of chunks) {
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      if (chunk.content.includes("auto")) {
+        api.emit(
+          "affectsApplication",
+          evidence,
+          { kind: "entity", entityId: "application:auto" },
+          { evidence, provenance: "exact" },
+        );
+      }
+
+      if (chunk.content.includes("home")) {
+        api.emit(
+          "affectsApplication",
+          evidence,
+          { kind: "entity", entityId: "application:home" },
+          { evidence, provenance: "exact" },
+        );
+      }
+    }
+  },
+});
+
+export const requirements = assertions({
+  id: "requirements",
+  version: 1,
+  types: {
+    requirement: z.object({
+      application: z.enum(["auto", "home"]),
+      jurisdiction: z.enum(["CA", "NY"]),
+      rule: z.string(),
+      effectiveDate: z.string(),
+    }),
+  },
+  run: ({ document, chunks }, api) => {
+    const metadata = metadataSchema.parse(document.metadata);
+    for (const chunk of chunks) {
+      if (!chunk.content.includes("must")) continue;
+
+      const evidence = {
+        kind: "chunk",
+        sourceId: chunk.sourceId,
+        chunkId: chunk.chunkId,
+      } as const;
+
+      const current = api.emit(
+        "requirement",
+        {
+          application: metadata.application,
+          jurisdiction: metadata.jurisdiction,
+          rule: chunk.content,
+          effectiveDate: metadata.effectiveDate,
+        },
+        { evidence, provenance: "exact" },
+      );
+
+      if (chunk.content.includes("supersedes 2025 rule")) {
+        const previous = api.emit(
+          "requirement",
+          {
+            application: metadata.application,
+            jurisdiction: metadata.jurisdiction,
+            rule: "Applicant may provide proof after approval.",
+            effectiveDate: "2025-01-01",
+          },
+          { evidence, provenance: "exact" },
+        );
+
+        api.relate(
+          "supersedes",
+          current,
+          previous,
+          { evidence, provenance: "exact" },
+        );
+      }
+    }
+  },
+});
+
+export const compliance = knowledgeBase({
+  id: "compliance",
+  storage: inMemoryStorage(),
+  embeddings: dense,
+  metadataSchema,
+  pipeline: indexingPipeline({
+    derive: [relateReferences(), policyRelations, requirements],
+  }),
+  communities: communities({ model: knowledgeReporter }),
+});
+
+export const autoPolicies = compliance.view({
+  id: "auto-policies",
+  where: { application: "auto", status: "published" },
+});
+
+export const autoEvidence = autoPolicies.recipe({
+  id: "auto-policy-evidence",
+  steps: [
+    retrieve({ limit: 8 }),
+    expandRelations({
+      types: ["references", "affectsApplication", "sequence"],
+      direction: "both",
+      depth: 2,
+      limit: 6,
+    }),
+  ],
+});
+
+export const autoThemes = autoPolicies.recipe({
+  id: "auto-policy-themes",
+  steps: [
+    globalSearch({
+      model: knowledgeReporter,
+      detail: "overview",
+      scan: "all",
+      limit: 8,
+    }),
+  ],
+});
+```
+
+### `lib/compliance/index.ts`
+
+```ts
+import { compliance } from "./knowledge";
+
+export async function indexCompliancePolicies() {
+  await compliance.reindex([
+    {
+      namespace: "compliance",
+      sourceId: "auto-ca-2026.md",
+      title: "California Auto 2026",
+      content: [
+        "Auto applicants must provide proof of coverage before approval.",
+        "This supersedes 2025 rule.",
+        "See [General Notices](https://example.test/notices).",
+      ].join("\n\n"),
+      metadata: { application: "auto", jurisdiction: "CA", status: "published", effectiveDate: "2026-01-01" },
+    },
+    {
+      namespace: "compliance",
+      sourceId: "auto-ny-2026.md",
+      title: "New York Auto 2026",
+      content: "Auto applicants must acknowledge renewal notices within 10 days.",
+      metadata: { application: "auto", jurisdiction: "NY", status: "published", effectiveDate: "2026-02-01" },
+    },
+    {
+      namespace: "compliance",
+      sourceId: "home-ca-draft.md",
+      title: "California Home Draft",
+      content: "Home applicants must provide inspection records.",
+      metadata: { application: "home", jurisdiction: "CA", status: "draft", effectiveDate: "2026-03-01" },
+    },
+  ]);
+
+  await compliance.communities?.prepare();
+}
+```
+
+### `lib/compliance/query.ts`
+
+```ts
+import { inspectRequest, prompt, summarizable } from "@use-crux/core";
+import {
+  autoEvidence,
+  autoPolicies,
+  autoThemes,
+  requirements,
+} from "./knowledge";
+
+export async function readAutoRequirements() {
+  const resolved = await autoPolicies
+    .assertions(requirements, { types: ["requirement"] })
+    .resolve()
+    .result();
+
+  return {
+    selected: resolved.selected.map((item) => item.data),
+    superseded: resolved.superseded.map((item) => item.data),
+    contested: resolved.contested.map((item) => item.data),
+    unresolved: resolved.unresolved.map((item) => item.data),
+  };
+}
+
+export const answerAutoPolicy = prompt({
+  id: "answer-auto-policy",
+  use: [
+    summarizable(autoEvidence),
+    autoPolicies
+      .assertions(requirements, { types: ["requirement"] })
+      .resolve(),
+    autoThemes,
+  ],
+  system: "Answer from visible auto policy evidence and resolved requirements.",
+  prompt: ({ input }) => input.question as string,
+});
+
+export async function inspectAnswerReceipt(result: {
+  steps: Array<{ request?: { id: string } }>;
+}) {
+  const request = result.steps[0]?.request;
+  if (!request) return undefined;
+  return inspectRequest(request);
+}
+```

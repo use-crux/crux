@@ -6,11 +6,12 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.9"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.12"
 
 var defaultCallNames = []string{
 	"Agent",
 	"agent",
+	"assertions",
 	"blackboard",
 	"cascade",
 	"consensus",
@@ -29,6 +30,8 @@ var defaultCallNames = []string{
 	"embed",
 	"embedMany",
 	"embedding",
+	"effect",
+	"rollbackOnError",
 	"evaluate",
 	"record",
 	"expandParents",
@@ -51,14 +54,19 @@ var defaultCallNames = []string{
 	"indexChunks",
 	"indexDocuments",
 	"indexer",
+	"knowledgeModel",
 	"llmJudge",
 	"memory",
 	"mediaClassifier",
+	"communities",
 	"parallel",
 	"pipeline",
 	"prompt",
 	"registry",
 	"reindex",
+	"relate",
+	"relateEntities",
+	"relateReferences",
 	"knowledgeBase",
 	"rerank",
 	"reranker",
@@ -85,11 +93,13 @@ var defaultCallNames = []string{
 	"upstashVectorStore",
 	"urlSource",
 	"urlsSource",
+	"view",
 	"workspace",
 }
 
 var defaultCallInterestNames = []string{
 	"agent",
+	"assertions",
 	"blackboard",
 	"cascade",
 	"consensus",
@@ -108,6 +118,8 @@ var defaultCallInterestNames = []string{
 	"embed",
 	"embedMany",
 	"embedding",
+	"effect",
+	"rollbackOnError",
 	"evaluate",
 	"record",
 	"expandParents",
@@ -130,14 +142,19 @@ var defaultCallInterestNames = []string{
 	"indexChunks",
 	"indexDocuments",
 	"indexer",
+	"knowledgeModel",
 	"llmJudge",
 	"memory",
 	"mediaClassifier",
+	"communities",
 	"parallel",
 	"pipeline",
 	"prompt",
 	"registry",
 	"reindex",
+	"relate",
+	"relateEntities",
+	"relateReferences",
 	"knowledgeBase",
 	"rerank",
 	"reranker",
@@ -164,6 +181,7 @@ var defaultCallInterestNames = []string{
 	"upstashVectorStore",
 	"urlSource",
 	"urlsSource",
+	"view",
 	"workspace",
 }
 
@@ -178,8 +196,26 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 		if name == "durableTask" {
 			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/runtime"}
 		}
+		if name == "effect" {
+			arg := 2
+			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/effect"}
+			interest.ConfigArg = &arg
+			interest.Properties = []string{"version", "recover", "resource"}
+		}
+		if name == "rollbackOnError" {
+			arg := 1
+			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/effect"}
+			interest.ConfigArg = &arg
+			interest.Properties = []string{"recovery"}
+		}
 		if name == "thread" {
 			interest.ImportFrom = []string{"@use-crux/core/thread"}
+		}
+		if name == "assertions" || name == "communities" || name == "knowledgeModel" || name == "relate" || name == "relateEntities" || name == "relateReferences" {
+			interest.ImportFrom = []string{"@use-crux/core/knowledge"}
+		}
+		if name == "knowledgeBase" {
+			interest.ImportFrom = []string{"@use-crux/core/knowledge", "@use-crux/core/retrieval", "@use-crux/core"}
 		}
 		if name == "evaluate" || name == "fileSource" || name == "filesSource" || name == "urlSource" || name == "urlsSource" || name == "textSource" {
 			arg := 1
@@ -212,10 +248,12 @@ func defaultHost() json.RawMessage {
 		"context",
 		"embedding",
 		"embedding.call",
+		"effect",
 		"evidence.record",
 		"eval",
 		"flow",
 		"injectable",
+		"knowledge",
 		"memory",
 		"prompt",
 		"rag.indexer",

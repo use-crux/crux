@@ -10,7 +10,7 @@
 
 import type { z } from 'zod'
 import type { OperationResultMeta } from '../observability'
-import type { Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
+import type { EvidenceHit, Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
 import type { InternalInjectableEntry } from '../prompt/internal-injection'
 import type { Citation } from './schema'
 import type { GroundingSession } from './session'
@@ -42,7 +42,7 @@ export interface ResolvedCitation extends Citation {
   url?: string
   path?: string
   metadata?: Record<string, unknown>
-  provenance?: RetrieverHit['provenance']
+  provenance?: EvidenceHit['provenance']
   hit: {
     namespace: string
     sourceId: string
@@ -52,7 +52,7 @@ export interface ResolvedCitation extends Citation {
     metadata: Record<string, unknown>
     sourceUrl?: string
     sourcePath?: string
-    provenance?: RetrieverHit['provenance']
+    provenance?: EvidenceHit['provenance']
   }
 }
 

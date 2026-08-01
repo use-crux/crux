@@ -174,6 +174,12 @@ export function renderCitationContext(
 
   for (const hit of hits) {
     lines.push('')
+    if (hit.kind === 'finding') {
+      lines.push(`Finding: ${hit.citation.findingTarget}`)
+      lines.push(`Score: ${hit.score}`)
+      lines.push(hit.content.slice(0, maxContentChars))
+      continue
+    }
     lines.push(`Source: ${hit.namespace}/${hit.source.id}/${hit.chunkId}`)
     if (hit.source.url) lines.push(`URL: ${hit.source.url}`)
     if (hit.source.path) lines.push(`Path: ${hit.source.path}`)
@@ -214,18 +220,19 @@ function createGroundingToolMiddleware(
     id: `grounding:${groundingId}:retrieval-evidence`,
     afterExecute: async ({ output }) => {
       if (!isRetrievalToolPayload(output)) return
-      await session.recordHits(output.hits.map(toolHitToRetrieverHit), 'tool')
+      await session.recordHits(output.hits.flatMap(toolHitToRetrieverHit), 'tool')
     },
   })
 }
 
-function toolHitToRetrieverHit(hit: RetrievalToolHit): RetrieverHit {
-  return {
+function toolHitToRetrieverHit(hit: RetrievalToolHit): RetrieverHit[] {
+  if (hit.kind === 'finding') return []
+  return [{
     namespace: hit.namespace,
     source: hit.source,
     chunkId: hit.chunkId,
     content: hit.content,
     metadata: {},
     score: hit.score,
-  }
+  }]
 }

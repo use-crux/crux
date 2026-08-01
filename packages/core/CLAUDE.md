@@ -9,11 +9,13 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for the npm 
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
 - **`/flow`** — `flow()`, `signalFlow()`, `cancelFlow()`, `executeFlow()` (suspendable/resumable)
+- **`/effect`** — `effect()`, receipts, recovery, `rollbackOnError()`, `rollback()`, reconciliation
 - **`/memory`** — `memory()`, `memoryBlock()`, `workingState()`, `episodes()`, `facts()`, `procedures()`
 - **`/thread`** — `thread()`, immutable hydrated history, branches, edits, redaction/deletion, commit receipts, and devtools topology
 - **`/embedding`** — `embedding()` (dense or sparse vector primitive)
 - **`/indexing`** — `indexer()` (chunk + embed + write documents to record/vector stores)
-- **`/retrieval`** — `knowledgeBase()`, `retriever()`, `retrievalRecipe()` (indexed knowledge → scored hits, tools, grounding)
+- **`/retrieval`** — `knowledgeBase()`, `retriever()`, `retrievalRecipe()`, `expandRelations()`, `globalSearch()` (indexed knowledge → scored hits, tools, grounding)
+- **`/knowledge`** — canonical Connected Knowledge home: `knowledgeBase()` + `view()`, `relate()` + built-ins, `assertions()` + `resolve()`, `communities()`, `knowledgeModel()`, storage conformance suite
 - **`/scoring`** — `judge()`, pre-built metrics; runtime enforcement uses `constraint.judge(...)` from `/safety`
 - **`/eval`** — inert `evaluate()` definitions, typed Cases and Variants; execution is coordinated by `crux eval`
 - **`/feedback`** — awaited, run-linked production feedback submissions

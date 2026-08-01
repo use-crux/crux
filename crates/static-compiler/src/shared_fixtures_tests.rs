@@ -348,6 +348,8 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "flow.duplicate_suspend_name",
             "flow.undeclared_suspend_signal",
             "workspace.write_without_guardrail",
+            "effect.duplicate_identity",
+            "effect.irreversible_in_required_boundary",
             "safety.duplicate_policy_id",
             "thread.conflicting_binding",
             "thread.duplicate_active",
@@ -360,6 +362,9 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "routing.unresolved_target",
             "routing.cascade_unreachable_tier",
             "rag.recipe_step_unresolved_target",
+            "expand-relations-unknown-type",
+            "knowledge-recipe-producer-conflict",
+            "assertions-unknown-type-selection",
             "runtime.duplicate_target_name",
             "runtime.non_literal_target_name",
             "runtime.target_not_exported",
@@ -395,7 +400,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 28);
+    assert_eq!(coverage.identities.len(), 29);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it

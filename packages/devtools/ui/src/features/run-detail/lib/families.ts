@@ -12,8 +12,8 @@
  *   Orchestration → crux   composition.* · flow.*
  *   Agents        → iris   agent.* · delegate.*
  *   Generation    → warn   generation.* · compaction.*
- *   Capabilities  → ok/—   retrieval.*·embedding.* (ok) · tool.*·cache.* (neutral)
- *   State         → plum   memory.* · thread.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
+ *   Capabilities  → ok/—   retrieval.*·knowledge.*·embedding.* (ok) · tool.*·cache.* (neutral)
+ *   State         → plum   effect.* · memory.* · thread.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
  *   Routing       → warn   routing.* · fallback.* · tool.approval
  *   Safety        → danger guardrail.* · constraint.* · security.*
  *   Evaluation    → gold   eval.* · scoring.*
@@ -71,12 +71,22 @@ export function primitiveFamily(
   if (hasPrefix(p, ["generation.", "compaction."])) return "generation";
   // Multimodal completed operations read as generation-adjacent (warn tone).
   if (hasPrefix(p, ["media."])) return "generation";
-  if (hasPrefix(p, ["retrieval.", "embedding.", "tool.", "cache.", "mcp."]))
+  if (
+    hasPrefix(p, [
+      "retrieval.",
+      "knowledge.",
+      "embedding.",
+      "tool.",
+      "cache.",
+      "mcp.",
+    ])
+  )
     return "capabilities";
   if (
     p === "operation" ||
     hasPrefix(p, [
       "memory.",
+      "effect.",
       "thread.",
       "plan.",
       "blackboard.",
@@ -112,7 +122,9 @@ export function primitiveTone(primitive: string | undefined): ChipTone {
     case "state":
       return "plum";
     case "capabilities":
-      return hasPrefix(p, ["retrieval.", "embedding."]) ? "ok" : "muted";
+      return hasPrefix(p, ["retrieval.", "knowledge.", "embedding."])
+        ? "ok"
+        : "muted";
     case "transition":
     default:
       return "muted";
@@ -136,6 +148,12 @@ const TAG_LABEL_OVERRIDES: Record<string, string> = {
   "tool.approval": "approval",
   "defer.scheduled": "scheduled",
   "defer.run": "deferred",
+  "knowledge.expand-relations": "expand",
+  "knowledge.global-search": "search",
+  "knowledge.derive": "derive",
+  "knowledge.compile": "compile",
+  "retrieval.expand-relations": "expand",
+  "retrieval.global-search": "search",
 };
 
 export function primitiveTagLabel(primitive: string | undefined): string {

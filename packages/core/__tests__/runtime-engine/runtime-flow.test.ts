@@ -594,6 +594,11 @@ describe('runtime-backed flows', () => {
       status: 'cancelled',
       flowId: 'flow_cancel_from_handler',
       cancelReason: 'not needed',
+      effects: {
+        kind: 'effect.scope',
+        id: expect.stringMatching(/^effect-boundary:\d+$/),
+        runId: 'flow_cancel_from_handler',
+      },
       _meta: {
         traceId: owner?.traceId,
         spanId: owner?.spanId,

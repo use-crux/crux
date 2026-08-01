@@ -1,0 +1,322 @@
+---
+title: Connected Knowledge Assertions
+description: assertions(), AssertionSet, resolution handles, assertion refs, and assertion relations.
+---
+
+```ts
+import { assertions } from "@use-crux/core/knowledge";
+import type {
+  AssertionEmitApi,
+  AssertionEmitOptions,
+  AssertionIdentityRefInput,
+  AssertionListOptions,
+  AssertionListPage,
+  AssertionOf,
+  AssertionRef,
+  AssertionRelateOptions,
+  AssertionRelationRecord,
+  AssertionRelationType,
+  AssertionResolutionHandle,
+  AssertionResolutionPolicy,
+  AssertionResolutionResult,
+  AssertionResolutionStatus,
+  AssertionSet,
+  AssertionSetOptions,
+  AssertionsConfig,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+Assertion stages extract schema-typed propositions during indexing.
+`knowledgeBase().assertions(stage)` and `view.assertions(stage)` return lazy
+read handles over persisted assertions. Resolution handles partition visible
+assertions into selected, superseded, contested, and unresolved sets.
+
+## `assertions(config)`
+
+Creates a frozen assertion stage.
+
+```ts
+function assertions<const TTypes extends Record<string, z.ZodType<unknown>>>(
+  config: AssertionsConfig<TTypes>,
+): AssertionStage<TTypes>;
+```
+
+### Parameters
+
+```ts
+type AssertionsConfig<TTypes extends Record<string, z.ZodType<unknown>>> = {
+  readonly id: string;
+  readonly version: number;
+  readonly types: TTypes;
+} & (
+  | {
+      readonly model: KnowledgeModel;
+      readonly instructions?: string;
+      readonly run?: never;
+    }
+  | {
+      readonly run: AssertionRun<TTypes>;
+      readonly model?: never;
+      readonly instructions?: never;
+    }
+);
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `id` | `string` | Required | Must be non-empty. |
+| `version` | `number` | Required | Must be an integer greater than or equal to `1`. |
+| `types` | `Record<string, z.ZodType<unknown>>` | Required | Must include at least one Zod schema. Type names must be non-empty and cannot contain `:` or `%`. |
+| `model` | `KnowledgeModel` | Required in model mode | Mutually exclusive with `run`. |
+| `instructions` | `string` | `undefined` | Only valid with `model`. |
+| `run` | `AssertionRun<TTypes>` | Required in run mode | Mutually exclusive with `model`. Must be a function. |
+
+### Returns
+
+The returned stage includes `_tag: "AssertionStage"`, `kind: "assertion"`,
+`id`, `version`, normalized `types`, `mode`, and `fingerprint()`.
+
+### Emit API
+
+```ts
+interface AssertionRunInput {
+  readonly document: CruxDocument;
+  readonly chunks: readonly CruxChunk[];
+}
+
+interface AssertionEmitOptions {
+  readonly evidence: KnowledgeRef | readonly KnowledgeRef[];
+  readonly provenance?: "exact" | "derived";
+}
+
+interface AssertionEmitApi<TTypes extends Record<string, z.ZodType<unknown>>> {
+  emit<TType extends keyof TTypes & string>(
+    type: TType,
+    data: z.infer<TTypes[TType]>,
+    opts: AssertionEmitOptions,
+  ): AssertionRef;
+  relate(
+    type: AssertionRelationType,
+    from: AssertionRelationEndpoint<TTypes>,
+    to: AssertionRelationEndpoint<TTypes>,
+    opts: AssertionRelateOptions,
+  ): void;
+}
+```
+
+`emit()` returns `{ assertionId: string }`. `relate()` accepts an assertion
+index from the same run, an `AssertionRef`, or a typed
+`AssertionIdentityRefInput`.
+
+### Failures
+
+`assertions()` throws plain `Error`s for invalid identity, invalid mode, invalid
+model, invalid schema map, invalid type names, and invalid instructions.
+
+### Example
+
+```ts
+import { z } from "zod";
+import { assertions } from "@use-crux/core/knowledge";
+
+const facts = assertions({
+  id: "commercial-facts",
+  version: 1,
+  types: {
+    price: z.object({
+      amount: z.number(),
+      currency: z.string(),
+    }),
+  },
+  run: (_input, api) => {
+    api.emit(
+      "price",
+      { amount: 12, currency: "EUR" },
+      {
+        evidence: { kind: "chunk", sourceId: "pricing", chunkId: "main" },
+        provenance: "exact",
+      },
+    );
+  },
+});
+```
+
+## `AssertionSet`
+
+```ts
+interface AssertionSet<TTypes, TSelected = keyof TTypes & string> {
+  readonly _tag: "AssertionSet";
+  readonly id: string;
+  readonly namespace: string;
+  list(options?: AssertionListOptions): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>>;
+  stream(): AsyncIterable<AssertionOf<TTypes, TSelected>>;
+  resolve(policy?: AssertionResolutionPolicy<TTypes, TSelected>): AssertionResolutionHandle<TTypes, TSelected>;
+  asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>;
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>;
+}
+```
+
+### Options
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `AssertionSetOptions.types` | `readonly TSelected[]` | All stage types | Selects assertion types at handle creation. |
+| `AssertionListOptions.limit` | `number` | `100` | Floored and clamped to at least `0`. |
+| `AssertionListOptions.cursor` | `string` | `undefined` | Passed to the record store. |
+| `AssertionContextOptions.priority` | `number` | `50` | Floored and clamped to `0..100`. |
+| `AssertionContextOptions.limit` | `number` | `50` | Floored and clamped to `0..Number.MAX_SAFE_INTEGER`. |
+| `AssertionContextOptions.itemCharLimit` | `number` | `240` | Floored and clamped to at least `24`. |
+
+### Return Shapes
+
+```ts
+interface AssertionListPage<TItem> {
+  readonly items: readonly TItem[];
+  readonly cursor?: string;
+}
+
+type AssertionOf<TTypes, K = keyof TTypes> = {
+  readonly assertionId: string;
+  readonly type: K;
+  readonly data: z.infer<TTypes[K]>;
+  readonly evidence: readonly AssertionSupport[];
+  readonly provenance: "exact" | "derived";
+};
+```
+
+View-bound assertion sets only return assertions with visible evidence support.
+`provenance` is `"derived"` if any visible support is derived, otherwise
+`"exact"`.
+
+### Failures
+
+`list()`, `stream()`, `asContext()`, and snapshot reads throw
+`Error("knowledgeBase().assertions() requires record storage.")` when no record
+store is configured. `resolve().result()` throws
+`Error("Assertion resolution requires record storage.")` without record
+storage.
+
+### Example
+
+```ts
+const set = docs.assertions(facts, { types: ["price"] });
+const page = await set.list({ limit: 10 });
+
+for (const item of page.items) {
+  console.log(item.type, item.data);
+}
+```
+
+## Resolution
+
+```ts
+interface AssertionResolutionHandle<TTypes, TSelected> {
+  readonly _tag: "AssertionResolution";
+  readonly id: string;
+  status(): Promise<AssertionResolutionStatus>;
+  prepare(): Promise<void>;
+  result(): Promise<AssertionResolutionResult<AssertionOf<TTypes, TSelected>>>;
+  asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>;
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>;
+}
+```
+
+```ts
+interface AssertionResolutionStatus {
+  readonly state: "idle" | "ready";
+  readonly cached: boolean;
+  readonly generationId?: string;
+  readonly revisionHash?: string;
+}
+
+interface AssertionResolutionResult<TItem> {
+  readonly selected: readonly TItem[];
+  readonly superseded: readonly TItem[];
+  readonly contested: readonly TItem[];
+  readonly unresolved: readonly TItem[];
+  readonly trace: readonly AssertionResolutionTrace[];
+}
+```
+
+`status()` starts as `{ state: "idle", cached: false }`. `prepare()` reads the
+current snapshot, computes a cache key from generation, optional view revision,
+selected types, and policy fingerprint, then resolves and caches the result.
+`result()` calls `prepare()` when needed.
+
+### Policy
+
+```ts
+type AssertionResolutionPolicy<TTypes, TSelected> =
+  | {
+      readonly id: string;
+      readonly version: number;
+      readonly model: KnowledgeModel;
+      readonly instructions?: string;
+      readonly run?: never;
+    }
+  | {
+      readonly id: string;
+      readonly version: number;
+      readonly run: (
+        input: AssertionPolicyInput<AssertionOf<TTypes, TSelected>>,
+        decision: AssertionPolicyDecision<AssertionOf<TTypes, TSelected>>,
+      ) => void | Promise<void>;
+      readonly model?: never;
+      readonly instructions?: never;
+    };
+```
+
+Without a policy, explicit assertion relations drive resolution:
+`supersedes` puts the target assertion in `superseded`, and `conflictsWith`
+puts both endpoints in `contested`. Everything else defaults to `selected`
+unless a policy marks it `unresolved`, `superseded`, or `contested`.
+
+### Example
+
+```ts
+const resolution = docs.assertions(facts).resolve({
+  id: "prefer-latest",
+  version: 1,
+  run: ({ assertions }, decision) => {
+    for (const assertion of assertions) {
+      decision.select(assertion, "Accepted by deterministic policy.");
+    }
+  },
+});
+
+const result = await resolution.result();
+console.log(result.selected.length);
+```
+
+## Assertion References And Relations
+
+```ts
+interface AssertionRef extends JsonObject {
+  readonly assertionId: string;
+}
+
+type AssertionRelationType =
+  | "supports"
+  | "amends"
+  | "supersedes"
+  | "narrows"
+  | "conflictsWith";
+
+interface AssertionIdentityRefInput<TType extends string = string, TData = unknown> {
+  readonly type: TType;
+  readonly data: TData;
+}
+```
+
+Persisted assertion relations have `_cruxRecordType:
+"knowledge-assertion-relation"`, a stable `relationId`, `from`, `to`,
+`evidence`, `provenance`, stage identity, generation identity, namespace,
+`direction: "directed"`, and timestamps.
+
+## Related
+
+- Reference: [Connected Knowledge](/docs/reference/crux-core/connected-knowledge)
+- Reference: [Connected Knowledge relations](/docs/reference/crux-core/connected-knowledge-relations)
+- Guide: [Retrieval & RAG](/docs/guides/retrieval)

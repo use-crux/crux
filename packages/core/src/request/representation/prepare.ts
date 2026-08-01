@@ -39,6 +39,9 @@ export async function prepareRepresentationPolicies(input: {
           input.model;
         const artifactInput = {
           sourceTexts: policy.summary.sourceTexts,
+          ...(policy.summary.sourceDigests
+            ? { sourceDigests: policy.summary.sourceDigests }
+            : {}),
           strategy: policy.summary.strategy,
           provider: input.provider,
           model: modelIdentity(model),
@@ -117,6 +120,9 @@ export async function observeRepresentationPolicies(input: {
       const model = policy.summary.model ?? input.model;
       const artifact = await findSourceSummaryArtifact({
         sourceTexts: policy.summary.sourceTexts,
+        ...(policy.summary.sourceDigests
+          ? { sourceDigests: policy.summary.sourceDigests }
+          : {}),
         strategy: policy.summary.strategy,
         provider: input.provider,
         model: modelIdentity(model),

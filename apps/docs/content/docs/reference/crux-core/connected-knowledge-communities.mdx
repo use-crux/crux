@@ -1,0 +1,248 @@
+---
+title: Connected Knowledge Communities
+description: communities(), KnowledgeCommunitiesSurface, community reports, lifecycle, and report records.
+---
+
+```ts
+import { communities } from "@use-crux/core/knowledge";
+import type {
+  CommunitiesConfig,
+  CommunitiesFactoryConfig,
+  CommunityBuildDescriptor,
+  CommunityReadinessStatus,
+  CommunityRefreshHost,
+  CommunityReport,
+  CommunityReportCounts,
+  CommunityReportFinding,
+  CommunityReportLineage,
+  CommunityReportsOptions,
+  CommunityReportsPage,
+  KnowledgeCommunitiesSurface,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+Community configuration enables persisted community reports for a knowledge
+base or view. The public lifecycle surface reports readiness, prepares missing
+or stale materializations, and reads paginated reports.
+
+## `communities(config)`
+
+Creates a frozen community strategy config for `knowledgeBase({ communities })`.
+
+```ts
+function communities(config: CommunitiesFactoryConfig): CommunitiesConfig;
+```
+
+### Parameters
+
+```ts
+interface CommunitiesFactoryConfig {
+  readonly model: KnowledgeModel;
+  readonly id?: string;
+}
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `model` | `KnowledgeModel` | Required | Must have non-empty `name` and `fingerprint`, plus `generateText` and `generateObject`. |
+| `id` | `string` | `"communities"` | Must be non-empty after trimming. |
+
+### Returns
+
+```ts
+interface CommunitiesConfig {
+  readonly id: string;
+  readonly model: KnowledgeModel;
+  readonly strategyFingerprint: string;
+}
+```
+
+`strategyFingerprint` covers community strategy version `1`, model name,
+model fingerprint, leaf input budget `24000`, parent input budget `96000`,
+and parent budget multiple `4`.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| Missing or invalid model object | `Error("Communities require a knowledge model.")` |
+| Empty model name | `Error("Communities model name must be non-empty.")` |
+| Empty model fingerprint | `Error("Communities model fingerprint must be non-empty.")` |
+| Missing model methods | `Error("Communities model must provide retrieval methods.")` |
+| Empty `id` | `Error("Communities id must be non-empty.")` |
+
+### Example
+
+```ts
+import {
+  communities,
+  knowledgeBase,
+  knowledgeModel,
+} from "@use-crux/core/knowledge";
+
+const reportModel = knowledgeModel({
+  name: "community-reporter",
+  version: "1",
+  generateText,
+  generateObject,
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings,
+  communities: communities({ model: reportModel }),
+});
+```
+
+## `KnowledgeCommunitiesSurface`
+
+```ts
+type CommunityReadinessStatus =
+  | "missing"
+  | "building"
+  | "ready"
+  | "stale";
+
+interface KnowledgeCommunitiesSurface {
+  status(): Promise<CommunityReadinessStatus>;
+  prepare(options?: { readonly force?: boolean }): Promise<void>;
+  reports(options?: CommunityReportsOptions): Promise<CommunityReportsPage>;
+}
+```
+
+The surface is available as `knowledgeBase().communities` and
+`KnowledgeView.communities` only when communities are configured.
+
+### `status()`
+
+Returns:
+
+| Status | Meaning |
+| --- | --- |
+| `"missing"` | No current community generation pointer exists. |
+| `"building"` | An equivalent build is in process, or a non-stale lease blocks the probe lease. |
+| `"ready"` | Current pointer matches view revision, graph generation, strategy fingerprint, and has no dirty sources. |
+| `"stale"` | Lease is stale, pointer metadata changed, or dirty sources exist. |
+
+`status()` throws `Error("knowledgeBase().communities requires record storage.")`
+without record storage.
+
+### `prepare(options?)`
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `force` | `boolean` | `false` | When false, a `"ready"` status short-circuits. |
+
+Without a refresh host, `prepare()` builds communities in process. With a
+refresh host, it calls `refreshHost.ensure(descriptor)`.
+
+```ts
+interface CommunityBuildDescriptor {
+  readonly indexerId: string;
+  readonly namespace: string;
+  readonly scopeKey: string;
+  readonly viewId?: string;
+}
+
+interface CommunityRefreshHost {
+  ensure(descriptor: CommunityBuildDescriptor): Promise<void>;
+}
+```
+
+### `reports(options?)`
+
+```ts
+interface CommunityReportsOptions {
+  readonly level?: number;
+  readonly parentId?: string;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+interface CommunityReportsPage {
+  readonly reports: readonly CommunityReport[];
+  readonly cursor?: string;
+}
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `level` | `number` | `undefined` | Reads the generation level index when supplied. |
+| `parentId` | `string` | `undefined` | Reads children of a parent community when supplied. Takes precedence over `level`. |
+| `cursor` | `string` | `undefined` | For `parentId`, the cursor is the previous `communityId`. Otherwise passed to record-store listing. |
+| `limit` | `number` | All in-memory children for `parentId`; store default otherwise | For `parentId`, used as slice length without clamping. |
+
+`reports()` calls `prepare()` first. It throws the same record-storage error as
+`status()` and `prepare()`.
+
+### Example
+
+```ts
+await docs.communities?.prepare();
+
+const page = await docs.communities?.reports({
+  level: 0,
+  limit: 20,
+});
+
+for (const report of page?.reports ?? []) {
+  console.log(report.title, report.counts.chunks);
+}
+```
+
+## Community Reports
+
+```ts
+interface CommunityReport {
+  readonly communityId: string;
+  readonly generationId: string;
+  readonly level: number;
+  readonly parentCommunityId?: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly findings: readonly CommunityReportFinding[];
+  readonly lineage: CommunityReportLineage;
+  readonly counts: CommunityReportCounts;
+}
+
+interface CommunityReportFinding {
+  readonly id: string;
+  readonly statement: string;
+  readonly evidence: readonly KnowledgeRef[];
+  readonly assertionRefs?: readonly { readonly assertionId: string }[];
+}
+```
+
+Validation bounds for persisted reports:
+
+| Field | Constraint |
+| --- | --- |
+| `title` | String, maximum 120 characters |
+| `summary` | String, maximum 2000 characters |
+| `finding.statement` | String, maximum 500 characters |
+| `finding.evidence` | Non-empty array of valid `KnowledgeRef` values |
+| `level` | Non-negative integer |
+
+```ts
+interface CommunityReportLineage {
+  readonly viewRevision: string | null;
+  readonly graphGeneration: string;
+  readonly strategyFingerprint: string;
+  readonly memberHash: string;
+}
+
+interface CommunityReportCounts {
+  readonly entities: number;
+  readonly chunks: number;
+  readonly assertions: number;
+}
+```
+
+## Related
+
+- Reference: [Connected Knowledge recipe steps](/docs/reference/crux-core/connected-knowledge-recipes)
+- Reference: [Connected Knowledge model and refs](/docs/reference/crux-core/connected-knowledge-model-and-refs)
+- Guide: [Retrieval & RAG](/docs/guides/retrieval)

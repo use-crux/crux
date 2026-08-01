@@ -216,6 +216,12 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     family: "capability",
     glyph: "db",
   },
+  "rag.knowledgeBase.view": {
+    label: "Knowledge view",
+    family: "capability",
+    glyph: "search",
+    child: true,
+  },
   "rag.recipe": {
     label: "RAG recipe",
     family: "capability",
@@ -249,6 +255,26 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     family: "capability",
     glyph: "db",
   },
+  "knowledge.relation": {
+    label: "Knowledge relation",
+    family: "capability",
+    glyph: "branch",
+  },
+  "knowledge.assertions": {
+    label: "Knowledge assertions",
+    family: "capability",
+    glyph: "doc",
+  },
+  "knowledge.communities": {
+    label: "Knowledge communities",
+    family: "capability",
+    glyph: "grid",
+  },
+  "knowledge.model": {
+    label: "Knowledge model",
+    family: "capability",
+    glyph: "spark",
+  },
   memory: { label: "Memory", family: "state", glyph: "brain" },
   "memory.store": { label: "Store", family: "state", glyph: "db", child: true },
   "memory.block": {
@@ -260,6 +286,7 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   blackboard: { label: "Blackboard", family: "state", glyph: "grid" },
   thread: { label: "Thread", family: "state", glyph: "branch" },
   workspace: { label: "Workspace", family: "state", glyph: "folder" },
+  effect: { label: "Effect", family: "state", glyph: "spark" },
   "storage.recordStore": {
     label: "Record store",
     family: "state",

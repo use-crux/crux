@@ -1,0 +1,329 @@
+---
+title: Connected Knowledge
+description: knowledgeBase(), KnowledgeBase handles, scoped handles, and KnowledgeView handles.
+---
+
+```ts
+import { knowledgeBase } from "@use-crux/core/knowledge";
+import type {
+  KnowledgeBase,
+  KnowledgeBaseConfig,
+  KnowledgeBaseFilter,
+  KnowledgeBaseGroundingConfig,
+  KnowledgeBaseInspection,
+  KnowledgeBaseRecipeConfig,
+  KnowledgeBaseRetrieverConfig,
+  KnowledgeBaseScopeConfig,
+  KnowledgeBaseViewConfig,
+  KnowledgeView,
+  KnowledgeViewInspection,
+  KnowledgeViewResolution,
+  ScopedKnowledgeBase,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+Connected Knowledge starts at `knowledgeBase()`. The handle owns indexing,
+storage wiring, retrieval, views, assertions, communities, grounding, tools,
+and inspection for one knowledge base id and namespace.
+
+Use this page for the exact handle surface. Relation, assertion, community,
+recipe-step, model, reference, conformance, and receipt APIs have separate
+reference pages.
+
+## `knowledgeBase(config)`
+
+Creates a frozen `KnowledgeBase` handle.
+
+```ts
+function knowledgeBase<
+  const TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
+  const TModality extends EmbeddingModality = "text",
+>(
+  config: KnowledgeBaseConfig<TMetadataSchema, TModality>,
+): KnowledgeBase<TMetadataSchema, TModality>;
+```
+
+### Parameters
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `id` | `string` | Required | Stable knowledge base id. If `corpus` is provided, `corpus.id` must equal `id`. |
+| `source` | `KnowledgeBaseSource` | `undefined` | Used when `index()` or `reindex()` is called without an input. |
+| `corpus` | `Corpus` | `undefined` | Managed source tracker. Its `namespace` becomes the handle namespace when present. |
+| `storage` | `Storage` | `undefined` | Storage bundle used by indexing and retrieval. |
+| `records` | `RecordStore` | `storage?.records` | Explicit record store override. Required for connected knowledge graph, view, assertion, and community storage. |
+| `vectors` | `VectorStore` | `storage?.vectors` | Explicit vector store override. |
+| `embeddings` | `DenseEmbedding<TModality>` | `undefined` | Enables dense retrieval. |
+| `sparseEmbeddings` | `SparseEmbedding` | `undefined` | Enables sparse retrieval. With `embeddings`, enables hybrid retrieval. |
+| `chunking` | `ChunkingOptions` | `undefined` | Forwarded to indexing. Cannot be combined with `pipeline`. |
+| `pipeline` | `IndexingPipeline` | `undefined` | Explicit indexing pipeline. Cannot be combined with `chunking`. |
+| `communities` | `CommunitiesConfig` | `undefined` | Enables `handle.communities` and community bindings for recipes. |
+| `metadataSchema` | `z.ZodType<unknown>` | `undefined` | Types filters and validates indexed metadata. |
+| `lifecycle.retention` | `"cleanup" \| "retain-inactive"` | `"cleanup"` | Controls inactive indexed records and connected-knowledge generations. |
+| `cache` | `PipelineCacheConfig` | `undefined` | Forwarded to the indexing pipeline. |
+
+### Returns
+
+```ts
+interface KnowledgeBase<TMetadataSchema, TModality> {
+  readonly id: string;
+  readonly namespace: string;
+  index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>;
+  reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>;
+  remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>;
+  scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase<TMetadataSchema, TModality>;
+  view(config: KnowledgeBaseViewConfig<TMetadataSchema>): KnowledgeView<TMetadataSchema, TModality>;
+  assertions(stage, options?): AssertionSet;
+  readonly communities?: KnowledgeCommunitiesSurface;
+  retriever(config?: KnowledgeBaseRetrieverConfig): Retriever;
+  recipe(config?: KnowledgeBaseRecipeConfig): RetrievalRecipe;
+  grounding(config?: KnowledgeBaseGroundingConfig): Grounding;
+  tools(config?): RetrieverTools;
+  inspect(): KnowledgeBaseInspection;
+}
+```
+
+`namespace` defaults to `corpus.namespace` when `corpus` is present, otherwise
+to `id`. `scope()` returns a frozen handle with a replacement namespace and no
+nested `scope()` method.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| `corpus.id !== id` | `Error("knowledgeBase(\"<id>\") requires corpus.id to match the knowledge base id.")` |
+| Both `pipeline` and `chunking` are supplied | `Error("knowledgeBase() accepts either pipeline or chunking, not both.")` |
+| Indexed metadata fails `metadataSchema` | `KnowledgeBaseMetadataValidationError` from the retrieval runtime |
+| `index()` or `reindex()` cannot produce a result | Plain `Error` with the corresponding `knowledgeBase().index()` or `knowledgeBase().reindex()` message |
+
+### Example
+
+```ts
+import { z } from "zod";
+import { knowledgeBase } from "@use-crux/core/knowledge";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings,
+  metadataSchema: z.object({
+    status: z.enum(["draft", "published"]),
+    team: z.string(),
+  }),
+});
+
+await docs.index([
+  {
+    namespace: "docs",
+    sourceId: "guide",
+    content: "Published content",
+    metadata: { status: "published", team: "docs" },
+  },
+]);
+
+const published = docs.view({
+  id: "published",
+  where: { status: "published" },
+});
+```
+
+## Handle Methods
+
+### `index(input?)`
+
+Indexes sources into the current generation. `input` is
+`readonly KnowledgeBaseIndexItem[] | AsyncIterable<KnowledgeBaseIndexItem>`.
+Each item may be a `CruxDocument`, `CruxChunk`, or ingest load result. When no
+input is passed, the configured `source` is resolved.
+
+With a `corpus`, `index()` calls `corpus.sync()` with
+`sourceSet: "partial"` and `stale: "keep"`. Without a `corpus`, chunks and
+documents are indexed with `replaceSources: true`.
+
+### `reindex(input?)`
+
+Replaces the active source set with freshly indexed sources. With a `corpus`,
+`reindex()` calls `corpus.sync()` with `sourceSet: "complete"` and
+`stale: "delete"`. Without a `corpus`, it uses the same direct indexing path as
+`index()`.
+
+### `remove(sourceId)`
+
+```ts
+remove(sourceId: string): Promise<{ sourceId: string; deletedCount: number }>;
+```
+
+Removes a source from active retrieval, updates view membership, deletes source
+claims, recompiles connected knowledge when configured, and refreshes lifecycle
+counters.
+
+### `scope(config)`
+
+```ts
+interface KnowledgeBaseScopeConfig {
+  readonly namespace: string;
+}
+```
+
+Returns a handle bound to `config.namespace`. The returned type is
+`ScopedKnowledgeBase`, which is `KnowledgeBase` without `scope`.
+
+### `retriever(config?)`
+
+```ts
+interface KnowledgeBaseRetrieverConfig<TFilter = ExactFilter> {
+  limit?: number;
+  threshold?: number;
+  filter?: TFilter;
+  mode?: "dense" | "sparse" | "hybrid";
+}
+```
+
+Returns this knowledge base as a `Retriever`. Defaults are inherited from the
+underlying retriever implementation. `filter` is typed from `metadataSchema`
+when the schema is an object.
+
+### `recipe(config?)`
+
+```ts
+type KnowledgeBaseRecipeConfig<TSteps extends readonly RetrievalStep[]> =
+  Omit<RetrievalRecipeConfig<TSteps>, "id" | "retriever"> & {
+    readonly id?: string;
+  };
+```
+
+When omitted, the method creates a recipe with one `retrieve()` step and a
+derived id and fingerprint. When `config.id` is omitted, the bound recipe id is
+derived from the knowledge base read surface and behavior. If any step has
+`kind: "global-search"`, the recipe uses a placeholder custom retriever because
+`globalSearch()` itself produces hits.
+
+### `grounding(config?)`
+
+```ts
+type KnowledgeBaseGroundingConfig = Omit<GroundingConfig, "id" | "retriever"> & {
+  readonly id?: string;
+};
+```
+
+Returns a grounding handle over the knowledge base retriever. The default id is
+`grounding:<knowledge base id>`.
+
+### `tools(config?)`
+
+Returns `runtime.retriever().asTools(config)`. Tool config is the same
+`RetrievalToolConfig` documented on the Retrieval reference page.
+
+### `assertions(stage, options?)`
+
+Returns a lazy `AssertionSet` for one assertion stage. It requires record
+storage when the set is read or resolved.
+
+### `communities`
+
+Present only when `knowledgeBase({ communities })` is configured. The value is
+a `KnowledgeCommunitiesSurface`.
+
+### `inspect()`
+
+```ts
+interface KnowledgeBaseInspection {
+  id: string;
+  namespace: string;
+  source: { kind: "corpus" | "direct" };
+  storage: { records: boolean; vectors: boolean };
+  capabilities: {
+    dense: boolean;
+    sparse: boolean;
+    hybrid: boolean;
+    delete: boolean;
+    filter: "pre" | "post" | false;
+  };
+  lifecycle: {
+    status: "ready";
+    retention: "cleanup" | "retain-inactive";
+    indexedSources: number;
+    indexedChunks: number;
+    retainedInactiveChunks: number;
+    lastIndexedAt?: number;
+  };
+}
+```
+
+`inspect()` reads configured capabilities and the in-memory lifecycle counters
+held by the handle.
+
+## Views
+
+```ts
+interface KnowledgeBaseViewConfig<TMetadataSchema> {
+  readonly id: string;
+  readonly where: TMetadataSchema extends z.ZodObject<z.ZodRawShape>
+    ? ViewWhere<z.infer<TMetadataSchema>>
+    : never;
+}
+
+type ViewWhere<T> = WhereClause<T> | { any: readonly WhereClause<T>[] };
+```
+
+`where` is an AND of exact scalar matches. Array values mean membership in any
+listed scalar. `{ any: [...] }` is a union of clauses. Valid scalar values are
+strings, finite numbers, and booleans.
+
+### `KnowledgeView`
+
+```ts
+interface KnowledgeView<TMetadataSchema, TModality> {
+  readonly id: string;
+  readonly namespace: string;
+  resolve(): Promise<KnowledgeViewResolution>;
+  at(revisionHash: string): KnowledgeView<TMetadataSchema, TModality>;
+  retriever(config?: KnowledgeViewRetrieverConfig): Retriever;
+  recipe(config?: KnowledgeViewRecipeConfig): RetrievalRecipe;
+  grounding(config?: KnowledgeBaseGroundingConfig | RetrievalRecipeGroundingConfig): Grounding;
+  tools(config?): RetrieverTools;
+  assertions(stage, options?): AssertionSet;
+  readonly communities?: KnowledgeCommunitiesSurface;
+  inspect(): KnowledgeViewInspection;
+}
+```
+
+```ts
+interface KnowledgeViewResolution {
+  readonly revisionHash: string;
+  readonly members: readonly string[];
+}
+
+interface KnowledgeViewInspection {
+  readonly id: string;
+  readonly namespace: string;
+  readonly where: NormalizedViewWhere;
+  readonly revisionHash?: string;
+}
+```
+
+`resolve()` computes the visible source ids and returns a content-addressed
+revision hash. `at(revisionHash)` returns a handle pinned to a persisted
+revision. `inspect()` does not force resolution.
+
+### View Failures
+
+| Condition | Error |
+| --- | --- |
+| `where` is not an object | `ViewWhereValidationError` code `"invalid_shape"` |
+| `{ any: [] }` or non-array `any` | `ViewWhereValidationError` code `"empty_any"` |
+| Empty clause | `ViewWhereValidationError` code `"empty_clause"` |
+| Field missing from `metadataSchema` | `ViewWhereValidationError` code `"unknown_field"` |
+| Non-scalar schema field | `ViewWhereValidationError` code `"non_scalar_field"` |
+| Non-scalar where value | `ViewWhereValidationError` code `"non_scalar_value"` |
+| Value rejected by the field schema | `ViewWhereValidationError` code `"invalid_value"` |
+
+## Related
+
+- Guide: [Retrieval & RAG](/docs/guides/retrieval)
+- Guide: [Retrieval Recipes](/docs/guides/retrieval/recipes)
+- Reference: [Connected Knowledge relations](/docs/reference/crux-core/connected-knowledge-relations)
+- Reference: [Connected Knowledge assertions](/docs/reference/crux-core/connected-knowledge-assertions)
+- Reference: [Connected Knowledge communities](/docs/reference/crux-core/connected-knowledge-communities)

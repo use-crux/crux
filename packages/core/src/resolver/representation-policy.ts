@@ -6,15 +6,10 @@
 
 import type { z } from "zod";
 import type { Context, SkillEntry } from "../prompt/context-types";
-import {
-  LOAD_REFERENCE_TOOL_NAME,
-  LOAD_SKILL_TOOL_NAME,
-} from "../skill/tools";
 import { assertAlternativeCapabilities } from "../request/representation/capabilities";
 import {
   compileRepresentationLadder,
   isForcedOffload,
-  isRepresentationLadder,
 } from "../request/representation/ladder";
 import type {
   RepresentationEntry,
@@ -25,6 +20,14 @@ import { normalizeSystemContent } from "./system-content";
 import type { RepresentationOwnership } from "./contract";
 import { summarize } from "../request/history/strategies";
 import { OFFLOAD_SUPPORT_TOOL_NAME } from "../request/offload/support-tool";
+import {
+  collectOwnedSources,
+  createSkillProjection,
+  findOffloadable,
+  findSummarizable,
+  loadedSkillOmissionEdits,
+  sourceIdentityDigests,
+} from "./representation-policy-helpers";
 
 /** Resolve authored rungs without adding their capabilities to the prompt. */
 export async function resolveRepresentationPolicies(
@@ -76,7 +79,7 @@ export async function resolveRepresentationPolicies(
     const ownership = ownershipByEntry.get(entry);
     const ownedSources = ownership?.contexts.length
       ? ownership.contexts
-      : collectOwnedSources(compiled.primarySources, contexts);
+      : collectOwnedSources(compiled.primarySources.filter(isContext), contexts);
     const sources = ownedSources.map((source) => {
       const contextIndex = contexts.indexOf(source);
       return source.id
@@ -86,6 +89,7 @@ export async function resolveRepresentationPolicies(
     const fullTexts = sources.map(
       (source) => parts.find((part) => part.source === source)?.text ?? "",
     );
+    const sourceDigests = sourceIdentityDigests(sources, parts);
     const ownedSkillIds = [
       ...new Set(ownership?.skills.map((skill) => skill.id) ?? []),
     ];
@@ -111,6 +115,9 @@ export async function resolveRepresentationPolicies(
         }));
         continue;
       }
+      if (!isContext(rung.source)) {
+        throw new TypeError("authored representation rungs must be exact Context sources");
+      }
       assertAlternativeCapabilities(ownedSources, rung.source, input);
       const content = normalizeSystemContent(
         await rung.source.systemFn(input),
@@ -125,10 +132,13 @@ export async function resolveRepresentationPolicies(
         available: rung.available,
       }));
     }
-    const contextIndex = contexts.indexOf(compiled.primary);
+    const primaryContext = isContext(compiled.primary)
+      ? compiled.primary
+      : ownedSources[0];
+    const contextIndex = primaryContext ? contexts.indexOf(primaryContext) : -1;
     policies.push(Object.freeze({
       contributor:
-        compiled.primary.id ?? `context[${contextIndex}]`,
+        primaryContext?.id ?? `context[${contextIndex}]`,
       sources: Object.freeze(sources),
       fullTexts: Object.freeze(fullTexts),
       priority: Math.max(
@@ -184,7 +194,7 @@ export async function resolveRepresentationPolicies(
       omissionEdits: Object.freeze(omissionEdits),
       ...(summary
         ? {
-            summary: summaryPolicy(entry, fullTexts),
+            summary: summaryPolicy(entry, fullTexts, sourceDigests),
           }
         : {}),
       rungs: Object.freeze(rungs),
@@ -193,9 +203,18 @@ export async function resolveRepresentationPolicies(
   return Object.freeze(policies);
 }
 
+function isContext(value: unknown): value is Context<z.ZodType> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Context"
+  );
+}
+
 function summaryPolicy(
   entry: RepresentationEntry,
   sourceTexts: readonly string[],
+  sourceDigests: readonly string[],
 ): NonNullable<ResolvedRepresentationPolicy["summary"]> {
   const summary = findSummarizable(entry);
   const strategy = summary?.options.strategy ?? summarize.adaptive();
@@ -209,127 +228,12 @@ function summaryPolicy(
   }
   return Object.freeze({
     sourceTexts: Object.freeze([...sourceTexts]),
+    ...(sourceDigests.length > 0
+      ? { sourceDigests: Object.freeze([...sourceDigests]) }
+      : {}),
     ...(summary?.options.model !== undefined
       ? { model: summary.options.model }
       : {}),
     strategy,
   });
-}
-
-function findSummarizable(
-  entry: RepresentationEntry,
-): Extract<RepresentationEntry, { readonly _tag: "summarizable" }> | undefined {
-  let current: unknown = entry;
-  while (current && typeof current === "object" && "_tag" in current) {
-    const node = current as RepresentationEntry;
-    if (node._tag === "summarizable") return node;
-    if (node._tag !== "offloadable" && node._tag !== "droppable") {
-      return undefined;
-    }
-    current = node.source;
-  }
-  return undefined;
-}
-
-function findOffloadable(
-  entry: RepresentationEntry,
-): Extract<RepresentationEntry, { readonly _tag: "offloadable" }> | undefined {
-  let current: unknown = entry;
-  while (current && typeof current === "object" && "_tag" in current) {
-    const node = current as RepresentationEntry;
-    if (node._tag === "offloadable") return node;
-    if (node._tag !== "droppable") return undefined;
-    current = node.source;
-  }
-  return undefined;
-}
-
-function loadedSkillOmissionEdits(
-  ownedSkillIds: readonly string[],
-  parts: readonly InspectPart[],
-): readonly {
-  readonly source: string;
-  readonly fullText: string;
-  readonly replacement: string;
-}[] {
-  if (ownedSkillIds.length === 0) return [];
-  const sources = ownedSkillIds.map((id) => ({
-    source: `context:__crux_skill_loaded:${id}`,
-    replacement: "",
-  }));
-  return sources.flatMap(({ source, replacement }) => {
-    const fullText = parts.find((part) => part.source === source)?.text;
-    return fullText === undefined
-      ? []
-      : [{ source, fullText, replacement }];
-  });
-}
-
-function createSkillProjection(
-  skills: readonly SkillEntry[],
-  parts: readonly InspectPart[],
-  renderSkillIndex: (skills: readonly SkillEntry[]) => string,
-): ResolvedRepresentationPolicy["skillProjection"] {
-  if (skills.length === 0) return undefined;
-  const source = "context:__crux_skill_index";
-  const fullText = parts.find((part) => part.source === source)?.text;
-  if (fullText === undefined) return undefined;
-  return Object.freeze({
-    source,
-    fullText,
-    allSkillIds: Object.freeze(skills.map((skill) => skill.id)),
-    loaderToolNames: Object.freeze([
-      LOAD_SKILL_TOOL_NAME,
-      LOAD_REFERENCE_TOOL_NAME,
-    ]),
-    renderRetained: (retainedSkillIds: readonly string[]) => {
-      const retained = new Set(retainedSkillIds);
-      return renderSkillIndex(
-        skills.filter((skill) => retained.has(skill.id)),
-      );
-    },
-  });
-}
-
-function collectOwnedSources(
-  roots: readonly Context<z.ZodType>[],
-  resolved: readonly Context<z.ZodType>[],
-): readonly Context<z.ZodType>[] {
-  const found: Context<z.ZodType>[] = [];
-  const seen = new Set<Context<z.ZodType>>();
-  const visitContext = (source: Context<z.ZodType>) => {
-    if (seen.has(source) || !resolved.includes(source)) return;
-    seen.add(source);
-    found.push(source);
-    source.useEntries.forEach(visitEntry);
-  };
-  const visitEntry = (value: unknown): void => {
-    if (!value || typeof value !== "object") return;
-    if (isRepresentationLadder(value)) {
-      compileRepresentationLadder(value).primarySources.forEach(visitContext);
-      return;
-    }
-    const entry = value as {
-      readonly _tag?: string;
-      readonly context?: Context<z.ZodType>;
-      readonly cases?: Readonly<Record<string, unknown>>;
-      readonly default?: unknown;
-      readonly useEntries?: readonly unknown[];
-    };
-    if (entry._tag === "Context") {
-      visitContext(value as Context<z.ZodType>);
-      return;
-    }
-    if (entry.context) visitContext(entry.context);
-    if (entry.cases) Object.values(entry.cases).flat().forEach(visitEntry);
-    if (entry.default) {
-      const values = Array.isArray(entry.default)
-        ? entry.default
-        : [entry.default];
-      values.forEach(visitEntry);
-    }
-    entry.useEntries?.forEach(visitEntry);
-  };
-  roots.forEach(visitContext);
-  return Object.freeze(found);
 }
