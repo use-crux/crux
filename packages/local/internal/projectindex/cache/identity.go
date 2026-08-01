@@ -29,6 +29,10 @@ package cache
 // Epoch 59 adds Effect export metadata and the integrated Thread snapshot.
 // Epoch 60 combines the independently advanced Effect LSP and canonical Thread
 // history snapshot contracts so neither parent cache can mask the other.
+// Epoch 61 adds authored Connected Knowledge definitions, view children,
+// static relation facts, and Connected Knowledge lint findings.
+// Epoch 62 combines the independently advanced Effects and Connected Knowledge
+// snapshot contracts so neither parent cache can mask the other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 60
+const ProjectIndexSnapshotCacheEpoch = 62

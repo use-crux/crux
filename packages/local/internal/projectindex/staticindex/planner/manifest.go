@@ -11,6 +11,7 @@ const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.11"
 var defaultCallNames = []string{
 	"Agent",
 	"agent",
+	"assertions",
 	"blackboard",
 	"cascade",
 	"consensus",
@@ -52,14 +53,19 @@ var defaultCallNames = []string{
 	"indexChunks",
 	"indexDocuments",
 	"indexer",
+	"knowledgeModel",
 	"llmJudge",
 	"memory",
 	"mediaClassifier",
+	"communities",
 	"parallel",
 	"pipeline",
 	"prompt",
 	"registry",
 	"reindex",
+	"relate",
+	"relateEntities",
+	"relateReferences",
 	"knowledgeBase",
 	"rerank",
 	"reranker",
@@ -86,11 +92,13 @@ var defaultCallNames = []string{
 	"upstashVectorStore",
 	"urlSource",
 	"urlsSource",
+	"view",
 	"workspace",
 }
 
 var defaultCallInterestNames = []string{
 	"agent",
+	"assertions",
 	"blackboard",
 	"cascade",
 	"consensus",
@@ -132,14 +140,19 @@ var defaultCallInterestNames = []string{
 	"indexChunks",
 	"indexDocuments",
 	"indexer",
+	"knowledgeModel",
 	"llmJudge",
 	"memory",
 	"mediaClassifier",
+	"communities",
 	"parallel",
 	"pipeline",
 	"prompt",
 	"registry",
 	"reindex",
+	"relate",
+	"relateEntities",
+	"relateReferences",
 	"knowledgeBase",
 	"rerank",
 	"reranker",
@@ -166,6 +179,7 @@ var defaultCallInterestNames = []string{
 	"upstashVectorStore",
 	"urlSource",
 	"urlsSource",
+	"view",
 	"workspace",
 }
 
@@ -188,6 +202,12 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 		}
 		if name == "thread" {
 			interest.ImportFrom = []string{"@use-crux/core/thread"}
+		}
+		if name == "assertions" || name == "communities" || name == "knowledgeModel" || name == "relate" || name == "relateEntities" || name == "relateReferences" {
+			interest.ImportFrom = []string{"@use-crux/core/knowledge"}
+		}
+		if name == "knowledgeBase" {
+			interest.ImportFrom = []string{"@use-crux/core/knowledge", "@use-crux/core/retrieval", "@use-crux/core"}
 		}
 		if name == "evaluate" || name == "fileSource" || name == "filesSource" || name == "urlSource" || name == "urlsSource" || name == "textSource" {
 			arg := 1
@@ -225,6 +245,7 @@ func defaultHost() json.RawMessage {
 		"eval",
 		"flow",
 		"injectable",
+		"knowledge",
 		"memory",
 		"prompt",
 		"rag.indexer",

@@ -19,3 +19,14 @@ describe("Thread primitive presentation", () => {
     expect(primitiveTagLabel("thread.operation")).toBe("thread");
   });
 });
+
+describe("Connected Knowledge primitive presentation", () => {
+  it("renders Knowledge retrieval steps as Capabilities primitives", () => {
+    expect(primitiveFamily("knowledge.expand-relations")).toBe("capabilities");
+    expect(primitiveTone("knowledge.expand-relations")).toBe("ok");
+    expect(primitiveTagLabel("knowledge.expand-relations")).toBe("expand");
+    expect(primitiveTagLabel("knowledge.global-search")).toBe("search");
+    expect(primitiveTagLabel("knowledge.derive")).toBe("derive");
+    expect(primitiveTagLabel("knowledge.compile")).toBe("compile");
+  });
+});

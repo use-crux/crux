@@ -1,0 +1,295 @@
+---
+title: Connected Knowledge Relations
+description: relate(), relateReferences(), relateEntities(), relation stages, emit API, and KnowledgeLocator.
+---
+
+```ts
+import {
+  knowledgeModel,
+  relate,
+  relateEntities,
+  relateReferences,
+} from "@use-crux/core/knowledge";
+import type {
+  KnowledgeLocator,
+  RelateConfig,
+  RelateEmitApi,
+  RelateEmitOptions,
+  RelateRun,
+  RelateRunInput,
+  RelationStage,
+  RelationTypeSpec,
+} from "@use-crux/core/knowledge";
+```
+
+## Overview
+
+Relation stages define a typed graph vocabulary and a production mode for
+emitting edge claims during indexing. Use `relate()` for custom vocabularies,
+`relateReferences()` for explicit document references, and `relateEntities()`
+for generic entity mentions and entity relationships.
+
+## `relate(config)`
+
+Creates a frozen relation stage for an indexing pipeline.
+
+```ts
+function relate<const TTypes extends Record<string, RelationTypeSpec>>(
+  config: RelateConfig<TTypes>,
+): RelationStage<TTypes>;
+```
+
+### Parameters
+
+```ts
+type RelateConfig<TTypes extends Record<string, RelationTypeSpec>> = {
+  readonly id: string;
+  readonly version: number;
+  readonly types: TTypes;
+} & (
+  | {
+      readonly model: KnowledgeModel;
+      readonly instructions?: string;
+      readonly run?: never;
+    }
+  | {
+      readonly run: RelateRun<TTypes>;
+      readonly model?: never;
+      readonly instructions?: never;
+    }
+);
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `id` | `string` | Required | Must be a non-empty string. |
+| `version` | `number` | Required | Must be an integer greater than or equal to `1`. |
+| `types` | `Record<string, RelationTypeSpec>` | Required | Must include at least one type. Type names must be non-empty and cannot contain `:` or `%`. |
+| `model` | `KnowledgeModel` | Required in model mode | Mutually exclusive with `run`. Must have non-empty `name` and `fingerprint`, plus `generateText` and `generateObject`. |
+| `instructions` | `string` | `undefined` | Only valid with `model`. |
+| `run` | `RelateRun<TTypes>` | Required in run mode | Mutually exclusive with `model`. Must be a function. |
+
+### `RelationTypeSpec`
+
+```ts
+interface RelationTypeSpec {
+  readonly from: readonly KnowledgeRefKind[];
+  readonly to: readonly KnowledgeRefKind[];
+  readonly direction: "directed" | "symmetric";
+  readonly description: string;
+}
+```
+
+`from` and `to` must be non-empty arrays of valid `KnowledgeRefKind` values.
+The stage normalizes kind order to `chunk`, `document`, `entity`, `parent`.
+
+### Returns
+
+```ts
+type RelationStage<TTypes extends Record<string, RelationTypeSpec>> =
+  RelationDeriveStage & {
+    readonly types: TTypes;
+  } & (
+    | {
+        readonly mode: "model";
+        readonly model: KnowledgeModel;
+        readonly instructions?: string;
+        readonly run?: never;
+      }
+    | {
+        readonly mode: "run";
+        readonly run: RelateRun<TTypes>;
+        readonly model?: never;
+        readonly instructions?: never;
+      }
+  );
+```
+
+The returned object includes `_tag: "RelationStage"`, `kind: "relation"`,
+`id`, `version`, normalized `types`, `mode`, and `fingerprint()`.
+
+### Emit API
+
+```ts
+interface RelateRunInput {
+  readonly document: CruxDocument;
+  readonly chunks: readonly CruxChunk[];
+}
+
+type KnowledgeLocator =
+  | { readonly url: string }
+  | { readonly title: string }
+  | { readonly anchor: string };
+
+interface RelateEmitOptions {
+  readonly description?: string;
+  readonly evidence: KnowledgeRef | readonly KnowledgeRef[];
+  readonly provenance?: "exact" | "derived";
+}
+
+interface RelateEmitApi<TTypes extends Record<string, RelationTypeSpec>> {
+  emit<TType extends keyof TTypes & string>(
+    type: TType,
+    from: KnowledgeRefOfKinds<TTypes[TType]["from"][number]> | KnowledgeLocator,
+    to: KnowledgeRefOfKinds<TTypes[TType]["to"][number]> | KnowledgeLocator,
+    opts?: RelateEmitOptions,
+  ): void;
+}
+```
+
+`KnowledgeLocator` is resolved against indexed records during graph
+compilation. `description` is persisted only when it is a string of 2,000
+characters or fewer.
+
+### Failures
+
+`relate()` throws plain `Error`s for invalid identity, mode, model, type names,
+type specs, invalid kind arrays, and invalid instructions.
+
+### Example
+
+```ts
+import { relate } from "@use-crux/core/knowledge";
+
+const citations = relate({
+  id: "citations",
+  version: 1,
+  types: {
+    cites: {
+      from: ["chunk"],
+      to: ["document"],
+      direction: "directed",
+      description: "A chunk cites another document",
+    },
+  },
+  run: (_input, api) => {
+    const evidence = {
+      kind: "chunk",
+      sourceId: "guide",
+      chunkId: "intro",
+    } as const;
+
+    api.emit(
+      "cites",
+      evidence,
+      { title: "Protocol Reference" },
+      { evidence, provenance: "exact" },
+    );
+  },
+});
+```
+
+## `relateReferences(config?)`
+
+Creates the built-in explicit-reference relation stage.
+
+```ts
+interface RelateReferencesConfig {
+  readonly id?: string;
+}
+
+function relateReferences(
+  config?: RelateReferencesConfig,
+): RelationStage<{
+  readonly references: {
+    readonly from: readonly ["chunk"];
+    readonly to: readonly ["document"];
+    readonly direction: "directed";
+    readonly description: "A chunk explicitly references another document";
+  };
+}>;
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `id` | `string` | `"references"` | Must satisfy `relate()` id validation. |
+
+The stage scans chunk text for Markdown links, bare `http` or `https` URLs,
+and cited titles in quoted or bracketed citation forms. It emits `references`
+claims from chunk refs to `{ url }` or `{ title }` locators with
+`provenance: "exact"`.
+
+### Example
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { relateReferences } from "@use-crux/core/knowledge";
+
+const pipeline = indexingPipeline({
+  derive: [relateReferences()],
+});
+```
+
+## `relateEntities(config)`
+
+Creates the built-in entity relation stage.
+
+```ts
+interface RelateEntitiesConfig {
+  readonly model: KnowledgeModel;
+  readonly id?: string;
+  readonly instructions?: string;
+}
+
+function relateEntities(config: RelateEntitiesConfig): RelationStage<{
+  readonly mentions: {
+    readonly from: readonly ["chunk"];
+    readonly to: readonly ["entity"];
+    readonly direction: "directed";
+    readonly description: "A chunk mentions an entity";
+  };
+  readonly related: {
+    readonly from: readonly ["entity"];
+    readonly to: readonly ["entity"];
+    readonly direction: "symmetric";
+    readonly description: "Two entities are related in the source text";
+  };
+}>;
+```
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `model` | `KnowledgeModel` | Required | Must pass entity model validation. |
+| `id` | `string` | `"entities"` | Used as the underlying relation stage id. |
+| `instructions` | `string` | `undefined` | Appended to the built-in extraction prompt. |
+
+The stage emits `mentions` from chunks to entity refs and `related` symmetric
+edges between entity refs. Entity ids are stable ids over trimmed,
+lowercased, whitespace-collapsed names. Related descriptions are accepted up
+to 500 characters.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| Invalid model shape | `Error("Entity relations require a knowledge model.")` or the model field-specific message |
+| Returned object fails the entity schema after parsing | `Error("Relation <id> returned invalid entity relations.")` |
+
+### Example
+
+```ts
+import { indexingPipeline } from "@use-crux/core/indexing";
+import { knowledgeModel, relateEntities } from "@use-crux/core/knowledge";
+
+const extractor = knowledgeModel({
+  name: "entity-extractor",
+  version: "1",
+  generateText,
+  generateObject,
+});
+
+const pipeline = indexingPipeline({
+  derive: [
+    relateEntities({
+      model: extractor,
+      instructions: "Prefer product and organization names.",
+    }),
+  ],
+});
+```
+
+## Related
+
+- Reference: [Connected Knowledge](/docs/reference/crux-core/connected-knowledge)
+- Reference: [Connected Knowledge model and refs](/docs/reference/crux-core/connected-knowledge-model-and-refs)
+- Reference: [Connected Knowledge recipe steps](/docs/reference/crux-core/connected-knowledge-recipes)

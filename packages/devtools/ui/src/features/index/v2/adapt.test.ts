@@ -49,6 +49,35 @@ describe("indexFactChips", () => {
 });
 
 describe("kindMeta", () => {
+  it("registers Connected Knowledge definitions in the Capabilities family", () => {
+    expect(kindMeta("rag.knowledgeBase.view")).toMatchObject({
+      label: "Knowledge view",
+      family: "capability",
+      glyph: "search",
+      child: true,
+    });
+    expect(kindMeta("knowledge.relation")).toMatchObject({
+      label: "Knowledge relation",
+      family: "capability",
+      glyph: "branch",
+    });
+    expect(kindMeta("knowledge.assertions")).toMatchObject({
+      label: "Knowledge assertions",
+      family: "capability",
+      glyph: "doc",
+    });
+    expect(kindMeta("knowledge.communities")).toMatchObject({
+      label: "Knowledge communities",
+      family: "capability",
+      glyph: "grid",
+    });
+    expect(kindMeta("knowledge.model")).toMatchObject({
+      label: "Knowledge model",
+      family: "capability",
+      glyph: "spark",
+    });
+  });
+
   it("registers Thread definitions in the State family", () => {
     expect(kindMeta("thread")).toMatchObject({
       label: "Thread",
@@ -128,6 +157,147 @@ describe("Thread catalog presentation", () => {
       "threadInspector",
       "relations",
       "source",
+      "observability",
+      "health",
+    ]);
+  });
+});
+
+describe("Connected Knowledge catalog presentation", () => {
+  it("renders knowledge facts as at-a-glance chips", () => {
+    expect(
+      indexFactChips({
+        id: "rag.knowledgeBase:docs:view:published",
+        kind: "rag.knowledgeBase.view",
+        name: "published",
+        fidelity: "resolved",
+        confidence: "static",
+        facts: {
+          viewId: "published",
+          whereFields: ["audience", "status"],
+        },
+        lint: [],
+        raw: {
+          id: "rag.knowledgeBase:docs:view:published",
+          kind: "rag.knowledgeBase.view",
+          name: "published",
+          fidelity: "resolved",
+        },
+      } satisfies ViewDef),
+    ).toEqual([
+      ["view", "published"],
+      ["where", 2],
+    ]);
+
+    expect(
+      indexFactChips({
+        id: "knowledge.relation:citations",
+        kind: "knowledge.relation",
+        name: "citations",
+        fidelity: "resolved",
+        confidence: "static",
+        facts: {
+          relationId: "citations",
+          version: 3,
+          typeNames: ["cites"],
+          modelName: "extractor",
+        },
+        lint: [],
+        raw: {
+          id: "knowledge.relation:citations",
+          kind: "knowledge.relation",
+          name: "citations",
+          fidelity: "resolved",
+        },
+      } satisfies ViewDef),
+    ).toEqual([
+      ["id", "citations"],
+      ["version", 3],
+      ["types", 1],
+      ["model", "extractor"],
+    ]);
+  });
+
+  it("rolls knowledge views under their owning knowledge base", () => {
+    const index = buildIndex({
+      prompts: [],
+      contexts: [],
+      tools: [],
+      definitions: [
+        {
+          id: "rag.knowledgeBase:docs",
+          kind: "rag.knowledgeBase",
+          name: "docs",
+          fidelity: "resolved",
+          metadata: {
+            facts: { kind: "rag.knowledgeBase", knowledgeBaseId: "docs" },
+          },
+        },
+        {
+          id: "rag.knowledgeBase:docs:view:published",
+          kind: "rag.knowledgeBase.view",
+          name: "published",
+          fidelity: "resolved",
+          metadata: {
+            indexPresentation: {
+              standalone: false,
+              role: "view",
+              parentDefinitionId: "rag.knowledgeBase:docs",
+              parentRelationType: "rag.knowledgeBase.includes_view",
+            },
+            facts: {
+              kind: "rag.knowledgeBase.view",
+              knowledgeBaseId: "rag.knowledgeBase:docs",
+              viewId: "published",
+              whereFields: ["status"],
+            },
+          },
+        },
+      ],
+      relations: [
+        {
+          id: "relation:kb-view",
+          type: "rag.knowledgeBase.includes_view",
+          from: "rag.knowledgeBase:docs",
+          to: "rag.knowledgeBase:docs:view:published",
+          fidelity: "resolved",
+        },
+      ],
+      diagnostics: [],
+      lintFindings: [],
+      sources: [],
+    } satisfies ProjectIndexData);
+
+    expect(index.standalone.map((def) => def.id)).toEqual([
+      "rag.knowledgeBase:docs",
+    ]);
+    expect(index.parentOf("rag.knowledgeBase:docs:view:published")).toBe(
+      "rag.knowledgeBase:docs",
+    );
+    expect(
+      index.childrenOf("rag.knowledgeBase:docs").map((def) => def.id),
+    ).toEqual(["rag.knowledgeBase:docs:view:published"]);
+    expect(
+      indexSectionOrder({
+        id: "knowledge.relation:citations",
+        kind: "knowledge.relation",
+        name: "citations",
+        fidelity: "resolved",
+        confidence: "static",
+        lint: [],
+        raw: {
+          id: "knowledge.relation:citations",
+          kind: "knowledge.relation",
+          name: "citations",
+          fidelity: "resolved",
+        },
+      } satisfies ViewDef),
+    ).toEqual([
+      "hero",
+      "knowledge",
+      "deps",
+      "source",
+      "relations",
       "observability",
       "health",
     ]);

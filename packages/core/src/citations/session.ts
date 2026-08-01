@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { RetrieverHit } from '../retrieval/types'
+import type { EvidenceHit, RetrieverHit } from '../retrieval/types'
 
 /** How a hit became citeable during grounded generation. */
 export type GroundingHitOrigin = 'injected' | 'tool'
@@ -26,29 +26,30 @@ export interface GroundingSession {
    */
   recordHits(hits: readonly RetrieverHit[], origin: GroundingHitOrigin): void | Promise<void>
   /** Return all citeable hits, deduplicated by source identity. */
-  allowedHits(): readonly RetrieverHit[] | Promise<readonly RetrieverHit[]>
+  allowedHits(): readonly EvidenceHit[] | Promise<readonly EvidenceHit[]>
 }
 
 /** Create the default in-memory grounding session for single-process runtimes. */
 export function createGroundingSession(args: { generationId?: string } = {}): GroundingSession {
-  const hits = new Map<string, RetrieverHit>()
+  const hits = new Map<string, EvidenceHit>()
 
   return Object.freeze({
     generationId: args.generationId ?? createGenerationId(),
     recordHits(nextHits: readonly RetrieverHit[]): void {
       for (const hit of nextHits) {
+        if (hit.kind === 'finding') continue
         const key = groundingHitKey(hit)
         if (!hits.has(key)) hits.set(key, hit)
       }
     },
-    allowedHits(): readonly RetrieverHit[] {
+    allowedHits(): readonly EvidenceHit[] {
       return [...hits.values()]
     },
   }) satisfies GroundingSession
 }
 
 /** Build the stable deduplication identity for a citeable hit. */
-export function groundingHitKey(hit: Pick<RetrieverHit, 'namespace' | 'source' | 'chunkId'>): string {
+export function groundingHitKey(hit: Pick<EvidenceHit, 'namespace' | 'source' | 'chunkId'>): string {
   return `${hit.namespace}:${hit.source.id}:${hit.chunkId}`
 }
 

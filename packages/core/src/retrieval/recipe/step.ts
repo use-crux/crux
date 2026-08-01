@@ -10,6 +10,7 @@ import type { ExactFilter } from '../../storage'
 import type { RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
 import type { RetrievalModel } from '../model'
+import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
 
 /** Phase of data flowing through a retrieval recipe. */
 export type StepPhase = 'queries' | 'hits'
@@ -19,6 +20,7 @@ export type RetrievalStepKind =
   | 'rewrite-query'
   | 'fanout'
   | 'retrieve'
+  | 'global-search'
   | 'filter'
   | 'fusion'
   | 'rerank'
@@ -44,6 +46,7 @@ export type StepInput<TPhase extends StepPhase> = TPhase extends 'queries'
 export type StepOutput<TPhase extends StepPhase> = StepInput<TPhase> & {
   warnings?: readonly string[]
   sources?: readonly RetrievalSourceTrace[]
+  knowledge?: KnowledgeStepTrace
 }
 
 /** Per-source retrieve attribution captured on retrieve-step traces. */
@@ -59,6 +62,31 @@ export interface RetrievalSourceTrace {
   error?: { message: string; name?: string }
 }
 
+/** Knowledge-specific receipt payload emitted by connected retrieval steps. */
+export interface KnowledgeStepTrace {
+  readonly contributor: string
+  readonly view?: { readonly id: string; readonly viewRevision: string | null }
+  readonly generations: readonly string[]
+  readonly coverage: 'exact' | 'compensated' | 'raw-fallback' | 'materialization-wait'
+  readonly coverageBasis: string
+  readonly scan?: 'all' | 'adaptive'
+  readonly detail?: 'overview' | 'detailed'
+  readonly available: { readonly reports: number; readonly findings?: number }
+  readonly processed: { readonly reports: number; readonly findings?: number }
+  readonly adaptive?: {
+    readonly threshold: number
+    readonly visited: readonly { readonly communityId: string; readonly rating: number }[]
+    readonly skipped: readonly { readonly communityId: string; readonly rating: number }[]
+  }
+  readonly preflight?: {
+    readonly reports: number
+    readonly batches: number
+    readonly inputChars: number
+    readonly calls: number
+  }
+  readonly truncations?: readonly string[]
+}
+
 /** Runtime context provided to a retrieval step. */
 export interface RetrievalStepContext {
   recipeId: string
@@ -67,6 +95,8 @@ export interface RetrievalStepContext {
   request: RetrieveRequest
   model?: RetrievalModel
   concurrency: number
+  readonly knowledge?: RetrievalKnowledgeBinding
+  readonly communities?: RetrievalCommunitiesBinding
 }
 
 /** Config for `retrievalStep()`. */
@@ -98,6 +128,7 @@ interface RetrieveStepConfig {
 const retrieveStepConfigs = new WeakMap<RetrievalStep, RetrieveStepConfig>()
 const internalStepIds = new WeakSet<RetrievalStep>()
 const rerankerDefinitionIds = new WeakMap<RetrievalStep, string>()
+const publicStepConfigs = new WeakMap<RetrievalStep, Readonly<Record<string, unknown>>>()
 
 /** Create a typed retrieval step. */
 export function retrievalStep<const TIn extends StepPhase, const TOut extends StepPhase>(
@@ -120,8 +151,12 @@ export function isBuiltInRetrievalStep(step: RetrievalStep): boolean {
 }
 
 /** Mark a step as created by a built-in recipe helper. Internal. */
-export function markBuiltInRetrievalStep<TStep extends RetrievalStep>(step: TStep): TStep {
+export function markBuiltInRetrievalStep<TStep extends RetrievalStep>(
+  step: TStep,
+  publicConfig?: Readonly<Record<string, unknown>>,
+): TStep {
   internalStepIds.add(step)
+  if (publicConfig) setRetrievalStepPublicConfig(step, publicConfig)
   return step
 }
 
@@ -147,4 +182,17 @@ export function setRerankerDefinitionId(step: RetrievalStep, rerankerId: string)
 /** Return the authored reranker definition id for a rerank step. Internal. */
 export function getRerankerDefinitionId(step: RetrievalStep): string | undefined {
   return rerankerDefinitionIds.get(step)
+}
+
+/** Capture public options that affect a built-in step. Internal. */
+export function setRetrievalStepPublicConfig(
+  step: RetrievalStep,
+  config: Readonly<Record<string, unknown>>,
+): void {
+  publicStepConfigs.set(step, config)
+}
+
+/** Return public options that affect a built-in step. Internal. */
+export function getRetrievalStepPublicConfig(step: RetrievalStep): Readonly<Record<string, unknown>> | undefined {
+  return publicStepConfigs.get(step)
 }

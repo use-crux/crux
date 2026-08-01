@@ -218,10 +218,12 @@ expectTypeOf<{
 }>().toExtend<WorkspaceRetrieverMountSource>();
 expectTypeOf<WorkspaceRetrieverMountSource>().toExtend<WorkspaceMountSource>();
 expectTypeOf(
-  retrieverWorkspaceMountSource(sourceRetriever, {
-    query: ({ operation }) => operation,
-    pathForHit: (hit) => `${hit.source.id}/${hit.chunkId}.md`,
-  }),
+	  retrieverWorkspaceMountSource(sourceRetriever, {
+	    query: ({ operation }) => operation,
+	    pathForHit: (hit) => hit.kind === "finding"
+	      ? `findings/${hit.citation.findingTarget}.md`
+	      : `${hit.source.id}/${hit.chunkId}.md`,
+	  }),
 ).toExtend<WorkspaceCustomMountSource>();
 expectTypeOf<{
   query: "docs";

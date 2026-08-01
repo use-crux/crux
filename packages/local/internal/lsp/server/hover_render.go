@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,8 +129,91 @@ func definitionHoverSections(
 	if description := escape(definition.Description); description != "" {
 		sections = append(sections, hoverSection{content: description})
 	}
+	if details := knowledgeDefinitionDetails(definition, escape, markdown); details != "" {
+		sections = append(sections, hoverSection{content: details})
+	}
 	sections = append(sections, hoverSection{content: definitionCountSummary(summary)})
 	return sections
+}
+
+func knowledgeDefinitionDetails(
+	definition api.ProjectDefinition,
+	escape func(string) string,
+	markdown bool,
+) string {
+	if !isKnowledgeDefinitionKind(definition.Kind) {
+		return ""
+	}
+	facts := definitionFacts(definition.Metadata)
+	parts := []string{"kind " + escape(definition.Kind), "id " + escape(definition.ID)}
+	if version := metadataString(facts, "version"); version != "" {
+		parts = append(parts, "version "+escape(version))
+	}
+	if types := metadataStringArray(facts, "typeNames"); len(types) > 0 {
+		for index := range types {
+			types[index] = escape(types[index])
+		}
+		parts = append(parts, "types "+strings.Join(types, ", "))
+	}
+	details := strings.Join(parts, " · ")
+	if markdown {
+		return "**Definition:** " + details
+	}
+	return "Definition: " + details
+}
+
+func isKnowledgeDefinitionKind(kind string) bool {
+	switch kind {
+	case "rag.knowledgeBase",
+		"rag.knowledgeBase.view",
+		"knowledge.relation",
+		"knowledge.assertions",
+		"knowledge.communities",
+		"knowledge.model":
+		return true
+	default:
+		return false
+	}
+}
+
+func definitionFacts(metadata json.RawMessage) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(metadata, &decoded); err != nil {
+		return nil
+	}
+	facts, _ := decoded["facts"].(map[string]any)
+	return facts
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	switch value := metadata[key].(type) {
+	case string:
+		return value
+	case float64:
+		if value == float64(int64(value)) {
+			return strconv.FormatInt(int64(value), 10)
+		}
+		return strconv.FormatFloat(value, 'f', -1, 64)
+	default:
+		return ""
+	}
+}
+
+func metadataStringArray(metadata map[string]any, key string) []string {
+	values, _ := metadata[key].([]any)
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if item, ok := value.(string); ok && item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func definitionTitle(name, kind string) string {

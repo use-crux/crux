@@ -1,10 +1,11 @@
 {
   "title": "RAG",
-  "description": "Semantic RAG with Upstash, episodic recall over chat history.",
+  "description": "Semantic RAG, Connected Knowledge compliance, episodic recall over chat history.",
   "pages": [
     "index",
     "local-files-rag",
     "semantic-rag",
+    "connected-knowledge-compliance",
     "episodic-recall",
     "crawler-loader"
   ]

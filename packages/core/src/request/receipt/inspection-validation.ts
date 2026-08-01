@@ -5,6 +5,10 @@
  */
 
 import type { RequestInspection } from "./inspection";
+import {
+  isKnowledgeReceipt,
+  projectKnowledgeRecords,
+} from "./knowledge-validation";
 
 /** Validate and freeze one cross-process inspection result. @internal */
 export function validatedRequestInspection(
@@ -20,6 +24,8 @@ export function validatedRequestInspection(
     !isCounting(value.counting) ||
     !isNonNegativeInteger(value.retryCount) ||
     !isArray(value.artifacts, isArtifact) ||
+    (value.knowledge !== undefined &&
+      !isArray(value.knowledge, isKnowledgeReceipt)) ||
     !isArray(value.supportTools, isString) ||
     !isArray(value.supportRequests, isSupportRequest) ||
     !isArray(value.linkedRequestIds, isString) ||
@@ -69,6 +75,9 @@ function projectInspection(value: Record<string, unknown>): object {
     artifacts: projectRecords(value.artifacts, [
       "contributor", "kind", "supportRequestIds",
     ]),
+    ...(Array.isArray(value.knowledge) && value.knowledge.length > 0
+      ? { knowledge: projectKnowledgeRecords(value.knowledge) }
+      : {}),
     supportTools: [...(value.supportTools as readonly unknown[])],
     supportRequests: projectRecords(value.supportRequests, [
       "id",

@@ -1,6 +1,6 @@
 ---
-title: Retrieval & RAG
-description: Define knowledge bases, retrieve scored evidence, compose retrieval recipes, and validate grounded citations.
+title: Retrieval & Knowledge
+description: One progressive system from plain RAG to typed views, evidence-backed relations, communities, and global search.
 ---
 
 Your model cannot answer questions about your own docs: it has never seen them, and pasting everything into the prompt does not scale. Retrieval fixes that by indexing your knowledge once and turning each question into prompt-ready, scored evidence.
@@ -170,6 +170,22 @@ const status = tenantDocs.inspect().lifecycle;
 ```
 
 Removed sources become unretrievable immediately. If inactive vector rows are retained by policy or adapter limits, `inspect()` reports that retention.
+
+## Beyond Retrieval: Connected Knowledge
+
+The same knowledge base extends past vector retrieval when answers depend on
+source membership, cited neighbors, corpus-wide themes, or conflicting
+requirements across documents:
+
+```txt
+knowledgeBase() -> view() -> relations -> communities/global search -> assertions
+```
+
+Every level is opt-in and each pays for itself independently. A plain knowledge
+base never runs connected-knowledge generation, and adding a level never
+changes the behavior of the levels below it. Start with the
+[Connected knowledge overview](/docs/guides/retrieval/connected-knowledge) for
+the full decision table of when each level is worth adding.
 
 ## Evals
 

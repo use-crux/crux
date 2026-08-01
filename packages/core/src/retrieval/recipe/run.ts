@@ -12,6 +12,7 @@ import { RetrievalRunError } from '../errors'
 import { emitRetrievalHitsArtifact } from '../observability'
 import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
+import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
 import type { RetrievalStep, RetrievalStepContext } from './step'
 import type { NormalizedRecipeSource } from './source'
 import { assertRecipeStepSupportsInput, prepareRecipeRequest, type PreparedRecipeRequest } from './input'
@@ -27,11 +28,14 @@ let recipeRunCounter = 0
 /** Normalized single-source recipe configuration used by the runner. */
 export interface RecipeRunnerConfig {
   recipeId: string
+  recipeFingerprint: string
   sources: readonly NormalizedRecipeSource[]
   steps: readonly RetrievalStep[]
   model?: RetrievalStepContext['model']
   concurrency: number
   onSourceError: 'fail' | 'skip-with-warning'
+  knowledge?: RetrievalKnowledgeBinding
+  communities?: RetrievalCommunitiesBinding
 }
 
 /** Execute a recipe and return hits plus a serializable trace. */
@@ -49,6 +53,7 @@ export async function runRetrievalRecipe(
     definitionRefs: [recipeDefinitionRef(config.recipeId)],
     attributes: {
       recipeId: config.recipeId,
+      recipeFingerprint: config.recipeFingerprint,
       sourceRetrieverIds: config.sources.map((source) => source.retriever.id),
       namespaceCount: new Set(
         config.sources.map((source) => source.retriever.namespace),
@@ -169,6 +174,7 @@ function buildTrace(args: {
   return {
     id: args.traceId,
     recipeId: args.config.recipeId,
+    fingerprint: args.config.recipeFingerprint,
     retrieverId: args.config.sources[0]?.retriever.id ?? '',
     startedAt: args.startedAt,
     durationMs: Date.now() - args.startedAt,

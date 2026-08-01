@@ -1,16 +1,27 @@
 {
-  "title": "Retrieval & RAG",
-  "description": "The full RAG path: embeddings, ingestion, indexing, querying, recipes, grounding, and corpus sync.",
+  "title": "Retrieval & Knowledge",
+  "description": "One progressive system: index and retrieve scored evidence, then add typed views, relations, assertions, communities, and global search as the corpus demands.",
   "pages": [
     "index",
-    "embeddings",
-    "multimodal-search",
-    "ingestion",
-    "indexing",
-    "chunkers",
+    "---Fundamentals---",
+    "knowledge-bases",
     "querying",
     "recipes",
     "grounding",
-    "corpus-sync"
+    "---Indexing---",
+    "ingestion",
+    "indexing",
+    "chunkers",
+    "embeddings",
+    "multimodal-search",
+    "corpus-sync",
+    "---Connected knowledge---",
+    "connected-knowledge",
+    "views",
+    "relations",
+    "assertions",
+    "communities",
+    "global-search",
+    "planning"
   ]
 }

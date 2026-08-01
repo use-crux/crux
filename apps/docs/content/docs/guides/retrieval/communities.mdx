@@ -1,0 +1,158 @@
+---
+title: Communities
+description: Build and read report hierarchies over a knowledge base or view.
+---
+
+Communities materialize a topic map over the visible connected graph. Use them
+when users ask broad questions such as "what risks affect this application" or
+"which themes recur across these policies".
+
+Do not use communities for one direct evidence lookup. Use a retriever or a
+recipe with `expandRelations()` first.
+
+## Configure Communities
+
+`communities({ model })` requires a named `KnowledgeModel`. Reports are
+generated from visible chunks and graph input, then stored under a community
+generation.
+
+```ts
+import {
+  communities,
+  knowledgeBase,
+  knowledgeModel,
+} from "@use-crux/core/knowledge";
+import { z } from "zod";
+
+const metadataSchema = z.object({
+  status: z.enum(["draft", "published"]),
+});
+
+const reporter = knowledgeModel({
+  name: "policy-community-reporter",
+  version: "2026-07",
+  generateText: retrievalModel.generateText,
+  generateObject: retrievalModel.generateObject,
+});
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage,
+  embeddings: dense,
+  metadataSchema,
+  communities: communities({ model: reporter }),
+});
+```
+
+If you have already configured an entity relation stage with `mentions` and
+`related` relations, communities use that graph. Otherwise, configuring
+communities adds a generic entity mapping pass through the same derive pipeline.
+
+## Readiness Lifecycle
+
+The communities surface exists only when configured:
+
+```ts
+await docs.communities?.status();
+await docs.communities?.prepare();
+
+const page = await docs.communities?.reports({ level: 0, limit: 20 });
+```
+
+`status()` returns:
+
+| Status | Meaning |
+| --- | --- |
+| `missing` | No community generation exists for the current scope. |
+| `building` | This process or another process holds the build lease. |
+| `ready` | The current reports match the visible graph, view revision, and strategy fingerprint. |
+| `stale` | A current generation exists, but it no longer matches the live inputs. |
+
+Without a runtime host, `stale` is a supported state. Crux does not start
+detached background work. Call `prepare()` to refresh in-process, or
+`reports()` to prepare before reading.
+
+Use `prepare({ force: true })` to rebuild even when the current generation is
+ready.
+
+## Views
+
+Views expose the same community surface, scoped to a resolved view revision.
+
+```ts
+const published = docs.view({
+  id: "published",
+  where: { status: "published" },
+});
+
+await published.communities?.prepare();
+
+const rootReports = await published.communities?.reports({
+  level: 1,
+  limit: 10,
+});
+```
+
+A pinned view has its own community scope:
+
+```ts
+const revision = await published.resolve();
+const pinned = published.at(revision.revisionHash);
+
+await pinned.communities?.prepare();
+```
+
+If the pinned source set is no longer exactly replayable, the pinned community
+read fails instead of reading a different source set.
+
+## Report Structure
+
+Each report includes:
+
+| Field | Meaning |
+| --- | --- |
+| `communityId` | Stable id derived from the sorted member identities. |
+| `generationId` | Community generation that owns the report. |
+| `level` | Hierarchy level. Leaves are level `0`; parent levels are higher. |
+| `parentCommunityId` | Parent report id when present. |
+| `title` and `summary` | Bounded report text generated from visible evidence or child findings. |
+| `findings` | Bounded statements with evidence refs and optional assertion refs. |
+| `lineage` | View revision, graph generation, strategy fingerprint, and member hash. |
+| `counts` | Counts for entities, chunks, and assertions represented by the report. |
+
+Reports are not indexed source documents. They do not enter vector retrieval,
+view membership, or later community construction.
+
+## Cost Model
+
+Community clustering is deterministic. Model calls happen for:
+
+- generic entity mapping when no authored entity mapping stage exists
+- report generation for communities whose member hash changed
+- one repair retry when a report does not validate
+
+Unchanged communities reuse prior report content when the `communityId`,
+`memberHash`, and strategy fingerprint match. A failed refresh is atomic: the
+prior published generation remains current.
+
+## What Builds
+
+Community input is assembled from the visible namespace or view:
+
+- visible chunks
+- entity mentions and entity-to-entity relations
+- evidence-backed graph edges with visible supports
+- fallback leaves for chunks without entity evidence
+
+Every visible chunk belongs to exactly one leaf community. Large inputs are
+split deterministically to stay within internal report input budgets. A chunk
+larger than the leaf budget fails the build because it cannot be split safely at
+the community layer.
+
+## Related
+
+<Cards>
+  <Card title="Relations" description="Publish the graph communities read." href="/docs/guides/retrieval/relations" />
+  <Card title="Global search" description="Search community reports with preflight and citations." href="/docs/guides/retrieval/global-search" />
+  <Card title="Views" description="Build report scopes for typed source sets." href="/docs/guides/retrieval/views" />
+</Cards>
