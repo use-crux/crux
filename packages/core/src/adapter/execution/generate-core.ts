@@ -43,7 +43,10 @@ import { createStructuredCompletion } from "./structured-completion";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
-import { normalizeAdapterCallError } from "../normalized-outcome";
+import {
+  isCruxAdapterError,
+  normalizeAdapterCallError,
+} from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
 import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import { emitInputTokenEstimate } from "./media-token-budget";
@@ -104,9 +107,9 @@ import {
 } from "../../request/receipt/receipt";
 import {
   createPrepareStepState,
-  recordPrepareStepOutcome,
   runPrepareStep,
 } from "../../request/prepare/step";
+import { createPreparationStatistics } from "../../request/prepare/statistics";
 import {
   resolveExecutionAmendment,
   type ResolvedExecutionAmendment,
@@ -205,6 +208,9 @@ export async function generateCore<
   const stepFacts: ResultStepFacts[] = [];
   let lastRequestReceipt: RequestReceipt | undefined;
   const prepareStepState = createPrepareStepState();
+  const preparationStatistics = args.prepareStep
+    ? createPreparationStatistics()
+    : undefined;
   const representationEpoch = createRequestRepresentationEpoch();
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
@@ -476,6 +482,7 @@ export async function generateCore<
     const amendment = await runPrepareStep({
       callback: args.prepareStep,
       state: prepareStepState,
+      statistics: preparationStatistics,
       requestInput: args.input ?? {},
       reason,
       previousReceipt: lastRequestReceipt,
@@ -503,6 +510,34 @@ export async function generateCore<
         reason,
       },
     });
+  };
+
+  const dispatchSealedProvider = async (sealed: SealedRequestPlan<TExtra>) => {
+    preparationStatistics?.recordStarted(sealed.request.model);
+    try {
+      await validateRequestPlan(sealed);
+      const response = await callProvider(sealed.request);
+      preparationStatistics?.recordTerminal({
+        model: sealed.request.model,
+        outcome: "succeeded",
+        usage: response.extracted.usage,
+        transportRetries: response.extracted.transportRetries,
+      });
+      recordRequestRetryCount(
+        sealed.receipt,
+        response.extracted.transportRetries,
+      );
+      return response;
+    } catch (error) {
+      preparationStatistics?.recordTerminal({
+        model: sealed.request.model,
+        outcome:
+          isCruxAdapterError(error) && error.providerError.kind === "aborted"
+            ? "cancelled"
+            : "failed",
+      });
+      throw error;
+    }
   };
 
   const generated = await sourceSession
@@ -580,13 +615,7 @@ export async function generateCore<
             const sealed = await sealProviderRequest(callArgs, boundary);
             lastCallArgs = sealed.request;
 
-            await validateRequestPlan(sealed);
-            const { raw, extracted } = await callProvider(lastCallArgs);
-            recordPrepareStepOutcome(prepareStepState, {
-              usage: extracted.usage,
-              transportRetries: extracted.transportRetries,
-            });
-            recordRequestRetryCount(sealed.receipt, extracted.transportRetries);
+            const { raw, extracted } = await dispatchSealedProvider(sealed);
             lastRaw = raw;
             const providerStep = stepFactsFromResponse(extracted);
             const guardedStep = await guardSafetySessionLanguageStep(
@@ -711,16 +740,7 @@ export async function generateCore<
               };
               const sealed = await sealProviderRequest(regenArgs, boundary);
               lastCallArgs = sealed.request;
-              await validateRequestPlan(sealed);
-              const regen = await callProvider(lastCallArgs);
-              recordPrepareStepOutcome(prepareStepState, {
-                usage: regen.extracted.usage,
-                transportRetries: regen.extracted.transportRetries,
-              });
-              recordRequestRetryCount(
-                sealed.receipt,
-                regen.extracted.transportRetries,
-              );
+              const regen = await dispatchSealedProvider(sealed);
               lastRaw = regen.raw;
               steps++;
               const providerRegenStep = stepFactsFromResponse(regen.extracted);
