@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 948,
+    "files": 950,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1933,
-    "canonicalBytes": 400789
+    "dependencies": 1939,
+    "canonicalBytes": 402123
   },
   "files": [
     {
@@ -5550,8 +5550,8 @@
     },
     {
       "file": "packages/indexer/fixtures/effect-static-project/effects.ts",
-      "sha256": "7c234c00ae44549d4b66ddd667780b6cdf8e88c894dc234802897d709398266a",
-      "bytes": 8763,
+      "sha256": "34cd2296e073ee17931be14d92cd1ea6ab93a25b203cbce8af8f2b6133b3a045",
+      "bytes": 9506,
       "definitions": 5,
       "relations": 0,
       "diagnostics": 0,
@@ -7079,7 +7079,25 @@
       "dependencies": 1
     },
     {
+      "file": "packages/indexer/src/indexer/static-index/syntax/record/effect-boundary-native-facts.ts",
+      "sha256": "44a4cb9b913519beb8ce8c3da14d4e6d5e48905a3020ea85b02fd88b09d1241b",
+      "bytes": 284,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/indexer/src/indexer/static-index/syntax/record/effect-native-facts.ts",
+      "sha256": "fb466732f1e8ccccccdfb9f0af987f609668589d2fac22296cbe2cafe0104ce1",
+      "bytes": 307,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/static-index/syntax/record/effect-static-options.ts",
       "sha256": "b2c388a11122de46deaacba9c188ea2826f28a3318a15a1c18d5985cd5ea43e6",
       "bytes": 120,
       "definitions": 0,

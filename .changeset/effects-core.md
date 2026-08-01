@@ -38,3 +38,8 @@ Runtime retries and legacy RecordStore recovery, so Effects from an earlier
 attempt remain available for rollback. Persisted refs reuse a live scope only
 when both id and run match; stale or colliding refs rotate to collision-resistant
 IDs so another Flow's recovery stack remains isolated.
+
+Report an `effect.irreversible_in_required_boundary` Project Index error when
+an irreversible Effect is certainly called inside a required-recovery
+`rollbackOnError()` boundary, with guidance for defining recovery, moving the
+Effect outside the boundary, or explicitly choosing best-effort recovery.

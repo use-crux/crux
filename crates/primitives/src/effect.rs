@@ -1,5 +1,7 @@
 //! Static projection for public custom Effect definitions.
 
+mod boundary;
+
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
@@ -90,13 +92,41 @@ pub(crate) fn effect_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
         path_identity(input.relative_path)
     ));
 
+    let mut source_refs = vec![executor_ref];
+    source_refs.extend(boundary::required_boundary_refs(input, &id));
     Some(extracted_facts(
         parts.variable_name,
         definition,
         Vec::new(),
         Vec::new(),
-        vec![executor_ref],
+        source_refs,
     ))
+}
+
+pub(super) fn irreversible_effect_identity(value: &StaticSyntaxValue) -> Option<(String, String)> {
+    let StaticSyntaxValue::Call { callee, args, .. } = value else {
+        return None;
+    };
+    if callee.name != "effect"
+        || callee.direct == Some(false)
+        || !matches!(
+            callee.module_specifier.as_deref(),
+            Some("@use-crux/core" | "@use-crux/core/effect")
+        )
+    {
+        return None;
+    }
+    let effect_id = args.first().and_then(literal_string)?;
+    let options = args.get(2).filter(|value| is_object(value));
+    let has_options = args.len() > 2;
+    let version = effect_version(options, has_options)?;
+    let facts = effect_metadata_facts(Some(effect_id), Some(version), options, has_options);
+    (facts.get("recoverable").and_then(Value::as_bool) == Some(false)).then(|| {
+        (
+            effect_id.to_string(),
+            format!("effect:{}:v{}", safe_id(effect_id), format_number(version)),
+        )
+    })
 }
 
 fn effect_metadata_facts(

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
 import { builtInIndexRuleDescriptors } from "../src/indexer/lints/rules";
 import { indexRelationPolicies } from "../src/indexer/relations";
+import { finalizeStaticIndexFactsWithWorker } from "../src/testing/static-index-worker";
 import {
   extractNativeAndFallback,
   itWithRustOxc,
@@ -21,7 +22,7 @@ describe("first-party shared static index fixtures", () => {
       const source = await readFile(effectFixtureUrl, "utf8");
       const result = await extractNativeAndFallback({
         source,
-        callNames: ["effect"],
+        callNames: ["effect", "rollbackOnError"],
       });
 
       expect(nativeFactCount(result.record, "effect")).toBe(5);
@@ -90,6 +91,24 @@ describe("first-party shared static index fixtures", () => {
           "effect:payments.charge:v2:source:execute:executor:execute:src-fixture.ts:be4c7cffd8136a5a:2",
           "effect:payments.charge:v2:source:execute:executor:execute:src-fixture.ts:be4c7cffd8136a5a:5",
         ]);
+        const requiredBoundaryRefs = effects.flatMap((definition) =>
+          (definition.sourceRefs ?? []).filter(
+            (ref) =>
+              ref.role === "config" &&
+              ref.property === "rollbackOnError.recovery",
+          ),
+        );
+        expect
+          .soft(requiredBoundaryRefs, `${frontend} required-boundary evidence`)
+          .toEqual([
+            expect.objectContaining({
+              symbol: "rollbackOnError",
+              source: expect.objectContaining({
+                file: expect.stringMatching(/src\/fixture\.ts$/),
+              }),
+              fidelity: "resolved",
+            }),
+          ]);
       }
     },
     30_000,
@@ -121,6 +140,106 @@ describe("first-party shared static index fixtures", () => {
           ).size,
         ).toBe(2);
       }
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
+    "finalizes the irreversible required-boundary finding identically from both frontends",
+    async () => {
+      const source = await readFile(effectFixtureUrl, "utf8");
+      const result = await extractNativeAndFallback({
+        source,
+        primaryPath: "src/effects.ts",
+        callNames: ["effect", "rollbackOnError"],
+      });
+      const finalize = (output: typeof result.nativeOut) =>
+        finalizeStaticIndexFactsWithWorker({
+          root: "/workspace/acme",
+          nativeFacts: [{ definitions: output.definitions }],
+        });
+      const nativeFacts = await finalize(result.nativeOut);
+      const typescriptFacts = await finalize(result.typescriptOut);
+      const findings = (facts: typeof nativeFacts) =>
+        (facts.lintFindings ?? []).filter(
+          (finding) =>
+            finding.ruleId ===
+            "effect.irreversible_in_required_boundary",
+        );
+
+      expect(findings(typescriptFacts)).toEqual(findings(nativeFacts));
+      expect(findings(typescriptFacts)).toEqual([
+        expect.objectContaining({
+          source: expect.objectContaining({
+            file: expect.stringMatching(/src\/effects\.ts$/),
+            line: 33,
+          }),
+          message: expect.stringMatching(
+            /inventory\.reserve.*src\/effects\.ts:33.*Define recovery.*move the Effect outside.*best-effort/,
+          ),
+        }),
+      ]);
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
+    "requires certain irreversible targets and certain required boundary options",
+    async () => {
+      const result = await extractNativeAndFallback({
+        source: `
+          import { effect, rollbackOnError } from "@use-crux/core/effect";
+          const execute = async () => undefined;
+          const recover = async () => undefined;
+          const irreversible = effect("irreversible", execute);
+          const recoverable = effect("recoverable", execute, { recover });
+          const dynamicOptions = {};
+          const unknownRecovery = effect("unknown-recovery", execute, dynamicOptions);
+          declare const dynamicId: string;
+          const unanalyzableId = effect(dynamicId, execute);
+          const irreversibleAlias = irreversible;
+          const effectBag = { irreversible };
+          declare const chooseEffect: boolean;
+          const dynamicReference = chooseEffect ? irreversible : recoverable;
+          const requiredOptions = { recovery: "required" } as const;
+          const recoveryMode = "required" as const;
+
+          void rollbackOnError(async () => { await irreversible(); });
+          void rollbackOnError(async () => { await irreversible(); }, {});
+          void rollbackOnError(async () => { await irreversible(); }, { recovery: "required" });
+          void rollbackOnError(async () => { await irreversibleAlias(); });
+          void rollbackOnError(async () => { await effectBag.irreversible(); });
+          void rollbackOnError(async () => { await irreversible(); }, { recovery: "best-effort" });
+          void rollbackOnError(async () => { await irreversible(); }, { ...requiredOptions });
+          void rollbackOnError(async () => { await irreversible(); }, requiredOptions);
+          void rollbackOnError(async () => { await irreversible(); }, { recovery: recoveryMode });
+          void rollbackOnError(async () => { await dynamicReference(); });
+          void rollbackOnError(async () => { await unanalyzableId(); });
+          void rollbackOnError(async () => { await recoverable(); });
+          void rollbackOnError(async () => { await unknownRecovery(); });
+        `,
+        callNames: ["effect", "rollbackOnError"],
+      });
+
+      const boundaryRefs = (output: typeof result.nativeOut) =>
+        output.definitions.flatMap((definition) =>
+          (definition.sourceRefs ?? []).filter(
+            (ref) => ref.property === "rollbackOnError.recovery",
+          ),
+        );
+      expect(boundaryRefs(result.nativeOut)).toEqual(
+        boundaryRefs(result.typescriptOut),
+      );
+      expect(boundaryRefs(result.nativeOut)).toHaveLength(5);
+      expect(
+        boundaryRefs(result.nativeOut).map((ref) => ref.description),
+      ).toEqual([
+        'Required-recovery boundary contains irreversible Effect "irreversible"',
+        'Required-recovery boundary contains irreversible Effect "irreversible"',
+        'Required-recovery boundary contains irreversible Effect "irreversible"',
+        'Required-recovery boundary contains irreversible Effect "irreversible"',
+        'Required-recovery boundary contains irreversible Effect "irreversible"',
+      ]);
     },
     30_000,
   );
@@ -190,6 +309,40 @@ describe("first-party shared static index fixtures", () => {
           }),
         ]),
       );
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
+    "does not infer irreversible boundaries through cross-file Effect imports",
+    async () => {
+      const result = await extractNativeAndFallback({
+        source: `
+          import { rollbackOnError } from "@use-crux/core/effect";
+          import { importedEffect } from "./effects";
+          void rollbackOnError(async () => { await importedEffect(); });
+        `,
+        additionalFiles: [
+          {
+            path: "src/effects.ts",
+            source: `
+              import { effect } from "@use-crux/core/effect";
+              export const importedEffect = effect("imported", async () => undefined);
+            `,
+          },
+        ],
+        callNames: ["effect", "rollbackOnError"],
+      });
+
+      for (const output of [result.nativeOut, result.typescriptOut]) {
+        expect(
+          output.definitions.flatMap((definition) =>
+            (definition.sourceRefs ?? []).filter(
+              (ref) => ref.property === "rollbackOnError.recovery",
+            ),
+          ),
+        ).toEqual([]);
+      }
     },
     30_000,
   );

@@ -60,7 +60,7 @@ export async function finalizeStaticIndexFactsWithWorker(input: {
     protocolVersion: 2,
     method: 'staticIndexFinalize',
     identity: staticIndexRunIdentityFixture,
-    nativeFacts: input.nativeFacts,
+    nativeFacts: [{ root: input.root }, ...input.nativeFacts],
     extensionFacts: input.extensionFacts ?? [],
     ...(input.lintFacts ? { lintFacts: input.lintFacts } : {}),
     ...(input.lintConfig ? { lintConfig: input.lintConfig } : {}),

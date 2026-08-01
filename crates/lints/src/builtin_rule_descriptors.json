@@ -696,6 +696,45 @@
     "fidelity": "safe"
   },
   {
+    "id": "effect.irreversible_in_required_boundary",
+    "source": "builtin",
+    "severity": "error",
+    "category": "contracts",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Irreversible Effect is inside a required-recovery boundary",
+    "description": "A statically identified Effect with no recovery is called inside a statically required rollbackOnError() boundary.",
+    "rationale": "A required-recovery boundary promises that every contained Effect can be recovered, and the strict default must teach every valid escape hatch.",
+    "impact": "The required boundary blocks the irreversible Effect before mutation, so the authored operation cannot proceed as written.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/effect-irreversible-in-required-boundary",
+    "fixes": [
+      {
+        "title": "Define recovery",
+        "description": "Add a recovery handler to the Effect definition.",
+        "kind": "manual"
+      },
+      {
+        "title": "Move the Effect outside",
+        "description": "Call the irreversible Effect outside the required-recovery boundary.",
+        "kind": "manual"
+      },
+      {
+        "title": "Choose best-effort recovery",
+        "description": "Set the boundary option to { recovery: 'best-effort' } when partial rollback is acceptable.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line effect.irreversible_in_required_boundary -- reason"
+    },
+    "phase": "index",
+    "requires": ["definitions", "sources"],
+    "fidelity": "safe"
+  },
+  {
     "id": "safety.duplicate_policy_id",
     "source": "builtin",
     "severity": "warning",

@@ -201,6 +201,38 @@ fn analyze_retains_duplicate_effect_call_site_evidence_for_finalization() {
 }
 
 #[test]
+fn analyze_finds_only_certain_irreversible_effects_in_required_boundaries() {
+    let source =
+        include_str!("../../../../../packages/indexer/fixtures/effect-static-project/effects.ts");
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
+        "/workspace/acme".to_string(),
+        "src/effects.ts".to_string(),
+        vec!["effect".to_string(), "rollbackOnError".to_string()],
+        source,
+    ));
+    let finalized = finalize_static_index_values(&facts.into_wire_values(), &[]);
+    let findings = finalized
+        .model
+        .facts
+        .lint_findings
+        .iter()
+        .filter(|finding| finding.rule_id == "effect.irreversible_in_required_boundary")
+        .collect::<Vec<_>>();
+
+    assert_eq!(findings.len(), 1, "findings={findings:?}");
+    let finding = findings[0];
+    assert!(finding.message.contains("inventory.reserve"));
+    assert!(finding.message.contains("src/effects.ts:33"));
+    for action in ["Define recovery", "move the Effect outside", "best-effort"] {
+        assert!(
+            finding.message.contains(action),
+            "message={}",
+            finding.message
+        );
+    }
+}
+
+#[test]
 fn analyze_relation_refs_are_finalize_compatible() {
     let source = [
         "const supportPrompt = prompt({ id: 'support' })",
