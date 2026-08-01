@@ -19,6 +19,11 @@ import type { MetadataFilter } from './request'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from './types'
 import { createKnowledgeBaseRuntime } from './knowledge-base-runtime'
 import { createKnowledgeBaseView } from './knowledge-base-views'
+import {
+  injectKnowledgeRetrievalContext,
+  knowledgeRetrievalContext,
+  type KnowledgeRetrievalContextOptions,
+} from './knowledge-base-context'
 import { retrievalRecipe, type RetrievalRecipe, type RetrievalRecipeConfig } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
@@ -36,6 +41,8 @@ import type { AssertionStage } from '../knowledge/assertions/assertions'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
 import type { KnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
 import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
+import type { Context } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -146,6 +153,8 @@ export interface KnowledgeBase<
   TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
   TModality extends EmbeddingModality = 'text',
 > {
+  /** Runtime discriminant used by prompt composition. */
+  readonly _tag: 'KnowledgeBase'
   /** Stable knowledge base id. */
   readonly id: string
   /** Structural namespace bound to this handle. */
@@ -175,6 +184,10 @@ export interface KnowledgeBase<
   ): RetrievalRecipe
   /** Return this knowledge base as grounded prompt context/tools. */
   grounding(config?: KnowledgeBaseGroundingConfig): Grounding
+  /** Return this knowledge base as default retrieval prompt context. */
+  asContext(options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>>
+  /** Contribute default retrieval context when used directly in `use`. */
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
   /** Return this knowledge base as retrieval tools. */
   tools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   /** Inspect configured parts and lifecycle capabilities. */
@@ -217,6 +230,7 @@ function createKnowledgeBaseHandle<
   })
 
   const handle = {
+    _tag: 'KnowledgeBase' as const,
     id: config.id,
     namespace: config.namespace,
     index: runtime.index,
@@ -297,6 +311,10 @@ function createKnowledgeBaseHandle<
         id: groundingConfig?.id ?? `grounding:${config.id}`,
         retriever: runtime.retriever() as unknown as Retriever,
       }),
+    asContext: (options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>> =>
+      knowledgeRetrievalContext(runtime.retriever({ limit: options?.limit }) as unknown as Retriever, options),
+    inject: async (_args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> =>
+      injectKnowledgeRetrievalContext(runtime.retriever() as unknown as Retriever),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => runtime.retriever().asTools(toolConfig),

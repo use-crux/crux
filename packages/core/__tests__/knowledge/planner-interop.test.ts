@@ -34,14 +34,15 @@ describe.sequential('knowledge planner interop', () => {
     const answer = prompt({
       id: 'knowledge-required',
       use: [
-        view.retriever({ limit: 1 }).asContext({ query: 'guide' }),
-        docs.assertions(stage()).asContext(),
+        view,
+        docs.assertions(stage()),
       ],
+      input: z.object({ query: z.string() }),
       prompt: 'Answer.',
     })
     const harness = requestHarness()
 
-    const result = await harness.runtime.generate(answer, { model: 'model-1' })
+    const result = await harness.runtime.generate(answer, { model: 'model-1', input: { query: 'guide' } })
     const inspection = await result.steps[0]!.request!.inspect()
 
     expect(result.steps[0]?.request?.adaptations).toEqual([])
@@ -82,10 +83,11 @@ describe.sequential('knowledge planner interop', () => {
       await harness.runtime.generate(
         prompt({
           id: 'summary-rev-a',
-          use: [summarizable(view.retriever({ limit: 1 }).asContext({ query: 'guide' }))],
+          input: z.object({ query: z.string() }),
+          use: [summarizable(view)],
           prompt: 'Answer.',
         }),
-        { model: 'summary-model', inputBudget: { optimizeAt: 800, max: 850 } },
+        { model: 'summary-model', input: { query: 'guide' }, inputBudget: { optimizeAt: 800, max: 850 } },
       )
 
       await docs.reindex([
@@ -94,10 +96,11 @@ describe.sequential('knowledge planner interop', () => {
       await harness.runtime.generate(
         prompt({
           id: 'summary-rev-b',
-          use: [summarizable(view.retriever({ limit: 1 }).asContext({ query: 'guide' }))],
+          input: z.object({ query: z.string() }),
+          use: [summarizable(view)],
           prompt: 'Answer.',
         }),
-        { model: 'summary-model', inputBudget: { optimizeAt: 800, max: 850 } },
+        { model: 'summary-model', input: { query: 'guide' }, inputBudget: { optimizeAt: 800, max: 850 } },
       )
 
       expect((await records.list('crux:request-summary:v1:source:')).entries).toHaveLength(2)
@@ -153,10 +156,11 @@ describe.sequential('knowledge planner interop', () => {
     const result = await requestHarness().runtime.generate(
       prompt({
         id: 'knowledge-receipt-identity',
-        use: [docs.retriever({ limit: 1 }).asContext({ query: 'guide' })],
+        input: z.object({ query: z.string() }),
+        use: [docs],
         prompt: 'Answer.',
       }),
-      { model: 'model-1' },
+      { model: 'model-1', input: { query: 'guide' } },
     )
 
     const serialized = JSON.stringify(await result.steps[0]!.request!.inspect())

@@ -151,6 +151,8 @@ export interface Retriever<
     query?: string | ((input: Record<string, unknown>) => string)
     limit?: number
     renderContext?: (hits: RetrieverHit[], meta: { query: string; mode: RetrieverMode; namespace: string }) => string
+    /** Attach retrieval tools to the returned context. Defaults from the configured inject mode. */
+    tools?: boolean
   }): Context<z.ZodType<{}>>
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(options?: TConfig): RetrieverTools<TConfig>
   inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>

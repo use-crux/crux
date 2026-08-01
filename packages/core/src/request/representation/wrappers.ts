@@ -13,7 +13,10 @@ import type {
   OffloadableLadder,
   OffloadableOptions,
   PreferLadder,
+  NormalizedRepresentationSource,
+  RepresentationContextSource,
   RepresentationSource,
+  RepresentationSourceInput,
   RepresentationSourceSchema,
   SummarizableInput,
   SummarizableLadder,
@@ -37,19 +40,23 @@ import type {
  * ```
  */
 export function prefer<
-  TSource extends RepresentationSource<z.ZodType>,
+  TSource extends RepresentationSourceInput<RepresentationSource<z.ZodType>>,
 >(
   primary: TSource,
   ...alternatives: readonly [
-    RepresentationSource<RepresentationSourceSchema<TSource>>,
-    ...RepresentationSource<RepresentationSourceSchema<TSource>>[],
+    RepresentationSourceInput<RepresentationSourceSchema<NormalizedRepresentationSource<TSource>> extends z.ZodType
+      ? RepresentationSource<RepresentationSourceSchema<NormalizedRepresentationSource<TSource>>>
+      : never>,
+    ...RepresentationSourceInput<RepresentationSourceSchema<NormalizedRepresentationSource<TSource>> extends z.ZodType
+      ? RepresentationSource<RepresentationSourceSchema<NormalizedRepresentationSource<TSource>>>
+      : never>[],
   ]
-): PreferLadder<TSource> {
+): PreferLadder<NormalizedRepresentationSource<TSource>> {
   return Object.freeze({
     _tag: "prefer",
-    primary,
-    alternatives: Object.freeze([...alternatives]),
-  }) as PreferLadder<TSource>;
+    primary: normalizeSource(primary),
+    alternatives: Object.freeze(alternatives.map(normalizeSource)),
+  }) as PreferLadder<NormalizedRepresentationSource<TSource>>;
 }
 
 /**
@@ -69,16 +76,16 @@ export function prefer<
  * ```
  */
 export function summarizable<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 >(
   source: SummarizableInput<TSource>,
   options: Readonly<SummarizableOptions> = {},
-): SummarizableLadder<TSource> {
+): SummarizableLadder<NormalizedRepresentationSource<TSource>> {
   return Object.freeze({
     _tag: "summarizable",
-    source,
+    source: normalizeInput(source),
     options: Object.freeze({ ...options }),
-  }) as SummarizableLadder<TSource>;
+  }) as SummarizableLadder<NormalizedRepresentationSource<TSource>>;
 }
 
 /**
@@ -97,11 +104,11 @@ export function summarizable<
  * ```
  */
 export function offloadable<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 >(
   source: OffloadableInput<TSource>,
   options?: Readonly<OffloadableOptions>,
-): OffloadableLadder<TSource>;
+): OffloadableLadder<NormalizedRepresentationSource<TSource>>;
 /**
  * Declare a Tool output reference policy for later execution support.
  *
@@ -129,7 +136,7 @@ export function offloadable(
   }
   return Object.freeze({
     _tag: "offloadable",
-    source,
+    source: normalizeInput(source),
     options: Object.freeze({ ...options }),
   }) as OffloadableLadder;
 }
@@ -149,14 +156,14 @@ export function offloadable(
  * ```
  */
 export function droppable<
-  TSource extends RepresentationSource,
+  TSource extends RepresentationSourceInput,
 >(
   source: DroppableInput<TSource>,
-): DroppableLadder<TSource> {
+): DroppableLadder<NormalizedRepresentationSource<TSource>> {
   return Object.freeze({
     _tag: "droppable",
-    source,
-  }) as DroppableLadder<TSource>;
+    source: normalizeInput(source),
+  }) as DroppableLadder<NormalizedRepresentationSource<TSource>>;
 }
 
 /**
@@ -185,6 +192,48 @@ function isRepresentationInput(
   return (
     tag === "Context" ||
     tag === "prefer" ||
-    tag === "summarizable"
+    tag === "summarizable" ||
+    hasAsContext(value)
+  );
+}
+
+function normalizeInput<TSource extends RepresentationSourceInput>(
+  source: SummarizableInput<TSource> | OffloadableInput<TSource> | DroppableInput<TSource>,
+): unknown {
+  if (Array.isArray(source)) return Object.freeze(source.map(normalizeSource));
+  return isSourceInput(source) ? normalizeSource(source) : source;
+}
+
+function normalizeSource<TSource extends RepresentationSourceInput>(
+  source: TSource,
+): NormalizedRepresentationSource<TSource> {
+  if (isContext(source)) {
+    return source as NormalizedRepresentationSource<TSource>;
+  }
+  // Non-context values without an asContext() adapter (such as already-wrapped
+  // ladders reaching here through invalid nesting) pass through unchanged so
+  // the ladder constructors reject them with their own diagnostics.
+  return (
+    hasAsContext(source) ? source.asContext() : source
+  ) as NormalizedRepresentationSource<TSource>;
+}
+
+function isSourceInput(value: unknown): value is RepresentationSourceInput {
+  return isContext(value) || hasAsContext(value);
+}
+
+function isContext(value: unknown): value is RepresentationSource {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { readonly _tag?: unknown })._tag === "Context"
+  );
+}
+
+function hasAsContext(value: unknown): value is RepresentationContextSource {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    typeof (value as { readonly asContext?: unknown }).asContext === "function"
   );
 }

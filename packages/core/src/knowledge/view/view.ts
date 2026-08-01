@@ -13,10 +13,13 @@ import type { retrieve } from '../../retrieval/recipe/steps/built-ins'
 import type { RetrievalStep } from '../../retrieval/recipe/step'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from '../../retrieval/types'
 import type { KnowledgeBaseFilter, KnowledgeBaseGroundingConfig, KnowledgeBaseRetrieverConfig } from '../../retrieval/knowledge-base'
+import type { KnowledgeRetrievalContextOptions } from '../../retrieval/knowledge-base-context'
 import type { AssertionStage } from '../assertions/assertions'
 import type { AssertionSet, AssertionSetOptions } from '../assertions/set'
 import type { KnowledgeCommunitiesSurface } from '../communities/lifecycle'
 import type { NormalizedViewWhere, ViewWhere } from './where'
+import type { Context } from '../../prompt/context-types'
+import type { InternalPromptInjection } from '../../prompt/internal-injection'
 
 /** Configuration accepted by {@link KnowledgeView.retriever}. */
 export type KnowledgeViewRetrieverConfig<TFilter extends ExactFilter = ExactFilter> = KnowledgeBaseRetrieverConfig<TFilter>
@@ -63,6 +66,8 @@ export interface KnowledgeView<
   TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
   TModality extends EmbeddingModality = 'text',
 > {
+  /** Runtime discriminant used by prompt composition. */
+  readonly _tag: 'KnowledgeView'
   /** Stable view id. */
   readonly id: string
   /** Structural namespace bound to this handle. */
@@ -79,6 +84,10 @@ export interface KnowledgeView<
   ): RetrievalRecipe
   /** Return this view as grounded prompt context/tools. */
   grounding(config?: KnowledgeBaseGroundingConfig | RetrievalRecipeGroundingConfig): Grounding
+  /** Return this view as default retrieval prompt context. */
+  asContext(options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>>
+  /** Contribute default retrieval context when used directly in `use`. */
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
   /** Return this view as retrieval tools. */
   tools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   /** Return a lazy view-bound set of persisted assertions. */

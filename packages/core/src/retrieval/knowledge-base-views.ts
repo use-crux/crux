@@ -24,6 +24,13 @@ import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
 import { deriveBoundRetrievalRecipeIdentity, viewRecipeSurface } from './recipe/bound-identity'
 import type { Retriever, RetrievalToolConfig, RetrieverTools } from './types'
+import {
+  injectKnowledgeRetrievalContext,
+  knowledgeRetrievalContext,
+  type KnowledgeRetrievalContextOptions,
+} from './knowledge-base-context'
+import type { Context } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 
 interface KnowledgeBaseViewFactoryConfig<
   TMetadataSchema extends z.ZodType<unknown> | undefined,
@@ -129,6 +136,7 @@ function createViewHandle<
   })
 
   const handle: KnowledgeView<TMetadataSchema, TModality> = {
+    _tag: 'KnowledgeView',
     id: registration.viewId,
     namespace: config.namespace,
     resolve,
@@ -196,6 +204,10 @@ function createViewHandle<
         id: groundingConfig?.id ?? `grounding:${config.id}:${registration.viewId}`,
         retriever: handle.retriever() as unknown as Retriever,
       }),
+    asContext: (options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>> =>
+      knowledgeRetrievalContext(handle.retriever({ limit: options?.limit }) as unknown as Retriever, options),
+    inject: async (_args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> =>
+      injectKnowledgeRetrievalContext(handle.retriever() as unknown as Retriever),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => handle.retriever().asTools(toolConfig),
