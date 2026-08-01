@@ -137,6 +137,17 @@ function retrievalHitPreview(
   hit: RetrieverHit,
   index: number,
 ): Record<string, unknown> {
+  if (hit.kind === "finding") {
+    return {
+      rank: index + 1,
+      namespace: hit.namespace,
+      kind: "finding",
+      findingTarget: hit.citation.findingTarget,
+      score: hit.score,
+      preview: hit.content.slice(0, 240),
+      contentPreview: hit.content.slice(0, 240),
+    };
+  }
   return {
     rank: index + 1,
     namespace: hit.namespace,

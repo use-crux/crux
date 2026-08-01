@@ -101,6 +101,7 @@ export async function prepareIndexedChunkSearch<TModality extends EmbeddingModal
 
 /** Mark a dense-only media result without changing the public hit shape. */
 export function withMediaQueryProvenance(hit: RetrieverHit, marker: string): RetrieverHit {
+  if (hit.kind === 'finding') return hit
   return {
     ...hit,
     provenance: {

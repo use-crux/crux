@@ -1300,6 +1300,111 @@
       "title": "RAG recipe step target is unresolved"
     },
     {
+      "category": "composition",
+      "confidence": "high",
+      "description": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/expand-relations-unknown-type",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Rename the selected type or add it to the relation vocabulary in the knowledge pipeline.",
+          "kind": "manual",
+          "title": "Use a declared relation type"
+        }
+      ],
+      "id": "expand-relations-unknown-type",
+      "impact": "Unknown relation selections make graph expansion narrower than authored code suggests and can hide missing connected-knowledge coverage.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line expand-relations-unknown-type -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Relation expansion selects an unknown type"
+    },
+    {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
+      "docsUrl": "/docs/reference/crux-core/index-lints/knowledge-recipe-producer-conflict",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Remove the duplicate retrieve() or globalSearch() step so the recipe has exactly one producer.",
+          "kind": "manual",
+          "title": "Keep one producer step"
+        }
+      ],
+      "id": "knowledge-recipe-producer-conflict",
+      "impact": "Multiple producers make recipe execution ambiguous and mirror a runtime failure before retrieval can produce hits.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line knowledge-recipe-producer-conflict -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Knowledge recipe has multiple producer steps"
+    },
+    {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/assertions-unknown-type-selection",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Rename the selected assertion type or add it to the assertion stage types map.",
+          "kind": "manual",
+          "title": "Use a declared assertion type"
+        }
+      ],
+      "id": "assertions-unknown-type-selection",
+      "impact": "Unknown assertion selections produce empty or incomplete assertion context even though authored code appears to request a typed subset.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line assertions-unknown-type-selection -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Assertion selection names an unknown type"
+    },
+    {
       "category": "runtime",
       "confidence": "high",
       "description": "Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.",

@@ -597,7 +597,8 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
   // `retrieval.pipeline`, or operation reports) maps to its family instead of
   // falling through to the generic "trace" tag.
   const p = node.primitive ?? "";
-  if (p.startsWith("retrieval.")) return "retrieval";
+  if (p.startsWith("retrieval.") || p.startsWith("knowledge."))
+    return "retrieval";
   if (p.startsWith("embedding.")) return "embed";
   if (p.startsWith("memory.") || p.startsWith("blackboard")) return "memory";
   if (p.startsWith("effect.")) return "effect";

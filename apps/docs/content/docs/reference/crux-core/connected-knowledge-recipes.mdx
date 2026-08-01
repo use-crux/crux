@@ -1,0 +1,257 @@
+---
+title: Connected Knowledge Recipe Steps
+description: expandRelations(), globalSearch(), connected hit shapes, defaults, ceilings, and request receipts.
+---
+
+```ts
+import { expandRelations, globalSearch } from "@use-crux/core/retrieval";
+import type {
+  EvidenceHit,
+  FindingCitation,
+  FindingHit,
+  RetrieverHit,
+} from "@use-crux/core/retrieval";
+```
+
+## Overview
+
+Connected Knowledge adds two retrieval recipe steps:
+
+| Step | Phase | Produces |
+| --- | --- | --- |
+| `expandRelations()` | `hits -> hits` | Additional chunk evidence found through visible graph neighbors. |
+| `globalSearch()` | `queries -> hits` | Report-derived finding hits from community reports. |
+
+`globalSearch()` is exported from `@use-crux/core/retrieval`, not from
+`@use-crux/core/knowledge`.
+
+## `expandRelations(config?)`
+
+Creates a built-in recipe step that expands evidence hits through the bound
+knowledge graph.
+
+```ts
+interface ExpandRelationsConfig {
+  readonly types?: readonly string[];
+  readonly direction?: "out" | "in" | "both";
+  readonly depth?: number;
+  readonly limit?: number;
+  readonly seeds?: readonly ("hits" | "query")[];
+}
+
+function expandRelations(
+  config?: ExpandRelationsConfig,
+): RetrievalStep<"hits", "hits">;
+```
+
+### Parameters
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `types` | `readonly string[]` | All visible relation types | Passed to graph `neighbors()` when supplied. |
+| `direction` | `"out" \| "in" \| "both"` | `"both"` | `"both"` omits direction from graph reads. |
+| `depth` | `number` | `1` | Floored and clamped to at least `0`. Entity hops cost `0`; non-entity hops cost `1`. |
+| `limit` | `number` | `20` | Maximum unique added hits across all seeds. Floored and clamped to at least `0`. |
+| `seeds` | `readonly ("hits" \| "query")[]` | `["hits", "query"]` | Empty array returns input hits unchanged. Query seeding is currently deterministic no-op. |
+
+### Ceilings
+
+| Ceiling | Value | Behavior |
+| --- | --- | --- |
+| Neighbor fan-out per graph read | `64` | Adds a warning when a neighbor page reaches the ceiling. |
+| Total graph candidates | `512` | Adds one truncation warning when exceeded. |
+| RRF constant | `60` | Used to score added hits from graph rank and seed rank. |
+
+### Returns
+
+The returned step has `id: "expand-relations"`, `kind: "custom"`,
+`phase: { in: "hits", out: "hits" }`, `needsModel: false`, and built-in public
+config metadata.
+
+At run time, the step returns the original hits plus added evidence hits.
+Finding hits are not used as seeds and are preserved unchanged. Added hits get
+graph provenance under `hit.provenance.graph` with `seed`, encoded `path`,
+edge type names, and `distance`.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| Recipe has no bound knowledge reader | `Error("expandRelations() requires a knowledge binding. Use knowledgeBase().recipe(...) or a view recipe so graph access and visibility are bound.")` |
+
+### Example
+
+```ts
+import { expandRelations, retrieve } from "@use-crux/core/retrieval";
+
+const recipe = docs.recipe({
+  steps: [
+    retrieve({ limit: 10 }),
+    expandRelations({
+      types: ["mentions", "related"],
+      direction: "both",
+      depth: 1,
+      limit: 8,
+    }),
+  ],
+});
+
+const hits = await recipe.retrieve("release planning");
+```
+
+## `globalSearch(config)`
+
+Creates a producer step that maps community reports to finding hits.
+
+```ts
+interface GlobalSearchConfig {
+  readonly model: KnowledgeModel;
+  readonly scan?: "all" | "adaptive";
+  readonly detail?: "auto" | "overview" | "detailed";
+  readonly limit?: number;
+}
+
+function globalSearch(config: GlobalSearchConfig): RetrievalStep<"queries", "hits">;
+```
+
+### Parameters
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `model` | `KnowledgeModel` | Required | The model used for map calls. The step sets `needsModel: true`. |
+| `scan` | `"all" \| "adaptive"` | `"all"` | `"adaptive"` keeps root reports and reports whose parent is a root. |
+| `detail` | `"auto" \| "overview" \| "detailed"` | `"auto"` | `"auto"` deterministically selects overview or detailed from query, generations, strategy fingerprint, model fingerprint, scan, and limit. |
+| `limit` | `number` | `20` | Floored and clamped to at least `1`. |
+
+### Defaults And Ceilings
+
+| Constant | Value | Behavior |
+| --- | --- | --- |
+| Batch input budget | `24000` characters | Used for report packing and raw fallback limits. |
+| Map-call ceiling | `32` calls | Enforced before map calls when no request admission hook is present. |
+| Adaptive threshold | `50` | Recorded in adaptive trace entries. |
+
+### Run Behavior
+
+`globalSearch()` requires a recipe bound through `knowledgeBase().recipe(...)`
+or `view.recipe(...)` with `knowledgeBase({ communities })` configured. It
+rejects request filters. Use a typed view for scoped global search.
+
+Freshness resolution uses this order:
+
+1. If communities are `"ready"`, read reports and mark coverage `"exact"`.
+2. If a compatible older view generation can be compensated with added sources
+   under the 24,000 character budget, mark coverage `"compensated"`.
+3. If direct raw chunk mapping fits under the 24,000 character budget, mark
+   coverage `"raw-fallback"`.
+4. Otherwise wait for community materialization and mark coverage
+   `"materialization-wait"`.
+
+The step validates map output. If the first object fails schema validation or
+references an unknown finding id, it makes one repair call. If repair also
+fails, it throws.
+
+### Returns
+
+The returned step has `id: "global-search"`, `kind: "global-search"`,
+`phase: { in: "queries", out: "hits" }`, `model: config.model`, and
+`needsModel: true`.
+
+The step output is `FindingHit[]` plus a knowledge trace payload containing
+contributor, optional view, generations, coverage, coverage basis, scan,
+resolved detail, available and processed counts, adaptive trace, preflight,
+and truncations.
+
+### Failures
+
+| Condition | Error |
+| --- | --- |
+| Missing communities binding at construction through `retrievalRecipe()` | `RetrievalConfigError` code `"missing_model"` with the connected-communities message |
+| Missing communities binding at run time | `Error("globalSearch() requires connected knowledge communities. Configure knowledgeBase({ communities: communities({ model }) }) and run it through knowledgeBase().recipe(...) or view.recipe(...).")` |
+| Request has `filter` | `Error("globalSearch() does not accept request filters. Create a typed knowledge view and call view.recipe(...) instead.")` |
+| Admission hook returns `false` | `Error("globalSearch() was rejected by the request admission hook before map calls.")` |
+| No admission hook and preflight calls exceed `32` | Plain `Error` with estimated calls, report count, and remedies |
+| Repair validation fails | `Error("globalSearch() batch <n> failed validation after repair: <details>")` |
+
+### Example
+
+```ts
+import { globalSearch } from "@use-crux/core/retrieval";
+
+const recipe = docs.recipe({
+  steps: [
+    globalSearch({
+      model: reportModel,
+      detail: "overview",
+      scan: "adaptive",
+      limit: 12,
+    }),
+  ],
+});
+
+const findings = await recipe.retrieve("What changed in the launch plan?");
+```
+
+## Hit Kinds
+
+```ts
+type RetrieverHit = EvidenceHit | FindingHit;
+```
+
+### `EvidenceHit`
+
+```ts
+interface EvidenceHit {
+  readonly kind?: "evidence";
+  namespace: string;
+  readonly source: RetrieverSource;
+  chunkId: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  score: number;
+  parent?: {
+    parentId?: string;
+    key?: string;
+    title?: string;
+    summary?: string;
+    content?: string;
+    metadata?: Record<string, unknown>;
+  };
+  provenance?: HitProvenance;
+}
+```
+
+Absence of `kind` means evidence. Retrieval never hydrates `source.assetRef`
+automatically.
+
+### `FindingHit`
+
+```ts
+interface FindingHit {
+  readonly kind: "finding";
+  readonly namespace: string;
+  readonly content: string;
+  readonly score: number;
+  readonly citation: FindingCitation;
+}
+
+interface FindingCitation {
+  readonly findingTarget: string;
+  readonly supports: readonly KnowledgeRef[];
+  readonly assertionRefs: readonly { readonly assertionId: string }[];
+  readonly lineage: {
+    readonly viewRevision: string | null;
+    readonly communityGeneration: string;
+    readonly reportCommunityId: string;
+  };
+}
+```
+
+`globalSearch()` clamps scores into `0.000001..1` by dividing the mapped
+`0..100` score by `100`.
+
+## Related
+
+- Reference: [Connected Knowledge communities](/docs/reference/crux-core/connected-knowledge-communities)
+- Reference: [Connected Knowledge inspection](/docs/reference/crux-core/connected-knowledge-inspection)
+- Reference: [Retrieval](/docs/reference/crux-core/retrieval)

@@ -31,6 +31,7 @@ export type {
   RequestCandidateInspection,
   RequestContributionInspection,
 } from "./receipt/inspection";
+export type { RequestKnowledgeInspection } from "./receipt/knowledge";
 export type {
   CompositionRequestReceiptNode,
   CompositionRequestReceiptTree,

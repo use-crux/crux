@@ -18,6 +18,7 @@ import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
 import type { CruxSourceFacts } from '../indexing'
 import type { AssetRef } from '../asset'
+import type { KnowledgeRef } from '../knowledge/refs'
 
 export type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 
@@ -57,8 +58,21 @@ export type RetrieverTools<TConfig extends RetrievalToolConfig | undefined = und
   >]: RetrievalToolDef
 }
 
-/** A single scored retrieval result. */
-export interface RetrieverHit {
+/** Immutable provenance issued for a global-search finding hit. */
+export interface FindingCitation {
+  readonly findingTarget: string
+  readonly supports: readonly KnowledgeRef[]
+  readonly assertionRefs: readonly { readonly assertionId: string }[]
+  readonly lineage: {
+    readonly viewRevision: string | null
+    readonly communityGeneration: string
+    readonly reportCommunityId: string
+  }
+}
+
+/** A chunk-shaped retrieval result. Absence of `kind` means evidence. */
+export interface EvidenceHit {
+  readonly kind?: 'evidence'
   namespace: string
   /** Structured attribution hydrated from the indexed record. */
   readonly source: RetrieverSource
@@ -76,6 +90,18 @@ export interface RetrieverHit {
   }
   provenance?: HitProvenance
 }
+
+/** A report-derived connected-knowledge finding. */
+export interface FindingHit {
+  readonly kind: 'finding'
+  readonly namespace: string
+  readonly content: string
+  readonly score: number
+  readonly citation: FindingCitation
+}
+
+/** A single scored retrieval result. */
+export type RetrieverHit = EvidenceHit | FindingHit
 
 /** Safe source attribution returned with a retrieval hit. */
 export interface RetrieverSource extends Omit<CruxSourceFacts, 'assetRef'> {
@@ -125,6 +151,8 @@ export interface Retriever<
     query?: string | ((input: Record<string, unknown>) => string)
     limit?: number
     renderContext?: (hits: RetrieverHit[], meta: { query: string; mode: RetrieverMode; namespace: string }) => string
+    /** Attach retrieval tools to the returned context. Defaults from the configured inject mode. */
+    tools?: boolean
   }): Context<z.ZodType<{}>>
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(options?: TConfig): RetrieverTools<TConfig>
   inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>

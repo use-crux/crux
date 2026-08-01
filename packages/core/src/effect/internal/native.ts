@@ -76,6 +76,11 @@ export interface NativeRecoveryContext {
 export interface NativeEffectProvider<TOperation, TRecoveryRef> {
   /** Describe the stable identity and current capability of an operation. */
   describe(operation: TOperation): NativeEffectDescription;
+  /** Optionally refine the safe resource summary from the settled output. */
+  resourceForOutput?(
+    operation: TOperation,
+    output: unknown,
+  ): EffectResource | readonly EffectResource[] | undefined;
   /** Prepare a future provider-owned recovery reference. */
   prepareRecovery?(
     operation: TOperation,
@@ -196,9 +201,13 @@ async function runNativeEffectOccurrence<
 
   try {
     const output = await span.withContext(async () => execute());
+    const resource =
+      safeResourceForOutput(provider, operation, output) ??
+      description.resource;
     const settled = effectLedger.transition(receipt.id, {
       outcome: "succeeded",
       completedAt: Date.now(),
+      ...(resource === undefined ? {} : { resource }),
     });
     settleNativeReceipt(settled, span, true);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
@@ -213,6 +222,18 @@ async function runNativeEffectOccurrence<
     settleNativeReceipt(settled, span, unknown);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     throw error;
+  }
+}
+
+function safeResourceForOutput<TOperation, TRecoveryRef>(
+  provider: NativeEffectProvider<TOperation, TRecoveryRef>,
+  operation: TOperation,
+  output: unknown,
+): EffectResource | readonly EffectResource[] | undefined {
+  try {
+    return provider.resourceForOutput?.(operation, output);
+  } catch {
+    return undefined;
   }
 }
 

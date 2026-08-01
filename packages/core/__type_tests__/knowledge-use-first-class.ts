@@ -1,0 +1,31 @@
+import { expectTypeOf } from 'vitest'
+import { z } from 'zod'
+import { context, prompt, summarizable, droppable, offloadable, prefer } from '../src'
+import type { DroppableLadder, PreferLadder, SummarizableLadder } from '../src'
+import { assertions, knowledgeBase } from '../src/knowledge'
+import { inMemoryStorage } from '../src/storage'
+
+const docs = knowledgeBase({
+  id: 'docs',
+  storage: inMemoryStorage(),
+  metadataSchema: z.object({ status: z.enum(['open', 'closed']) }),
+})
+const view = docs.view({ id: 'open', where: { status: 'open' } })
+const compact = context({ id: 'compact', system: 'Compact docs.' })
+const facts = assertions({
+  id: 'facts',
+  version: 1,
+  types: { fact: z.object({ id: z.string() }) },
+  run: () => undefined,
+})
+
+prompt({
+  use: [docs, view, docs.assertions(facts), docs.assertions(facts).resolve()],
+  prompt: 'Answer.',
+})
+
+expectTypeOf(summarizable(docs)).toMatchTypeOf<SummarizableLadder>()
+expectTypeOf(summarizable(view)).toMatchTypeOf<SummarizableLadder>()
+expectTypeOf(droppable(offloadable(docs))).toMatchTypeOf<DroppableLadder>()
+expectTypeOf(prefer(view, compact)).toMatchTypeOf<PreferLadder>()
+expectTypeOf(docs.retriever().asContext({ tools: true })).toMatchTypeOf<ReturnType<typeof docs.asContext>>()

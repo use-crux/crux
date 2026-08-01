@@ -21,6 +21,7 @@ use crate::helpers::{
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
 use crate::rules::effect::irreversible_required_boundary_findings;
 use crate::rules::evidence::evidence_record_findings;
+use crate::rules::knowledge::knowledge_lint_findings;
 use crate::rules::relation::relation_lint_findings;
 use crate::rules::thread::thread_lint_findings;
 
@@ -52,6 +53,12 @@ pub(crate) fn core_lint_findings(
     findings.extend(safety_duplicate_policy_id_findings(
         builder,
         &facts.definitions,
+    ));
+    findings.extend(knowledge_lint_findings(
+        builder,
+        &facts.definitions,
+        &facts.relations,
+        by_id,
     ));
     findings.extend(effect_duplicate_identity_findings(builder, facts));
     findings.extend(irreversible_required_boundary_findings(builder, facts));

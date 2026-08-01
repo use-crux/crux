@@ -99,7 +99,13 @@ export function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInj
 
 /** Classify a private injectable entry by its `_tag`, falling back to `injectable`. */
 export function injectableContributionKind(entry: InternalInjectableEntry): CruxContextInjectableKind {
-  if (entry._tag === 'Retriever' || entry._tag === 'RetrievalPipeline' || entry._tag === 'Grounding') {
+  if (
+    entry._tag === 'Retriever' ||
+    entry._tag === 'RetrievalPipeline' ||
+    entry._tag === 'Grounding' ||
+    entry._tag === 'KnowledgeBase' ||
+    entry._tag === 'KnowledgeView'
+  ) {
     return 'retriever'
   }
   if (entry._tag === 'Skill') return 'skill'

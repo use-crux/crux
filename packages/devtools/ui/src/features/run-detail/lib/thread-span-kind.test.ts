@@ -35,3 +35,15 @@ describe("thread span Run Detail projection", () => {
     expect(semanticKindFor(node("plan.update"))).not.toBe("thread");
   });
 });
+
+describe("Connected Knowledge span Run Detail projection", () => {
+  it.each([
+    "knowledge.expand-relations",
+    "knowledge.global-search",
+    "knowledge.derive",
+    "knowledge.compile",
+  ])("tags %s as a retrieval span in the capabilities family", (primitive) => {
+    expect(semanticKindFor(node(primitive))).toBe("retrieval");
+    expect(primitiveFamily(primitive)).toBe("capabilities");
+  });
+});

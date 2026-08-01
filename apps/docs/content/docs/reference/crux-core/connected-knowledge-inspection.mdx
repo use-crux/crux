@@ -1,0 +1,132 @@
+---
+title: Connected Knowledge Inspection
+description: Knowledge handle inspection and RequestKnowledgeInspection on inspectRequest().
+---
+
+```ts
+import {
+  inspectRequest,
+  type RequestInspection,
+  type RequestKnowledgeInspection,
+} from "@use-crux/core";
+import type {
+  KnowledgeBaseInspection,
+  KnowledgeViewInspection,
+} from "@use-crux/core";
+```
+
+## Overview
+
+Connected Knowledge has two public inspection surfaces:
+
+| Surface | Reads |
+| --- | --- |
+| `knowledgeBase().inspect()` and `view.inspect()` | Handle configuration, lifecycle counters, capabilities, view predicate, and optional view revision hash. |
+| `inspectRequest(...).knowledge` | Redacted connected-knowledge recipe trace projections attached to a provider request receipt. |
+
+This page documents the receipt projection. Handle inspection shapes are also
+listed on the main Connected Knowledge page.
+
+## `RequestInspection.knowledge`
+
+```ts
+interface RequestInspection {
+  readonly knowledge?: readonly RequestKnowledgeInspection[];
+}
+```
+
+`knowledge` is assembled from retrieval recipe traces attached under the
+resolver metadata key `"crux.request.knowledgeTraces"`. If that metadata is
+absent or invalid, the projection is an empty frozen array on the retained
+inspection object.
+
+`inspectRequest()` throws `RequestInspectionUnavailableError` when the receipt
+is no longer retained locally and no observability inspection destination can
+return a valid inspection.
+
+## `RequestKnowledgeInspection`
+
+```ts
+interface RequestKnowledgeInspection {
+  readonly traceId: string;
+  readonly recipeId: string;
+  readonly fingerprint: string;
+  readonly stepId: string;
+  readonly contributor: string;
+  readonly view?: { readonly id: string; readonly viewRevision: string | null };
+  readonly generations: readonly string[];
+  readonly coverage: string;
+  readonly coverageBasis: string;
+  readonly scan?: string;
+  readonly detail?: string;
+  readonly counts: {
+    readonly available: { readonly reports: number; readonly findings?: number };
+    readonly processed: { readonly reports: number; readonly findings?: number };
+  };
+  readonly preflight?: {
+    readonly reports: number;
+    readonly batches: number;
+    readonly inputChars: number;
+    readonly calls: number;
+  };
+  readonly truncations: readonly string[];
+}
+```
+
+### Fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `traceId` | `string` | Recipe trace id that supplied this projection. |
+| `recipeId` | `string` | Stable recipe id. |
+| `fingerprint` | `string` | Stable recipe behavior fingerprint. |
+| `stepId` | `string` | Step id inside the recipe. |
+| `contributor` | `string` | Knowledge contributor emitted by the step, such as `"global-search"` or `"expand-relations"`. |
+| `view` | `{ id: string; viewRevision: string \| null }` | Present when the step was view-scoped and the trace had valid view metadata. |
+| `generations` | `readonly string[]` | Knowledge generation ids reported by the step. Non-string entries are dropped. |
+| `coverage` | `string` | Coverage mode reported by the step. Connected recipe steps currently emit `"exact"`, `"compensated"`, `"raw-fallback"`, or `"materialization-wait"`. |
+| `coverageBasis` | `string` | Content-free explanation of coverage. |
+| `scan` | `string` | Present for global search traces. |
+| `detail` | `string` | Present for global search traces after `"auto"` resolves. |
+| `counts.available` | `{ reports: number; findings?: number }` | Available report and finding counts. Invalid count records project to `{ reports: 0 }`. |
+| `counts.processed` | `{ reports: number; findings?: number }` | Processed report and finding counts. Invalid count records project to `{ reports: 0 }`. |
+| `preflight` | `{ reports; batches; inputChars; calls }` | Present only when all four fields are numbers. |
+| `truncations` | `readonly string[]` | Redacted truncation markers. Non-string entries are dropped. |
+
+### Projection Rules
+
+`RequestKnowledgeInspection` entries are only projected for trace steps that
+contain a valid `knowledge` object and string `stepId`, `contributor`,
+`coverage`, and `coverageBasis`. Invalid traces or invalid steps are skipped.
+
+The projection is content-free. It does not include query text, chunk content,
+report text, finding statements, filters, metadata payloads, or embeddings.
+
+### Example
+
+```ts
+const inspection = await inspectRequest(receipt);
+
+for (const entry of inspection.knowledge ?? []) {
+  console.log(entry.recipeId, entry.stepId, entry.coverage);
+}
+```
+
+## Request Retention
+
+Live request inspection is retained in process with:
+
+| Constant | Value |
+| --- | --- |
+| Retention limit | `256` inspections |
+| Retention duration | `5 * 60000` milliseconds |
+
+Cross-process lookup requires an observability transport with a request
+inspection destination. Returned remote inspections are validated and redacted
+before being returned.
+
+## Related
+
+- Reference: [Request evidence](/docs/reference/crux-core/request-evidence)
+- Reference: [Request invocation](/docs/reference/crux-core/request-invocation)
+- Reference: [Connected Knowledge recipe steps](/docs/reference/crux-core/connected-knowledge-recipes)

@@ -10,7 +10,7 @@
  */
 
 import type { z } from 'zod'
-import type { ChunkingOptions, Corpus, IndexResult, PipelineCacheConfig } from '../indexing'
+import type { ChunkingOptions, Corpus, IndexingPipeline, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import { grounding } from '../citations'
@@ -18,9 +18,16 @@ import type { Grounding, GroundingConfig } from '../citations'
 import type { MetadataFilter } from './request'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from './types'
 import { createKnowledgeBaseRuntime } from './knowledge-base-runtime'
+import { createKnowledgeBaseView } from './knowledge-base-views'
+import {
+  injectKnowledgeRetrievalContext,
+  knowledgeRetrievalContext,
+  type KnowledgeRetrievalContextOptions,
+} from './knowledge-base-context'
 import { retrievalRecipe, type RetrievalRecipe, type RetrievalRecipeConfig } from './recipe/recipe'
 import { retrieve } from './recipe/steps/built-ins'
 import type { RetrievalStep } from './recipe/step'
+import { deriveBoundRetrievalRecipeIdentity, knowledgeBaseRecipeSurface } from './recipe/bound-identity'
 import type {
   KnowledgeBaseIndexInput,
   KnowledgeBaseLifecycleState,
@@ -28,6 +35,14 @@ import type {
   KnowledgeBaseSource,
 } from './knowledge-base-runtime'
 import type { CorpusSyncResult } from '../indexing'
+import type { KnowledgeBaseViewConfig, KnowledgeView } from '../knowledge/view/view'
+import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from '../knowledge/assertions/set'
+import type { AssertionStage } from '../knowledge/assertions/assertions'
+import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import type { KnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
+import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
+import type { Context } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -81,8 +96,11 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
 /** Recipe options for {@link KnowledgeBase.recipe}. */
 export type KnowledgeBaseRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]> = Omit<
   RetrievalRecipeConfig<TSteps>,
-  'retriever'
->
+  'id' | 'retriever'
+> & {
+  /** Stable recipe id. Anonymous bound recipes derive one from read surface and behavior. */
+  id?: string
+}
 
 /** Grounding options for {@link KnowledgeBase.grounding}. */
 export type KnowledgeBaseGroundingConfig = Omit<GroundingConfig, 'id' | 'retriever'> & {
@@ -112,7 +130,11 @@ export interface KnowledgeBaseConfig<
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions
-  /** Metadata schema used to type retrieval filters. */
+  /** Explicit indexing pipeline used for document indexing. */
+  pipeline?: IndexingPipeline
+  /** Connected knowledge community report configuration. */
+  communities?: CommunitiesConfig
+  /** Metadata schema used to type retrieval filters and validate indexed metadata. */
   metadataSchema?: TMetadataSchema
   /** Lifecycle policy for inactive generations and vector retention. */
   lifecycle?: { retention?: 'cleanup' | 'retain-inactive' }
@@ -131,6 +153,8 @@ export interface KnowledgeBase<
   TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
   TModality extends EmbeddingModality = 'text',
 > {
+  /** Runtime discriminant used by prompt composition. */
+  readonly _tag: 'KnowledgeBase'
   /** Stable knowledge base id. */
   readonly id: string
   /** Structural namespace bound to this handle. */
@@ -143,6 +167,15 @@ export interface KnowledgeBase<
   remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
   /** Return a tenant-scoped handle with structural key-level isolation. */
   scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase<TMetadataSchema, TModality>
+  /** Return a live connected knowledge view selected by schema-typed metadata. */
+  view(config: KnowledgeBaseViewConfig<TMetadataSchema>): KnowledgeView<TMetadataSchema, TModality>
+  /** Return a lazy set of persisted assertions produced by one assertion stage. */
+  assertions<
+    const TTypes extends Record<string, z.ZodType<unknown>>,
+    const TSelected extends keyof TTypes & string = keyof TTypes & string,
+  >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>): AssertionSet<TTypes, TSelected>
+  /** Connected knowledge community lifecycle and reports, when configured. */
+  readonly communities?: KnowledgeCommunitiesSurface
   /** Return this knowledge base as a retriever. */
   retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>, TModality>
   /** Return this knowledge base as a retrieval recipe. */
@@ -151,6 +184,10 @@ export interface KnowledgeBase<
   ): RetrievalRecipe
   /** Return this knowledge base as grounded prompt context/tools. */
   grounding(config?: KnowledgeBaseGroundingConfig): Grounding
+  /** Return this knowledge base as default retrieval prompt context. */
+  asContext(options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>>
+  /** Contribute default retrieval context when used directly in `use`. */
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
   /** Return this knowledge base as retrieval tools. */
   tools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   /** Inspect configured parts and lifecycle capabilities. */
@@ -167,6 +204,9 @@ export function knowledgeBase<
   if (config.corpus && config.corpus.id !== config.id) {
     throw new Error(`knowledgeBase("${config.id}") requires corpus.id to match the knowledge base id.`)
   }
+  if (config.pipeline && config.chunking) {
+    throw new Error('knowledgeBase() accepts either pipeline or chunking, not both.')
+  }
   const namespace = config.corpus?.namespace ?? config.id
   return createKnowledgeBaseHandle({ ...config, namespace }, true)
 }
@@ -179,8 +219,18 @@ function createKnowledgeBaseHandle<
   includeScope: boolean,
 ): KnowledgeBase<TMetadataSchema, TModality> {
   const runtime = createKnowledgeBaseRuntime(config)
+  const records = config.records ?? config.storage?.records
+  const communities = createRecipeCommunitiesBinding({
+    records,
+    assets: config.storage?.assets,
+    indexerId: config.id,
+    namespace: config.namespace,
+    config: config.communities,
+    retention: config.lifecycle?.retention,
+  })
 
   const handle = {
+    _tag: 'KnowledgeBase' as const,
     id: config.id,
     namespace: config.namespace,
     index: runtime.index,
@@ -188,22 +238,72 @@ function createKnowledgeBaseHandle<
     remove: runtime.remove,
     scope: (scopeConfig: KnowledgeBaseScopeConfig) =>
       createKnowledgeBaseHandle({ ...config, namespace: scopeConfig.namespace }, false),
+    view: (viewConfig: KnowledgeBaseViewConfig<TMetadataSchema>) =>
+      createKnowledgeBaseView({
+        id: config.id,
+        namespace: config.namespace,
+        metadataSchema: config.metadataSchema,
+        view: viewConfig,
+        records,
+        registry: runtime.viewRegistry(),
+        retriever: runtime.retriever,
+        knowledgeBinding: runtime.knowledgeBinding,
+        ...(config.communities ? { communities: config.communities } : {}),
+        ...(config.storage?.assets ? { assets: config.storage.assets } : {}),
+        ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
+      }),
+    assertions: <
+      const TTypes extends Record<string, z.ZodType<unknown>>,
+      const TSelected extends keyof TTypes & string = keyof TTypes & string,
+    >(stage: AssertionStage<TTypes>, options?: AssertionSetOptions<TTypes, TSelected>) => createAssertionSet({
+      records,
+      indexerId: config.id,
+      namespace: config.namespace,
+      stage,
+      ...(options?.types ? { selectedTypes: options.types } : {}),
+    }),
     retriever: (retrieverConfig?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>) =>
       runtime.retriever(retrieverConfig),
     recipe: <const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(
       recipeConfig?: KnowledgeBaseRecipeConfig<TSteps>,
     ): RetrievalRecipe => {
+      const knowledge = runtime.knowledgeBinding()
       if (!recipeConfig) {
-        return retrievalRecipe({
-          id: `${config.id}-recipe`,
-          retriever: runtime.retriever(),
-          steps: [retrieve()],
+        const steps = [retrieve()] as const
+        const surface = knowledgeBaseRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace })
+        const identity = deriveBoundRetrievalRecipeIdentity({
+          surface,
+          steps,
         })
+        const defaultRecipeConfig = {
+          id: identity.id,
+          fingerprint: identity.fingerprint,
+          retriever: runtime.retriever(),
+          steps,
+          ...(knowledge ? { knowledge } : {}),
+        }
+        return retrievalRecipe(defaultRecipeConfig)
       }
-      return retrievalRecipe({
+      const identity = recipeConfig.id !== undefined
+        ? { id: recipeConfig.id, fingerprint: undefined }
+        : deriveBoundRetrievalRecipeIdentity({
+            surface: knowledgeBaseRecipeSurface({ knowledgeBaseId: config.id, namespace: config.namespace }),
+            steps: recipeConfig.steps,
+            ...(recipeConfig.model ? { model: recipeConfig.model } : {}),
+            ...(recipeConfig.concurrency !== undefined ? { concurrency: recipeConfig.concurrency } : {}),
+            ...(recipeConfig.onSourceError !== undefined ? { onSourceError: recipeConfig.onSourceError } : {}),
+          })
+      const boundRecipeConfig = {
         ...recipeConfig,
-        retriever: runtime.retriever() as unknown as Retriever,
-      })
+        id: identity.id,
+        ...(identity.fingerprint ? { fingerprint: identity.fingerprint } : {}),
+        retriever: recipeConfig.steps.some((step) => step.kind === 'global-search')
+          ? globalSearchRecipeRetriever(config.id, config.namespace)
+          : runtime.retriever() as unknown as Retriever,
+        ...(knowledge ? { knowledge } : {}),
+        ...(communities.binding ? { communities: communities.binding } : {}),
+      }
+      return retrievalRecipe(boundRecipeConfig)
     },
     grounding: (groundingConfig?: KnowledgeBaseGroundingConfig): Grounding =>
       grounding({
@@ -211,6 +311,10 @@ function createKnowledgeBaseHandle<
         id: groundingConfig?.id ?? `grounding:${config.id}`,
         retriever: runtime.retriever() as unknown as Retriever,
       }),
+    asContext: (options?: KnowledgeRetrievalContextOptions): Context<z.ZodType<{}>> =>
+      knowledgeRetrievalContext(runtime.retriever({ limit: options?.limit }) as unknown as Retriever, options),
+    inject: async (_args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> =>
+      injectKnowledgeRetrievalContext(runtime.retriever() as unknown as Retriever),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => runtime.retriever().asTools(toolConfig),
@@ -223,8 +327,14 @@ function createKnowledgeBaseHandle<
       lifecycle: { ...runtime.lifecycle },
     }),
   }
+  const communityHandle = config.communities
+    ? {
+        communities: communities.surface,
+      }
+    : {}
+  const completeHandle = { ...handle, ...communityHandle }
   if (!includeScope) {
-    delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>>).scope
+    delete (completeHandle as Partial<Pick<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>>).scope
   }
-  return Object.freeze(handle) as KnowledgeBase<TMetadataSchema, TModality>
+  return Object.freeze(completeHandle) as KnowledgeBase<TMetadataSchema, TModality>
 }

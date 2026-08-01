@@ -14,6 +14,7 @@ import {
 import type { RequestAdaptation } from "./adaptations";
 import type { RequestInspectionEvidence } from "./inspection";
 import type { ResolvedRepresentationPolicy } from "../representation/ladder-types";
+import { KNOWLEDGE_TRACE_METADATA_KEY } from "./knowledge";
 
 /** Build content-free candidate, artifact, and linkage evidence. @internal */
 export function requestInspectionEvidence<
@@ -25,6 +26,7 @@ export function requestInspectionEvidence<
   readonly adaptations: readonly RequestAdaptation[];
   readonly provider: string;
   readonly maxInputTokens: number;
+  readonly metadata?: Readonly<Record<string, unknown>>;
   readonly media?: ProviderMediaHooks;
   readonly previousRequestId?: string;
 }): RequestInspectionEvidence {
@@ -128,9 +130,103 @@ export function requestInspectionEvidence<
     contributions: Object.freeze([...contributions.values()]),
     candidates: Object.freeze(candidates),
     artifacts: Object.freeze(artifacts),
+    knowledge: Object.freeze(knowledgeReceipts(input.metadata)),
     supportTools: Object.freeze(supportTools),
     linkedRequestIds: Object.freeze([...new Set(linkedRequestIds)]),
   });
+}
+
+function knowledgeReceipts(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): NonNullable<RequestInspectionEvidence["knowledge"]> {
+  const value = metadata?.[KNOWLEDGE_TRACE_METADATA_KEY];
+  if (!Array.isArray(value)) return Object.freeze([]);
+  return Object.freeze(value.flatMap(projectKnowledgeTrace));
+}
+
+function projectKnowledgeTrace(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.steps)) return [];
+  const traceId = stringField(value, "id");
+  const recipeId = stringField(value, "recipeId");
+  const fingerprint = stringField(value, "fingerprint");
+  if (!traceId || !recipeId || !fingerprint) return [];
+  return value.steps.flatMap((step) => {
+    if (!isRecord(step) || !isRecord(step.knowledge)) return [];
+    const knowledge = step.knowledge;
+    const stepId = stringField(step, "stepId");
+    const contributor = stringField(knowledge, "contributor");
+    const coverage = stringField(knowledge, "coverage");
+    const coverageBasis = stringField(knowledge, "coverageBasis");
+    if (!stepId || !contributor || !coverage || !coverageBasis) return [];
+    return [Object.freeze({
+      traceId,
+      recipeId,
+      fingerprint,
+      stepId,
+      contributor,
+      ...(isViewReceipt(knowledge.view) ? { view: knowledge.view } : {}),
+      generations: Object.freeze(stringArray(knowledge.generations)),
+      coverage,
+      coverageBasis,
+      ...(typeof knowledge.scan === "string" ? { scan: knowledge.scan } : {}),
+      ...(typeof knowledge.detail === "string" ? { detail: knowledge.detail } : {}),
+      counts: Object.freeze({
+        available: countRecord(knowledge.available),
+        processed: countRecord(knowledge.processed),
+      }),
+      ...(isPreflight(knowledge.preflight)
+        ? { preflight: Object.freeze(knowledge.preflight) }
+        : {}),
+      truncations: Object.freeze(stringArray(knowledge.truncations)),
+    })];
+  });
+}
+
+function countRecord(value: unknown): { readonly reports: number; readonly findings?: number } {
+  if (!isRecord(value) || typeof value.reports !== "number") {
+    return Object.freeze({ reports: 0 });
+  }
+  return Object.freeze({
+    reports: value.reports,
+    ...(typeof value.findings === "number" ? { findings: value.findings } : {}),
+  });
+}
+
+function isViewReceipt(value: unknown): value is { readonly id: string; readonly viewRevision: string | null } {
+  return isRecord(value) &&
+    typeof value.id === "string" &&
+    (typeof value.viewRevision === "string" || value.viewRevision === null);
+}
+
+function isPreflight(value: unknown): value is {
+  readonly reports: number;
+  readonly batches: number;
+  readonly inputChars: number;
+  readonly calls: number;
+} {
+  return isRecord(value) &&
+    typeof value.reports === "number" &&
+    typeof value.batches === "number" &&
+    typeof value.inputChars === "number" &&
+    typeof value.calls === "number";
+}
+
+function stringArray(value: unknown): readonly string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function stringField(
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const field = value[key];
+  return typeof field === "string" ? field : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function contributionBoundary(

@@ -827,6 +827,7 @@ export type { CruxEntity, QueryableCruxEntity } from "./tools/entity";
 
 // Retrieval
 export {
+  communities,
   knowledgeBase,
   retriever,
   retrievalRecipe,
@@ -841,6 +842,18 @@ export type {
   KnowledgeBaseConfig,
   KnowledgeBaseInspection,
   KnowledgeBaseScopeConfig,
+  CommunitiesConfig,
+  CommunitiesFactoryConfig,
+  CommunityBuildDescriptor,
+  CommunityRefreshHost,
+  KnowledgeCommunitiesSurface,
+  CommunityReadinessStatus,
+  CommunityReportsOptions,
+  CommunityReportsPage,
+  CommunityReport,
+  CommunityReportCounts,
+  CommunityReportFinding,
+  CommunityReportLineage,
   ScopedKnowledgeBase,
   PlannedQuery,
   RecipeTrace,

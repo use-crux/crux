@@ -8,6 +8,10 @@
 
 import { grounding } from '../../citations'
 import type { Grounding, GroundingConfig } from '../../citations'
+import { contextWithFamily } from '../../prompt/context'
+import { contributor } from '../../prompt/contributor'
+import type { ContextEntry } from '../../prompt/context-types'
+import { KNOWLEDGE_TRACE_METADATA_KEY } from '../../request/receipt/knowledge'
 import type { RetrievalModel } from '../model'
 import type { EmbeddingModality } from '../../embedding'
 import type { ExactFilter } from '../../storage'
@@ -16,8 +20,10 @@ import { createRetrieverTools } from '../tools'
 import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
 import { normalizeRetrieveRequest } from '../request'
 import { runRetrievalRecipe } from './run'
+import type { RetrievalCommunitiesBinding, RetrievalKnowledgeBinding } from './knowledge-binding'
 import { isBuiltInRetrievalStep, type RetrievalStep } from './step'
 import { normalizeRecipeSources, type NormalizedRecipeSource, type RetrievalRecipeSourceInput } from './source'
+import { fingerprintRetrievalRecipeBehavior } from './bound-identity'
 export type { RecipeTrace, StepTrace } from './trace'
 export type { RetrievalRecipeSource } from './source'
 
@@ -31,20 +37,37 @@ export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] =
   onSourceError?: 'fail' | 'skip-with-warning'
 }
 
+interface InternalRetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]>
+  extends RetrievalRecipeConfig<TSteps> {
+  knowledge?: RetrievalKnowledgeBinding
+  communities?: RetrievalCommunitiesBinding
+  fingerprint?: string
+}
+
 /** Named, inspectable retrieval composition. */
 export interface RetrievalRecipe {
   readonly _tag: 'RetrievalRecipe'
   readonly id: string
+  readonly fingerprint: string
   run(input: RetrieveInput, options?: RetrieveOptions): Promise<readonly RetrieverHit[]>
   retrieve(query: RetrieveInput, options?: RetrieveOptions): Promise<RetrieverHit[]>
   retrieveWithTrace(
     query: RetrieveInput,
     options?: RetrieveOptions,
   ): Promise<{ hits: RetrieverHit[]; trace: import('./trace').RecipeTrace }>
+  asContext(options: RetrievalRecipeContextOptions): ContextEntry
   asRetriever(): Retriever<ExactFilter, EmbeddingModality> & Retriever
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   asGrounding(config?: RetrievalRecipeGroundingConfig): Grounding
   inspect(): { id: string; stepCount: number; retrieverIds: readonly string[] }
+}
+
+/** Options for rendering a retrieval recipe as prompt context. */
+export interface RetrievalRecipeContextOptions {
+  readonly priority?: number
+  readonly query: string | ((input: Record<string, unknown>) => string)
+  readonly limit?: number
+  readonly renderContext?: (hits: RetrieverHit[], meta: { query: string; recipeId: string; namespace: string }) => string
 }
 
 /** Grounding options for {@link RetrievalRecipe.asGrounding}. */
@@ -57,16 +80,21 @@ export type RetrievalRecipeGroundingConfig = Omit<GroundingConfig, 'id' | 'retri
 export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   config: RetrievalRecipeConfig<TSteps>,
 ): RetrievalRecipe {
+  const internalConfig = config as InternalRetrievalRecipeConfig<TSteps>
   const sources = normalizeRecipeSources(config.retriever)
   validateRecipeConfig(config, sources)
+  const fingerprint = internalConfig.fingerprint ?? fingerprintRetrievalRecipeBehavior(config)
 
   const runnerConfig = {
     recipeId: config.id,
+    recipeFingerprint: fingerprint,
     sources,
     steps: config.steps,
     ...(config.model ? { model: config.model } : {}),
     concurrency: config.concurrency ?? 4,
     onSourceError: config.onSourceError ?? 'fail',
+    ...(internalConfig.knowledge ? { knowledge: internalConfig.knowledge } : {}),
+    ...(internalConfig.communities ? { communities: internalConfig.communities } : {}),
   }
   const retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'] = (queryOrRequest, options = {}) =>
     runRetrievalRecipe(runnerConfig, queryOrRequest, options)
@@ -79,9 +107,12 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   return Object.freeze({
     _tag: 'RetrievalRecipe' as const,
     id: config.id,
+    fingerprint,
     run: retrieve,
     retrieve,
     retrieveWithTrace,
+    asContext: (options: RetrievalRecipeContextOptions) =>
+      recipeContext(config.id, sources[0].retriever.namespace, retrieveWithTrace, options),
     asRetriever: () => recipeRetriever,
     asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
@@ -100,7 +131,45 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   })
 }
 
+function recipeContext(
+  recipeId: string,
+  namespace: string,
+  retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'],
+  options: RetrievalRecipeContextOptions,
+): ContextEntry {
+  return contributor({
+    id: `retrieval-recipe:${recipeId}`,
+    contribute: async ({ input }) => {
+      const query = typeof options.query === 'function' ? options.query(input) : options.query
+      const { hits, trace } = await retrieveWithTrace(query, { limit: options.limit })
+      const rendered = (options.renderContext ?? defaultRenderRecipeContext)(
+        hits,
+        { query, recipeId, namespace },
+      )
+      return {
+        contexts: [contextWithFamily({
+          id: `retrieval-recipe-context:${recipeId}`,
+          priority: options.priority ?? 50,
+          system: rendered,
+        }, 'retriever')],
+        metadata: { [KNOWLEDGE_TRACE_METADATA_KEY]: [trace] },
+      }
+    },
+  })
+}
+
+function defaultRenderRecipeContext(
+  hits: readonly RetrieverHit[],
+  meta: { query: string; recipeId: string; namespace: string },
+): string {
+  const lines = hits.map((hit) => hit.kind === 'finding'
+    ? `- [${hit.citation.findingTarget}] (score: ${hit.score.toFixed(2)}) ${hit.content}`
+    : `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
+  return `## Retrieved Context (${meta.namespace}/${meta.recipeId}: ${meta.query})\n${lines.join('\n')}`
+}
+
 function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly NormalizedRecipeSource[]): void {
+  const internalConfig = config as InternalRetrievalRecipeConfig
   if (!config.id.trim()) {
     throw new RetrievalConfigError('invalid_step_order', 'Retrieval recipe id must be non-empty.')
   }
@@ -117,6 +186,12 @@ function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly N
     if (step.needsModel && !step.model && !config.model) {
       throw new RetrievalConfigError('missing_model', `Retrieval step "${step.id}" requires a model.`)
     }
+    if (step.kind === 'global-search' && !internalConfig.communities) {
+      throw new RetrievalConfigError(
+        'missing_model',
+        `Retrieval step "${step.id}" requires connected knowledge communities. Configure knowledgeBase({ communities: communities({ model }) }) and run it through knowledgeBase().recipe(...) or view.recipe(...).`,
+      )
+    }
     if ((step.id === 'retrieve' || step.id === 'fusion') && !isBuiltInRetrievalStep(step)) {
       throw new RetrievalConfigError('reserved_step_id', `Retrieval step id "${step.id}" is reserved.`)
     }
@@ -125,7 +200,17 @@ function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly N
 
 function validateStepOrder(steps: readonly RetrievalStep[]): void {
   let current: 'queries' | 'hits' = 'queries'
+  let producer: RetrievalStep | undefined
   for (const step of steps) {
+    if (isProducerStep(step)) {
+      if (producer) {
+        throw new RetrievalConfigError(
+          'invalid_step_order',
+          `Retrieval recipe has more than one producer step: "${producer.id}" and "${step.id}". Use exactly one of retrieve() or globalSearch().`,
+        )
+      }
+      producer = step
+    }
     if (step.phase.in !== current) {
       throw new RetrievalConfigError(
         'invalid_step_order',
@@ -134,6 +219,10 @@ function validateStepOrder(steps: readonly RetrievalStep[]): void {
     }
     current = step.phase.out
   }
+}
+
+function isProducerStep(step: RetrievalStep): boolean {
+  return step.kind === 'retrieve' || step.kind === 'global-search'
 }
 
 function createRecipeRetriever(

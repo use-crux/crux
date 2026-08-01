@@ -98,14 +98,16 @@ function materializeRankings(
     if (!hit) return
     seen.add(ranking.index)
     const score = ranking.score ?? fallbackScore(rankIndex, validRankings.length)
-    reranked.push({
-      ...hit,
-      score,
-      provenance: {
-        ...hit.provenance,
-        rerankScore: score,
-      },
-    })
+    reranked.push(hit.kind === 'finding'
+      ? { ...hit, score }
+      : {
+          ...hit,
+          score,
+          provenance: {
+            ...hit.provenance,
+            rerankScore: score,
+          },
+        })
   })
 
   hits.forEach((hit, index) => {

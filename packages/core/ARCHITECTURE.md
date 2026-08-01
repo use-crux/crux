@@ -295,6 +295,18 @@ packages/core/src/       Published as @use-crux/core
 │   └── errors.ts       Unsupported-modality and incompatible-space errors
 ├── retrieval/
 │   └── index.ts        knowledgeBase(), retriever(), retrievalRecipe() — query-first retrieval, RAG facades, and traceable recipe composition
+├── knowledge/
+│   ├── index.ts        Canonical connected-knowledge entrypoint: knowledgeBase(), relate(), assertions(), communities(), knowledgeModel(), refs, conformance suite
+│   ├── refs.ts         Closed KnowledgeRef union and the bijective key-segment codec
+│   ├── keys.ts / records.ts / generation.ts  Persisted key contract, edge/entity codecs, and atomic generation ownership over RecordStore
+│   ├── structural.ts / graph-store.ts  Virtual structural projection (never persisted) unified with published semantic edges behind one reader
+│   ├── derive/         Per-source claim stages: runner with source-hash caching, locator target resolution, claim codecs
+│   ├── compile.ts      Claims → published graph generations with merged evidence supports and pending-locator retry
+│   ├── relate/         relate() vocabularies plus relateReferences()/relateEntities() built-ins
+│   ├── view/           Typed where clauses, incremental membership indexes, content-addressed revisions, view registry
+│   ├── assertions/     Evidence-backed assertion authoring, sets, AssertionRelation records, resolution, use[] context adapters
+│   ├── communities/    Deterministic bounded clustering, report generations with member-hash reuse, leased single-flight builds, readiness lifecycle
+│   └── conformance.ts  Runner-agnostic storage conformance suite for adapter packages
 ├── storage/
 │   └── index.ts        RecordStore, VectorStore, AssetStore, storage(), and in-memory implementations
 ├── workspace/

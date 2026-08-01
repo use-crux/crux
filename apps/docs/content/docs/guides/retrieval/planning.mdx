@@ -1,0 +1,170 @@
+---
+title: Planning
+description: Use Connected Knowledge with request planning, representation ladders, tools, artifacts, and receipts.
+---
+
+Knowledge contributors follow the same request-planning rules as other prompt
+context. Plain knowledge context is exact and required. Crux only chooses a
+summary, exact reference, or omission when you authorize that representation.
+
+Knowledge sources go into `use` directly: knowledge bases, views, assertion
+sets, and resolutions resolve their query from the prompt input (a string
+field named `query`, `question`, `message`, or `prompt`). Recipes compose
+query processing, so they enter through `asContext({ query })`. Use
+`asContext()` on a source only to override defaults such as the query
+mapping, limit, or priority.
+
+Use planning when retrieved context, assertion context, or global-search
+findings can grow enough to pressure the model input window.
+
+## Exact By Default
+
+Unwrapped knowledge context is required:
+
+```ts
+import { prompt } from "@use-crux/core";
+
+const published = docs.view({
+  id: "published",
+  where: { status: "published" },
+});
+
+const answer = prompt({
+  id: "published-answer",
+  use: [published, published.assertions(policyFacts)],
+  prompt: ({ input }) => input.question as string,
+});
+```
+
+If this request cannot fit, planning fails before the provider call. It does
+not silently summarize or drop the knowledge source.
+
+## Authorize Smaller Forms
+
+Wrap the contributor when a smaller representation is acceptable:
+
+```ts
+import {
+  droppable,
+  offloadable,
+  prompt,
+  summarizable,
+} from "@use-crux/core";
+
+const policyContext = summarizable(published);
+
+const resolvedFacts = offloadable(
+  summarizable(published.assertions(policyFacts).resolve()),
+);
+
+const optionalThemes = droppable(
+  reportSearch.asContext({
+    query: ({ question }) => question as string,
+  }),
+);
+
+const answer = prompt({
+  id: "planned-policy-answer",
+  use: [policyContext, resolvedFacts, optionalThemes],
+  prompt: ({ input }) => input.question as string,
+});
+```
+
+Use `summarizable()` for descriptive retrieved content or assertion summaries.
+Use `offloadable()` when exact recovery matters. Use `droppable()` only when the
+request is still correct without that contributor and its tools.
+
+## Keep Retriever Tools Sticky
+
+Retriever context can keep search tools available while planning selects a
+summary or reference representation.
+
+```ts
+const contextOptions: {
+  query: (input: Record<string, unknown>) => string;
+  tools: true;
+} = {
+  query: ({ question }) => question as string,
+  tools: true,
+};
+
+const searchableContext = docs.retriever({ limit: 8 }).asContext(contextOptions);
+
+const plannedSearchableContext = summarizable(searchableContext);
+```
+
+Representation changes keep the contributor's owned tools. Complete omission
+through `droppable()` removes that contributor and its tools.
+
+This matters for assistants that should start with retrieved context and still
+search during later tool rounds.
+
+## Artifact Identity
+
+Generated summaries are request artifacts. For knowledge sources, artifact
+identity includes the selected source versions in addition to rendered text and
+summary configuration. A view reindex that changes member source versions can
+produce a new summary artifact even when the visible text looks the same.
+
+This is intentional: knowledge summaries should not be reused across different
+source revisions by accident.
+
+## Global Search Receipts
+
+Recipes can contribute knowledge receipts when used as context:
+
+```ts
+const answer = prompt({
+  id: "theme-answer",
+  use: [
+    reportSearch.asContext({
+      query: ({ question }) => question as string,
+    }),
+  ],
+  prompt: ({ input }) => input.question as string,
+});
+
+const result = await runtime.generate(answer, {
+  input: { question: "Which billing risks recur?" },
+  inputBudget: { optimizeAt: 18_000, max: 24_000 },
+});
+
+const inspection = await result.steps[0].request.inspect();
+
+console.table(inspection.contributions);
+console.table(inspection.knowledge);
+```
+
+Knowledge receipts are redacted. They include recipe id, fingerprint, step id,
+contributor, coverage, counts, preflight estimate, scan/detail, view revision,
+and generation ids. They do not include retrieved text or report content.
+
+You can also inspect a serialized or retained receipt with `inspectRequest()`:
+
+```ts
+import { inspectRequest } from "@use-crux/core";
+
+const inspection = await inspectRequest(result.steps[0].request);
+```
+
+## Budget Guidance
+
+| Source | Default behavior | Good ladder |
+| --- | --- | --- |
+| Retriever context | Exact and required. | `summarizable()`, then `offloadable()` if exact recovery matters. |
+| View retriever context | Exact and required, pinned by resolved source versions. | `summarizable()` when the view can be summarized safely. |
+| Assertion set context | Exact bounded assertion lines. | `summarizable()` for large descriptive fact sets. |
+| Assertion resolution context | Exact selected partition plus partition counts. | `summarizable()` if the selected set can be compressed. |
+| Global-search recipe context | Exact finding context from the recipe result. | `droppable()` only when broad themes are optional. |
+
+For the full planning model, see
+[Context planning](/docs/guides/context-planning) and
+[Representation ladders](/docs/guides/context-planning/representations).
+
+## Related
+
+<Cards>
+  <Card title="Global search" description="Producer traces and knowledge receipts." href="/docs/guides/retrieval/global-search" />
+  <Card title="Assertions" description="Assertion context and resolution handles." href="/docs/guides/retrieval/assertions" />
+  <Card title="Context planning" description="Request budgets, representations, and receipts." href="/docs/guides/context-planning" />
+</Cards>

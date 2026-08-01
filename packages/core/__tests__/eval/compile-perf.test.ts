@@ -9,10 +9,13 @@ import { describe, expect, it } from "vitest";
  *
  * The baseline is measured with TypeScript 5.9.3. Public type changes must stay
  * within +20%; a large drop means the fixture stopped exercising inference.
- * Re-baselined after whole-request context planning added representation
- * ladders, preparation amendments, and receipts to the public surface.
+ * Re-recorded twice on 2026-07-31 for deliberate public surface growth —
+ * whole-request context planning (representation ladders, preparation
+ * amendments, receipts) and connected knowledge (views, relations,
+ * assertions, communities) — then measured on the merged tree, where the
+ * combined surfaces instantiate more than either branch alone.
  */
-const BASELINE_INSTANTIATIONS = 521_987;
+const BASELINE_INSTANTIATIONS = 581_481;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..", "..");

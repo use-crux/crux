@@ -47,6 +47,7 @@ import { IndexMcpDetail } from "./mcp-detail";
 import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 import { PromptTextSection } from "./prompt-text/section";
 import { IndexEvidence } from "./evidence-section";
+import { IndexKnowledge } from "./knowledge-section";
 import { ThreadInspector } from "@/features/thread/components/ThreadInspector";
 
 // ── relations block (two columns, full width) ────────────────────────────────
@@ -203,6 +204,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   mcp: IndexMcpDetail,
   workspaceSnapshots: IndexWorkspaceSnapshotUsage,
   evidence: IndexEvidence,
+  knowledge: IndexKnowledge,
   threadInspector: IndexThreadInspector,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
@@ -319,12 +321,23 @@ export function indexSectionOrder(def: ViewDef): string[] {
   if (k.startsWith("rag."))
     return [
       "hero",
+      "knowledge",
       "config",
       "deps",
       "data",
       "source",
       "observability",
       "relations",
+      "health",
+    ];
+  if (k.startsWith("knowledge."))
+    return [
+      "hero",
+      "knowledge",
+      "deps",
+      "source",
+      "relations",
+      "observability",
       "health",
     ];
   if (k.startsWith("storage."))
