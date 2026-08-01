@@ -57,6 +57,22 @@ export async function expectOutboxState(
   ).resolves.not.toHaveLength(0);
 }
 
+export async function expectWorkStatus(
+  store: InMemoryRuntimeStore,
+  namespace: string,
+  workId: WorkId,
+  status: "pending" | "suspended" | "completed",
+): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const work = await store.state.getWork(workId, { namespace });
+    if (work?.status === status) return;
+    await Promise.resolve();
+  }
+  await expect(
+    store.state.getWork(workId, { namespace }),
+  ).resolves.toMatchObject({ status });
+}
+
 export async function expectWaiterCounts(
   store: InMemoryRuntimeStore,
   workId: WorkId,

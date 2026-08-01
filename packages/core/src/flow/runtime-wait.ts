@@ -4,6 +4,7 @@ import type { JsonValue } from "../storage";
 import { runtimeRequiredError } from "../runtime/api/runtime-required";
 import {
   decodeSignalOccurrence,
+  isStaticSignalSource,
   signalSourceId,
   signalSourceMatch,
   signalSourcePredicate,
@@ -73,6 +74,7 @@ export function executeRuntimeWait<TPayload>(
       eventName: event.name,
       ...(signalId ? { signalId } : {}),
       ...(signalMatch === undefined ? {} : { signalMatch }),
+      ...(signalPredicate ? { signalPredicate: true } : {}),
       match:
         input.options && "match" in input.options
           ? (input.options.match ?? {})
@@ -86,14 +88,14 @@ function normalizeWaitSource<TPayload>(
   source: string | FlowWaitForEvent<TPayload> | StaticSignalSource,
 ): FlowWaitForEvent<TPayload> {
   if (typeof source === "string") return { name: source };
-  if ("_tag" in source) return { name: signalSourceId(source) };
+  if (isStaticSignalSource(source)) return { name: signalSourceId(source) };
   return source;
 }
 
 function staticSignalSource<TPayload>(
   source: string | FlowWaitForEvent<TPayload> | StaticSignalSource,
 ): StaticSignalSource | undefined {
-  return typeof source === "object" && "_tag" in source ? source : undefined;
+  return isStaticSignalSource(source) ? source : undefined;
 }
 
 function validateEventPayload<TPayload>(

@@ -48,7 +48,7 @@ export interface SignalOccurrence<
   readonly id: string;
   /** Literal identity of the Signal definition. */
   readonly signalId: TId;
-  /** JSON-safe payload after schema normalization. */
+  /** Detached, recursively frozen JSON payload after schema normalization. */
   readonly payload: TPayload;
   /** Process time at which publication was accepted. */
   readonly acceptedAt: Date;
@@ -59,10 +59,9 @@ export interface SignalOccurrence<
  *
  * @remarks Listener latency and failure cannot change the publication receipt.
  */
-export type SignalListener<
-  TId extends string,
-  TPayload extends JsonValue,
-> = (occurrence: SignalOccurrence<TId, TPayload>) => void | Promise<void>;
+export type SignalListener<TId extends string, TPayload extends JsonValue> = (
+  occurrence: SignalOccurrence<TId, TPayload>,
+) => void | Promise<void>;
 
 /** Idempotent function that stops one process-local Signal subscription. */
 export type SignalUnsubscribe = () => void;

@@ -31,6 +31,11 @@ import { classifyRuntimeFailure } from "./retry";
 import { transition, type WorkItem } from "./work";
 import { recordSignalDeliveryAttempt } from "../reactive/delivery-state";
 import { runtimeRetrySnapshotForError } from "./target-retry";
+import { persistMergedRetrySnapshot } from "./kernel-predicate-suspension";
+import {
+  settleCompletedSignalWork,
+  settleFailedSignalWork,
+} from "./signal-delivery-settlement";
 /** Serialized failure details carried into a wake failure composite. */
 export type WakeFailureInput =
   | {
@@ -164,9 +169,7 @@ export async function retryWorkAfterFailureInTransaction(
     attempt: current.attempt + 1,
     notBefore: input.retryAt,
   });
-  if (input.retrySnapshot) {
-    await tx.state.putSnapshot(input.retrySnapshot);
-  }
+  await persistMergedRetrySnapshot(tx, input.retrySnapshot);
   await recordSignalDeliveryAttempt(tx, current, "pending", deps.now());
   await tx.state.putWork(retryWork);
   await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
@@ -208,7 +211,7 @@ export async function failWorkInTransaction(
           },
         });
 
-  await recordSignalDeliveryAttempt(
+  await settleFailedSignalWork(
     tx,
     current,
     input.failure.kind === "dead-letter" ? "dead-letter" : "failed",
@@ -239,12 +242,7 @@ export async function completeWorkInTransaction(
     input.work,
     input.leaseToken,
   );
-  await recordSignalDeliveryAttempt(
-    tx,
-    current,
-    input.outcome.status === "blocked" ? "failed" : "delivered",
-    deps.now(),
-  );
+  await settleCompletedSignalWork(tx, current, input.outcome, deps.now());
   if (input.outcome.status === "suspended") {
     await recordSuspensionInTransaction(tx, deps, input.outcome.suspension);
     await tx.state.putIdempotencyKey({

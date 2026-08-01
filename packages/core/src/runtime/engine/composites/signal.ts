@@ -15,9 +15,15 @@ import type {
   SignalOccurrenceRecord,
 } from "../../reactive/records";
 import { signalDeliveryId } from "../../reactive/identity";
+import {
+  decodeSignalPayload,
+  encodeSignalPayload,
+  SIGNAL_PAYLOAD_CODEC,
+} from "../../reactive/payload-codec";
 import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
 import { emitEventInTransaction } from "../kernel-events";
+import { createRuntimeError } from "../errors";
 
 /** Input accepted by the atomic `signal.publish` composite. */
 export interface SignalPublishCompositeInput {
@@ -33,6 +39,8 @@ export interface SignalPublishCompositeInput {
   readonly acceptedAt: string;
   /** Versioned hash used for idempotent lookup without storing the raw key. */
   readonly idempotencyHash?: string;
+  /** Captured execution origin used to enforce cross-subsystem isolation. */
+  readonly executionScope?: "eval";
 }
 
 /**
@@ -68,7 +76,9 @@ export async function publishSignalInTransaction(
     : null;
   if (replay) {
     if (
-      canonicalSignalJson(replay.payload) !== canonicalSignalJson(input.payload)
+      canonicalSignalJson(
+        decodeSignalPayload(replay.payload, replay.payloadCodec),
+      ) !== canonicalSignalJson(input.payload)
     ) {
       throw new SignalError(
         "idempotency_conflict",
@@ -94,6 +104,17 @@ export async function publishSignalInTransaction(
     .filter(isFlowSignalWaiter)
     .filter((waiter) => signalWaiterMatches(waiter, input.payload));
   if (required.length === 0) return { accepted: false };
+  if (input.executionScope === "eval") {
+    throw createRuntimeError({
+      code: "EVAL_REACTIVE_DISPATCH_FORBIDDEN",
+      whatFailed: `Eval execution cannot dispatch Signal \`${input.signalId}\` to a durable Flow.`,
+      why: "Durable reactive work started inside an Eval has no isolated execution or evidence contract.",
+      whatStillWorks:
+        "Process-local Signal publication and ordinary Eval task execution remain available.",
+      nextStep:
+        "Publish this Signal outside Eval execution, or remove the armed durable consumer before running the Eval.",
+    });
+  }
   const requiredWaiterIds = new Set(required.map((waiter) => waiter.waiterId));
 
   const occurrence: SignalOccurrenceRecord = Object.freeze({
@@ -101,7 +122,8 @@ export async function publishSignalInTransaction(
     namespace: input.namespace,
     occurrenceId: input.occurrenceId,
     signalId: input.signalId,
-    payload: input.payload,
+    payload: encodeSignalPayload(input.payload),
+    payloadCodec: SIGNAL_PAYLOAD_CODEC,
     acceptedAt: input.acceptedAt,
     ...(input.idempotencyHash
       ? { idempotencyHash: input.idempotencyHash }
@@ -114,6 +136,7 @@ export async function publishSignalInTransaction(
     id: occurrence.occurrenceId,
     signalId: occurrence.signalId,
     payload: occurrence.payload,
+    payloadCodec: occurrence.payloadCodec,
     acceptedAt: occurrence.acceptedAt,
   };
   const emitted = await emitEventInTransaction(
@@ -151,9 +174,11 @@ async function signalStoreForPublication(
   input: SignalPublishCompositeInput,
 ): Promise<RuntimeSignalStorePort | undefined> {
   if (tx.signals) return tx.signals;
-  const required = (await tx.waiters.resolve(input.signalId, input.payload, {
-    namespace: input.namespace,
-  }))
+  const required = (
+    await tx.waiters.resolve(input.signalId, input.payload, {
+      namespace: input.namespace,
+    })
+  )
     .filter(isFlowSignalWaiter)
     .filter((waiter) => signalWaiterMatches(waiter, input.payload));
   if (required.length === 0) return undefined;
@@ -192,10 +217,7 @@ function deliveryFor(
   return Object.freeze({
     schemaVersion: 1,
     namespace: occurrence.namespace,
-    deliveryId: signalDeliveryId(
-      occurrence.occurrenceId,
-      waiter.waiterId,
-    ),
+    deliveryId: signalDeliveryId(occurrence.occurrenceId, waiter.waiterId),
     occurrenceId: occurrence.occurrenceId,
     consumer: Object.freeze({
       kind: "flow.signal-wait" as const,

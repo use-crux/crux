@@ -845,6 +845,9 @@ async function executeFlow<
                 ...(error.runtime?.signalMatch === undefined
                   ? {}
                   : { signalMatch: error.runtime.signalMatch }),
+                ...(error.runtime?.signalPredicate
+                  ? { signalPredicate: true }
+                  : {}),
                 match: error.runtime?.match ?? {},
                 timeoutAt,
               },
@@ -1471,15 +1474,13 @@ export function flow(
         snapshot.workId,
         runtime.now(),
       );
-      const wakeWork =
-        current.status === "suspended"
-          ? await runtime.store.state.setWorkPending(snapshot.workId, {
-              namespace: runtime.namespace,
-              work: runtimeResumeWork(snapshot, runtime.now()),
-              idempotencyKey,
-              now: runtime.now(),
-            })
-          : current;
+      const wakeWork = await runtime.kernel.resumeFlow({
+        namespace: runtime.namespace,
+        flowId: snapshot.flowId,
+        workId: snapshot.workId,
+        work: runtimeResumeWork(snapshot, runtime.now()),
+        idempotencyKey,
+      });
       if (!wakeWork) {
         throw runtimeFlowNotResumableError({
           api: `${name}.resume()`,
@@ -1490,10 +1491,7 @@ export function flow(
 
       await runtime.kernel.handleWake({
         ...wakeEnvelopeForWork(wakeWork),
-        idempotencyKey:
-          current.status === "suspended"
-            ? idempotencyKey
-            : wakeWork.idempotencyKey,
+        idempotencyKey: wakeWork.idempotencyKey,
       });
       return runtimeInlineResult(runtimeRef, flowId);
     });

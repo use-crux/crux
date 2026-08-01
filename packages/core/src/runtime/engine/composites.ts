@@ -47,6 +47,7 @@ import type {
   SignalPublishCompositeInput,
   SignalPublishCompositeResult,
 } from "./composites/signal";
+import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import { runtimeCompositeBodies } from "./composites/registry";
 
 export { runtimeCompositeBodies } from "./composites/registry";
@@ -61,6 +62,7 @@ export interface RuntimeCompositeDeps {
 
 /** Named composite operation implemented by the Runtime Engine kernel. */
 export type RuntimeCompositeKind =
+  | "flow.manual-resume"
   | "flow.signal-wait.register"
   | "signal.publish"
   | "wake.block-missing-target"
@@ -84,6 +86,8 @@ export type RuntimeCompositeKind =
 
 /** Input payloads accepted by named composite operations. */
 export interface RuntimeCompositeInput {
+  /** Atomically arbitrate a manual Flow resume with its armed bindings. */
+  readonly "flow.manual-resume": FlowManualResumeInput;
   /** Atomically suspend leased Flow work with its Signal waiter binding. */
   readonly "flow.signal-wait.register": {
     readonly work: WorkItem;
@@ -165,6 +169,8 @@ export interface RuntimeCompositeInput {
 
 /** Results returned by named composite operations. */
 export interface RuntimeCompositeResult {
+  /** Claimed pending work, or null when another waiter/timer already won. */
+  readonly "flow.manual-resume": WorkItem | null;
   /** No result. */
   readonly "flow.signal-wait.register": void;
   /** Durable Signal acceptance result or a process-local fallback decision. */

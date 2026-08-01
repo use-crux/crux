@@ -38,6 +38,7 @@ import type {
   RecordSuspensionInput,
   RuntimeSuspensionSnapshotInput,
 } from "./kernel-flow-types";
+import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import type {
   RuntimeScheduledWorkFlushRecord,
   RuntimeScheduledWorkIntent,
@@ -241,6 +242,8 @@ export type RuntimeWakeResult =
 
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
+  /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
+  resumeFlow(input: FlowManualResumeInput): Promise<WorkItem | null>;
   /** Atomically accept one Signal occurrence and every required delivery. */
   publishSignal(
     input: SignalPublishCompositeInput,

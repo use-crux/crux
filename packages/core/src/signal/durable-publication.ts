@@ -14,6 +14,8 @@ import type {
   SignalPublishReceipt,
 } from "./publication";
 import { createSignalOccurrenceId, hashSignalIdempotencyKey } from "./identity";
+import { hasActiveEvalExecutionScope } from "../eval/internal/scope";
+import { decodeSignalPayload } from "../runtime/reactive/payload-codec";
 
 interface PublishAcceptedSignalInput<
   TId extends string,
@@ -56,6 +58,7 @@ export async function publishAcceptedSignal<
       signalId: input.signalId,
       payload: input.payload,
       acceptedAt: acceptedAt.toISOString(),
+      ...(hasActiveEvalExecutionScope() ? { executionScope: "eval" } : {}),
       ...(input.options?.idempotencyKey === undefined
         ? {}
         : {
@@ -120,12 +123,16 @@ function publicOccurrence<
   readonly occurrenceId: string;
   readonly signalId: string;
   readonly payload: JsonValue;
+  readonly payloadCodec?: string;
   readonly acceptedAt: string;
 }): SignalOccurrence<TId, TPayload> {
   return Object.freeze({
     id: occurrence.occurrenceId,
     signalId: occurrence.signalId as TId,
-    payload: occurrence.payload as TPayload,
+    payload: decodeSignalPayload(
+      occurrence.payload,
+      occurrence.payloadCodec,
+    ) as TPayload,
     acceptedAt: new Date(occurrence.acceptedAt),
   });
 }

@@ -3,6 +3,7 @@ import { config, flow, signal } from "@use-crux/core";
 import {
   inMemoryRuntimeStore,
   node,
+  decodeSignalPayload,
   type FlowId,
   type InMemoryRuntimeStore,
 } from "@use-crux/core/runtime";
@@ -165,9 +166,13 @@ export function registerSignalDurableIdempotencyBehaviors(): void {
       });
       await expect(conflicting).rejects.not.toThrow("private-conflict-key");
       await expect(conflicting).rejects.not.toThrow("second-private-sha");
-      await expect(
-        store.signals.getOccurrence("signal-conflict-test", first.occurrenceId),
-      ).resolves.toMatchObject({ payload: { sha: "first-private-sha" } });
+      const occurrence = await store.signals.getOccurrence(
+        "signal-conflict-test",
+        first.occurrenceId,
+      );
+      expect(
+        decodeSignalPayload(occurrence!.payload, occurrence!.payloadCodec),
+      ).toEqual({ sha: "first-private-sha" });
       await expect(
         store.signals.listDeliveries(
           "signal-conflict-test",

@@ -5,6 +5,7 @@
  */
 
 import type { JsonValue } from "../../storage";
+import type { SignalPayloadCodec } from "./payload-codec";
 
 /** Stable reference to one durable reactive consumer. */
 export type ReactiveConsumerRef = {
@@ -28,8 +29,10 @@ export interface SignalOccurrenceRecord {
   readonly occurrenceId: string;
   /** Application-authored Signal identity. */
   readonly signalId: string;
-  /** Validated JSON-safe Signal payload. */
+  /** Adapter-opaque encoded payload when `payloadCodec` is present. */
   readonly payload: JsonValue;
+  /** Lossless payload encoding used by new records; absent on legacy rows. */
+  readonly payloadCodec?: SignalPayloadCodec;
   /** Optional provider-envelope provenance without provider-specific payloads. */
   readonly source?: {
     /** Provider-envelope source discriminator. */

@@ -142,19 +142,14 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
         }
 
         const now = runtime.now()
-        const idempotencyKey = flowManualResumeKey(
-          snapshot.workId,
-          now,
-        )
-        const wakeWork =
-          current.status === 'suspended'
-            ? await runtime.store.state.setWorkPending(snapshot.workId, {
-                namespace: runtime.namespace,
-                work: runtimeResumeWork(snapshot, now),
-                idempotencyKey,
-                now,
-              })
-            : current
+        const idempotencyKey = flowManualResumeKey(snapshot.workId, now)
+        const wakeWork = await runtime.kernel.resumeFlow({
+          namespace: runtime.namespace,
+          flowId: snapshot.flowId,
+          workId: snapshot.workId,
+          work: runtimeResumeWork(snapshot, now),
+          idempotencyKey,
+        })
         if (!wakeWork) {
           throw runtimeFlowNotResumableError({
             api: 'crux.flows.resume()',
@@ -165,8 +160,7 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
 
         await runtime.kernel.handleWake({
           ...wakeEnvelopeForWork(wakeWork),
-          idempotencyKey:
-            current.status === 'suspended' ? idempotencyKey : wakeWork.idempotencyKey,
+          idempotencyKey: wakeWork.idempotencyKey,
         })
         return runtimeRef.flowResult
       }),

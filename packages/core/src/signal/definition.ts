@@ -63,6 +63,8 @@ export interface Signal<TId extends string, TSchema extends SignalSchema> {
    * @returns A receipt describing the actual acceptance guarantee.
    * @throws {@link SignalValidationError} for schema-invalid payloads,
    * `CruxRuntimeError` with `PAYLOAD_NOT_JSON` for unsafe normalized output,
+   * `EVAL_REACTIVE_DISPATCH_FORBIDDEN` when Eval execution would wake a
+   * durable Flow,
    * or {@link SignalError} when publication is rejected.
    */
   publish(

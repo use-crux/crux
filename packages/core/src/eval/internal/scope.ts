@@ -82,6 +82,21 @@ export function hasActiveEvalCellScope(): boolean {
   return false;
 }
 
+/** Return true inside either tier of public Eval execution. @internal */
+export function hasActiveEvalExecutionScope(): boolean {
+  let scope = currentScope();
+  while (scope) {
+    if (
+      scope.descriptor.kind === "eval-run" ||
+      scope.descriptor.kind === "eval-cell"
+    ) {
+      return true;
+    }
+    scope = scope.parent;
+  }
+  return false;
+}
+
 function hasActiveEvalRunScope(): boolean {
   let scope = currentScope();
   while (scope) {

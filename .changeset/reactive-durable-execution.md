@@ -12,3 +12,15 @@ consumer completion. Runtime adapters remain source-compatible through an
 optional Signal-record port; durable bindings reject capability preflight when
 that port or a durable storage declaration is absent. Flow delivery retries now
 rotate replay/observability snapshots atomically with the retry work and outbox.
+
+Harden durable delivery against concurrent manual resumes and predicate
+evaluation races. Manual resume now arbitrates atomically with armed waiters
+and timers, busy in-process wakes remain retryable, predicate waits retain one
+durable binding with a FIFO occurrence queue, and retry snapshots preserve
+newly observed replay fingerprints and concurrently accepted candidates.
+Persist Signal payloads through a lossless codec that preserves negative zero
+and returns detached, deeply frozen occurrences. Eval execution rejects
+durable reactive dispatch before allocation while retaining process-local
+publication. Reactive adapter conformance now requires deterministic
+transaction-abort injection and verifies rollback across every write boundary,
+including multiple required deliveries.

@@ -11,6 +11,7 @@
 import type { RuntimeStoreAdapter, RuntimeStoreTransaction } from '../store'
 import { dispatchBatch } from './outbox'
 import { timerKey, waiterTimeoutKey } from './idempotency'
+import { shouldDeferPredicateTimeout } from './kernel-predicate-timeout'
 import { targetIdForNewWork, wakeEnvelopeForWork } from './kernel-shared'
 import type {
   MaintenanceTickOptions,
@@ -251,6 +252,9 @@ async function expireWaiterInTransaction(options: {
   readonly deps: RuntimeCompositeDeps
   readonly waiter: RuntimeWaiter
 }): Promise<boolean> {
+  if (await shouldDeferPredicateTimeout(options.tx, options.waiter)) {
+    return false
+  }
   const won = await options.tx.waiters.transition(
     options.waiter.waiterId,
     'armed',

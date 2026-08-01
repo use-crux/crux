@@ -102,6 +102,8 @@ export interface RuntimeFlowSuspendMetadata {
   readonly signalId?: string;
   /** Canonical match data for a filtered static Signal source. */
   readonly signalMatch?: JsonValue;
+  /** Whether deployed Flow code must evaluate a durable predicate candidate. */
+  readonly signalPredicate?: true;
   /** Top-level payload equality match registered with the waiter port. */
   readonly match: Readonly<Record<string, JsonValue>>;
   /** Replay fingerprint entry emitted for this suspension. */

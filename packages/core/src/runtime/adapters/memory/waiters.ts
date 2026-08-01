@@ -202,6 +202,7 @@ function cloneWaiterSource(
   return Object.freeze({
     kind: source.kind,
     signalId: source.signalId,
+    ...(source.filterKind ? { filterKind: source.filterKind } : {}),
     ...(source.match === undefined
       ? {}
       : { match: cloneJsonValue(source.match, "Signal waiter match") }),

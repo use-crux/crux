@@ -16,6 +16,7 @@ export async function recordSignalDeliveryAttempt(
   work: WorkItem,
   state: SettledSignalDeliveryState,
   updatedAt: Date,
+  options: { readonly settleAllPredicateCandidates?: boolean } = {},
 ): Promise<void> {
   if (work.work.kind !== "flow.resume") return;
   const signals = tx.signals;
@@ -26,10 +27,22 @@ export async function recordSignalDeliveryAttempt(
   const deliveryIds = new Set(
     (snapshot?.pendingSuspends ?? []).flatMap((suspend) => {
       const deliveryKey = suspend.deliveryKey ?? suspend.label;
+      const candidates = suspend.candidates ?? [];
       const delivered =
         suspend.delivered ?? snapshot?.deliveredSuspends?.[deliveryKey];
-      return delivered && suspend.waiterId
-        ? [signalDeliveryId(delivered.eventId, suspend.waiterId)]
+      const selected =
+        candidates.length > 0
+          ? options.settleAllPredicateCandidates
+            ? candidates
+            : candidates.slice(0, 1)
+          : delivered
+            ? [delivered]
+            : [];
+      const waiterId = suspend.waiterId;
+      return waiterId
+        ? selected.map((candidate) =>
+            signalDeliveryId(candidate.eventId, waiterId),
+          )
         : [];
     }),
   );

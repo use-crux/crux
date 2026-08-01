@@ -51,9 +51,7 @@ function encodeCanonicalSignalJson(value: JsonValue): string {
     return `[${value.map(encodeCanonicalSignalJson).join(",")}]`;
   }
   if (value !== null && typeof value === "object") {
-    const record = value as Readonly<
-      Record<string, JsonValue | undefined>
-    >;
+    const record = value as Readonly<Record<string, JsonValue | undefined>>;
     return `{${Object.keys(record)
       .sort()
       .map(
@@ -62,6 +60,7 @@ function encodeCanonicalSignalJson(value: JsonValue): string {
       )
       .join(",")}}`;
   }
+  if (typeof value === "number" && Object.is(value, -0)) return "-0";
   return JSON.stringify(value);
 }
 
@@ -137,9 +136,7 @@ function canonicalizeSignalJsonValue(value: JsonValue): JsonValue {
     return value.map(canonicalizeSignalJsonValue);
   }
   if (value !== null && typeof value === "object") {
-    const record = value as Readonly<
-      Record<string, JsonValue | undefined>
-    >;
+    const record = value as Readonly<Record<string, JsonValue | undefined>>;
     const canonical: Record<string, JsonValue> = {};
     for (const key of Object.keys(record).sort()) {
       Object.defineProperty(canonical, key, {
@@ -154,9 +151,7 @@ function canonicalizeSignalJsonValue(value: JsonValue): JsonValue {
   return value;
 }
 
-function signalPayloadNotJson(
-  subject: "match" | "normalized output",
-): never {
+function signalPayloadNotJson(subject: "match" | "normalized output"): never {
   throw createRuntimeError({
     code: "PAYLOAD_NOT_JSON",
     whatFailed: `Signal ${subject} is not JSON-serializable.`,

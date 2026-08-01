@@ -61,6 +61,7 @@ export function runtimeFlowRetrySnapshot(
   return {
     ...execution.snapshot,
     completedSteps: runtimeCompletedSteps(options.completedSteps),
+    fingerprint: execution.fingerprint.observed,
     continuation: options.continuation,
     updatedAt: execution.runtime.now(),
   };
@@ -241,12 +242,10 @@ export async function deliveredRuntimePayloads(
     delivered.set(deliveryKey, deliveredPayload(delivery, deliveryKey));
   }
   for (const suspend of snapshot.pendingSuspends) {
-    if (!suspend.delivered) continue;
+    const selected = suspend.candidates?.[0] ?? suspend.delivered;
+    if (!selected) continue;
     const deliveryKey = suspend.deliveryKey ?? suspend.label;
-    delivered.set(
-      deliveryKey,
-      deliveredPayload(suspend.delivered, deliveryKey),
-    );
+    delivered.set(deliveryKey, deliveredPayload(selected, deliveryKey));
   }
   return delivered;
 }

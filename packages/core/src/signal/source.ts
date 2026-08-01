@@ -10,6 +10,7 @@ import type { SignalOccurrence } from "./publication";
 import type { JsonValue } from "../storage";
 import { createRuntimeError } from "../runtime/engine/errors";
 import type { InferSignalSchemaOutput, SignalSchema } from "./schema-types";
+import { decodeSignalPayload } from "../runtime/reactive/payload-codec";
 
 interface AnySignalSource {
   readonly _tag: "Signal";
@@ -35,6 +36,15 @@ export type SignalOccurrenceFor<TSource> =
           | PredicateSignalView<infer TId, infer TSchema>
       ? SignalOccurrence<TId, InferSignalSchemaOutput<TSchema>>
       : never;
+
+/** Identify the two static Signal source tags. @internal */
+export function isStaticSignalSource(
+  source: unknown,
+): source is StaticSignalSource {
+  if (source === null || typeof source !== "object") return false;
+  const tag = (source as { readonly _tag?: unknown })._tag;
+  return tag === "Signal" || tag === "FilteredSignal";
+}
 
 /** Return the base Signal identity for a static source. @internal */
 export function signalSourceId(source: StaticSignalSource): string {
@@ -79,10 +89,12 @@ export function decodeSignalOccurrence(
   if (!Number.isFinite(acceptedAt.getTime())) {
     return invalidOccurrence(expectedSignalId);
   }
+  const payloadCodec =
+    typeof value.payloadCodec === "string" ? value.payloadCodec : undefined;
   return Object.freeze({
     id: value.id,
     signalId: expectedSignalId,
-    payload: value.payload as JsonValue,
+    payload: decodeSignalPayload(value.payload as JsonValue, payloadCodec),
     acceptedAt,
   });
 }

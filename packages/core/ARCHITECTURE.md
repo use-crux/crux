@@ -938,7 +938,7 @@ Generated and hand-written wake entries meet the kernel through `createRuntimeHa
 
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 
-Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, `RUNTIME_HOST_ONLY`, and `EVAL_REACTIVE_DISPATCH_FORBIDDEN`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline
 

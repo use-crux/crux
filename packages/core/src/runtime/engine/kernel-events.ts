@@ -25,6 +25,10 @@ import type {
 import { scheduleTimerInTransaction } from "./kernel-timers";
 import { transition } from "./work";
 import { fireWaiter } from "./kernel-waiter-fire";
+import { cancelFlowSnapshotBindings } from "./flow-binding-arbitration";
+import { preparePredicateSuspends } from "./kernel-predicate-suspension";
+import { flowEventResumeKey } from "./idempotency";
+import { wakeEnvelopeForWork } from "./kernel-shared";
 
 /** Dependencies for event/suspension kernel operations. */
 export interface EmitEventInTransactionDeps extends RuntimeCompositeDeps {}
@@ -65,19 +69,24 @@ export async function recordSuspensionInTransaction(
   const current = await tx.state.getWork(input.workId, {
     namespace: input.namespace,
   });
+  const currentSnapshot = await tx.state.getSnapshot(input.flowId, {
+    namespace: input.namespace,
+  });
+  const prepared = await preparePredicateSuspends(
+    tx,
+    currentSnapshot,
+    input.suspends,
+    input.snapshot.deliveredSuspends,
+    (suspend) => registerSuspend(tx, input, suspend),
+  );
+  await cancelFlowSnapshotBindings(
+    tx,
+    currentSnapshot,
+    prepared.retainedWaiterIds,
+  );
   if (current && current.status !== "suspended") {
     await tx.state.putWork(transition(current, { status: "suspended" }));
   }
-
-  const pendingSuspends = await input.suspends.reduce<
-    Promise<readonly RuntimePendingSuspend[]>
-  >(
-    async (previous, suspend) => [
-      ...(await previous),
-      await registerSuspend(tx, input, suspend),
-    ],
-    Promise.resolve([]),
-  );
   const flushedWork = await flushScheduledWorkInTransaction(
     tx,
     input.scheduledWork,
@@ -96,14 +105,32 @@ export async function recordSuspensionInTransaction(
       : {}),
     completedSteps: input.snapshot.completedSteps,
     fingerprint: input.snapshot.fingerprint,
-    pendingSuspends,
-    deliveredSuspends: input.snapshot.deliveredSuspends,
+    pendingSuspends: prepared.pending,
+    deliveredSuspends: prepared.deliveredSuspends,
     scheduledWork: mergeScheduledWorkRecords(
       input.snapshot.scheduledWork,
       flushedWork,
     ),
     updatedAt: deps.now(),
   });
+  if (prepared.nextCandidate) {
+    const idempotencyKey = flowEventResumeKey(
+      input.workId,
+      prepared.nextCandidate.eventId,
+    );
+    const pending = await tx.state.setWorkPending(input.workId, {
+      namespace: input.namespace,
+      work: { kind: "flow.resume", flowId: input.flowId },
+      idempotencyKey,
+      now: deps.now(),
+    });
+    if (!pending)
+      throw new Error("Predicate candidate wake could not resume Flow work.");
+    await tx.outbox.put(
+      { ...wakeEnvelopeForWork(pending), idempotencyKey },
+      { deliverAt: deps.now() },
+    );
+  }
 }
 
 /** Append an event and resume all matching waiters that win the CAS race. */
@@ -160,6 +187,9 @@ async function registerSuspend(
           source: {
             kind: "signal" as const,
             signalId: suspend.signalId,
+            ...(suspend.signalPredicate
+              ? { filterKind: "predicate" as const }
+              : {}),
             ...(suspend.signalMatch === undefined
               ? {}
               : { match: suspend.signalMatch }),
@@ -193,5 +223,7 @@ async function registerSuspend(
     waiterId: waiter.waiterId,
     timerId: timer?.timerId,
     timeoutAt: suspend.timeoutAt,
+    ...(suspend.signalPredicate ? { signalPredicate: true } : {}),
+    ...(suspend.signalPredicate ? { candidates: [] } : {}),
   };
 }

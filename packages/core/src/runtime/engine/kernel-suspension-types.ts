@@ -14,6 +14,8 @@ export interface RuntimeSuspendRegistration {
   readonly signalId?: string;
   /** Canonical match data when the Signal source is match-filtered. */
   readonly signalMatch?: JsonValue;
+  /** Retain one durable binding while deployed predicate code filters candidates. */
+  readonly signalPredicate?: true;
   /** Top-level payload equality match for this waiter. */
   readonly match: Readonly<Record<string, JsonValue>>;
   /** Optional timeout deadline that resumes work with `flow.timeout`. */

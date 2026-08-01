@@ -38,6 +38,7 @@ import type {
   StageDeferredIntentInput,
 } from "./kernel-deferred";
 import type { SignalPublishCompositeInput } from "./composites/signal";
+import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 
 const DEFAULT_LEASE_TTL_MS = 60_000;
 
@@ -108,6 +109,8 @@ export function createRuntimeKernel(
   });
 
   return Object.freeze({
+    resumeFlow: (input: FlowManualResumeInput) =>
+      runComposite("flow.manual-resume", input),
     publishSignal: (input: SignalPublishCompositeInput) =>
       runComposite("signal.publish", input),
     stageDeferredIntent: (input: StageDeferredIntentInput) =>

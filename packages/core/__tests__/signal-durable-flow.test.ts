@@ -19,6 +19,7 @@ import {
   durableMemoryRuntimeStore,
   expectFlowStatus,
   expectWaiterCounts,
+  expectWorkStatus,
 } from "./signal-durable-test-helpers";
 
 afterEach(() => {
@@ -182,12 +183,18 @@ describe("durable Signal Flow delivery", () => {
         changed.publish({ status: "failed" }),
       ).resolves.toMatchObject({ guarantee: "durable" });
       await firstPredicate.promise;
+      await expectWorkStatus(
+        store,
+        "signal-predicate-test",
+        snapshot!.workId,
+        "suspended",
+      );
       const waiters = await expectWaiterCounts(store, snapshot!.workId, {
         armed: 1,
-        total: 2,
+        total: 1,
       });
       expect(predicateCalls).toBe(1);
-      expect(waiters).toHaveLength(2);
+      expect(waiters).toHaveLength(1);
       expect(
         waiters.every((waiter) => !("predicate" in (waiter.source ?? {}))),
       ).toBe(true);
@@ -214,19 +221,20 @@ describe("durable Signal Flow delivery", () => {
   it("atomically binds the Signal waiter to its Flow snapshot through the dedicated composite", async () => {
     const baseStore = durableMemoryRuntimeStore();
     const compositeKinds: RuntimeCompositeKind[] = [];
-    const runComposite: NonNullable<RuntimeStoreAdapter["runComposite"]> =
-      async (kind, input) => {
-        compositeKinds.push(kind);
-        return runDefaultRuntimeComposite(
-          baseStore,
-          {
-            now: () => new Date("2026-07-31T23:00:00.000Z"),
-            newWorkId: () => "signal_binding_child" as WorkId,
-          },
-          kind,
-          input,
-        );
-      };
+    const runComposite: NonNullable<
+      RuntimeStoreAdapter["runComposite"]
+    > = async (kind, input) => {
+      compositeKinds.push(kind);
+      return runDefaultRuntimeComposite(
+        baseStore,
+        {
+          now: () => new Date("2026-07-31T23:00:00.000Z"),
+          newWorkId: () => "signal_binding_child" as WorkId,
+        },
+        kind,
+        input,
+      );
+    };
     const store = Object.freeze({ ...baseStore, runComposite });
     const crux = config({
       runtime: node({

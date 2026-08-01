@@ -24,6 +24,8 @@ export interface NewRuntimeWaiter {
     readonly kind: "signal";
     readonly signalId: string;
     readonly match?: JsonValue;
+    /** Deployed predicate code evaluates queued candidates during Flow replay. */
+    readonly filterKind?: "predicate";
   };
   /** Top-level payload equality match. */
   readonly match: Readonly<Record<string, JsonValue>>;

@@ -28,11 +28,13 @@ import {
 } from "../maintenance";
 import type { RuntimeCompositeBody, RuntimeCompositeKind } from "../composites";
 import { publishSignalInTransaction } from "./signal";
+import { resumeFlowManuallyInTransaction } from "./flow-manual-resume";
 
 /** Transaction body selected for every known composite name. */
 export const runtimeCompositeBodies: {
   readonly [K in RuntimeCompositeKind]: RuntimeCompositeBody<K>;
 } = Object.freeze({
+  "flow.manual-resume": resumeFlowManuallyInTransaction,
   "flow.signal-wait.register": completeWorkInTransaction,
   "signal.publish": publishSignalInTransaction,
   "wake.block-missing-target": blockMissingTargetInTransaction,

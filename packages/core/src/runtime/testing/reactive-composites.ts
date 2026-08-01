@@ -5,13 +5,16 @@ import type { FlowId, LeaseToken, RuntimeTargetId, WorkId } from "../ports";
 import type { RuntimeStoreAdapter } from "../store";
 import type { RuntimeSignalStorePort } from "../reactive/records";
 import { makeConformanceWorkItem } from "./store-fixtures";
-import { requireFaultHook, runComposite } from "./store-composite-case-utils";
+import { runComposite } from "./store-composite-case-utils";
+import { verifyReactiveCompositeRollback } from "./reactive-composite-rollback";
 
 const NAMESPACE = "reactive-conformance";
 const FLOW_ID = "flow_signal_conformance" as FlowId;
 const WORK_ID = "work_signal_conformance" as WorkId;
 const TARGET_ID = "signal conformance flow" as RuntimeTargetId;
 const OCCURRENCE_ID = "signal_occurrence_conformance";
+const SECOND_OCCURRENCE_ID = "signal_occurrence_conformance_2";
+const THIRD_OCCURRENCE_ID = "signal_occurrence_conformance_3";
 
 /** Options for {@link runReactiveCompositeAdapterTests}. */
 export interface RunReactiveCompositeAdapterTestsOptions<
@@ -23,18 +26,23 @@ export interface RunReactiveCompositeAdapterTestsOptions<
   readonly name: string;
   /** Create a fresh, isolated Runtime store with a concrete Signal port. */
   readonly createStore: () => TStore | Promise<TStore>;
-  /** Configure the next transaction to fail after N successful writes. */
-  readonly failAfterWrites?: (store: TStore, writes: number) => void;
-  /** Declare native substrate atomicity when injected partial writes are impossible. */
-  readonly substrateAtomicTransact?: boolean;
+  /**
+   * Abort the next composite transaction after exactly N successful mutations.
+   *
+   * @remarks Zero aborts before the first mutation. The hook must reset after
+   * one transaction and expose the unchanged pre-transaction records after
+   * the abort, regardless of whether the adapter uses a native transaction.
+   */
+  readonly failAfterWrites: (store: TStore, writes: number) => void;
 }
 
 /**
  * Register Signal occurrence/delivery atomicity checks for a Runtime adapter.
  *
- * @remarks The suite uses only the provider-neutral Runtime store and named
- * composite contracts. Adapters must either provide fault injection or declare
- * substrate-owned atomic transactions.
+ * @remarks The suite uses only provider-neutral Runtime store and named
+ * composite contracts. Every adapter must provide deterministic transaction
+ * abort injection; claiming substrate atomicity does not certify an adapter.
+ * Calling this suite certifies only the supplied adapter harness.
  */
 export function runReactiveCompositeAdapterTests<
   TStore extends RuntimeStoreAdapter & {
@@ -82,42 +90,113 @@ export function runReactiveCompositeAdapterTests<
       );
     });
 
-    it.skipIf(options.substrateAtomicTransact)(
-      "rolls back every reactive record when the required delivery write faults",
-      async () => {
-        const store = await options.createStore();
-        await prepareSignalWait(store);
-        requireFaultHook(options.failAfterWrites)(store, 6);
+    it("retains predicate candidates in FIFO order while work is pending or leased", async () => {
+      const store = await options.createStore();
+      await prepareSignalWait(store, 1, true);
 
-        await expect(publishConformanceSignal(store)).rejects.toThrow(
-          "Injected transaction failure",
-        );
-        await expect(
-          store.signals.getOccurrence(NAMESPACE, OCCURRENCE_ID),
-        ).resolves.toBeNull();
-        await expect(
-          store.signals.listDeliveries(NAMESPACE, OCCURRENCE_ID),
-        ).resolves.toHaveLength(0);
-        await expect(
-          store.events.read({ namespace: NAMESPACE }),
-        ).resolves.toMatchObject({
-          events: [],
-        });
-        await expect(
-          store.outbox.list({
-            namespace: NAMESPACE,
-            state: "pending",
-            limit: 10,
-          }),
-        ).resolves.toHaveLength(0);
-      },
-    );
+      await publishConformanceSignal(store);
+      await publishConformanceSignal(store, SECOND_OCCURRENCE_ID, "second");
+      const pending = await store.state.getWork(WORK_ID, {
+        namespace: NAMESPACE,
+      });
+      if (!pending || pending.status !== "pending") {
+        throw new Error("Predicate publication did not leave pending work.");
+      }
+      await store.state.putWork({
+        ...pending,
+        status: "leased",
+        leaseToken: "predicate_conformance_lease" as LeaseToken,
+      });
+      await publishConformanceSignal(store, THIRD_OCCURRENCE_ID, "third");
+
+      const snapshot = await store.state.getSnapshot(FLOW_ID, {
+        namespace: NAMESPACE,
+      });
+      expect(
+        snapshot?.pendingSuspends[0]?.candidates?.map(({ eventId }) => eventId),
+      ).toEqual([OCCURRENCE_ID, SECOND_OCCURRENCE_ID, THIRD_OCCURRENCE_ID]);
+      await expect(store.waiters.listByWork(WORK_ID)).resolves.toMatchObject([
+        { state: "armed", source: { filterKind: "predicate" } },
+      ]);
+      await expect(
+        store.outbox.list({
+          namespace: NAMESPACE,
+          state: "pending",
+          limit: 32,
+        }),
+      ).resolves.toHaveLength(1);
+    });
+
+    it("rolls back at every reactive write boundary", async () => {
+      await verifyReactiveCompositeRollback({
+        createStore: options.createStore,
+        failAfterWrites: options.failAfterWrites,
+        prepare: (store) => prepareSignalWait(store, 2),
+        publish: publishConformanceSignal,
+        namespace: NAMESPACE,
+        flowId: FLOW_ID,
+        workId: WORK_ID,
+        occurrenceId: OCCURRENCE_ID,
+      });
+    });
+
+    it("rolls back every predicate candidate and delivery write", async () => {
+      await verifyReactiveCompositeRollback({
+        createStore: options.createStore,
+        failAfterWrites: options.failAfterWrites,
+        prepare: async (store) => {
+          await prepareSignalWait(store, 2, true);
+          await publishConformanceSignal(store);
+        },
+        publish: (store) =>
+          publishConformanceSignal(store, SECOND_OCCURRENCE_ID, "second"),
+        namespace: NAMESPACE,
+        flowId: FLOW_ID,
+        workId: WORK_ID,
+        occurrenceId: SECOND_OCCURRENCE_ID,
+        verifyRollback: verifyPredicateAppendRolledBack,
+      });
+    });
   });
+}
+
+async function verifyPredicateAppendRolledBack(
+  store: RuntimeStoreAdapter & { readonly signals: RuntimeSignalStorePort },
+): Promise<void> {
+  await expect(
+    store.signals.getOccurrence(NAMESPACE, SECOND_OCCURRENCE_ID),
+  ).resolves.toBeNull();
+  await expect(
+    store.signals.listDeliveries(NAMESPACE, SECOND_OCCURRENCE_ID),
+  ).resolves.toHaveLength(0);
+  await expect(
+    store.events.read({ namespace: NAMESPACE }),
+  ).resolves.toMatchObject({ events: [{ eventId: OCCURRENCE_ID }] });
+  await expect(
+    store.outbox.list({ namespace: NAMESPACE, state: "pending", limit: 32 }),
+  ).resolves.toHaveLength(1);
+  await expect(
+    store.state.getWork(WORK_ID, { namespace: NAMESPACE }),
+  ).resolves.toMatchObject({ status: "pending" });
+  await expect(
+    store.state.getSnapshot(FLOW_ID, { namespace: NAMESPACE }),
+  ).resolves.toMatchObject({
+    status: "suspended",
+    pendingSuspends: [
+      { candidates: [{ eventId: OCCURRENCE_ID }] },
+      { candidates: [{ eventId: OCCURRENCE_ID }] },
+    ],
+  });
+  await expect(store.waiters.listByWork(WORK_ID)).resolves.toMatchObject([
+    { state: "armed", source: { filterKind: "predicate" } },
+    { state: "armed", source: { filterKind: "predicate" } },
+  ]);
 }
 
 async function prepareSignalWait(
   store: RuntimeStoreAdapter,
   bindingCount = 1,
+  signalPredicate = false,
 ): Promise<void> {
   await store.state.putWork(
     makeConformanceWorkItem({
@@ -143,18 +222,23 @@ async function prepareSignalWait(
         eventName: "signal.conformance",
         signalId: "signal.conformance",
         match: {},
+        ...(signalPredicate ? { signalPredicate: true as const } : {}),
       };
     }),
   });
 }
 
-async function publishConformanceSignal(store: RuntimeStoreAdapter) {
+async function publishConformanceSignal(
+  store: RuntimeStoreAdapter,
+  occurrenceId = OCCURRENCE_ID,
+  value = "accepted",
+) {
   return await runComposite(store, "signal.publish", {
     namespace: NAMESPACE,
-    occurrenceId: OCCURRENCE_ID,
+    occurrenceId,
     signalId: "signal.conformance",
-    payload: { value: "accepted" },
+    payload: { value },
     acceptedAt: "2026-07-31T22:30:00.000Z",
-    idempotencyHash: "conformance-hash",
+    idempotencyHash: `conformance-hash:${occurrenceId}`,
   });
 }

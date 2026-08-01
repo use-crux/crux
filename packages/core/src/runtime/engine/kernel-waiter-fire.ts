@@ -6,12 +6,12 @@ import type { RuntimeWaiter } from "../ports/waiters";
 import type { RuntimeOutboxItem, RuntimeStoreTransaction } from "../store";
 import type { RuntimeCompositeDeps } from "./composites";
 import { flowEventResumeKey, taskRunKey } from "./idempotency";
-import {
-  isTerminalWork,
-  targetIdForNewWork,
-  wakeEnvelopeForWork,
-} from "./kernel-shared";
+import { targetIdForNewWork, wakeEnvelopeForWork } from "./kernel-shared";
 import type { WorkItem } from "./work";
+import {
+  isPredicateSignalWaiter,
+  queuePredicateCandidate,
+} from "./kernel-predicate-wait";
 
 interface FireWaiterOptions {
   readonly tx: RuntimeStoreTransaction;
@@ -26,6 +26,12 @@ export async function fireWaiter(options: FireWaiterOptions): Promise<{
   readonly won: boolean;
   readonly outboxItems: readonly RuntimeOutboxItem[];
 }> {
+  if (isPredicateSignalWaiter(options.waiter)) {
+    return {
+      won: true,
+      outboxItems: await queuePredicateCandidate(options),
+    };
+  }
   const won = await options.tx.waiters.transition(
     options.waiter.waiterId,
     "armed",
@@ -57,13 +63,14 @@ export async function fireWaiter(options: FireWaiterOptions): Promise<{
       now: options.deps.now(),
     },
   );
-  const wakeWork =
-    transitioned ??
-    (await options.tx.state.getWork(options.waiter.workId, {
-      namespace: options.waiter.namespace,
-    }));
-  if (!wakeWork || isTerminalWork(wakeWork)) {
-    return { won: true, outboxItems: [] };
+  const current = transitioned
+    ? null
+    : await options.tx.state.getWork(options.waiter.workId, {
+        namespace: options.waiter.namespace,
+      });
+  const wakeWork = transitioned ?? current;
+  if (!wakeWork || wakeWork.status !== "pending") {
+    throw new Error("Waiter firing lost work arbitration.");
   }
 
   await options.tx.state.markSnapshotDelivered(options.waiter.workId, {

@@ -101,7 +101,13 @@ function createMicrotaskWake(
   return (envelope) =>
     new Promise<void>((resolve, reject) => {
       enqueueMicrotask(() => {
-        void input.kernel.handleWake(envelope).then(() => resolve(), reject);
+        void input.kernel.handleWake(envelope).then((result) => {
+          if (result.status === 409) {
+            reject(new Error("Runtime wake is busy."));
+            return;
+          }
+          resolve();
+        }, reject);
       });
     });
 }
