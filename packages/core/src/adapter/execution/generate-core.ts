@@ -43,10 +43,7 @@ import { createStructuredCompletion } from "./structured-completion";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
-import {
-  isCruxAdapterError,
-  normalizeAdapterCallError,
-} from "../normalized-outcome";
+import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
 import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import { emitInputTokenEstimate } from "./media-token-budget";
@@ -110,6 +107,7 @@ import {
   runPrepareStep,
 } from "../../request/prepare/step";
 import { createPreparationStatistics } from "../../request/prepare/statistics";
+import { dispatchSealedProvider } from "./sealed-provider-dispatch";
 import {
   resolveExecutionAmendment,
   type ResolvedExecutionAmendment,
@@ -512,34 +510,6 @@ export async function generateCore<
     });
   };
 
-  const dispatchSealedProvider = async (sealed: SealedRequestPlan<TExtra>) => {
-    preparationStatistics?.recordStarted(sealed.request.model);
-    try {
-      await validateRequestPlan(sealed);
-      const response = await callProvider(sealed.request);
-      preparationStatistics?.recordTerminal({
-        model: sealed.request.model,
-        outcome: "succeeded",
-        usage: response.extracted.usage,
-        transportRetries: response.extracted.transportRetries,
-      });
-      recordRequestRetryCount(
-        sealed.receipt,
-        response.extracted.transportRetries,
-      );
-      return response;
-    } catch (error) {
-      preparationStatistics?.recordTerminal({
-        model: sealed.request.model,
-        outcome:
-          isCruxAdapterError(error) && error.providerError.kind === "aborted"
-            ? "cancelled"
-            : "failed",
-      });
-      throw error;
-    }
-  };
-
   const generated = await sourceSession
     .withContext(() =>
       orchestrateGenerateWithCompletion(
@@ -615,7 +585,19 @@ export async function generateCore<
             const sealed = await sealProviderRequest(callArgs, boundary);
             lastCallArgs = sealed.request;
 
-            const { raw, extracted } = await dispatchSealedProvider(sealed);
+            const { raw, extracted } = await dispatchSealedProvider({
+              request: sealed.request,
+              model: sealed.request.model,
+              statistics: preparationStatistics,
+              validate: () => validateRequestPlan(sealed),
+              call: callProvider,
+              settlement: ({ extracted: response }) => ({
+                usage: response.usage,
+                transportRetries: response.transportRetries,
+              }),
+              recordRetries: (transportRetries) =>
+                recordRequestRetryCount(sealed.receipt, transportRetries),
+            });
             lastRaw = raw;
             const providerStep = stepFactsFromResponse(extracted);
             const guardedStep = await guardSafetySessionLanguageStep(
@@ -740,7 +722,19 @@ export async function generateCore<
               };
               const sealed = await sealProviderRequest(regenArgs, boundary);
               lastCallArgs = sealed.request;
-              const regen = await dispatchSealedProvider(sealed);
+              const regen = await dispatchSealedProvider({
+                request: sealed.request,
+                model: sealed.request.model,
+                statistics: preparationStatistics,
+                validate: () => validateRequestPlan(sealed),
+                call: callProvider,
+                settlement: ({ extracted: response }) => ({
+                  usage: response.usage,
+                  transportRetries: response.transportRetries,
+                }),
+                recordRetries: (transportRetries) =>
+                  recordRequestRetryCount(sealed.receipt, transportRetries),
+              });
               lastRaw = regen.raw;
               steps++;
               const providerRegenStep = stepFactsFromResponse(regen.extracted);
