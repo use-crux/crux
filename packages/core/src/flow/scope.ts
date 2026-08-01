@@ -104,8 +104,7 @@ import {
   validateSignalPayload,
 } from "./signals";
 import type { FlowDefinitionOptions, FlowSignalMap } from "./signals";
-import { staticSignalSourceIds } from "./static-signal-sources";
-import { assertReactiveCapabilities } from "../runtime/reactive/preflight";
+import { assertStaticSignalFlowActivation } from "./signal-activation";
 import { deliveredRuntimePayload, executeRuntimeWait } from "./runtime-wait";
 import { flowHandlerAcceptsInput } from "./handler-arity";
 import {
@@ -1464,14 +1463,11 @@ export function flow(
       ...(newWorkId ? { newWorkId } : {}),
       startMaintenance: false,
     });
-    const [durableSignalId] = staticSignalSourceIds(definitionOptions?.signals);
-    if (durableSignalId) {
-      assertReactiveCapabilities({
-        profile: "signal.durable-delivery",
-        runtime,
-        whatFailed: `Flow \`${name}\` cannot activate durable Signal wait \`${durableSignalId}\`.`,
-      });
-    }
+    assertStaticSignalFlowActivation({
+      flowName: name,
+      signals: definitionOptions?.signals,
+      runtime,
+    });
     runtimeRef.current = runtime;
     try {
       return await useRuntime(runtime, runtimeRef, runtimeDefinition);
@@ -1622,15 +1618,20 @@ export function flow(
   const handle = {
     name,
 
-    run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
+    async run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput);
-      if (getHooks().runtimeEngine) {
-        return runWithRuntime({
+      const runtimeDefinition = getHooks().runtimeEngine;
+      if (runtimeDefinition) {
+        return await runWithRuntime({
           ...runOptions,
           signals: definitionOptions?.signals,
         });
       }
-      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+      assertStaticSignalFlowActivation({
+        flowName: name,
+        signals: definitionOptions?.signals,
+      });
+      return await executeFlow<unknown, unknown, FlowSignalMap | undefined>(
         name,
         executeHandler,
         {
@@ -1640,14 +1641,19 @@ export function flow(
       );
     },
 
-    resume(
+    async resume(
       flowId: string,
       options?: FlowResumeOptions,
     ): Promise<FlowResult<unknown>> {
-      if (getHooks().runtimeEngine) {
-        return resumeWithRuntime(flowId, options);
+      const runtimeDefinition = getHooks().runtimeEngine;
+      if (runtimeDefinition) {
+        return await resumeWithRuntime(flowId, options);
       }
-      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+      assertStaticSignalFlowActivation({
+        flowName: name,
+        signals: definitionOptions?.signals,
+      });
+      return await executeFlow<unknown, unknown, FlowSignalMap | undefined>(
         name,
         executeHandler,
         {

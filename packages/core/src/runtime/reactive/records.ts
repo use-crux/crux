@@ -33,15 +33,6 @@ export interface SignalOccurrenceRecord {
   readonly payload: JsonValue;
   /** Lossless payload encoding used by new records; absent on legacy rows. */
   readonly payloadCodec?: SignalPayloadCodec;
-  /** Optional provider-envelope provenance without provider-specific payloads. */
-  readonly source?: {
-    /** Provider-envelope source discriminator. */
-    readonly kind: "provider-envelope";
-    /** Stable provider adapter identity. */
-    readonly providerId: string;
-    /** Provider-owned envelope identity. */
-    readonly envelopeId: string;
-  };
   /** ISO timestamp when publication was accepted. */
   readonly acceptedAt: string;
   /** Versioned hash of the caller idempotency key and canonical payload scope. */
@@ -66,28 +57,6 @@ export interface SignalDeliveryRecord {
   readonly attempts: number;
   /** ISO timestamp of the latest delivery transition. */
   readonly updatedAt: string;
-}
-
-/** Durable dynamic subscription shape reserved for Session-owned bindings. */
-export interface SignalSubscriptionRecord {
-  /** Record schema version. */
-  readonly schemaVersion: 1;
-  /** Runtime namespace that owns the subscription. */
-  readonly namespace: string;
-  /** Stable subscription identity. */
-  readonly subscriptionId: string;
-  /** Session owner; Flow delivery never writes this record. */
-  readonly sessionId: string;
-  /** Application-authored Signal identity. */
-  readonly signalId: string;
-  /** Optional canonical partial-equality match data. */
-  readonly match?: JsonValue;
-  /** Current ordered subscription lifecycle state. */
-  readonly state: "active" | "draining" | "removed";
-  /** Delivery barrier used by later ordered unsubscribe behavior. */
-  readonly barrierCursor?: string;
-  /** ISO timestamp when the subscription was created. */
-  readonly createdAt: string;
 }
 
 /** Runtime-store operations required by durable Signal composites. */
@@ -117,6 +86,4 @@ export interface RuntimeSignalStorePort {
   ): Promise<readonly SignalDeliveryRecord[]>;
   /** Persist one required delivery in the active transaction. */
   putDelivery(record: SignalDeliveryRecord): Promise<void>;
-  /** Persist one Session-owned dynamic subscription record. */
-  putSubscription(record: SignalSubscriptionRecord): Promise<void>;
 }

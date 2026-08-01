@@ -41,6 +41,7 @@
     "effect",
     "defer",
     "runtime-engine",
+    "runtime-adapter",
     "plan",
     "tasks",
     "skill",

@@ -227,7 +227,7 @@ export interface RuntimeStoreTransaction {
   /** Durable invocation scopes and their staged named work. */
   readonly deferred: RuntimeDeferredStorePort;
   /**
-   * Optional durable Signal occurrence, delivery, and subscription storage.
+   * Optional durable Signal occurrence and delivery storage.
    *
    * @remarks Existing adapters may omit this port. Durable Signal profiles
    * then fail capability preflight before allocating Flow work.

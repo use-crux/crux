@@ -2,7 +2,6 @@ import type {
   RuntimeSignalStorePort,
   SignalDeliveryRecord,
   SignalOccurrenceRecord,
-  SignalSubscriptionRecord,
 } from "../../reactive/records";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
@@ -67,13 +66,6 @@ export function createMemorySignalStore(
         cloneDelivery(record),
       );
     },
-    async putSubscription(record) {
-      recordWrite?.();
-      data.signalSubscriptions.set(
-        scopedKey(record.namespace, record.subscriptionId),
-        cloneSubscription(record),
-      );
-    },
   };
 }
 
@@ -83,7 +75,6 @@ function cloneOccurrence(
   return Object.freeze({
     ...record,
     payload: cloneJsonValue(record.payload, "Signal occurrence payload"),
-    ...(record.source ? { source: Object.freeze({ ...record.source }) } : {}),
   });
 }
 
@@ -91,16 +82,5 @@ function cloneDelivery(record: SignalDeliveryRecord): SignalDeliveryRecord {
   return Object.freeze({
     ...record,
     consumer: Object.freeze({ ...record.consumer }),
-  });
-}
-
-function cloneSubscription(
-  record: SignalSubscriptionRecord,
-): SignalSubscriptionRecord {
-  return Object.freeze({
-    ...record,
-    ...(record.match === undefined
-      ? {}
-      : { match: cloneJsonValue(record.match, "Signal subscription match") }),
   });
 }

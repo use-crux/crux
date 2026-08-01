@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { config, flow, signal } from "@use-crux/core";
+import { effect } from "@use-crux/core/effect";
 import {
   inMemoryRuntimeStore,
   node,
@@ -13,6 +14,38 @@ afterEach(() => {
 });
 
 describe("reactive Runtime capability preflight", () => {
+  it("rejects a static-Signal Flow before handler work when Runtime is absent", async () => {
+    const checksChanged = signal({
+      id: "ci.checks.no-runtime",
+      schema: z.object({ sha: z.string() }),
+    });
+    const executions = { handler: 0, step: 0, effect: 0 };
+    const recordAttempt = effect("ci.checks.no-runtime.effect", async () => {
+      executions.effect += 1;
+    });
+    const crux = config({});
+    const release = flow(
+      "release-without-runtime",
+      { signals: { checksChanged } },
+      async (scope) => {
+        executions.handler += 1;
+        await scope.step("must-not-run", async () => {
+          executions.step += 1;
+          await recordAttempt();
+        });
+        await scope.waitFor(checksChanged);
+      },
+    );
+
+    await expect(release.run()).rejects.toMatchObject({
+      code: "RUNTIME_REQUIRED",
+      whatFailed: "flow.waitFor() requires a Crux runtime engine.",
+    });
+    expect(executions).toEqual({ handler: 0, step: 0, effect: 0 });
+
+    crux.dispose();
+  });
+
   it("rejects a durable Flow Signal wait before acceptance on process-local storage", async () => {
     const checksChanged = signal({
       id: "ci.checks.changed",

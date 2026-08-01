@@ -72,19 +72,19 @@ export function createProcessLocalSignalState<
       const idempotencyKey = options?.idempotencyKey;
       const existing = replay(payload, options);
       if (existing !== undefined) return existing;
-      const acceptedAt = options?.acceptedAt ?? new Date();
+      const acceptedAt = options?.acceptedAt?.getTime() ?? Date.now();
       const occurrenceId = options?.occurrenceId ?? createSignalOccurrenceId();
       const receipt: SignalPublishReceipt<TId> = Object.freeze({
         occurrenceId,
         signalId,
-        acceptedAt,
+        acceptedAt: new Date(acceptedAt),
         guarantee: "process-local",
       });
       const occurrence: SignalOccurrence<TId, TPayload> = Object.freeze({
         id: occurrenceId,
         signalId,
         payload,
-        acceptedAt,
+        acceptedAt: new Date(acceptedAt),
       });
       if (idempotencyKey !== undefined) {
         idempotentPublications.set(idempotencyKey, {
@@ -112,13 +112,17 @@ function scheduleListeners<TId extends string, TPayload extends JsonValue>(
   occurrence: SignalOccurrence<TId, TPayload>,
 ): void {
   for (const listener of listeners) {
+    const listenerOccurrence = Object.freeze({
+      ...occurrence,
+      acceptedAt: new Date(occurrence.acceptedAt),
+    });
     queueMicrotask(() => {
       try {
-        void Promise.resolve(listener(occurrence)).catch(() => {
-          reportListenerFailure(occurrence);
+        void Promise.resolve(listener(listenerOccurrence)).catch(() => {
+          reportListenerFailure(listenerOccurrence);
         });
       } catch {
-        reportListenerFailure(occurrence);
+        reportListenerFailure(listenerOccurrence);
       }
     });
   }

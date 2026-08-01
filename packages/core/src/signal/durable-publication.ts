@@ -13,7 +13,10 @@ import type {
   SignalPublishOptions,
   SignalPublishReceipt,
 } from "./publication";
-import { createSignalOccurrenceId, hashSignalIdempotencyKey } from "./identity";
+import {
+  createDurableSignalOccurrenceId,
+  hashSignalIdempotencyKey,
+} from "./identity";
 import { hasActiveEvalExecutionScope } from "../eval/internal/scope";
 import { decodeSignalPayload } from "../runtime/reactive/payload-codec";
 
@@ -42,7 +45,7 @@ export async function publishAcceptedSignal<
     return input.local.publish(input.payload, input.options);
 
   const acceptedAt = new Date();
-  const occurrenceId = createSignalOccurrenceId();
+  const occurrenceId = createDurableSignalOccurrenceId();
   const runtimeRef: RuntimeTargetRuntimeRef = {};
   const runtime = createRuntimeWithHostContext({
     runtime: runtimeDefinition,
@@ -90,7 +93,7 @@ export async function publishAcceptedSignal<
     return Object.freeze({
       occurrenceId: occurrence.id,
       signalId: occurrence.signalId,
-      acceptedAt: occurrence.acceptedAt,
+      acceptedAt: new Date(occurrence.acceptedAt),
       guarantee: "durable" as const,
     });
   } catch (error) {

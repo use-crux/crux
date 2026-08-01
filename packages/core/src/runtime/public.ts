@@ -293,7 +293,6 @@ export type {
   RuntimeSignalStorePort,
   SignalDeliveryRecord,
   SignalOccurrenceRecord,
-  SignalSubscriptionRecord,
 } from "./reactive/records";
 export type * from "./store";
 

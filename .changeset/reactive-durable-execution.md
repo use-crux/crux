@@ -33,3 +33,10 @@ current-API recipes, exact Signal and Flow-wait reference pages, public JSDoc,
 and provider-neutral architecture guidance. The documentation distinguishes
 process-local acceptance, certified durable delivery, consumer completion,
 and a persisted Effect scope reference from restart-safe recovery.
+
+Require cryptographically secure occurrence identities for durable
+publication while retaining a process-local fallback, isolate mutable
+acceptance timestamps across receipts, records, and listeners, and trim the
+Runtime Signal adapter contract to the occurrence and Flow-delivery surface
+actually shipped. Add an exact adapter reference for records, payload codecs,
+named composites, durability declarations, and required reactive conformance.

@@ -213,6 +213,10 @@ Store adapters also implement bounded `prune()` methods on the owning ports: eve
 
 Store adapters may also implement `runComposite(kind, input)`. This optional method runs one named kernel composite atomically and returns the typed result for that composite. If omitted, core calls `transact()` and executes the same kernel-owned body in-process. Adapters should override it only when the platform needs a native atomic boundary, such as Convex running `runtime.composites.run` as one component mutation.
 
+Durable Signal adapter authors should follow the exact
+[Runtime Signal adapter surface](/docs/reference/crux-core/runtime-adapter),
+including its record, codec, atomicity, and certification requirements.
+
 The test harness and conformance helpers live on `@use-crux/core/runtime/testing`:
 
 ```ts
