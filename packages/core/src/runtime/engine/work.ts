@@ -35,8 +35,12 @@ export interface WorkItemError {
   readonly details?: JsonValue;
 }
 
-/** Durable runtime work record owned by the kernel state machine. */
-export interface RuntimeWorkItem {
+/**
+ * Durable runtime work record owned by the kernel state machine.
+ *
+ * @deprecated Use {@link RuntimeWorkItem} instead.
+ */
+export interface WorkItem {
   /** Kernel-generated stable work id. */
   readonly workId: WorkId;
   /** Runtime namespace isolating environments that share a substrate. */
@@ -69,11 +73,11 @@ export interface RuntimeWorkItem {
   readonly updatedAt: Date;
 }
 
-/** @deprecated Use RuntimeWorkState instead. */
-export type WorkStatus = RuntimeWorkState;
+/** Canonical durable runtime work record owned by the kernel state machine. */
+export type RuntimeWorkItem = WorkItem;
 
-/** @deprecated Use RuntimeWorkItem instead. */
-export type WorkItem = RuntimeWorkItem;
+/** @deprecated Use {@link RuntimeWorkState} instead. */
+export type WorkStatus = RuntimeWorkState;
 
 /** Transition request accepted by {@link transition}. */
 export type WorkTransition =

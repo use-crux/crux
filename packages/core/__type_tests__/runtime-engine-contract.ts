@@ -56,15 +56,29 @@ import {
   type TestRuntimeSettleResult,
 } from '@use-crux/core/runtime/testing'
 
+declare module '@use-crux/core/runtime' {
+  interface WorkItem {
+    readonly legacyMetadata?: { readonly source: 'legacy' }
+  }
+}
+
 declare const workId: WorkId
 declare const flowId: FlowId
 declare const taskId: TaskId
 declare const targetId: RuntimeTargetId
 declare const cursor: EventCursor
 declare const waiterId: WaiterId
+declare const legacyWorkItem: WorkItem
+declare const canonicalWorkItem: RuntimeWorkItem
 
 expectTypeOf<RuntimeWorkItem>().toEqualTypeOf<WorkItem>()
 expectTypeOf<RuntimeWorkState>().toEqualTypeOf<WorkStatus>()
+expectTypeOf(legacyWorkItem.legacyMetadata).toEqualTypeOf<
+  { readonly source: 'legacy' } | undefined
+>()
+expectTypeOf(canonicalWorkItem.legacyMetadata).toEqualTypeOf<
+  { readonly source: 'legacy' } | undefined
+>()
 expectTypeOf(workId).toMatchTypeOf<string>()
 expectTypeOf(flowId).toMatchTypeOf<string>()
 
