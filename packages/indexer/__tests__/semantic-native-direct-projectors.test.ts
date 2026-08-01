@@ -234,12 +234,23 @@ describe("native semantic direct Crux projectors", () => {
           inMemoryVectorStore,
           storage,
         } from '@use-crux/core/storage'
+        import {
+          postgresRecordStore,
+          postgresStorage,
+          postgresVectorStore,
+        } from '@use-crux/postgres'
 
         export const records = inMemoryRecordStore()
         export const vectors = inMemoryVectorStore()
         export const assets = inMemoryAssetStore()
         export const appStorage = storage({ records, vectors, assets })
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+        export const pgRecords = postgresRecordStore()
+        export const pgDense = postgresVectorStore({ dimensions: 2 })
+        export const pgSparse = postgresVectorStore({ dimensions: 2, sparseDimensions: 8 })
+        const dynamicOptions = { dimensions: 2, sparseDimensions: 8 }
+        export const pgDynamic = postgresVectorStore(dynamicOptions)
+        export const pgStorage = postgresStorage({ dimensions: 2, sparseDimensions: 8 })
       `,
     );
 
@@ -272,6 +283,58 @@ describe("native semantic direct Crux projectors", () => {
         }),
       ]),
     );
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.recordStore:pgRecords",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: {
+          record: { ttl: "lazy", filter: "native", watch: false, batch: true },
+        },
+      },
+    });
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.vectorStore:pgDense",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: { vector: { sparse: false, hybrid: false, fusion: [] } },
+      },
+    });
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.vectorStore:pgSparse",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: {
+          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+        },
+      },
+    });
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.vectorStore:pgDynamic",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: { vector: { sparse: false, hybrid: false, fusion: [] } },
+      },
+    });
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.bundle:pgStorage",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: {
+          record: { ttl: "lazy", filter: "native", watch: false, batch: true },
+          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+        },
+      },
+    });
   }, 20_000);
 });
 

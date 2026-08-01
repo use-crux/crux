@@ -1,6 +1,7 @@
 import type { ProjectRelation } from "@use-crux/core/project-index";
 import {
   isCallExpression,
+  isNumericLiteral,
   isObjectLiteralExpression,
   isStringLiteral,
   type Expression,
@@ -296,7 +297,18 @@ function storageScopeReference(
 function nativeStorageDescriptor(
   expression: Expression,
 ): SemanticStorageFactoryDescriptor | undefined {
-  return semanticStorageFactoryDescriptor(storageCallName(expression));
+  return semanticStorageFactoryDescriptor(
+    storageCallName(expression),
+    hasLiteralSparseDimensions(expression),
+  );
+}
+
+function hasLiteralSparseDimensions(expression: Expression): boolean {
+  if (!isCallExpression(expression)) return false;
+  const [firstArg] = nativeNodeList(expression.arguments);
+  if (!firstArg || !isObjectLiteralExpression(firstArg)) return false;
+  const value = storagePropertyExpression(firstArg, "sparseDimensions");
+  return Boolean(value && isNumericLiteral(value) && Number(value.text) > 0);
 }
 
 function bundleRelationType(

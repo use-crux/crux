@@ -1,9 +1,72 @@
 ---
 title: "@use-crux/postgres"
-description: Postgres Runtime Engine store adapter for durable Crux work, flow snapshots, events, waiters, timers, leases, outbox rows, and setup checks.
+description: PostgreSQL JSON records, pgvector retrieval, composed Connected Knowledge storage, and durable Runtime Engine storage.
 ---
 
 Peer dependency: `pg` >=8.22.0
+
+## Connected Knowledge storage
+
+```ts
+import {
+  postgresRecordStore,
+  postgresStorage,
+  postgresVectorStore,
+} from "@use-crux/postgres";
+```
+
+All three factories accept `url`, `pool`, `poolOptions`, and `schema`.
+`url` defaults to `DATABASE_URL`; `schema` defaults to `crux_storage`. A
+caller-supplied `Pool` is never closed. When Crux creates the pool, call the
+adapter's `close()` method during application shutdown.
+
+### `postgresRecordStore(options?)`
+
+The record adapter stores JSONB values with lazy expiry and a bigint CAS
+version. It supports ordered opaque-cursor listing, escaped literal prefixes,
+exact top-level scalar filters, batches, and linearizable versioned mutation.
+
+```ts
+const records = postgresRecordStore({ url: process.env.DATABASE_URL });
+await records.setup.apply();
+await records.put("docs:1", { title: "PostgreSQL" }, { ttlMs: 300_000 });
+```
+
+### `postgresVectorStore(options)`
+
+`dimensions` is required. Add `sparseDimensions` to enable sparse vectors,
+hybrid search, and RRF fusion. Crux indices are zero-based; the adapter converts
+them to pgvector's one-based `sparsevec` representation.
+
+```ts
+const vectors = postgresVectorStore({
+  dimensions: 1536,
+  sparseDimensions: 30_000,
+});
+await vectors.setup.apply();
+```
+
+Search uses cosine HNSW indexes and exact JSONB metadata prefilters. HNSW is
+approximate. Hybrid search uses bounded candidates and normalized RRF with
+stable key tie-breaking. DBSF throws `StorageError("unsupported_capability")`.
+
+### `postgresStorage(options)`
+
+The composed factory shares one pool, one setup lifecycle, and one close
+boundary:
+
+```ts
+const storage = postgresStorage({ dimensions: 1536 });
+const result = await storage.setup.check();
+if (!result.ok) await storage.setup.apply();
+```
+
+Setup is explicit and idempotent. `check()` never mutates the database;
+`apply()` creates the `vector` extension when needed, the storage schema,
+tables, constraints, and indexes. Data operations never run DDL. Diagnostics
+never include connection strings, SQL values, or stored content.
+
+## Runtime Engine
 
 ```ts
 import { postgres } from "@use-crux/postgres/runtime";
@@ -11,7 +74,7 @@ import { postgres } from "@use-crux/postgres/runtime";
 
 `@use-crux/postgres/runtime` provides the first-party durable store for the Runtime Engine. Use it with `node({ store })` for long-lived Node processes or with `serverless({ store, wake })` for HTTP-woken deployments.
 
-## `postgres(options?)`
+### `postgres(options?)`
 
 ```ts
 import { config } from "@use-crux/core";
@@ -39,7 +102,7 @@ export default config({
 
 The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
 
-## Setup
+### Runtime setup
 
 `postgres()` exposes a setup port used by `crux setup`:
 

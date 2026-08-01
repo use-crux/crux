@@ -33,6 +33,25 @@ const inMemoryVectorCapabilities = {
   },
 } as const satisfies IndexedStorageCapabilities;
 
+const postgresRecordCapabilities = {
+  record: { ttl: "lazy", filter: "native", watch: false, batch: true },
+} as const satisfies IndexedStorageCapabilities;
+
+function postgresVectorCapabilities(
+  sparse: boolean,
+): IndexedStorageCapabilities {
+  return {
+    vector: {
+      dense: true,
+      sparse,
+      hybrid: sparse,
+      fusion: sparse ? ["rrf"] : [],
+      filter: "pre",
+      consistency: "strong",
+    },
+  };
+}
+
 const storageFactoryByCallName: Readonly<
   Record<string, SemanticStorageFactoryDescriptor | undefined>
 > = {
@@ -121,6 +140,24 @@ const storageFactoryByCallName: Readonly<
       },
     },
   },
+  postgresRecordStore: {
+    kind: "storage.recordStore",
+    backend: "postgresRecordStore",
+    capabilities: postgresRecordCapabilities,
+  },
+  postgresVectorStore: {
+    kind: "storage.vectorStore",
+    backend: "postgresVectorStore",
+    capabilities: postgresVectorCapabilities(false),
+  },
+  postgresStorage: {
+    kind: "storage.bundle",
+    backend: "postgresStorage",
+    capabilities: {
+      ...postgresRecordCapabilities,
+      ...postgresVectorCapabilities(false),
+    },
+  },
 };
 
 /** Storage factory names that make a file semantically relevant. */
@@ -131,8 +168,23 @@ export const semanticStorageCallNames = Object.keys(
 /** Returns the beta storage descriptor for a known factory call. */
 export function semanticStorageFactoryDescriptor(
   callName: string | undefined,
+  hasLiteralSparseDimensions = false,
 ): SemanticStorageFactoryDescriptor | undefined {
-  return callName ? storageFactoryByCallName[callName] : undefined;
+  const descriptor = callName ? storageFactoryByCallName[callName] : undefined;
+  if (
+    !descriptor ||
+    !hasLiteralSparseDimensions ||
+    (callName !== "postgresVectorStore" && callName !== "postgresStorage")
+  ) {
+    return descriptor;
+  }
+  return {
+    ...descriptor,
+    capabilities: {
+      ...(callName === "postgresStorage" ? postgresRecordCapabilities : {}),
+      ...postgresVectorCapabilities(true),
+    },
+  };
 }
 
 /** Returns whether a Project Index kind belongs to the Storage Beta vocabulary. */

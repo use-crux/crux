@@ -11,6 +11,12 @@ conflicting requirements across documents.
 Connected Knowledge starts with the same `knowledgeBase()` used by Retrieval
 and RAG. Add only the layer that pays for itself:
 
+For PostgreSQL deployments, use
+`postgresStorage({ dimensions, sparseDimensions? })` from
+`@use-crux/postgres`, run `storage.setup.apply()` during provisioning, and pass
+the bundle to `knowledgeBase()`. Records and pgvector rows share one pool;
+Runtime Engine tables remain isolated in `crux_runtime`.
+
 ```txt
 plain knowledge base -> views -> relations -> communities/global search -> assertions
 ```

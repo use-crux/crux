@@ -610,6 +610,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           inMemoryVectorStore,
           storage,
         } from '@use-crux/core/storage'
+        import { postgresRecordStore, postgresStorage, postgresVectorStore } from '@use-crux/postgres'
 
         export const recordsAlias = inMemoryRecordStore()
         export const vectors = inMemoryVectorStore()
@@ -618,6 +619,9 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const appStorage = storage(bundleParts)
         export const inlineStorage = { records: recordsAlias, vectors, assets }
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+        export const pgRecords = postgresRecordStore()
+        export const pgVectors = postgresVectorStore({ dimensions: 2, sparseDimensions: 8 })
+        export const pgStorage = postgresStorage({ dimensions: 2, sparseDimensions: 8 })
       `,
         "src/usage.ts": `
         import { retriever, workspace } from '@use-crux/core'
@@ -648,6 +652,9 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           "storage.bundle:appStorage",
           "storage.bundle:inlineStorage",
           "storage.scope:tenantStorage",
+          "storage.recordStore:pgRecords",
+          "storage.vectorStore:pgVectors",
+          "storage.bundle:pgStorage",
           "rag.retriever:docs",
           "workspace:scratch",
         ],

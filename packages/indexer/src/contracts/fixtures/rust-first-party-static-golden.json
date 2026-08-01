@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 958,
+    "files": 965,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1950,
-    "canonicalBytes": 403221
+    "dependencies": 1959,
+    "canonicalBytes": 404147
   },
   "files": [
     {
@@ -8222,6 +8222,15 @@
       "dependencies": 2
     },
     {
+      "file": "packages/postgres/src/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/postgres/src/runtime.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -8346,6 +8355,60 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 5
+    },
+    {
+      "file": "packages/postgres/src/storage/connection.ts",
+      "sha256": "e1bae8d65ee5c3672150b1dbdf5d79402c1984d717458d424750a3ccf1f437de",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/postgres/src/storage/record-store.ts",
+      "sha256": "5ef8b77e5007c89b35ae2d6da274cee22eb2737c2ad881ea5ca95cc9efd59a75",
+      "bytes": 267,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/postgres/src/storage/sql.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/src/storage/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/src/storage/validation.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/src/storage/vector-store.ts",
+      "sha256": "5ef8b77e5007c89b35ae2d6da274cee22eb2737c2ad881ea5ca95cc9efd59a75",
+      "bytes": 267,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
     },
     {
       "file": "packages/react/src/hooks.ts",
