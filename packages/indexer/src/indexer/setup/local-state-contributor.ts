@@ -22,22 +22,22 @@ export function createLocalStateSetupContributor() {
 
 async function appendLocalStateGitignoreRule(root: string): Promise<void> {
   const path = join(root, GITIGNORE)
-  const existing = await readGitignore(path)
-  if (gitignoreEffectivelyIgnoresSource(existing)) return
+  const existing = await readGitignoreBytes(path)
+  if (gitignoreEffectivelyIgnoresSource(existing.toString('utf8'))) return
 
-  const prefix = existing.length === 0 || existing.endsWith('\n') ? '' : '\n'
-  await writeFile(path, `${existing}${prefix}${CANONICAL_RULE}\n`)
+  const prefix = existing.length === 0 || existing.at(-1) === 0x0a ? Buffer.alloc(0) : Buffer.from('\n')
+  await writeFile(path, Buffer.concat([existing, prefix, Buffer.from(`${CANONICAL_RULE}\n`)]))
 }
 
 async function gitignoreEffectivelyIgnoresLocalState(root: string): Promise<boolean> {
-  return gitignoreEffectivelyIgnoresSource(await readGitignore(join(root, GITIGNORE)))
+  return gitignoreEffectivelyIgnoresSource((await readGitignoreBytes(join(root, GITIGNORE))).toString('utf8'))
 }
 
-async function readGitignore(path: string): Promise<string> {
+async function readGitignoreBytes(path: string): Promise<Buffer> {
   try {
-    return await readFile(path, 'utf8')
+    return await readFile(path)
   } catch (error) {
-    if (isMissingFile(error)) return ''
+    if (isMissingFile(error)) return Buffer.alloc(0)
     throw error
   }
 }

@@ -80,6 +80,20 @@ describe('Local state setup contributor', () => {
     await expect(readFile(join(root, '.gitignore'), 'utf8')).resolves.toBe('dist\n.crux/\n')
   })
 
+  it('preserves non-UTF-8 existing bytes when appending', async () => {
+    const existing = Buffer.from([0xff, 0xfe, 0x64, 0x69, 0x73, 0x74])
+    const root = await fixture(existing)
+
+    await createSetupPlanner([createLocalStateSetupContributor()]).apply({
+      root,
+      mode: 'apply',
+    })
+
+    const actual = await readFile(join(root, '.gitignore'))
+    expect(actual.subarray(0, existing.length).equals(existing)).toBe(true)
+    expect(actual.subarray(existing.length).equals(Buffer.from('\n.crux/\n'))).toBe(true)
+  })
+
   it('appends when a later matching negation re-includes .crux', async () => {
     const root = await fixture('.crux/\n!.crux/\n')
 
@@ -116,7 +130,7 @@ describe('Local state setup contributor', () => {
   })
 })
 
-async function fixture(gitignore?: string): Promise<string> {
+async function fixture(gitignore?: string | Buffer): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'crux-local-state-setup-'))
   roots.push(root)
   if (gitignore !== undefined) {
