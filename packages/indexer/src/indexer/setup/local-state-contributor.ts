@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { appendFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { defineSetupContributor, type SetupAction, type SetupContext, type SetupFinding } from '@use-crux/core/setup'
 
@@ -26,7 +26,7 @@ async function appendLocalStateGitignoreRule(root: string): Promise<void> {
   if (gitignoreEffectivelyIgnoresSource(existing.toString('utf8'))) return
 
   const prefix = existing.length === 0 || existing.at(-1) === 0x0a ? Buffer.alloc(0) : Buffer.from('\n')
-  await writeFile(path, Buffer.concat([existing, prefix, Buffer.from(`${CANONICAL_RULE}\n`)]))
+  await appendFile(path, Buffer.concat([prefix, Buffer.from(`${CANONICAL_RULE}\n`)]))
 }
 
 async function gitignoreEffectivelyIgnoresLocalState(root: string): Promise<boolean> {
