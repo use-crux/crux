@@ -835,6 +835,51 @@
       "title": "Effect identity is defined more than once"
     },
     {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "A statically identified Effect with no recovery is called inside a statically required rollbackOnError() boundary.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/effect-irreversible-in-required-boundary",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Add a recovery handler to the Effect definition.",
+          "kind": "manual",
+          "title": "Define recovery"
+        },
+        {
+          "description": "Call the irreversible Effect outside the required-recovery boundary.",
+          "kind": "manual",
+          "title": "Move the Effect outside"
+        },
+        {
+          "description": "Set the boundary option to { recovery: 'best-effort' } when partial rollback is acceptable.",
+          "kind": "manual",
+          "title": "Choose best-effort recovery"
+        }
+      ],
+      "id": "effect.irreversible_in_required_boundary",
+      "impact": "The required boundary blocks the irreversible Effect before mutation, so the authored operation cannot proceed as written.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "A required-recovery boundary promises that every contained Effect can be recovered, and the strict default must teach every valid escape hatch.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line effect.irreversible_in_required_boundary -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Irreversible Effect is inside a required-recovery boundary"
+    },
+    {
       "category": "safety",
       "confidence": "high",
       "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
@@ -1255,109 +1300,109 @@
       "title": "RAG recipe step target is unresolved"
     },
     {
-      "id": "expand-relations-unknown-type",
-      "source": "builtin",
-      "severity": "warning",
       "category": "composition",
-      "maturity": "stable",
       "confidence": "high",
-      "profiles": [
-        "recommended",
-        "strict"
-      ],
-      "title": "Relation expansion selects an unknown type",
       "description": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
-      "rationale": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
-      "impact": "Unknown relation selections make graph expansion narrower than authored code suggests and can hide missing connected-knowledge coverage.",
       "docsUrl": "/docs/reference/crux-core/index-lints/expand-relations-unknown-type",
+      "fidelity": "safe",
       "fixes": [
         {
-          "title": "Use a declared relation type",
           "description": "Rename the selected type or add it to the relation vocabulary in the knowledge pipeline.",
-          "kind": "manual"
+          "kind": "manual",
+          "title": "Use a declared relation type"
         }
       ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line expand-relations-unknown-type -- reason"
-      },
-      "phase": "index",
-      "requires": [
-        "definitions",
-        "relations"
-      ],
-      "fidelity": "safe"
-    },
-    {
-      "id": "knowledge-recipe-producer-conflict",
-      "source": "builtin",
-      "severity": "error",
-      "category": "runtime",
+      "id": "expand-relations-unknown-type",
+      "impact": "Unknown relation selections make graph expansion narrower than authored code suggests and can hide missing connected-knowledge coverage.",
       "maturity": "stable",
-      "confidence": "high",
+      "phase": "index",
       "profiles": [
         "recommended",
         "strict"
       ],
-      "title": "Knowledge recipe has multiple producer steps",
-      "description": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
-      "rationale": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
-      "impact": "Multiple producers make recipe execution ambiguous and mirror a runtime failure before retrieval can produce hits.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/knowledge-recipe-producer-conflict",
-      "fixes": [
-        {
-          "title": "Keep one producer step",
-          "description": "Remove the duplicate retrieve() or globalSearch() step so the recipe has exactly one producer.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line knowledge-recipe-producer-conflict -- reason"
-      },
-      "phase": "index",
+      "rationale": "expandRelations({ types }) should name relation types declared by the Connected Knowledge relation vocabulary visible to the recipe.",
       "requires": [
         "definitions",
         "relations"
       ],
-      "fidelity": "safe"
-    },
-    {
-      "id": "assertions-unknown-type-selection",
-      "source": "builtin",
       "severity": "warning",
-      "category": "contracts",
-      "maturity": "stable",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line expand-relations-unknown-type -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Relation expansion selects an unknown type"
+    },
+    {
+      "category": "runtime",
       "confidence": "high",
+      "description": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
+      "docsUrl": "/docs/reference/crux-core/index-lints/knowledge-recipe-producer-conflict",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Remove the duplicate retrieve() or globalSearch() step so the recipe has exactly one producer.",
+          "kind": "manual",
+          "title": "Keep one producer step"
+        }
+      ],
+      "id": "knowledge-recipe-producer-conflict",
+      "impact": "Multiple producers make recipe execution ambiguous and mirror a runtime failure before retrieval can produce hits.",
+      "maturity": "stable",
+      "phase": "index",
       "profiles": [
         "recommended",
         "strict"
       ],
-      "title": "Assertion selection names an unknown type",
-      "description": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
-      "rationale": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
-      "impact": "Unknown assertion selections produce empty or incomplete assertion context even though authored code appears to request a typed subset.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/assertions-unknown-type-selection",
-      "fixes": [
-        {
-          "title": "Use a declared assertion type",
-          "description": "Rename the selected assertion type or add it to the assertion stage types map.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line assertions-unknown-type-selection -- reason"
-      },
-      "phase": "index",
+      "rationale": "Connected Knowledge recipes must choose exactly one producer step, either retrieve() or globalSearch().",
       "requires": [
         "definitions",
         "relations"
       ],
-      "fidelity": "safe"
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line knowledge-recipe-producer-conflict -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Knowledge recipe has multiple producer steps"
+    },
+    {
+      "category": "contracts",
+      "confidence": "high",
+      "description": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/assertions-unknown-type-selection",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Rename the selected assertion type or add it to the assertion stage types map.",
+          "kind": "manual",
+          "title": "Use a declared assertion type"
+        }
+      ],
+      "id": "assertions-unknown-type-selection",
+      "impact": "Unknown assertion selections produce empty or incomplete assertion context even though authored code appears to request a typed subset.",
+      "maturity": "stable",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "knowledgeBase().assertions(stage, { types }) and view.assertions(stage, { types }) should select assertion types declared by the stage.",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "severity": "warning",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line assertions-unknown-type-selection -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Assertion selection names an unknown type"
     },
     {
       "category": "runtime",

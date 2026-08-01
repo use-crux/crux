@@ -420,7 +420,7 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
     ),
     first_party(
         "effect",
-        &["effect"],
+        &["effect", "rollbackOnError"],
         &[],
         &["effect"],
         &["effect:"],

@@ -17,7 +17,7 @@ func TestMediaClassifierParticipatesInStaticPlanningAndCacheIdentity(t *testing.
 	for _, input := range DefaultCacheCompilerInputs() {
 		if strings.Contains(
 			string(input),
-			`"name":"safety-strategy-facts","version":"2"`,
+			`"name":"safety-strategy-facts","version":"3"`,
 		) {
 			foundProjection = true
 		}
