@@ -119,7 +119,8 @@
     },
     "./runtime/next": {
       "types": "./src/runtime/next.ts",
-      "import": "./src/runtime/next.ts"
+      "import": "./src/runtime/next.ts",
+      "default": "./src/runtime/next.ts"
     },
     "./observability": {
       "types": "./src/observability/index.ts",

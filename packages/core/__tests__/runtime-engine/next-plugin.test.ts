@@ -20,6 +20,21 @@ describe('withCruxBuild', () => {
     expect(calls).toEqual(['user-webpack'])
   })
 
+  it('accepts webpack null and installs a callable webpack hook', () => {
+    const config = withCruxBuild(
+      {
+        distDir: '.next-fixture',
+        webpack: null,
+      },
+      { command: ['node', '-e', 'process.exit(0)'] },
+    )
+
+    const output = config.webpack({ base: true }, {})
+
+    expect(output).toEqual({ base: true })
+    expect(config.distDir).toBe('.next-fixture')
+  })
+
   it('throws ARTIFACTS_STALE when generation fails', () => {
     expect(() =>
       withCruxBuild({}, { command: ['node', '-e', 'process.exit(7)'] }),

@@ -14,13 +14,14 @@ import { createRuntimeError } from './engine/errors'
 
 type NextWebpackConfig = Record<string, unknown>
 type NextWebpackContext = Record<string, unknown>
+type NextWebpackHook = (
+  config: NextWebpackConfig,
+  context: NextWebpackContext,
+) => NextWebpackConfig
 
 /** Minimal Next config shape accepted by {@link withCruxBuild}. */
 export interface CruxNextConfig {
-  webpack?: (
-    config: NextWebpackConfig,
-    context: NextWebpackContext,
-  ) => NextWebpackConfig
+  webpack?: NextWebpackHook | null
   [key: string]: unknown
 }
 
@@ -46,7 +47,7 @@ export interface WithCruxBuildOptions {
 export function withCruxBuild<TConfig extends CruxNextConfig>(
   nextConfig: TConfig = {} as TConfig,
   options: WithCruxBuildOptions = {},
-): TConfig {
+): Omit<TConfig, 'webpack'> & { webpack: NextWebpackHook } {
   const command = options.command ?? ['crux', 'runtime', 'generate']
   runCruxRuntimeGenerate({
     command,
@@ -59,7 +60,9 @@ export function withCruxBuild<TConfig extends CruxNextConfig>(
       config: NextWebpackConfig,
       context: NextWebpackContext,
     ): NextWebpackConfig {
-      return nextConfig.webpack ? nextConfig.webpack(config, context) : config
+      return typeof nextConfig.webpack === 'function'
+        ? nextConfig.webpack(config, context)
+        : config
     },
   }
 }
