@@ -40,3 +40,7 @@ acceptance timestamps across receipts, records, and listeners, and trim the
 Runtime Signal adapter contract to the occurrence and Flow-delivery surface
 actually shipped. Add an exact adapter reference for records, payload codecs,
 named composites, durability declarations, and required reactive conformance.
+
+Add canonical `RuntimeWorkItem` and `RuntimeWorkState` names for Runtime Engine
+queue records and states. Existing `WorkItem` and `WorkStatus` exports remain
+as deprecated source-compatible aliases.

@@ -4,12 +4,12 @@ import type { RuntimeStoreTransaction } from "../store";
 import { recordSignalDeliveryAttempt } from "../reactive/delivery-state";
 import { cancelFlowSnapshotBindings } from "./flow-binding-arbitration";
 import type { RuntimeTargetOutcome } from "./kernel-types";
-import type { WorkItem } from "./work";
+import type { RuntimeWorkItem } from "./work";
 
 /** Settle every candidate when Flow work reaches a terminal failure. */
 export async function settleFailedSignalWork(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   state: "failed" | "dead-letter",
   now: Date,
 ): Promise<void> {
@@ -22,7 +22,7 @@ export async function settleFailedSignalWork(
 /** Settle the selected delivery and cancel bindings once its wait is left. */
 export async function settleCompletedSignalWork(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   outcome: RuntimeTargetOutcome,
   now: Date,
 ): Promise<void> {
@@ -43,7 +43,7 @@ export async function settleCompletedSignalWork(
 
 async function flowSnapshotForWork(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
 ) {
   if (work.work.kind !== "flow.resume" && work.work.kind !== "flow.timeout") {
     return null;

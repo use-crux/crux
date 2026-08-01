@@ -1,8 +1,8 @@
 /**
  * Pure runtime work state machine.
  *
- * The kernel is the only layer allowed to move a {@link WorkItem} between
- * statuses. Adapters persist the resulting record, but they never invent their
+ * The kernel is the only layer allowed to move a {@link RuntimeWorkItem} between
+ * states. Adapters persist the resulting record, but they never invent their
  * own status transitions.
  *
  * @module
@@ -13,8 +13,8 @@ import type { RuntimeWork } from "../ports/work";
 import { cloneRuntimeResultRef, type RuntimeResultRef } from "../results/types";
 import type { JsonValue } from "../../storage";
 
-/** Durable execution status for a runtime work item. */
-export type WorkStatus =
+/** Durable execution state for a runtime work item. */
+export type RuntimeWorkState =
   | "pending"
   | "leased"
   | "suspended"
@@ -36,7 +36,7 @@ export interface WorkItemError {
 }
 
 /** Durable runtime work record owned by the kernel state machine. */
-export interface WorkItem {
+export interface RuntimeWorkItem {
   /** Kernel-generated stable work id. */
   readonly workId: WorkId;
   /** Runtime namespace isolating environments that share a substrate. */
@@ -46,7 +46,7 @@ export interface WorkItem {
   /** Durable name-based target id for diagnostics and target lookup. */
   readonly targetId: RuntimeTargetId;
   /** Current kernel-owned execution status. */
-  readonly status: WorkStatus;
+  readonly status: RuntimeWorkState;
   /** One-based delivery attempt count. */
   readonly attempt: number;
   /** Maximum attempts before work becomes dead-lettered. */
@@ -68,6 +68,12 @@ export interface WorkItem {
   /** Last state transition timestamp. */
   readonly updatedAt: Date;
 }
+
+/** @deprecated Use RuntimeWorkState instead. */
+export type WorkStatus = RuntimeWorkState;
+
+/** @deprecated Use RuntimeWorkItem instead. */
+export type WorkItem = RuntimeWorkItem;
 
 /** Transition request accepted by {@link transition}. */
 export type WorkTransition =
@@ -101,7 +107,10 @@ export type WorkTransition =
  * @returns A frozen copy with the new status applied.
  * @throws Error when the requested transition is not legal for the current status.
  */
-export function transition(work: WorkItem, next: WorkTransition): WorkItem {
+export function transition(
+  work: RuntimeWorkItem,
+  next: WorkTransition,
+): RuntimeWorkItem {
   if (!isLegalTransition(work.status, next.status)) {
     throw new Error(
       `Illegal runtime work transition: ${work.status} -> ${next.status}`,
@@ -132,7 +141,10 @@ export function transition(work: WorkItem, next: WorkTransition): WorkItem {
   });
 }
 
-function isLegalTransition(from: WorkStatus, to: WorkStatus): boolean {
+function isLegalTransition(
+  from: RuntimeWorkState,
+  to: RuntimeWorkState,
+): boolean {
   switch (from) {
     case "pending":
       return to === "leased" || to === "blocked" || to === "cancelled";
@@ -156,7 +168,9 @@ function isLegalTransition(from: WorkStatus, to: WorkStatus): boolean {
   }
 }
 
-function omitLease(work: WorkItem): Omit<WorkItem, "leaseToken"> {
+function omitLease(
+  work: RuntimeWorkItem,
+): Omit<RuntimeWorkItem, "leaseToken"> {
   const { leaseToken, ...withoutLease } = work;
   void leaseToken;
   return withoutLease;

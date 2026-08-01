@@ -7,7 +7,7 @@ import type { RuntimeOutboxItem, RuntimeStoreTransaction } from "../store";
 import type { RuntimeCompositeDeps } from "./composites";
 import { flowEventResumeKey, taskRunKey } from "./idempotency";
 import { targetIdForNewWork, wakeEnvelopeForWork } from "./kernel-shared";
-import type { WorkItem } from "./work";
+import type { RuntimeWorkItem } from "./work";
 import {
   isPredicateSignalWaiter,
   queuePredicateCandidate,
@@ -107,7 +107,7 @@ async function fireUnownedWaiter(options: FireWaiterOptions): Promise<{
 
 async function createUnownedWork(
   options: FireWaiterOptions,
-): Promise<WorkItem> {
+): Promise<RuntimeWorkItem> {
   const workId = options.deps.newWorkId();
   return await options.tx.state.createWork({
     workId,

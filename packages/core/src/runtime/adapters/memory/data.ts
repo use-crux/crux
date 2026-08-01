@@ -6,7 +6,7 @@ import type {
   RuntimeDeferredIntent,
   RuntimeDeferredScope,
 } from "../../ports/deferred";
-import type { WorkItem } from "../../engine/work";
+import type { RuntimeWorkItem } from "../../engine/work";
 import type {
   SignalDeliveryRecord,
   SignalOccurrenceRecord,
@@ -34,7 +34,7 @@ export interface MemoryRuntimeResultRecord {
 }
 
 export interface MemoryRuntimeData {
-  work: Map<string, WorkItem>;
+  work: Map<string, RuntimeWorkItem>;
   snapshots: Map<string, FlowSnapshot>;
   idempotency: Map<string, IdempotencyRecord>;
   leases: Map<string, Lease>;

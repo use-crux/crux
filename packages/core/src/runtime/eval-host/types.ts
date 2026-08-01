@@ -6,7 +6,7 @@ import type { RuntimeResultPayloadPort } from "../results/types";
 import type { RuntimeStoreAdapter } from "../store";
 import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition";
 import type { RuntimeWakeRequestVerifier } from "../handler/verify";
-import type { WorkItem } from "../engine/work";
+import type { RuntimeWorkItem } from "../engine/work";
 import type { RuntimeHandlerTarget } from "../handler/targets";
 import type { TimeoutBudget } from "../../generation/timeout";
 
@@ -105,7 +105,7 @@ export type EvalHostAdmissionResult =
   | { readonly kind: "capacity" }
   | {
       readonly kind: "admitted";
-      readonly work: WorkItem;
+      readonly work: RuntimeWorkItem;
       readonly created: boolean;
     };
 

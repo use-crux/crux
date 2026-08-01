@@ -31,7 +31,7 @@ import type {
   RuntimeTargetOutcome,
   ScanTimersResult,
 } from "./kernel-types";
-import type { WorkItem } from "./work";
+import type { RuntimeWorkItem } from "./work";
 import type { RuntimeDeferredIntent } from "../ports/deferred";
 import type {
   AbandonDeferredScopeInput,
@@ -90,7 +90,7 @@ export interface RuntimeCompositeInput {
   readonly "flow.manual-resume": FlowManualResumeInput;
   /** Atomically suspend leased Flow work with its Signal waiter binding. */
   readonly "flow.signal-wait.register": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly outcome: Extract<
       RuntimeTargetOutcome,
@@ -106,7 +106,7 @@ export interface RuntimeCompositeInput {
   };
   /** Requeue failed work after a retryable target failure. */
   readonly "wake.retry": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly retryAt: Date;
     /** Flow state that must rotate atomically with the physical retry. */
@@ -114,13 +114,13 @@ export interface RuntimeCompositeInput {
   };
   /** Commit blocked or dead-lettered work after a terminal target failure. */
   readonly "wake.fail": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly failure: WakeFailureInput;
   };
   /** Commit a successful target outcome for leased work. */
   readonly "wake.complete": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
     readonly leaseToken: LeaseToken;
     readonly outcome: RuntimeTargetOutcome;
     readonly idempotencyKey: string;
@@ -141,11 +141,11 @@ export interface RuntimeCompositeInput {
   readonly "work.operator-retry": RetryWorkInput;
   /** Reclaim one leased work row after its lease expired. */
   readonly "maintenance.reclaim-lease": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
   };
   /** Requeue one pending work row when no pending wake remains. */
   readonly "maintenance.requeue-orphan": {
-    readonly work: WorkItem;
+    readonly work: RuntimeWorkItem;
   };
   /** Expire waiter rows claimed before the composite. */
   readonly "maintenance.expire-waiters": {
@@ -170,7 +170,7 @@ export interface RuntimeCompositeInput {
 /** Results returned by named composite operations. */
 export interface RuntimeCompositeResult {
   /** Claimed pending work, or null when another waiter/timer already won. */
-  readonly "flow.manual-resume": WorkItem | null;
+  readonly "flow.manual-resume": RuntimeWorkItem | null;
   /** No result. */
   readonly "flow.signal-wait.register": void;
   /** Durable Signal acceptance result or a process-local fallback decision. */
@@ -190,7 +190,7 @@ export interface RuntimeCompositeResult {
   /** Due timer scan summary. */
   readonly "timers.fire-due": ScanTimersResult;
   /** Fresh pending task work. */
-  readonly "task.enqueue": WorkItem;
+  readonly "task.enqueue": RuntimeWorkItem;
   /** Cancellation attempt result. */
   readonly "work.cancel": CancelWorkResult;
   /** Operator retry attempt result. */

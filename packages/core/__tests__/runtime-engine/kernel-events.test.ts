@@ -7,7 +7,7 @@ import type {
   WorkId,
 } from '../../src/runtime/ports'
 import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
-import type { WorkItem } from '../../src/runtime/engine/work'
+import type { RuntimeWorkItem } from '../../src/runtime/engine/work'
 
 describe('RuntimeKernel event and suspension composites', () => {
   it('records a suspension by parking the existing flow work and registering owned waiters', async () => {
@@ -229,7 +229,7 @@ describe('RuntimeKernel event and suspension composites', () => {
   })
 })
 
-function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {
+function makeFlowWork(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_flow_1' as WorkId,

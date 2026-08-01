@@ -40,7 +40,7 @@ import {
 } from "../runtime/engine/replay";
 import { CruxRuntimeError } from "../runtime/engine/errors";
 import { runtimeRetryableTargetError } from "../runtime/engine/target-retry";
-import type { WorkItem } from "../runtime/engine/work";
+import type { RuntimeWorkItem } from "../runtime/engine/work";
 import {
   flowManualResumeKey,
   flowStartResumeKey,

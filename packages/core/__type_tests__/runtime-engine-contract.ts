@@ -22,12 +22,16 @@ import type {
   RuntimeKernel,
   RuntimeEngineDefinition,
   RuntimePendingSuspend,
+  RuntimeWorkItem,
+  RuntimeWorkState,
   RuntimeTargetId,
   RuntimeStoreAdapter,
   RuntimeWork,
   TaskId,
   WaiterId,
+  WorkItem,
   WorkId,
+  WorkStatus,
 } from '@use-crux/core/runtime'
 import {
   bindHostRuntime,
@@ -59,6 +63,8 @@ declare const targetId: RuntimeTargetId
 declare const cursor: EventCursor
 declare const waiterId: WaiterId
 
+expectTypeOf<RuntimeWorkItem>().toEqualTypeOf<WorkItem>()
+expectTypeOf<RuntimeWorkState>().toEqualTypeOf<WorkStatus>()
 expectTypeOf(workId).toMatchTypeOf<string>()
 expectTypeOf(flowId).toMatchTypeOf<string>()
 

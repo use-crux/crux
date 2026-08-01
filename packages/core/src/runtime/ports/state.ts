@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from "../../storage";
-import type { WorkItem } from "../engine/work";
+import type { RuntimeWorkItem } from "../engine/work";
 import type {
   EventCursor,
   FlowId,
@@ -18,7 +18,7 @@ import type {
   WorkId,
 } from "./ids";
 import type { RuntimeWork } from "./work";
-import type { WorkStatus } from "../engine/work";
+import type { RuntimeWorkState } from "../engine/work";
 import type { RuntimePruneOptions, RuntimePruneResult } from "./retention";
 import type { FlowSnapshot } from "./flow-state";
 export type {
@@ -81,7 +81,7 @@ export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
    * Defaults to `suspended`, which is the flow waiter/timer resume path.
    * Operator retry uses `blocked` and `dead-letter` through the same store CAS.
    */
-  readonly from?: WorkStatus | readonly WorkStatus[];
+  readonly from?: RuntimeWorkState | readonly RuntimeWorkState[];
 }
 
 /** Delivered event metadata to attach to a pending suspend by waiter id. */
@@ -101,7 +101,7 @@ export interface ListWorkOptions {
   /** Runtime namespace to list within. */
   readonly namespace: string;
   /** Work status to list. */
-  readonly status: WorkStatus;
+  readonly status: RuntimeWorkState;
   /** Only include records updated before this time. */
   readonly updatedBefore?: Date;
   /** Maximum number of records to return. */
@@ -119,7 +119,7 @@ export interface WorkStatusCount {
   /** Runtime namespace for this count bucket. */
   readonly namespace: string;
   /** Work status for this count bucket. */
-  readonly status: WorkStatus;
+  readonly status: RuntimeWorkState;
   /** Runtime target id for this count bucket. */
   readonly targetId: RuntimeTargetId;
   /** Number of rows in this bucket. */
@@ -143,7 +143,7 @@ export interface RuntimeStatePort {
    * transitions decrement the same counter through `putWork()`/transactional
    * state updates; counters must never go below zero.
    */
-  createWork(work: NewWorkItem): Promise<WorkItem>;
+  createWork(work: NewWorkItem): Promise<RuntimeWorkItem>;
 
   /**
    * Load a work item by id.
@@ -154,14 +154,14 @@ export interface RuntimeStatePort {
   getWork(
     workId: WorkId,
     options: RuntimeStateReadOptions,
-  ): Promise<WorkItem | null>;
+  ): Promise<RuntimeWorkItem | null>;
 
   /**
    * Persist a work item produced by the kernel state machine.
    *
    * Adapters must not perform their own status transitions or retry decisions.
    */
-  putWork(work: WorkItem): Promise<void>;
+  putWork(work: RuntimeWorkItem): Promise<void>;
 
   /**
    * List bounded work records for kernel-owned maintenance.
@@ -169,7 +169,7 @@ export interface RuntimeStatePort {
    * Adapters only filter and return records; expiry-vs-failure decisions,
    * cancellation legality, retry, and retention policy stay in the kernel.
    */
-  listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>;
+  listWork(options: ListWorkOptions): Promise<readonly RuntimeWorkItem[]>;
 
   /**
    * Delete completed, cancelled, and dead-lettered work updated before a cutoff.
@@ -198,7 +198,7 @@ export interface RuntimeStatePort {
   setWorkPending(
     workId: WorkId,
     options: SetWorkPendingOptions,
-  ): Promise<WorkItem | null>;
+  ): Promise<RuntimeWorkItem | null>;
 
   /**
    * Load a flow snapshot by id.

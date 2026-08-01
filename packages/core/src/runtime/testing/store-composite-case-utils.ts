@@ -11,7 +11,7 @@ import {
   type RuntimeCompositeKind,
   type RuntimeCompositeResult,
 } from '../engine/composites'
-import type { WorkItem } from '../engine/work'
+import type { RuntimeWorkItem } from '../engine/work'
 import type { RuntimeStoreAdapter } from '../store'
 import { makeConformanceWorkItem } from './store-fixtures'
 import type { RunStoreAdapterTestsOptions } from './store-types'
@@ -33,7 +33,7 @@ export interface StoreCompositeRollbackCase {
   readonly run: (store: RuntimeStoreAdapter) => Promise<void>
 }
 
-export function leasedWork(overrides: Partial<WorkItem> = {}): WorkItem {
+export function leasedWork(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   return makeConformanceWorkItem({
     status: 'leased',
     leaseToken: LEASE_TOKEN,

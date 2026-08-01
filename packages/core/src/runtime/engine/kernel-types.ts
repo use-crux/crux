@@ -19,7 +19,7 @@ import type {
 } from "../store";
 import type { RuntimeRetentionConfig } from "./retention";
 import type { WakeEnvelope } from "./envelope";
-import type { WorkItem, WorkItemError } from "./work";
+import type { RuntimeWorkItem, WorkItemError } from "./work";
 import type { RuntimeDeferredIntent } from "../ports/deferred";
 import type { RuntimeResultRef } from "../results/types";
 import type {
@@ -97,7 +97,7 @@ export type RuntimeTargetOutcome =
 /** Execution context passed to a runtime target. */
 export interface RuntimeTargetContext {
   /** Leased work item being processed. */
-  readonly work: WorkItem;
+  readonly work: RuntimeWorkItem;
   /** Lease proving this kernel owns the work item for this attempt. */
   readonly lease: Lease;
 }
@@ -217,7 +217,7 @@ export type RetryWorkResult =
       /** Whether this call moved retryable terminal work to pending. */
       readonly retried: true;
       /** Fresh pending work record carrying the operator retry idempotency key. */
-      readonly work: WorkItem;
+      readonly work: RuntimeWorkItem;
     }
   | {
       /** False when the work is missing or not in a retryable terminal state. */
@@ -243,7 +243,7 @@ export type RuntimeWakeResult =
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
   /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
-  resumeFlow(input: FlowManualResumeInput): Promise<WorkItem | null>;
+  resumeFlow(input: FlowManualResumeInput): Promise<RuntimeWorkItem | null>;
   /** Atomically accept one Signal occurrence and every required delivery. */
   publishSignal(
     input: SignalPublishCompositeInput,
@@ -265,7 +265,7 @@ export interface RuntimeKernel {
     input: RenewDeferredScopeLeaseInput,
   ): Promise<RenewDeferredScopeLeaseResult>;
   /** Create pending task work and write its wake envelope to the outbox. */
-  enqueueTask(input: EnqueueTaskInput): Promise<WorkItem>;
+  enqueueTask(input: EnqueueTaskInput): Promise<RuntimeWorkItem>;
   /** Persist a flow suspension and owned waiter registrations atomically. */
   recordSuspension(input: RecordSuspensionInput): Promise<void>;
   /** Append an event and resume all matching waiters that win the CAS race. */

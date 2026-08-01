@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   transition,
-  type WorkItem,
-  type WorkStatus,
+  type RuntimeWorkItem,
+  type RuntimeWorkState,
   type WorkTransition,
 } from '../../src/runtime/engine/work'
 import type {
@@ -107,7 +107,7 @@ describe('runtime work state machine', () => {
   })
 })
 
-const WORK_STATUSES: readonly WorkStatus[] = [
+const WORK_STATUSES: readonly RuntimeWorkState[] = [
   'pending',
   'leased',
   'suspended',
@@ -133,7 +133,7 @@ const LEGAL_TRANSITIONS = new Set<string>([
   'dead-letter->pending',
 ])
 
-function transitionTo(status: WorkStatus): WorkTransition {
+function transitionTo(status: RuntimeWorkState): WorkTransition {
   const error = {
     code: 'TARGET_NOT_FOUND',
     message: 'Target missing.',
@@ -155,7 +155,7 @@ function transitionTo(status: WorkStatus): WorkTransition {
   }
 }
 
-function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
+function makeWorkItem(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_1' as WorkId,

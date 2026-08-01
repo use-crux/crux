@@ -12,7 +12,7 @@ import {
   createRuntimeKernel,
   wakeEnvelopeForWork,
 } from '../../src/runtime/engine/kernel'
-import { transition, type WorkItem } from '../../src/runtime/engine/work'
+import { transition, type RuntimeWorkItem } from '../../src/runtime/engine/work'
 
 describe('RuntimeKernel maintenance and cancellation composites', () => {
   it('reclaims expired leased work without counting it as a failed attempt', async () => {
@@ -367,7 +367,7 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
 
 })
 
-function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {
+function makeFlowWork(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_flow_1' as WorkId,
@@ -384,7 +384,7 @@ function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {
   }
 }
 
-function makeTaskWork(overrides: Partial<WorkItem> = {}): WorkItem {
+function makeTaskWork(overrides: Partial<RuntimeWorkItem> = {}): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_task_1' as WorkId,

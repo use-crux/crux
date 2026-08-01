@@ -13,7 +13,7 @@ import type { EffectScopeRef } from "../effect/types";
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
 import type { RuntimeScheduledWorkIntent, RuntimeTargetOutcome } from "../runtime/engine/kernel";
 import type { ReplayFingerprint } from "../runtime/engine/replay";
-import type { WorkItem } from "../runtime/engine/work";
+import type { RuntimeWorkItem } from "../runtime/engine/work";
 import type { RuntimeWork } from "../runtime/ports/work";
 import type { FlowResumeOptions } from "./types";
 import type { FlowId as RuntimeFlowId, WorkId } from "../runtime/ports/ids";
@@ -34,7 +34,7 @@ export interface RuntimeFlowExecution {
   /** Resolved Runtime Engine handling the current wake. */
   readonly runtime: ResolvedRuntimeEngine;
   /** Leased flow work item being replayed. */
-  readonly work: WorkItem;
+  readonly work: RuntimeWorkItem;
   /** Runtime-owned flow snapshot loaded before replay. */
   readonly snapshot: RuntimeFlowSnapshot;
   /** Fingerprint checker for deploy-drift detection. */
@@ -181,7 +181,7 @@ export function runtimeFlowSnapshot(
 }
 
 /** Return the flow id carried by runtime work that is valid for a flow target. */
-export function flowIdForRuntimeWork(work: WorkItem): RuntimeFlowId {
+export function flowIdForRuntimeWork(work: RuntimeWorkItem): RuntimeFlowId {
   switch (work.work.kind) {
     case "flow.resume":
     case "flow.timeout":

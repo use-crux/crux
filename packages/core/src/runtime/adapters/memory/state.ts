@@ -1,6 +1,6 @@
 import type { JsonValue } from "../../../storage";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../../engine/retry";
-import type { WorkItem } from "../../engine/work";
+import type { RuntimeWorkItem } from "../../engine/work";
 import type { EventCursor, FlowId, WorkId } from "../../ports/ids";
 import type {
   FlowSnapshot,
@@ -31,14 +31,14 @@ export function createMemoryStatePort(
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeStatePort {
   return {
-    async createWork(input: NewWorkItem): Promise<WorkItem> {
+    async createWork(input: NewWorkItem): Promise<RuntimeWorkItem> {
       const key = scopedKey(input.namespace, input.workId);
       const existing = data.work.get(key);
       if (existing) return cloneWorkItem(existing);
 
       recordWrite?.();
       const now = input.now ? new Date(input.now) : new Date();
-      const stored: WorkItem = Object.freeze({
+      const stored: RuntimeWorkItem = Object.freeze({
         workId: input.workId,
         namespace: input.namespace,
         work: cloneRuntimeWork(input.work),
@@ -62,12 +62,12 @@ export function createMemoryStatePort(
     async getWork(
       workId: WorkId,
       options: RuntimeStateReadOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const work = data.work.get(scopedKey(options.namespace, workId));
       return work ? cloneWorkItem(work) : null;
     },
 
-    async putWork(work: WorkItem): Promise<void> {
+    async putWork(work: RuntimeWorkItem): Promise<void> {
       recordWrite?.();
       data.work.set(
         scopedKey(work.namespace, work.workId),
@@ -75,7 +75,7 @@ export function createMemoryStatePort(
       );
     },
 
-    async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
+    async listWork(options: ListWorkOptions): Promise<readonly RuntimeWorkItem[]> {
       const work = [...data.work.values()]
         .filter(
           (item) =>
@@ -120,14 +120,14 @@ export function createMemoryStatePort(
     async setWorkPending(
       workId: WorkId,
       options: SetWorkPendingOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const key = scopedKey(options.namespace, workId);
       const existing = data.work.get(key);
       if (!existing || !statusAllowed(existing.status, options.from))
         return null;
 
       recordWrite?.();
-      const updated: WorkItem = Object.freeze({
+      const updated: RuntimeWorkItem = Object.freeze({
         workId: existing.workId,
         namespace: existing.namespace,
         work: cloneRuntimeWork(options.work),
@@ -253,7 +253,7 @@ export function createMemoryStatePort(
     },
   };
 }
-function isPrunableWorkStatus(status: WorkItem["status"]): boolean {
+function isPrunableWorkStatus(status: RuntimeWorkItem["status"]): boolean {
   return (
     status === "completed" || status === "cancelled" || status === "dead-letter"
   );
@@ -266,7 +266,7 @@ function isPrunableSnapshotStatus(status: FlowSnapshot["status"]): boolean {
     status === "cancelled"
   );
 }
-export function cloneWorkItem(work: WorkItem): WorkItem {
+export function cloneWorkItem(work: RuntimeWorkItem): RuntimeWorkItem {
   return Object.freeze({
     workId: work.workId,
     namespace: work.namespace,
@@ -312,7 +312,7 @@ function incrementCounter(
   return next;
 }
 function statusAllowed(
-  status: WorkItem["status"],
+  status: RuntimeWorkItem["status"],
   from: SetWorkPendingOptions["from"],
 ): boolean {
   const allowed =
