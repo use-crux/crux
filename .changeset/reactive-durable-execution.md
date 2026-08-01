@@ -41,7 +41,7 @@ Runtime Signal adapter contract to the occurrence and Flow-delivery surface
 actually shipped. Add an exact adapter reference for records, payload codecs,
 named composites, durability declarations, and required reactive conformance.
 
-Add canonical `RuntimeWorkItem` and `RuntimeWorkState` names for Runtime Engine
-queue records and states. Existing `WorkItem` and `WorkStatus` exports remain
-as deprecated source-compatible names; `WorkItem` declaration merging also
-applies through `RuntimeWorkItem`.
+Complete the pre-launch alpha Runtime Engine queue-record migration. Use
+`RuntimeWorkItem` for queue records and `RuntimeWorkState` for their lifecycle;
+`WorkItem` and `WorkStatus` are removed. Adapter declaration merging targets
+`RuntimeWorkItem` directly through `@use-crux/core/runtime`.

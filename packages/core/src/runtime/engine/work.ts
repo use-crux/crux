@@ -13,7 +13,19 @@ import type { RuntimeWork } from "../ports/work";
 import { cloneRuntimeResultRef, type RuntimeResultRef } from "../results/types";
 import type { JsonValue } from "../../storage";
 
-/** Durable execution state for a runtime work item. */
+/**
+ * Kernel-owned lifecycle state for a {@link RuntimeWorkItem}.
+ *
+ * @remarks
+ * `pending` work is eligible for delivery after `notBefore`; `leased` work is
+ * owned by one fenced executor; and `suspended` work is waiting for a durable
+ * resume condition. `completed` and `cancelled` are terminal. `blocked` records
+ * require an operator or configuration fix before retry, while `dead-letter`
+ * records exhausted their automatic attempt budget.
+ *
+ * Store adapters persist this value but must not add states or choose
+ * transitions. The Runtime Engine kernel is the state-machine owner.
+ */
 export type RuntimeWorkState =
   | "pending"
   | "leased"
@@ -36,48 +48,59 @@ export interface WorkItemError {
 }
 
 /**
- * Durable runtime work record owned by the kernel state machine.
+ * Durable queue record exchanged between the Runtime Engine kernel and a
+ * {@link RuntimeStatePort} implementation.
  *
- * @deprecated Use {@link RuntimeWorkItem} instead.
+ * @remarks
+ * The kernel owns record identity, lifecycle transitions, attempts, leases,
+ * retry timing, and terminal errors. A store adapter must losslessly persist
+ * and reconstruct every Core-owned field; it must not synthesize transitions
+ * or retry decisions.
+ *
+ * Adapter packages may add optional, adapter-owned fields with declaration
+ * merging through the public `@use-crux/core/runtime` module. The adapter is
+ * responsible for initializing and round-tripping those fields:
+ *
+ * ```ts
+ * declare module "@use-crux/core/runtime" {
+ *   interface RuntimeWorkItem {
+ *     readonly storageRevision?: string;
+ *   }
+ * }
+ * ```
  */
-export interface WorkItem {
-  /** Kernel-generated stable work id. */
+export interface RuntimeWorkItem {
+  /** Kernel-generated identity retained across every attempt of this work. */
   readonly workId: WorkId;
-  /** Runtime namespace isolating environments that share a substrate. */
+  /** Runtime namespace and required persistence partition for this record. */
   readonly namespace: string;
-  /** Small routing payload describing the work to execute. */
+  /** Kernel-defined routing payload; adapters must treat its contents as opaque. */
   readonly work: RuntimeWork;
-  /** Durable name-based target id for diagnostics and target lookup. */
+  /** Stable name used by the kernel to resolve the registered execution target. */
   readonly targetId: RuntimeTargetId;
-  /** Current kernel-owned execution status. */
+  /** Current kernel-owned lifecycle state. */
   readonly status: RuntimeWorkState;
-  /** One-based delivery attempt count. */
+  /** One-based logical execution attempt; transport retries do not increment it. */
   readonly attempt: number;
-  /** Maximum attempts before work becomes dead-lettered. */
+  /** Maximum logical attempts before the kernel moves work to `dead-letter`. */
   readonly maxAttempts: number;
-  /** Earliest time this work should be delivered again. */
+  /** Earliest eligible delivery time for pending work. */
   readonly notBefore?: Date;
-  /** Stable idempotency key for the current delivery. */
+  /** Idempotency key for the current logical delivery intent. */
   readonly idempotencyKey: string;
-  /** Scoped-idle counter group this item keeps busy until terminal. */
+  /** Optional idle-counter scope held until the work reaches a terminal state. */
   readonly idleScope?: string;
-  /** Lease token while a worker owns this item. */
+  /** Fencing token present only while the work is leased to an executor. */
   readonly leaseToken?: LeaseToken;
-  /** Last user-facing runtime error attached to this item. */
+  /** Latest inspectable kernel error for blocked or failed work. */
   readonly lastError?: WorkItemError;
-  /** Private content-addressed result committed with completed work. */
+  /** Internal content-addressed result reference committed on completion. */
   readonly resultRef?: RuntimeResultRef;
-  /** Creation timestamp. */
+  /** Time the kernel first accepted this work occurrence. */
   readonly createdAt: Date;
-  /** Last state transition timestamp. */
+  /** Time of the most recent kernel-owned lifecycle transition. */
   readonly updatedAt: Date;
 }
-
-/** Canonical durable runtime work record owned by the kernel state machine. */
-export type RuntimeWorkItem = WorkItem;
-
-/** @deprecated Use {@link RuntimeWorkState} instead. */
-export type WorkStatus = RuntimeWorkState;
 
 /** Transition request accepted by {@link transition}. */
 export type WorkTransition =

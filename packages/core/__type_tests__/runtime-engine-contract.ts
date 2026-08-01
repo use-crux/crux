@@ -29,10 +29,12 @@ import type {
   RuntimeWork,
   TaskId,
   WaiterId,
-  WorkItem,
   WorkId,
-  WorkStatus,
 } from '@use-crux/core/runtime'
+// @ts-expect-error WorkItem is not part of the Runtime Engine public surface.
+import type { WorkItem } from '@use-crux/core/runtime'
+// @ts-expect-error WorkStatus is not part of the Runtime Engine public surface.
+import type { WorkStatus } from '@use-crux/core/runtime'
 import {
   bindHostRuntime,
   createRuntime,
@@ -57,8 +59,8 @@ import {
 } from '@use-crux/core/runtime/testing'
 
 declare module '@use-crux/core/runtime' {
-  interface WorkItem {
-    readonly legacyMetadata?: { readonly source: 'legacy' }
+  interface RuntimeWorkItem {
+    readonly adapterMetadata?: { readonly source: 'adapter' }
   }
 }
 
@@ -68,16 +70,19 @@ declare const taskId: TaskId
 declare const targetId: RuntimeTargetId
 declare const cursor: EventCursor
 declare const waiterId: WaiterId
-declare const legacyWorkItem: WorkItem
-declare const canonicalWorkItem: RuntimeWorkItem
+declare const runtimeWorkItem: RuntimeWorkItem
 
-expectTypeOf<RuntimeWorkItem>().toEqualTypeOf<WorkItem>()
-expectTypeOf<RuntimeWorkState>().toEqualTypeOf<WorkStatus>()
-expectTypeOf(legacyWorkItem.legacyMetadata).toEqualTypeOf<
-  { readonly source: 'legacy' } | undefined
+expectTypeOf<RuntimeWorkState>().toEqualTypeOf<
+  | 'pending'
+  | 'leased'
+  | 'suspended'
+  | 'completed'
+  | 'cancelled'
+  | 'blocked'
+  | 'dead-letter'
 >()
-expectTypeOf(canonicalWorkItem.legacyMetadata).toEqualTypeOf<
-  { readonly source: 'legacy' } | undefined
+expectTypeOf(runtimeWorkItem.adapterMetadata).toEqualTypeOf<
+  { readonly source: 'adapter' } | undefined
 >()
 expectTypeOf(workId).toMatchTypeOf<string>()
 expectTypeOf(flowId).toMatchTypeOf<string>()
