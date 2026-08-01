@@ -317,8 +317,7 @@ export const answerAutoPolicy = prompt({
     ),
     autoPolicies
       .assertions(requirements, { types: ["requirement"] })
-      .resolve()
-      .asContext({ limit: 20 }),
+      .resolve(),
     autoThemes.asContext({
       query: ({ question }) => question as string,
     }),
@@ -386,7 +385,7 @@ Use `detail: "detailed"` when reviewers need leaf-level findings, and keep
 ## Related
 
 <Cards>
-  <Card title="Connected Knowledge" description="Concepts and API guides for the system used in this recipe." href="/docs/guides/knowledge" />
+  <Card title="Connected Knowledge" description="Concepts and API guides for the system used in this recipe." href="/docs/guides/retrieval/connected-knowledge" />
   <Card title="Retrieval recipes" description="How query steps and hit steps compose." href="/docs/guides/retrieval/recipes" />
   <Card title="Context planning" description="How summaries, exact references, and receipts fit provider requests." href="/docs/guides/context-planning" />
 </Cards>

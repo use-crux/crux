@@ -1,21 +1,94 @@
 ---
 title: Connected Knowledge
-description: This page moved to the Connected Knowledge guide section.
+description: Add typed views, evidence-backed relations, assertions, communities, and global search to a knowledge base.
 ---
 
-Connected Knowledge now has its own guide section.
 
-Start with the [Connected Knowledge overview](/docs/guides/knowledge) for the
-progressive path from plain retrieval to views, relations, communities, global
-search, and assertions.
+Vector retrieval is necessary for most document search. It is not enough when
+the answer depends on source membership, cited neighbors, topic summaries, or
+conflicting requirements across documents.
 
-Common next pages:
+Connected Knowledge starts with the same `knowledgeBase()` used by Retrieval
+and RAG. Add only the layer that pays for itself:
+
+```txt
+plain knowledge base -> views -> relations -> communities/global search -> assertions
+```
+
+## The Progressive Path
+
+Start with a knowledge base when the model needs chunks that match a question.
+Add views when the corpus has typed metadata and users ask within a subset.
+Add relations when nearby evidence matters even when it does not match the
+query text. Add communities and `globalSearch()` when the question should scan
+themes across the corpus instead of starting from vector hits. Add assertions
+when the corpus contains propositions that need evidence, conflict handling, or
+resolution before prompting.
+
+```ts
+import { knowledgeBase } from "@use-crux/core/knowledge";
+import { inMemoryStorage } from "@use-crux/core/storage";
+
+const docs = knowledgeBase({
+  id: "docs",
+  storage: inMemoryStorage(),
+  embeddings: dense,
+});
+
+await docs.index([
+  {
+    namespace: "docs",
+    sourceId: "policy.md",
+    content: "Refunds are available within 30 days.",
+    metadata: { status: "published" },
+  },
+]);
+
+const hits = await docs.retriever({ limit: 5 }).retrieve("refund policy");
+```
+
+## When Each Level Pays Off
+
+| Level | Reach for it when | Do not use it when | Cost model |
+| --- | --- | --- | --- |
+| `knowledgeBase()` | You need normal RAG over indexed documents or chunks. | You already have a custom backend and only need a `retriever()`. | Indexing and retrieval use your embedding setup. No connected-knowledge generation runs. |
+| `view({ where })` | Metadata defines a stable read surface such as product, tenant, status, or application. | You only need one request-time filter. | Deterministic membership indexes and content-addressed revisions. |
+| `relate()` | Evidence near the first hits should be considered through typed graph edges. | The query text already retrieves all needed evidence. | Deterministic `run` stages are code-only. Model stages call the configured `KnowledgeModel` during indexing and cache by source and stage fingerprint. |
+| `communities()` | Users ask broad theme or risk questions across many sources. | You only need direct chunk evidence. | Requires a `KnowledgeModel`. Unchanged communities reuse prior reports by member hash. |
+| `globalSearch()` | The query should map over community reports and return finding hits. | You need filtered vector retrieval or one cited chunk answer. | Calls the configured `KnowledgeModel` once per selected report batch, after preflight. |
+| `assertions()` | You need typed propositions, conflict handling, supersession, or prompt context from resolved facts. | Raw document text is enough. | Deterministic `run` stages are code-only. Model assertion stages call the configured `KnowledgeModel` during indexing. |
+
+## What Is Deterministic
+
+These parts are deterministic after their inputs exist:
+
+- view membership, revisions, and namespace scoping
+- structural graph traversal over `hierarchy` and `sequence`
+- deterministic `relate({ run })` and `assertions({ run })` stages
+- relation expansion through the published graph
+- assertion resolution from explicit assertion relations and deterministic policies
+- community clustering and report reuse checks
+- global-search preflight, batching, and reduce ordering
+
+These parts make explicit model calls:
+
+- model-backed `relate()`
+- `relateEntities({ model })`
+- model-backed `assertions()`
+- `communities({ model })` report generation, and its generic entity mapping when no authored entity mapping is present
+- `globalSearch({ model })` map calls over selected reports
+- model-backed assertion resolution policies
+
+Crux does not make hidden connected-knowledge generation calls for a plain
+knowledge base.
+
+## Next Steps
 
 <Cards>
-  <Card title="Knowledge bases" description="Index, reindex, retrieve, ground, scope, and inspect a knowledge base." href="/docs/guides/knowledge/knowledge-bases" />
-  <Card title="Views" description="Typed metadata read surfaces with live and pinned revisions." href="/docs/guides/knowledge/views" />
-  <Card title="Relations" description="Derive typed graph edges and expand retrieval through them." href="/docs/guides/knowledge/relations" />
-  <Card title="Communities" description="Build and read report hierarchies over a knowledge base or view." href="/docs/guides/knowledge/communities" />
-  <Card title="Global search" description="Search community reports and return cited finding hits." href="/docs/guides/knowledge/global-search" />
-  <Card title="Assertions" description="Publish evidence-backed propositions and resolve conflicts." href="/docs/guides/knowledge/assertions" />
+  <Card title="Knowledge bases" description="Index, reindex, remove, retrieve, scope, and ground a knowledge base." href="/docs/guides/retrieval/knowledge-bases" />
+  <Card title="Views" description="Create typed live and pinned read surfaces from metadata." href="/docs/guides/retrieval/views" />
+  <Card title="Relations" description="Publish a graph and expand retrieval through it." href="/docs/guides/retrieval/relations" />
+  <Card title="Assertions" description="Author evidence-backed propositions and resolve conflicts." href="/docs/guides/retrieval/assertions" />
+  <Card title="Communities" description="Prepare and read topic reports over the visible graph." href="/docs/guides/retrieval/communities" />
+  <Card title="Global search" description="Search community reports and return cited finding hits." href="/docs/guides/retrieval/global-search" />
 </Cards>

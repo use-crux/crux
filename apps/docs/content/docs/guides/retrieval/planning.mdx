@@ -7,6 +7,13 @@ Knowledge contributors follow the same request-planning rules as other prompt
 context. Plain knowledge context is exact and required. Crux only chooses a
 summary, exact reference, or omission when you authorize that representation.
 
+Knowledge sources go into `use` directly: knowledge bases, views, assertion
+sets, and resolutions resolve their query from the prompt input (a string
+field named `query`, `question`, `message`, or `prompt`). Recipes compose
+query processing, so they enter through `asContext({ query })`. Use
+`asContext()` on a source only to override defaults such as the query
+mapping, limit, or priority.
+
 Use planning when retrieved context, assertion context, or global-search
 findings can grow enough to pressure the model input window.
 
@@ -24,12 +31,7 @@ const published = docs.view({
 
 const answer = prompt({
   id: "published-answer",
-  use: [
-    published.retriever({ limit: 8 }).asContext({
-      query: ({ question }) => question as string,
-    }),
-    published.assertions(policyFacts).asContext({ limit: 25 }),
-  ],
+  use: [published, published.assertions(policyFacts)],
   prompt: ({ input }) => input.question as string,
 });
 ```
@@ -49,16 +51,10 @@ import {
   summarizable,
 } from "@use-crux/core";
 
-const policyContext = summarizable(
-  published.retriever({ limit: 12 }).asContext({
-    query: ({ question }) => question as string,
-  }),
-);
+const policyContext = summarizable(published);
 
 const resolvedFacts = offloadable(
-  summarizable(
-    published.assertions(policyFacts).resolve().asContext({ limit: 50 }),
-  ),
+  summarizable(published.assertions(policyFacts).resolve()),
 );
 
 const optionalThemes = droppable(
@@ -168,7 +164,7 @@ For the full planning model, see
 ## Related
 
 <Cards>
-  <Card title="Global search" description="Producer traces and knowledge receipts." href="/docs/guides/knowledge/global-search" />
-  <Card title="Assertions" description="Assertion context and resolution handles." href="/docs/guides/knowledge/assertions" />
+  <Card title="Global search" description="Producer traces and knowledge receipts." href="/docs/guides/retrieval/global-search" />
+  <Card title="Assertions" description="Assertion context and resolution handles." href="/docs/guides/retrieval/assertions" />
   <Card title="Context planning" description="Request budgets, representations, and receipts." href="/docs/guides/context-planning" />
 </Cards>

@@ -117,16 +117,16 @@ for await (const item of requirements.stream()) {
 }
 ```
 
-Assertion sets can be used directly in `use`, or converted with `asContext()`.
-The prompt context is bounded and summarized as assertion lines, not raw source
-records.
+Assertion sets go directly into `use`. The prompt context is bounded and
+summarized as assertion lines, not raw source records. Use `asContext()` only
+when you need to override the defaults, such as the item limit or priority.
 
 ```ts
 import { prompt } from "@use-crux/core";
 
 const answer = prompt({
   id: "answer-policy",
-  use: [requirements.asContext({ limit: 20 })],
+  use: [requirements],
   system: "Answer from the documented requirements.",
   prompt: "Which requirements apply?",
 });
@@ -198,7 +198,7 @@ const resolvedRequirements = docs.assertions(policyFacts).resolve({
 
 const promptWithResolvedFacts = prompt({
   id: "resolved-policy-answer",
-  use: [resolvedRequirements.asContext()],
+  use: [resolvedRequirements],
   system: "Prefer selected requirements and mention contested items.",
 });
 ```
@@ -216,7 +216,7 @@ visible and the relation has visible evidence.
 ## Related
 
 <Cards>
-  <Card title="Views" description="Constrain assertion visibility by metadata membership." href="/docs/guides/knowledge/views" />
-  <Card title="Planning" description="Use assertion sets and resolutions as exact or summarized context." href="/docs/guides/knowledge/planning" />
-  <Card title="Relations" description="Use graph edges for retrieval expansion, not assertion conflict resolution." href="/docs/guides/knowledge/relations" />
+  <Card title="Views" description="Constrain assertion visibility by metadata membership." href="/docs/guides/retrieval/views" />
+  <Card title="Planning" description="Use assertion sets and resolutions as exact or summarized context." href="/docs/guides/retrieval/planning" />
+  <Card title="Relations" description="Use graph edges for retrieval expansion, not assertion conflict resolution." href="/docs/guides/retrieval/relations" />
 </Cards>
