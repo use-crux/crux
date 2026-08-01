@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 946,
+    "files": 947,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1925,
-    "canonicalBytes": 400258
+    "dependencies": 1930,
+    "canonicalBytes": 400577
   },
   "files": [
     {
@@ -2120,6 +2120,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/core/__type_tests__/knowledge-use-first-class.ts",
+      "sha256": "9b6386e3b335c493bfc03b99b8a1b7155ac7204181a596dc7713e5cb3c1656d3",
+      "bytes": 193,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/__type_tests__/knowledge-view-contract.ts",
       "sha256": "1e8149745ad9b253b69b9dc295ebb767b90ce0444b339ab94e57178df0fd9adc",
       "bytes": 113,
@@ -3912,21 +3921,21 @@
     },
     {
       "file": "packages/core/src/retrieval/knowledge-base-views.ts",
-      "sha256": "7a0a84a03796662be755f5aaf2cda0f5da1190afc4f4a3f27cf79f2acdf70b50",
-      "bytes": 589,
+      "sha256": "d4dd32fc534c79d8c2331a8ccd3914d99092ef4fca484e34ede7c65bc7e98104",
+      "bytes": 652,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 10
+    },
+    {
+      "file": "packages/core/src/retrieval/knowledge-base.ts",
+      "sha256": "5837c3226d0bcbab7a6f76b882b7f19e31feee50db90e0acf6a6954ef7189591",
+      "bytes": 601,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 9
-    },
-    {
-      "file": "packages/core/src/retrieval/knowledge-base.ts",
-      "sha256": "8953cc4041470bfae5a54cd29b5592b70683f0b4a4f7ffeb8e3f0413ee33a3eb",
-      "bytes": 538,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 8
     },
     {
       "file": "packages/core/src/retrieval/recipe/federation.ts",
