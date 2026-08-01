@@ -28,6 +28,21 @@ describe("request representation ladder types", () => {
     );
   });
 
+  it("rejects Contributor-tagged values without a callable contribution at construction", () => {
+    const invalidContributor = {
+      _tag: "Contributor",
+      id: "not-a-contributor",
+      useEntries: [],
+    } as never;
+
+    expect(() => summarizable(invalidContributor)).toThrowError(
+      /callable contribute/,
+    );
+    expect(() => droppable(invalidContributor)).toThrowError(
+      /callable contribute/,
+    );
+  });
+
   it("rejects order-reversing and terminal nesting at compile time", () => {
     const omitted = droppable(full);
     const referenced = offloadable(full);

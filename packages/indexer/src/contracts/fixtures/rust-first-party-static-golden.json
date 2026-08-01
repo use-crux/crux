@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 947,
+    "files": 948,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1930,
-    "canonicalBytes": 400577
+    "dependencies": 1933,
+    "canonicalBytes": 400789
   },
   "files": [
     {
@@ -2121,12 +2121,12 @@
     },
     {
       "file": "packages/core/__type_tests__/knowledge-use-first-class.ts",
-      "sha256": "9b6386e3b335c493bfc03b99b8a1b7155ac7204181a596dc7713e5cb3c1656d3",
-      "bytes": 193,
+      "sha256": "1382be5d93e3fdac91f66c2b5d15a8beecef7037a89d9a62b83511e520d4519d",
+      "bytes": 239,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/core/__type_tests__/knowledge-view-contract.ts",
@@ -2253,6 +2253,15 @@
       "relations": 5,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/request-representation-contributor-source.ts",
+      "sha256": "8df06b6e294eb8eb4bcd31ea07576cb15047239af5c4d635d4014349d6fb16dd",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/__type_tests__/result-meta-contract.ts",
@@ -3957,12 +3966,12 @@
     },
     {
       "file": "packages/core/src/retrieval/recipe/recipe.ts",
-      "sha256": "3ec0bc788a6bd51dddceefd4d8fe0f3da2e96004235cf7ac78978971e420ba62",
-      "bytes": 623,
+      "sha256": "5142eb1c7d769fc43df48a3c39b30b9839bd2c2f55ada871d43dac866f453f9f",
+      "bytes": 686,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 11
+      "dependencies": 12
     },
     {
       "file": "packages/core/src/retrieval/recipe/run.ts",

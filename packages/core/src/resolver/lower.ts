@@ -104,7 +104,8 @@ export function injectableContributionKind(entry: InternalInjectableEntry): Crux
     entry._tag === 'RetrievalPipeline' ||
     entry._tag === 'Grounding' ||
     entry._tag === 'KnowledgeBase' ||
-    entry._tag === 'KnowledgeView'
+    entry._tag === 'KnowledgeView' ||
+    entry._tag === 'RetrievalRecipe'
   ) {
     return 'retriever'
   }
