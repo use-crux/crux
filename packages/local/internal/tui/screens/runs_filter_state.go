@@ -62,6 +62,7 @@ var runsListNow = time.Now
 
 type runsListProjectionKey struct {
 	request, revision uint64
+	valueVersion      uint64
 	ownerScreen       string
 	ownerResource     string
 	ownerRecord       string
@@ -134,6 +135,7 @@ func (s *Runs) filteredRuns() []api.ObservabilityRunSummary {
 	key := runsListProjectionKey{
 		request:       snapshot.Token.Request,
 		revision:      snapshot.Token.Revision,
+		valueVersion:  s.runsValueVersion,
 		ownerScreen:   snapshot.Token.Owner.Screen,
 		ownerResource: snapshot.Token.Owner.Resource,
 		ownerRecord:   snapshot.Token.Owner.RecordID,
@@ -209,6 +211,15 @@ func (s *Runs) filteredRuns() []api.ObservabilityRunSummary {
 	}
 	s.projection = projection
 	return s.projection.rows
+}
+
+// syncVisibleRuns is the sole resource+filter-to-pane reconciliation path.
+// filteredRuns remains the authoritative derivation; the ListPane is only its
+// cursor/viewport representation.
+func (s *Runs) syncVisibleRuns() []api.ObservabilityRunSummary {
+	runs := s.filteredRuns()
+	s.runList.SetItems(runs)
+	return runs
 }
 
 func runStatusMatches(status string, accepted []string) bool {

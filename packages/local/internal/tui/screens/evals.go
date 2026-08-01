@@ -215,7 +215,11 @@ func (s *Evals) View(_ Size) string {
 	}
 	snapshot := s.catalogResource.Snapshot()
 	if !snapshot.HasValue {
-		return s.centerMessage(resourceStateMessage(snapshot.State, snapshot.Err, "Eval catalog"))
+		message := resourceStateMessage(snapshot.State, snapshot.Err, "Eval catalog")
+		if snapshot.State == resource.ResourceFailed {
+			message += " · press R to retry"
+		}
+		return s.centerMessage(message)
 	}
 	if len(s.items) == 0 {
 		return s.centerMessage("No Evals discovered — run `crux eval`; discovery scans `.crux/evals`.")

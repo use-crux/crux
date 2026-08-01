@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
@@ -158,6 +159,18 @@ func awaitProgramExit(t *testing.T, done <-chan shutdownProgramResult) {
 	}
 }
 
+func awaitProgramExitWithin(t *testing.T, done <-chan shutdownProgramResult, limit time.Duration) {
+	t.Helper()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("run program: %v", result.err)
+		}
+	case <-time.After(limit):
+		t.Fatalf("program did not exit within %s", limit)
+	}
+}
+
 func TestRealProgramProcessesKeysDuringSlowIndexRefreshes(t *testing.T) {
 	t.Run("project index", func(t *testing.T) {
 		client := newSlowIndexFixtureClient()
@@ -219,4 +232,63 @@ func TestRealProgramProcessesKeysDuringSlowIndexRefreshes(t *testing.T) {
 			t.Fatalf("! during activity refresh set status %q", app.workbench.statusToast)
 		}
 	})
+}
+
+func TestRealProgramNavigationAndQuitStayResponsiveWhenDataLayerIsWedged(t *testing.T) {
+	client := newSlowIndexFixtureClient()
+	app, input, done := runSlowIndexApp(t, client)
+	defer input.Close()
+	defer close(client.projectRelease)
+	defer close(client.activityRelease)
+
+	cleanupRelease := make(chan struct{})
+	defer close(cleanupRelease)
+	app.SetShutdownCallback(func() error {
+		<-cleanupRelease
+		return nil
+	})
+
+	writeProgramKey(t, input, "5")
+	app.SendMsg(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainIndex), Revs: bridge.Revisions{Index: 1}})
+	select {
+	case <-client.projectStarted:
+	case <-time.After(time.Second):
+		t.Fatal("wedged ProjectIndex refresh did not start")
+	}
+
+	indexEvents := make(chan store.IndexData, 2_000)
+	bridgeCtx, cancelBridge := context.WithCancel(t.Context())
+	bridgeSession := bridge.Start(bridgeCtx, bridge.Sources{IndexChanged: indexEvents}, app.SendMsg)
+	defer func() {
+		cancelBridge()
+		_ = bridgeSession.Wait(context.Background())
+	}()
+	floodDone := make(chan struct{})
+	go func() {
+		defer close(floodDone)
+		for range 1_998 {
+			indexEvents <- store.IndexData{}
+		}
+		close(indexEvents)
+	}()
+
+	started := time.Now()
+	writeProgramKey(t, input, "1")
+	writeProgramKey(t, input, "q")
+	limit := 100 * time.Millisecond
+	if raceTestEnabled {
+		limit = 500 * time.Millisecond
+	}
+	awaitProgramExitWithin(t, done, limit)
+	if elapsed := time.Since(started); elapsed > limit {
+		t.Fatalf("navigation and quit took %s, want at most %s", elapsed, limit)
+	}
+	if app.workbench.activeNav != "overview" {
+		t.Fatalf("screen switch during wedged refresh ended on %q, want overview", app.workbench.activeNav)
+	}
+	select {
+	case <-floodDone:
+	case <-time.After(time.Second):
+		t.Fatal("event flood producer remained blocked after program exit")
+	}
 }

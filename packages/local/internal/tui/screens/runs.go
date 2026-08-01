@@ -60,6 +60,7 @@ type Runs struct {
 	showAllSpans     bool
 	exportState      runExportState
 	detailIntent     uint64
+	runsValueVersion uint64
 	projection       runsListProjection
 }
 
@@ -235,6 +236,7 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if !s.runsResource.Apply(resource.ResourceResult[[]api.ObservabilityRunSummary](m)) {
 			return nil
 		}
+		s.runsValueVersion++
 		snapshot := s.runsResource.Snapshot()
 		if !snapshot.HasValue {
 			return nil
@@ -244,7 +246,7 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if s.routedRun != nil {
 			s.ensureSelectedRunVisible(selectedID)
 		}
-		s.runList.SetItems(s.filteredRuns())
+		s.syncVisibleRuns()
 		if selectedID != "" {
 			s.runList.Select(selectedID)
 		}
@@ -363,7 +365,7 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	right := ""
 	listSnapshot := s.runsResource.Snapshot()
 	if listSnapshot.HasValue {
-		count := len(s.runSummaries())
+		count := len(s.filteredRuns())
 		window := "all time"
 		if s.activeRunWindow().label != "all" {
 			window = "last " + s.activeRunWindow().label

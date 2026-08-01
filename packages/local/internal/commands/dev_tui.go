@@ -179,11 +179,7 @@ func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, server
 	app.SetShutdownCallback(shutdownTUI)
 
 	_, programErr := p.Run()
-	result := app.ShutdownResult()
-	if !result.Completed {
-		cleanupErr := shutdownTUI()
-		return errors.Join(programErr, cleanupErr)
-	}
+	result := app.FinishShutdown()
 	if result.Err == nil {
 		devStatusf(io, "%s Workbench closed. Dev server stopped.\n", devBullet(io))
 	} else if result.Cause == tui.ShutdownRawInterrupt {

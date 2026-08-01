@@ -87,6 +87,28 @@ func TestSelectLintFindingsRejectsUnknownProfile(t *testing.T) {
 	}
 }
 
+func TestBareLintCrossReferencesLiveIndexFindings(t *testing.T) {
+	original := readLiveLintIndex
+	defer func() { readLiveLintIndex = original }()
+	root := t.TempDir()
+	readLiveLintIndex = func(context.Context, *cli.Factory) (api.IndexData, error) {
+		return api.IndexData{
+			Project:      &api.ProjectIdentity{Root: root},
+			LintFindings: make([]api.IndexLintFinding, 304),
+		}, nil
+	}
+
+	var out bytes.Buffer
+	factory := cli.NewFactoryWithStreams(output.NewTestIO(&out, nil, output.TestIOOptions{}))
+	factory.Port = 5507
+	printLiveLintCrossReference(context.Background(), factory, root)
+
+	want := "Live Index reports 304 findings — run 'crux lint --port 5507' or start crux dev."
+	if got := strings.TrimSpace(out.String()); got != want {
+		t.Fatalf("cross-reference = %q, want %q", got, want)
+	}
+}
+
 func TestLintInputErrorsExitTwoBeforeIndexing(t *testing.T) {
 	original := runProjectIndexForCommand
 	defer func() { runProjectIndexForCommand = original }()

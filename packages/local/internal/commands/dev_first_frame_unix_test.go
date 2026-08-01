@@ -123,7 +123,7 @@ func TestDevRendersRealTUIFrameBeforeWarmupCompletes(t *testing.T) {
 	}
 }
 
-func TestDevJoinsWorkersBeforeRealTUIRestoresTerminal(t *testing.T) {
+func TestDevRestoresRealTUIBeforeJoiningWorkers(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	master, terminal, err := pty.Open()
@@ -200,8 +200,8 @@ func TestDevJoinsWorkersBeforeRealTUIRestoresTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("capture active PTY state: %v", err)
 	}
-	if reflect.DeepEqual(activeTTY, initialTTY) {
-		t.Fatal("TUI restored the terminal before its admitted worker joined")
+	if !reflect.DeepEqual(activeTTY, initialTTY) {
+		t.Fatal("TUI did not restore the terminal while its admitted worker was still joining")
 	}
 
 	close(releasePreflight)

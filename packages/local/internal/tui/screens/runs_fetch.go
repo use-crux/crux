@@ -23,6 +23,8 @@ type runsSessionsLoadedMsg struct {
 	sessions map[string]bool
 }
 
+const runDetailIntentDelay = 10 * time.Millisecond
+
 func (m runsListLoadedMsg) ResourceOwner() resource.ResourceOwner {
 	return resource.ResourceResult[[]api.ObservabilityRunSummary](m).Token.Owner
 }
@@ -170,7 +172,7 @@ func (s *Runs) scheduleRunDetail(runID string) tea.Cmd {
 	}
 	s.detailIntent++
 	intent := s.detailIntent
-	return tea.Tick(35*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(runDetailIntentDelay, func(time.Time) tea.Msg {
 		return runDetailIntentMsg{runID: runID, intent: intent}
 	})
 }

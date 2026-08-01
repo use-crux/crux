@@ -6,10 +6,21 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 func (s *Evals) Actions(ctx context.Context, client DataClient) []interaction.Action {
 	actions := []interaction.Action{
+		{
+			ID:      "evals.retry-catalog",
+			Binding: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "retry catalog")),
+			DisabledReason: disabledUnless(
+				s.catalogResource.Snapshot().State == resource.ResourceFailed, "catalog has not failed",
+			),
+			Run: func() tea.Cmd {
+				return s.fetchCatalog(ctx, client, s.catalogResource.Snapshot().Token.Revision)
+			},
+		},
 		s.catalogMoveAction(ctx, client, "evals.next", []string{"j", "down"}, "j/↓", 1),
 		s.catalogMoveAction(ctx, client, "evals.previous", []string{"k", "up"}, "k/↑", -1),
 		s.cellMoveAction(ctx, client, "evals.cell-left", []string{"h", "left"}, "h/←", 0, -1),

@@ -139,6 +139,31 @@ func TestEvalCatalogArmStatusUsesCurrentAndFingerprint(t *testing.T) {
 	}
 }
 
+func TestEvalCatalogFailureIsReadableAndRetryable(t *testing.T) {
+	screen := NewEvals()
+	screen.Resize(Size{Width: 100, Height: 30})
+	_, token := screen.catalogResource.Begin(testContext, evalCatalogResourceOwner, 0)
+	screen.catalogResource.Apply(resource.ResourceResult[[]json.RawMessage]{
+		Token: token,
+		Err:   errors.New("discovery timed out after 14s"),
+	})
+
+	view := stripANSI(screen.View(Size{}))
+	for _, want := range []string{"failed Eval catalog", "discovery timed out after 14s", "press R to retry"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("failed catalog omitted %q:\n%s", want, view)
+		}
+	}
+
+	cmd := screen.Update(testContext, keyPress("R"), uitest.NewFixtureClient())
+	if cmd == nil {
+		t.Fatal("R did not start an Eval catalog retry")
+	}
+	if state := screen.catalogResource.Snapshot().State; state != resource.ResourceLoading {
+		t.Fatalf("catalog state after retry = %v, want loading", state)
+	}
+}
+
 func TestEvalsCellNavigationAndRunLinkGating(t *testing.T) {
 	client := uitest.NewFixtureClient()
 	screen := loadedFixtureEvals(t, client)

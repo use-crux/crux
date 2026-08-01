@@ -65,6 +65,7 @@ type App struct {
 	dashboardNotified   bool
 	quitRequested       bool
 	shutdownStarted     atomic.Bool
+	shutdownCleanupOnce sync.Once
 	shutdownCallback    func() error
 	shutdownResult      ShutdownResult
 	shutdownMu          sync.RWMutex
@@ -158,9 +159,6 @@ func (a *App) Init() tea.Cmd {
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if finished, ok := msg.(shutdownFinishedMsg); ok {
-		return a, a.finishShutdown(finished.result)
-	}
 	if a.shutdownStarted.Load() {
 		return a, nil
 	}

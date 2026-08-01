@@ -21,6 +21,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/commandui"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 type configInspectOptions struct {
@@ -33,6 +35,10 @@ type configInspectOptions struct {
 type projectConfigResolveFunc func(ctx context.Context, root, configPath, projectName string, process commandWorkerProcess) (json.RawMessage, error)
 
 var resolveProjectConfigForInspect projectConfigResolveFunc = inspectProjectConfigWithWorker
+
+type configDiscoveryFunc func(context.Context, *cli.Factory, string, string, string, commandWorkerProcess) (store.IndexData, string, error)
+
+var resolveConfigDiscovery configDiscoveryFunc = discoverConfigProjectIndex
 
 const configInspectTimeout = 120 * time.Second
 
@@ -83,6 +89,13 @@ side effects) so explicit overrides are reflected, not just defaults.`,
 			if err != nil {
 				return err
 			}
+			index, source, discoveryErr := resolveConfigDiscovery(
+				cmd.Context(), f, root, opts.configPath, opts.project, newCommandWorkerProcess(io),
+			)
+			config, err = mergeConfigDiscovery(config, index, source, discoveryErr)
+			if err != nil {
+				return err
+			}
 			if jsonOutput {
 				return writePrettyJSON(io.Out, config)
 			}
@@ -95,6 +108,95 @@ side effects) so explicit overrides are reflected, not just defaults.`,
 	inspectCmd.Flags().StringVar(&opts.project, "name", "", "Project name to include in worker resolution")
 	cmd.AddCommand(inspectCmd)
 	return cmd
+}
+
+const configDiscoveryTimeout = 14 * time.Second
+const configLiveDiscoveryTimeout = 750 * time.Millisecond
+const configDiscoveryDiagnosticCode = "project_index.discovery"
+
+func discoverConfigProjectIndex(
+	ctx context.Context,
+	f *cli.Factory,
+	root, configPath, projectName string,
+	process commandWorkerProcess,
+) (store.IndexData, string, error) {
+	liveCtx, cancelLive := context.WithTimeout(ctx, configLiveDiscoveryTimeout)
+	var live store.IndexData
+	liveErr := f.ClientFor("config inspect").GetJSON(liveCtx, "/api/index", &live)
+	cancelLive()
+	if liveErr == nil && live.Project != nil && sameProjectRoot(root, live.Project.Root) {
+		return live, "live Project Index", nil
+	}
+
+	staticCtx, cancelStatic := context.WithTimeout(ctx, configDiscoveryTimeout)
+	defer cancelStatic()
+	worker := assets.NewEmbeddedProjectIndexer("", process.options()...)
+	defer worker.Close()
+	patch, err := worker.IndexProjectAstPatch(staticCtx, root, configPath, projectName)
+	if err == nil {
+		index := projectindex.ApplyPatch(projectindex.EmptyPatchState(), patch).Index
+		return index, "static Project Index discovery", nil
+	}
+	if staticCtx.Err() != nil {
+		err = fmt.Errorf("static Project Index discovery exceeded %s", configDiscoveryTimeout)
+	}
+	if liveErr == nil && live.Project != nil && !sameProjectRoot(root, live.Project.Root) {
+		err = fmt.Errorf("live server indexes %s; %w", live.Project.Root, err)
+	}
+	return store.IndexData{}, "", err
+}
+
+func sameProjectRoot(left, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	return leftErr == nil && rightErr == nil && filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
+}
+
+func mergeConfigDiscovery(raw json.RawMessage, index store.IndexData, source string, discoveryErr error) (json.RawMessage, error) {
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return nil, fmt.Errorf("decode effective config discovery: %w", err)
+	}
+	var diagnostics []configDiagnostic
+	if value := document["diagnostics"]; len(value) > 0 {
+		if err := json.Unmarshal(value, &diagnostics); err != nil {
+			return nil, fmt.Errorf("decode effective config diagnostics: %w", err)
+		}
+	}
+	if discoveryErr != nil {
+		diagnostics = append(diagnostics, configDiagnostic{
+			Severity: "warning",
+			Code:     configDiscoveryDiagnosticCode,
+			Message:  "Project Index counts unavailable: " + discoveryErr.Error(),
+		})
+	} else {
+		kinds := make(map[string]int)
+		for _, definition := range index.Definitions {
+			kinds[definition.Kind]++
+		}
+		discovered := configDiscovered{
+			Definitions:     len(index.Definitions),
+			Relations:       len(index.Relations),
+			Evals:           kinds["eval"],
+			DefinitionKinds: kinds,
+		}
+		discoveredJSON, err := json.Marshal(discovered)
+		if err != nil {
+			return nil, err
+		}
+		document["discovered"] = discoveredJSON
+		diagnostics = append(diagnostics, configDiagnostic{
+			Severity: "info",
+			Code:     configDiscoveryDiagnosticCode,
+			Message:  "Project Index counts from " + source + ".",
+		})
+	}
+	diagnosticsJSON, err := json.Marshal(diagnostics)
+	if err != nil {
+		return nil, err
+	}
+	document["diagnostics"] = diagnosticsJSON
+	return json.Marshal(document)
 }
 
 func resolveConfigInspectRoot(cwd string) (string, error) {
@@ -377,13 +479,13 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 		listRow(io, "installed", model.Plugins),
 	})
 
-	// ── Config-visible source model ───────────────────────────
+	// ── Project Index discovery ───────────────────────────────
 	fmt.Fprintln(out)
-	printConfigDomain(io, "Config-visible source model", []configRow{
+	printConfigDomain(io, "Project Index discovery", []configRow{
 		{label: "definitions", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Definitions))},
 		{label: "relations", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Relations))},
 		{label: "Evals", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Evals))},
-		{label: "scope", value: "config imports only; run crux index for the full Project Index"},
+		{label: "scope", value: configDiscoveryScope(model.Diagnostics)},
 	})
 
 	// ── Diagnostics ──────────────────────────────────────────
@@ -395,6 +497,15 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	}
 	printConfigDiagnostics(io, model.Diagnostics)
 	return nil
+}
+
+func configDiscoveryScope(diagnostics []configDiagnostic) string {
+	for index := len(diagnostics) - 1; index >= 0; index-- {
+		if diagnostics[index].Code == configDiscoveryDiagnosticCode {
+			return diagnostics[index].Message
+		}
+	}
+	return "config imports only; Project Index counts unavailable (discovery was not run)"
 }
 
 // ── Row builders ──────────────────────────────────────────────────

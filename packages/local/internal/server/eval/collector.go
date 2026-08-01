@@ -4,6 +4,7 @@ package eval
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -20,19 +21,29 @@ type Collector struct {
 	projectRoot string
 	deps        CollectorDeps
 	ttl         time.Duration
+	timeout     time.Duration
 	collect     func(context.Context) ([]json.RawMessage, error)
 
 	mu        sync.Mutex
 	cached    []json.RawMessage
 	fetchedAt time.Time
+	inflight  *collectorFlight
+}
+
+type collectorFlight struct {
+	done      chan struct{}
+	manifests []json.RawMessage
+	err       error
+	waiters   int
 }
 
 const collectorTTL = 15 * time.Second
 const freshCollectorBurstTTL = 250 * time.Millisecond
+const collectorTimeout = 14 * time.Second
 
 // NewCollector creates a cached, discovery-only Eval catalog reader.
 func NewCollector(projectRoot string, deps CollectorDeps) *Collector {
-	collector := &Collector{projectRoot: projectRoot, deps: deps, ttl: collectorTTL}
+	collector := &Collector{projectRoot: projectRoot, deps: deps, ttl: collectorTTL, timeout: collectorTimeout}
 	collector.collect = collector.collectFromWorker
 	return collector
 }
@@ -49,23 +60,55 @@ func NewFreshCollector(projectRoot string, deps CollectorDeps) *Collector {
 // EvalManifests returns additive worker projections without reinterpreting them.
 func (c *Collector) EvalManifests(ctx context.Context) ([]json.RawMessage, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.cached != nil && time.Since(c.fetchedAt) < c.ttl {
-		return cloneRaw(c.cached), nil
+		cached := cloneRaw(c.cached)
+		c.mu.Unlock()
+		return cached, nil
 	}
+	if flight := c.inflight; flight != nil {
+		flight.waiters++
+		c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-flight.done:
+			return cloneRaw(flight.manifests), flight.err
+		}
+	}
+	flight := &collectorFlight{done: make(chan struct{})}
+	c.inflight = flight
+	c.mu.Unlock()
+	go c.runFlight(context.WithoutCancel(ctx), flight)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-flight.done:
+		return cloneRaw(flight.manifests), flight.err
+	}
+}
+
+func (c *Collector) runFlight(ctx context.Context, flight *collectorFlight) {
 	manifests, err := c.collect(ctx)
+	c.mu.Lock()
 	if err != nil {
 		if c.cached != nil {
-			return cloneRaw(c.cached), nil
+			manifests, err = cloneRaw(c.cached), nil
 		}
-		return nil, err
+	} else {
+		c.cached = cloneRaw(manifests)
+		c.fetchedAt = time.Now()
 	}
-	c.cached = cloneRaw(manifests)
-	c.fetchedAt = time.Now()
-	return cloneRaw(manifests), nil
+	flight.manifests = cloneRaw(manifests)
+	flight.err = err
+	c.inflight = nil
+	close(flight.done)
+	c.mu.Unlock()
 }
 
 func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
 	node, err := c.deps.FindNode()
 	if err != nil {
 		return nil, err
@@ -80,7 +123,7 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 	result, err := workerproc.Stream(ctx, workerproc.OneShot{
 		CommandPath: node,
 		CommandArgs: []string{coordinator},
-		Args:        []string{"--catalog-readiness"},
+		Args:        []string{"--list"},
 		Dir:         c.projectRoot,
 	}, func(raw json.RawMessage) error {
 		var event struct {
@@ -94,6 +137,12 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 		return nil
 	})
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("Eval catalog discovery timed out after %s", c.timeout)
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, err
 	}
 	if !found {

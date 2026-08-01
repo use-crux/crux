@@ -104,7 +104,7 @@ func (s *Runs) cycleRunWindow(ctx context.Context, c DataClient) tea.Cmd {
 func (s *Runs) cycleRunGroup(ctx context.Context, c DataClient) tea.Cmd {
 	selectedID := s.SelectedRunID()
 	s.runGroupIndex = (s.runGroupIndex + 1) % len(runGroups)
-	s.runList.SetItems(s.filteredRuns())
+	s.syncVisibleRuns()
 	if selectedID != "" {
 		s.runList.Select(selectedID)
 	}
@@ -160,8 +160,7 @@ func (s *Runs) refreshFilteredRuns(ctx context.Context, c DataClient) tea.Cmd {
 
 func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea.Cmd {
 	previousID := s.SelectedRunID()
-	runs := s.filteredRuns()
-	s.runList.SetItems(runs)
+	runs := s.syncVisibleRuns()
 	if len(runs) == 0 {
 		s.clearRunSelection()
 		return nil

@@ -12,3 +12,5 @@ Make `crux runtime generate` report progress and fail with a bounded timeout ins
 Improve Local CLI error quality and output hygiene: make connection hints command- and port-aware, keep one-shot worker lifecycle logs quiet, explain non-project roots, lead Runtime errors with their actionable diagnostic, validate config/check inputs before work begins, suppress non-interactive spinners and Eval color warnings, and add actionable argument, lookup, import, live-stream, and Stats help guidance.
 
 Make monorepo Eval listing skip test-fixture trees and scope duplicate Eval ids to their owning package, bound offline server connection attempts, distinguish config-import counts from the full Project Index, keep forced-color stderr pipes free of spinner frames, and honor stored-rollup-only observability list reads.
+
+Report real Project Index definition counts from a matching live server or a bounded static discovery pass during `config inspect`, and explain explicitly when those counts are unavailable. Cross-reference the live Index finding count after bare `crux lint` output when the server is reachable, with an actionable live-mode hint otherwise.

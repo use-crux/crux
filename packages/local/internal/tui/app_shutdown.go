@@ -32,12 +32,8 @@ type shutdownRequestMsg struct {
 	cause ShutdownCause
 }
 
-type shutdownFinishedMsg struct {
-	result ShutdownResult
-}
-
 // SetShutdownCallback installs the one cleanup operation which must finish
-// before Bubble Tea restores the terminal and returns from Program.Run.
+// after Bubble Tea restores the terminal and returns from Program.Run.
 func (a *App) SetShutdownCallback(fn func() error) {
 	a.shutdownMu.Lock()
 	defer a.shutdownMu.Unlock()
@@ -70,21 +66,39 @@ func (a *App) beginShutdown(cause ShutdownCause) tea.Cmd {
 		return nil
 	}
 	a.quitRequested = true
-	a.shutdownMu.RLock()
-	cleanup := a.shutdownCallback
-	a.shutdownMu.RUnlock()
-	return func() tea.Msg {
+	a.shutdownMu.Lock()
+	a.shutdownResult.Cause = cause
+	a.shutdownMu.Unlock()
+
+	// Cleanup can wait for an unrelated in-flight server request. Restore the
+	// terminal immediately and let the command root join cleanup after Run
+	// returns; otherwise the App suppresses input while keeping the user trapped
+	// in the alternate screen for the entire request timeout.
+	return tea.Batch(
+		func() tea.Msg {
+			a.FinishShutdown()
+			return nil
+		},
+		tea.Quit,
+	)
+}
+
+// FinishShutdown runs the App cleanup exactly once. It is safe to call after
+// Program.Run so the terminal is already restored while server cleanup waits.
+func (a *App) FinishShutdown() ShutdownResult {
+	a.shutdownCleanupOnce.Do(func() {
+		a.shutdownMu.RLock()
+		cleanup := a.shutdownCallback
+		cause := a.shutdownResult.Cause
+		a.shutdownMu.RUnlock()
+
 		var err error
 		if cleanup != nil {
 			err = cleanup()
 		}
-		return shutdownFinishedMsg{result: ShutdownResult{Cause: cause, Err: err, Completed: true}}
-	}
-}
-
-func (a *App) finishShutdown(result ShutdownResult) tea.Cmd {
-	a.shutdownMu.Lock()
-	a.shutdownResult = result
-	a.shutdownMu.Unlock()
-	return tea.Quit
+		a.shutdownMu.Lock()
+		a.shutdownResult = ShutdownResult{Cause: cause, Err: err, Completed: true}
+		a.shutdownMu.Unlock()
+	})
+	return a.ShutdownResult()
 }

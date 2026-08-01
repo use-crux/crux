@@ -23,3 +23,7 @@ Keep Runs interactions responsive at thousand-run scale by coalescing detail rea
 Add an Evals workbench with catalog readiness, a navigable Case-by-Variant result grid, reusable-evidence detail, local Runs drill-through, run history, and committed Baseline compatibility. Join Insights Cases to the same persisted Eval evidence, and expand the deterministic Local demo with a mixed 3-by-2 Eval matrix and Baseline.
 
 Unify TUI surfaces and pane seams across every screen, replace noisy braille trends with honest block-ramp sparklines, add terminal-safe TypeScript and JSON syntax color, and renumber navigation in visual order.
+
+Keep navigation and terminal quit responsive while a hard Project Index refresh and workspace cleanup are wedged, and cover the production bridge flood with a real-program latency regression. Derive Runs rows from one versioned resource-and-filter projection so accepted refresh values cannot retain a false-empty cache, tighten cold cursor-detail coalescing, and preserve complete compact Index status names.
+
+Use the same bounded Eval catalog discovery mode as `crux eval list`, surface readable timeout failures within 15 seconds, and provide an on-screen retry action.

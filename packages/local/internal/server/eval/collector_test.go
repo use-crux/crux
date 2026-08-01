@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -33,6 +35,137 @@ func TestCollectorCachesAdditiveCatalogAndServesLastGoodSnapshot(t *testing.T) {
 	third, err := collector.EvalManifests(context.Background())
 	if err != nil || string(third[0]) != `{"id":"support","future":true}` || calls != 2 {
 		t.Fatalf("stale fallback = %s, calls = %d, err = %v", third, calls, err)
+	}
+}
+
+func TestCollectorUsesCLIDiscoverySemantics(t *testing.T) {
+	worker := t.TempDir() + "/coordinator"
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\n[ \"$2\" = \"--list\" ] || exit 9\nprintf '%s\\n' '{\"type\":\"collect:done\",\"evals\":[{\"id\":\"support\"}],\"errors\":[]}' '{\"type\":\"run:done\",\"exitCode\":0}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	collector := NewCollector(t.TempDir(), CollectorDeps{
+		FindNode:           func() (string, error) { return worker, nil },
+		ExtractCoordinator: func() (string, error) { return "ignored", nil },
+	})
+	manifests, err := collector.EvalManifests(t.Context())
+	if err != nil || len(manifests) != 1 {
+		t.Fatalf("manifests = %s, err = %v", manifests, err)
+	}
+}
+
+func TestCollectorBoundsWorkerFailure(t *testing.T) {
+	worker := t.TempDir() + "/coordinator"
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	collector := NewCollector("", CollectorDeps{})
+	collector.timeout = 20 * time.Millisecond
+	collector.deps.FindNode = func() (string, error) { return worker, nil }
+	collector.deps.ExtractCoordinator = func() (string, error) { return "ignored", nil }
+	collector.collect = collector.collectFromWorker
+	started := time.Now()
+	_, err := collector.EvalManifests(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("error = %v, want readable timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("bounded failure took %s", elapsed)
+	}
+}
+
+func TestCollectorCoalescesConcurrentWorkerFailure(t *testing.T) {
+	collector := NewCollector("", CollectorDeps{})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	calls := 0
+	collector.collect = func(context.Context) ([]json.RawMessage, error) {
+		calls++
+		close(started)
+		<-release
+		return nil, errors.New("worker failed")
+	}
+
+	type result struct {
+		err error
+	}
+	results := make(chan result, 2)
+	go func() {
+		_, err := collector.EvalManifests(t.Context())
+		results <- result{err: err}
+	}()
+	<-started
+	go func() {
+		_, err := collector.EvalManifests(t.Context())
+		results <- result{err: err}
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		collector.mu.Lock()
+		waiting := collector.inflight != nil && collector.inflight.waiters == 1
+		collector.mu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("second reader did not join the in-flight collection")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+
+	for range 2 {
+		if got := <-results; got.err == nil || got.err.Error() != "worker failed" {
+			t.Fatalf("coalesced error = %v", got.err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("worker calls = %d, want one shared failure", calls)
+	}
+}
+
+func TestCollectorCancellationDoesNotPoisonSharedFlight(t *testing.T) {
+	collector := NewCollector("", CollectorDeps{})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	collector.collect = func(context.Context) ([]json.RawMessage, error) {
+		close(started)
+		<-release
+		return []json.RawMessage{json.RawMessage(`{"id":"shared"}`)}, nil
+	}
+
+	leaderCtx, cancelLeader := context.WithCancel(t.Context())
+	leader := make(chan error, 1)
+	go func() {
+		_, err := collector.EvalManifests(leaderCtx)
+		leader <- err
+	}()
+	<-started
+	waiter := make(chan []json.RawMessage, 1)
+	go func() {
+		manifests, _ := collector.EvalManifests(t.Context())
+		waiter <- manifests
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		collector.mu.Lock()
+		waiting := collector.inflight != nil && collector.inflight.waiters == 1
+		collector.mu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("second reader did not join the in-flight collection")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancelLeader()
+	if err := <-leader; !errors.Is(err, context.Canceled) {
+		t.Fatalf("leader error = %v, want canceled", err)
+	}
+	close(release)
+	if manifests := <-waiter; len(manifests) != 1 || string(manifests[0]) != `{"id":"shared"}` {
+		t.Fatalf("waiter manifests = %s", manifests)
 	}
 }
 

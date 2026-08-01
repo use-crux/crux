@@ -18,6 +18,14 @@ func (s *Index) renderList(width, height int) string {
 	}
 	meta = appendResourceStatus(meta, s.currentExportState())
 	subtitle := fmt.Sprintf("%d · by %s", len(snapshot.Value.Definitions), s.groupAxisLabel())
+	if compactStatus := s.indexCompactStatusStrip(); width < 64 && status == "" && compactStatus != "" {
+		// Compact panes have room for the title or the status, but not the
+		// duplicated count, grouping label, position, and status together.
+		// Preserve whole state names instead of rendering ambiguous fragments
+		// such as "index read…".
+		subtitle = ""
+		meta = compactStatus
+	}
 	header := overviewPaneHeader(width, focusTitle("Definitions", s.focus == indexFocusDefinitions),
 		subtitle, meta)
 	hdrH := strings.Count(header, "\n") + 1

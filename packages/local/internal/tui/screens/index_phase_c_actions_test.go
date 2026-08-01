@@ -83,6 +83,51 @@ func TestIndexRuntimeJoinAndWatchStatusExposeTypedActions(t *testing.T) {
 	}
 }
 
+func TestIndexCompactHeaderPreservesWholeStatusNames(t *testing.T) {
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{
+		Indexing: &api.ProjectIndexingStatus{
+			Status:   "ready",
+			Semantic: api.IndexIndexingSemanticStatus{Status: "ready"},
+		},
+		Definitions: []api.ProjectDefinition{{ID: "prompt:compact", Kind: "prompt", Name: "compact"}},
+	})
+	index.Resize(Size{Width: 44, Height: 20})
+
+	view := stripANSI(index.renderList(44, 20))
+	header := strings.Split(view, "\n")[1]
+	for _, want := range []string{"Definitions", "index ready", "semantic ok"} {
+		if !strings.Contains(header, want) {
+			t.Fatalf("compact header omitted %q: %q", want, header)
+		}
+	}
+	if strings.Contains(header, "index read…") || strings.Contains(header, "semantic o…") {
+		t.Fatalf("compact header truncated a status name: %q", header)
+	}
+}
+
+func TestIndexCompactHeaderShortensDegradedSemanticStateWithoutTruncating(t *testing.T) {
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{
+		Indexing: &api.ProjectIndexingStatus{
+			Status:   "degraded",
+			Semantic: api.IndexIndexingSemanticStatus{Status: "degraded"},
+		},
+		Definitions: []api.ProjectDefinition{{ID: "prompt:compact", Kind: "prompt", Name: "compact"}},
+	})
+	index.Resize(Size{Width: 44, Height: 20})
+
+	header := strings.Split(stripANSI(index.renderList(44, 20)), "\n")[1]
+	for _, want := range []string{"index degraded", "semantic warn"} {
+		if !strings.Contains(header, want) {
+			t.Fatalf("compact degraded header omitted %q: %q", want, header)
+		}
+	}
+	if strings.Contains(header, "…") {
+		t.Fatalf("compact degraded header truncated status: %q", header)
+	}
+}
+
 func TestIndexGroupAxisTogglesBetweenKindAndFile(t *testing.T) {
 	index := NewIndex()
 	index.SetIndexForTest(api.IndexData{

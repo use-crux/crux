@@ -62,6 +62,46 @@ func (s *Index) indexStatusStrip() string {
 	return strings.Join(parts, shell.TextMuted.Render(" · "))
 }
 
+func (s *Index) indexCompactStatusStrip() string {
+	parts := make([]string, 0, 2)
+	if indexing := s.indexData().Indexing; indexing != nil {
+		parts = append(parts, compactIndexStatusPart("index", indexing.Status, "ready"))
+		if indexing.Semantic.Status != "" {
+			semanticStatus := indexing.Semantic.Status
+			switch semanticStatus {
+			case "disabled":
+				semanticStatus = "off"
+			case "degraded":
+				semanticStatus = "warn"
+			}
+			if semanticStatus == "ready" {
+				parts = append(parts, compactIndexStatusPart("semantic", semanticStatus, "ready"))
+			} else {
+				parts = append(parts, compactIndexStatusPart("semantic", semanticStatus))
+			}
+		}
+	}
+	return strings.Join(parts, shell.TextMuted.Render("·"))
+}
+
+func compactIndexStatusPart(label, status string, nominal ...string) string {
+	status = sanitizeIndexInline(status)
+	display := status
+	if status == "ready" && label == "semantic" {
+		display = "ok"
+	}
+	value := strings.TrimSpace(label + " " + display)
+	for _, expected := range nominal {
+		if status == expected {
+			return shell.TextMuted.Render(value)
+		}
+	}
+	if status == "failed" || status == "error" {
+		return shell.Rose.Render(value)
+	}
+	return shell.Amber.Render(value)
+}
+
 func indexStatusPart(label, status string, nominal ...string) string {
 	status = sanitizeIndexInline(status)
 	display := status

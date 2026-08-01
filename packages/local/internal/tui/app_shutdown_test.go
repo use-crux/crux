@@ -44,7 +44,7 @@ func newShutdownTestApp(ctx context.Context) *App {
 	return app
 }
 
-func TestAppWaitsForCleanupBeforeWorkspaceQuitCompletes(t *testing.T) {
+func TestAppRestoresTerminalBeforeWorkspaceCleanupCompletes(t *testing.T) {
 	cleanupStarted := make(chan struct{})
 	cleanupRelease := make(chan struct{})
 	app := newShutdownTestApp(t.Context())
@@ -63,21 +63,15 @@ func TestAppWaitsForCleanupBeforeWorkspaceQuitCompletes(t *testing.T) {
 	}
 	select {
 	case result := <-done:
-		t.Fatalf("program completed before cleanup was released: %+v", result)
-	case <-time.After(30 * time.Millisecond):
-	}
-
-	close(cleanupRelease)
-	select {
-	case result := <-done:
 		if result.err != nil {
 			t.Fatalf("run program: %v", result.err)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("program did not quit after cleanup completed")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("program kept the terminal open while cleanup was blocked")
 	}
 
-	result := app.ShutdownResult()
+	close(cleanupRelease)
+	result := app.FinishShutdown()
 	if !result.Completed {
 		t.Fatal("shutdown result was not marked complete")
 	}

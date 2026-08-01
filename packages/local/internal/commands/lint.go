@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -61,7 +62,11 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 				}
 				return writeLintResult(f.Streams(), index, opts)
 			}
-			return runLint(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
+			err := runLint(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
+			if !opts.json {
+				printLiveLintCrossReference(cmd.Context(), f, opts.root)
+			}
+			return err
 		},
 	}
 
@@ -74,6 +79,31 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.projectID, "project-id", "", "Optional project identity for display and cache scoping")
 	cmd.Flags().BoolVar(&opts.server, "server", false, "Read findings from the running devtools server instead of indexing once")
 	return cmd
+}
+
+func printLiveLintCrossReference(ctx context.Context, f *cli.Factory, root string) {
+	const probeTimeout = 750 * time.Millisecond
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	port := f.Port
+	if port == 0 {
+		port = 4400
+	}
+	if index, err := readLiveLintIndex(probeCtx, f); err == nil &&
+		index.Project != nil && sameProjectRoot(root, index.Project.Root) {
+		fmt.Fprintf(f.Streams().Out,
+			"Live Index reports %d findings — run 'crux lint --port %d' or start crux dev.\n",
+			len(index.LintFindings), port)
+		return
+	}
+	fmt.Fprintf(f.Streams().Out,
+		"Tip: live Index mode is available with 'crux lint --port %d' after starting crux dev.\n", port)
+}
+
+var readLiveLintIndex = func(ctx context.Context, f *cli.Factory) (api.IndexData, error) {
+	var index api.IndexData
+	err := f.ClientFor("lint").GetJSON(ctx, "/api/index", &index)
+	return index, err
 }
 
 func validateLintOptions(opts lintOptions) error {

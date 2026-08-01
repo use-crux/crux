@@ -16,6 +16,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // loadedConfigFixture is a representative effective-config payload.
@@ -182,8 +183,8 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		"lint:", "profile", "strict", "rules",
 		"plugins:", "@acme/tracer",
 		// The scoped config model is explicitly distinguished from the full Index.
-		"Config-visible source model", "definitions", "relations", "Evals",
-		"config imports only; run crux index for the full Project Index",
+		"Project Index discovery", "definitions", "relations", "Evals",
+		"config imports only; Project Index counts unavailable (discovery was not run)",
 		"Diagnostics  1", "info", "project_model.missing_stable_id",
 	} {
 		if !strings.Contains(text, want) {
@@ -194,6 +195,43 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 	// Explicit values must be tagged as config, defaults as default.
 	if !strings.Contains(text, "first-party-only  (default)") {
 		t.Fatalf("default indexer.trust was not tagged (default):\n%s", text)
+	}
+}
+
+func TestMergeConfigDiscoveryReplacesCountsAndExplainsSource(t *testing.T) {
+	raw, err := mergeConfigDiscovery(loadedConfigFixture(t.TempDir()), store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:a", Kind: "prompt"},
+			{ID: "eval:a", Kind: "eval"},
+		},
+		Relations: []store.ProjectRelation{{ID: "relation:a"}},
+	}, "live Project Index", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model configInspect
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	if model.Discovered.Definitions != 2 || model.Discovered.Relations != 1 || model.Discovered.Evals != 1 {
+		t.Fatalf("discovery counts = %#v", model.Discovered)
+	}
+	if scope := configDiscoveryScope(model.Diagnostics); scope != "Project Index counts from live Project Index." {
+		t.Fatalf("scope = %q", scope)
+	}
+}
+
+func TestMergeConfigDiscoveryMakesUnavailableCountsExplicit(t *testing.T) {
+	raw, err := mergeConfigDiscovery(loadedConfigFixture(t.TempDir()), store.IndexData{}, "", errors.New("compiler unavailable"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model configInspect
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	if scope := configDiscoveryScope(model.Diagnostics); !strings.Contains(scope, "counts unavailable: compiler unavailable") {
+		t.Fatalf("scope = %q", scope)
 	}
 }
 
