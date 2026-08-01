@@ -1,6 +1,6 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { effect, rollback } from "@use-crux/core/effect";
 import { flow } from "../../src/flow";
-import type { EffectScopeRef } from "../../src/effect";
 import { createFlowWorkDriver } from "../../src/work/internal/flow-driver";
 import { createProcessLocalWorkKernel } from "../../src/work/internal/process-local-kernel";
 
@@ -17,19 +17,16 @@ describe("process-local Work kernel", () => {
     const flowStarted = deferred();
     const releaseFlow = deferred();
     const expected = { kind: "work-output", count: 2 } as const;
+    const recover = vi.fn(async () => undefined);
+    const record = effect("work.tracer.record", async () => undefined, {
+      recover,
+    });
     const target = flow("internal work tracer", async () => {
       flowStarted.resolve();
       await releaseFlow.promise;
+      await record.run();
       return expected;
     });
-    const flowDriver = createFlowWorkDriver(target);
-    let executionEffects: EffectScopeRef | undefined;
-    const driver: typeof flowDriver = {
-      async run(context) {
-        executionEffects = context.effects;
-        return flowDriver.run(context);
-      },
-    };
     let start: (() => void) | undefined;
     let now = 0;
     const kernel = createProcessLocalWorkKernel({
@@ -40,7 +37,7 @@ describe("process-local Work kernel", () => {
       },
     });
 
-    const handle = await kernel.spawn(driver);
+    const handle = await kernel.spawn(createFlowWorkDriver(target));
     expectTypeOf(handle.result()).toEqualTypeOf<Promise<typeof expected>>();
     await expect(handle.status()).resolves.toMatchObject({
       id: "work_tracer",
@@ -50,7 +47,6 @@ describe("process-local Work kernel", () => {
     start?.();
     await flowStarted.promise;
     await expect(handle.status()).resolves.toMatchObject({ state: "running" });
-    expect(executionEffects).toBe(handle.effects);
     expect(Object.isFrozen(handle.effects)).toBe(true);
 
     releaseFlow.resolve();
@@ -59,5 +55,13 @@ describe("process-local Work kernel", () => {
       state: "completed",
       resultAvailable: true,
     });
+    const rollbackResult = await rollback(handle.effects);
+    expect(rollbackResult.units).toEqual([
+      expect.objectContaining({
+        effectIds: ["work.tracer.record"],
+        status: "recovered",
+      }),
+    ]);
+    expect(recover).toHaveBeenCalledOnce();
   });
 });
