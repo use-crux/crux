@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 interface ProjectConfigArtifact {
@@ -34,6 +34,16 @@ interface RuntimeArtifactsArtifact {
   };
 }
 
+interface StaticIndexConfigArtifact {
+  readonly type: "artifact:done";
+  readonly artifact: "projectStaticIndexConfig";
+  readonly payload: {
+    readonly configDependencies: readonly string[];
+    readonly cacheDisabled?: boolean;
+    readonly diagnostics: readonly unknown[];
+  };
+}
+
 const PACKAGE_ROOT = resolve(__dirname, "..");
 const BUILT_WORKER = resolve(PACKAGE_ROOT, "dist/project-indexer.mjs");
 const CORE_PACKAGE = resolve(PACKAGE_ROOT, "../core");
@@ -51,6 +61,12 @@ describe("built project-indexer TypeScript imports", () => {
     const root = await mkdtemp(join(tmpdir(), "crux-built-config-import-"));
     roots.push(root);
     await writeFile(join(root, "package.json"), '{"type":"module"}\n');
+    await writeFile(
+      join(root, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: { baseUrl: ".", paths: { "@/*": ["*"] } },
+      }),
+    );
     await mkdir(join(root, "node_modules/@use-crux"), { recursive: true });
     await symlink(
       CORE_PACKAGE,
@@ -81,7 +97,7 @@ describe("built project-indexer TypeScript imports", () => {
     await writeFile(
       join(root, "settings.tsx"),
       [
-        'import { Defaults, NativeMode } from "./value"',
+        'import { Defaults, NativeMode } from "@/value"',
         "class Setting {",
         "  constructor(public readonly enabled: boolean) {}",
         "}",
@@ -112,6 +128,88 @@ describe("built project-indexer TypeScript imports", () => {
 
     expect(event.payload.configFile.status).toBe("loaded");
     expect(event.payload.experimental.indexer.native.value).toBe("true");
+  }, 60_000);
+
+  it("reports extended alias config dependencies through the built worker", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "crux-built-config-dependencies-"),
+    );
+    roots.push(root);
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
+    await mkdir(join(root, "config"), { recursive: true });
+    await writeFile(
+      join(root, "config/base.json"),
+      JSON.stringify({
+        compilerOptions: { baseUrl: "..", paths: { "@/*": ["src/*"] } },
+      }),
+    );
+    await writeFile(
+      join(root, "tsconfig.json"),
+      JSON.stringify({ extends: "./config/base.json" }),
+    );
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src/value.ts"), "export const value = true\n");
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        'import { value } from "@/value"',
+        "export default { config: { experimental: { indexer: { native: value } } }, prompts: [], contexts: [], get() {} }",
+      ].join("\n"),
+    );
+
+    const event = await runBuiltWorker<StaticIndexConfigArtifact>(
+      { method: "inspectProjectStaticIndexConfig", protocolVersion: 3, root },
+      "projectStaticIndexConfig",
+    );
+
+    expect(event.payload.diagnostics).toEqual([]);
+    expect(event.payload.configDependencies).toEqual([
+      "config/base.json",
+      "tsconfig.json",
+    ]);
+    expect(event.payload.cacheDisabled).not.toBe(true);
+  }, 60_000);
+
+  it("rejects an authored alias outside the project boundary before package fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crux-built-config-contained-"));
+    const outside = join(dirname(root), `${basename(root)}-outside.ts`);
+    roots.push(root, outside);
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
+    await writeFile(outside, "export const value = true\n");
+    await writeFile(
+      join(root, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { danger: [`../${basename(outside)}`] },
+        },
+      }),
+    );
+    await mkdir(join(root, "node_modules/danger"), { recursive: true });
+    await writeFile(
+      join(root, "node_modules/danger/package.json"),
+      '{"name":"danger","type":"module","exports":"./index.js"}\n',
+    );
+    await writeFile(
+      join(root, "node_modules/danger/index.js"),
+      "export const value = false\n",
+    );
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        'import { value } from "danger"',
+        "export default { config: { experimental: { indexer: { native: value } } }, prompts: [], contexts: [], get() {} }",
+      ].join("\n"),
+    );
+
+    const event = await runBuiltWorker<StaticIndexConfigArtifact>(
+      { method: "inspectProjectStaticIndexConfig", protocolVersion: 3, root },
+      "projectStaticIndexConfig",
+    );
+
+    expect(event.payload.diagnostics).toEqual([
+      expect.objectContaining({ code: "index.config_import_failed" }),
+    ]);
   }, 60_000);
 
   it("shares Core identity between a public Eval and the internal collector", async () => {

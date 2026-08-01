@@ -7,6 +7,7 @@
     "root": "/repo",
     "payload": {
       "root": "/repo",
+      "configDependencies": ["config/base.json", "tsconfig.json"],
       "extensions": [],
       "diagnostics": []
     }

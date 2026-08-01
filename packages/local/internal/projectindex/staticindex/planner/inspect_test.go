@@ -37,6 +37,36 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsEscapingConfigDependency(t *testing.T) {
+	reader := &recordingReader{responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","configDependencies":["../base.json"],"extensions":[]}`)}}
+
+	if _, err := LoadConfig(context.Background(), reader, "/repo", "/repo/crux.config.ts"); err == nil {
+		t.Fatal("LoadConfig error = nil, want escaping config dependency rejection")
+	}
+}
+
+func TestInspectDisablesCachesForUnboundedConfigClosure(t *testing.T) {
+	root := t.TempDir()
+	configFile := filepath.Join(root, "crux.config.ts")
+	if err := os.WriteFile(configFile, []byte("export default {}\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	reader := &recordingReader{responses: []json.RawMessage{json.RawMessage(
+		`{"root":` + quote(root) + `,"configFile":` + quote(configFile) + `,"configDependencies":["tsconfig.json"],"cacheDisabled":true,"extensions":[]}`,
+	)}}
+
+	result, err := Inspect(context.Background(), reader, root, configFile, "project")
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if !result.Plan.CacheDisabled || len(result.Plan.CacheInputs) != 0 {
+		t.Fatalf("plan cacheDisabled=%v cacheInputs=%d, want disabled with no inputs", result.Plan.CacheDisabled, len(result.Plan.CacheInputs))
+	}
+	if len(result.Plan.ConfigDependencies) != 1 || result.Plan.ConfigDependencies[0] != "tsconfig.json" {
+		t.Fatalf("plan config dependencies = %v", result.Plan.ConfigDependencies)
+	}
+}
+
 func TestLoadConfigPreservesObservabilityPolicyTriState(t *testing.T) {
 	for _, test := range []struct {
 		name      string

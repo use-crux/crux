@@ -26,7 +26,10 @@ export async function generateEvalArtifacts(input: {
   readonly importSpecifier: (sourceFile: string) => string;
   readonly redactPaths?: unknown;
 }): Promise<GeneratedEvalArtifacts> {
-  return withUserImportSession(() => generateEvalArtifactsInSession(input));
+  return withUserImportSession(
+    () => generateEvalArtifactsInSession(input),
+    input.root,
+  );
 }
 
 async function generateEvalArtifactsInSession(input: {

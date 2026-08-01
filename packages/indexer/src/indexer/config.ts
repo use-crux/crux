@@ -10,7 +10,12 @@ import {
   sourceOnlyDiagnostic,
 } from './diagnostics'
 import { findConfigFiles } from './files'
-import { importUserModule, withCruxIndexMode } from './imports'
+import {
+  importUserModule,
+  userImportConfigIdentity,
+  withBoundedUserImportSession,
+  withCruxIndexMode,
+} from './imports'
 import { resolutionModeImportsSource } from './resolution-mode'
 import { addSource } from './sources'
 
@@ -30,6 +35,8 @@ export interface LoadedProjectConfigResult {
   readonly loaded: LoadedProjectConfig
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly sources: readonly IndexSourceFile[]
+  readonly configDependencies: readonly string[]
+  readonly cacheDisabled: boolean
 }
 
 /** Load source-only config metadata without importing any user modules. */
@@ -49,6 +56,8 @@ export function loadSourceOnlyProjectConfig(root: string, configPath: string | u
     },
     diagnostics,
     sources: [...sources.values()],
+    configDependencies: [],
+    cacheDisabled: false,
   }
 }
 
@@ -112,7 +121,13 @@ async function importProjectConfig(
   const sourceImports = resolutionModeImportsSource(resolutionMode)
   if (!configFile) {
     diagnostics.push(configNotFoundDiagnostic())
-    return { loaded: { resolutionMode, sourceImports }, diagnostics, sources: [...sources.values()] }
+    return {
+      loaded: { resolutionMode, sourceImports },
+      diagnostics,
+      sources: [...sources.values()],
+      configDependencies: [],
+      cacheDisabled: false,
+    }
   }
   if (configMatches.length > 1) {
     diagnostics.push(multipleConfigsDiagnostic(root, configFile, configMatches.length))
@@ -120,37 +135,57 @@ async function importProjectConfig(
 
   addSource(sources, configFile, 'indexed')
 
-  return withCruxIndexMode(async () => {
-    try {
-      const mod = await importUserModule(configFile, 8_000)
-      const exported = (mod as { default?: unknown }).default ?? mod
-      if (isCruxInstance(exported)) {
+  return withCruxIndexMode(() =>
+    withBoundedUserImportSession(async () => {
+      try {
+        const mod = await importUserModule(configFile, 8_000, root)
+        addImportConfigSources(sources)
+        const exported = (mod as { default?: unknown }).default ?? mod
+        if (isCruxInstance(exported)) {
+          return {
+            loaded: {
+              configFile,
+              crux: exported,
+              indexer: exported.config.indexer,
+              experimental: exported.config.experimental,
+              lint: exported.config.lint,
+              resolutionMode,
+              sourceImports,
+            },
+            diagnostics,
+            sources: [...sources.values()],
+            ...importConfigIdentity(),
+          }
+        }
+        diagnostics.push(configUnrecognizedDiagnostic(configFile))
         return {
-          loaded: {
-            configFile,
-            crux: exported,
-            indexer: exported.config.indexer,
-            experimental: exported.config.experimental,
-            lint: exported.config.lint,
-            resolutionMode,
-            sourceImports,
-          },
+          loaded: { configFile, resolutionMode, sourceImports },
           diagnostics,
           sources: [...sources.values()],
+          ...importConfigIdentity(),
+        }
+      } catch (error) {
+        addImportConfigSources(sources)
+        addSource(sources, configFile, 'error')
+        diagnostics.push(configImportFailedDiagnostic(configFile, errorMessage(error)))
+        return {
+          loaded: { configFile, importFailed: true, resolutionMode, sourceImports },
+          diagnostics,
+          sources: [...sources.values()],
+          ...importConfigIdentity(),
         }
       }
-      diagnostics.push(configUnrecognizedDiagnostic(configFile))
-      return { loaded: { configFile, resolutionMode, sourceImports }, diagnostics, sources: [...sources.values()] }
-    } catch (error) {
-      addSource(sources, configFile, 'error')
-      diagnostics.push(configImportFailedDiagnostic(configFile, errorMessage(error)))
-      return {
-        loaded: { configFile, importFailed: true, resolutionMode, sourceImports },
-        diagnostics,
-        sources: [...sources.values()],
-      }
-    }
-  })
+    }, root),
+  )
+}
+
+function addImportConfigSources(sources: Map<string, IndexSourceFile>): void {
+  for (const file of userImportConfigIdentity().files) addSource(sources, file, 'indexed')
+}
+
+function importConfigIdentity(): Pick<LoadedProjectConfigResult, 'configDependencies' | 'cacheDisabled'> {
+  const identity = userImportConfigIdentity()
+  return { configDependencies: identity.files, cacheDisabled: identity.cacheDisabled }
 }
 
 function isCruxInstance(value: unknown): value is Crux {
