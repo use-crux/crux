@@ -19,6 +19,7 @@ describeCruxAdapterConformance({
     structuredOutput: true,
     streaming: true,
     toolCalls: true,
+    agentTools: true,
     approvalSuspension: true,
     providerCache: true,
   },
