@@ -320,7 +320,9 @@ describe("native semantic direct Crux projectors", () => {
       ),
     ).toMatchObject({
       metadata: {
-        capabilities: { vector: { sparse: false, hybrid: false, fusion: [] } },
+        capabilities: {
+          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+        },
       },
     });
     expect(
