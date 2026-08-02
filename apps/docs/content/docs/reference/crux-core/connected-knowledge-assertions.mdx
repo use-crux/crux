@@ -33,6 +33,26 @@ Assertion stages extract schema-typed propositions during indexing.
 read handles over persisted assertions. Resolution handles partition visible
 assertions into selected, superseded, contested, and unresolved sets.
 
+## Prompt Bounds
+
+Model-mode assertion derivation uses these internal bounds:
+
+| Constant | Value | Applies To |
+| --- | ---: | --- |
+| `MAX_DERIVE_BATCH_CHARS` | `12000` | Estimated source content assigned to one generated extraction batch. |
+| `MAX_DERIVE_PROMPT_CHARS` | `12000` | Final derive or repair prompt sent for one batch. |
+
+Chunks are sorted by ordinal and assigned whole, in order, to deterministic
+batches. The stage vocabulary, instructions, source id, and document title
+repeat per batch. The document body appears as a bounded excerpt in the first
+batch only. Calls scale with source size, and claims from all successful batches
+are unioned before cache replacement.
+
+Routine per-chunk truncation is not used. Truncation warnings are returned on
+`result.knowledge` from `knowledgeBase().index()` and
+`knowledgeBase().reindex()` only when a single chunk is too large for one batch.
+The same bounded summary is recorded on the mutation effect receipt evidence.
+
 ## `assertions(config)`
 
 Creates a frozen assertion stage.

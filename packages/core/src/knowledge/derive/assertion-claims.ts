@@ -12,7 +12,7 @@ import type { AssertionStage } from '../assertions/assertions'
 import { toAssertionJsonData } from '../assertions/identity'
 import { knowledgeClaimsKey } from '../keys'
 import { encodeKnowledgeRef, isKnowledgeRef, type KnowledgeRef } from '../refs'
-import { claimManifestKey, readClaimManifest, type ClaimManifestRecord } from './claims'
+import { claimManifestKey, createClaimManifest, isCurrentManifest, readClaimManifest, type ClaimManifestRecord } from './manifest'
 import { isAssertionRelationClaimRecord, type AssertionRelationClaimRecord } from './assertion-relation-claims'
 import type { DeriveStage } from './stage'
 
@@ -101,7 +101,7 @@ export function toAssertionClaimRecords(
   })
 }
 
-/** Return a valid cached assertion count, or undefined when cache is stale. */
+/** Read the assertion claim manifest and include a count when its cache is valid. */
 export async function readCachedAssertionClaimCount(args: {
   readonly records: RecordStore
   readonly indexerId: string
@@ -110,15 +110,18 @@ export async function readCachedAssertionClaimCount(args: {
   readonly sourceId: string
   readonly sourceHash: string
   readonly stageFingerprint: string
-}): Promise<number | undefined> {
+}): Promise<{
+  readonly manifest: ClaimManifestRecord | undefined
+  readonly count?: number
+}> {
   const manifest = await readClaimManifest(args.records, claimManifestKey({
     indexerId: args.indexerId,
     namespace: args.namespace,
     stageId: args.stage.id,
     sourceId: args.sourceId,
   }))
-  if (!manifest || manifest.sourceHash !== args.sourceHash || manifest.stageFingerprint !== args.stageFingerprint) {
-    return undefined
+  if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint)) {
+    return { manifest }
   }
   const keys = manifest.claimHashes.map((hash) => claimKey(args, hash))
   const values = args.records.getMany
@@ -130,8 +133,8 @@ export async function readCachedAssertionClaimCount(args: {
     args.sourceId,
     manifest.claimHashes[index] ?? '',
   ))
-    ? manifest.claimHashes.length
-    : undefined
+    ? { manifest, count: manifest.claimHashes.length }
+    : { manifest }
 }
 
 /** Replace cached assertion claims and their source manifest. */
@@ -145,6 +148,7 @@ export async function replaceAssertionClaimRecords(args: {
   readonly stageFingerprint: string
   readonly previous: ClaimManifestRecord | undefined
   readonly claims: readonly (AssertionClaimRecord | AssertionRelationClaimRecord)[]
+  readonly warnings: readonly string[]
 }): Promise<void> {
   await deletePreviousClaims(args)
   await Promise.all(args.claims.map((claim) => args.records.put(claimKey(args, claim.claimHash), claim)))
@@ -153,12 +157,12 @@ export async function replaceAssertionClaimRecords(args: {
     namespace: args.namespace,
     stageId: args.stage.id,
     sourceId: args.sourceId,
-  }), {
-    _cruxRecordType: 'knowledge-claim-manifest',
+  }), createClaimManifest({
     sourceHash: args.sourceHash,
     stageFingerprint: args.stageFingerprint,
-    claimHashes: args.claims.map((claim) => claim.claimHash).sort(),
-  })
+    claimHashes: args.claims.map((claim) => claim.claimHash),
+    warnings: args.warnings,
+  }))
 }
 
 /** Narrow an arbitrary stored value to an assertion claim record. */

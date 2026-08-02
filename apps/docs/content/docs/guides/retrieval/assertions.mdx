@@ -100,6 +100,33 @@ const extractedFacts = assertions({
 Model-backed assertion stages validate output, retry repair once, drop invalid
 items with warnings, and cache valid claims by source and stage fingerprint.
 
+## Prompt Bounds
+
+Model-mode assertion extraction batches source chunks deterministically. Chunks
+are sorted by ordinal and assigned whole, in order, to batches bounded by the
+internal `MAX_DERIVE_BATCH_CHARS = 12000` budget. Each batch makes one model
+call, so calls scale with source size and every chunk is covered.
+
+The stage vocabulary, instructions, source id, and document title repeat for
+each batch. A bounded excerpt of the document body appears only in the first
+batch. Routine per-chunk truncation is not used; truncation happens only when a
+single chunk is too large to fit in one batch.
+
+When an oversized single chunk is truncated, indexing returns a warning in
+`result.knowledge`. The same summary is recorded on the mutation effect receipt
+evidence. Each warning names the stage, source id, chunk id, original length,
+and bounded length.
+
+```ts
+const result = await docs.reindex(sources);
+
+console.log(result.knowledge?.stages[0]?.warnings);
+```
+
+Right-size chunking so ordinary chunks fit comfortably within the 12000-character
+batch budget. The parent-child chunker already uses a 900-character child
+default, so most sources batch without truncation.
+
 ## Consume Assertion Sets
 
 Read assertions from a knowledge base or a view. The `types` option narrows the

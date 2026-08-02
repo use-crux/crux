@@ -15,11 +15,9 @@ import {
 } from './assertion-claims'
 import { runAssertionStage } from './assertion-runner'
 import {
-  claimManifestKey,
   claimsSchema,
   deriveClaimsSourceHash,
   readCachedClaimCount,
-  readClaimManifest,
   replaceClaimRecords,
   toClaimRecords,
   validateRelationClaims,
@@ -27,10 +25,8 @@ import {
   type RawRelationClaim,
 } from './claims'
 import { generateObjectWithEvidence } from './modality-validation'
+import { renderBoundedRelationBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
 import type { DeriveStage } from './stage'
-
-const MAX_PROMPT_CHARS = 12000
-const MAX_CHUNK_CHARS = 1200
 
 /** Input for running configured derivations against one source. */
 export interface RunDeriveStagesInput {
@@ -77,17 +73,17 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         sourceHash,
         stageFingerprint,
       })
-    if (cached !== undefined) {
-      results.push({ stageId: stage.id, status: 'cached', claims: cached, warnings: [] })
+    if (cached.count !== undefined) {
+      results.push({
+        stageId: stage.id,
+        status: 'cached',
+        claims: cached.count,
+        warnings: cached.manifest?.warnings ?? [],
+      })
       continue
     }
 
-    const previous = await readClaimManifest(input.records, claimManifestKey({
-      indexerId: input.indexerId,
-      namespace: input.namespace,
-      stageId: stage.id,
-      sourceId: input.document.sourceId,
-    }))
+    const previous = cached.manifest
     if (isAssertionStage(stage)) {
       const run = await runAssertionStage({
         document: input.document,
@@ -105,6 +101,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         stageFingerprint,
         previous,
         claims: [...run.claims, ...run.relationClaims],
+        warnings: run.warnings,
       })
       results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
       continue
@@ -120,6 +117,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         stageFingerprint,
         previous,
         claims: run.claims,
+        warnings: run.warnings,
       })
       results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
     }
@@ -172,37 +170,60 @@ async function runGenerated(
   input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
 ): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
-  const prompt = renderPrompt(input.document, input.chunks, stage)
-  const first = await readGeneratedClaims(input, stage, prompt)
   const valid = new Map<string, ClaimRecord>()
   const warnings: string[] = []
-  addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
 
-  if (first.errors.length > 0) {
-    const repaired = await readGeneratedClaims(input, stage, `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`)
-    addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
-    for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
-      warnings.push(`Derive ${stage.id} dropped invalid claim: ${error}`)
-    }
+  for (const batch of renderBoundedRelationBatches(input.document, input.chunks, stage)) {
+    const run = await runGeneratedBatch(input, stage, batch)
+    addRecords(valid, run.claims)
+    warnings.push(...run.warnings)
   }
 
+  return { claims: [...valid.values()], warnings }
+}
+
+async function runGeneratedBatch(
+  input: RunDeriveStagesInput,
+  stage: RelationStage<Record<string, RelationTypeSpec>>,
+  batch: DerivePromptBatch,
+): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
+  const first = await readGeneratedClaims(input, stage, batch)
+  const valid = new Map<string, ClaimRecord>()
+  const warnings: string[] = [...batch.warnings]
+  addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
+  if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
+
+  const repairedPrompt = renderBoundedRepairPrompt({
+    stageId: stage.id,
+    sourceId: input.document.sourceId,
+    prompt: batch.prompt,
+    errors: first.errors,
+  })
+  warnings.push(...repairedPrompt.warnings)
+  const repaired = await readGeneratedClaims(input, stage, { ...batch, prompt: repairedPrompt.prompt })
+  if (repaired.errors.length > 0) {
+    throw new Error(
+      repaired.errors.join('\n') || `Derive ${stage.id} batch ${batch.ordinal} failed after repair.`,
+    )
+  }
+  addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }
 }
 
 async function readGeneratedClaims(
   input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
-  prompt: string,
+  batch: DerivePromptBatch,
 ) {
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate claims.`)
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only claims that match the requested schema.',
-    prompt,
+    prompt: batch.prompt,
     schema: claimsSchema,
     sourceId: input.document.sourceId,
-    chunks: input.chunks,
+    chunks: batch.chunks,
     subject: `stage "${stage.id}"`,
     ...(input.assets ? { assets: input.assets } : {}),
   })
@@ -260,28 +281,6 @@ function isAssertionStage(stage: DeriveStage): stage is AssertionStage<Record<st
 
 function addRecords(target: Map<string, ClaimRecord>, records: readonly ClaimRecord[]): void {
   for (const record of records) target.set(record.claimHash, record)
-}
-
-function renderPrompt(
-  document: CruxDocument,
-  chunks: readonly CruxChunk[],
-  stage: RelationStage<Record<string, RelationTypeSpec>>,
-): string {
-  const vocabulary = Object.entries(stage.types).map(([name, spec]) =>
-    `${name}: ${spec.description}; from ${spec.from.join('|')}; to ${spec.to.join('|')}`,
-  )
-  return bound([
-    stage.instructions ?? '',
-    `Source: ${document.sourceId}`,
-    document.title ? `Title: ${document.title}` : '',
-    `Vocabulary:\n${vocabulary.join('\n')}`,
-    `Document:\n${bound(document.content ?? '', MAX_CHUNK_CHARS)}`,
-    `Chunks:\n${chunks.map((chunk) => `[${chunk.chunkId}] ${bound(chunk.content, MAX_CHUNK_CHARS)}`).join('\n')}`,
-  ].filter(Boolean).join('\n\n'), MAX_PROMPT_CHARS)
-}
-
-function bound(value: string, max = MAX_PROMPT_CHARS): string {
-  return value.length <= max ? value : value.slice(0, max)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,6 @@
 import { retriever } from './define-retriever'
 import { createConnectedKnowledgeIntegration } from './knowledge-base-connected'
-import { runKnowledgeBaseMutationEffect } from './knowledge-base-effects'
+import { recordKnowledgeBaseMutationKnowledgeEvidence, runKnowledgeBaseMutationEffect } from './knowledge-base-effects'
 import {
   KnowledgeBaseMetadataValidationError,
   applyKnowledgeBaseCorpusMetadataSchema,
@@ -38,7 +38,6 @@ import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import type { Retriever } from './types'
 import type { KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
-
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
 export type KnowledgeBaseIndexInput = readonly KnowledgeBaseIndexItem[] | AsyncIterable<KnowledgeBaseIndexItem>
 
@@ -152,25 +151,27 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
   async function index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult> {
     const items = await resolveKnowledgeBaseInput(config.source, input)
     const { result, failures, indexed, sourceIds } = await runIndex(items, false)
+    const knowledge = indexed ? await connected.afterIndex(sourceIds) : undefined
     if (indexed) {
-      await connected.afterIndex(sourceIds)
       await refreshKnowledgeBaseLifecycleState(lifecycle, config.id, config.namespace, records)
     }
     if (failures.length > 0) throw new KnowledgeBaseMetadataValidationError(config.id, failures)
     if (!result) throw new Error('knowledgeBase().index() did not produce an index result.')
-    return result
+    recordKnowledgeBaseMutationKnowledgeEvidence(result, knowledge)
+    return knowledge ? { ...result, knowledge } : result
   }
 
   async function reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult> {
     const items = await resolveKnowledgeBaseInput(config.source, input)
     const { result, failures, indexed, sourceIds } = await runIndex(items, true)
+    const knowledge = indexed ? await connected.afterIndex(sourceIds) : undefined
     if (indexed) {
-      await connected.afterIndex(sourceIds)
       await refreshKnowledgeBaseLifecycleState(lifecycle, config.id, config.namespace, records)
     }
     if (failures.length > 0) throw new KnowledgeBaseMetadataValidationError(config.id, failures)
     if (!result) throw new Error('knowledgeBase().reindex() did not produce an index result.')
-    return result
+    recordKnowledgeBaseMutationKnowledgeEvidence(result, knowledge)
+    return knowledge ? { ...result, knowledge } : result
   }
 
   async function runIndex(
