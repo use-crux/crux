@@ -190,6 +190,28 @@ api.relate(
 Supported assertion relation types are `supports`, `amends`, `supersedes`,
 `narrows`, and `conflictsWith`.
 
+### Inspecting relations
+
+Use `relations()` when you need the persisted assertion relation records
+themselves, including endpoints, evidence support refs, provenance, and stage
+identity. The read is lazy and cursor-paginated like `list()`.
+
+```ts
+const page = await docs.assertions(policyFacts).relations({
+  types: ["supersedes", "conflictsWith"],
+  limit: 25,
+});
+
+for (const relation of page.items) {
+  console.log(relation.type, relation.from.assertionId, relation.to.assertionId);
+  console.log(relation.evidence);
+}
+```
+
+View-bound assertion sets apply the view membership boundary to relation
+evidence. A relation is visible through a view only when at least one of its
+support refs is visible through that view.
+
 ## Resolve Conflicts
 
 Resolution partitions visible assertions into four groups:
@@ -237,8 +259,9 @@ types, and policy fingerprint. It never mutates source assertions.
 
 View-bound assertion sets first resolve the view revision. Supports outside the
 visible member set are excluded. Assertions with no visible supports are hidden.
-Assertion relations are visible only when both assertion endpoints remain
-visible and the relation has visible evidence.
+Assertion relations are visible when their evidence supports intersect the
+visible member set; the public relation read returns endpoint refs, not
+hydrated assertion content.
 
 ## Related
 

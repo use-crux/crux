@@ -13,7 +13,7 @@ import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
 import type { RetrieverHit } from '../retrieval/types'
 import { createKnowledgeGenerationStore } from './generation'
-import type { KnowledgeGraphReader, KnowledgeNeighbor } from './graph-types'
+import type { KnowledgeGraphReader, KnowledgeNeighbor, KnowledgeNeighborOptions } from './graph-types'
 import {
   knowledgeAdjacencyInPrefix,
   knowledgeAdjacencyOutPrefix,
@@ -50,7 +50,7 @@ export function createKnowledgeGraphStore(config: KnowledgeGraphStoreConfig): Kn
     options: NeighborOptions = {},
   ): Promise<KnowledgeNeighbor[]> {
     const limit = normalizeLimit(options.limit)
-    const structuralNeighbors = await structural.neighbors(ref, options)
+    const structuralNeighbors = withOptionalEvidence(await structural.neighbors(ref, options), options)
     if (limit === 0) return []
 
     const generationId = await pinnedCurrentGeneration()
@@ -94,10 +94,15 @@ export function createKnowledgeGraphStore(config: KnowledgeGraphStoreConfig): Kn
         const edge = asVisibleEdge(edgeValues[index], generationId)
         if (!edge || !includesType(options.types, edge.type)) return []
         const peer = peerRef(edge, ref, pointer.direction, pointer.peer)
-        return peer ? [{ ref: peer, type: edge.type, direction: pointer.direction, edgeId: edge.edgeId }] : []
+        return peer ? [{ ref: peer, type: edge.type, direction: pointer.direction, edgeId: edge.edgeId, evidence: edge.evidence }] : []
       })
       .sort(comparePersistedNeighbors)
-      .map(({ ref, type, direction }) => ({ ref, type, direction }))
+      .map(({ ref, type, direction, evidence }) => ({
+        ref,
+        type,
+        direction,
+        ...(options.includeEvidence ? { evidence } : {}),
+      }))
   }
 
   async function listAdjacency(
@@ -134,14 +139,11 @@ export function createKnowledgeGraphStore(config: KnowledgeGraphStoreConfig): Kn
   }
 }
 
-type NeighborOptions = {
-  readonly types?: readonly string[]
-  readonly direction?: KnowledgeNeighbor['direction']
-  readonly limit?: number
-}
+type NeighborOptions = KnowledgeNeighborOptions
 
 type PersistedNeighbor = KnowledgeNeighbor & {
   readonly edgeId: string
+  readonly evidence: KnowledgeEdgeRecord['evidence']
 }
 
 type AdjacencyPointer = {
@@ -230,6 +232,15 @@ function includesType(types: readonly string[] | undefined, type: string): boole
 
 function normalizeLimit(limit: number | undefined): number {
   return limit === undefined ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(limit))
+}
+
+function withOptionalEvidence(
+  neighbors: readonly KnowledgeNeighbor[],
+  options: NeighborOptions,
+): readonly KnowledgeNeighbor[] {
+  return options.includeEvidence
+    ? neighbors.map((neighbor) => ({ ...neighbor, evidence: [] }))
+    : neighbors
 }
 
 function sameRef(left: KnowledgeRef, right: KnowledgeRef): boolean {

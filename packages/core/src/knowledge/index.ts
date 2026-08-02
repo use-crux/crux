@@ -68,6 +68,7 @@ export type { AssertionContextOptions } from './assertions/context'
 export type {
   AssertionListOptions,
   AssertionListPage,
+  AssertionRelationListOptions,
   AssertionSet,
   AssertionSetOptions,
 } from './assertions/set'
@@ -105,7 +106,13 @@ export {
   isKnowledgeRefKind,
 } from './refs'
 export type { KnowledgeRef, KnowledgeRefKind } from './refs'
-export type { KnowledgeGraphReader, KnowledgeNeighbor, StructuralRelationType } from './graph-types'
+export type {
+  KnowledgeGraphReader,
+  KnowledgeNeighbor,
+  KnowledgeNeighborEvidenceSupport,
+  KnowledgeNeighborOptions,
+  StructuralRelationType,
+} from './graph-types'
 export type {
   KnowledgeBaseViewConfig,
   KnowledgeView,
