@@ -135,3 +135,6 @@ project an empty object, and non-object inputs project through an `input` field.
 
 Project Index now distinguishes direct Agent tools with an `agent.uses_agent_tool`
 relation while retaining `agent.uses_tool` for ordinary Tools.
+
+Each invocation now appears in Local Run Detail and Devtools as a distinct
+privacy-safe child Agent beneath its ordinary Tool call in the parent trace.
