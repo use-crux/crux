@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 965,
+    "files": 966,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1959,
-    "canonicalBytes": 404147
+    "dependencies": 1960,
+    "canonicalBytes": 404286
   },
   "files": [
     {
@@ -6963,12 +6963,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/setup-ops.ts",
-      "sha256": "6a0cd2f7766712361a9dfc2bf69ad1c6186b6b6aacfa612488a7b6c1daad2304",
-      "bytes": 449,
+      "sha256": "69d5696e99f1c383705b79bec5008406aaed08dc2d323e5bac1b3ac60ada384b",
+      "bytes": 520,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/indexer/src/indexer/setup/defer-contributor.ts",
@@ -6990,6 +6990,15 @@
     },
     {
       "file": "packages/indexer/src/indexer/setup/defer-source-evidence.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/local-state-contributor.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
