@@ -48,3 +48,7 @@ Complete the pre-launch alpha Runtime Engine queue-record migration. Use
 
 Add inert Runtime managed-transport declarations and pure validation for
 provider-neutral bindings and accepted envelopes.
+
+Add immutable `RuntimeProgram` construction with canonical manifest hashes,
+shared Runtime target normalization, and managed-binding resolution and
+compatibility diagnostics for generated and hand-written hosts.

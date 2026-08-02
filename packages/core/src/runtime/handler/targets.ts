@@ -33,20 +33,46 @@ export interface NormalizeRuntimeHandlerTargetsOptions {
   readonly entry?: string
 }
 
+/** Canonicalize Runtime target declarations without resolving executable targets. */
+export function canonicalizeRuntimeHandlerTargets(
+  targets: readonly RuntimeHandlerTarget[],
+  entry = 'runtime entry',
+): readonly RuntimeHandlerTarget[] {
+  const seen = new Set<string>()
+  const canonical = [...targets].sort((left, right) =>
+    compareText(
+      runtimeHandlerTargetIdentity(left),
+      runtimeHandlerTargetIdentity(right),
+    ),
+  )
+  for (const target of canonical) {
+    const name = runtimeHandlerTargetIdentity(target)
+    if (seen.has(name)) throw duplicateTargetError(name, entry)
+    seen.add(name)
+  }
+  return Object.freeze(canonical)
+}
+
+/** Return the stable durable identity of a Runtime handler target declaration. */
+export function runtimeHandlerTargetIdentity(
+  target: RuntimeHandlerTarget,
+): string {
+  return 'name' in target ? target.name : target.targetId
+}
+
 /** Resolve handler target declarations into the kernel's executable target map. */
 export function normalizeRuntimeHandlerTargets(
   options: NormalizeRuntimeHandlerTargetsOptions,
 ): RuntimeTargetMap {
   const registeredTargets = runtimeTargetMap(options.runtimeRef)
   const entries: Array<[string, RuntimeTarget]> = []
-  const seen = new Set<string>()
   const entry = options.entry ?? 'runtime entry'
 
-  for (const target of options.targets) {
-    const name = targetName(target)
-    if (seen.has(name)) throw duplicateTargetError(name, entry)
-    seen.add(name)
-
+  for (const target of canonicalizeRuntimeHandlerTargets(
+    options.targets,
+    entry,
+  )) {
+    const name = runtimeHandlerTargetIdentity(target)
     const runtimeTarget = isRuntimeTarget(target)
       ? target
       : registeredTargets[name]
@@ -55,10 +81,6 @@ export function normalizeRuntimeHandlerTargets(
   }
 
   return Object.freeze(Object.fromEntries(entries))
-}
-
-function targetName(target: RuntimeHandlerTarget): string {
-  return 'name' in target ? target.name : target.targetId
 }
 
 function isRuntimeTarget(target: RuntimeHandlerTarget): target is RuntimeTarget {
@@ -92,4 +114,8 @@ function unresolvedTargetError(name: string, entry: string): never {
     nextStep:
       `Pass the exported target object for \`${name}\` directly or run \`crux runtime generate\` so the entry imports it.`,
   })
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
