@@ -26,6 +26,53 @@ Bundle a prompt with optional model and tools into a frozen agent instance.
 
 **Returns:** `Agent<TOwnInput, TOutput, TContexts>`, frozen object with `_tag: 'Agent'`
 
+### Agent entries in `tools`
+
+An Agent's `tools` map may contain direct child Agent values alongside ordinary
+Tools:
+
+```ts
+const parent = agent({
+  id: "parent",
+  prompt: parentPrompt,
+  tools: { research: researchAgent },
+});
+```
+
+`research` is the exported model-tool name. `researchAgent.id` remains the
+child's identity and Work target; it does not rename the Tool. Crux uses the
+child Agent's `description`, falling back to its Prompt's `description`. If
+neither exists, preparation throws
+`Foreground Agent tool "research" requires an Agent or Prompt description.`
+before provider dispatch or child Work acceptance. Crux does not synthesize a
+description.
+
+| Child Prompt input | Generated Tool parameters | Input passed to the child |
+| ------------------ | ------------------------- | ------------------------- |
+| Object schema | The object schema unchanged | The validated object unchanged |
+| No input schema | Empty object schema | `{}` |
+| Non-object or mixed-root schema | `{ input: childSchema }` | The validated `input` value |
+
+There is no text-input shortcut. Tool arguments are validated before Work
+acceptance, so invalid input creates no child Work. Direct Agent entries are
+bound after authored and call-level tools are merged and before ordinary Tool
+preparation. The winning map entry follows the same middleware, approval, and
+guardrail path as any other Tool, under its map-key name; no separate collision
+or approval behavior is introduced.
+
+Execution accepts exactly one foreground child Work and awaits it. The Tool
+result is the child's exact validated structured or multimodal `output`, not an
+`AgentResult`, summary, transcript, or execution handle. The child runs with
+only its own Agent definition—its prompt, `use`, and tools—and receives only
+its declared input. Parent-only and sibling tools, parent history and request
+details, and parent runtime or control handles are not inherited.
+
+An ambient Work attachment links the child to its execution ancestry. Without
+one, the child receives cancellation linkage only. In either case, that linkage
+does not grant authority over the parent. Parent cancellation propagates
+through the child Work boundary; child failure, cancellation, or timeout rejects
+the ordinary Tool execution and follows the normal Tool-loop error path.
+
 ### `isAgent(value)`
 
 Type guard, returns `true` if the value is an `Agent` instance created by `agent()`.

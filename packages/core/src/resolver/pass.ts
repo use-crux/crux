@@ -106,6 +106,10 @@ export function validatePromptConfig(config: AnyPromptConfig): void {
   }
 }
 
+function isInputRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Run one compiler pass and return both resolved args and inspect data. */
 export async function runPromptPass(
   config: AnyPromptConfig,
@@ -115,6 +119,7 @@ export async function runPromptPass(
   mode: ProjectionMode,
 ): Promise<PromptResolutionPass> {
   let input = opts.input ?? {};
+  let promptInput: unknown = input;
   const resolverPrivateInput = collectResolverPrivateInput(input);
   if (Object.keys(resolverPrivateInput).length > 0) {
     input = { ...input };
@@ -141,7 +146,8 @@ export async function runPromptPass(
         promptInputPreview(config.id, input, mergedSchema, "passed"),
       );
     }
-    input = parseResult.data as Record<string, unknown>;
+    promptInput = parseResult.data;
+    input = isInputRecord(promptInput) ? promptInput : {};
   } else if (mode === "resolve") {
     emitPromptInputArtifact(
       ports,
@@ -205,6 +211,7 @@ export async function runPromptPass(
   }
 
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id);
+  const contentInput = isInputRecord(promptInput) ? guardedInput : promptInput;
   const mergedUse = await resolveUse(
     entries,
     guardedInput,
@@ -279,9 +286,9 @@ export async function runPromptPass(
   if (config.messages) {
     messages = (
       config.messages as (arg: {
-        input: Record<string, unknown>;
+        input: unknown;
       }) => AnyMessage[]
-    )({ input: guardedInput });
+    )({ input: contentInput });
     assertNoObjectMessageContent(messages);
 
     foldedSystem = foldSystemIntoMessagesWithBoundary(system, messages);
@@ -289,7 +296,7 @@ export async function runPromptPass(
     system = "";
   } else {
     const resolvedPromptText = applyPromptAdaptation(
-      resolvePromptText(config.prompt, guardedInput, config.id),
+      resolvePromptText(config.prompt, contentInput, config.id),
       adaptation,
     );
     promptText = resolvedPromptText?.text;
