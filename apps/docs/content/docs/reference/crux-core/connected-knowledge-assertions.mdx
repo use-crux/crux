@@ -12,6 +12,7 @@ import type {
   AssertionListOptions,
   AssertionListPage,
   AssertionOf,
+  AssertionRelationListOptions,
   AssertionRef,
   AssertionRelateOptions,
   AssertionRelationRecord,
@@ -172,6 +173,7 @@ interface AssertionSet<TTypes, TSelected = keyof TTypes & string> {
   readonly namespace: string;
   list(options?: AssertionListOptions): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>>;
   stream(): AsyncIterable<AssertionOf<TTypes, TSelected>>;
+  relations(options?: AssertionRelationListOptions): Promise<AssertionListPage<AssertionRelationRecord>>;
   resolve(policy?: AssertionResolutionPolicy<TTypes, TSelected>): AssertionResolutionHandle<TTypes, TSelected>;
   asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>;
   inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>;
@@ -185,6 +187,9 @@ interface AssertionSet<TTypes, TSelected = keyof TTypes & string> {
 | `AssertionSetOptions.types` | `readonly TSelected[]` | All stage types | Selects assertion types at handle creation. |
 | `AssertionListOptions.limit` | `number` | `100` | Floored and clamped to at least `0`. |
 | `AssertionListOptions.cursor` | `string` | `undefined` | Passed to the record store. |
+| `AssertionRelationListOptions.types` | `readonly AssertionRelationType[]` | All relation types | Selects persisted assertion relation types. |
+| `AssertionRelationListOptions.limit` | `number` | `100` | Floored and clamped to at least `0`. |
+| `AssertionRelationListOptions.cursor` | `string` | `undefined` | Passed to the record store. |
 | `AssertionContextOptions.priority` | `number` | `50` | Floored and clamped to `0..100`. |
 | `AssertionContextOptions.limit` | `number` | `50` | Floored and clamped to `0..Number.MAX_SAFE_INTEGER`. |
 | `AssertionContextOptions.itemCharLimit` | `number` | `240` | Floored and clamped to at least `24`. |
@@ -210,9 +215,13 @@ View-bound assertion sets only return assertions with visible evidence support.
 `provenance` is `"derived"` if any visible support is derived, otherwise
 `"exact"`.
 
+`relations()` returns full `AssertionRelationRecord` entries. For view-bound
+sets, relation evidence is filtered to visible support refs and relations with
+no visible supports are hidden.
+
 ### Failures
 
-`list()`, `stream()`, `asContext()`, and snapshot reads throw
+`list()`, `relations()`, `stream()`, `asContext()`, and snapshot reads throw
 `Error("knowledgeBase().assertions() requires record storage.")` when no record
 store is configured. `resolve().result()` throws
 `Error("Assertion resolution requires record storage.")` without record
@@ -258,12 +267,32 @@ interface AssertionResolutionResult<TItem> {
   readonly unresolved: readonly TItem[];
   readonly trace: readonly AssertionResolutionTrace[];
 }
+
+type AssertionDecisionEvidence =
+  | {
+      readonly kind: "relation";
+      readonly relationId: string;
+      readonly type: AssertionRelationType;
+      readonly evidence: readonly AssertionSupport[];
+      readonly provenance: "exact" | "derived";
+      readonly stageId: string;
+      readonly stageVersion: number;
+      readonly stageFingerprint: string;
+    }
+  | {
+      readonly kind: "policy";
+      readonly policyId: string;
+      readonly note?: string;
+    };
 ```
 
 `status()` starts as `{ state: "idle", cached: false }`. `prepare()` reads the
 current snapshot, computes a cache key from generation, optional view revision,
 selected types, and policy fingerprint, then resolves and caches the result.
 `result()` calls `prepare()` when needed.
+
+Relation trace evidence contains support refs and relation provenance only. It
+does not hydrate chunk content or inline assertion data.
 
 ### Policy
 

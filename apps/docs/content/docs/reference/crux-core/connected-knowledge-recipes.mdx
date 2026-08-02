@@ -73,6 +73,24 @@ Finding hits are not used as seeds and are preserved unchanged. Added hits get
 graph provenance under `hit.provenance.graph` with `seed`, encoded `path`,
 edge type names, and `distance`.
 
+## Graph Neighbor Evidence
+
+Recipe expansion uses the bound graph reader:
+
+```ts
+const neighbors = await context.knowledge.reader.neighbors(ref, {
+  types: ["mentions"],
+  direction: "out",
+  includeEvidence: true,
+});
+```
+
+By default, `neighbors()` returns `{ ref, type, direction }` only. Set
+`includeEvidence: true` to include `evidence` on each returned edge. Persisted
+semantic edges return their stored chunk support refs. Virtual structural edges
+such as `hierarchy` and `sequence` return `evidence: []`, because they are
+projected from indexed structure and have no persisted supports.
+
 ### Failures
 
 | Condition | Error |

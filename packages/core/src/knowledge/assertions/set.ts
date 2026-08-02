@@ -18,7 +18,7 @@ import {
   type AssertionContextOptions,
 } from './context'
 import type { AssertionSupport, KnowledgeAssertionRecord } from './identity'
-import { isAssertionRelationRecord, type AssertionRelationRecord } from './relations'
+import { isAssertionRelationRecord, type AssertionRelationRecord, type AssertionRelationType } from './relations'
 import { createAssertionResolution, type AssertionResolutionHandle, type AssertionResolutionPolicy } from './resolution'
 
 /** Options for listing assertion sets. */
@@ -30,6 +30,13 @@ export interface AssertionListOptions {
 /** One page of assertion set items. */
 export interface AssertionListPage<TItem> {
   readonly items: readonly TItem[]
+  readonly cursor?: string
+}
+
+/** Options for listing persisted assertion relations. */
+export interface AssertionRelationListOptions {
+  readonly types?: readonly AssertionRelationType[]
+  readonly limit?: number
   readonly cursor?: string
 }
 
@@ -55,6 +62,8 @@ export interface AssertionSet<
   stream(): AsyncIterable<AssertionOf<TTypes, TSelected>>
   /** Resolve assertion conflicts and supersession without mutating source assertions. */
   resolve(policy?: AssertionResolutionPolicy<TTypes, TSelected>): AssertionResolutionHandle<TTypes, TSelected>
+  /** List visible persisted assertion relations with cursor pagination. */
+  relations(options?: AssertionRelationListOptions): Promise<AssertionListPage<AssertionRelationRecord>>
   /** Render this assertion set as bounded prompt context. */
   asContext(options?: AssertionContextOptions): Context<z.ZodType<{}>>
   /** Contribute this assertion set as context when used directly in `use`. */
@@ -97,21 +106,11 @@ export function createAssertionSet<
   ): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>> {
     if (!config.records) throw new Error('knowledgeBase().assertions() requires record storage.')
     const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
-    const items: Array<AssertionOf<TTypes, TSelected>> = []
-    let cursor = options.cursor
-    const limit = Math.max(0, Math.floor(options.limit ?? 100))
-    while (items.length < limit) {
-      const page = await config.records.list(snapshot.itemPrefix, { cursor, limit: Math.max(1, limit - items.length) })
-      for (const entry of page.entries) {
-        const record = asAssertionRecord(entry.value)
-        if (!record || (selected && !selected.has(record.type))) continue
-        const item = toVisibleAssertion<TTypes, TSelected>(record, members)
-        if (item) items.push(item)
-      }
-      cursor = page.cursor
-      if (!cursor) break
-    }
-    return { items, ...(cursor ? { cursor } : {}) }
+    return listVisiblePage(config.records, snapshot.itemPrefix, options, (value) => {
+      const record = asAssertionRecord(value)
+      if (!record || (selected && !selected.has(record.type))) return null
+      return toVisibleAssertion<TTypes, TSelected>(record, members)
+    })
   }
 
   async function* stream(): AsyncIterable<AssertionOf<TTypes, TSelected>> {
@@ -122,6 +121,19 @@ export function createAssertionSet<
       if (!page.cursor) return
       cursor = page.cursor
     }
+  }
+
+  async function relations(options: AssertionRelationListOptions = {}): Promise<AssertionListPage<AssertionRelationRecord>> {
+    if (!config.records) throw new Error('knowledgeBase().assertions() requires record storage.')
+    const snapshot = await readAssertionSnapshot(config)
+    if (!snapshot.relationPrefix) return { items: [] }
+    const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
+    const types = options.types ? new Set<string>(options.types) : undefined
+    return listVisiblePage(config.records, snapshot.relationPrefix, options, (value) => {
+      const relation = isAssertionRelationRecord(value) ? value : null
+      if (!relation || (types && !types.has(relation.type))) return null
+      return toVisibleRelation(relation, members)
+    })
   }
 
   async function countFromSnapshot(
@@ -145,6 +157,7 @@ export function createAssertionSet<
     list,
     stream,
     resolve: (policy) => createAssertionResolution({ ...config, selectedTypes: config.selectedTypes, policy }),
+    relations,
     asContext: (options) => {
       const normalized = normalizeAssertionContextOptions(options)
       return contextWithFamily({
@@ -171,6 +184,34 @@ export function createAssertionSet<
   return Object.freeze(handle)
 }
 
+/**
+ * Page through a record prefix, keeping only the items a projection admits.
+ *
+ * Both assertion and relation listings share the cursor arithmetic: request at
+ * most the remaining page size, keep paging while the caller's limit is unmet,
+ * and return the store cursor only when more records remain. Internal.
+ */
+async function listVisiblePage<TItem>(
+  records: RecordStore,
+  prefix: string,
+  options: { readonly limit?: number; readonly cursor?: string },
+  project: (value: JsonObject) => TItem | null,
+): Promise<AssertionListPage<TItem>> {
+  const items: TItem[] = []
+  let cursor = options.cursor
+  const limit = Math.max(0, Math.floor(options.limit ?? 100))
+  while (items.length < limit) {
+    const page = await records.list(prefix, { cursor, limit: Math.max(1, limit - items.length) })
+    for (const entry of page.entries) {
+      const item = project(entry.value)
+      if (item) items.push(item)
+    }
+    cursor = page.cursor
+    if (!cursor) break
+  }
+  return { items, ...(cursor ? { cursor } : {}) }
+}
+
 /** Read assertion records and relations for the current generation. Internal. */
 export async function readAssertionSnapshot<TTypes extends Record<string, z.ZodType<unknown>>>(config: {
   readonly records?: RecordStore
@@ -178,9 +219,12 @@ export async function readAssertionSnapshot<TTypes extends Record<string, z.ZodT
   readonly namespace: string
   readonly stage: AssertionStage<TTypes>
   readonly resolveRevision?: () => Promise<ViewRevision>
-}): Promise<{
+}, options: {
+  readonly includeRelations?: boolean
+} = {}): Promise<{
   readonly generationId: string
   readonly itemPrefix: string
+  readonly relationPrefix: string
   readonly relations: readonly AssertionRelationRecord[]
   readonly revision?: ViewRevision
 }> {
@@ -189,16 +233,38 @@ export async function readAssertionSnapshot<TTypes extends Record<string, z.ZodT
   const generationId = current && typeof current.generationId === 'string' ? current.generationId : ''
   const itemPrefix = generationId ? knowledgeAssertionsItemPrefix(config.indexerId, config.namespace, config.stage.id, generationId) : ''
   const relationPrefix = generationId ? knowledgeAssertionsRelationPrefix(config.indexerId, config.namespace, config.stage.id, generationId) : ''
-  const relationPage = relationPrefix ? await config.records.list(relationPrefix, { limit: 1000 }) : { entries: [] }
   return {
     generationId,
     itemPrefix,
-    relations: relationPage.entries.flatMap((entry) => {
-      const relation = isAssertionRelationRecord(entry.value) ? entry.value : null
-      return relation ? [relation] : []
-    }),
+    relationPrefix,
+    relations: options.includeRelations && relationPrefix ? await listAssertionRelations(config.records, relationPrefix) : [],
     ...(config.resolveRevision ? { revision: await config.resolveRevision() } : {}),
   }
+}
+
+async function listAssertionRelations(
+  records: RecordStore,
+  relationPrefix: string,
+): Promise<readonly AssertionRelationRecord[]> {
+  const relations: AssertionRelationRecord[] = []
+  let cursor: string | undefined
+  do {
+    const page = await records.list(relationPrefix, { cursor, limit: 100 })
+    relations.push(...page.entries.flatMap((entry) =>
+      isAssertionRelationRecord(entry.value) ? [entry.value] : [],
+    ))
+    cursor = page.cursor
+  } while (cursor)
+  return relations
+}
+
+export function toVisibleRelation(
+  relation: AssertionRelationRecord,
+  members: ReadonlySet<string> | undefined,
+): AssertionRelationRecord | null {
+  const evidence = visibleSupports(relation.evidence, members)
+  if (evidence.length === 0) return null
+  return { ...relation, evidence }
 }
 
 export function toVisibleAssertion<
