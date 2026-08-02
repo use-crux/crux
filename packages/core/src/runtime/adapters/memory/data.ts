@@ -12,6 +12,7 @@ import type {
   SignalOccurrenceRecord,
 } from "../../reactive/records";
 import type { RuntimeOutboxItem, RuntimeTimerRecord } from "../../store";
+import type { WorkControlRecord } from "../../ports/work-control";
 
 export type MemoryWriteRecorder = () => void;
 
@@ -51,6 +52,7 @@ export interface MemoryRuntimeData {
   signalOccurrences: Map<string, SignalOccurrenceRecord>;
   signalIdempotency: Map<string, string>;
   signalDeliveries: Map<string, SignalDeliveryRecord>;
+  workControl: Map<string, WorkControlRecord>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -77,6 +79,7 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     signalOccurrences: new Map(),
     signalIdempotency: new Map(),
     signalDeliveries: new Map(),
+    workControl: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -111,6 +114,7 @@ export function cloneMemoryRuntimeData(
     signalOccurrences: new Map(data.signalOccurrences),
     signalIdempotency: new Map(data.signalIdempotency),
     signalDeliveries: new Map(data.signalDeliveries),
+    workControl: new Map(data.workControl),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -140,6 +144,7 @@ export function replaceMemoryRuntimeData(
   target.signalOccurrences = source.signalOccurrences;
   target.signalIdempotency = source.signalIdempotency;
   target.signalDeliveries = source.signalDeliveries;
+  target.workControl = source.workControl;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
   target.nextTimerId = source.nextTimerId;

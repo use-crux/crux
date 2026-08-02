@@ -34,9 +34,12 @@ import type { RuntimeSignalStorePort } from "../../reactive/records";
 import type { MemoryWaiterPort } from "./waiters";
 import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
+import type { RuntimeWorkControlPort } from "../../ports/work-control";
+import { createMemoryWorkControlPort } from "./work-control";
 
 type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
+  readonly workControl: RuntimeWorkControlPort;
 };
 
 /** Fault-injection controls used by adapter conformance tests. */
@@ -71,6 +74,8 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
   readonly results: RuntimeResultPayloadPort;
   /** Durable Signal records backed by in-memory maps. */
   readonly signals: RuntimeSignalStorePort;
+  /** Process-local Work-control command records. */
+  readonly workControl: RuntimeWorkControlPort;
 }
 
 /** Create a fresh, isolated in-memory runtime store. */
@@ -92,6 +97,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       outbox: createMemoryOutboxPort(target, outboxFaults, recordWrite),
       deferred: createMemoryDeferredStore(target, recordWrite),
       signals: createMemorySignalStore(target, recordWrite),
+      workControl: createMemoryWorkControlPort(target, recordWrite),
     };
   }
 
