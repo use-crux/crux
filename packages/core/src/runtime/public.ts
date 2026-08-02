@@ -13,6 +13,21 @@ export * from "./engine/errors";
 export * from "./reactive/payload-codec";
 
 export type {
+  RuntimeAcceptedTransportEnvelope,
+  RuntimeAcceptedTransportPayload,
+  RuntimeManagedTransportAdapterDeclaration,
+  RuntimeManagedTransportBinding,
+  RuntimeSignalTransportTarget,
+  RuntimeTransportConfigRef,
+} from "./transport";
+export {
+  RuntimeManagedTransportContractError,
+  validateRuntimeAcceptedTransportEnvelope,
+  validateRuntimeManagedTransportAdapterDeclaration,
+  validateRuntimeManagedTransportBinding,
+} from "./transport";
+
+export type {
   RuntimeArtifactManifest,
   RuntimeArtifactManifestEval,
   RuntimeArtifactManifestEvalCase,
