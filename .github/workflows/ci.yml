@@ -72,6 +72,47 @@ jobs:
       - name: Test
         run: pnpm turbo run test --filter='!@use-crux/indexer'
 
+  postgres-storage:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_DB: crux_storage_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d crux_storage_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CRUX_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/crux_storage_test
+      CRUX_TEST_PGVECTOR_URL: postgres://postgres:postgres@localhost:5432/crux_storage_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: PostgreSQL storage release coverage
+        run: pnpm --filter @use-crux/postgres test
+
   indexer:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
@@ -106,8 +147,8 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Static Index parity gate
-        run: pnpm test:static-index-parity
+      - name: Static Index contract gate
+        run: pnpm test:static-index-contracts
 
       - name: Go observability conformance
         working-directory: packages/local
@@ -159,18 +200,20 @@ jobs:
 
   verify:
     if: ${{ always() }}
-    needs: [typecheck, test, indexer, build_package]
+    needs: [typecheck, test, postgres-storage, indexer, build_package]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Require successful verification jobs
         env:
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           TEST_RESULT: ${{ needs.test.result }}
+          POSTGRES_STORAGE_RESULT: ${{ needs.postgres-storage.result }}
           INDEXER_RESULT: ${{ needs.indexer.result }}
           BUILD_PACKAGE_RESULT: ${{ needs.build_package.result }}
         run: |
           test "$TYPECHECK_RESULT" = success
           test "$TEST_RESULT" = success
+          test "$POSTGRES_STORAGE_RESULT" = success
           test "$INDEXER_RESULT" = success
           test "$BUILD_PACKAGE_RESULT" = success
 

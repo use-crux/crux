@@ -22,6 +22,7 @@ describe("generated deployed Eval registry", () => {
     roots.push(root);
     const source = join(root, "evals/support.eval.ts");
     await mkdir(dirname(source), { recursive: true });
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
     await writeFile(
       source,
       [
@@ -60,14 +61,21 @@ describe("generated deployed Eval registry", () => {
     await writeFile(
       join(root, "crux.config.ts"),
       [
-        "import { config } from '@use-crux/core'",
         "import { genericQueue, inMemoryRuntimeStore, serverless } from '@use-crux/core/runtime'",
         "const memory = inMemoryRuntimeStore()",
         "const store = Object.freeze({ ...memory, id: 'capability-readiness-fixture' })",
-        "export default config({ runtime: serverless({",
-        "  store, namespace: 'capability-readiness', publicUrl: 'http://localhost',",
-        "  wake: genericQueue({ secret: 'capability-readiness-secret-32-bytes', enqueue: async () => undefined }),",
-        "}), observability: { redactPaths: ['customer.email'] } })",
+        "export default {",
+        "  config: {",
+        "    runtime: serverless({",
+        "      store, namespace: 'capability-readiness', publicUrl: 'http://localhost',",
+        "      wake: genericQueue({ secret: 'capability-readiness-secret-32-bytes', enqueue: async () => undefined }),",
+        "    }),",
+        "    observability: { redactPaths: ['customer.email'] },",
+        "  },",
+        "  prompts: [],",
+        "  contexts: [],",
+        "  get() { return undefined },",
+        "}",
       ].join("\n"),
     );
     const definitions = (
@@ -213,13 +221,14 @@ describe("generated deployed Eval registry", () => {
     ).rejects.toThrow(/Project Index arm facts disagree.*support/i);
   });
 
-  it("keeps ordinary Next Runtime requests usable when Eval host secrets are absent", async () => {
+  it("omits Eval host capabilities when a source has no deployable Runtime Eval", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-registry-"));
     roots.push(root);
     const source = join(root, "evals/support.eval.ts");
     const targetFile = join(root, "src/nested.ts");
     await mkdir(dirname(source), { recursive: true });
     await mkdir(dirname(targetFile), { recursive: true });
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
     await writeFile(
       targetFile,
       [
@@ -230,14 +239,18 @@ describe("generated deployed Eval registry", () => {
     await writeFile(
       join(root, "crux.config.ts"),
       [
-        "import { config } from '@use-crux/core'",
         "import { genericQueue, inMemoryRuntimeStore, serverless } from '@use-crux/core/runtime'",
         "const memory = inMemoryRuntimeStore()",
         "const store = Object.freeze({ ...memory, id: 'durable-generated-fixture' })",
-        "export default config({ runtime: serverless({",
-        "  store, namespace: 'generated-fixture', publicUrl: 'http://localhost',",
-        "  wake: genericQueue({ secret: 'generated-runtime-secret-32-bytes', enqueue: async (message) => { (globalThis as any).__generatedEvalWake = message } }),",
-        "}) })",
+        "export default {",
+        "  config: { runtime: serverless({",
+        "    store, namespace: 'generated-fixture', publicUrl: 'http://localhost',",
+        "    wake: genericQueue({ secret: 'generated-runtime-secret-32-bytes', enqueue: async (message) => { (globalThis as any).__generatedEvalWake = message } }),",
+        "  }) },",
+        "  prompts: [],",
+        "  contexts: [],",
+        "  get() { return undefined },",
+        "}",
       ].join("\n"),
     );
     await writeFile(
@@ -268,19 +281,12 @@ describe("generated deployed Eval registry", () => {
       definitions,
     });
     const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
-    const generated = (await importUserModule(
-      join(root, "crux.generated/next.ts"),
-      4_000,
-    )) as {
-      readonly GET: (request: Request) => Promise<Response>;
-    };
 
     expect(result.manifest.evals).toEqual([]);
     expect(entry).not.toContain("createServerlessEvalHost");
     expect(entry).not.toContain("evals/support.eval");
-    await expect(
-      generated.GET(new Request("http://localhost/api/crux")),
-    ).resolves.toMatchObject({ status: 200 });
+    expect(entry).not.toContain("supportedEvalHostCapabilities");
+    expect(entry).not.toContain("evalHostCapabilities");
   });
 
   it("imports only mixed Evals and deploys only their Runtime arms", async () => {
@@ -522,7 +528,7 @@ describe("generated deployed Eval registry", () => {
           id: "eval:example",
           kind: "eval",
           name: "example",
-          source: { file: source },
+          source: { file: source, line: 1 },
           fidelity: "resolved",
           status: "active",
           metadata: {

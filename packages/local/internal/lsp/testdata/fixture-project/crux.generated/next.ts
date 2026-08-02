@@ -7,9 +7,5 @@ import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval
 
 const targets = [] as const
 export const evalRegistry = createDeployedEvalRegistry({persistencePolicy:{redactPaths:[]},entries:[]})
-const supportedEvalHostCapabilities = [] as readonly string[]
-const evalHostCapabilities = Object.freeze([...new Set(evalRegistry.entries.flatMap((entry) => entry.requiredHostCapabilities))]
-  .filter((capability) => supportedEvalHostCapabilities.includes(capability))
-  .sort())
 
 export const { GET, POST } = createRuntimeHandler({ targets, manifestHash: 'ccedd7af6c59edba70f00bea174b22d7d76d4c5f54e83feebbdef586c81d51d6' })

@@ -478,11 +478,13 @@ function semanticAgentRelations(
     for (const target of semanticToolMapTargets(
       toExpression(tools, view),
       view,
+      new Set(),
+      ["tool", "agent"],
     )) {
       relations.push(
         semanticRelation(
           candidate,
-          "agent.uses_tool",
+          target.kind === "agent" ? "agent.uses_agent_tool" : "agent.uses_tool",
           candidate.definitionId,
           target.id,
           view,

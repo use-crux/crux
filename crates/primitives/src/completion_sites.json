@@ -9,7 +9,7 @@
   {"callNames":["agent"],"propertyPath":["prompt"],"slot":"scalarIdentifier","acceptedKinds":["prompt"],"insertion":"identifier"},
   {"callNames":["agent"],"propertyPath":["model"],"slot":"scalarIdentifier","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback"],"insertion":"identifier"},
   {"callNames":["agent"],"propertyPath":["languageModel"],"slot":"scalarIdentifier","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback"],"insertion":"identifier"},
-  {"callNames":["agent"],"propertyPath":["tools","*"],"slot":"toolMapMember","acceptedKinds":["tool"],"insertion":"toolMapMember"},
+  {"callNames":["agent"],"propertyPath":["tools","*"],"slot":"toolMapMember","acceptedKinds":["tool","agent"],"insertion":"toolMapMember"},
   {"callNames":["agent"],"propertyPath":["handoffs","*"],"slot":"staticId","acceptedKinds":["agent"],"insertion":"staticId","excludeSelf":true},
   {"callNames":["agent"],"propertyPath":["handoffs","*","id"],"slot":"staticId","acceptedKinds":["agent"],"insertion":"staticId","excludeSelf":true},
   {"callNames":["context"],"propertyPath":["use","*"],"slot":"identifierArrayElement","acceptedKinds":["context","thread","mcp.server"],"insertion":"identifier"},

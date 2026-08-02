@@ -35,6 +35,7 @@ import type { CruxRunId } from "../../observability";
 import type { InputBudget } from "../../request/budget/input-budget";
 import type { PrepareStep } from "../../request/prepare/step";
 import type { ThreadCommit } from "../../thread/types";
+import type { SystemBlock } from "../../resolver/types";
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
@@ -73,6 +74,18 @@ export interface AdapterExecutionGenerateArgs<
 
   /** Callback evaluated before each semantic provider-call plan is sealed. */
   readonly prepareStep?: PrepareStep<TModel>;
+
+  /**
+   * Sample one internal model-facing context contribution at each semantic
+   * boundary. The sampled block is sealed with that request and is never
+   * revisited by exact transport retries.
+   *
+   * @internal
+   */
+  readonly projectStepSystemContext?: () =>
+    | SystemBlock
+    | undefined
+    | Promise<SystemBlock | undefined>;
 
   /** Maximum loop iterations before generation stops. Defaults to 10. */
   readonly maxSteps?: number;

@@ -58,16 +58,19 @@ describe("Static Index readiness docs", () => {
       ),
     ]);
 
-    expect(readiness).toContain("pnpm test:static-index-parity");
-    expect(readiness).toContain("rust-first-party-static-golden.test.ts");
-    expect(readiness).toContain("rust-first-party-static-golden.json");
+    expect(readiness).toContain("pnpm test:static-index-contracts");
+    expect(readiness).toContain(
+      "rust-first-party-repository-invariants.test.ts",
+    );
+    expect(readiness).toContain("exact curated compiler contracts");
+    expect(readiness).not.toContain("rust-first-party-static-golden");
     expect(readiness).toContain("Rust-owned descriptor fixture");
     expect(readiness).toContain("First-party extractor families are Rust-only in the binary");
     expect(readiness).toContain("TypeScript extension host");
     expect(readiness).toContain("A missing or incompatible worker is a setup failure");
 
-    expect(publishing).toContain("Static Index parity");
-    expect(publishing).toContain("pnpm test:static-index-parity");
+    expect(publishing).toContain("Static Index contracts");
+    expect(publishing).toContain("pnpm test:static-index-contracts");
     expect(publishing).toContain("make local");
 
     for (const source of [
@@ -85,7 +88,7 @@ describe("Static Index readiness docs", () => {
     expect(projectIndexReference).toMatch(/Static Index always uses/);
   });
 
-  it("pins the CI parity gate and Static Index benchmark entrypoint", async () => {
+  it("pins the CI contract gate and Static Index benchmark entrypoint", async () => {
     const [workflow, packageJson, benchmarkScript, readiness] =
       await Promise.all([
         readRepoDoc(".github/workflows/ci.yml"),
@@ -95,11 +98,12 @@ describe("Static Index readiness docs", () => {
       ]);
 
     expect(workflow).toMatch(
-      /name: Static Index parity gate\s+run: pnpm test:static-index-parity/,
+      /name: Static Index contract gate\s+run: pnpm test:static-index-contracts/,
     );
-    expect(packageJson.scripts?.["test:static-index-parity"]).toBe(
-      "node ./scripts/static-index-parity-gate.mjs",
+    expect(packageJson.scripts?.["test:static-index-contracts"]).toBe(
+      "node ./scripts/static-index-contract-gate.mjs",
     );
+    expect(packageJson.scripts?.["test:static-index-parity"]).toBeUndefined();
     expect(packageJson.scripts?.["benchmark:static-index"]).toBe(
       "node ./scripts/static-index-benchmark.mjs",
     );

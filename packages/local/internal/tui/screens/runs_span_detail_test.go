@@ -235,14 +235,14 @@ func TestSpanDetailFlowRunShowsFlowFields(t *testing.T) {
 // call variant.
 func TestSpanDetailGenerationStreamUsesGenerationRenderer(t *testing.T) {
 	out := renderSpanWithPayload(t, api.SpanPrimitiveGenerationStream, map[string]any{
-		"provider": "anthropic",
-		"model":    "claude-3.5-sonnet",
+		"provider": "mistralai",
+		"model":    "mistral-large-2",
 	})
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "GENERATION") {
 		t.Errorf("generation.stream span missing GENERATION header\n%s", plain)
 	}
-	if !strings.Contains(plain, "anthropic/claude-3.5-sonnet") {
+	if !strings.Contains(plain, "mistralai/mistral-large-2") {
 		t.Errorf("generation.stream span missing provider/model row\n%s", plain)
 	}
 }

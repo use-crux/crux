@@ -37,9 +37,18 @@ package cache
 // Epoch 63 combines the independently advanced Effect boundary lint and
 // Connected Knowledge snapshot contracts so neither parent cache can mask the
 // other.
-// Epoch 64 combines main's Epoch 63 lineage with the feature branch's Epoch 60
-// lineage, which restores runtime-rich Eval execution and timeout facts across
-// the bundled-worker/package-copy boundary.
+// Epoch 64 advances the direct Agent-tool relation contract so mixed tool/agent
+// tool maps keep typed native-direct edges across restart boundaries. A feature
+// branch independently assigned Epoch 64 to the Epoch 63/60 reconciliation that
+// restores runtime-rich Eval execution and timeout facts across the
+// bundled-worker/package-copy boundary.
+// Epoch 65 combines that contract with dynamic nested PromptText identity across
+// restart boundaries so neither independently assigned epoch 64 can mask the
+// other.
+// Epoch 66 combines main's Epoch 65 lineage with the feature branch's Epoch 64
+// runtime-rich Eval lineage. It preserves the historical Epoch 55, 59, and 60
+// collision reconciliations while ensuring neither parent snapshot can mask the
+// other's Project Index contract.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 64
+const ProjectIndexSnapshotCacheEpoch = 66

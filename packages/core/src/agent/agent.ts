@@ -46,7 +46,13 @@ export interface AgentConfig<
   prompt: Prompt<TOwnInput, TOutput, TContexts>
   /** Default model override. Takes precedence over composition-level model. */
   model?: RoutableModel<TModel>
-  /** Default tools available to this agent. */
+  /**
+   * Default tools available to this agent. Named maps may contain ordinary
+   * Tools or direct child Agents, with each key used as the provider tool name.
+   * A child Agent runs as an awaited foreground Tool through ordinary Tool
+   * policy, using its Agent/Prompt description and Prompt input/output
+   * contracts. It inherits cancellation and ancestry, but not parent authority.
+   */
   tools?: AnyToolSet
   /** Default whole-request input pressure settings for each provider call. */
   inputBudget?: InputBudget
@@ -112,7 +118,13 @@ export interface Agent<
   readonly prompt: Prompt<TOwnInput, TOutput, TContexts>
   /** Default model override. */
   readonly model: RoutableModel<TModel> | undefined
-  /** Default tools. */
+  /**
+   * Default tools. Named maps may contain ordinary Tools or direct child
+   * Agents; keys are provider tool names. Child Agents are awaited foreground
+   * Tools that use their Agent/Prompt description and Prompt input/output
+   * contracts, traverse ordinary Tool policy, and inherit cancellation and
+   * ancestry but no parent authority.
+   */
   readonly tools: AnyToolSet | undefined
   /** Default whole-request input pressure settings. */
   readonly inputBudget: InputBudget | undefined

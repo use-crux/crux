@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -50,6 +51,8 @@ type Service struct {
 	runtimeOverlays          *projectindex.RuntimeOverlayState
 	authoritativeASTObserved bool
 	watchStatus              projectIndexWatchStatusStore
+	configDependenciesMu     sync.RWMutex
+	configDependenciesByRoot map[string][]string
 	readModel                ReadModelFunc
 	publish                  PublishFunc
 
@@ -76,15 +79,28 @@ func New(options Options) *Service {
 		facts = cache.NewSQLiteIndexFactStore()
 	}
 	return &Service{
-		ctx:             ctx,
-		store:           indexStore,
-		indexer:         options.Indexer,
-		indexCache:      cache.NewCache(facts, options.StrictCache),
-		indexState:      projectindex.NewState(),
-		runtimeOverlays: projectindex.NewRuntimeOverlayState(),
-		readModel:       options.ReadModel,
-		publish:         options.Publish,
+		ctx:                      ctx,
+		store:                    indexStore,
+		indexer:                  options.Indexer,
+		indexCache:               cache.NewCache(facts, options.StrictCache),
+		indexState:               projectindex.NewState(),
+		configDependenciesByRoot: map[string][]string{},
+		runtimeOverlays:          projectindex.NewRuntimeOverlayState(),
+		readModel:                options.ReadModel,
+		publish:                  options.Publish,
 	}
+}
+
+func (s *Service) setConfigDependencies(root string, dependencies []string) {
+	s.configDependenciesMu.Lock()
+	s.configDependenciesByRoot[filepath.Clean(root)] = append([]string(nil), dependencies...)
+	s.configDependenciesMu.Unlock()
+}
+
+func (s *Service) configDependencies(root string) []string {
+	s.configDependenciesMu.RLock()
+	defer s.configDependenciesMu.RUnlock()
+	return append([]string(nil), s.configDependenciesByRoot[filepath.Clean(root)]...)
 }
 
 // WithProjectIndexer replaces the phase clients used for future indexing work.

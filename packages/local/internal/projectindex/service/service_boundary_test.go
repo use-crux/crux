@@ -314,6 +314,50 @@ func TestServiceConfigWatchRefreshesEffectiveObservabilityPolicy(t *testing.T) {
 	assertConfigured(52, true)
 }
 
+func TestServiceConfigDependencyWatchFallsBackOnEditOrDeletion(t *testing.T) {
+	indexer := &watchFallbackIndexer{configDependencies: []string{"config/base.json", "tsconfig.json"}}
+	service := New(Options{Store: store.NewStore(), Indexer: indexer})
+	if _, err := service.ReindexProjectWithOptions(
+		context.Background(),
+		"/repo",
+		"crux.config.ts",
+		"project",
+		ProjectReindexOptions{Semantic: ProjectSemanticDisabled},
+	); err != nil {
+		t.Fatalf("initial full reindex: %v", err)
+	}
+
+	changes := []struct {
+		files   []string
+		deleted []string
+	}{
+		{files: []string{"/repo/config/base.json"}},
+		{deleted: []string{"/repo/tsconfig.json"}},
+	}
+	for runID, change := range changes {
+		indexer.calledFull = false
+		indexer.calledIncrement = false
+		_, err := service.ReindexProjectIncrementalWithOptions(
+			context.Background(),
+			"/repo",
+			"crux.config.ts",
+			"project",
+			change.files,
+			change.deleted,
+			ProjectReindexOptions{
+				Semantic: ProjectSemanticDisabled,
+				Watch:    ProjectWatchRunOptions{RunID: uint64(runID + 1)},
+			},
+		)
+		if err != nil {
+			t.Fatalf("config dependency watch %d: %v", runID, err)
+		}
+		if indexer.calledIncrement || !indexer.calledFull {
+			t.Fatalf("config dependency watch %d full=%v incremental=%v, want full only", runID, indexer.calledFull, indexer.calledIncrement)
+		}
+	}
+}
+
 func TestServiceReturnsWatchIncrementalBeforeBackgroundLint(t *testing.T) {
 	indexer := &watchBackgroundLintIndexer{
 		lintStarted: make(chan struct{}),

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -50,6 +52,9 @@ func Inspect(
 			return InspectResult{}, err
 		}
 		config = loaded
+		if config.CacheDisabled {
+			ctx = projectindex.WithoutCache(ctx)
+		}
 		nodeReasons = append(nodeReasons, ReasonConfig)
 		timings = AppendTiming(timings, TimingConfig, configStarted, 1)
 	}
@@ -101,5 +106,27 @@ func LoadConfig(
 	if err := json.Unmarshal(resp, &config); err != nil {
 		return projectindex.ProjectStaticIndexConfig{}, fmt.Errorf("decode project Static Index config: %w", err)
 	}
+	if err := validateConfigDependencies(root, config.ConfigDependencies); err != nil {
+		return projectindex.ProjectStaticIndexConfig{}, err
+	}
 	return config, nil
+}
+
+const maxConfigDependencies = 64
+
+func validateConfigDependencies(root string, dependencies []string) error {
+	if len(dependencies) > maxConfigDependencies {
+		return fmt.Errorf("decode project Static Index config: too many config dependencies")
+	}
+	for _, dependency := range dependencies {
+		if dependency == "" || filepath.IsAbs(dependency) || filepath.Clean(dependency) != filepath.FromSlash(dependency) {
+			return fmt.Errorf("decode project Static Index config: invalid config dependency %q", dependency)
+		}
+		path := filepath.Join(root, filepath.FromSlash(dependency))
+		relative, err := filepath.Rel(root, path)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("decode project Static Index config: config dependency escapes root")
+		}
+	}
+	return nil
 }

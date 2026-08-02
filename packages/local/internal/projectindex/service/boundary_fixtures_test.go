@@ -210,6 +210,7 @@ type watchFallbackIndexer struct {
 	calledFull               bool
 	calledIncrement          bool
 	redactPatternsConfigured bool
+	configDependencies       []string
 }
 
 func (i *watchFallbackIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
@@ -241,6 +242,14 @@ func (i *watchFallbackIndexer) IndexProjectAstPatch(context.Context, string, str
 			},
 		},
 	}, nil
+}
+
+func (i *watchFallbackIndexer) IndexProjectAstPatchWithResult(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error) {
+	patch, err := i.IndexProjectAstPatch(ctx, root, configPath, projectName)
+	return projectindex.ProjectAstIndexResult{
+		Patch:              patch,
+		ConfigDependencies: append([]string(nil), i.configDependencies...),
+	}, err
 }
 
 func (i *watchFallbackIndexer) IndexProjectIncremental(

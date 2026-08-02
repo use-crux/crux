@@ -66,7 +66,10 @@ const presence = (present: boolean): ProjectConfigSetting =>
 export async function inspectProjectConfig(
   options: InspectProjectConfigOptions,
 ): Promise<ProjectConfigInspect> {
-  return withUserImportSession(() => inspectProjectConfigInSession(options));
+  return withUserImportSession(
+    () => inspectProjectConfigInSession(options),
+    options.root,
+  );
 }
 
 async function inspectProjectConfigInSession(

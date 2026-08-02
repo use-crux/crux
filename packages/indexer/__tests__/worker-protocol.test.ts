@@ -165,6 +165,7 @@ describe("project index worker protocol", () => {
       type: "artifact:done",
       artifact: "projectStaticIndexConfig",
       root: "/repo",
+      payload: { configDependencies: ["config/base.json", "tsconfig.json"] },
     });
     expect(fixture.artifactError).toMatchObject({
       protocolVersion: 3,

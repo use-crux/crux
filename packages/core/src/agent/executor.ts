@@ -83,6 +83,8 @@ export interface ExecuteOptions {
   prepareStep?: PrepareStep<AnyModel>
   /** Tool names exposed from the prepared child baseline. */
   activeTools?: readonly string[]
+  /** Cooperative cancellation inherited by this Agent invocation. */
+  signal?: AbortSignal
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.

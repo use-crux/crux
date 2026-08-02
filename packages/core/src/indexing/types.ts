@@ -328,9 +328,32 @@ export interface IndexResult {
   sourceCount: number
   chunkCount: number
   stages?: SourceStageRecord[]
+  /** Connected-knowledge derivation summary, present only when configured. */
+  readonly knowledge?: ConnectedKnowledgeSummary
   dryRun?: false
   /** Exact `indexing.pipeline` operation that produced this summary. */
   readonly _meta: OperationResultMeta
+}
+
+/** Connected-knowledge derivation diagnostics returned by indexing mutations. */
+export interface ConnectedKnowledgeSummary {
+  /** Per-derive-stage aggregate over indexed active sources. */
+  readonly stages: readonly ConnectedKnowledgeStageSummary[]
+}
+
+/** Aggregate result for one connected-knowledge derive stage. */
+export interface ConnectedKnowledgeStageSummary {
+  /** Authored derive stage id. */
+  readonly stageId: string
+  /** Number of sources that ran or reused cached claims for this stage. */
+  readonly status: {
+    readonly ran: number
+    readonly cached: number
+  }
+  /** Total validated claims available for this stage. */
+  readonly claims: number
+  /** Deterministic bounded diagnostics emitted while deriving this stage. */
+  readonly warnings: readonly string[]
 }
 
 /** The result of a dry-run index: chunks/parents without persistence. */
@@ -554,6 +577,8 @@ export interface CorpusSyncResult {
   chunkCount: number
   durationMs: number
   sources: CorpusSourceResult[]
+  /** Connected-knowledge derivation summary, present only when configured. */
+  readonly knowledge?: ConnectedKnowledgeSummary
   /** Exact `corpus.sync` operation that produced this aggregate summary. */
   readonly _meta: OperationResultMeta
 }

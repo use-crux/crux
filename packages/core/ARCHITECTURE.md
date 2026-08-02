@@ -20,6 +20,55 @@ Core never depends on their SDKs. Source sessions close in reverse order through
 the bounded invocation cleanup path, including setup failure, cancellation,
 stream disposal, and approval suspension.
 
+## Foreground Agent-tool binding
+
+The Agent foreground-tool binder sits in the adapter execution path after
+authored and call-level Tool maps are merged and before ordinary Tool
+preparation. It replaces only the winning direct Agent entries with ordinary
+Tools, so existing middleware, approvals, guardrails, validation, and provider
+mapping remain the single Tool policy path.
+
+Each adapter owns a process-local, adapter-neutral Work port backed by its local
+Work kernel. A call made inside Work uses the ambient attachment; a root call
+without one uses cancellation-only linkage. Either route accepts one foreground
+child Work, executes the child through the adapter's Agent executor, awaits its
+result, and projects only the exact child output into the Tool result.
+
+Attachment carries lifecycle ancestry and cancellation, not authority. The
+executor receives the child Agent, its declared input, the selected model, and
+the child signal only. Parent prompt state, tools, history, request data, and
+runtime controls never cross the binder boundary.
+
+## Backgroundable Agent-tool binding
+
+`backgroundable(agent)` is a frozen, inert wrapper. During Agent execution the
+background binder recognizes only that wrapper, adds the reserved
+`run_in_background` Tool input field, and preserves the ordinary foreground
+path when the field is absent or false. A true value accepts child execution
+through the same adapter-local process-local kernel, retains its internal
+handle in the current Agent owner's private inbox, and returns only an
+immutable model-facing Work reference.
+
+The control path is deliberately one-way and provider-neutral:
+
+```txt
+wrapper -> binder -> owner-retained inbox -> process-local kernel
+        -> safe step-system projection at the next sealed provider boundary
+```
+
+Only an Agent with backgroundable children receives the automatic `work` Tool.
+The inbox enforces ownership for list and id lookup; unknown, detached, or
+foreign ids expose no existence or content. List/status projection contains
+only bounded lifecycle metadata. Result and failure content is never injected
+into system context, and request sealing samples status before dispatch instead
+of mutating an active provider call. The child executor receives its own Agent
+definition, declared input, selected model, and child cancellation signal—no
+parent prompt, history, tools, or control authority.
+
+Core owns the wrapper, binding, owner retention, kernel lifecycle, automatic
+control, and safe projection. Provider packages changed tests only; there is no
+provider-specific behavior.
+
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
 rule options as data only. `@use-crux/indexer` owns extension manifest validation, trust enforcement,
@@ -1875,6 +1924,8 @@ A user-visible operation (`operationId`) owns one root run and any independently
 A logical run (`runId`) is distinct from the physical execution segment (`segmentId`) that carries it: a run may suspend and resume across any number of processes/isolates/invocations before it ends exactly once. `openRun(...).suspend({ reason })` ends the current segment and returns a JSON-safe `CruxPropagationCarrier`; `observe.resumeRun(carrier, { reason })` opens a fresh segment (`segmentSeq` restarts at 1) on the same `runId` and emits `run:resume` before any child record. A host continuation that did not logically suspend uses a fresh segment without manufacturing suspend/resume evidence. `observe.withContext()` / `captureContext()` remain context-only — they restore the active span/attribute stack for a callback and can never resume, suspend, or end a run themselves, so first-party Flow/Convex code holds the returned run/segment handle as the explicit lifecycle owner instead of restoring a captured context and hoping an implicit span ends the run. Calling `suspend`/`end`/`error` more than once is locally idempotent; the immutable backend record is the distributed authority, and a conflicting second terminal record is diagnosed rather than applied.
 
 Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
+
+A direct foreground child Agent Tool opens a distinct `agent.run` inside the ordinary `tool.call`, using the active parent trace. The foreground binder projects only the authored `agentId` and the invoked Agent's definition reference on that boundary; prompt, input, output, tool history, request, model, control, and handle data are deliberately absent. Descendant generation and Tool spans remain ordinary observability producers, so their artifacts and attributes continue through the configured capture/redaction policy. Local's Run Detail projection retains the parent Agent -> Tool -> child Agent topology, and Devtools renders the nested `agent.run` as its own Agent row rather than folding it into the Tool.
 
 Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; contributor, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 

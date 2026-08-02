@@ -79,7 +79,11 @@ func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 	if result.UsedStaticIndex {
 		timing.UsedStaticIndex = true
 		w.recordLastAstTiming(timing)
-		return projectindex.ProjectAstIndexResult{Patch: result.Patch, UsedStaticIndex: true}, nil
+		return projectindex.ProjectAstIndexResult{
+			Patch:              result.Patch,
+			UsedStaticIndex:    true,
+			ConfigDependencies: append([]string(nil), result.Plan.ConfigDependencies...),
+		}, nil
 	}
 	w.recordLastAstTiming(timing)
 	return projectindex.ProjectAstIndexResult{}, fmt.Errorf(

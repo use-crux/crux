@@ -7,6 +7,7 @@
 import type { Message } from "../../generation/messages";
 import type { RequestReceipt } from "../receipt/receipt";
 import type { ExecutionAmendment } from "./amendment";
+import type { PreparationStatistics } from "./statistics";
 import {
   createStepContext,
   stepToolHistory,
@@ -109,6 +110,8 @@ export function recordPrepareStepOutcome(
 export async function runPrepareStep<TModel>(input: {
   readonly callback?: PrepareStep<TModel>;
   readonly state: PrepareStepState;
+  /** Process-local committed statistics for this immediate activation. */
+  readonly statistics?: PreparationStatistics;
   readonly requestInput: Readonly<Record<string, unknown>>;
   readonly reason: StepReason;
   readonly previousReceipt?: RequestReceipt;
@@ -123,7 +126,9 @@ export async function runPrepareStep<TModel>(input: {
   const abort = () => controller.abort(input.signal?.reason);
   input.signal?.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(() => controller.abort(), PREPARATION_TIMEOUT_MS);
-  const stats = createStats(input.state, index, input.reason);
+  const stats = input.statistics
+    ? input.statistics.beforeStep({ stepIndex: index, reason: input.reason })
+    : createStats(input.state, index, input.reason);
   const context = createStepContext({
     operation: "language",
     input: input.requestInput,

@@ -49,7 +49,7 @@ func (s *Session) Run(ctx context.Context) (Result, error) {
 		Evidence:         options.Evidence,
 		PatchOptions:     options.PatchOptions,
 		PatchInvalidates: options.PatchInvalidates,
-		CacheDisabled:    projectindex.CacheDisabled(ctx),
+		CacheDisabled:    projectindex.CacheDisabled(ctx) || plan.Plan.CacheDisabled,
 	})
 	result.StaticTiming = runResult.Timing
 	addNodeReason(&result, runResult.NodeReason)

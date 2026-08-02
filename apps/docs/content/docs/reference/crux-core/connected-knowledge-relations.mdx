@@ -29,6 +29,26 @@ emitting edge claims during indexing. Use `relate()` for custom vocabularies,
 `relateReferences()` for explicit document references, and `relateEntities()`
 for generic entity mentions and entity relationships.
 
+## Prompt Bounds
+
+Model-mode relation derivation uses these internal bounds:
+
+| Constant | Value | Applies To |
+| --- | ---: | --- |
+| `MAX_DERIVE_BATCH_CHARS` | `12000` | Estimated source content assigned to one generated extraction batch. |
+| `MAX_DERIVE_PROMPT_CHARS` | `12000` | Final derive or repair prompt sent for one batch. |
+
+Chunks are sorted by ordinal and assigned whole, in order, to deterministic
+batches. The stage vocabulary, instructions, source id, and document title
+repeat per batch. The document body appears as a bounded excerpt in the first
+batch only. Calls scale with source size, and claims from all successful batches
+are unioned before cache replacement.
+
+Routine per-chunk truncation is not used. Truncation warnings are returned on
+`result.knowledge` from `knowledgeBase().index()` and
+`knowledgeBase().reindex()` only when a single chunk is too large for one batch.
+The same bounded summary is recorded on the mutation effect receipt evidence.
+
 ## `relate(config)`
 
 Creates a frozen relation stage for an indexing pipeline.

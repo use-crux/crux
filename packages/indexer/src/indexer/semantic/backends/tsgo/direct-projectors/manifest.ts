@@ -76,11 +76,45 @@ export interface NativeDirectArrayDependencySpec {
   >;
 }
 
-export interface NativeDirectObjectDependencySpec {
-  readonly kind: "objectShorthand";
-  readonly property: string;
+/**
+ * Single admitted target kind for an object-map dependency.
+ *
+ * Prefer this shape when every map member must resolve to one kind.
+ */
+type NativeDirectObjectDependencySingleTarget = {
   readonly targetKind: NativeDirectDefinitionKind;
   readonly relationType: ProjectRelation["type"];
+  readonly targets?: never;
+};
+
+/**
+ * Multiple admitted target/relation pairs for one object-map property.
+ *
+ * Use when one map can mix kinds (for example Agent `tools` admitting both
+ * `tool` and `agent` members) so a single dependency resolves the full map.
+ */
+type NativeDirectObjectDependencyMultiTarget = {
+  readonly targetKind?: never;
+  readonly relationType?: never;
+  /**
+   * Admitted object-map member kinds with the relation to emit for each.
+   * Unadmitted resolved kinds force shared-analyzer fallback.
+   */
+  readonly targets: readonly {
+    readonly targetKind: NativeDirectDefinitionKind;
+    readonly relationType: ProjectRelation["type"];
+  }[];
+};
+
+/**
+ * Object-shorthand map dependency (`tools: { searchTool, reviewerAgent }`).
+ *
+ * Single-target and multi-target forms are mutually exclusive so a map cannot
+ * declare both a lone relation and a conflicting target table.
+ */
+export type NativeDirectObjectDependencySpec = {
+  readonly kind: "objectShorthand";
+  readonly property: string;
   readonly relationOrigin: NativeDirectRelationOriginSpec;
   readonly fact?: Extract<
     NativeDirectDependencyFactSpec,
@@ -91,6 +125,34 @@ export interface NativeDirectObjectDependencySpec {
     readonly property: string;
     readonly metadata: Readonly<Record<string, unknown>>;
   };
+} & (
+  | NativeDirectObjectDependencySingleTarget
+  | NativeDirectObjectDependencyMultiTarget
+);
+
+/** Admitted target kinds for an object-map dependency. */
+export function objectDependencyTargetKinds(
+  spec: NativeDirectObjectDependencySpec,
+): readonly NativeDirectDefinitionKind[] {
+  if (spec.targets) {
+    return spec.targets.map((target) => target.targetKind);
+  }
+  return [spec.targetKind];
+}
+
+/**
+ * Relation type for a resolved object-map member kind, if admitted.
+ * Returns `undefined` for unadmitted kinds (shared-analyzer fallback).
+ */
+export function objectDependencyRelationType(
+  spec: NativeDirectObjectDependencySpec,
+  targetKind: NativeDirectDefinitionKind,
+): ProjectRelation["type"] | undefined {
+  if (spec.targets) {
+    return spec.targets.find((target) => target.targetKind === targetKind)
+      ?.relationType;
+  }
+  return targetKind === spec.targetKind ? spec.relationType : undefined;
 }
 
 export interface NativeDirectStaticIdArrayDependencySpec {

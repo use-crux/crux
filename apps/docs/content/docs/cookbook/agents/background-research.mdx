@@ -1,0 +1,127 @@
+---
+title: Background research coordinator
+description: Let a coordinator draft in parallel, then retrieve a process-local research Agent result.
+---
+
+This recipe gives a coordinator one backgroundable research child. The model
+chooses foreground or background execution through the same `research` tool,
+then uses Crux's automatic model-facing `work` tool to rejoin later.
+
+## Full example
+
+```ts title="background-research.ts"
+import OpenAI from "openai";
+import { z } from "zod";
+
+import { prompt } from "@use-crux/core";
+import { agent, backgroundable } from "@use-crux/core/agent";
+import { createOpenAI } from "@use-crux/openai";
+
+const researchAgent = agent({
+  id: "research-agent",
+  description: "Research one question and return concise findings",
+  prompt: prompt({
+    id: "research-question",
+    input: z.object({ question: z.string() }),
+    output: z.object({
+      summary: z.string(),
+      findings: z.array(z.string()),
+    }),
+    system:
+      "Research the question carefully. Return a concise summary and concrete findings.",
+    prompt: ({ input }) => input.question,
+  }),
+});
+
+const coordinator = agent({
+  id: "research-coordinator",
+  description: "Coordinates research and writes the final response",
+  prompt: prompt({
+    id: "coordinate-research",
+    input: z.object({ question: z.string() }),
+    system: `You coordinate a research task.
+1. Call research with run_in_background: true and retain its Work reference.
+2. While it runs, draft an answer outline without inventing findings.
+3. On a later model step, use the automatic work tool with action "result"
+   and the retained id. If status is returned, wait or continue independent work.
+4. Use the exact research result before writing the final answer.`,
+    prompt: ({ input }) => input.question,
+  }),
+  tools: { research: backgroundable(researchAgent) },
+});
+
+const crux = createOpenAI(
+  new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+);
+
+const run = await crux.parallel({
+  id: "background-research-run",
+  agents: { coordinator },
+  context: { question: "Why do leaves change color in autumn?" },
+  model: "gpt-4o-mini",
+});
+
+console.log(run.results.coordinator.output);
+```
+
+`backgroundable` comes from `@use-crux/core/agent`; provider packages do not
+re-export it. The provider adapter owns execution, while Core owns the child
+binding, Work lifecycle, safe projection, and automatic control semantics.
+
+## What the model sees
+
+The first provider request includes `research` plus the automatic `work` tool.
+Calling `research` without `run_in_background`, or with `false`, blocks that
+tool call and returns the exact child result. Calling it with `true` returns a
+Work reference while the child keeps running.
+
+On the next provider step, the coordinator can see capped, result-free status
+for its Work. It may then call `work` with `action: "result"`. A completed child
+returns its exact output; otherwise the action waits for at most 30 seconds and
+returns safe status so the model can decide what to do next.
+
+Application code never invokes `work`. It only starts the coordinator through
+the normal adapter API and receives the coordinator's final result.
+
+## Prompting tips
+
+- Say which work is independent enough to start in the background.
+- Tell the coordinator to retain the returned id and retrieve the result before
+  making claims that depend on it.
+- Tell it what useful work can continue while the child runs.
+- Do not paste an imagined `work` implementation into the prompt. Core supplies
+  the tool and schema automatically.
+
+## Test the behavior
+
+Use a scripted or stubbed provider client and assert the semantic sequence:
+
+1. The coordinator calls `research` with `run_in_background: true`.
+2. Its continuation receives a `work.ref`, but not the child result.
+3. A later request contains safe background status.
+4. The coordinator calls the automatic `work` tool with `action: "result"`.
+5. Only that result round contains the child's exact output.
+
+Do not assert a particular generated Work id. Also cover the foreground path by
+omitting `run_in_background`, and verify that the exact child output returns in
+the same tool round.
+
+## Debug safely
+
+If the coordinator never rejoins, inspect redacted provider request logs for
+the `research` call, returned `work.ref`, and later `work` call. If the
+automatic tool is missing, confirm that the child is wrapped in
+`backgroundable()`. If preparation fails on `work`, remove any authored tool of
+that name. If lookup returns `not_found`, the Work was detached, belongs to a
+different owner, or the process-local registry was lost.
+
+There is no dedicated background-state Devtools view. Avoid logging child
+result or failure content merely to infer status.
+
+## Deployment boundary
+
+This recipe is strictly process-local. A process exit loses the registry,
+results, and control capability. For crash recovery, cross-request control, or
+durable replay, use [Flows](/docs/guides/flows), the [Runtime Engine](/docs/guides/durable-execution),
+or durable [Signals](/docs/guides/durable-execution/signals) as appropriate;
+this recipe does not connect to them automatically.

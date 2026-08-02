@@ -1151,7 +1151,8 @@ Go joins a candidate only when all of the following are true:
 1. the saved semantic backend emitted the resolved source ref through
    `canonicalPromptTextIdentity` and `isCanonicalPromptTextTag`, proving module
    `@use-crux/core` and export `md`;
-2. the source ref language is `markdown` and lifecycle is `static`;
+2. the source ref language is `markdown` and lifecycle is either `static` or
+   `dynamic`;
 3. the source ref and candidate are in the same normalized file; and
 4. the resolved source-ref snippet range exactly equals the candidate's whole
    tagged-template `range`.
@@ -1159,6 +1160,13 @@ Go joins a candidate only when all of the following are true:
 The serialized metadata name `tag: "md"` is descriptive and is never identity
 proof by itself. A local or shadowed `md`, an alias without canonical saved
 evidence, or an off-by-one range produces no identity-sensitive output.
+Lifecycle remains explicit evidence for presentation and execution policy, but
+does not suppress syntax-exact editor analysis: canonical direct and callback
+PromptText both receive decorations, headings, literal links, and eligible
+semantic fragment joins. This does not execute a callback or widen static-only
+refactor applicability. Canonical `md` regions nested inside callback
+expressions within an interpolation receive their own exact semantic identity;
+local or shadowed lookalike tags in the same expression remain excluded.
 
 ### Unified transient source
 

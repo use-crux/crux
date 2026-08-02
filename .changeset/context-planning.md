@@ -128,3 +128,17 @@ processes.
 Migrate the published memory, request-debugging, and silent-truncation articles
 to caller-owned history, whole-request `inputBudget`, explicit representation
 ladders, `preview()`, and executed request receipts.
+
+Named Agent tool maps may now include direct child Agents as awaited foreground
+Tools. Object inputs project their object schema directly, no-input children
+project an empty object, and non-object inputs project through an `input` field.
+
+Project Index now distinguishes direct Agent tools with an `agent.uses_agent_tool`
+relation while retaining `agent.uses_tool` for ordinary Tools.
+
+Each invocation now appears in Local Run Detail and Devtools as a distinct
+privacy-safe child Agent beneath its ordinary Tool call in the parent trace.
+
+Wrap a child Agent with `backgroundable()` to let the model start process-local
+joinable Work. Background-enabled runs receive one owner-scoped `work` control
+Tool and capped, result-free status context only at safe provider boundaries.

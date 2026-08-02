@@ -49,6 +49,7 @@ import {
   taskRunKey,
   waiterTimeoutKey,
 } from '@use-crux/core/runtime'
+import { withCruxBuild } from '@use-crux/core/runtime/next'
 import { task as planTask } from '@use-crux/core'
 import {
   createTestRuntime,
@@ -214,6 +215,50 @@ runWithRuntimeHost(
   },
   () => hostBoundRuntime,
 )
+
+const nextConfigWithNullWebpack = withCruxBuild(
+  {
+    distDir: '.next-custom',
+    trailingSlash: true,
+    webpack: null,
+  },
+  { command: ['node', '-e', 'process.exit(0)'] },
+)
+expectTypeOf(nextConfigWithNullWebpack.distDir).toEqualTypeOf<string>()
+expectTypeOf(nextConfigWithNullWebpack.trailingSlash).toEqualTypeOf<boolean>()
+expectTypeOf(nextConfigWithNullWebpack.webpack).toEqualTypeOf<
+  (config: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>
+>()
+
+const nextConfigWithCallableWebpack = withCruxBuild(
+  {
+    webpack(config: Record<string, unknown>) {
+      return { ...config, wrapped: true }
+    },
+  },
+  { command: ['node', '-e', 'process.exit(0)'] },
+)
+expectTypeOf(nextConfigWithCallableWebpack.webpack).toMatchTypeOf<
+  (config: Record<string, unknown>) => Record<string, unknown>
+>()
+
+interface DeclaredNextConfig {
+  distDir?: string
+  webpack?:
+    | null
+    | ((
+        config: { entry?: string },
+        context: { dev: boolean },
+      ) => { entry?: string })
+}
+declare const declaredNextConfig: DeclaredNextConfig
+const wrappedDeclaredNextConfig = withCruxBuild(declaredNextConfig, {
+  command: ['node', '-e', 'process.exit(0)'],
+})
+expectTypeOf(wrappedDeclaredNextConfig).toMatchTypeOf<DeclaredNextConfig>()
+expectTypeOf(wrappedDeclaredNextConfig.webpack).toEqualTypeOf<
+  NonNullable<DeclaredNextConfig['webpack']>
+>()
 
 declare const lifecycleStorage: CruxContextStorage<{ requestId: string }>
 const lifecycle: CruxHostLifecycle<{ requestId: string }> = {

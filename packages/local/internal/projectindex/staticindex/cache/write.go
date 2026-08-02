@@ -37,6 +37,7 @@ type WritableExtraction struct {
 func WriteFromPatch(
 	root string,
 	cacheInputs []json.RawMessage,
+	configDependencies []string,
 	sourceInput SourceInput,
 	plan protocol.Plan,
 	patch projectindex.IndexPatch,
@@ -52,7 +53,7 @@ func WriteFromPatch(
 	sourceFiles := sourceFileMap(sourceInput.Files)
 	sourceProfiles := semanticProfileMap(sourceInput.SemanticSourceProfile)
 	sources := patchSourceMap(patch.Facts.Sources)
-	configFiles := readConfigFileHashes(root)
+	configFiles := readConfigFileHashes(root, configDependencies)
 
 	for _, file := range primaryMisses {
 		source, ok := sources[file]

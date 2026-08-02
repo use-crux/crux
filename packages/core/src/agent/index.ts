@@ -19,6 +19,8 @@ export type { Delegate, DelegateConfig, DelegateResult } from './delegate'
 
 export { agent, isAgent } from './agent'
 export type { Agent, AnyAgent, AgentConfig, AgentLike, HandoffTarget, InferAgentInput, InferAgentOutput, RoutableModel } from './agent'
+export { backgroundable } from './backgroundable'
+export type { BackgroundableAgent } from './backgroundable'
 export type { InputBudget } from '../request/budget/input-budget'
 export type { PrepareStep } from '../request/prepare/step'
 export type {

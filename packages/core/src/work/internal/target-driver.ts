@@ -11,6 +11,10 @@ import type { EffectScopeRef } from "../../effect/types";
 export interface InternalWorkExecutionContext {
   /** Stable identity of the accepted Work occurrence. */
   readonly id: string;
+  /** Identity of the direct attached parent, when this Work is attached. */
+  readonly attachedParentId?: string;
+  /** Child-owned cooperative cancellation linked to its attached parent. */
+  readonly signal: AbortSignal;
   /** Passive Effect boundary containing the target execution. */
   readonly effects: EffectScopeRef;
 }

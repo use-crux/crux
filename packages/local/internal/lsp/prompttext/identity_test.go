@@ -42,6 +42,34 @@ func TestControllerAcceptsAliasedCanonicalSemanticRef(t *testing.T) {
 	}
 }
 
+func TestControllerDecoratesCanonicalDynamicSemanticRef(t *testing.T) {
+	t.Parallel()
+
+	document, file, sourceRef, analysis := aliasedIdentityFixture()
+	sourceRef.Metadata["promptText"].(map[string]any)["lifecycle"] = "dynamic"
+	controller := NewController(&fixedDocumentSource{document: document})
+
+	result := controller.Decorations(context.Background(), Request{
+		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
+		Views: semanticIdentityProvider(document, file, sourceRef),
+	})
+
+	if len(result.Decorations) != 1 ||
+		result.Decorations[0].Role != DecorationRoleHeading {
+		t.Fatalf("dynamic canonical decorations = %#v, want one heading", result)
+	}
+
+	symbols := controller.Symbols(context.Background(), Request{
+		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
+		Views: semanticIdentityProvider(document, file, sourceRef),
+	})
+	if len(symbols.Symbols) != 1 || symbols.Symbols[0].Name != "Alias" {
+		t.Fatalf("dynamic canonical symbols = %#v, want Rust-labelled heading", symbols)
+	}
+}
+
 func TestControllerRejectsForeignNormalizedPromptTextTag(t *testing.T) {
 	t.Parallel()
 
@@ -57,6 +85,23 @@ func TestControllerRejectsForeignNormalizedPromptTextTag(t *testing.T) {
 
 	if result.Decorations == nil || len(result.Decorations) != 0 {
 		t.Fatalf("foreign normalized tag decorations = %#v, want exact clear", result)
+	}
+}
+
+func TestControllerRejectsForeignPromptTextLifecycle(t *testing.T) {
+	t.Parallel()
+
+	document, file, sourceRef, _ := aliasedIdentityFixture()
+	sourceRef.Metadata["promptText"].(map[string]any)["lifecycle"] = "eventual"
+	controller := NewController(&fixedDocumentSource{document: document})
+
+	result := controller.Decorations(context.Background(), Request{
+		URI: document.URI, File: file, Root: "/repo", ScopeID: "/repo",
+		SourceEpoch: 1, Analyzer: panicTransientSource{},
+		Views: semanticIdentityProvider(document, file, sourceRef),
+	})
+	if result.Decorations == nil || len(result.Decorations) != 0 {
+		t.Fatalf("foreign lifecycle decorations = %#v, want exact clear", result)
 	}
 }
 
@@ -93,22 +138,22 @@ func TestControllerMatchesSemanticSourceColumnsAsUTF16(t *testing.T) {
 	}
 }
 
-func TestStaticMarkdownSourceKindIgnoresLegacyFragmentMarker(t *testing.T) {
+func TestCanonicalMarkdownSourceKindIgnoresLegacyFragmentMarker(t *testing.T) {
 	_, _, sourceRef, _ := aliasedIdentityFixture()
 	sourceRef.Metadata["fragment"] = true
-	if kind, ok := staticMarkdownSourceKind(sourceRef); !ok ||
+	if kind, ok := canonicalMarkdownSourceKind(sourceRef); !ok ||
 		kind != promptview.PromptTextSourceOwner {
 		t.Fatalf("legacy-marked owner = %q, %v", kind, ok)
 	}
 
 	delete(sourceRef.Metadata["promptText"].(map[string]any), "sourceKind")
-	if _, ok := staticMarkdownSourceKind(sourceRef); ok {
+	if _, ok := canonicalMarkdownSourceKind(sourceRef); ok {
 		t.Fatal("legacy marker substituted for missing compiler source kind")
 	}
 
 	_, _, sourceRef, _ = aliasedIdentityFixture()
 	sourceRef.Metadata["promptText"].(map[string]any)["tag"] = "lookalike"
-	if _, ok := staticMarkdownSourceKind(sourceRef); ok {
+	if _, ok := canonicalMarkdownSourceKind(sourceRef); ok {
 		t.Fatal("foreign normalized tag was accepted as canonical PromptText")
 	}
 }
@@ -267,7 +312,7 @@ func unicodeIdentityFixture() (
 func semanticIdentityProvider(
 	document transient.Document,
 	file string,
-	sourceRef api.ProjectSourceRef,
+	sourceRefs ...api.ProjectSourceRef,
 ) indexview.ViewProvider {
 	generation := uint64(4)
 	store := readmodel.NewStore()
@@ -277,7 +322,7 @@ func semanticIdentityProvider(
 			Semantic: api.IndexIndexingSemanticStatus{Status: "ready"},
 		},
 		Definitions: []api.ProjectDefinition{{
-			ID: "prompt:aliased", SourceRefs: []api.ProjectSourceRef{sourceRef},
+			ID: "prompt:aliased", SourceRefs: sourceRefs,
 		}},
 		Sources: []api.IndexSourceFile{{
 			File: file, Status: "indexed", SourceHash: document.Revision.SourceHash,

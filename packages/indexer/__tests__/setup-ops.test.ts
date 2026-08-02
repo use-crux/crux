@@ -41,6 +41,7 @@ describe('runSetupOperation', () => {
   it('contains malformed project metadata without leaking its contents', async () => {
     const root = await mkdtemp(join(tmpdir(), 'crux-setup-ops-'))
     roots.push(root)
+    await writeFile(join(root, '.gitignore'), '.crux/\n')
     await writeFile(join(root, 'package.json'), '{ "password": "secret" ')
 
     const report = await runSetupOperation({ root, mode: 'check' })
@@ -148,6 +149,52 @@ describe('runSetupOperation', () => {
         changedFiles: [],
       },
     })
+  })
+
+  it('applies local-state before Runtime artifacts own .crux creation', async () => {
+    const root = await fixture({ type: 'module' }, { gitignore: false })
+    const source = join(root, 'src/review.ts')
+    await mkdir(join(root, 'src'))
+    await writeFile(source, 'export const reviewFlow = true\n')
+
+    const applied = await runSetupOperation({
+      root,
+      mode: 'apply',
+      definitions: [runtimeTarget(source)],
+    })
+
+    expect(applied).toMatchObject({
+      ok: true,
+      setup: {
+        findings: [],
+        applied: [{ actionId: 'local-state.gitignore-crux', ok: true }],
+      },
+      generation: {
+        status: 'generated',
+        changedFiles: [
+          '.crux/generated/runtime/privacy.json',
+          'crux.generated/next.ts',
+          '.crux/generated/runtime/manifest.json',
+        ],
+      },
+    })
+    await expect(readFile(join(root, '.gitignore'), 'utf8')).resolves.toBe(
+      '.crux/\n',
+    )
+    await expect(
+      readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
+    ).resolves.toContain('"targets"')
+  })
+
+  it('does not duplicate the local-state rule across repeated apply', async () => {
+    const root = await fixture({ type: 'module' }, { gitignore: false })
+
+    await runSetupOperation({ root, mode: 'apply', definitions: [] })
+    await runSetupOperation({ root, mode: 'apply', definitions: [] })
+
+    await expect(readFile(join(root, '.gitignore'), 'utf8')).resolves.toBe(
+      '.crux/\n',
+    )
   })
 
   it('blocks generation on final setup errors but not warnings', async () => {
@@ -339,9 +386,15 @@ function setupReport(mode: 'check' | 'apply', severity?: 'error' | 'warning'): S
   }
 }
 
-async function fixture(manifest: object): Promise<string> {
+async function fixture(
+  manifest: object,
+  options: { readonly gitignore?: boolean } = {},
+): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'crux-setup-ops-'))
   roots.push(root)
   await writeFile(join(root, 'package.json'), JSON.stringify(manifest))
+  if (options.gitignore !== false) {
+    await writeFile(join(root, '.gitignore'), '.crux/\n')
+  }
   return root
 }

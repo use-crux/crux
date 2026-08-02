@@ -28,6 +28,10 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		supportText)
 	tsconfigFile := writeStaticIndexPlanCacheFixtureFile(t, root, "tsconfig.json",
 		tsconfigText)
+	extendedConfigText := "{\"compilerOptions\":{\"baseUrl\":\"..\"}}\n"
+	extendedConfigFile := writeStaticIndexPlanCacheFixtureFile(t, root, "configs/base.json",
+		extendedConfigText)
+	configDependencies := []string{"configs/base.json", "tsconfig.json"}
 
 	cacheKey := "static-cache-key:writer"
 	writeStaticIndexPlanCacheFile(t, root, cacheKey)
@@ -40,10 +44,16 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 			"file":       "src/support.ts",
 			"sourceHash": staticIndexPlanCacheFixtureHash(t, supportFile),
 		}},
-		"configFiles": []map[string]string{{
-			"file":       "tsconfig.json",
-			"sourceHash": staticIndexPlanCacheFixtureHash(t, tsconfigFile),
-		}},
+		"configFiles": []map[string]string{
+			{
+				"file":       "configs/base.json",
+				"sourceHash": staticIndexPlanCacheFixtureHash(t, extendedConfigFile),
+			},
+			{
+				"file":       "tsconfig.json",
+				"sourceHash": staticIndexPlanCacheFixtureHash(t, tsconfigFile),
+			},
+		},
 		"compilerInputs": staticIndexPlanCacheCompilerInputsFixture(t),
 		"cacheKey":       cacheKey,
 	})
@@ -51,6 +61,7 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 	configured := true
 	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:                     root,
+		ConfigDependencies:       configDependencies,
 		RedactPatternsConfigured: &configured,
 	})
 	if err != nil {
@@ -102,7 +113,7 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("change support: %v", err)
 	}
 	dependencyChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root: root,
+		Root: root, ConfigDependencies: configDependencies,
 	})
 	if err != nil {
 		t.Fatalf("dependency changed planner.Build error = %v", err)
@@ -118,7 +129,7 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("change tsconfig: %v", err)
 	}
 	configChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root: root,
+		Root: root, ConfigDependencies: configDependencies,
 	})
 	if err != nil {
 		t.Fatalf("config changed planner.Build error = %v", err)
@@ -130,11 +141,39 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("restore tsconfig: %v", err)
 	}
 
+	if err := os.WriteFile(extendedConfigFile, []byte("{\"compilerOptions\":{\"baseUrl\":\"src\"}}\n"), 0o600); err != nil {
+		t.Fatalf("change extended config: %v", err)
+	}
+	extendedChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
+		Root: root, ConfigDependencies: configDependencies,
+	})
+	if err != nil {
+		t.Fatalf("extended config changed planner.Build error = %v", err)
+	}
+	if len(extendedChangedPlan.CacheHits) != 0 || !slices.Equal(extendedChangedPlan.CacheMisses, []string{sourceFile}) {
+		t.Fatalf("extended config changed cache hits=%v misses=%v, want source miss", extendedChangedPlan.CacheHits, extendedChangedPlan.CacheMisses)
+	}
+	if err := os.Remove(extendedConfigFile); err != nil {
+		t.Fatalf("delete extended config: %v", err)
+	}
+	extendedDeletedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
+		Root: root, ConfigDependencies: configDependencies,
+	})
+	if err != nil {
+		t.Fatalf("extended config deleted planner.Build error = %v", err)
+	}
+	if len(extendedDeletedPlan.CacheHits) != 0 || !slices.Equal(extendedDeletedPlan.CacheMisses, []string{sourceFile}) {
+		t.Fatalf("extended config deleted cache hits=%v misses=%v, want source miss", extendedDeletedPlan.CacheHits, extendedDeletedPlan.CacheMisses)
+	}
+	if err := os.WriteFile(extendedConfigFile, []byte(extendedConfigText), 0o600); err != nil {
+		t.Fatalf("restore extended config: %v", err)
+	}
+
 	if err := os.WriteFile(sourceFile, []byte("import { support } from './support'\nexport const writer = prompt({ id: `${support}:changed` })\n"), 0o600); err != nil {
 		t.Fatalf("change source: %v", err)
 	}
 	changedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root: root,
+		Root: root, ConfigDependencies: configDependencies,
 	})
 	if err != nil {
 		t.Fatalf("changed planner.Build error = %v", err)

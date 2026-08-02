@@ -62,6 +62,11 @@ describe("runtime artifacts", () => {
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
     ).resolves.toContain("createRuntimeHandler({ targets, manifestHash:");
+    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+    expect(entry).toContain("export const evalRegistry");
+    expect(entry).toContain("entries:[]");
+    expect(entry).not.toContain("supportedEvalHostCapabilities");
+    expect(entry).not.toContain("evalHostCapabilities");
     await expect(
       readFile(join(root, "convex/crux.ts"), "utf8"),
     ).rejects.toMatchObject({
@@ -237,14 +242,19 @@ describe("runtime artifacts", () => {
   it("does not infer Convex host from commented config source", async () => {
     const root = await fixtureRoot();
     await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
     await writeFile(
       join(root, "crux.config.ts"),
       [
-        "import { config } from '@use-crux/core'",
         "import { node } from '@use-crux/core/runtime'",
         "",
         "// runtime: convex()",
-        "export default config({ runtime: node() })",
+        "export default {",
+        "  config: { runtime: node() },",
+        "  prompts: [],",
+        "  contexts: [],",
+        "  get() { return undefined },",
+        "}",
       ].join("\n"),
     );
     await writeFile(

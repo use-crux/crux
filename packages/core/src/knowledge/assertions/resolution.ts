@@ -16,7 +16,7 @@ import type { AssertionSupport } from './identity'
 import type { AssertionRelationRecord } from './relations'
 import { policyFingerprint } from './resolution-fingerprint'
 import { applyModelPolicy } from './resolution-policy'
-import { readAssertionSnapshot, toVisibleAssertion, visibleSupports } from './set'
+import { readAssertionSnapshot, toVisibleAssertion, toVisibleRelation } from './set'
 
 /** Decision trace entry produced by assertion resolution. */
 export interface AssertionResolutionTrace {
@@ -27,8 +27,9 @@ export interface AssertionResolutionTrace {
 
 /** Evidence cited by a resolution decision. */
 export type AssertionDecisionEvidence =
-  | { readonly kind: 'relation'; readonly relationId: string; readonly type: AssertionRelationRecord['type'] }
+  | AssertionRelationDecisionEvidence
   | { readonly kind: 'policy'; readonly policyId: string; readonly note?: string }
+type AssertionRelationDecisionEvidence = Pick<AssertionRelationRecord, 'evidence' | 'provenance' | 'stageId' | 'stageVersion' | 'stageFingerprint'> & { readonly kind: 'relation'; readonly relationId: string; readonly type: AssertionRelationRecord['type'] }
 
 /** Resolved assertion partitions. */
 export interface AssertionResolutionResult<TItem> {
@@ -174,7 +175,7 @@ export function createAssertionResolution<
 
 async function readFullSnapshot<TTypes extends Record<string, z.ZodType<unknown>>, TSelected extends keyof TTypes & string>(config: ResolutionFactoryConfig<TTypes, TSelected>) {
   if (!config.records) throw new Error('Assertion resolution requires record storage.')
-  const snapshot = await readAssertionSnapshot(config)
+  const snapshot = await readAssertionSnapshot(config, { includeRelations: true })
   const selected = config.selectedTypes ? new Set<string>(config.selectedTypes) : undefined
   const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
   const assertions: Array<AssertionOf<TTypes, TSelected>> = []
@@ -192,8 +193,8 @@ async function readFullSnapshot<TTypes extends Record<string, z.ZodType<unknown>
   const visibleIds = new Set(assertions.map((assertion) => assertion.assertionId))
   const relations = snapshot.relations.flatMap((relation) => {
     if (!visibleIds.has(relation.from.assertionId) || !visibleIds.has(relation.to.assertionId)) return []
-    const evidence = visibleSupports(relation.evidence, members)
-    return evidence.length > 0 ? [{ ...relation, evidence }] : []
+    const visible = toVisibleRelation(relation, members)
+    return visible ? [visible] : []
   })
   return { generationId: snapshot.generationId, revisionHash: snapshot.revision?.revisionHash, assertions, relations }
 }
@@ -229,7 +230,7 @@ function applyExplicitRelations<TItem extends ResolutionItem>(
   relations: readonly AssertionRelationRecord[],
 ): void {
   for (const relation of relations) {
-    const evidence = { kind: 'relation' as const, relationId: relation.relationId, type: relation.type }
+    const evidence = relationDecisionEvidence(relation)
     if (relation.type === 'supersedes') add(state.superseded, relation.to.assertionId, evidence)
     if (relation.type === 'conflictsWith') {
       add(state.contested, relation.from.assertionId, evidence)
@@ -238,6 +239,9 @@ function applyExplicitRelations<TItem extends ResolutionItem>(
   }
 }
 
+function relationDecisionEvidence(relation: AssertionRelationRecord): AssertionRelationDecisionEvidence {
+  return { kind: 'relation', relationId: relation.relationId, type: relation.type, evidence: relation.evidence, provenance: relation.provenance, stageId: relation.stageId, stageVersion: relation.stageVersion, stageFingerprint: relation.stageFingerprint }
+}
 async function applyRunPolicy<TItem extends ResolutionItem>(
   state: ReturnType<typeof createState<TItem>>,
   snapshot: { readonly assertions: readonly TItem[]; readonly relations: readonly AssertionRelationRecord[] },

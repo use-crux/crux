@@ -386,4 +386,4 @@ type ErasedPromptBaseConfig = Omit<
 };
 
 export type AnyPromptConfig = ErasedPromptBaseConfig &
-  PromptContent<PromptInputArg<Record<string, unknown>>>;
+  PromptContent<PromptInputArg<unknown>>;

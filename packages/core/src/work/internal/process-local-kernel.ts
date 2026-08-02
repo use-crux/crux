@@ -7,35 +7,23 @@
 
 import type { EffectScopeRef } from "../../effect/types";
 import { runPassiveEffectBoundary } from "../../effect/internal/boundary";
+import {
+  createInternalWorkCancellation,
+  currentInternalWorkAttachment,
+  runWithInternalWorkContext,
+  type InternalWorkSpawnOptions,
+} from "./attached-context";
 import type {
   InternalWorkExecutionContext,
   InternalWorkTargetDriver,
 } from "./target-driver";
+import {
+  workStatusSnapshot,
+  type InternalWorkStatus,
+  type StoredWorkStatus,
+} from "./process-local-status";
 
-interface InternalWorkStatusBase {
-  readonly id: string;
-  readonly acceptedAt: Date;
-  readonly updatedAt: Date;
-}
-
-/** Minimal lifecycle exposed by the first internal Work tracer. @internal */
-export type InternalWorkStatus =
-  | (InternalWorkStatusBase & { readonly state: "queued" })
-  | (InternalWorkStatusBase & {
-      readonly state: "running";
-      readonly startedAt: Date;
-    })
-  | (InternalWorkStatusBase & {
-      readonly state: "completed";
-      readonly startedAt: Date;
-      readonly completedAt: Date;
-      readonly resultAvailable: true;
-    })
-  | (InternalWorkStatusBase & {
-      readonly state: "failed";
-      readonly startedAt: Date;
-      readonly failedAt: Date;
-    });
+export type { InternalWorkStatus } from "./process-local-status";
 
 /** Typed internal handle for one finite process-local execution. @internal */
 export interface InternalWorkHandle<TOutput> {
@@ -47,6 +35,8 @@ export interface InternalWorkHandle<TOutput> {
   status(): Promise<InternalWorkStatus>;
   /** Join the execution and return its exact target output. */
   result(): Promise<TOutput>;
+  /** Cooperatively request cancellation of this Work occurrence. */
+  cancel(): boolean;
 }
 
 /** Injectable process-local infrastructure seams. @internal */
@@ -63,74 +53,22 @@ export interface ProcessLocalWorkKernelOptions {
 
 /** Explicitly instantiated, isolated Work registry and execution kernel. @internal */
 export interface ProcessLocalWorkKernel {
-  /** Accept and schedule one bound first-party target execution. */
+  /** Accept and schedule one bound target with explicit optional linkage. */
   spawn<TOutput>(
     driver: InternalWorkTargetDriver<TOutput>,
+    options?: InternalWorkSpawnOptions,
   ): Promise<InternalWorkHandle<TOutput>>;
 }
-
-interface StoredWorkStatusBase {
-  readonly id: string;
-  readonly acceptedAt: number;
-  readonly updatedAt: number;
-}
-
-type StoredWorkStatus =
-  | (StoredWorkStatusBase & { readonly state: "queued" })
-  | (StoredWorkStatusBase & {
-      readonly state: "running";
-      readonly startedAt: number;
-    })
-  | (StoredWorkStatusBase & {
-      readonly state: "completed";
-      readonly startedAt: number;
-      readonly completedAt: number;
-      readonly resultAvailable: true;
-    })
-  | (StoredWorkStatusBase & {
-      readonly state: "failed";
-      readonly startedAt: number;
-      readonly failedAt: number;
-    });
 
 interface MutableWorkRecord {
   status: StoredWorkStatus;
 }
 
-/** Materialize a detached lifecycle snapshot from immutable timestamps. */
-function workStatusSnapshot(status: StoredWorkStatus): InternalWorkStatus {
-  const base = {
-    id: status.id,
-    acceptedAt: new Date(status.acceptedAt),
-    updatedAt: new Date(status.updatedAt),
-  };
-
-  switch (status.state) {
-    case "queued":
-      return Object.freeze({ ...base, state: status.state });
-    case "running":
-      return Object.freeze({
-        ...base,
-        state: status.state,
-        startedAt: new Date(status.startedAt),
-      });
-    case "completed":
-      return Object.freeze({
-        ...base,
-        state: status.state,
-        startedAt: new Date(status.startedAt),
-        completedAt: new Date(status.completedAt),
-        resultAvailable: status.resultAvailable,
-      });
-    case "failed":
-      return Object.freeze({
-        ...base,
-        state: status.state,
-        startedAt: new Date(status.startedAt),
-        failedAt: new Date(status.failedAt),
-      });
-  }
+/** Whether a stored status awaits acknowledgement of a direct cancellation. */
+function isCancellationRequested(status: StoredWorkStatus): boolean {
+  return status.state === "cancel-requested";
 }
+
 
 /**
  * Create an isolated process-local Work kernel.
@@ -163,7 +101,18 @@ export function createProcessLocalWorkKernel(
   return Object.freeze({
     async spawn<TOutput>(
       driver: InternalWorkTargetDriver<TOutput>,
+      options?: InternalWorkSpawnOptions,
     ): Promise<InternalWorkHandle<TOutput>> {
+      const attachment =
+        options?.kind === "attached"
+          ? options.attachment
+          : options
+            ? undefined
+            : currentInternalWorkAttachment();
+      const parentSignal =
+        options?.kind === "cancellation-only"
+          ? options.signal
+          : attachment?.signal;
       const id = createId();
       if (registry.has(id)) {
         throw new TypeError(`Process-local Work id \`${id}\` already exists.`);
@@ -178,6 +127,7 @@ export function createProcessLocalWorkKernel(
         }),
       };
       registry.set(id, record);
+      const cancellation = createInternalWorkCancellation(parentSignal);
 
       let acceptEffects!: (effects: EffectScopeRef) => void;
       const effectsAllocated = new Promise<EffectScopeRef>((resolve) => {
@@ -187,50 +137,85 @@ export function createProcessLocalWorkKernel(
       const scheduled = new Promise<void>((resolve) => {
         start = resolve;
       });
-      const execution = runEffectBoundary(id, async (boundary) => {
-        acceptEffects(boundary.ref);
-        schedule(start);
-        await scheduled;
+      const execution = runEffectBoundary(
+        id,
+        async (boundary) => {
+          acceptEffects(boundary.ref);
+          schedule(start);
+          await scheduled;
 
-        const startedAt = now().getTime();
-        record.status = Object.freeze({
-          id,
-          state: "running",
-          acceptedAt,
-          startedAt,
-          updatedAt: startedAt,
-        });
-        const context: InternalWorkExecutionContext = Object.freeze({
-          id,
-          effects: boundary.ref,
-        });
-        let output: TOutput;
-        try {
-          output = await driver.run(context);
-        } catch (failure) {
-          const failedAt = now().getTime();
+          if (record.status.state === "cancelled") {
+            throw cancellation.signal.reason;
+          }
+
+          const startedAt = now().getTime();
           record.status = Object.freeze({
             id,
-            state: "failed",
+            state: "running",
             acceptedAt,
             startedAt,
-            failedAt,
-            updatedAt: failedAt,
+            updatedAt: startedAt,
           });
-          throw failure;
-        }
-        const completedAt = now().getTime();
-        record.status = Object.freeze({
-          id,
-          state: "completed",
-          acceptedAt,
-          startedAt,
-          completedAt,
-          resultAvailable: true,
-          updatedAt: completedAt,
-        });
-        return output;
-      });
+          const context: InternalWorkExecutionContext = Object.freeze({
+            id,
+            ...(attachment ? { attachedParentId: attachment.parentId } : undefined),
+            signal: cancellation.signal,
+            effects: boundary.ref,
+          });
+          let output: TOutput;
+          try {
+            output = await runWithInternalWorkContext(
+              id,
+              cancellation.signal,
+              () => driver.run(context),
+            );
+          } catch (failure) {
+            const failedAt = now().getTime();
+            if (
+              isCancellationRequested(record.status) &&
+              cancellation.signal.aborted &&
+              failure === cancellation.signal.reason
+            ) {
+              record.status = Object.freeze({
+                id,
+                state: "cancelled",
+                acceptedAt,
+                startedAt,
+                cancelledAt: failedAt,
+                updatedAt: failedAt,
+              });
+              throw failure;
+            }
+            record.status = Object.freeze({
+              id,
+              state: "failed",
+              acceptedAt,
+              startedAt,
+              failedAt,
+              updatedAt: failedAt,
+            });
+            throw failure;
+          }
+          const completedAt = now().getTime();
+          record.status = Object.freeze({
+            id,
+            state: "completed",
+            acceptedAt,
+            startedAt,
+            completedAt,
+            resultAvailable: true,
+            updatedAt: completedAt,
+          });
+          return output;
+        },
+        undefined,
+        options &&
+          "effectParent" in options &&
+          options.effectParent === "independent"
+          ? { effectParent: "independent" }
+          : undefined,
+      );
+      void execution.then(cancellation.dispose, cancellation.dispose);
       void execution.catch(() => undefined);
       let effects: EffectScopeRef;
       try {
@@ -248,6 +233,38 @@ export function createProcessLocalWorkKernel(
         effects,
         status: () => Promise.resolve(workStatusSnapshot(record.status)),
         result: () => execution,
+        cancel: () => {
+          const current = record.status;
+          const updatedAt = now().getTime();
+          switch (current.state) {
+            case "queued":
+              record.status = Object.freeze({
+                id,
+                state: "cancelled",
+                acceptedAt,
+                cancelledAt: updatedAt,
+                updatedAt,
+              });
+              cancellation.cancel();
+              return true;
+            case "running":
+              record.status = Object.freeze({
+                id,
+                state: "cancel-requested",
+                acceptedAt,
+                startedAt: current.startedAt,
+                cancellationRequestedAt: updatedAt,
+                updatedAt,
+              });
+              cancellation.cancel();
+              return true;
+            case "cancel-requested":
+            case "completed":
+            case "failed":
+            case "cancelled":
+              return false;
+          }
+        },
       });
     },
   });
