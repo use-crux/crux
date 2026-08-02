@@ -20,6 +20,7 @@ describeCruxAdapterConformance({
     streaming: true,
     toolCalls: true,
     agentTools: true,
+    backgroundAgentWork: true,
     approvalSuspension: true,
     providerCache: true,
   },

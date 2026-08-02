@@ -41,6 +41,8 @@ export interface ProviderRuntimeConformanceCapabilities {
   readonly toolCalls?: boolean;
   /** Run direct foreground Agent-as-Tool continuation checks. Requires `toolCalls`. */
   readonly agentTools?: boolean;
+  /** Run backgroundable Agent and automatic Work-control checks. Requires `agentTools`. */
+  readonly backgroundAgentWork?: boolean;
   /** Run approval suspension checks. Requires `toolCalls`. */
   readonly approvalSuspension?: boolean;
   /** Reserved for SDK-loop step steering checks. */
