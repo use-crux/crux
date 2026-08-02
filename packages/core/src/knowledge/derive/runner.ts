@@ -15,19 +15,18 @@ import {
 } from './assertion-claims'
 import { runAssertionStage } from './assertion-runner'
 import {
-  claimManifestKey,
   claimsSchema,
   deriveClaimsSourceHash,
   readCachedClaimCount,
-  readClaimManifest,
   replaceClaimRecords,
   toClaimRecords,
   validateRelationClaims,
   type ClaimRecord,
   type RawRelationClaim,
 } from './claims'
+import { claimManifestKey, readClaimManifest } from './manifest'
 import { generateObjectWithEvidence } from './modality-validation'
-import { renderBoundedRelationPrompt, renderBoundedRepairPrompt } from './prompt-bounds'
+import { renderBoundedRelationBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
 import type { DeriveStage } from './stage'
 
 /** Input for running configured derivations against one source. */
@@ -178,45 +177,58 @@ async function runGenerated(
   input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
 ): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
-  const rendered = renderBoundedRelationPrompt(input.document, input.chunks, stage)
-  const prompt = rendered.prompt
-  const first = await readGeneratedClaims(input, stage, prompt)
   const valid = new Map<string, ClaimRecord>()
-  const warnings: string[] = [...rendered.warnings]
-  addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
+  const warnings: string[] = []
 
-  if (first.errors.length > 0) {
-    const repairedPrompt = renderBoundedRepairPrompt({
-      stageId: stage.id,
-      sourceId: input.document.sourceId,
-      prompt,
-      errors: first.errors,
-    })
-    warnings.push(...repairedPrompt.warnings)
-    const repaired = await readGeneratedClaims(input, stage, repairedPrompt.prompt)
-    addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
-    for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
-      warnings.push(`Derive ${stage.id} dropped invalid claim: ${error}`)
-    }
+  for (const batch of renderBoundedRelationBatches(input.document, input.chunks, stage)) {
+    const run = await runGeneratedBatch(input, stage, batch)
+    addRecords(valid, run.claims)
+    warnings.push(...run.warnings)
   }
 
+  return { claims: [...valid.values()], warnings }
+}
+
+async function runGeneratedBatch(
+  input: RunDeriveStagesInput,
+  stage: RelationStage<Record<string, RelationTypeSpec>>,
+  batch: DerivePromptBatch,
+): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
+  const first = await readGeneratedClaims(input, stage, batch)
+  const valid = new Map<string, ClaimRecord>()
+  const warnings: string[] = [...batch.warnings]
+  addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
+  if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
+
+  const repairedPrompt = renderBoundedRepairPrompt({
+    stageId: stage.id,
+    sourceId: input.document.sourceId,
+    prompt: batch.prompt,
+    errors: first.errors,
+  })
+  warnings.push(...repairedPrompt.warnings)
+  const repaired = await readGeneratedClaims(input, stage, { ...batch, prompt: repairedPrompt.prompt })
+  if (repaired.errors.length > 0) {
+    throw new Error(repaired.errors[0] ?? `Derive ${stage.id} batch ${batch.ordinal} failed after repair.`)
+  }
+  addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }
 }
 
 async function readGeneratedClaims(
   input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
-  prompt: string,
+  batch: DerivePromptBatch,
 ) {
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate claims.`)
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only claims that match the requested schema.',
-    prompt,
+    prompt: batch.prompt,
     schema: claimsSchema,
     sourceId: input.document.sourceId,
-    chunks: input.chunks,
+    chunks: batch.chunks,
     subject: `stage "${stage.id}"`,
     ...(input.assets ? { assets: input.assets } : {}),
   })

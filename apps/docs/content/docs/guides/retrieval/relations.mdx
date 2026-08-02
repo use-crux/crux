@@ -106,15 +106,20 @@ you change output-affecting model behavior, change the version or fingerprint.
 
 ## Prompt Bounds
 
-Model-mode relation prompts are bounded deterministically. Crux includes at
-most `MAX_DERIVE_CHUNK_CHARS = 1200` characters from each source document body
-and chunk, and at most `MAX_DERIVE_PROMPT_CHARS = 12000` characters in the final
-derive prompt.
+Model-mode relation extraction batches source chunks deterministically. Chunks
+are sorted by ordinal and assigned whole, in order, to batches bounded by the
+internal `MAX_DERIVE_BATCH_CHARS = 12000` budget. Each batch makes one model
+call, so calls scale with source size and every chunk is covered.
 
-When content is truncated, indexing returns a warning in `result.knowledge`.
-The same summary is recorded on the mutation effect receipt evidence. Each
-warning names the stage, source id, chunk id when present, original length, and
-bounded length.
+The stage vocabulary, instructions, source id, and document title repeat for
+each batch. A bounded excerpt of the document body appears only in the first
+batch. Routine per-chunk truncation is not used; truncation happens only when a
+single chunk is too large to fit in one batch.
+
+When an oversized single chunk is truncated, indexing returns a warning in
+`result.knowledge`. The same summary is recorded on the mutation effect receipt
+evidence. Each warning names the stage, source id, chunk id, original length,
+and bounded length.
 
 ```ts
 const result = await docs.index(sources);
@@ -122,9 +127,9 @@ const result = await docs.index(sources);
 console.log(result.knowledge?.stages[0]?.warnings);
 ```
 
-Right-size chunking so ordinary chunks fit within the 1200-character chunk
-bound. The parent-child chunker already uses a 900-character child default, so
-prefer tuning chunking over pre-splitting relation work.
+Right-size chunking so ordinary chunks fit comfortably within the 12000-character
+batch budget. The parent-child chunker already uses a 900-character child
+default, so most sources batch without truncation.
 
 ## Multimodal Evidence
 

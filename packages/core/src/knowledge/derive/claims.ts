@@ -12,9 +12,16 @@ import type { JsonObject, RecordStore } from '../../storage'
 import { knowledgeClaimsKey } from '../keys'
 import { encodeKnowledgeRef, isKnowledgeRef, type KnowledgeRef, type KnowledgeRefKind } from '../refs'
 import type { RelationStage, RelationTypeSpec } from '../relate/relate'
+import {
+  claimManifestKey,
+  createClaimManifest,
+  isCurrentManifest,
+  readClaimManifest,
+  type ClaimManifestRecord,
+} from './manifest'
+import { orderDeriveChunks } from './prompt-bounds'
 import type { DeriveStage } from './stage'
 
-const MANIFEST_HASH = '__manifest'
 const MAX_DESCRIPTION_LENGTH = 1000
 export interface ClaimRecord extends JsonObject {
   readonly _cruxRecordType: 'knowledge-claim'
@@ -25,12 +32,6 @@ export interface ClaimRecord extends JsonObject {
   readonly evidence: readonly string[], readonly provenance: 'exact' | 'derived'
   readonly sourceId: string, readonly claimHash: string
   readonly status?: 'ready' | 'pending'
-}
-export interface ClaimManifestRecord extends JsonObject {
-  readonly _cruxRecordType: 'knowledge-claim-manifest'
-  readonly sourceHash: string, readonly stageFingerprint: string
-  readonly claimHashes: readonly string[]
-  readonly warnings?: readonly string[]
 }
 export type RawRelationClaim = {
   readonly type: unknown, readonly from: unknown, readonly to: unknown
@@ -67,18 +68,12 @@ export const claimsSchema = z.object({
 export function deriveClaimsSourceHash(document: CruxDocument, chunks: readonly CruxChunk[]): string {
   return computeSourceHashes({
     ...document,
-    content: [document.content ?? '', ...chunks.map((chunk) => chunk.content)].join('\n'),
+    content: [document.content ?? '', ...orderDeriveChunks(chunks).map((chunk) => chunk.content)].join('\n'),
   }).sourceHash
-}
-type ClaimKeyArgs = {
-  readonly indexerId: string, readonly namespace: string, readonly stageId: string, readonly sourceId: string
 }
 type ClaimCacheArgs = {
   readonly records: RecordStore, readonly indexerId: string, readonly namespace: string
   readonly stage: DeriveStage, readonly sourceId: string
-}
-export function claimManifestKey(args: ClaimKeyArgs): string {
-  return knowledgeClaimsKey(args.indexerId, args.namespace, args.stageId, args.sourceId, MANIFEST_HASH)
 }
 
 export function validateRelationClaims(
@@ -146,7 +141,7 @@ export async function readCachedClaimCount(args: ClaimCacheArgs & {
     stageId: args.stage.id,
     sourceId: args.sourceId,
   }))
-  if (!manifest || manifest.sourceHash !== args.sourceHash || manifest.stageFingerprint !== args.stageFingerprint) {
+  if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint)) {
     return undefined
   }
   const keys = manifest.claimHashes.map((claimHash) => knowledgeClaimsKey(
@@ -188,17 +183,12 @@ export async function replaceClaimRecords(args: ClaimCacheArgs & {
     namespace: args.namespace,
     stageId: args.stage.id,
     sourceId: args.sourceId,
-  }), {
-    _cruxRecordType: 'knowledge-claim-manifest',
+  }), createClaimManifest({
     sourceHash: args.sourceHash,
     stageFingerprint: args.stageFingerprint,
-    claimHashes: args.claims.map((claim) => claim.claimHash).sort(),
-    ...(args.warnings.length > 0 ? { warnings: [...args.warnings] } : {}),
-  })
-}
-
-export function readClaimManifest(records: RecordStore, key: string): Promise<ClaimManifestRecord | undefined> {
-  return records.get(key).then((value) => isManifestRecord(value) ? value : undefined)
+    claimHashes: args.claims.map((claim) => claim.claimHash),
+    warnings: args.warnings,
+  }))
 }
 
 export function isClaimRecord(value: unknown): value is ClaimRecord {
@@ -260,19 +250,6 @@ function normalizeEvidence(value: unknown): readonly KnowledgeRef[] {
 
 function isValidEndpoint(value: unknown, kinds: readonly KnowledgeRefKind[]): boolean {
   return isKnowledgeLocator(value) || (isKnowledgeRef(value) && kinds.includes(value.kind as KnowledgeRefKind))
-}
-
-function isManifestRecord(value: unknown): value is ClaimManifestRecord {
-  return isRecord(value) &&
-    value._cruxRecordType === 'knowledge-claim-manifest' &&
-    typeof value.sourceHash === 'string' &&
-    typeof value.stageFingerprint === 'string' &&
-    Array.isArray(value.claimHashes) &&
-    value.claimHashes.every((hash) => typeof hash === 'string') &&
-    (
-      value.warnings === undefined ||
-      (Array.isArray(value.warnings) && value.warnings.every((warning) => typeof warning === 'string'))
-    )
 }
 
 function isCachedClaimRecord(value: unknown, stage: DeriveStage, sourceId: string, claimHash: string): value is ClaimRecord {

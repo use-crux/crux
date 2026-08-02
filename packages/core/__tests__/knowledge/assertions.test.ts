@@ -162,7 +162,7 @@ describe('assertions', () => {
     expect((await records.list(`indexer:${indexerId}:namespace:${namespace}:assertions:`)).entries).toEqual([])
   })
 
-  it('repairs generated assertions once, drops invalid outputs, and caches valid claims', async () => {
+  it('repairs generated assertions once and caches valid claims', async () => {
     const { records } = inMemoryStorage()
     await persistChunks(records, [chunk('doc-1', 'c1', 'Fact')])
     const model = countingModel([
@@ -172,8 +172,7 @@ describe('assertions', () => {
         { type: 'fact', data: { value: 'missing evidence' } },
       ] },
       { assertions: [
-        { type: 'fact', data: { value: 12 }, evidence: [chunkRef] },
-        { type: 'fact', data: { value: 'missing evidence' } },
+        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef] },
       ] },
     ])
     const stage = assertions({ id: 'facts', version: 1, types: schemas, model })
@@ -183,7 +182,7 @@ describe('assertions', () => {
 
     const first = await runDeriveStages(args)
     expect(first[0]).toMatchObject({ status: 'ran', claims: 1 })
-    expect(first[0]?.warnings).toHaveLength(2)
+    expect(first[0]?.warnings).toEqual([])
     expect(model.generateObject).toHaveBeenCalledTimes(2)
 
     const compiled = await compileKnowledgeGeneration({ records, indexerId, namespace, retention: 'retain-inactive' })

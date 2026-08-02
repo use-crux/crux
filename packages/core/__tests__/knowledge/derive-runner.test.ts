@@ -139,21 +139,21 @@ describe('runDeriveStages', () => {
     await expect(runDeriveStages({ ...base, stages: [missingEvidence] })).rejects.toThrow(/refs type cites.*evidence/)
   })
 
-  it('repairs generated claims once, drops still-invalid claims, and keeps valid claims cached', async () => {
+  it('repairs generated claims once and keeps valid claims cached', async () => {
     const records = inMemoryRecordStore()
     const source = model([
       { claims: [
         { type: 'cites', from: chunkRef, to: documentRef, evidence: [chunkRef] },
         { type: 'missing', from: chunkRef, to: documentRef, evidence: [chunkRef] },
       ] },
-      { claims: [{ type: 'missing', from: chunkRef, to: documentRef, evidence: [chunkRef] }] },
+      { claims: [{ type: 'cites', from: chunkRef, to: documentRef, evidence: [chunkRef] }] },
     ])
     const stage = relate({ id: 'refs', version: 1, types: relationTypes, model: source })
     const args = { records, indexerId: 'kb', namespace: 'ns', stages: [stage], document: document(), chunks: chunks() }
 
     const first = await runDeriveStages(args)
     expect(first[0]).toMatchObject({ status: 'ran', claims: 1 })
-    expect(first[0]?.warnings).toHaveLength(1)
+    expect(first[0]?.warnings).toEqual([])
     expect(source.generateObject).toHaveBeenCalledTimes(2)
     expect(await records.get(knowledgeClaimsKey('kb', 'ns', 'refs', 'doc-1', claimHash('derived')))).toMatchObject({
       type: 'cites',

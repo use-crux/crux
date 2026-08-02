@@ -4,8 +4,11 @@
  * @module
  */
 
-/** Maximum characters sent in one connected-knowledge derive prompt. */
-export const MAX_DERIVE_PROMPT_CHARS = 12000
+/** Extraction prompt/cache shape version; bump when generated derive output semantics change. */
+export const EXTRACTION_CONTRACT_VERSION = 2
 
-/** Maximum characters included from one source document body or chunk. */
-export const MAX_DERIVE_CHUNK_CHARS = 1200
+/** Maximum estimated content characters assigned to one generated derive batch. */
+export const MAX_DERIVE_BATCH_CHARS = 12000
+
+/** Maximum characters sent in one connected-knowledge derive prompt or repair prompt. */
+export const MAX_DERIVE_PROMPT_CHARS = MAX_DERIVE_BATCH_CHARS

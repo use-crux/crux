@@ -5,7 +5,7 @@ import type { EffectReceipt } from '../../src/effect'
 import { effectLedger } from '../../src/effect/internal/ledger'
 import { indexingPipeline, type CruxChunk, type CruxDocument } from '../../src/indexing'
 import { assertions, knowledgeBase, relate } from '../../src/knowledge'
-import { MAX_DERIVE_CHUNK_CHARS } from '../../src/knowledge/derive/bounds'
+import { MAX_DERIVE_BATCH_CHARS } from '../../src/knowledge/derive/bounds'
 import { runDeriveStages } from '../../src/knowledge/derive/runner'
 import type { KnowledgeModel } from '../../src/knowledge/model'
 import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
@@ -29,7 +29,7 @@ describe('connected knowledge derive diagnostics', () => {
     const records = inMemoryRecordStore()
     const source = model([{ claims: [] }])
     const stage = relate({ id: 'refs', version: 1, types: relationTypes, model: source })
-    const oversized = 'x'.repeat(MAX_DERIVE_CHUNK_CHARS + 5)
+    const oversized = 'x'.repeat(MAX_DERIVE_BATCH_CHARS + 5)
 
     const result = await runDeriveStages({
       records,
@@ -40,12 +40,10 @@ describe('connected knowledge derive diagnostics', () => {
       chunks: [chunk('doc-1', 'c1', oversized)],
     })
 
-    expect(result[0]?.warnings).toContain(
-      'Derive refs truncated chunk for source doc-1 chunk c1: 1205 -> 1200 chars.',
-    )
+    expect(result[0]?.warnings[0]).toMatch(/Derive refs truncated chunk for source doc-1 chunk c1: 12005 -> \d+ chars\./)
   })
 
-  it('surfaces dropped assertion warnings on index results and replays them from cache', async () => {
+  it('fails assertion extraction when repair still returns invalid claims', async () => {
     const storage = inMemoryStorage()
     const source = model([
       { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef] }] },
@@ -58,22 +56,7 @@ describe('connected knowledge derive diagnostics', () => {
     })
     const input = [chunk('doc-1', 'c1', 'Fact', 'kb-assertions')]
 
-    const first = await docs.index(input)
-    expect(first.knowledge?.stages).toEqual([{
-      stageId: 'facts',
-      status: { ran: 1, cached: 0 },
-      claims: 0,
-      warnings: ['Derive facts dropped invalid assertion: Derive facts type fact: invalid data'],
-    }])
-    expect(source.generateObject).toHaveBeenCalledTimes(2)
-
-    const second = await docs.index(input)
-    expect(second.knowledge?.stages).toEqual([{
-      stageId: 'facts',
-      status: { ran: 0, cached: 1 },
-      claims: 0,
-      warnings: first.knowledge?.stages[0]?.warnings,
-    }])
+    await expect(docs.index(input)).rejects.toThrow(/Derive facts type fact: invalid data/)
     expect(source.generateObject).toHaveBeenCalledTimes(2)
   })
 
@@ -88,8 +71,7 @@ describe('connected knowledge derive diagnostics', () => {
   it('records the same knowledge summary on the mutation effect receipt evidence', async () => {
     const storage = inMemoryStorage()
     const source = model([
-      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef] }] },
-      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef] }] },
+      { assertions: [{ type: 'fact', data: { value: 'ok' }, evidence: [chunkRef] }] },
     ])
     const docs = knowledgeBase({
       id: 'kb-effects',
@@ -123,19 +105,17 @@ describe('connected knowledge derive diagnostics', () => {
       storage,
       pipeline: indexingPipeline({ derive: [relate({ id: 'refs', version: 1, types: relationTypes, model: source })] }),
     })
-    const oversized = 'x'.repeat(MAX_DERIVE_CHUNK_CHARS + 1)
+    const oversized = 'x'.repeat(MAX_DERIVE_BATCH_CHARS + 1)
     const chunks = Array.from({ length: 52 }, (_, index) =>
-      chunk('doc-1', `c${index + 1}`, oversized, 'kb-warning-cap'))
+      ({ ...chunk('doc-1', `c${index + 1}`, oversized, 'kb-warning-cap'), ordinal: index }))
 
     const result = await docs.index(chunks)
     const warnings = result.knowledge?.stages[0]?.warnings ?? []
 
     expect(warnings).toHaveLength(51)
-    expect(warnings.slice(0, 2)).toEqual([
-      'Derive refs truncated document body for source doc-1: 62554 -> 1200 chars.',
-      'Derive refs truncated chunk for source doc-1 chunk c1: 1201 -> 1200 chars.',
-    ])
-    expect(warnings[50]).toBe('+4 more')
+    expect(warnings[0]).toMatch(/Derive refs truncated chunk for source doc-1 chunk c1: 12001 -> \d+ chars\./)
+    expect(warnings[1]).toMatch(/Derive refs truncated chunk for source doc-1 chunk c2: 12001 -> \d+ chars\./)
+    expect(warnings[50]).toBe('+2 more')
   })
 })
 

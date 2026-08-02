@@ -24,7 +24,7 @@ import {
   type RawAssertionRelationClaim,
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
-import { renderBoundedAssertionPrompt, renderBoundedRepairPrompt } from './prompt-bounds'
+import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
 
 const refSchema: z.ZodType<KnowledgeRef> = z.union([
   z.object({ kind: z.literal('document'), sourceId: z.string() }).strict(),
@@ -106,29 +106,46 @@ async function runGenerated(input: {
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
   readonly warnings: readonly string[]
 }> {
-  const rendered = renderBoundedAssertionPrompt(input.document, input.chunks, input.stage)
-  const prompt = rendered.prompt
-  const first = await readGeneratedAssertionClaims(input, prompt)
   const valid = new Map<string, AssertionClaimRecord>()
-  const warnings: string[] = [...rendered.warnings]
-  addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
+  const warnings: string[] = []
 
-  if (first.errors.length > 0) {
-    const repairedPrompt = renderBoundedRepairPrompt({
-      stageId: input.stage.id,
-      sourceId: input.document.sourceId,
-      prompt,
-      errors: first.errors,
-    })
-    warnings.push(...repairedPrompt.warnings)
-    const repaired = await readGeneratedAssertionClaims(input, repairedPrompt.prompt)
-    addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
-    for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
-      warnings.push(`Derive ${input.stage.id} dropped invalid assertion: ${error}`)
-    }
+  for (const batch of renderBoundedAssertionBatches(input.document, input.chunks, input.stage)) {
+    const run = await runGeneratedBatch(input, batch)
+    addRecords(valid, run.claims)
+    warnings.push(...run.warnings)
   }
 
   return { claims: [...valid.values()], relationClaims: [], warnings }
+}
+
+async function runGeneratedBatch(
+  input: {
+    readonly document: CruxDocument
+    readonly chunks: readonly CruxChunk[]
+    readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
+    readonly assets?: AssetStore
+  },
+  batch: DerivePromptBatch,
+): Promise<{ readonly claims: readonly AssertionClaimRecord[]; readonly warnings: readonly string[] }> {
+  const first = await readGeneratedAssertionClaims(input, batch)
+  const valid = new Map<string, AssertionClaimRecord>()
+  const warnings: string[] = [...batch.warnings]
+  addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
+  if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
+
+  const repairedPrompt = renderBoundedRepairPrompt({
+    stageId: input.stage.id,
+    sourceId: input.document.sourceId,
+    prompt: batch.prompt,
+    errors: first.errors,
+  })
+  warnings.push(...repairedPrompt.warnings)
+  const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
+  if (repaired.errors.length > 0) {
+    throw new Error(repaired.errors[0] ?? `Derive ${input.stage.id} batch ${batch.ordinal} failed after repair.`)
+  }
+  addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
+  return { claims: [...valid.values()], warnings }
 }
 
 async function readGeneratedAssertionClaims(
@@ -138,19 +155,19 @@ async function readGeneratedAssertionClaims(
     readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
     readonly assets?: AssetStore
   },
-  prompt: string,
+  batch: DerivePromptBatch,
 ) {
-  const { stage, chunks } = input
+  const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
   const schema = payloadSchema(stage)
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only assertions that match the requested schema.',
-    prompt,
+    prompt: batch.prompt,
     schema,
     sourceId: input.document.sourceId,
-    chunks,
+    chunks: batch.chunks,
     subject: `stage "${stage.id}"`,
     ...(input.assets ? { assets: input.assets } : {}),
   })
@@ -158,7 +175,7 @@ async function readGeneratedAssertionClaims(
   if (!parsed.success) {
     return { claims: [], errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message) }
   }
-  return validateAssertionClaims(stage, parsed.data.assertions, chunks)
+  return validateAssertionClaims(stage, parsed.data.assertions, batch.chunks)
 }
 
 function payloadSchema(stage: AssertionStage<Record<string, z.ZodType<unknown>>>) {

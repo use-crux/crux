@@ -12,7 +12,7 @@ import type { AssertionStage } from '../assertions/assertions'
 import { toAssertionJsonData } from '../assertions/identity'
 import { knowledgeClaimsKey } from '../keys'
 import { encodeKnowledgeRef, isKnowledgeRef, type KnowledgeRef } from '../refs'
-import { claimManifestKey, readClaimManifest, type ClaimManifestRecord } from './claims'
+import { claimManifestKey, createClaimManifest, isCurrentManifest, readClaimManifest, type ClaimManifestRecord } from './manifest'
 import { isAssertionRelationClaimRecord, type AssertionRelationClaimRecord } from './assertion-relation-claims'
 import type { DeriveStage } from './stage'
 
@@ -117,7 +117,7 @@ export async function readCachedAssertionClaimCount(args: {
     stageId: args.stage.id,
     sourceId: args.sourceId,
   }))
-  if (!manifest || manifest.sourceHash !== args.sourceHash || manifest.stageFingerprint !== args.stageFingerprint) {
+  if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint)) {
     return undefined
   }
   const keys = manifest.claimHashes.map((hash) => claimKey(args, hash))
@@ -154,13 +154,12 @@ export async function replaceAssertionClaimRecords(args: {
     namespace: args.namespace,
     stageId: args.stage.id,
     sourceId: args.sourceId,
-  }), {
-    _cruxRecordType: 'knowledge-claim-manifest',
+  }), createClaimManifest({
     sourceHash: args.sourceHash,
     stageFingerprint: args.stageFingerprint,
-    claimHashes: args.claims.map((claim) => claim.claimHash).sort(),
-    ...(args.warnings.length > 0 ? { warnings: [...args.warnings] } : {}),
-  })
+    claimHashes: args.claims.map((claim) => claim.claimHash),
+    warnings: args.warnings,
+  }))
 }
 
 /** Narrow an arbitrary stored value to an assertion claim record. */
