@@ -53,10 +53,16 @@ export async function assertStaticRepositoryInvariants(
 
   return {
     files: selection.files.map((file) => rootRelativePath(root, file)),
-    skipped: selection.skipped.map((candidate) => ({
-      file: rootRelativePath(root, candidate.file),
-      reason: candidate.reason,
-    })),
+    skipped: selection.skipped.flatMap((candidate) =>
+      candidate.action === "skip"
+        ? [
+            {
+              file: rootRelativePath(root, candidate.file),
+              reason: candidate.reason,
+            },
+          ]
+        : [],
+    ),
     canonicalFiles: firstCanonical,
   };
 }
