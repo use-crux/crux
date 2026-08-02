@@ -12,6 +12,7 @@ import { currentInternalWorkAttachment } from "../work/internal/attached-context
 import type { ProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { isAgent } from "./agent";
 import type { AgentExecutor } from "./executor";
+import { observeForegroundAgentRun } from "./foreground-agent-observability";
 
 /** Join handle for one accepted foreground child Work. @internal */
 export interface ForegroundChildWork<TOutput> {
@@ -120,11 +121,13 @@ export function bindForegroundAgentTools(
           async execute(toolInput: unknown, execution: ToolExecutionOptions) {
             const work = await options.work.spawn(
               (signal) =>
-                options.executor(value, {
-                  input: inputBinding.toPromptInput(toolInput),
-                  model: options.model,
-                  signal,
-                }),
+                observeForegroundAgentRun(value, () =>
+                  options.executor(value, {
+                    input: inputBinding.toPromptInput(toolInput),
+                    model: options.model,
+                    signal,
+                  }),
+                ),
               execution.abortSignal
                 ? { kind: "cancellation-only", signal: execution.abortSignal }
                 : { kind: "cancellation-only" },

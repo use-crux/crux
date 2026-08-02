@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   adapter,
@@ -8,7 +8,17 @@ import {
   type ToolResultEntry,
 } from "../../src";
 import { agent } from "../../src/agent";
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from "../../src/observability";
 import { currentInternalWorkAttachment } from "../../src/work/internal/attached-context";
+
+afterEach(() => {
+  resetObservabilityRuntime();
+});
 
 function response(text: string): AdapterResponse {
   return {
@@ -21,7 +31,9 @@ function response(text: string): AdapterResponse {
   };
 }
 
-it("runs a direct child Agent tool as one awaited foreground Work", async () => {
+it("observes a direct foreground child Agent under its parent without private data", async () => {
+  const transport = createInMemoryObservabilityTransport();
+  setObservabilityTransport(transport);
   const childInput = z.object({ topic: z.string() });
   const childOutput = z.object({ summary: z.string(), sources: z.array(z.string()) });
   const exactChildResult = {
@@ -116,11 +128,53 @@ it("runs a direct child Agent tool as one awaited foreground Work", async () => 
     agents: { parent },
     model: "recording-model",
   });
+  await observe.flush();
+
+  const agentRuns = transport.records.filter(
+    (record) => record.type === "span:start" && record.primitive === "agent.run",
+  );
+  const parentRun = agentRuns.find(
+    (record) => record.attributes?.agentId === parent.id,
+  );
+  const childRun = agentRuns.find(
+    (record) => record.attributes?.agentId === child.id,
+  );
+  const startsById = new Map(
+    transport.records
+      .filter((record) => record.type === "span:start")
+      .map((record) => [record.spanId, record]),
+  );
+  let ancestor = childRun?.parentSpanId
+    ? startsById.get(childRun.parentSpanId)
+    : undefined;
+  while (ancestor && ancestor.spanId !== parentRun?.spanId) {
+    ancestor = ancestor.parentSpanId
+      ? startsById.get(ancestor.parentSpanId)
+      : undefined;
+  }
 
   expect(result.results.parent.output).toBe("parent finished");
   expect(providerCalls).toHaveBeenCalledTimes(3);
   expect(childWorkIds.size).toBe(1);
   expect(exactToolResult).toEqual(exactChildResult);
+  expect(agentRuns).toHaveLength(2);
+  expect(childRun).toMatchObject({
+    name: child.id,
+    traceId: parentRun?.traceId,
+    attributes: { agentId: child.id },
+    definitionRefs: [
+      {
+        id: expect.stringMatching(/^agent:/),
+        kind: "agent",
+        role: "invoked-agent",
+      },
+    ],
+  });
+  expect(ancestor?.spanId).toBe(parentRun?.spanId);
+  expect(childRun?.attributes).toEqual({ agentId: child.id });
+  expect(JSON.stringify(childRun)).not.toMatch(
+    /foreground-child-prompt|Research work|A structured child result|source-a|child-call|recording-model|control|handle/i,
+  );
 });
 
 it("uses an empty object Tool contract and the canonical empty Prompt input", async () => {
