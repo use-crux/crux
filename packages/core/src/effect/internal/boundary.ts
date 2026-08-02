@@ -47,7 +47,13 @@ export interface EffectBoundaryState {
 
 /** Typed scope-kernel slot for the nearest effect boundary. */
 export const effectBoundaryFacet =
-  createScopeFacetSlot<EffectBoundaryState>("effect.boundary");
+  createScopeFacetSlot<EffectBoundaryState | null>("effect.boundary");
+
+/** Internal execution options for a passive Effect boundary. */
+export interface PassiveEffectBoundaryOptions {
+  /** Run without inheriting an ambient Effect boundary parent. */
+  readonly effectParent?: "independent";
+}
 
 /** Create explicit boundary state from a live kernel scope. */
 export function createEffectBoundary(
@@ -71,8 +77,8 @@ export function runPassiveEffectBoundary<T>(
   runId: string,
   run: (boundary: EffectBoundaryState) => Promise<T> | T,
   existingRef?: EffectScopeRef,
+  options?: PassiveEffectBoundaryOptions,
 ): Promise<T> {
-  const parent = currentEffectBoundary();
   const locatedScope =
     existingRef?.kind === "effect.scope" &&
     existingRef.runId === runId
@@ -91,10 +97,15 @@ export function runPassiveEffectBoundary<T>(
       id: createEffectBoundaryId(existingRef?.id),
       runId,
     });
+  let parent: EffectBoundaryState | undefined;
   const operation = runScope(
     { kind: "effect-boundary", id: ref.id },
     {},
     async (scope) => {
+      if (options?.effectParent === "independent") {
+        scope.setFacet(effectBoundaryFacet, null);
+      }
+      parent = currentEffectBoundary();
       const boundary = createEffectBoundaryState(
         ref,
         "passive",
@@ -143,7 +154,9 @@ export function runPassiveEffectBoundary<T>(
       }
     },
   );
-  return trackEffectBoundaryOperation(operation, parent);
+  return options?.effectParent === "independent"
+    ? operation
+    : trackEffectBoundaryOperation(operation, parent);
 }
 
 function createEffectBoundaryState(
@@ -173,7 +186,7 @@ export function effectBoundaryStateFor(ref: EffectScopeRef):
 
 /** Resolve the nearest explicit effect boundary. */
 export function currentEffectBoundary(): EffectBoundaryState | undefined {
-  return currentScopeFacet(effectBoundaryFacet);
+  return currentScopeFacet(effectBoundaryFacet) ?? undefined;
 }
 
 /** Reject effect admission after rollback has made a boundary terminal. */

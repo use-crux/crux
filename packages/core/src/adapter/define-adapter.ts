@@ -33,6 +33,12 @@ import {
   bindForegroundAgentTools,
   createForegroundChildWorkPort,
 } from "../agent/foreground-tool-binder";
+import { bindBackgroundAgentTools } from "../agent/background-tool-binder";
+import {
+  bindWorkControlTool,
+  reservedWorkToolNameError,
+  WORK_CONTROL_TOOL_NAME,
+} from "../agent/work-control-tool";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
@@ -51,6 +57,8 @@ import { createStreamResult } from "./result-accumulator";
 import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
 import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
+import { createInternalWorkOwnerPort } from "../work/internal/owner-retained-work";
+import { projectBackgroundWorkStatusContext } from "../agent/background-work-status-context";
 
 export type {
   AdapterGenerateOptions,
@@ -80,6 +88,12 @@ function withMergedPromptTools(
       resolveOpts: AdapterResolveOpts,
     ): Promise<ResolvedPrompt> => {
       const resolved = await prompt.resolve(resolveOpts);
+      if (
+        Object.hasOwn(tools, WORK_CONTROL_TOOL_NAME) &&
+        Object.hasOwn(resolved.tools ?? {}, WORK_CONTROL_TOOL_NAME)
+      ) {
+        throw reservedWorkToolNameError();
+      }
       return { ...resolved, tools: { ...(resolved.tools ?? {}), ...tools } };
     },
   });
@@ -274,7 +288,18 @@ export function adapter<
       // Merge agent tools + composition-level tools into the prompt
       // so the tool loop can pick them up from the resolved prompt.
       const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
-      const boundTools = bindForegroundAgentTools(mergedTools, {
+      const backgroundWork = createInternalWorkOwnerPort(workKernel);
+      const toolsWithWorkControl = bindWorkControlTool(
+        mergedTools,
+        backgroundWork,
+      );
+      const backgroundBoundTools = bindBackgroundAgentTools(toolsWithWorkControl, {
+        executor,
+        model,
+        work: backgroundWork,
+        foregroundWork,
+      });
+      const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
         executor,
         model,
         work: foregroundWork,
@@ -298,7 +323,16 @@ export function adapter<
         extra: {} as TExtra,
       };
 
-      const result = await generate(promptWithTools, generateOpts);
+      const result = await execution.generate({
+        prompt: promptWithTools,
+        ...generateOpts,
+        modelInfo: {
+          provider: spec.providerId,
+          modelId: model,
+        },
+        projectStepSystemContext: () =>
+          projectBackgroundWorkStatusContext(backgroundWork),
+      });
 
       return {
         agentId: agent.id,

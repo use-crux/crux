@@ -1,0 +1,176 @@
+---
+title: Backgroundable Agent Work
+description: Exact process-local backgroundable(), Work reference, automatic work Tool, and safe status contracts.
+---
+
+```ts
+import { backgroundable } from "@use-crux/core/agent";
+import type { BackgroundableAgent } from "@use-crux/core/agent";
+```
+
+`backgroundable(agent)` returns a frozen, inert `BackgroundableAgent<TAgent>`.
+It becomes executable only when used as a child entry in an Agent `tools` map:
+
+```ts
+const coordinator = agent({
+  id: "coordinator",
+  prompt: coordinatorPrompt,
+  tools: { research: backgroundable(researchAgent) },
+});
+```
+
+The export belongs to `@use-crux/core/agent`. Provider packages do not
+re-export it.
+
+## Child Tool input
+
+The wrapper adds one reserved optional field:
+
+| Child Prompt input | Provider Tool input | Child receives |
+| --- | --- | --- |
+| Object schema | Original fields plus `run_in_background?: boolean` | Original validated object without the control field |
+| Scalar or mixed-root schema | `{ input, run_in_background? }` | Validated `input` value |
+| No input schema | `{ run_in_background? }` | `{}` |
+
+An object input schema cannot author `run_in_background`; preparation throws.
+The normal Tool validation path runs before Work acceptance.
+
+When the field is absent or `false`, the call is foreground and returns the
+exact child output. When it is `true`, the Tool returns immediately without
+awaiting the child result:
+
+```ts
+interface WorkRef {
+  readonly kind: "work.ref";
+  readonly id: string;
+  readonly targetId: string;
+  readonly guarantees: {
+    readonly execution: "process-local";
+    readonly rejoin: "process-local";
+  };
+}
+```
+
+The returned object and nested guarantees are immutable.
+
+## Automatic `work` Tool
+
+Exactly one automatic model-facing Tool named `work` is added when an Agent has
+at least one backgroundable child. Agents with only ordinary Tools or direct
+foreground child Agents do not receive it. An authored `work` Tool collision
+in the Agent or its resolved Prompt fails preparation.
+
+Its exact input is:
+
+```ts
+interface WorkToolInput {
+  readonly action: "list" | "status" | "result" | "cancel" | "detach";
+  readonly id?: string;
+  readonly timeout?: string;
+}
+```
+
+`status`, `result`, `cancel`, and `detach` require `id`. `timeout` is a Crux
+duration string used by `result`. This Tool is not exported for application
+code; it is an automatic capability for the parent model.
+
+## `list` and `status`
+
+`list` returns at most 50 owner-visible entries. `status` returns one. Both use
+the same immutable, result-free projection:
+
+```ts
+interface WorkStatus {
+  readonly work: WorkRef;
+  readonly targetLabel: string;
+  readonly state:
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancel-requested"
+    | "cancelled";
+  readonly attachment: "attached";
+  readonly attempt: 1;
+  readonly createdAt: string;
+  readonly startedAt?: string;
+  readonly finishedAt?: string;
+  readonly resultAvailable: boolean;
+}
+```
+
+Timestamps are ISO strings and appear only when applicable. `targetLabel` is
+the authored child Tool map key. No result or failure payload is included.
+
+For any id action, an unknown id or one owned by another Agent returns:
+
+```ts
+{ status: "not_found" }
+```
+
+## `result`
+
+If Work is complete, `result` returns the exact child output. Otherwise it
+waits for the requested `timeout`, capped at 30 seconds; omitting `timeout`
+uses the 30-second cap. If no result becomes available, it returns the safe
+status projection. A rejection is represented only by lifecycle status—failure
+content is never returned.
+
+## `cancel`
+
+Cancellation returns:
+
+```ts
+interface CancelReceipt {
+  readonly workId: string;
+  readonly accepted: boolean;
+  readonly state: WorkStatus["state"];
+  readonly acceptedAt: string;
+}
+```
+
+Queued Work can be cancelled before it runs. Running Work first enters
+`cancel-requested` and cancellation remains cooperative. A failure unrelated to
+that request stays `failed`, and normal completion may win the race. Requests
+against already terminal Work are not accepted.
+
+## `detach`
+
+Detach removes the Work from the owner's visible inbox without cancelling it:
+
+```ts
+{ id: string, detached: true }
+```
+
+Later lookup by that owner returns `{ status: "not_found" }`, even if the
+underlying execution continues.
+
+## Provider-boundary status context
+
+Before each new semantic provider request is sealed, Core samples the owner's
+inbox. If Work exists, the next request can receive a non-cacheable, capped
+status block. At most 12 prioritized rows are included. The active provider
+request is immutable and is never patched after dispatch.
+
+This automatic context contains only Work id, target label, state, elapsed
+time, and result availability. Child output and failure content are never
+injected. A result reaches the model only through an explicit `result` action.
+
+## Execution isolation and lifetime
+
+The child runs only its own prompt, `use`, tools, and declared input. It does
+not inherit parent prompt/history, sibling tools, request details, or control
+authority.
+
+All execution, registry, result, and control state is process-local. Process
+exit loses it. There is no crash recovery, remote transport, API route,
+cross-process or Session rejoin, durable replay, or public application Work
+handle. Use [Flows](/docs/guides/flows), the [Runtime Engine](/docs/guides/durable-execution),
+or [Signals](/docs/guides/durable-execution/signals) when those guarantees are
+required; no integration is implied.
+
+## Related
+
+- [Background Agent Work guide](/docs/guides/agents/background-agent-work)
+- [Background research cookbook](/docs/cookbook/agents/background-research)
+- [General Agent reference](/docs/reference/crux-core/agent)

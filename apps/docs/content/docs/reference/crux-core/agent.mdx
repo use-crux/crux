@@ -73,6 +73,9 @@ does not grant authority over the parent. Parent cancellation propagates
 through the child Work boundary; child failure, cancellation, or timeout rejects
 the ordinary Tool execution and follows the normal Tool-loop error path.
 
+For child Agents that can continue independently, see
+[Backgroundable Agent Work](/docs/reference/crux-core/backgroundable-agent-work).
+
 Each direct foreground child invocation opens a distinct nested `agent.run`
 below its ordinary `tool.call`, in the same trace as the parent. The child
 `agent.run` boundary projects only the authored `agentId` and invoked-Agent

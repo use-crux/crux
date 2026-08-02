@@ -19,6 +19,8 @@ export interface InternalWorkAttachment {
 export interface InternalWorkCancellationOnly {
   readonly kind: "cancellation-only";
   readonly signal?: AbortSignal;
+  /** Run without retaining this Work in the ambient Effect boundary. */
+  readonly effectParent?: "independent";
 }
 
 /** Explicit linkage supplied when accepting an internal Work. @internal */
@@ -57,6 +59,8 @@ export function runWithInternalWorkContext<T>(
 /** One child-owned signal linked cooperatively to an optional parent. */
 export interface InternalWorkCancellation {
   readonly signal: AbortSignal;
+  /** Cooperatively request cancellation of this directly linked Work. */
+  cancel(): void;
   dispose(): void;
 }
 
@@ -72,6 +76,7 @@ export function createInternalWorkCancellation(
 
   return Object.freeze({
     signal: controller.signal,
+    cancel: () => controller.abort(),
     dispose: () => parentSignal?.removeEventListener("abort", abortFromParent),
   });
 }

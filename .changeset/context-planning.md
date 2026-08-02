@@ -138,3 +138,7 @@ relation while retaining `agent.uses_tool` for ordinary Tools.
 
 Each invocation now appears in Local Run Detail and Devtools as a distinct
 privacy-safe child Agent beneath its ordinary Tool call in the parent trace.
+
+Wrap a child Agent with `backgroundable()` to let the model start process-local
+joinable Work. Background-enabled runs receive one owner-scoped `work` control
+Tool and capped, result-free status context only at safe provider boundaries.

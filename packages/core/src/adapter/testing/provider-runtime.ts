@@ -19,6 +19,8 @@ import type {
   ProviderRuntimeDepsArg,
 } from "../provider-runtime";
 import { assertCanonicalResult } from "./canonical-result";
+import { providerRuntimeAgentToolsConformance } from "./provider-runtime-agent-tools";
+import { providerRuntimeBackgroundWorkConformance } from "./provider-runtime-background-work";
 import type { ConformanceViolation } from "../testing";
 import type {
   ProviderRuntimeConformanceGenerateOptions,
@@ -375,6 +377,23 @@ export async function providerRuntimeConformance<
         );
       }
     });
+  }
+
+  if (capabilities?.agentTools) {
+    violations.push(
+      ...(await providerRuntimeAgentToolsConformance(harness, (prepared) =>
+        bindRuntime(runtime, prepared),
+      )),
+    );
+  }
+
+  if (capabilities?.backgroundAgentWork) {
+    violations.push(
+      ...(await providerRuntimeBackgroundWorkConformance(
+        harness,
+        (prepared) => bindRuntime(runtime, prepared),
+      )),
+    );
   }
 
   if (capabilities?.approvalSuspension) {
