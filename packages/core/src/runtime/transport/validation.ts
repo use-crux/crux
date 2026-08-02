@@ -11,12 +11,17 @@ import { RuntimeManagedTransportContractError } from "./errors";
 
 const MAX_IDENTIFIER_BYTES = 512;
 const MAX_ROUTING_JSON_BYTES = 16 * 1024;
+/** Caps routing traversal work before the independent encoded-size check. */
+const MAX_ROUTING_DEPTH = 64;
+const MAX_ROUTING_NODES = 1024;
 const MAX_INLINE_PAYLOAD_BYTES = 1024 * 1024;
+const MAX_INLINE_PAYLOAD_CHARACTERS = Math.ceil((MAX_INLINE_PAYLOAD_BYTES * 4) / 3);
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const SECRET_ROUTING_KEY_PARTS = ["authorization", "cookie", "signature", "token"];
 
 type PlainRecord = Record<string, unknown>;
+type RoutingTraversalBudget = { depth: number; nodes: number };
 
 /** Validates and detaches an inert provider adapter declaration. */
 export function validateRuntimeManagedTransportAdapterDeclaration(
@@ -124,6 +129,9 @@ function validatePayload(value: unknown, path: string): RuntimeAcceptedTransport
   const sha256 = requireSha256(record.sha256, `${path}.sha256`);
   if (kind === "inline-base64url") {
     const inline = requireString(record.value, `${path}.value`);
+    if (inline.length > MAX_INLINE_PAYLOAD_CHARACTERS) {
+      invalid(`${path}.value`, "must not exceed encoded length for 1 MiB of decoded bytes");
+    }
     if (!BASE64URL_PATTERN.test(inline) || inline.length % 4 === 1) {
       invalid(`${path}.value`, "must be unpadded base64url");
     }
@@ -143,13 +151,16 @@ function validatePayload(value: unknown, path: string): RuntimeAcceptedTransport
 
 function validateRouting(value: unknown, path: string): Readonly<Record<string, JsonValue>> {
   const record = requirePlainRecord(value, path);
-  const routing = cloneJson(record, path, new Set()) as Readonly<Record<string, JsonValue>>;
+  const routing = cloneJson(record, path, new Set(), { depth: 0, nodes: 0 }) as Readonly<Record<string, JsonValue>>;
   const encoded = JSON.stringify(routing);
   if (utf8Bytes(encoded) > MAX_ROUTING_JSON_BYTES) invalid(path, "must encode to at most 16 KiB of JSON");
   return routing;
 }
 
-function cloneJson(value: unknown, path: string, ancestors: Set<object>): JsonValue {
+function cloneJson(value: unknown, path: string, ancestors: Set<object>, budget: RoutingTraversalBudget): JsonValue {
+  if (budget.depth > MAX_ROUTING_DEPTH) invalid(path, "must not exceed routing depth limit of 64");
+  budget.nodes += 1;
+  if (budget.nodes > MAX_ROUTING_NODES) invalid(path, "must not exceed routing node limit of 1024");
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) invalid(path, "must be JSON-safe");
@@ -158,22 +169,26 @@ function cloneJson(value: unknown, path: string, ancestors: Set<object>): JsonVa
   if (typeof value !== "object") invalid(path, "must be detached JSON data");
   if (ancestors.has(value)) invalid(path, "must not be cyclic");
   ancestors.add(value);
-  const result = Array.isArray(value) ? cloneArray(value, path, ancestors) : cloneRecord(value, path, ancestors);
+  budget.depth += 1;
+  const result = Array.isArray(value)
+    ? cloneArray(value, path, ancestors, budget)
+    : cloneRecord(value, path, ancestors, budget);
+  budget.depth -= 1;
   ancestors.delete(value);
   return result;
 }
 
-function cloneRecord(value: object, path: string, ancestors: Set<object>): JsonValue {
+function cloneRecord(value: object, path: string, ancestors: Set<object>, budget: RoutingTraversalBudget): JsonValue {
   const record = requirePlainRecord(value, path);
   const copy: Record<string, JsonValue> = {};
   for (const [key, item] of Object.entries(record)) {
     if (hasSecretRoutingKey(key)) invalid(`${path}.${key}`, "must not contain a secret-like key");
-    Object.defineProperty(copy, key, { enumerable: true, value: cloneJson(item, `${path}.${key}`, ancestors) });
+    Object.defineProperty(copy, key, { enumerable: true, value: cloneJson(item, `${path}.${key}`, ancestors, budget) });
   }
   return freeze(copy);
 }
 
-function cloneArray(value: unknown[], path: string, ancestors: Set<object>): JsonValue {
+function cloneArray(value: unknown[], path: string, ancestors: Set<object>, budget: RoutingTraversalBudget): JsonValue {
   if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length > 0) {
     invalid(path, "must be a plain JSON array");
   }
@@ -188,7 +203,7 @@ function cloneArray(value: unknown[], path: string, ancestors: Set<object>): Jso
     if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
       invalid(`${path}[${index}]`, "must not contain accessors or holes");
     }
-    copy.push(cloneJson(descriptor.value, `${path}[${index}]`, ancestors));
+    copy.push(cloneJson(descriptor.value, `${path}[${index}]`, ancestors, budget));
   }
   return freeze(copy);
 }

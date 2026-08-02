@@ -135,7 +135,8 @@ describe("runtime managed transport validation", () => {
       get: () => "adapter.webhook",
     });
     const cyclic = envelope();
-    cyclic.authenticatedRouting.self = cyclic.authenticatedRouting;
+    const routing: Record<string, unknown> = cyclic.authenticatedRouting;
+    routing.self = routing;
 
     const invalidValues: unknown[] = [
       () => undefined,
@@ -201,6 +202,15 @@ describe("runtime managed transport validation", () => {
         payload: { ...envelope().payload, value: "AQI=" },
       }),
     );
+    expect(() =>
+      validateRuntimeAcceptedTransportEnvelope({
+        ...envelope(),
+        payload: {
+          ...envelope().payload,
+          value: "!".repeat(Math.ceil((1024 * 1024 * 4) / 3) + 1),
+        },
+      }),
+    ).toThrow("$.payload.value: must not exceed encoded length for 1 MiB of decoded bytes");
     const inlineByteLength = 1_048_578;
     expectContractError(() =>
       validateRuntimeAcceptedTransportEnvelope({
@@ -246,5 +256,26 @@ describe("runtime managed transport validation", () => {
         authenticatedRouting: { route: "x".repeat(16 * 1024) },
       }),
     );
+  });
+
+  it("rejects routing deeper than the traversal budget", () => {
+    let routing: Record<string, unknown> = {};
+    for (let depth = 0; depth < 65; depth += 1) routing = { child: routing };
+
+    expect(() =>
+      validateRuntimeAcceptedTransportEnvelope({
+        ...envelope(),
+        authenticatedRouting: routing,
+      }),
+    ).toThrow("must not exceed routing depth limit of 64");
+  });
+
+  it("rejects routing wider than the traversal budget", () => {
+    expect(() =>
+      validateRuntimeAcceptedTransportEnvelope({
+        ...envelope(),
+        authenticatedRouting: { items: Array.from({ length: 1024 }, () => null) },
+      }),
+    ).toThrow("must not exceed routing node limit of 1024");
   });
 });
