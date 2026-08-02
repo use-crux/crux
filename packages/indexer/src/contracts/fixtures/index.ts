@@ -27,12 +27,6 @@ export {
   type WorkerEventCasesSharedFixture,
   type WorkerEventsSharedFixture,
 } from "./shared";
-export type {
-  RustFirstPartyStaticGoldenFileFixture,
-  RustFirstPartyStaticGoldenSharedFixture,
-  RustFirstPartyStaticGoldenTotalsFixture,
-} from "./rust-first-party-static-golden";
-
 export {
   workerEventFixtureOptions,
   workerEventFixturePatch,
