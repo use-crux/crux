@@ -2,7 +2,8 @@
 
 This report records the release gate for the required Rust/Oxc Static Index
 path. Rust/Oxc is the only bundled first-party static compiler, and the gate
-checks it against the Rust-owned golden plus Go host behavior.
+combines exact curated compiler contracts, first-party repository invariants,
+and Go host behavior.
 
 ## Status
 
@@ -12,28 +13,28 @@ publish an apparently healthy empty Project Index.
 
 ## Current Evidence
 
-Last release-gate verification run: 2026-07-21.
-
 ```bash
-node scripts/static-index-parity-gate.mjs
+node scripts/static-index-contract-gate.mjs
 ```
 
-Observed gate coverage:
+Gate coverage:
 
-| Surface                 | Evidence                                                                                                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust worker build       | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                     |
-| Rust tests              | `cargo test` passed, including `static-compiler` 73 tests, `worker` 20 tests, `syntax-oxc` 8 tests, and doc tests.                                          |
-| Rust first-party golden | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                            |
-| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 105 files, 494 tests, and 1 skipped test. |
-| Go production path      | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                    |
-| Local worker embed path | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.            |
+| Surface                     | Evidence                                                                                                                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust worker build           | The gate builds `crux-static-index-worker` before worker-backed tests.                                                                                                              |
+| Curated compiler contracts  | Small protocol, Static Syntax, descriptor, relation, primitive, and extractor fixtures assert exact intended behavior without snapshotting ordinary repository source.             |
+| First-party repository      | `rust-first-party-repository-invariants.test.ts` uses production discovery/extraction with Rust/Oxc and no cache, accounts for selected files, rejects diagnostics, and compares two normalized runs for determinism. |
+| Full indexer suite          | The full `@use-crux/indexer` suite runs with the freshly built Rust worker.                                                                                                         |
+| Go production path          | Go Project Index packages run with the built Rust worker and embedded local worker bundle; their genuine cross-runtime parity tests remain part of this evidence.                  |
+| Local worker embed path     | The gate builds `@use-crux/local-workers` and embeds the generated assets before the Go Project Index packages run.                                                               |
 
-`pnpm test:static-index-parity` is the release command because it builds the
-current Rust/Oxc worker, points every worker-backed test at that binary, compares
-Rust output with the Rust-owned golden, builds and embeds the TypeScript worker
-assets that remain for extension/config/semantic host work, and runs the Go host
-packages with required gate environment.
+`pnpm test:static-index-contracts` is the release command because it builds the
+current Rust/Oxc worker, runs exact curated compiler contracts, checks the
+actual first-party repository for structural invariants and deterministic
+normalized extraction output, builds and embeds the TypeScript worker assets
+that remain for extension/config/semantic host work, and runs the Go host
+packages with required gate environment. The repository test does not compare
+Rust/Oxc with a checked whole-repository snapshot or claim Rust-to-Rust parity.
 
 ## Coverage
 
@@ -41,14 +42,15 @@ packages with required gate environment.
   evaluated by the Rust `crates/lints` implementation. TypeScript no longer
   contains a bundled first-party lint evaluator.
 - First-party extractor families are Rust-only in the binary and verified
-  against the Rust-owned static golden across definitions, relations, source
-  refs, diagnostics, dependencies, source rows/source graph, runtime metadata,
-  degraded behavior, and provided records where present.
+  by exact curated contract fixtures for intended output and by the
+  cache-disabled first-party repository invariant/determinism test for
+  production discovery, extraction accounting, safe paths, local dependencies,
+  diagnostics, and repeatability.
 - TypeScript extension host coverage remains for an experimental third-party
   extractor and mixed Rust plus extension output. Internal rule-slot fixtures
   do not constitute a public third-party rule promise.
 - Warm cache, incremental source edits, config/lint-profile fallback, static
-  cache identity, and the non-skipping CI parity command are covered.
+  cache identity, and the non-skipping CI contract command are covered.
 
 ## Cache Identity Review
 
@@ -68,14 +70,14 @@ Static Index always uses Rust/Oxc and remains independent from
 Run these before releasing:
 
 ```bash
-node scripts/static-index-parity-gate.mjs
+node scripts/static-index-contract-gate.mjs
 make local
 ```
 
 The release shortcut is:
 
 ```bash
-pnpm test:static-index-parity
+pnpm test:static-index-contracts
 make local
 ```
 
