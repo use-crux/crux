@@ -71,6 +71,60 @@ done
 	}
 }
 
+func TestWorkerIndexProjectIncrementalIndexesKnownAndNewSources(t *testing.T) {
+	root := t.TempDir()
+	previousFile := filepath.Join(root, "src", "existing.ts")
+	newFile := filepath.Join(root, "src", "new-prompt.ts")
+	if err := os.MkdirAll(filepath.Dir(previousFile), 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(previousFile, []byte("export const existing = true\n"), 0o600); err != nil {
+		t.Fatalf("write previous source: %v", err)
+	}
+	if err := os.WriteFile(newFile, []byte("export const writer = prompt({ id: 'writer' })\n"), 0o600); err != nil {
+		t.Fatalf("write new source: %v", err)
+	}
+
+	script := writeShellScript(t, "incremental-new-source-node-should-not-run.sh", `#!/bin/sh
+while IFS= read -r line; do
+  printf '{"protocolVersion":3,"type":"phase:error","transactionId":"node","phase":"ast","error":{"message":"node incremental worker should not run"}}\n'
+done
+`)
+	compiler := &incrementalStaticCompiler{root: root, sourceFile: newFile}
+	worker := newTestWorkerWithProjectScript(t, script)
+	worker.WithSyntaxParser(compiler)
+	defer worker.Close()
+
+	result, err := worker.IndexProjectIncremental(
+		context.Background(),
+		root,
+		"",
+		"project",
+		incrementalPreviousIndex(root, previousFile),
+		[]string{previousFile, newFile},
+		nil,
+		"ast",
+	)
+	if err != nil {
+		t.Fatalf("IndexProjectIncremental new source error = %v", err)
+	}
+	if compiler.compileCalls != 1 {
+		t.Fatalf("compile calls = %d, want 1", compiler.compileCalls)
+	}
+	if got := result.Report.AffectedFiles; len(got) != 2 ||
+		got[0] != previousFile || got[1] != newFile {
+		t.Fatalf("affected files = %v, want known %s and new %s", got, previousFile, newFile)
+	}
+	if got := result.Report.StaticParsedFiles; len(got) != 2 ||
+		got[0] != previousFile || got[1] != newFile {
+		t.Fatalf("static parsed files = %v, want known %s and new %s", got, previousFile, newFile)
+	}
+	if got := result.Patches[0].Invalidates.Files; len(got) != 2 ||
+		got[0] != previousFile || got[1] != newFile {
+		t.Fatalf("invalidated files = %v, want known %s and new %s", got, previousFile, newFile)
+	}
+}
+
 type incrementalStaticCompiler struct {
 	root         string
 	sourceFile   string

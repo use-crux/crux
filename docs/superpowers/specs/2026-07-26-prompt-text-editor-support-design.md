@@ -46,6 +46,14 @@ Recognized PromptText gains:
 - canonical ownership and fragment navigation;
 - the three construction diagnostics already owned by #270;
 - evidence-gated fixes and an explicit byte-preserving string refactor;
+
+Recognition covers canonical direct/static and callback/dynamic PromptText.
+The lifecycle classification remains visible evidence, but both forms share
+the same syntax-exact decoration, heading, link, folding, and preview analysis;
+none of those features executes the callback. Compiler-proven canonical `md`
+regions inside nested callback expressions are retained independently, while
+local and shadowed lookalikes remain unrecognized.
+
 - safe static preview in a read-only editor document;
 - explicit exact preview in Devtools; and
 - navigation to the latest captured Run.

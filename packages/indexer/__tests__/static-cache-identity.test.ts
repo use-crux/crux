@@ -53,8 +53,8 @@ describe("static cache identity", () => {
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v86");
   });
 
-  it("takes the Connected Knowledge semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v44");
+  it("takes the combined Agent-tool and dynamic PromptText epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v45");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

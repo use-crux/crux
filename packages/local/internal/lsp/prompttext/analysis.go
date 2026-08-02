@@ -43,7 +43,7 @@ func canonicalSourceRefRange(
 		sourceRef.Snippet == nil || sourceRef.Snippet.Truncated ||
 		!sameFile(root, sourceRef.Source.File, file) ||
 		!sameFile(root, sourceRef.Snippet.Range.File, file) ||
-		!staticMarkdownSourceRef(sourceRef) {
+		!canonicalMarkdownSourceRef(sourceRef) {
 		return protocol.Range{}, false
 	}
 	sourceRange, start, end, ok := exactSourceRange(sourceRef.Snippet.Range, text)
@@ -53,12 +53,12 @@ func canonicalSourceRefRange(
 	return sourceRange, true
 }
 
-func staticMarkdownSourceRef(sourceRef api.ProjectSourceRef) bool {
-	_, ok := staticMarkdownSourceKind(sourceRef)
+func canonicalMarkdownSourceRef(sourceRef api.ProjectSourceRef) bool {
+	_, ok := canonicalMarkdownSourceKind(sourceRef)
 	return ok
 }
 
-func staticMarkdownSourceKind(
+func canonicalMarkdownSourceKind(
 	sourceRef api.ProjectSourceRef,
 ) (promptview.PromptTextSourceKind, bool) {
 	promptText, ok := sourceRef.Metadata["promptText"].(map[string]any)
@@ -70,7 +70,8 @@ func staticMarkdownSourceKind(
 	lifecycle, lifecycleOK := promptText["lifecycle"].(string)
 	sourceKind, sourceKindOK := promptText["sourceKind"].(string)
 	if !tagOK || !languageOK || !lifecycleOK || !sourceKindOK ||
-		tag != "md" || language != "markdown" || lifecycle != "static" ||
+		tag != "md" || language != "markdown" ||
+		(lifecycle != "static" && lifecycle != "dynamic") ||
 		sourceRef.Role != sourceRef.Property ||
 		(sourceRef.Role != "prompt" && sourceRef.Role != "system") {
 		return "", false

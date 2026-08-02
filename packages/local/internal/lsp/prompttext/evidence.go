@@ -158,7 +158,7 @@ func semanticPromptTextRef(
 	sourceRef api.ProjectSourceRef,
 ) (semanticRef, bool) {
 	if sourceRef.ID == "" || sourceRef.Fidelity != "resolved" || sourceRef.Snippet == nil ||
-		sourceRef.Snippet.Truncated || !staticMarkdownSourceRef(sourceRef) ||
+		sourceRef.Snippet.Truncated || !canonicalMarkdownSourceRef(sourceRef) ||
 		!sameFile(root, sourceRef.Source.File, sourceRef.Snippet.Range.File) {
 		return semanticRef{}, false
 	}
@@ -220,13 +220,13 @@ func validSemanticJoin(
 	owner, target semanticRef,
 	join semanticFragmentJoin,
 ) bool {
-	targetKind, targetKindOK := staticMarkdownSourceKind(target.sourceRef)
+	targetKind, targetKindOK := canonicalMarkdownSourceKind(target.sourceRef)
 	return join.Kind == "named-fragment" && join.Proof == "semantic-exact" &&
 		join.OwnerSourceRefID == owner.sourceRef.ID &&
 		join.TargetSourceRefID == target.sourceRef.ID &&
 		targetKindOK && targetKind == promptview.PromptTextSourceNamedFragment &&
-		staticMarkdownSourceRef(owner.sourceRef) &&
-		staticMarkdownSourceRef(target.sourceRef) &&
+		canonicalMarkdownSourceRef(owner.sourceRef) &&
+		canonicalMarkdownSourceRef(target.sourceRef) &&
 		joinContextMatches(owner.sourceRef, target.sourceRef) &&
 		sourceRangesEqual(join.OwnerTemplateRange, owner.sourceRef.Snippet.Range) &&
 		sourceRangesEqual(join.TargetTemplateRange, target.sourceRef.Snippet.Range) &&

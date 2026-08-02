@@ -12,8 +12,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 64 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want merged integration epoch 64", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 65 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want merged integration epoch 65", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -69,6 +69,9 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"independently advanced Effect boundary lint and Connected Knowledge",
 		"Epoch 64",
 		"direct Agent-tool relation",
+		"dynamic nested PromptText identity",
+		"Epoch 65",
+		"neither independently assigned epoch 64 can mask the other",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -79,7 +82,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-64", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-65", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
@@ -152,6 +155,10 @@ func TestProjectIndexFactStoreMissesPrePromptTextDiagnosticEvidenceEpoch(t *test
 
 func TestProjectIndexFactStoreMissesPrePromptTextRefactorEpoch(t *testing.T) {
 	assertSnapshotEpochMiss(t, 53, "pre-prompt-text-refactor snapshot")
+}
+
+func TestProjectIndexFactStoreMissesPreDynamicNestedPromptTextEpoch(t *testing.T) {
+	assertSnapshotEpochMiss(t, 64, "pre-dynamic-nested-prompt-text snapshot")
 }
 
 func assertSnapshotEpochMiss(t *testing.T, epoch int, contents string) {

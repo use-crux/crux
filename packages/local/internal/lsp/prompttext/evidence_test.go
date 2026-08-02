@@ -57,6 +57,9 @@ func TestSemanticPreviewEvidenceBuildsExactReachableJoin(t *testing.T) {
 			fragmentFile: {File: fragmentFile, SourceHash: sourceHash(fragmentText)},
 		},
 	}
+	for _, sourceRef := range publication.DefinitionsByID["prompt:writer"].SourceRefs {
+		sourceRef.Metadata["promptText"].(map[string]any)["lifecycle"] = "dynamic"
+	}
 
 	fragments, joins := semanticPreviewEvidence(
 		publication, root, documentFile, documentText,

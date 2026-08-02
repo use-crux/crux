@@ -227,7 +227,8 @@ Focused tests cover:
   identity;
 - view selection across edit, return-to-saved, save, close, generation,
   cancellation, handover, and reconnect;
-- decorations across supported themes and semantic-highlighting modes;
+- decorations across supported themes, semantic-highlighting modes, and both
+  canonical direct/static and callback/dynamic PromptText lifecycles;
 - the dedicated window-scoped decoration switch, immediate cancellation and
   clearing, and zero decoration-type replacement across theme changes;
 - canonical preview-evidence digest order invariance, every-field sensitivity,

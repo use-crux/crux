@@ -45,8 +45,8 @@ func (w *Bundle) indexProjectIncrementalFromStaticIndex(
 	}
 
 	planningStarted := time.Now()
-	affectedFiles, ok := incrementalAffectedFiles(root, previous, files)
-	if !ok || len(affectedFiles) == 0 {
+	affectedFiles := incrementalAffectedFiles(root, previous, files)
+	if len(affectedFiles) == 0 {
 		return projectindex.ProjectIndexIncrementalResult{}, fmt.Errorf("Static Index incremental source closure is unavailable")
 	}
 	closureFiles := incrementalDependencyClosure(root, previous, affectedFiles)
@@ -126,7 +126,7 @@ func (w *Bundle) indexProjectIncrementalFromStaticIndex(
 	}, nil
 }
 
-func incrementalAffectedFiles(root string, index store.IndexData, files []string) ([]string, bool) {
+func incrementalAffectedFiles(root string, index store.IndexData, files []string) []string {
 	sourceByCanonical := map[string]string{}
 	dependentsByCanonical := map[string][]string{}
 	for _, source := range index.Sources {
@@ -140,9 +140,10 @@ func incrementalAffectedFiles(root string, index store.IndexData, files []string
 	seen := map[string]bool{}
 	queue := []string{}
 	for _, file := range files {
-		actual, ok := sourceByCanonical[incrementalCanonicalFile(root, file)]
+		canonical := incrementalCanonicalFile(root, file)
+		actual, ok := sourceByCanonical[canonical]
 		if !ok {
-			return nil, false
+			actual = canonical
 		}
 		queue = append(queue, actual)
 	}
@@ -161,7 +162,7 @@ func incrementalAffectedFiles(root string, index store.IndexData, files []string
 			}
 		}
 	}
-	return sortedStringSet(seen), true
+	return sortedStringSet(seen)
 }
 
 func incrementalDependencyClosure(root string, index store.IndexData, affectedFiles []string) []string {
@@ -178,11 +179,19 @@ func incrementalDependencyClosure(root string, index store.IndexData, affectedFi
 		sort.Strings(queue)
 		file := queue[0]
 		queue = queue[1:]
-		source, ok := sourceByCanonical[incrementalCanonicalFile(root, file)]
-		if !ok || seen[source.File] {
+		canonical := incrementalCanonicalFile(root, file)
+		source, known := sourceByCanonical[canonical]
+		actual := canonical
+		if known {
+			actual = source.File
+		}
+		if actual == "" || seen[actual] {
 			continue
 		}
-		seen[source.File] = true
+		seen[actual] = true
+		if !known {
+			continue
+		}
 		for _, dependency := range source.Dependencies {
 			if actual, ok := sourceByCanonical[incrementalCanonicalFile(root, dependency)]; ok && !seen[actual.File] {
 				queue = append(queue, actual.File)

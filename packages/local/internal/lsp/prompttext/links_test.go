@@ -45,7 +45,9 @@ func TestPromptTextDocumentLinkControllerPublishesOnlyTrustedTargets(t *testing.
 	result := controller.Links(context.Background(), Request{
 		URI: uri, File: file, Root: root, ScopeID: root,
 		SourceEpoch: 1, Analyzer: fixedTransientSource{result: analysis},
-		Views: canonicalLinkViews(root, file, text, revision.SourceHash),
+		Views: canonicalLinkViewsLifecycle(
+			root, file, text, revision.SourceHash, "dynamic",
+		),
 	})
 
 	want := []protocol.DocumentLink{
@@ -140,6 +142,16 @@ func canonicalLinkViews(
 	text string,
 	sourceHash string,
 ) indexview.ViewProvider {
+	return canonicalLinkViewsLifecycle(root, file, text, sourceHash, "static")
+}
+
+func canonicalLinkViewsLifecycle(
+	root string,
+	file string,
+	text string,
+	sourceHash string,
+	lifecycle string,
+) indexview.ViewProvider {
 	generation := uint64(1)
 	endColumn := len(text) - 1
 	store := readmodel.NewStore()
@@ -165,7 +177,7 @@ func canonicalLinkViews(
 				},
 				Fidelity: "resolved",
 				Metadata: map[string]any{"promptText": map[string]any{
-					"tag": "md", "language": "markdown", "lifecycle": "static",
+					"tag": "md", "language": "markdown", "lifecycle": lifecycle,
 					"sourceKind": "owner",
 				}},
 			}},
