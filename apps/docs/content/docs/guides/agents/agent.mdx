@@ -113,6 +113,9 @@ The child's Prompt input becomes the model-facing Tool schema as follows:
 
 The call is foreground: Crux accepts one child Work, waits for it, and returns
 the child's exact validated structured or multimodal output as the Tool result.
+In Run Detail, the call stays nested under the parent Agent: its ordinary Tool
+call contains a separate child Agent row. What that child generates and which
+tools it calls follow your existing observability capture and redaction policy.
 Invalid Tool input is rejected before child Work begins. The child receives
 only its declared input and runs with its own prompt, `use`, and tools; it does
 not inherit the parent's prompt, tools, history, request details, or runtime
