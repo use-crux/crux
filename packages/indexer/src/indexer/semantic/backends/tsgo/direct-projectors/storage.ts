@@ -63,7 +63,11 @@ export function nativeDirectStorageEvidence(
   >,
 ): NativeStorageEvidence | undefined {
   const definitions = variables.flatMap(
-    (variable) => nativeStorageDefinition(variable) ?? [],
+    (variable) =>
+      nativeStorageDefinition(
+        variable,
+        bindingsByFile.get(variable.file),
+      ) ?? [],
   );
   if (definitions.length === 0)
     return { definitions: [], relations: [], sourceRefs: [] };
@@ -98,8 +102,9 @@ export function nativeDirectStorageEvidence(
 
 function nativeStorageDefinition(
   variable: NativeVariable,
+  bindings?: ReadonlyMap<string, NativeSourceBinding>,
 ): NativeStorageDefinition | undefined {
-  const descriptor = nativeStorageDescriptor(variable.initializer);
+  const descriptor = nativeStorageDescriptor(variable.initializer, bindings);
   if (descriptor) {
     return {
       variable,
@@ -296,19 +301,44 @@ function storageScopeReference(
 
 function nativeStorageDescriptor(
   expression: Expression,
+  bindings?: ReadonlyMap<string, NativeSourceBinding>,
 ): SemanticStorageFactoryDescriptor | undefined {
   return semanticStorageFactoryDescriptor(
     storageCallName(expression),
-    hasLiteralSparseDimensions(expression),
+    hasLiteralSparseDimensions(expression, bindings),
   );
 }
 
-function hasLiteralSparseDimensions(expression: Expression): boolean {
+function hasLiteralSparseDimensions(
+  expression: Expression,
+  bindings?: ReadonlyMap<string, NativeSourceBinding>,
+): boolean {
   if (!isCallExpression(expression)) return false;
   const [firstArg] = nativeNodeList(expression.arguments);
-  if (!firstArg || !isObjectLiteralExpression(firstArg)) return false;
-  const value = storagePropertyExpression(firstArg, "sparseDimensions");
+  const config = firstArg
+    ? nativeStorageConfigObject(firstArg, bindings, new Set())
+    : undefined;
+  if (!config) return false;
+  const value = storagePropertyExpression(config, "sparseDimensions");
   return Boolean(value && isNumericLiteral(value) && Number(value.text) > 0);
+}
+
+function nativeStorageConfigObject(
+  expression: Expression,
+  bindings: ReadonlyMap<string, NativeSourceBinding> | undefined,
+  seen: ReadonlySet<string>,
+): ObjectLiteralExpression | undefined {
+  if (isObjectLiteralExpression(expression)) return expression;
+  const name = expressionIdentifier(expression);
+  if (!name || seen.has(name)) return undefined;
+  const initializer = bindings?.get(name)?.initializer;
+  return initializer
+    ? nativeStorageConfigObject(
+        initializer,
+        bindings,
+        new Set([...seen, name]),
+      )
+    : undefined;
 }
 
 function bundleRelationType(
