@@ -67,10 +67,7 @@ parent prompt, history, tools, or control authority.
 
 Core owns the wrapper, binding, owner retention, kernel lifecycle, automatic
 control, and safe projection. Provider packages changed tests only; there is no
-provider-specific behavior. The wrapper requires no Indexer, cache-identity, or
-LSP code change; direct-Agent indexing remains the separate lane G concern.
-There is no background-state Devtools UI in this surface. D/E/F code-dependent
-semantics remain outside this documentation boundary.
+provider-specific behavior.
 
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
