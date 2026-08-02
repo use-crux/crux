@@ -126,21 +126,19 @@ export async function providerRuntimeBackgroundWorkConformance<
     if (!containsString(calls[1], CHILD_INPUT.request)) {
       fail("background child request did not receive its authored input");
     }
-    const parentContinuation = JSON.stringify(calls[2]);
-    if (!parentContinuation.includes('"work.ref"')) {
+    if (!containsString(calls[2], "work.ref")) {
       fail("parent continuation did not receive the background Work reference");
     }
-    if (!parentContinuation.includes("Background work:")) {
+    if (!containsString(calls[2], "Background work:")) {
       fail("parent continuation did not receive safe boundary status context");
     }
 
-    const controlContinuation = JSON.stringify(calls[3]);
-    if (!controlContinuation.includes('"resultAvailable"')) {
+    if (!containsString(calls[3], "resultAvailable")) {
       fail("Work list result did not round-trip a safe status projection");
     }
     if (
-      parentContinuation.includes(CHILD_OUTPUT) ||
-      controlContinuation.includes(CHILD_OUTPUT)
+      containsString(calls[2], CHILD_OUTPUT) ||
+      containsString(calls[3], CHILD_OUTPUT)
     ) {
       fail("background child output leaked without an explicit result action");
     }
