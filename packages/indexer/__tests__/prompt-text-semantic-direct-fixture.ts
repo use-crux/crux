@@ -54,6 +54,7 @@ export const mutableCallbackPrompt = prompt({ id: 'mutable-callback', prompt: mu
 export const legacyCallbackPrompt = prompt({ id: 'legacy-callback', prompt: legacyCallback })
 export const propertyCallbackPrompt = prompt({ id: 'property-callback', prompt: callbackObject.value })
 export const accessorPrompt = prompt({ id: 'accessor', prompt: () => { const holder = { get value() { return md\`Getter\` } }; void holder; return md\`Owned\` } })
+export const mappedPrompt = prompt({ id: 'mapped', prompt: (items: string[]) => md\`Outer \${items.map((item) => md\`Inner \${item}\`)} \${items.map((item) => localTag\`Fake \${item}\`)}\` })
 function shadowedPrompt() { const md = localTag; return md\`Shadowed\` }
 export const shadowed = prompt({ id: 'shadowed', prompt: shadowedPrompt })
 `;
@@ -163,6 +164,15 @@ export const promptTextSemanticDirectFixture: SemanticBackendParityFixture = {
         symbol: "named",
       }),
       ref("prompt:accessor", "prompt", "md`Owned`", "dynamic"),
+      ref(
+        "prompt:mapped",
+        "prompt",
+        "md`Outer ${items.map((item) => md`Inner ${item}`)} ${items.map((item) => localTag`Fake ${item}`)}`",
+        "dynamic",
+      ),
+      ref("prompt:mapped", "prompt", "md`Inner ${item}`", "dynamic", {
+        sourceKind: "anonymous-fragment",
+      }),
     ],
   },
 };

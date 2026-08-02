@@ -9,11 +9,10 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  */
 export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v88";
 /**
- * Semantic v42 preserves the authored Connected Knowledge static contract bump
- * alongside Thread definitions, context-planning structure, hook/budget refs,
- * and findings.
+ * Semantic v45 combines the independently advanced Agent-tool projection and
+ * canonical PromptText identities nested inside callback interpolations.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v44";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v45";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

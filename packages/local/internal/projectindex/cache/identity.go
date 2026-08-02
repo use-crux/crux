@@ -39,6 +39,9 @@ package cache
 // other.
 // Epoch 64 advances the direct Agent-tool relation contract so mixed tool/agent
 // tool maps keep typed native-direct edges across restart boundaries.
+// Epoch 65 combines that contract with dynamic nested PromptText identity across
+// restart boundaries so neither independently assigned epoch 64 can mask the
+// other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 64
+const ProjectIndexSnapshotCacheEpoch = 65

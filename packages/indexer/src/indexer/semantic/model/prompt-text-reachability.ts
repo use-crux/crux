@@ -242,10 +242,7 @@ function collectNestedExpression(
   if (direct.length > 0) return direct;
 
   return view.syntax.children(unwrapped).flatMap((child) => {
-    if (
-      view.syntax.isFunctionLike(child) ||
-      view.syntax.isKind(child, "classDeclaration")
-    ) {
+    if (view.syntax.isKind(child, "classDeclaration")) {
       return [];
     }
     return collectNestedDescendant(child, spec, lifecycle, view, seen);
@@ -271,10 +268,7 @@ function collectNestedDescendant(
   );
   if (direct.length > 0) return direct;
   return view.syntax.children(unwrapped).flatMap((child) => {
-    if (
-      view.syntax.isFunctionLike(child) ||
-      view.syntax.isKind(child, "classDeclaration")
-    ) {
+    if (view.syntax.isKind(child, "classDeclaration")) {
       return [];
     }
     return collectNestedDescendant(child, spec, lifecycle, view, seen);
