@@ -27,6 +27,9 @@ export {
   validateRuntimeManagedTransportBinding,
 } from "./transport";
 
+export { createRuntimeProgram } from "./program";
+export type { CreateRuntimeProgramOptions, RuntimeProgram } from "./program";
+
 export type {
   RuntimeArtifactManifest,
   RuntimeArtifactManifestEval,
