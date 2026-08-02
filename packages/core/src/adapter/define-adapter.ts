@@ -281,6 +281,7 @@ export function adapter<
         executor,
         model,
         work: backgroundWork,
+        foregroundWork,
       });
       const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
         executor,
