@@ -15,7 +15,7 @@
     "build:cli:all": "make cli-all",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:static-index-parity": "node ./scripts/static-index-parity-gate.mjs",
+    "test:static-index-contracts": "node ./scripts/static-index-contract-gate.mjs",
     "benchmark:static-index": "node ./scripts/static-index-benchmark.mjs",
     "typecheck:ts55": "node ./scripts/typecheck-typescript-compat.mjs 5.5.4",
     "typecheck:ts60": "node ./scripts/typecheck-typescript-compat.mjs 6.0.3",

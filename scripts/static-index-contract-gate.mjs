@@ -1,19 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * Static Index parity gate for CI and release checks.
+ * Static Index contract gate for CI and release checks.
  *
- * The gate builds the Rust/Oxc worker first and then passes its absolute path
- * to every parity command. It also builds and embeds the Node worker bundle
- * before Go host tests, which mirrors the fresh-checkout CI path instead of
- * relying on locally generated assets.
+ * The gate builds the Rust/Oxc worker first and passes its absolute path to
+ * worker-backed contract tests. It also builds and embeds the Node worker
+ * bundle before Go host tests, matching the fresh-checkout CI path.
  *
  * @module
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -34,28 +33,21 @@ const localPackageRoot = resolve(repoRoot, "packages", "local");
  *   args: readonly string[]
  *   cwd?: string
  *   env?: Readonly<Record<string, string>>
- * }>} ParityCommand
+ * }>} ContractCommand
  */
 
-/** Environment passed to every worker-backed parity command. */
-const workerEnv = {
-  CRUX_STATIC_INDEX_WORKER: workerPath,
-};
-
-/** Environment that turns Go env-gated parity tests from local skips into CI failures. */
+const workerEnv = { CRUX_STATIC_INDEX_WORKER: workerPath };
 const requiredGoParityEnv = {
   ...workerEnv,
   CRUX_INDEXER_PARITY_ROOT: repoRoot,
   CRUX_INDEXER_PARITY_REQUIRED: "1",
 };
-
-/** Environment that compares Rust/Oxc output against the captured Rust static golden. */
-const requiredRustStaticGoldenEnv = {
+const requiredRepositoryContractEnv = {
   ...workerEnv,
-  CRUX_RUST_FIRST_PARTY_STATIC_GOLDEN_REQUIRED: "1",
+  CRUX_STATIC_INDEX_CONTRACTS_REQUIRED: "1",
 };
 
-/** @type {readonly ParityCommand[]} */
+/** @type {readonly ContractCommand[]} */
 const commands = [
   {
     label: "Build Rust/Oxc Static Index worker",
@@ -69,12 +61,12 @@ const commands = [
     ],
   },
   {
-    label: "Run Rust Static Index tests",
+    label: "Run Rust Static Index contract tests",
     command: "cargo",
     args: ["test"],
   },
   {
-    label: "Verify Rust first-party static output against Rust golden",
+    label: "Verify first-party repository static invariants",
     command: "pnpm",
     args: [
       "--filter",
@@ -82,9 +74,9 @@ const commands = [
       "exec",
       "vitest",
       "run",
-      "__tests__/rust-first-party-static-golden.test.ts",
+      "__tests__/rust-first-party-repository-invariants.test.ts",
     ],
-    env: requiredRustStaticGoldenEnv,
+    env: requiredRepositoryContractEnv,
   },
   {
     label: "Run full indexer suite with Rust worker",
@@ -104,11 +96,9 @@ const commands = [
     cwd: localPackageRoot,
   },
   {
-    label: 'Run Go Project Index parity packages',
-    command: 'go',
-    // The production parity test indexes repoRoot and clears .crux/cache/index;
-    // keep Go packages serial so adjacent package tests cannot churn that cache.
-    args: ['test', '-p', '1', './internal/projectindex/...', '-count=1'],
+    label: "Run Go Project Index parity packages",
+    command: "go",
+    args: ["test", "-p", "1", "./internal/projectindex/...", "-count=1"],
     cwd: localPackageRoot,
     env: requiredGoParityEnv,
   },
@@ -119,11 +109,7 @@ for (const item of commands) {
   if (item.label === "Build Rust/Oxc Static Index worker") assertWorkerExists();
 }
 
-/**
- * Runs one parity command with inherited stdio.
- *
- * @param {ParityCommand} item - Command descriptor to execute.
- */
+/** Runs one contract command with inherited stdio. */
 function run(item) {
   console.log(`\n==> ${item.label}`);
   const result = spawnSync(item.command, item.args, {
@@ -133,15 +119,11 @@ function run(item) {
     shell: process.platform === "win32",
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-/** Throws if the Rust worker build did not produce the binary used by parity tests. */
+/** Throws if the worker build did not produce the required binary. */
 function assertWorkerExists() {
   if (existsSync(workerPath)) return;
-  throw new Error(
-    `Static Index parity gate expected Rust worker at ${workerPath}`,
-  );
+  throw new Error(`Static Index contract gate expected Rust worker at ${workerPath}`);
 }

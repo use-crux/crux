@@ -100,7 +100,7 @@ by `crates/primitives/src/manifest_tests.rs` and
 | `packages/indexer/__tests__/static-syntax-record.test.ts`                                                                             | Static Syntax records                                                                                          | Behavior/schema                                         | Checks TypeScript frontend record shape, JSON safety, import interests, pruned evidence, and shared constructor/callback/diagnostic cases.     |
 | `packages/indexer/__tests__/rust-oxc-frontend-batch.test.ts`                                                                          | Static Syntax protocol                                                                                         | Behavior                                                | Uses a fake Rust/Oxc process to prove batch and disk-source protocol behavior from TypeScript host code.                                       |
 | `packages/indexer/__tests__/static-provided-record-index.test.ts`                                                                     | Static Syntax planning                                                                                         | Behavior                                                | Proves provided Static Syntax records participate in planning without exposing a Project Index patch compiler API.                              |
-| `packages/indexer/__tests__/rust-first-party-static-golden.test.ts`                                                                   | Rust Static Index production path                                                                              | Full facts                                              | Compares normalized Rust Static Index output against the checked golden fixture.                                                               |
+| `packages/indexer/__tests__/rust-first-party-repository-invariants.test.ts`                                                          | Rust Static Index production path                                                                              | Invariants and determinism                              | Runs cache-disabled production discovery/extraction twice in one checkout, checks exact file accounting, safe paths, error diagnostics, sound local dependency paths, and complete canonical determinism. Source-level warnings are allowed without pinning their count. |
 | `packages/local/internal/projectindex/staticindex/run/parity/normalize_test.go`                                                       | Static parity normalizer                                                                                       | Behavior                                                | Proves fact ordering is ignored while semantic metadata changes still fail.                                                                    |
 | Owner `packages/local/internal/projectindex/eventwire`; test `packages/local/internal/projectindex/eventwire/shared_fixtures_test.go` | Worker events                                                                                                  | Schema/behavior                                         | Decodes the shared worker event stream fixture through the Go worker-event collector.                                                          |
 | `packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go`                                                   | Static Index protocol                                                                                          | Schema/behavior                                         | Decodes the shared Static Index request/response fixture through Go protocol mirrors.                                                          |
@@ -111,3 +111,25 @@ by `crates/primitives/src/manifest_tests.rs` and
 
 The baseline has no Project Index output change. Cache identity changes are not
 needed for this phase.
+
+Exact compiler behavior remains owned by the small curated protocol, Static
+Syntax, descriptor, relation, primitive, and extractor fixtures above. The
+first-party repository test is deliberately not a Rust-to-Rust parity test or
+a checked snapshot of evolving repository source. Because relation targets are
+definition ids rather than distinguishable file paths, repository dependency
+validation is limited to proving that explicit local paths in the extraction
+dependency list remain inside the repository root; bare module specifiers
+remain external. Production discovery may skip valid dependency files that do
+not contain Crux source signals, so selected-file membership is not an
+invariant.
+
+Repository source warnings remain in canonical output and must be deterministic
+across both runs, but their codes and count are not pinned. Any diagnostic with
+severity `error` fails the gate. Worker, protocol, process, source-read, and
+extractor failures thrown before extraction results also fail the gate.
+
+The determinism comparison is process-local and same-checkout. It compares the
+complete `canonicalStaticExtractionJson` payload, including fingerprints and
+assertion-site ids; it does not mask root-derived fields for cross-checkout
+stability. Root-relative normalization remains limited to discovery and file
+accounting paths.

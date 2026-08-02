@@ -42,10 +42,13 @@ rows below.
 
 ## Migration Notes
 
-- The mandatory P5.4 first-party fact snapshot is captured as
-  `contracts/fixtures/rust-first-party-static-golden.json`, a root-stable
-  digest over the Rust/Oxc static output. Use it as the Rust oracle for bundled
-  first-party static output drift.
+- Exact bundled compiler behavior is covered by small curated contract
+  fixtures. The cache-disabled
+  `rust-first-party-repository-invariants.test.ts` separately exercises
+  production discovery and Rust/Oxc extraction over the actual repository,
+  enforcing structural invariants and deterministic normalized output without
+  treating evolving repository source as a checked compiler fixture or making
+  a Rust-to-Rust parity claim.
 - The first Rust move should target facts already expressible as primitive
   config projection: schema metadata/source refs, direct callback source refs,
   injection facts, routing children/relations, and agent config relations.
