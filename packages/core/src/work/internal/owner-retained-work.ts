@@ -24,7 +24,6 @@ class OwnerRetainedWorkReference<TOutput>
   implements InternalRetainedWorkReference<TOutput>
 {
   readonly #owner: symbol;
-  readonly #handle: InternalWorkHandle<TOutput>;
 
   declare readonly [retainedWorkReferenceBrand]: (
     output: TOutput,
@@ -33,15 +32,13 @@ class OwnerRetainedWorkReference<TOutput>
   constructor(
     readonly id: string,
     owner: symbol,
-    handle: InternalWorkHandle<TOutput>,
   ) {
     this.#owner = owner;
-    this.#handle = handle;
     Object.freeze(this);
   }
 
-  recover(owner: symbol): InternalWorkHandle<TOutput> | undefined {
-    return owner === this.#owner ? this.#handle : undefined;
+  belongsTo(owner: symbol): boolean {
+    return owner === this.#owner;
   }
 }
 
@@ -56,6 +53,12 @@ export interface InternalWorkOwnerPort {
   recover<TOutput>(
     reference: InternalRetainedWorkReference<TOutput>,
   ): InternalWorkHandle<TOutput> | undefined;
+
+  /** List frozen, content-free references retained by this owner. */
+  list(): readonly InternalRetainedWorkReference<unknown>[];
+
+  /** Look up a retained handle by id within this owner's private inbox. */
+  lookup(id: string): InternalWorkHandle<unknown> | undefined;
 }
 
 /** Create one isolated logical-owner capability over an injected Work kernel. */
@@ -63,21 +66,43 @@ export function createInternalWorkOwnerPort(
   kernel: ProcessLocalWorkKernel,
 ): InternalWorkOwnerPort {
   const owner = Symbol("internal-work-owner");
+  const retainedHandles = new Map<string, InternalWorkHandle<unknown>>();
 
   return Object.freeze({
     async spawnAndRetain<TOutput>(
       driver: InternalWorkTargetDriver<TOutput>,
     ): Promise<InternalRetainedWorkReference<TOutput>> {
       const handle = await kernel.spawn(driver);
-      return new OwnerRetainedWorkReference(handle.id, owner, handle);
+      const reference = new OwnerRetainedWorkReference<TOutput>(handle.id, owner);
+      retainedHandles.set(handle.id, handle);
+      return reference;
     },
 
     recover<TOutput>(
       reference: InternalRetainedWorkReference<TOutput>,
     ): InternalWorkHandle<TOutput> | undefined {
-      return reference instanceof OwnerRetainedWorkReference
-        ? reference.recover(owner)
-        : undefined;
+      if (
+        !(reference instanceof OwnerRetainedWorkReference) ||
+        !reference.belongsTo(owner)
+      ) {
+        return undefined;
+      }
+
+      return retainedHandles.get(reference.id) as
+        | InternalWorkHandle<TOutput>
+        | undefined;
+    },
+
+    list(): readonly InternalRetainedWorkReference<unknown>[] {
+      return Object.freeze(
+        [...retainedHandles.keys()].map(
+          (id) => new OwnerRetainedWorkReference<unknown>(id, owner),
+        ),
+      );
+    },
+
+    lookup(id: string): InternalWorkHandle<unknown> | undefined {
+      return retainedHandles.get(id);
     },
   });
 }
