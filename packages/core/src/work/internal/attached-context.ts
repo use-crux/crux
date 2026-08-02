@@ -59,6 +59,8 @@ export function runWithInternalWorkContext<T>(
 /** One child-owned signal linked cooperatively to an optional parent. */
 export interface InternalWorkCancellation {
   readonly signal: AbortSignal;
+  /** Cooperatively request cancellation of this directly linked Work. */
+  cancel(): void;
   dispose(): void;
 }
 
@@ -74,6 +76,7 @@ export function createInternalWorkCancellation(
 
   return Object.freeze({
     signal: controller.signal,
+    cancel: () => controller.abort(),
     dispose: () => parentSignal?.removeEventListener("abort", abortFromParent),
   });
 }

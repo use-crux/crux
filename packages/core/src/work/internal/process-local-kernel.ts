@@ -53,6 +53,8 @@ export interface InternalWorkHandle<TOutput> {
   status(): Promise<InternalWorkStatus>;
   /** Join the execution and return its exact target output. */
   result(): Promise<TOutput>;
+  /** Cooperatively request cancellation of this Work occurrence. */
+  cancel(): void;
 }
 
 /** Injectable process-local infrastructure seams. @internal */
@@ -283,6 +285,7 @@ export function createProcessLocalWorkKernel(
         effects,
         status: () => Promise.resolve(workStatusSnapshot(record.status)),
         result: () => execution,
+        cancel: cancellation.cancel,
       });
     },
   });

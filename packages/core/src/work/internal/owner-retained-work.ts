@@ -60,6 +60,9 @@ export interface InternalWorkOwnerPort {
 
   /** Look up a retained handle by id within this owner's private inbox. */
   lookup(id: string): InternalWorkHandle<unknown> | undefined;
+
+  /** Remove one directly owned Work from this inbox without cancelling it. */
+  detach(id: string): boolean;
 }
 
 /** Cancellation-only linkage accepted by owner-retained child Work. @internal */
@@ -113,6 +116,10 @@ export function createInternalWorkOwnerPort(
 
     lookup(id: string): InternalWorkHandle<unknown> | undefined {
       return retainedHandles.get(id);
+    },
+
+    detach(id: string): boolean {
+      return retainedHandles.delete(id);
     },
   });
 }

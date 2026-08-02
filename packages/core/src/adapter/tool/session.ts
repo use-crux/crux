@@ -38,10 +38,13 @@ import type { ManagedMemoryWriteGuard } from "../../memory/managed-write-guard";
 import type { TimeoutOptions } from "../../generation/timeout";
 import {
   TimeoutError,
+  composeAbortSignals,
+  createBudgetSignal,
   toolBudgetMs,
   withAbortSignal,
   withBudget,
 } from "../../generation/timeout";
+import { isWorkControlTool } from "../../agent/work-control-tool";
 import type { Message } from "../../generation/messages";
 import type { JsonValue, ToolModelOutput } from "../../types/tool";
 import type { SystemBlock } from "../../resolver/types";
@@ -1171,16 +1174,31 @@ export function createToolLifecycle(
         }
         const execute = tool.execute ?? (() => undefined);
         const toolOptions = executionOptionsFor(toolCall, messages);
-        const result = await span.withContext(() =>
-          withBudget(
-            () => Promise.resolve(execute(toolCall.args, toolOptions)),
-            {
-              budget: "tool",
-              limitMs: toolBudgetMs(options.timeout, toolCall.name),
-              toolName: toolCall.name,
-            },
-          ),
-        );
+        const budgetOptions = {
+          budget: "tool" as const,
+          limitMs: toolBudgetMs(options.timeout, toolCall.name),
+          toolName: toolCall.name,
+        };
+        const result = await span.withContext(async () => {
+          if (!isWorkControlTool(tool)) {
+            return withBudget(
+              () => Promise.resolve(execute(toolCall.args, toolOptions)),
+              budgetOptions,
+            );
+          }
+          const budget = createBudgetSignal(budgetOptions);
+          try {
+            return await execute(toolCall.args, {
+              ...toolOptions,
+              abortSignal: composeAbortSignals(
+                toolOptions.abortSignal,
+                budget.signal,
+              ),
+            });
+          } finally {
+            budget.dispose();
+          }
+        });
         const convertedModelOutput = await span.withContext(() =>
           createToolModelOutput({
             tool,

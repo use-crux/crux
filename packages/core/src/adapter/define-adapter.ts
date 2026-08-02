@@ -34,6 +34,11 @@ import {
   createForegroundChildWorkPort,
 } from "../agent/foreground-tool-binder";
 import { bindBackgroundAgentTools } from "../agent/background-tool-binder";
+import {
+  bindWorkControlTool,
+  reservedWorkToolNameError,
+  WORK_CONTROL_TOOL_NAME,
+} from "../agent/work-control-tool";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
@@ -82,6 +87,12 @@ function withMergedPromptTools(
       resolveOpts: AdapterResolveOpts,
     ): Promise<ResolvedPrompt> => {
       const resolved = await prompt.resolve(resolveOpts);
+      if (
+        Object.hasOwn(tools, WORK_CONTROL_TOOL_NAME) &&
+        Object.hasOwn(resolved.tools ?? {}, WORK_CONTROL_TOOL_NAME)
+      ) {
+        throw reservedWorkToolNameError();
+      }
       return { ...resolved, tools: { ...(resolved.tools ?? {}), ...tools } };
     },
   });
@@ -277,7 +288,11 @@ export function adapter<
       // so the tool loop can pick them up from the resolved prompt.
       const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
       const backgroundWork = createInternalWorkOwnerPort(workKernel);
-      const backgroundBoundTools = bindBackgroundAgentTools(mergedTools, {
+      const toolsWithWorkControl = bindWorkControlTool(
+        mergedTools,
+        backgroundWork,
+      );
+      const backgroundBoundTools = bindBackgroundAgentTools(toolsWithWorkControl, {
         executor,
         model,
         work: backgroundWork,
