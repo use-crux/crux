@@ -104,6 +104,39 @@ describe("static repository invariants", () => {
     }
   });
 
+  it("rejects semantically different canonical output across runs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crux-static-invariants-"));
+    let run = 0;
+
+    try {
+      await writeCorpusFile(root);
+
+      await expect(
+        assertStaticRepositoryInvariants(root, {
+          syntaxFrontend: () => {
+            const diagnosticId = `fixture-warning-${++run}`;
+            return {
+              ...emptyFrontend,
+              parseFile: (input) => ({
+                ...emptyRecord(input),
+                diagnostics: [
+                  {
+                    id: diagnosticId,
+                    severity: "warning",
+                    code: "relation.unresolved_reference",
+                    message: `Unresolved reference from ${diagnosticId}`,
+                  },
+                ],
+              }),
+            };
+          },
+        }),
+      ).rejects.toThrow(/not deterministic/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("requires every safe selected path exactly once", () => {
     const root = "/repo";
     const first = emptyExtraction("/repo/src/first.ts");

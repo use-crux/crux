@@ -162,15 +162,12 @@ function canonicalRun(
   return files.map((file) => ({
     file: rootRelativePath(root, file.file),
     extraction: canonicalStaticExtractionJson(
-      rootStableValue(
-        {
-          definitions: file.definitions,
-          relations: file.relations,
-          diagnostics: file.diagnostics,
-          dependencies: file.dependencies,
-        },
-        root,
-      ) as Parameters<typeof canonicalStaticExtractionJson>[0],
+      {
+        definitions: file.definitions,
+        relations: file.relations,
+        diagnostics: file.diagnostics,
+        dependencies: file.dependencies,
+      },
     ),
   }));
 }
@@ -187,34 +184,6 @@ function equalCanonicalRuns(
         file.extraction === right[index]?.extraction,
     )
   );
-}
-
-function rootStableValue(value: unknown, root: string): unknown {
-  if (typeof value === "string") return rootStableString(value, root);
-  if (Array.isArray(value))
-    return value.map((item) => rootStableValue(item, root));
-  if (!value || typeof value !== "object") return value;
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      key === "fingerprint"
-        ? "<root-derived-fingerprint>"
-        : key === "assertionSiteId"
-          ? "<root-derived-assertion-site-id>"
-          : rootStableValue(child, root),
-    ]),
-  );
-}
-
-function rootStableString(value: string, root: string): string {
-  const normalizedRoot = normalizePath(root);
-  const normalizedValue = normalizePath(value);
-  if (normalizedValue === normalizedRoot) return "<repo>";
-  if (normalizedValue.startsWith(`${normalizedRoot}/`)) {
-    return `<repo>/${normalizedValue.slice(normalizedRoot.length + 1)}`;
-  }
-  return normalizedValue;
 }
 
 function rootRelativePath(root: string, file: string): string {

@@ -51,13 +51,16 @@ parity.
 Run `staticDefinitionFileSelection(root)` and a cache-disabled
 `createStaticExtraction` with the Rust/Oxc frontend over actual first-party
 source. Run the same normalized collection twice. The runner returns an
-in-memory, root-normalized result for assertion; it does not write a fixture.
+in-memory result for same-checkout assertion; it does not write a fixture or
+compare output across checkout roots.
 
 The required invariants are deliberately structural and deterministic:
 
 - Both runs have identical normalized extraction output after the existing
-  canonical normalization. This detects nondeterministic output without
-  checking it into the repository.
+  canonical normalization. The comparison includes the complete canonical
+  payload, including fingerprints and assertion-site ids. Same-root absolute
+  paths are valid because both runs occur in one checkout. This detects
+  nondeterministic output without checking it into the repository.
 - The selected-file list accounts for extraction: each discovered file is
   extracted exactly once, neither run reports an extra file, and skipped
   candidates are retained only as discovery accounting.
@@ -98,7 +101,7 @@ slice is proven.
    output; both runs must pass repository invariants without regenerating any
    fixture. This test establishes the reason for the migration before changing
    the release gate.
-2. Extract shared root/path normalization, discovery accounting, deterministic
+2. Extract shared path normalization, discovery accounting, deterministic
    collection, diagnostic classification, and local-dependency validation into
    a small repository-invariants runner. Reuse existing canonical static
    normalization rather than adding another serializer.
