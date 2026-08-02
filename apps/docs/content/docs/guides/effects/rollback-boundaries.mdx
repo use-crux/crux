@@ -180,9 +180,9 @@ receipts. Repeated or concurrent requests join or reuse unit settlement, so a
 successfully recovered unit reports `already_recovered` and its handler does
 not run twice.
 
-This release does not persist scope refs, captured state, or recovery handlers.
-A ref cannot be resolved after restart. Durable delayed recovery belongs to a
-future runtime slice.
+Flow snapshots may persist the JSON-safe scope ref, but receipts, captured
+state, recovery handlers, and Effect ledger state remain process-local. A ref
+cannot restore recovery after restart; durable recovery is future runtime work.
 
 ## Understand terminal boundaries
 

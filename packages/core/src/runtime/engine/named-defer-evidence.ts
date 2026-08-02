@@ -18,7 +18,7 @@ import {
 } from "../../observability";
 import type { CruxDeploymentIdentity } from "../../project-index";
 import type { JsonValue } from "../../storage";
-import type { WorkItem } from "./work";
+import type { RuntimeWorkItem } from "./work";
 
 const NAMED_DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000;
 
@@ -95,7 +95,7 @@ export function namedDeferProvenanceAsJson(
  * defer provenance. Ordinary task work is a pure pass-through.
  */
 export async function executeWithNamedDeferEvidence<T>(
-  work: WorkItem,
+  work: RuntimeWorkItem,
   execute: () => Promise<T>,
 ): Promise<T> {
   if (work.work.kind !== "task.run" || !work.work.defer) {
@@ -270,7 +270,7 @@ function isTraceId(value: string | undefined): value is string {
  * retrying indefinitely.
  */
 export async function flushNamedDeferEvidenceAfterCommit(
-  work: WorkItem,
+  work: RuntimeWorkItem,
 ): Promise<void> {
   if (
     work.work.kind !== "task.run" ||

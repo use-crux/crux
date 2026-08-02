@@ -5,7 +5,7 @@ import type {
   RuntimeStatePort,
   SetWorkPendingOptions,
   WorkId,
-  WorkItem,
+  RuntimeWorkItem,
 } from '@use-crux/core/runtime'
 import type { WithoutSystemFields } from 'convex/server'
 import type { Doc } from '../_generated/dataModel.js'
@@ -58,7 +58,7 @@ export function createCompositeStatePort(ctx: MutationCtx): RuntimeStatePort {
 async function createWorkRecord(
   ctx: MutationCtx,
   input: NewWorkItem,
-): Promise<WorkItem> {
+): Promise<RuntimeWorkItem> {
   const existing = await ctx.db
     .query('runtimeWork')
     .withIndex('by_work_id', (q) => q.eq('workId', input.workId))
@@ -77,7 +77,7 @@ async function getWorkRecord(
   ctx: MutationCtx,
   workId: WorkId,
   namespace: string,
-): Promise<WorkItem | null> {
+): Promise<RuntimeWorkItem | null> {
   const work = await ctx.db
     .query('runtimeWork')
     .withIndex('by_work_id', (q) => q.eq('workId', workId))
@@ -87,7 +87,7 @@ async function getWorkRecord(
 
 async function putWorkRecord(
   ctx: MutationCtx,
-  work: WorkItem,
+  work: RuntimeWorkItem,
 ): Promise<void> {
   const existing = await ctx.db
     .query('runtimeWork')
@@ -102,7 +102,7 @@ async function setWorkPendingRecord(
   ctx: MutationCtx,
   workId: WorkId,
   pending: SetWorkPendingOptions,
-): Promise<WorkItem | null> {
+): Promise<RuntimeWorkItem | null> {
   const existing = await ctx.db
     .query('runtimeWork')
     .withIndex('by_work_id', (q) => q.eq('workId', workId))

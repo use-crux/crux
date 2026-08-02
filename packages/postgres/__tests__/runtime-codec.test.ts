@@ -23,4 +23,32 @@ describe("Postgres Runtime snapshot codec", () => {
 
     expect(snapshot.pendingSuspends[0]?.timeoutAt).toEqual(deadline);
   });
+
+  it("preserves a Flow Effect scope reference", () => {
+    const snapshot = decodeFlowSnapshot({
+      flow_id: "flow_effects",
+      work_id: "work_effects",
+      target_id: "review",
+      namespace: "tenant-a",
+      status: "suspended",
+      effects: {
+        kind: "effect.scope",
+        id: "effect-boundary:1",
+        runId: "flow_effects",
+      },
+      input: {},
+      completed_steps: {},
+      fingerprint: [],
+      pending_suspends: [],
+      delivered_suspends: null,
+      scheduled_work: null,
+      updated_at: "2026-08-01T00:00:00.000Z",
+    });
+
+    expect(snapshot.effects).toEqual({
+      kind: "effect.scope",
+      id: "effect-boundary:1",
+      runId: "flow_effects",
+    });
+  });
 });

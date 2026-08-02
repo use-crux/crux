@@ -18,7 +18,7 @@
  * @module
  */
 
-import type { StandardSchemaV1 } from '../schema'
+import type { StandardSchemaV1 } from '../../../internal/standard-schema'
 import type { Capability } from '../capabilities'
 import type { RetrieverHit } from '../../../retrieval'
 import type { TokenUsage } from '../../../generation/types'

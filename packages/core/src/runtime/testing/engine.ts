@@ -15,7 +15,7 @@ import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
 import { createRuntimeKernel, wakeEnvelopeForWork } from '../engine/kernel'
 import { createOutboxDispatcher } from '../engine/outbox'
-import type { WorkItem } from '../engine/work'
+import type { RuntimeWorkItem } from '../engine/work'
 
 /** Harness supplied by a runtime engine adapter conformance test. */
 export interface RuntimeEngineAdapterTestHarness<
@@ -245,7 +245,7 @@ export function runRuntimeEngineAdapterTests<
   })
 }
 
-function makeSuspendedFlowWork(): WorkItem {
+function makeSuspendedFlowWork(): RuntimeWorkItem {
   const now = new Date('2026-07-02T00:00:00.000Z')
   return {
     workId: 'work_flow_1' as WorkId,

@@ -1,4 +1,4 @@
-import type { WorkStatus } from '@use-crux/core/runtime'
+import type { RuntimeWorkState } from '@use-crux/core/runtime'
 
 export function unsupported<TArgs extends readonly unknown[], TResult>(
   name: string,
@@ -23,8 +23,8 @@ export function clean<T extends Record<string, unknown>>(record: T): T {
 
 export function statusAllowed(
   status: string,
-  from: WorkStatus | readonly WorkStatus[] | undefined,
+  from: RuntimeWorkState | readonly RuntimeWorkState[] | undefined,
 ): boolean {
   if (from === undefined) return status === 'suspended'
-  return Array.isArray(from) ? from.includes(status as WorkStatus) : status === from
+  return Array.isArray(from) ? from.includes(status as RuntimeWorkState) : status === from
 }

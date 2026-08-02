@@ -1,6 +1,6 @@
 import type { JsonValue } from "../../../storage";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../../engine/retry";
-import type { WorkItem } from "../../engine/work";
+import type { RuntimeWorkItem } from "../../engine/work";
 import type { EventCursor, FlowId, WorkId } from "../../ports/ids";
 import type {
   FlowSnapshot,
@@ -20,20 +20,25 @@ import { scopedKey } from "./data";
 import { cloneJsonValue } from "./json";
 import { matchesPruneNamespace, olderThan, pruneMapValues } from "./retention";
 import { cloneRuntimeResultRef } from "../../results/types";
+import {
+  appendPredicateCandidate,
+  cloneMemoryDeliveredSuspend,
+  cloneMemoryPendingSuspend,
+} from "./predicate-candidates";
 
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeStatePort {
   return {
-    async createWork(input: NewWorkItem): Promise<WorkItem> {
+    async createWork(input: NewWorkItem): Promise<RuntimeWorkItem> {
       const key = scopedKey(input.namespace, input.workId);
       const existing = data.work.get(key);
       if (existing) return cloneWorkItem(existing);
 
       recordWrite?.();
       const now = input.now ? new Date(input.now) : new Date();
-      const stored: WorkItem = Object.freeze({
+      const stored: RuntimeWorkItem = Object.freeze({
         workId: input.workId,
         namespace: input.namespace,
         work: cloneRuntimeWork(input.work),
@@ -57,12 +62,12 @@ export function createMemoryStatePort(
     async getWork(
       workId: WorkId,
       options: RuntimeStateReadOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const work = data.work.get(scopedKey(options.namespace, workId));
       return work ? cloneWorkItem(work) : null;
     },
 
-    async putWork(work: WorkItem): Promise<void> {
+    async putWork(work: RuntimeWorkItem): Promise<void> {
       recordWrite?.();
       data.work.set(
         scopedKey(work.namespace, work.workId),
@@ -70,7 +75,7 @@ export function createMemoryStatePort(
       );
     },
 
-    async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
+    async listWork(options: ListWorkOptions): Promise<readonly RuntimeWorkItem[]> {
       const work = [...data.work.values()]
         .filter(
           (item) =>
@@ -115,14 +120,14 @@ export function createMemoryStatePort(
     async setWorkPending(
       workId: WorkId,
       options: SetWorkPendingOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const key = scopedKey(options.namespace, workId);
       const existing = data.work.get(key);
       if (!existing || !statusAllowed(existing.status, options.from))
         return null;
 
       recordWrite?.();
-      const updated: WorkItem = Object.freeze({
+      const updated: RuntimeWorkItem = Object.freeze({
         workId: existing.workId,
         namespace: existing.namespace,
         work: cloneRuntimeWork(options.work),
@@ -182,12 +187,17 @@ export function createMemoryStatePort(
       const [key, snapshot] = entry;
       const pendingSuspends = snapshot.pendingSuspends.map((suspend) => {
         if (suspend.waiterId !== options.waiterId) return suspend;
+        if (options.predicateCandidate) {
+          return appendPredicateCandidate(suspend, options);
+        }
         return Object.freeze({
-          ...clonePendingSuspend(suspend),
+          ...cloneMemoryPendingSuspend(suspend),
           delivered: deliveredSuspend(options),
         });
       });
-      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options);
+      const deliveredSuspends = options.predicateCandidate
+        ? snapshot.deliveredSuspends
+        : mergeDeliveredSuspend(snapshot, options);
       recordWrite?.();
       data.snapshots.set(
         key,
@@ -243,7 +253,7 @@ export function createMemoryStatePort(
     },
   };
 }
-function isPrunableWorkStatus(status: WorkItem["status"]): boolean {
+function isPrunableWorkStatus(status: RuntimeWorkItem["status"]): boolean {
   return (
     status === "completed" || status === "cancelled" || status === "dead-letter"
   );
@@ -256,7 +266,7 @@ function isPrunableSnapshotStatus(status: FlowSnapshot["status"]): boolean {
     status === "cancelled"
   );
 }
-export function cloneWorkItem(work: WorkItem): WorkItem {
+export function cloneWorkItem(work: RuntimeWorkItem): RuntimeWorkItem {
   return Object.freeze({
     workId: work.workId,
     namespace: work.namespace,
@@ -302,7 +312,7 @@ function incrementCounter(
   return next;
 }
 function statusAllowed(
-  status: WorkItem["status"],
+  status: RuntimeWorkItem["status"],
   from: SetWorkPendingOptions["from"],
 ): boolean {
   const allowed =
@@ -316,6 +326,15 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     targetId: snapshot.targetId,
     namespace: snapshot.namespace,
     status: snapshot.status,
+    ...(snapshot.effects
+      ? {
+          effects: Object.freeze({
+            kind: snapshot.effects.kind,
+            id: snapshot.effects.id,
+            runId: snapshot.effects.runId,
+          }),
+        }
+      : {}),
     input: cloneJsonValue(snapshot.input, "flow snapshot input"),
     ...(snapshot.continuation
       ? {
@@ -331,7 +350,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     ) as Readonly<Record<string, JsonValue>>,
     fingerprint: [...snapshot.fingerprint],
     pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
-      clonePendingSuspend(suspend),
+      cloneMemoryPendingSuspend(suspend),
     ),
     deliveredSuspends: snapshot.deliveredSuspends
       ? Object.freeze(
@@ -340,7 +359,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
               ([deliveryKey, delivery]) => [
                 deliveryKey,
                 delivery
-                  ? cloneDeliveredSuspend(
+                  ? cloneMemoryDeliveredSuspend(
                       delivery,
                       `flow snapshot deliveredSuspends.${deliveryKey}.payload`,
                     )
@@ -370,44 +389,6 @@ function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
     completedAt: new Date(record.completedAt),
   });
 }
-function clonePendingSuspend(
-  suspend: RuntimePendingSuspend,
-): RuntimePendingSuspend {
-  return Object.freeze({
-    label: suspend.label,
-    deliveryKey: suspend.deliveryKey,
-    waiterId: suspend.waiterId,
-    timerId: suspend.timerId,
-    timeoutAt: suspend.timeoutAt ? new Date(suspend.timeoutAt) : undefined,
-    delivered: suspend.delivered
-      ? cloneDeliveredSuspend(
-          suspend.delivered,
-          `flow snapshot pendingSuspends.${suspend.label}.delivered.payload`,
-        )
-      : undefined,
-  });
-}
-
-function cloneDeliveredSuspend(
-  delivery: NonNullable<RuntimePendingSuspend["delivered"]>,
-  path: string,
-): NonNullable<RuntimePendingSuspend["delivered"]> {
-  const payload = (
-    delivery as NonNullable<RuntimePendingSuspend["delivered"]> & {
-      readonly payload?: JsonValue;
-    }
-  ).payload;
-  if (payload === undefined) {
-    return { eventId: delivery.eventId } as unknown as NonNullable<
-      RuntimePendingSuspend["delivered"]
-    >;
-  }
-  return {
-    eventId: delivery.eventId,
-    payload: cloneJsonValue(payload, path),
-  };
-}
-
 function mergeDeliveredSuspend(
   snapshot: FlowSnapshot,
   options: MarkSnapshotDeliveredOptions,
@@ -425,7 +406,7 @@ function mergeDeliveredSuspend(
 
 function deliveredSuspend(
   options: MarkSnapshotDeliveredOptions,
-): FlowSnapshot["pendingSuspends"][number]["delivered"] {
+): NonNullable<RuntimePendingSuspend["delivered"]> {
   return {
     eventId: options.eventId as EventCursor,
     payload: cloneJsonValue(options.payload, "flow snapshot delivered payload"),

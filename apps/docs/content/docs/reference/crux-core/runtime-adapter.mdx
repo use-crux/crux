@@ -1,0 +1,215 @@
+---
+title: Runtime Signal adapter surface
+description: Exact @use-crux/core/runtime contracts for durable Signal storage, records, codecs, atomic composites, and conformance.
+---
+
+This page is the complete adapter extension surface shipped for durable
+Signal-to-Flow delivery. All runtime contracts come from
+`@use-crux/core/runtime`; conformance helpers come from
+`@use-crux/core/runtime/testing`.
+
+<Callout type="warn">
+  The bundled in-memory Runtime store is process-local. No bundled durable
+  Signal store or provider is certified in this release. A custom adapter must
+  implement the contracts below and pass reactive composite certification
+  before it can honestly declare durable Signal support.
+</Callout>
+
+## Store capability
+
+`RuntimeStoreAdapter.durability` reports whether the configured substrate
+survives process loss:
+
+```ts
+interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
+  readonly id: string;
+  readonly durability?: "durable" | "process-local";
+  readonly leases: LeasePort;
+  readonly results?: RuntimeResultPayloadPort;
+  runComposite?<K extends RuntimeCompositeKind>(
+    kind: K,
+    input: RuntimeCompositeInput[K],
+  ): Promise<RuntimeCompositeResult[K]>;
+  transact<T>(
+    fn: (tx: RuntimeStoreTransaction) => Promise<T>,
+  ): Promise<T>;
+}
+
+interface RuntimeStoreTransaction {
+  // Other required Runtime ports are omitted here.
+  readonly signals?: RuntimeSignalStorePort;
+}
+```
+
+`durability: "durable"` is a mechanical claim, not certification. An omitted
+value is treated as unproven. `"process-local"` and unproven stores fail static
+Signal Flow activation before handler or work allocation. A durable store must
+also expose `signals` and satisfy the complete Runtime capability profile.
+
+## Signal store port
+
+```ts
+interface RuntimeSignalStorePort {
+  getOccurrence(
+    namespace: string,
+    occurrenceId: string,
+  ): Promise<SignalOccurrenceRecord | null>;
+
+  findOccurrenceByIdempotency(
+    namespace: string,
+    signalId: string,
+    idempotencyHash: string,
+  ): Promise<SignalOccurrenceRecord | null>;
+
+  putOccurrence(record: SignalOccurrenceRecord): Promise<void>;
+
+  getDelivery(
+    namespace: string,
+    deliveryId: string,
+  ): Promise<SignalDeliveryRecord | null>;
+
+  listDeliveries(
+    namespace: string,
+    occurrenceId: string,
+  ): Promise<readonly SignalDeliveryRecord[]>;
+
+  putDelivery(record: SignalDeliveryRecord): Promise<void>;
+}
+```
+
+These methods run inside the enclosing Runtime transaction or native named
+composite. Child A exposes no provider-envelope field and no Session dynamic
+subscription record or store method.
+
+## Persisted records
+
+```ts
+type ReactiveConsumerRef = {
+  readonly kind: "flow.signal-wait";
+  readonly flowId: string;
+  readonly waiterId: string;
+  readonly workId: string;
+};
+
+interface SignalOccurrenceRecord {
+  readonly schemaVersion: 1;
+  readonly namespace: string;
+  readonly occurrenceId: string;
+  readonly signalId: string;
+  readonly payload: JsonValue;
+  readonly payloadCodec?: SignalPayloadCodec;
+  readonly acceptedAt: string;
+  readonly idempotencyHash?: string;
+}
+
+interface SignalDeliveryRecord {
+  readonly schemaVersion: 1;
+  readonly namespace: string;
+  readonly deliveryId: string;
+  readonly occurrenceId: string;
+  readonly consumer: ReactiveConsumerRef;
+  readonly state:
+    | "pending"
+    | "leased"
+    | "delivered"
+    | "failed"
+    | "dead-letter";
+  readonly attempts: number;
+  readonly updatedAt: string;
+}
+```
+
+Delivery identity is per occurrence and waiter binding. Do not collapse two
+waiters owned by the same Flow work item into one delivery. Persist ISO strings
+as strings; public `Date` objects are materialized as detached values at the
+SDK boundary.
+
+## Payload codec
+
+The following are public exports:
+
+```ts
+const SIGNAL_PAYLOAD_CODEC = "crux.signal-json.v1" as const;
+type SignalPayloadCodec = typeof SIGNAL_PAYLOAD_CODEC;
+
+function encodeSignalPayload(payload: JsonValue): string;
+function decodeSignalPayload(
+  payload: JsonValue,
+  codec?: string,
+): JsonValue;
+```
+
+New occurrence records store the encoded string in `payload` and
+`SIGNAL_PAYLOAD_CODEC` in `payloadCodec`. Adapters must round-trip both values
+opaquely. This codec preserves accepted finite JavaScript values such as
+negative zero. An absent codec reads a legacy raw `JsonValue`; an unknown codec
+or malformed encoded value fails with `PAYLOAD_NOT_JSON`.
+
+## Atomic named composites
+
+Two named composites are relevant to durable Signal delivery:
+
+| Kind                        | Atomic responsibility                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `flow.signal-wait.register` | Persist Flow suspension, waiter binding, snapshot, and leased-work transition together.                      |
+| `signal.publish`            | Accept one occurrence plus every required delivery, event/waiter transition, replay snapshot, and wake row. |
+
+The generic adapter override is:
+
+```ts
+runComposite?<K extends RuntimeCompositeKind>(
+  kind: K,
+  input: RuntimeCompositeInput[K],
+): Promise<RuntimeCompositeResult[K]>;
+```
+
+Most adapters should omit it. Core then calls `transact()` and executes the
+kernel-owned body through `runDefaultRuntimeComposite()`. Override
+`runComposite()` only when the substrate requires its atomic boundary to run
+inside the provider. Such an override must preserve the exact typed
+`RuntimeCompositeInput` and `RuntimeCompositeResult` mapping. The public
+`runtimeCompositeBodies` registry is available when a host executes the same
+kernel-owned policy within its native transaction.
+
+## Required certification
+
+Run both general store conformance and reactive composite conformance in the
+adapter's Vitest suite:
+
+```ts
+import {
+  runReactiveCompositeAdapterTests,
+  runStoreAdapterTests,
+} from "@use-crux/core/runtime/testing";
+
+runStoreAdapterTests({
+  name: "acme-runtime",
+  createStore,
+});
+
+runReactiveCompositeAdapterTests({
+  name: "acme-runtime",
+  createStore,
+  failAfterWrites: (store, writes) => {
+    store.testing.failAfter(writes);
+  },
+});
+```
+
+`createStore` must return a fresh `RuntimeStoreAdapter` whose `signals` port is
+present. `failAfterWrites` must deterministically abort the next composite
+after exactly the requested number of successful mutations and then reset.
+Claiming that the substrate is atomic does not skip this requirement.
+
+The reactive suite verifies occurrence-plus-delivery atomicity, distinct
+delivery identities, predicate candidate ordering while work is pending or
+leased, and rollback at every reactive write boundary. Passing certifies only
+the supplied adapter harness and configuration; it does not certify a provider
+family or every deployment topology.
+
+## Related
+
+- [Signals API](/docs/reference/crux-core/signal)
+- [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- [Runtime work records](/docs/reference/crux-core/runtime-work-records)
+- [Runtime Adapter Authoring](/docs/guides/durable-execution/custom-adapters)

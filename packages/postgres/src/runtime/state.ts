@@ -9,7 +9,7 @@ import type {
   SetWorkPendingOptions,
   WorkStatusCount,
   WorkId,
-  WorkItem,
+  RuntimeWorkItem,
 } from '@use-crux/core/runtime'
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '@use-crux/core/runtime'
 import type { PostgresStoreFaults } from './faults'
@@ -33,7 +33,7 @@ export function createPostgresStatePort(
   const idleCounters = createPostgresIdleCounterPort(db, schema, faults)
 
   return {
-    async createWork(input: NewWorkItem): Promise<WorkItem> {
+    async createWork(input: NewWorkItem): Promise<RuntimeWorkItem> {
       const now = input.now ?? new Date()
       recordWrite(faults)
       const result = await db.query(
@@ -68,7 +68,7 @@ export function createPostgresStatePort(
 
     getWork,
 
-    async putWork(work: WorkItem): Promise<void> {
+    async putWork(work: RuntimeWorkItem): Promise<void> {
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${workTable}
@@ -108,7 +108,7 @@ export function createPostgresStatePort(
       )
     },
 
-    async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
+    async listWork(options: ListWorkOptions): Promise<readonly RuntimeWorkItem[]> {
       const values: unknown[] = [options.namespace, options.status]
       const filters = ['namespace = $1', 'status = $2']
       if (options.updatedBefore) {
@@ -160,7 +160,7 @@ export function createPostgresStatePort(
     async setWorkPending(
       workId: WorkId,
       options: SetWorkPendingOptions,
-    ): Promise<WorkItem | null> {
+    ): Promise<RuntimeWorkItem | null> {
       const from = allowedStatuses(options.from)
       recordWrite(faults)
       const result = await db.query(
@@ -204,14 +204,18 @@ export function createPostgresStatePort(
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${snapshotTable}
-          (namespace, flow_id, work_id, target_id, status, input,
-           completed_steps, fingerprint, pending_suspends, delivered_suspends, scheduled_work, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)
+          (namespace, flow_id, work_id, target_id, status, effects, input,
+           continuation, completed_steps, fingerprint, pending_suspends,
+           delivered_suspends, scheduled_work, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb,
+                 $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14)
          ON CONFLICT (namespace, flow_id) DO UPDATE SET
            work_id = EXCLUDED.work_id,
            target_id = EXCLUDED.target_id,
            status = EXCLUDED.status,
+           effects = EXCLUDED.effects,
            input = EXCLUDED.input,
+           continuation = EXCLUDED.continuation,
            completed_steps = EXCLUDED.completed_steps,
            fingerprint = EXCLUDED.fingerprint,
            pending_suspends = EXCLUDED.pending_suspends,
@@ -224,7 +228,11 @@ export function createPostgresStatePort(
           snapshot.workId,
           snapshot.targetId,
           snapshot.status,
+          snapshot.effects ? encodeJson(snapshot.effects) : null,
           encodeJson(snapshot.input),
+          snapshot.continuation !== undefined
+            ? encodeJson(snapshot.continuation)
+            : null,
           encodeJson(snapshot.completedSteps),
           encodeJson(snapshot.fingerprint),
           encodeJson(snapshot.pendingSuspends),
@@ -327,7 +335,7 @@ export function createPostgresStatePort(
   async function getWork(
     workId: WorkId,
     options: RuntimeStateReadOptions,
-  ): Promise<WorkItem | null> {
+  ): Promise<RuntimeWorkItem | null> {
     const result = await db.query(
       `SELECT * FROM ${workTable} WHERE namespace = $1 AND work_id = $2`,
       [options.namespace, workId],
@@ -357,7 +365,7 @@ function deliveredSuspend(
 
 function allowedStatuses(
   from: SetWorkPendingOptions['from'],
-): readonly WorkItem['status'][] {
+): readonly RuntimeWorkItem['status'][] {
   if (from === undefined) return ['suspended']
   return typeof from === 'string' ? [from] : from
 }

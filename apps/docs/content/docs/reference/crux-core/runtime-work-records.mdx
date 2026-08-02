@@ -1,0 +1,182 @@
+---
+title: Runtime work records
+description: Exact RuntimeWorkItem and RuntimeWorkState contracts for Runtime Engine adapter authors.
+---
+
+`RuntimeWorkItem` is the durable queue record exchanged between the Runtime
+Engine kernel and a store adapter. `RuntimeWorkState` is its complete lifecycle
+union. Import both from the public Runtime entrypoint:
+
+```ts
+import type {
+  RuntimeWorkItem,
+  RuntimeWorkState,
+} from "@use-crux/core/runtime";
+```
+
+These are adapter-author contracts. They describe records that an existing
+Runtime Engine persists; they are not an application-level background Work API.
+
+## Record contract
+
+```ts
+interface RuntimeWorkItem {
+  readonly workId: WorkId;
+  readonly namespace: string;
+  readonly work: RuntimeWork;
+  readonly targetId: RuntimeTargetId;
+  readonly status: RuntimeWorkState;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly notBefore?: Date;
+  readonly idempotencyKey: string;
+  readonly idleScope?: string;
+  readonly leaseToken?: LeaseToken;
+  readonly lastError?: WorkItemError;
+  readonly resultRef?: RuntimeResultRef;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+```
+
+| Field            | Meaning                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `workId`         | Kernel-minted identity retained across every logical attempt.                                                |
+| `namespace`      | Required persistence partition. Reads, writes, leases, and idempotency checks stay inside it.                |
+| `work`           | Kernel-defined routing payload. Adapters persist it without interpreting or rewriting its shape.            |
+| `targetId`       | Stable name the kernel uses to resolve the registered execution target.                                     |
+| `status`         | Current kernel-owned lifecycle state.                                                                       |
+| `attempt`        | One-based logical execution attempt. Queue or HTTP transport retries do not increment it.                   |
+| `maxAttempts`    | Logical attempt budget before ordinary failures move the record to `dead-letter`.                           |
+| `notBefore`      | Earliest time pending work is eligible for delivery.                                                        |
+| `idempotencyKey` | Identity of the current logical delivery intent. It changes when the kernel creates a fresh intent.         |
+| `idleScope`      | Optional counter scope held busy until the record reaches a terminal state.                                 |
+| `leaseToken`     | Fencing token present while one executor owns leased work.                                                  |
+| `lastError`      | Latest inspectable error attached when work becomes blocked or dead-lettered.                               |
+| `resultRef`      | Opaque content-addressed reference committed with a completed result.                                       |
+| `createdAt`      | Time the kernel first accepted this work occurrence.                                                        |
+| `updatedAt`      | Time of the latest kernel-owned lifecycle transition.                                                       |
+
+`WorkItemError` is a separate error-summary record and remains part of the
+Runtime surface:
+
+```ts
+interface WorkItemError {
+  readonly code: string;
+  readonly message: string;
+  readonly at: Date;
+  readonly details?: JsonValue;
+}
+```
+
+Adapters must preserve `lastError` and `resultRef` even when they do not expose
+the corresponding diagnostics or result payload store themselves.
+
+## State meanings
+
+```ts
+type RuntimeWorkState =
+  | "pending"
+  | "leased"
+  | "suspended"
+  | "completed"
+  | "cancelled"
+  | "blocked"
+  | "dead-letter";
+```
+
+| State         | Meaning                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `pending`     | Eligible for delivery when `notBefore` is absent or has passed.                                                               |
+| `leased`      | One executor owns the current attempt under `leaseToken`; final commits must prove that token is still current.              |
+| `suspended`   | Execution yielded while the Runtime waits for its durable resume condition.                                                  |
+| `completed`   | Terminal success. A private result may be addressed by `resultRef`.                                                          |
+| `cancelled`   | Terminal cancellation.                                                                                                       |
+| `blocked`     | Automatic delivery has stopped because the Runtime reported a configuration or public contract error. Operator retry is explicit. |
+| `dead-letter` | Ordinary failures exhausted `maxAttempts`. It is terminal for automatic delivery but can be retried explicitly after repair. |
+
+The kernel is the only state-machine owner. Store methods create the initial
+pending record, compare-and-set supported resume paths, and persist records
+produced by kernel composites. An adapter must not add states, choose retry
+delays, increment attempts, clear leases, or turn errors into terminal states on
+its own.
+
+## Persistence invariants
+
+An adapter implementation must preserve these rules:
+
+- Scope every record operation by `namespace`; a matching `workId` in another
+  namespace is a different record.
+- Keep `workId`, `namespace`, `targetId`, and `createdAt` stable for the full
+  occurrence. A retry updates the attempt-owned fields, not the occurrence
+  identity.
+- Round-trip `work`, `lastError.details`, and `resultRef` losslessly. Treat
+  kernel-owned payloads and references as opaque.
+- Persist `Date` fields without losing precision and materialize fresh `Date`
+  values on reads so callers cannot mutate stored state through a returned
+  object.
+- Commit completion, suspension, retry, failure, idempotency, outbox, snapshot,
+  and idle-counter changes through the kernel's required transaction or named
+  composite boundary.
+- Fence every finalizing write with the current `leaseToken`. A stale executor
+  must not overwrite the record or consume another attempt.
+
+Run `runStoreAdapterTests()` and `runRuntimeEngineAdapterTests()` from
+`@use-crux/core/runtime/testing` against the adapter's real transaction model.
+
+## Extending adapter-owned records
+
+Use declaration merging only when a store implementation needs metadata that
+belongs to its persistence mechanism, such as a row revision or physical
+partition marker. Do not use it for application input, target configuration,
+provider envelopes, or a second lifecycle state machine.
+
+Augment the canonical interface through the same public module path consumers
+import:
+
+```ts
+// acme-runtime.d.ts
+import "@use-crux/core/runtime";
+
+declare module "@use-crux/core/runtime" {
+  interface RuntimeWorkItem {
+    readonly acmeStorage?: {
+      readonly revision: string;
+      readonly partition: string;
+    };
+  }
+}
+```
+
+Extension fields should be optional because Core defines the base record and
+other Runtime adapters do not own the provider-specific metadata. Declaration
+merging changes the TypeScript contract; it does not add persistence. The
+adapter must initialize and preserve its fields across create, read, list,
+update, resume, retry, and native composite paths.
+
+## Alpha migration
+
+The pre-launch Runtime record migration is direct:
+
+| Removed name | Replacement        |
+| ------------ | ------------------ |
+| `WorkItem`   | `RuntimeWorkItem`  |
+| `WorkStatus` | `RuntimeWorkState` |
+
+Update both imports and declaration merging:
+
+```ts
+declare module "@use-crux/core/runtime" {
+  interface RuntimeWorkItem {
+    readonly acmeStorage?: { readonly revision: string };
+  }
+}
+```
+
+The removed names are not exported by `@use-crux/core/runtime`.
+
+## Related
+
+- [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- [Runtime Signal adapter surface](/docs/reference/crux-core/runtime-adapter)
+- [Runtime Adapter Authoring](/docs/guides/durable-execution/custom-adapters)

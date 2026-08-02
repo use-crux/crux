@@ -8,10 +8,10 @@ import type { RuntimeTargetId } from '../ports/ids'
 import type { RuntimeWork } from '../ports/work'
 import type { WakeEnvelope } from './envelope'
 import { createRuntimeError } from './errors'
-import type { WorkItem } from './work'
+import type { RuntimeWorkItem } from './work'
 
 /** Build the portable wake envelope for a durable work item. */
-export function wakeEnvelopeForWork(work: WorkItem): WakeEnvelope {
+export function wakeEnvelopeForWork(work: RuntimeWorkItem): WakeEnvelope {
   return {
     v: 1,
     ns: work.namespace,
@@ -24,7 +24,7 @@ export function wakeEnvelopeForWork(work: WorkItem): WakeEnvelope {
 }
 
 /** Return whether the work item is terminal for wake delivery. */
-export function isTerminalWork(work: WorkItem): boolean {
+export function isTerminalWork(work: RuntimeWorkItem): boolean {
   return (
     work.status === 'completed' ||
     work.status === 'cancelled' ||

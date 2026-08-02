@@ -34,7 +34,7 @@ import type {
   CellAssertionPhase,
   CellAssertionValue,
 } from '../assertion-types'
-import type { StandardSchemaV1 } from '../schema'
+import type { StandardSchemaV1 } from '../../../internal/standard-schema'
 import type { TokenUsage } from '../../../generation/types'
 import type { CellSignals } from '../execution-signals'
 import { createDecisionReportExpect } from './decision-report-matchers'

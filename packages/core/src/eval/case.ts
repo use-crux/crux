@@ -17,7 +17,7 @@ import type {
   StepAccess,
   ValueExpect,
 } from "./internal/assertions/types";
-import type { StandardSchemaV1 } from "./internal/schema";
+import type { StandardSchemaV1 } from "../internal/standard-schema";
 import type {
   CapsOf,
   EvalCaseCallOf,

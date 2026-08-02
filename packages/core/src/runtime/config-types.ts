@@ -235,8 +235,9 @@ export interface CruxGenerationConfig {
  * Runtime Engine configuration.
  *
  * Use a composer such as `node()` or a future `serverless()`/`convex()` adapter
- * to declare how durable work, wake delivery, timers, and maintenance should
- * run for runtime-bound APIs.
+ * to declare how durable work, Signal delivery, wake delivery, timers, and
+ * maintenance should run for runtime-bound APIs. Activated durable Signal
+ * bindings preflight the resolved store and mechanical Runtime capabilities.
  */
 export type CruxRuntimeConfig = RuntimeEngineDefinition;
 

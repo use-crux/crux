@@ -8,13 +8,9 @@
  * @module
  */
 
-export {
-  CruxRuntimeError,
-  RUNTIME_ERROR_CODES,
-  createRuntimeError,
-  runtimeErrorDocsUrl,
-} from "./engine/errors";
-export type { CruxRuntimeErrorCode, RuntimeErrorInput } from "./engine/errors";
+export * from "./engine/errors";
+
+export * from "./reactive/payload-codec";
 
 export type {
   RuntimeArtifactManifest,
@@ -51,9 +47,9 @@ export type {
 
 export { transition } from "./engine/work";
 export type {
-  WorkItem,
+  RuntimeWorkItem,
+  RuntimeWorkState,
   WorkItemError,
-  WorkStatus,
   WorkTransition,
 } from "./engine/work";
 
@@ -292,6 +288,12 @@ export type {
   WaiterPort,
 } from "./ports/waiters";
 export type { RuntimeWork } from "./ports/work";
+export type {
+  ReactiveConsumerRef,
+  RuntimeSignalStorePort,
+  SignalDeliveryRecord,
+  SignalOccurrenceRecord,
+} from "./reactive/records";
 export type * from "./store";
 
 export {

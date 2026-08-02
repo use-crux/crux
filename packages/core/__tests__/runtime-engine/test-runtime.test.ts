@@ -3,7 +3,7 @@ import { flow } from '@use-crux/core'
 import {
   durableTask,
   type FlowId,
-  type WorkStatus,
+  type RuntimeWorkState,
 } from '@use-crux/core/runtime'
 import {
   createTestRuntime,
@@ -96,7 +96,7 @@ describe('createTestRuntime()', () => {
   })
 })
 
-async function workStatusCounts(): Promise<Partial<Record<WorkStatus, number>>> {
+async function workStatusCounts(): Promise<Partial<Record<RuntimeWorkState, number>>> {
   if (!runtime) return {}
   const rows = await runtime.store.state.countWork({
     namespace: runtime.runtime.namespace,

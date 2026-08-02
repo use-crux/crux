@@ -3,6 +3,8 @@
 "@use-crux/indexer": minor
 "@use-crux/local": minor
 "@use-crux/otel": minor
+"@use-crux/postgres": patch
+"@use-crux/convex": patch
 ---
 
 Add the `@use-crux/core/effect` surface for typed in-process effects, immutable
@@ -27,6 +29,15 @@ reporting unavailable or irreversible recovery honestly.
 
 Export Effect spans through the OpenTelemetry adapter with the canonical
 `crux.effect.run` span name.
+
+Preserve optional in-process Flow Effect scope references in Postgres and
+Convex Runtime snapshots without implying durable recovery support.
+
+Keep Flow results and snapshots on the live in-process Effect boundary across
+Runtime retries and legacy RecordStore recovery, so Effects from an earlier
+attempt remain available for rollback. Persisted refs reuse a live scope only
+when both id and run match; stale or colliding refs rotate to collision-resistant
+IDs so another Flow's recovery stack remains isolated.
 
 Report an `effect.irreversible_in_required_boundary` Project Index error when
 an irreversible Effect is certainly called inside a required-recovery

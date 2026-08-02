@@ -17,6 +17,7 @@ The **Runtime Engine** is the durable execution layer that makes those cases wor
 You do not need the Runtime Engine to get started. Plenty works without it:
 
 - Plain [prompts](/docs/guides/prompts), [agents](/docs/guides/agents), and [compositions](/docs/guides/compositions).
+- [Signals](/docs/guides/durable-execution/signals) for typed process-local callbacks; a capable Runtime is required for durable Flow waits.
 - Object-bound [flows](/docs/guides/flows): `flow.suspend()`, `handle.signal()`, `handle.resume()`, and `handle.cancel()` work when your code still holds the flow handle.
 - Best-effort inline [background work](/docs/guides/background-work) with `defer(callback)`.
 
@@ -24,7 +25,7 @@ You add the Runtime Engine when you need work to survive the process. These APIs
 
 | API                                         | What it does                                         |
 | ------------------------------------------- | ---------------------------------------------------- |
-| `flow.waitFor(event)`                       | Suspend until an event arrives, even across restarts |
+| `flow.waitFor(event or signal)`             | Suspend until an event arrives, even across restarts |
 | `flow.after(target, delay)`                 | Run work later, on a durable timer                   |
 | `flow.defer(target, input)`                 | Durable child work inside a flow                     |
 | `flow.untilIdle({ scope: 'current-flow' })` | Wait for the current flow's durable child-work scope |

@@ -1,0 +1,146 @@
+---
+title: Signal recipes
+description: Copy current-API patterns for ingestion, local callbacks, normalization, filtering, and acceptance handling.
+---
+
+## Ingest a retrying external event
+
+Define the Signal once at module scope and use the provider's stable event ID
+as the idempotency key:
+
+```ts
+import { signal } from "@use-crux/core";
+import { z } from "zod";
+
+const invoicePaid = signal({
+  id: "billing.invoice.paid",
+  schema: z.object({
+    invoiceId: z.string(),
+    accountId: z.string(),
+    amountCents: z.number().int().nonnegative(),
+  }),
+});
+
+interface ProviderEvent {
+  id: string;
+  invoiceId: string;
+  accountId: string;
+  amountCents: number;
+}
+
+export async function acceptProviderEvent(event: ProviderEvent) {
+  return invoicePaid.publish(
+    {
+      invoiceId: event.invoiceId,
+      accountId: event.accountId,
+      amountCents: event.amountCents,
+    },
+    { idempotencyKey: event.id },
+  );
+}
+```
+
+Authenticate and verify the provider envelope before calling this function.
+Signal validation is not webhook authentication.
+
+## Attach independent local callbacks
+
+```ts
+const stopCacheUpdate = invoicePaid.subscribe(({ payload }) => {
+  localInvoiceCache.markPaid(payload.invoiceId);
+});
+
+const stopUiNotification = invoicePaid.subscribe(async ({ payload }) => {
+  await notifyConnectedClient(payload.accountId);
+});
+
+// During application shutdown or module disposal:
+stopCacheUpdate();
+stopUiNotification();
+```
+
+The callbacks are isolated and future-only. If either must survive a restart,
+do not treat this subscription as a queue.
+
+## Normalize at the boundary
+
+```ts
+const stockCounted = signal({
+  id: "inventory.stock.counted",
+  schema: z
+    .object({ sku: z.string(), counted: z.string() })
+    .transform(({ sku, counted }) => ({
+      sku,
+      counted: Number(counted),
+    })),
+});
+
+stockCounted.subscribe(({ payload }) => {
+  payload.counted; // number
+});
+
+await stockCounted.publish({ sku: "sku_123", counted: "12" });
+```
+
+The input type remains `{ sku: string; counted: string }`; listeners and Flow
+waits receive `{ sku: string; counted: number }`.
+
+## Wait for one exact business state
+
+```ts
+const approved = orderStatusChanged.when({ status: "approved" });
+
+export const fulfillApprovedOrder = flow(
+  "fulfill-approved-order",
+  { signals: { approved } },
+  async (scope) => {
+    const occurrence = await scope.waitFor(approved, { timeout: "2d" });
+    return scope.step("fulfill", () =>
+      fulfillOrder(occurrence.payload.orderId),
+    );
+  },
+);
+```
+
+This requires the qualifying Runtime/store described in
+[Durable Flow waits](/docs/guides/durable-execution/signals/durable-flow-waits).
+The match is portable JSON; the Flow receives the base Signal's complete typed
+occurrence.
+
+## Report acceptance honestly
+
+```ts
+const receipt = await invoicePaid.publish(payload, { idempotencyKey });
+
+return {
+  accepted: true,
+  occurrenceId: receipt.occurrenceId,
+  guarantee: receipt.guarantee,
+};
+```
+
+Return “accepted,” not “processed.” Even a `durable` receipt says nothing about
+whether a waiting Flow completed successfully.
+
+## Keep a process-local-only event explicit
+
+```ts
+const refreshRequested = signal({
+  id: "ui.refresh.requested",
+  schema: z.object({ panel: z.string() }),
+});
+
+refreshRequested.subscribe(({ payload }) => refreshPanel(payload.panel));
+
+const receipt = await refreshRequested.publish({ panel: "orders" });
+if (receipt.guarantee !== "process-local") {
+  throw new Error("A durable consumer was activated unexpectedly.");
+}
+```
+
+This assertion is useful when durability would indicate an unintended binding
+or deployment change. For ordinary code, inspect the receipt without assuming
+which guarantee will be selected.
+
+See the [Signals API reference](/docs/reference/crux-core/signal) for every
+public type and overload.

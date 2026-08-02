@@ -5,9 +5,9 @@ import {
   type NewWorkItem,
   type RuntimeStatePort,
   type WorkId,
-  type WorkItem,
+  type RuntimeWorkItem,
   type WorkStatusCount,
-  type WorkStatus,
+  type RuntimeWorkState,
 } from "@use-crux/core/runtime";
 import type { CloudflareStoragePort } from "./storage";
 import { scopedKey, scopedPrefix } from "./storage";
@@ -16,12 +16,12 @@ export function createCloudflareStatePort(
   storage: CloudflareStoragePort,
 ): RuntimeStatePort {
   return {
-    async createWork(input: NewWorkItem): Promise<WorkItem> {
+    async createWork(input: NewWorkItem): Promise<RuntimeWorkItem> {
       const key = scopedKey("work", input.namespace, input.workId);
-      const existing = await storage.get<WorkItem>(key);
+      const existing = await storage.get<RuntimeWorkItem>(key);
       if (existing) return existing;
       const now = input.now ?? new Date();
-      const work: WorkItem = {
+      const work: RuntimeWorkItem = {
         workId: input.workId,
         namespace: input.namespace,
         work: input.work,
@@ -40,7 +40,7 @@ export function createCloudflareStatePort(
     },
     async getWork(workId, options) {
       return (
-        (await storage.get<WorkItem>(
+        (await storage.get<RuntimeWorkItem>(
           scopedKey("work", options.namespace, workId),
         )) ?? null
       );
@@ -49,7 +49,7 @@ export function createCloudflareStatePort(
       await storage.put(scopedKey("work", work.namespace, work.workId), work);
     },
     async listWork(options) {
-      const rows = await storage.list<WorkItem>({
+      const rows = await storage.list<RuntimeWorkItem>({
         prefix: scopedPrefix("work", options.namespace),
       });
       return [...rows.values()]
@@ -61,7 +61,7 @@ export function createCloudflareStatePort(
         .slice(0, options.limit);
     },
     async countWork(options): Promise<readonly WorkStatusCount[]> {
-      const rows = await storage.list<WorkItem>({
+      const rows = await storage.list<RuntimeWorkItem>({
         prefix: scopedPrefix("work", options.namespace),
       });
       const counts = new Map<string, WorkStatusCount>();
@@ -109,12 +109,12 @@ export function createCloudflareStatePort(
         (await storage.get<number>(scopedKey("idle", namespace, scope))) ?? 0
       );
     },
-    async setWorkPending(workId, options): Promise<WorkItem | null> {
+    async setWorkPending(workId, options): Promise<RuntimeWorkItem | null> {
       const key = scopedKey("work", options.namespace, workId);
-      const existing = await storage.get<WorkItem>(key);
+      const existing = await storage.get<RuntimeWorkItem>(key);
       if (!existing || !statusAllowed(existing.status, options.from))
         return null;
-      const updated: WorkItem = {
+      const updated: RuntimeWorkItem = {
         workId: existing.workId,
         namespace: existing.namespace,
         work: options.work,
@@ -178,7 +178,7 @@ export function createCloudflareStatePort(
       });
     },
     async pruneTerminalWork(options) {
-      return await pruneRows<WorkItem>(storage, "work:", options, (work) =>
+      return await pruneRows<RuntimeWorkItem>(storage, "work:", options, (work) =>
         ["completed", "cancelled", "dead-letter"].includes(work.status),
       );
     },
@@ -204,8 +204,8 @@ export function createCloudflareStatePort(
 }
 
 function statusAllowed(
-  current: WorkStatus,
-  allowed: WorkStatus | readonly WorkStatus[] | undefined,
+  current: RuntimeWorkState,
+  allowed: RuntimeWorkState | readonly RuntimeWorkState[] | undefined,
 ): boolean {
   if (allowed === undefined) return current === "suspended";
   return Array.isArray(allowed)

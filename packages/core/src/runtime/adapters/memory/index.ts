@@ -29,9 +29,15 @@ import { createMemoryOutboxPort } from "./outbox";
 import { createMemoryResultPayloadPort } from "./results";
 import { createMemoryStatePort } from "./state";
 import { createMemoryTimerStore } from "./timers";
+import { createMemorySignalStore } from "./signals";
+import type { RuntimeSignalStorePort } from "../../reactive/records";
 import type { MemoryWaiterPort } from "./waiters";
 import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
+
+type InMemoryRuntimePorts = RuntimeStoreTransaction & {
+  readonly signals: RuntimeSignalStorePort;
+};
 
 /** Fault-injection controls used by adapter conformance tests. */
 export interface InMemoryRuntimeStoreTesting {
@@ -47,6 +53,8 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
   readonly testing: InMemoryRuntimeStoreTesting;
   /** Stable adapter id used in conformance output. */
   readonly id: "memory";
+  /** In-memory Runtime records end with the current process. */
+  readonly durability: "process-local";
   /** Durable runtime state for work, snapshots, and idempotency keys. */
   readonly state: RuntimeStatePort;
   /** Durable event port backed by in-memory records. */
@@ -61,6 +69,8 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
   readonly leases: LeasePort;
   /** Canonical content-addressed private Runtime results. */
   readonly results: RuntimeResultPayloadPort;
+  /** Durable Signal records backed by in-memory maps. */
+  readonly signals: RuntimeSignalStorePort;
 }
 
 /** Create a fresh, isolated in-memory runtime store. */
@@ -73,7 +83,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
   function portsFor(
     target = data,
     recordWrite?: () => void,
-  ): RuntimeStoreTransaction {
+  ): InMemoryRuntimePorts {
     return {
       state: createMemoryStatePort(target, recordWrite),
       events: createMemoryEventPort(target, recordWrite),
@@ -81,12 +91,14 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       timers: createMemoryTimerStore(target, recordWrite),
       outbox: createMemoryOutboxPort(target, outboxFaults, recordWrite),
       deferred: createMemoryDeferredStore(target, recordWrite),
+      signals: createMemorySignalStore(target, recordWrite),
     };
   }
 
   const ports = portsFor();
   return Object.freeze({
     id: "memory" as const,
+    durability: "process-local" as const,
     ...ports,
     results: createMemoryResultPayloadPort(data),
     leases: createMemoryLeasePort(data),

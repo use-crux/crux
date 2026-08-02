@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 950,
+    "files": 958,
     "definitions": 197,
     "relations": 15,
     "diagnostics": 36,
-    "dependencies": 1939,
-    "canonicalBytes": 402123
+    "dependencies": 1950,
+    "canonicalBytes": 403221
   },
   "files": [
     {
@@ -2318,6 +2318,24 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/runtime-reactive-conformance.test-d.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/runtime-reactive-surface.test-d.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/safety-beta-contract.ts",
       "sha256": "90da6a72319195a56a7e2263032286fe4ec48dbb5e6ec03cd7da7c6bb2943c7b",
       "bytes": 5910,
@@ -2364,6 +2382,24 @@
     },
     {
       "file": "packages/core/__type_tests__/setup-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/signal-docs.test-d.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/signal.test-d.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -3272,6 +3308,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/flow/handle-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/flow/index.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3291,12 +3336,12 @@
     },
     {
       "file": "packages/core/src/flow/scope.ts",
-      "sha256": "52c91bfce99162202ec03dfcb09bbb251aa7390755335aa88a3f0183d4985936",
-      "bytes": 1433,
+      "sha256": "4680d3cee1ede11111cee47fded691be252562a71d105c1cc0fcf70977b3bda3",
+      "bytes": 1687,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 27
+      "dependencies": 32
     },
     {
       "file": "packages/core/src/flow/signals.ts",
@@ -4127,6 +4172,15 @@
       "dependencies": 2
     },
     {
+      "file": "packages/core/src/runtime/engine/kernel-scheduled-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/runtime/engine/kernel-scheduled-work.ts",
       "sha256": "572f363f0cbec6395bddeb5105f5c93b021c8990a7605cd3ea01cab22cd2c162",
       "bytes": 242,
@@ -4143,6 +4197,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/runtime/engine/work.ts",
+      "sha256": "f0aa3c6cfb2ba079e540c2a5d3fbde83a3ec1097f84a396c8c9a5e92a2c269b2",
+      "bytes": 119,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/runtime/eval-host/connection-inference.ts",
@@ -4235,7 +4298,7 @@
       "dependencies": 1
     },
     {
-      "file": "packages/core/src/runtime/ports/ids.ts",
+      "file": "packages/core/src/runtime/ports/flow-state.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4244,7 +4307,7 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/runtime/ports/state.ts",
+      "file": "packages/core/src/runtime/ports/ids.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4521,6 +4584,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/signal/definition.ts",
+      "sha256": "7f325c607b0a6a30ef9f3f9afd5eb9b2e0c88eeb3cb35178a816a3561e8f0a4f",
+      "bytes": 317,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
     },
     {
       "file": "packages/core/src/skill/agent-kit.ts",

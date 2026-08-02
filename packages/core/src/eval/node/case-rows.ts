@@ -1,7 +1,7 @@
 /** Data-only Case row parsing and Standard Schema validation. */
 
 import { readFile } from "node:fs/promises";
-import type { StandardSchemaV1 } from "../internal/schema";
+import type { StandardSchemaV1 } from "../../internal/standard-schema";
 import type { JsonValue } from "../../storage";
 import type { RawEvalCase } from "../internal/definition";
 import { fingerprintEvalValueForInternalUse } from "../internal/runner";

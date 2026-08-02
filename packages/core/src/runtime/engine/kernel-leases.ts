@@ -11,7 +11,7 @@ import type { Lease, LeaseToken } from '../ports'
 import type { RuntimeStoreAdapter, RuntimeStoreTransaction } from '../store'
 import { CruxRuntimeError, createRuntimeError } from './errors'
 import type { RuntimeLeaseExtensionOptions } from './kernel-types'
-import type { WorkItem } from './work'
+import type { RuntimeWorkItem } from './work'
 
 /** Scheduler used by the lease heartbeat. */
 export type LeaseExtensionSchedule = NonNullable<
@@ -27,9 +27,9 @@ export interface LeaseExtensionHeartbeat {
 /** Verify the active transaction still owns a work item's lease token. */
 export async function assertLeaseHeldInTransaction(
   tx: RuntimeStoreTransaction,
-  work: WorkItem,
+  work: RuntimeWorkItem,
   leaseToken: LeaseToken,
-): Promise<WorkItem> {
+): Promise<RuntimeWorkItem> {
   const current = await tx.state.getWork(work.workId, {
     namespace: work.namespace,
   })
@@ -108,7 +108,7 @@ export function startLeaseExtensionHeartbeat(
   })
 }
 
-function leaseLostError(work: WorkItem): CruxRuntimeError {
+function leaseLostError(work: RuntimeWorkItem): CruxRuntimeError {
   return createRuntimeError({
     code: 'LEASE_LOST',
     whatFailed: `Runtime work \`${work.workId}\` lost its lease before commit.`,

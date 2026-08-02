@@ -38,7 +38,8 @@ import {
   createReplayFingerprint,
   runtimeSignalEventName,
 } from "../runtime/engine/replay";
-import type { WorkItem } from "../runtime/engine/work";
+import { CruxRuntimeError } from "../runtime/engine/errors";
+import { runtimeRetryableTargetError } from "../runtime/engine/target-retry";
 import {
   flowManualResumeKey,
   flowStartResumeKey,
@@ -51,6 +52,7 @@ import type {
 import type { RuntimeTaskInput, RuntimeTaskTarget } from "../runtime/api/task";
 import { executeWithRetry } from "../generation/retry";
 import type { JsonObject, JsonValue, RecordStore } from "../storage";
+import type { StaticSignalSource } from "../signal/source";
 import {
   observe,
   sanitizePropagationCarrier,
@@ -60,6 +62,7 @@ import {
   flowDefinitionRef,
   flowStepDefinitionRef,
 } from "../observability/definition-ref";
+import { CruxDeferError } from "../defer/errors";
 import { runWithDeferReplayGuard } from "../defer/internal/replay-guard";
 import { runScope } from "../scope/kernel";
 import {
@@ -85,8 +88,8 @@ import type {
   FlowSummary,
   FlowWaitForEvent,
   FlowWaitForOptions,
+  FlowWaitForSignalOptions,
   FlowUntilIdleOptions,
-  RuntimeFlowSuspendMetadata,
 } from "./types";
 import {
   FlowSuspendedError,
@@ -101,6 +104,8 @@ import {
   validateSignalPayload,
 } from "./signals";
 import type { FlowDefinitionOptions, FlowSignalMap } from "./signals";
+import { assertStaticSignalFlowActivation } from "./signal-activation";
+import { deliveredRuntimePayload, executeRuntimeWait } from "./runtime-wait";
 import { flowHandlerAcceptsInput } from "./handler-arity";
 import {
   createFlowId,
@@ -136,6 +141,7 @@ import {
   flowIdForRuntimeWork,
   runtimeCompletedSteps,
   runtimeDeliveredSuspendsForPersistence,
+  runtimeFlowRetrySnapshot,
   runtimeFlowSnapshot,
   runtimeInputValue,
   runtimeResumeWork,
@@ -170,6 +176,7 @@ export type {
   FlowUntilIdleOptions,
   FlowWaitForEvent,
   FlowWaitForOptions,
+  FlowWaitForSignalOptions,
   ListFlowsOptions,
   FlowSummary,
 };
@@ -554,10 +561,7 @@ async function executeFlow<
         return validateSignalPayload(_name, payloadSpec, replayPayload) as S;
       }
 
-      if (
-        runtimeExecution &&
-        runtimeTimeoutMatches(runtimeExecution, _name)
-      ) {
+      if (runtimeExecution && runtimeTimeoutMatches(runtimeExecution, _name)) {
         if (suspendOptions?.onExpired) {
           await suspendOptions.onExpired({ flowId, suspendedAt: _name });
         }
@@ -651,46 +655,17 @@ async function executeFlow<
     },
 
     async waitFor<TPayload = JsonValue>(
-      event: string | FlowWaitForEvent<TPayload>,
-      waitOptions?: FlowWaitForOptions,
+      event: string | FlowWaitForEvent<TPayload> | StaticSignalSource,
+      waitOptions?: FlowWaitForOptions | FlowWaitForSignalOptions,
     ): Promise<TPayload> {
-      const eventSpec = normalizeWaitForEvent(event);
-      const suspendPoint = `waitFor:${eventSpec.name}`;
       suspendCount++;
-      const deliveryKey = suspendDeliveryKey(suspendCount, suspendPoint);
-      runtimeExecution?.fingerprint.observe(`waitFor:${eventSpec.name}`);
-      const replayPayload = runtimeExecution
-        ? deliveredRuntimePayload(
-            runtimeExecution.deliveredPayloads,
-            deliveryKey,
-            suspendPoint,
-          )
-        : undefined;
-      if (isResume && replayPayload !== undefined) {
-        return validateWaitForPayload(eventSpec, replayPayload);
-      }
-
-      if (
-        runtimeExecution &&
-        runtimeTimeoutMatches(runtimeExecution, suspendPoint)
-      ) {
-        throw new FlowExpiredError(suspendPoint);
-      }
-
-      if (!runtimeExecution) {
-        throw runtimeRequiredError({ api: "flow.waitFor()" });
-      }
-
-      const metadata: RuntimeFlowSuspendMetadata = {
-        eventName: eventSpec.name,
-        match: waitOptions?.match ?? {},
-        fingerprint: `waitFor:${eventSpec.name}`,
-      };
-      throw new FlowSuspendedError(
-        suspendPoint,
-        { timeout: waitOptions?.timeout },
-        metadata,
-      );
+      return executeRuntimeWait({
+        source: event,
+        options: waitOptions,
+        occurrence: suspendCount,
+        isResume,
+        execution: runtimeExecution,
+      });
     },
 
     async defer<TTask extends RuntimeTaskTarget>(
@@ -835,6 +810,9 @@ async function executeFlow<
         deliveredSignalsForSnapshot(deliveredSignals);
       const completedSnapshot: FlowSnapshot = {
         ...snapshot,
+        effects: effectScopeRefForFlowSnapshot(
+          requireFlowEffectBoundary(effectBoundary).ref,
+        ),
         status: "completed",
         completedSteps: completedStepsForSnapshot(completedSteps),
         ...(deliveredSignalsSnapshot
@@ -850,10 +828,7 @@ async function executeFlow<
       );
     }
 
-    const observedResult = finalizeFlowResult(
-      completedResult,
-      resultOperation,
-    );
+    const observedResult = finalizeFlowResult(completedResult, resultOperation);
     flowSpan.end({
       attributes: { flowStatus: "completed", totalSteps: stepCount },
     });
@@ -904,6 +879,15 @@ async function executeFlow<
                 eventName:
                   error.runtime?.eventName ??
                   runtimeSignalEventName(flowId, error.suspendPoint),
+                ...(error.runtime?.signalId
+                  ? { signalId: error.runtime.signalId }
+                  : {}),
+                ...(error.runtime?.signalMatch === undefined
+                  ? {}
+                  : { signalMatch: error.runtime.signalMatch }),
+                ...(error.runtime?.signalPredicate
+                  ? { signalPredicate: true }
+                  : {}),
                 match: error.runtime?.match ?? {},
                 timeoutAt,
               },
@@ -1104,6 +1088,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const snapshotData = {
           ...(snapshot ?? {}),
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           status: "expired",
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot
@@ -1141,6 +1128,9 @@ async function executeFlow<
       if (flowStore) {
         const retryableSnapshot: FlowSnapshot = {
           ...snapshot,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           continuation: flowRun.captureContinuation(),
           updatedAt: currentTimeMs(),
         };
@@ -1158,6 +1148,23 @@ async function executeFlow<
       throw error;
     }
 
+    if (
+      runtimeExecution &&
+      !(error instanceof CruxRuntimeError) &&
+      !(error instanceof CruxDeferError) &&
+      runtimeExecution.work.attempt < runtimeExecution.work.maxAttempts
+    ) {
+      const retrySnapshot = runtimeFlowRetrySnapshot(runtimeExecution, {
+        effects: requireFlowEffectBoundary(effectBoundary).ref,
+        completedSteps,
+        continuation: flowRun.captureContinuation(),
+      });
+      flowSpan.error(error, { totalSteps: stepCount });
+      flowRun.suspend({ reason: "flow.error", attributes: { flowId } });
+      await observe.flush();
+      throw runtimeRetryableTargetError(error, retrySnapshot);
+    }
+
     // A failed resume attempt remains retryable while the persisted snapshot
     // is suspended. Close only this physical segment, not the logical run.
     if (snapshot) {
@@ -1167,6 +1174,9 @@ async function executeFlow<
           deliveredSignalsForSnapshot(deliveredSignals);
         const retryableSnapshot: FlowSnapshot = {
           ...snapshot,
+          effects: effectScopeRefForFlowSnapshot(
+            requireFlowEffectBoundary(effectBoundary).ref,
+          ),
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot
             ? { deliveredSignals: deliveredSignalsSnapshot }
@@ -1286,20 +1296,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function normalizeWaitForEvent<TPayload>(
-  event: string | FlowWaitForEvent<TPayload>,
-): FlowWaitForEvent<TPayload> {
-  return typeof event === "string" ? { name: event } : event;
-}
-
-function validateWaitForPayload<TPayload>(
-  event: FlowWaitForEvent<TPayload>,
-  payload: JsonValue,
-): TPayload {
-  if (!event.schema) return payload as TPayload;
-  return event.schema.parse(payload);
-}
-
 /**
  * Define a named flow and return a frozen `FlowHandle`.
  *
@@ -1328,6 +1324,14 @@ export function flow<THandler extends InferredFlowHandler>(
   name: string,
   handler: THandler,
 ): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>;
+/**
+ * Define a Flow with local signal contracts, static Signal wait sources, or both.
+ *
+ * @param name - Stable Flow target name.
+ * @param options - Signal declarations available to this Flow.
+ * @param handler - Flow execution function receiving the inferred scope.
+ * @returns A frozen handle whose static sources are accepted only by `waitFor()`.
+ */
 export function flow<
   const TSignals extends FlowSignalMap,
   THandler extends InferredFlowHandler<TSignals>,
@@ -1423,16 +1427,12 @@ export function flow(
           unknown,
           unknown,
           FlowSignalMap | undefined
-        >(
-          name,
-          executeHandler,
-          {
-            parentFlowId: runtimeRef.executionOptions?.parentFlowId,
-            goal: runtimeRef.executionOptions?.goal,
-            runtime: runtimeExecution,
-            signals: definitionOptions?.signals,
-          },
-        );
+        >(name, executeHandler, {
+          parentFlowId: runtimeRef.executionOptions?.parentFlowId,
+          goal: runtimeRef.executionOptions?.goal,
+          runtime: runtimeExecution,
+          signals: definitionOptions?.signals,
+        });
         runtimeRef.flowResult = result;
         return runtimeExecution.outcome ?? { status: "completed" };
       } catch (error) {
@@ -1463,6 +1463,11 @@ export function flow(
       targets: runtimeTargetMap(runtimeRef),
       ...(newWorkId ? { newWorkId } : {}),
       startMaintenance: false,
+    });
+    assertStaticSignalFlowActivation({
+      flowName: name,
+      signals: definitionOptions?.signals,
+      runtime,
     });
     runtimeRef.current = runtime;
     try {
@@ -1553,15 +1558,13 @@ export function flow(
         snapshot.workId,
         runtime.now(),
       );
-      const wakeWork =
-        current.status === "suspended"
-          ? await runtime.store.state.setWorkPending(snapshot.workId, {
-              namespace: runtime.namespace,
-              work: runtimeResumeWork(snapshot, runtime.now()),
-              idempotencyKey,
-              now: runtime.now(),
-            })
-          : current;
+      const wakeWork = await runtime.kernel.resumeFlow({
+        namespace: runtime.namespace,
+        flowId: snapshot.flowId,
+        workId: snapshot.workId,
+        work: runtimeResumeWork(snapshot, runtime.now()),
+        idempotencyKey,
+      });
       if (!wakeWork) {
         throw runtimeFlowNotResumableError({
           api: `${name}.resume()`,
@@ -1572,10 +1575,7 @@ export function flow(
 
       await runtime.kernel.handleWake({
         ...wakeEnvelopeForWork(wakeWork),
-        idempotencyKey:
-          current.status === "suspended"
-            ? idempotencyKey
-            : wakeWork.idempotencyKey,
+        idempotencyKey: wakeWork.idempotencyKey,
       });
       return runtimeInlineResult(runtimeRef, flowId);
     });
@@ -1619,15 +1619,20 @@ export function flow(
   const handle = {
     name,
 
-    run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
+    async run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput);
-      if (getHooks().runtimeEngine) {
-        return runWithRuntime({
+      const runtimeDefinition = getHooks().runtimeEngine;
+      if (runtimeDefinition) {
+        return await runWithRuntime({
           ...runOptions,
           signals: definitionOptions?.signals,
         });
       }
-      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+      assertStaticSignalFlowActivation({
+        flowName: name,
+        signals: definitionOptions?.signals,
+      });
+      return await executeFlow<unknown, unknown, FlowSignalMap | undefined>(
         name,
         executeHandler,
         {
@@ -1637,14 +1642,19 @@ export function flow(
       );
     },
 
-    resume(
+    async resume(
       flowId: string,
       options?: FlowResumeOptions,
     ): Promise<FlowResult<unknown>> {
-      if (getHooks().runtimeEngine) {
-        return resumeWithRuntime(flowId, options);
+      const runtimeDefinition = getHooks().runtimeEngine;
+      if (runtimeDefinition) {
+        return await resumeWithRuntime(flowId, options);
       }
-      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+      assertStaticSignalFlowActivation({
+        flowName: name,
+        signals: definitionOptions?.signals,
+      });
+      return await executeFlow<unknown, unknown, FlowSignalMap | undefined>(
         name,
         executeHandler,
         {
@@ -1699,18 +1709,6 @@ export function flow(
     unknown,
     FlowSignalMap | undefined
   >;
-}
-
-function deliveredRuntimePayload(
-  deliveredPayloads: ReadonlyMap<string, JsonValue>,
-  primaryKey: string,
-  fallbackKey: string,
-): JsonValue | undefined {
-  if (deliveredPayloads.has(primaryKey))
-    return deliveredPayloads.get(primaryKey);
-  if (deliveredPayloads.has(fallbackKey))
-    return deliveredPayloads.get(fallbackKey);
-  return undefined;
 }
 
 function isFlowDefinitionOptions(

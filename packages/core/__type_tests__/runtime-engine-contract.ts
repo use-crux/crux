@@ -22,6 +22,8 @@ import type {
   RuntimeKernel,
   RuntimeEngineDefinition,
   RuntimePendingSuspend,
+  RuntimeWorkItem,
+  RuntimeWorkState,
   RuntimeTargetId,
   RuntimeStoreAdapter,
   RuntimeWork,
@@ -29,6 +31,10 @@ import type {
   WaiterId,
   WorkId,
 } from '@use-crux/core/runtime'
+// @ts-expect-error WorkItem is not part of the Runtime Engine public surface.
+import type { WorkItem } from '@use-crux/core/runtime'
+// @ts-expect-error WorkStatus is not part of the Runtime Engine public surface.
+import type { WorkStatus } from '@use-crux/core/runtime'
 import {
   bindHostRuntime,
   createRuntime,
@@ -52,13 +58,32 @@ import {
   type TestRuntimeSettleResult,
 } from '@use-crux/core/runtime/testing'
 
+declare module '@use-crux/core/runtime' {
+  interface RuntimeWorkItem {
+    readonly adapterMetadata?: { readonly source: 'adapter' }
+  }
+}
+
 declare const workId: WorkId
 declare const flowId: FlowId
 declare const taskId: TaskId
 declare const targetId: RuntimeTargetId
 declare const cursor: EventCursor
 declare const waiterId: WaiterId
+declare const runtimeWorkItem: RuntimeWorkItem
 
+expectTypeOf<RuntimeWorkState>().toEqualTypeOf<
+  | 'pending'
+  | 'leased'
+  | 'suspended'
+  | 'completed'
+  | 'cancelled'
+  | 'blocked'
+  | 'dead-letter'
+>()
+expectTypeOf(runtimeWorkItem.adapterMetadata).toEqualTypeOf<
+  { readonly source: 'adapter' } | undefined
+>()
 expectTypeOf(workId).toMatchTypeOf<string>()
 expectTypeOf(flowId).toMatchTypeOf<string>()
 

@@ -4,7 +4,7 @@ import {
   type RuntimeCompositeInput,
   type WakeEnvelope,
   type WorkId,
-  type WorkItem,
+  type RuntimeWorkItem,
 } from "@use-crux/core/runtime";
 import {
   decodeCompositeValue,
@@ -245,7 +245,7 @@ export function createConvexEvalActionHarness() {
 
 const NOW = new Date("2026-07-16T18:00:00.000Z");
 
-function wakeFor(work: WorkItem): WakeEnvelope {
+function wakeFor(work: RuntimeWorkItem): WakeEnvelope {
   return {
     v: 1,
     ns: work.namespace,

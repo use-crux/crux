@@ -17,6 +17,7 @@ import type {
   RollbackOnErrorOptions,
   RollbackOptions,
 } from "../types";
+import { allocateEffectBoundaryId } from "./boundary-identity";
 import { effectLedger } from "./ledger";
 import { registerNestedBoundaryUnit } from "./recovery-stack";
 import {
@@ -24,8 +25,6 @@ import {
   type RollbackExecution,
 } from "./run-rollback";
 
-let nextImplicitBoundaryId = 0;
-let nextExplicitBoundaryId = 0;
 const effectBoundaryStates = new Map<string, EffectBoundaryState>();
 
 /** In-process state attached to one explicit effect boundary. */
@@ -74,16 +73,22 @@ export function runPassiveEffectBoundary<T>(
   existingRef?: EffectScopeRef,
 ): Promise<T> {
   const parent = currentEffectBoundary();
-  const existingScope =
+  const locatedScope =
     existingRef?.kind === "effect.scope" &&
     existingRef.runId === runId
       ? effectLedger.getScope(existingRef.id)
+      : undefined;
+  const existingScope =
+    existingRef &&
+    locatedScope?.ref.id === existingRef.id &&
+    locatedScope.ref.runId === existingRef.runId
+      ? locatedScope
       : undefined;
   const ref =
     existingScope?.ref ??
     Object.freeze({
       kind: "effect.scope" as const,
-      id: createEffectBoundaryId(),
+      id: createEffectBoundaryId(existingRef?.id),
       runId,
     });
   const operation = runScope(
@@ -262,31 +267,13 @@ export function closeEffectBoundary(
 }
 
 /** Allocate a unique kernel descriptor id for one explicit boundary. */
-export function createEffectBoundaryId(): string {
-  return `effect-boundary:${++nextExplicitBoundaryId}`;
-}
-
-/** Create the one-operation root boundary used by a standalone effect call. */
-export function createImplicitRootBoundary(): EffectScopeRef {
-  const id = `effect-root:${++nextImplicitBoundaryId}`;
-  return Object.freeze({
-    kind: "effect.scope",
-    id,
-    runId: id,
-  });
-}
-
-/** Close a one-operation root after its effect settles. */
-export function closeImplicitRootBoundary(
-  boundary: EffectScopeRef,
-): void {
-  effectLedger.registerScope({
-    ref: boundary,
-    status: "closed",
-    unitIds: effectLedger
-      .unitsFor(boundary.id)
-      .map((unit) => unit.id),
-  });
+export function createEffectBoundaryId(excludedId?: string): string {
+  return allocateEffectBoundaryId(
+    (id) =>
+      id === excludedId ||
+      effectBoundaryStates.has(id) ||
+      effectLedger.getScope(id) !== undefined,
+  );
 }
 
 function updateBoundaryRecord(

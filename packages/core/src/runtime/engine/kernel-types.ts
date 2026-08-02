@@ -8,19 +8,10 @@
  */
 
 import type { JsonValue } from "../../storage";
-import type { EffectScopeRef } from "../../effect/types";
 import type { RuntimeEvent } from "../ports/events";
 import type { Lease } from "../ports/leases";
 import type { FlowSnapshot as RuntimeFlowSnapshot } from "../ports/state";
-import type {
-  FlowId,
-  RuntimeTargetId,
-  TaskId,
-  TimerId,
-  WaiterId,
-  WorkId,
-} from "../ports/ids";
-import type { RuntimeWork } from "../ports/work";
+import type { RuntimeTargetId, TaskId, WorkId } from "../ports/ids";
 import type {
   RuntimeOutboxItem,
   RuntimeStoreAdapter,
@@ -28,8 +19,7 @@ import type {
 } from "../store";
 import type { RuntimeRetentionConfig } from "./retention";
 import type { WakeEnvelope } from "./envelope";
-import type { RuntimeWakeDeliver } from "./outbox";
-import type { WorkItem, WorkItemError } from "./work";
+import type { RuntimeWorkItem, WorkItemError } from "./work";
 import type { RuntimeDeferredIntent } from "../ports/deferred";
 import type { RuntimeResultRef } from "../results/types";
 import type {
@@ -40,6 +30,44 @@ import type {
   RenewDeferredScopeLeaseResult,
   StageDeferredIntentInput,
 } from "./kernel-deferred";
+import type {
+  SignalPublishCompositeInput,
+  SignalPublishCompositeResult,
+} from "./composites/signal";
+import type {
+  RecordSuspensionInput,
+  RuntimeSuspensionSnapshotInput,
+} from "./kernel-flow-types";
+import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
+import type {
+  RuntimeScheduledWorkFlushRecord,
+  RuntimeScheduledWorkIntent,
+} from "./kernel-scheduled-types";
+import type {
+  MaintenanceTickOptions,
+  MaintenanceTickResult,
+  ScanTimersOptions,
+  ScanTimersResult,
+  ScheduleTimerInput,
+} from "./kernel-timer-types";
+
+export type { RuntimeSuspendRegistration } from "./kernel-suspension-types";
+export type {
+  RecordSuspensionInput,
+  RuntimeSuspensionSnapshotInput,
+} from "./kernel-flow-types";
+export type {
+  RuntimeScheduledWorkFlushRecord,
+  RuntimeScheduledWorkIntent,
+} from "./kernel-scheduled-types";
+export type {
+  FireTimerRecordResult,
+  MaintenanceTickOptions,
+  MaintenanceTickResult,
+  ScanTimersOptions,
+  ScanTimersResult,
+  ScheduleTimerInput,
+} from "./kernel-timer-types";
 
 /** Result returned by a runtime target execution. */
 export type RuntimeTargetOutcome =
@@ -69,7 +97,7 @@ export type RuntimeTargetOutcome =
 /** Execution context passed to a runtime target. */
 export interface RuntimeTargetContext {
   /** Leased work item being processed. */
-  readonly work: WorkItem;
+  readonly work: RuntimeWorkItem;
   /** Lease proving this kernel owns the work item for this attempt. */
   readonly lease: Lease;
 }
@@ -141,86 +169,6 @@ export interface EnqueueTaskInput {
   readonly input?: JsonValue;
 }
 
-/** One suspend/wait registration produced by replay. */
-export interface RuntimeSuspendRegistration {
-  /** User-authored suspend/wait label. */
-  readonly label: string;
-  /** Source-order replay key for disambiguating repeated labels. */
-  readonly deliveryKey?: string;
-  /** Event name that can resume this suspend point. */
-  readonly eventName: string;
-  /** Top-level payload equality match for this waiter. */
-  readonly match: Readonly<Record<string, JsonValue>>;
-  /** Optional timeout deadline that should resume the work with flow.timeout. */
-  readonly timeoutAt?: Date;
-}
-
-/** Snapshot data supplied when a flow parks on suspend/wait. */
-export interface RuntimeSuspensionSnapshotInput {
-  /** Original flow input. */
-  readonly input: JsonValue;
-  /** In-process Effect boundary retained across flow execution segments. */
-  readonly effects?: EffectScopeRef;
-  /** Existing label-keyed step cache. */
-  readonly completedSteps: Readonly<Record<string, JsonValue>>;
-  /** Serializable observability carrier for the next execution segment. */
-  readonly continuation?: JsonValue;
-  /** Ordered replay labels observed so far. */
-  readonly fingerprint: readonly string[];
-  /** Event cursors for already consumed suspend deliveries. */
-  readonly deliveredSuspends?: RuntimeFlowSnapshot["deliveredSuspends"];
-  /** Durable work already flushed in prior replay passes. */
-  readonly scheduledWork?: RuntimeFlowSnapshot["scheduledWork"];
-}
-
-/** Buffered replay-visible work produced by `flow.defer()`/`after()`. */
-export type RuntimeScheduledWorkIntent =
-  | {
-      readonly kind: "defer";
-      readonly key: string;
-      readonly namespace: string;
-      readonly targetId: RuntimeTargetId;
-      readonly taskId: TaskId;
-      readonly workId: WorkId;
-      readonly input: JsonValue;
-      readonly idleScope: string;
-    }
-  | {
-      readonly kind: "after";
-      readonly key: string;
-      readonly namespace: string;
-      readonly targetId: RuntimeTargetId;
-      readonly taskId: TaskId;
-      readonly fireAt: Date;
-      readonly input: JsonValue;
-      readonly idleScope: string;
-    };
-
-/** Committed metadata produced by flushing one durable work intent. */
-export interface RuntimeScheduledWorkFlushRecord {
-  readonly key: string;
-  readonly workId?: WorkId;
-  readonly timerId?: TimerId;
-}
-
-/** Input for recording a flow suspension. */
-export interface RecordSuspensionInput {
-  /** Runtime namespace. */
-  readonly namespace: string;
-  /** Owning work item for the flow occurrence. */
-  readonly workId: WorkId;
-  /** Durable flow id. */
-  readonly flowId: FlowId;
-  /** Flow target id. */
-  readonly targetId: RuntimeTargetId;
-  /** Snapshot payload to persist. */
-  readonly snapshot: RuntimeSuspensionSnapshotInput;
-  /** Waiters to register before the suspension commits. */
-  readonly suspends: readonly RuntimeSuspendRegistration[];
-  /** Replay-visible durable work to flush with this suspension. */
-  readonly scheduledWork?: readonly RuntimeScheduledWorkIntent[];
-}
-
 /** Input for appending an event and firing matching waiters. */
 export interface EmitEventInput {
   /** Runtime namespace. */
@@ -269,96 +217,12 @@ export type RetryWorkResult =
       /** Whether this call moved retryable terminal work to pending. */
       readonly retried: true;
       /** Fresh pending work record carrying the operator retry idempotency key. */
-      readonly work: WorkItem;
+      readonly work: RuntimeWorkItem;
     }
   | {
       /** False when the work is missing or not in a retryable terminal state. */
       readonly retried: false;
     };
-
-/** Input for scheduling store-backed runtime timer records. */
-export interface ScheduleTimerInput {
-  /** Runtime namespace. */
-  readonly namespace: string;
-  /** Deadline when the timer becomes eligible to fire. */
-  readonly fireAt: Date;
-  /** Work to carry when the timer fires. */
-  readonly work: RuntimeWork;
-  /** Existing suspended work item to resume, when present. */
-  readonly workId?: WorkId;
-  /** Linked waiter whose timeout CAS must win before work is produced. */
-  readonly waiterId?: WaiterId;
-  /** Scoped-idle counter group to stamp onto work minted by the timer. */
-  readonly idleScope?: string;
-}
-
-/** Options for scanning due store-backed timers. */
-export interface ScanTimersOptions {
-  /** Namespace to scan. Omit only for maintenance diagnostics. */
-  readonly namespace?: string;
-  /** Time used to decide whether a timer is due. */
-  readonly now?: Date;
-  /** Maximum number of due timers to process. */
-  readonly limit?: number;
-}
-
-/** Result of one store-backed timer scan. */
-export interface ScanTimersResult {
-  /** Timers that won their race and produced wake work. */
-  readonly fired: number;
-  /** Timers that were already handled, cancelled, or lost the waiter race. */
-  readonly skipped: number;
-  /** Wake outbox rows produced by the scan. */
-  readonly outboxItems: readonly RuntimeOutboxItem[];
-}
-
-/** Transaction helper result for firing one timer record. */
-export interface FireTimerRecordResult {
-  /** Whether this timer produced runnable work. */
-  readonly fired: boolean;
-  /** Outbox item produced for the runnable work, when any. */
-  readonly outboxItem?: RuntimeOutboxItem;
-}
-
-/** Options for one kernel-owned maintenance pass. */
-export interface MaintenanceTickOptions {
-  /** Namespace to maintain. Omit only for diagnostics and local tests. */
-  readonly namespace?: string;
-  /** Time source for due timers and outbox eligibility. */
-  readonly now?: Date;
-  /** Maximum timers to scan. */
-  readonly timerLimit?: number;
-  /** Maximum leased work records to inspect for reclaim. */
-  readonly workLimit?: number;
-  /** Maximum expired waiter registrations to inspect. */
-  readonly waiterLimit?: number;
-  /** Optional wake delivery function for the outbox dispatch backstop. */
-  readonly deliver?: RuntimeWakeDeliver;
-}
-
-/** Summary of a kernel-owned maintenance pass. */
-export interface MaintenanceTickResult {
-  /** Outbox rows delivered by the backstop dispatcher. */
-  readonly outboxDelivered: number;
-  /** Outbox rows that failed delivery and were requeued. */
-  readonly outboxFailed: number;
-  /** Timers that produced runnable work. */
-  readonly timersFired: number;
-  /** Timers skipped because another race already won. */
-  readonly timersSkipped: number;
-  /** Leased work moved back to pending after lease expiry. */
-  readonly leasesReclaimed: number;
-  /** Unfinalized deferred invocation scopes abandoned after lease expiry. */
-  readonly deferredScopesAbandoned: number;
-  /** Waiters expired by the no-native-timer backstop. */
-  readonly waitersExpired: number;
-  /** Pending work rows with no live outbox wake that maintenance re-enqueued. */
-  readonly pendingRequeued: number;
-  /** Retention records removed. I4 has no retention policy yet. */
-  readonly retainedRecordsRemoved: number;
-  /** True when a bounded retention sweep left eligible records behind. */
-  readonly retentionTruncated?: boolean;
-}
 
 /** Outcome of a wake handling attempt. */
 export type RuntimeWakeResult =
@@ -378,6 +242,12 @@ export type RuntimeWakeResult =
 
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
+  /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
+  resumeFlow(input: FlowManualResumeInput): Promise<RuntimeWorkItem | null>;
+  /** Atomically accept one Signal occurrence and every required delivery. */
+  publishSignal(
+    input: SignalPublishCompositeInput,
+  ): Promise<SignalPublishCompositeResult>;
   /** Durably accept named deferred work without making it runnable. */
   stageDeferredIntent(
     input: StageDeferredIntentInput,
@@ -395,7 +265,7 @@ export interface RuntimeKernel {
     input: RenewDeferredScopeLeaseInput,
   ): Promise<RenewDeferredScopeLeaseResult>;
   /** Create pending task work and write its wake envelope to the outbox. */
-  enqueueTask(input: EnqueueTaskInput): Promise<WorkItem>;
+  enqueueTask(input: EnqueueTaskInput): Promise<RuntimeWorkItem>;
   /** Persist a flow suspension and owned waiter registrations atomically. */
   recordSuspension(input: RecordSuspensionInput): Promise<void>;
   /** Append an event and resume all matching waiters that win the CAS race. */
