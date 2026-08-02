@@ -4,7 +4,6 @@ import type {
   WorkControlRecord,
 } from "../../ports/work-control";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
-import { scopedKey } from "./data";
 
 export function createMemoryWorkControlPort(
   data: MemoryRuntimeData,
@@ -29,7 +28,7 @@ export function createMemoryWorkControlPort(
 }
 
 function workControlKey(key: WorkControlCommandKey): string {
-  return scopedKey(key.namespace, `${key.workId}\0${key.commandId}`);
+  return JSON.stringify([key.namespace, key.workId, key.commandId]);
 }
 
 function cloneWorkControlRecord(record: WorkControlRecord): WorkControlRecord {

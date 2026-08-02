@@ -3,6 +3,7 @@
 import type {
   RuntimeWorkControlPort,
   WorkControlCommandInput,
+  WorkControlRecord,
   WorkControlReceipt,
 } from "../ports/work-control";
 import type { RuntimeStoreAdapter, RuntimeStoreTransaction } from "../store";
@@ -54,9 +55,12 @@ export async function acceptWorkControlCommand(
   deps: AcceptWorkControlCommandDeps,
   input: AcceptWorkControlCommandInput,
 ): Promise<WorkControlReceipt> {
-  assertBoundedPayloadHash(input.payloadHash);
-
   return await deps.store.transact(async (tx) => {
+    const workControl = requireWorkControlPort(tx);
+    const existing = await workControl.get(input);
+    if (existing) return receiptForMatchingRecord(existing, input);
+
+    assertBoundedPayloadHash(input.payloadHash);
     const work = await tx.state.getWork(input.workId, {
       namespace: input.namespace,
     });
@@ -65,21 +69,6 @@ export async function acceptWorkControlCommand(
         WORK_CONTROL_ERROR_CODES.WORK_NOT_FOUND,
         "Owning Runtime Work was not found in this namespace.",
       );
-    }
-
-    const workControl = requireWorkControlPort(tx);
-    const existing = await workControl.get(input);
-    if (existing) {
-      if (
-        immutableCommandFingerprint(existing) !==
-        immutableCommandFingerprint(input)
-      ) {
-        throw new WorkControlAcceptanceError(
-          WORK_CONTROL_ERROR_CODES.COMMAND_CONFLICT,
-          "Work-control command identity was reused with different immutable inputs.",
-        );
-      }
-      return receiptFor(existing);
     }
 
     const acceptedAt = deps.now().toISOString();
@@ -97,7 +86,7 @@ export async function acceptWorkControlCommand(
         updatedAt: acceptedAt,
       }),
     );
-    return receiptFor(record);
+    return receiptForMatchingRecord(record, input);
   });
 }
 
@@ -130,6 +119,21 @@ function immutableCommandFingerprint(input: WorkControlCommandInput): string {
     input.acceptedAgentTargetId,
     input.resolvedPlanId,
   ]);
+}
+
+function receiptForMatchingRecord(
+  record: WorkControlRecord,
+  input: WorkControlCommandInput,
+): WorkControlReceipt {
+  if (
+    immutableCommandFingerprint(record) !== immutableCommandFingerprint(input)
+  ) {
+    throw new WorkControlAcceptanceError(
+      WORK_CONTROL_ERROR_CODES.COMMAND_CONFLICT,
+      "Work-control command identity was reused with different immutable inputs.",
+    );
+  }
+  return receiptFor(record);
 }
 
 function receiptFor(input: WorkControlReceipt): WorkControlReceipt {
