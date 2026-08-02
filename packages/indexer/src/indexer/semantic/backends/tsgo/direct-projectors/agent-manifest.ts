@@ -53,20 +53,10 @@ export const nativeDirectAgentPrimitiveManifest = [
       {
         kind: "objectShorthand",
         property: "tools",
-        targetKind: "tool",
-        relationType: "agent.uses_tool",
-        relationOrigin: { kind: "owner" },
-        sourceRef: {
-          role: "config",
-          property: "tools",
-          metadata: { toolMapContributor: "property" },
-        },
-      },
-      {
-        kind: "objectShorthand",
-        property: "tools",
-        targetKind: "agent",
-        relationType: "agent.uses_agent_tool",
+        targets: [
+          { targetKind: "tool", relationType: "agent.uses_tool" },
+          { targetKind: "agent", relationType: "agent.uses_agent_tool" },
+        ],
         relationOrigin: { kind: "owner" },
         sourceRef: {
           role: "config",

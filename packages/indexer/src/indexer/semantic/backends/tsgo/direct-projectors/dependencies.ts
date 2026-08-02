@@ -13,15 +13,16 @@ import {
   type PropertyName,
 } from '@typescript/native-preview/unstable/ast'
 import { nativeNodeList, nativeSourceForNode, nativeSourceSnippetForNode } from '../source'
-import type {
-  NativeDirectArrayDependencySpec,
-  NativeDirectDependencySpec,
-  NativeDirectDependencyFactSpec,
-  NativeDirectDefinitionKind,
-  NativeDirectIdentifierDependencySpec,
-  NativeDirectMcpExpectedToolsDependencySpec,
-  NativeDirectObjectDependencySpec,
-  NativeDirectRelationOriginSpec,
+import {
+  objectDependencyRelationType,
+  type NativeDirectArrayDependencySpec,
+  type NativeDirectDependencySpec,
+  type NativeDirectDependencyFactSpec,
+  type NativeDirectDefinitionKind,
+  type NativeDirectIdentifierDependencySpec,
+  type NativeDirectMcpExpectedToolsDependencySpec,
+  type NativeDirectObjectDependencySpec,
+  type NativeDirectRelationOriginSpec,
 } from './manifest'
 import { safeId } from '../../../../definitions'
 import { staticIdArrayEntries, type StaticIdArrayDependencyEntry } from './static-id-dependencies'
@@ -201,21 +202,23 @@ function objectShorthandEntries(
     nativeNodeList(expression.properties).map((property, index) => {
       if (!isShorthandPropertyAssignment(property) || !isIdentifier(property.name)) return undefined
       const target = definitions.get(property.name.text)
-      return target?.kind === spec.targetKind
-        ? {
-            kind: 'objectShorthand',
-            spec,
-            variable: property.name.text,
-            target,
-            relation: projectRelation({
-              type: spec.relationType,
-              from: relationOriginId(definition, spec.relationOrigin, index),
-              to: target.id,
-              fidelity: 'resolved',
-              source: nativeSourceForNode(definition.variable.file, definition.object),
-            }),
-          }
-        : undefined
+      if (!target) return undefined
+      const relationType = objectDependencyRelationType(spec, target.kind)
+      // Unadmitted kinds force shared-analyzer fallback rather than partial maps.
+      if (relationType === undefined) return undefined
+      return {
+        kind: 'objectShorthand' as const,
+        spec,
+        variable: property.name.text,
+        target,
+        relation: projectRelation({
+          type: relationType,
+          from: relationOriginId(definition, spec.relationOrigin, index),
+          to: target.id,
+          fidelity: 'resolved',
+          source: nativeSourceForNode(definition.variable.file, definition.object),
+        }),
+      }
     }),
   )
 }
