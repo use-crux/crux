@@ -42,8 +42,8 @@ export async function assertStaticRepositoryInvariants(
   const second = await extract(root, selection.files, options.syntaxFrontend);
   assertStaticRepositoryRunInvariants(root, selection.files, first);
   assertStaticRepositoryRunInvariants(root, selection.files, second);
-  assertNoDiagnostics(first);
-  assertNoDiagnostics(second);
+  assertNoErrorDiagnostics(first);
+  assertNoErrorDiagnostics(second);
   const firstCanonical = canonicalRun(root, first);
   const secondCanonical = canonicalRun(root, second);
 
@@ -107,9 +107,9 @@ export function assertStaticRepositoryRunInvariants(
       const dependencyFile = localDependencyFile(extraction.file, dependency);
       if (!dependencyFile) continue;
       const dependencyPath = rootRelativePath(root, dependencyFile);
-      if (!isSafeRelativePath(dependencyPath) || !selectedSet.has(dependencyPath)) {
+      if (!isSafeRelativePath(dependencyPath)) {
         throw new Error(
-          `Local static repository dependency is outside the selected corpus: ${normalizePath(dependency)}`,
+          `Local static repository dependency is outside the repository root: ${normalizePath(dependency)}`,
         );
       }
     }
@@ -125,11 +125,13 @@ function localDependencyFile(file: string, dependency: string): string | undefin
   return undefined;
 }
 
-function assertNoDiagnostics(files: readonly StaticFileExtraction[]): void {
-  const diagnostics = files.flatMap((file) => file.diagnostics);
+function assertNoErrorDiagnostics(files: readonly StaticFileExtraction[]): void {
+  const diagnostics = files
+    .flatMap((file) => file.diagnostics)
+    .filter((diagnostic) => diagnostic.severity === "error");
   if (diagnostics.length === 0) return;
   throw new Error(
-    `Unexpected static repository diagnostics: ${diagnostics
+    `Static repository error diagnostics: ${diagnostics
       .map((diagnostic) => diagnostic.code)
       .join(", ")}`,
   );

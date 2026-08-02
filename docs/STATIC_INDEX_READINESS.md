@@ -23,7 +23,7 @@ Gate coverage:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust worker build           | The gate builds `crux-static-index-worker` before worker-backed tests.                                                                                                              |
 | Curated compiler contracts  | Small protocol, Static Syntax, descriptor, relation, primitive, and extractor fixtures assert exact intended behavior without snapshotting ordinary repository source.             |
-| First-party repository      | `rust-first-party-repository-invariants.test.ts` uses production discovery/extraction with Rust/Oxc and no cache, accounts for selected files, rejects diagnostics, and compares two normalized runs for determinism. |
+| First-party repository      | `rust-first-party-repository-invariants.test.ts` uses production discovery/extraction with Rust/Oxc and no cache, accounts for selected files, rejects error diagnostics, and compares two normalized runs for determinism. Source-level warnings are allowed without pinning their count. |
 | Full indexer suite          | The full `@use-crux/indexer` suite runs with the freshly built Rust worker.                                                                                                         |
 | Go production path          | Go Project Index packages run with the built Rust worker and embedded local worker bundle; their genuine cross-runtime parity tests remain part of this evidence.                  |
 | Local worker embed path     | The gate builds `@use-crux/local-workers` and embeds the generated assets before the Go Project Index packages run.                                                               |
@@ -45,7 +45,10 @@ Rust/Oxc with a checked whole-repository snapshot or claim Rust-to-Rust parity.
   by exact curated contract fixtures for intended output and by the
   cache-disabled first-party repository invariant/determinism test for
   production discovery, extraction accounting, safe paths, local dependencies,
-  diagnostics, and repeatability.
+  error diagnostics, and repeatability. Source-level warnings remain part of
+  the canonical two-run comparison without a code allowlist, count snapshot, or
+  threshold. Thrown worker, protocol, process, source-read, and extractor
+  failures fail the gate before a result can be accepted.
 - TypeScript extension host coverage remains for an experimental third-party
   extractor and mixed Rust plus extension output. Internal rule-slot fixtures
   do not constitute a public third-party rule promise.

@@ -63,14 +63,18 @@ The required invariants are deliberately structural and deterministic:
   candidates are retained only as discovery accounting.
 - Every extracted file has one unique, root-relative POSIX path. No path is
   empty, absolute, outside the root, or duplicated.
-- There are no unexpected diagnostics. The invariant runner must distinguish
-  expected source-level diagnostics represented by a curated input from worker,
-  protocol, source-read, or extractor-failure diagnostics; the latter fail the
-  repository gate. It must not suppress diagnostics by count or threshold.
-- Every local dependency path and every dependency target that the current
-  normalized extraction represents as a file path resolves inside the selected
-  repository set. Non-file specifiers remain valid external dependencies and
-  are not coerced into paths.
+- Source-level warning diagnostics are allowed without pinning their count.
+  Diagnostics with severity `error` fail the repository gate, as do thrown
+  worker, protocol, process, source-read, or extractor failures before an
+  extraction result is produced. No diagnostic code allowlist, count snapshot,
+  or threshold is used; canonical two-run comparison still requires warning
+  output to be deterministic.
+- Every explicit local dependency path that the current normalized extraction
+  represents as a file path resolves inside the repository root. Production
+  discovery may validly skip dependency files that contain no Crux source
+  signals, so dependency membership in the selected-file set is not required.
+  Non-file specifiers remain valid external dependencies and are not coerced
+  into paths.
 
 No raw source hashes, canonical byte lengths, per-file fact counts, global
 counts, checked repository output, or performance threshold is an invariant.

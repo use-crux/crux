@@ -44,7 +44,37 @@ describe("static repository invariants", () => {
     }
   });
 
-  it("rejects repository extraction diagnostics", async () => {
+  it("accepts source-level warning diagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crux-static-invariants-"));
+
+    try {
+      await writeCorpusFile(root);
+
+      await expect(
+        assertStaticRepositoryInvariants(root, {
+          syntaxFrontend: () => ({
+            ...emptyFrontend,
+            parseFile: (input) => ({
+              ...emptyRecord(input),
+              diagnostics: [
+                {
+                  id: "fixture-warning",
+                  severity: "warning",
+                  code: "relation.unresolved_reference",
+                  message: "Fixture reference is unresolved",
+                  source: { file: input.file, line: 1, column: 1 },
+                },
+              ],
+            }),
+          }),
+        }),
+      ).resolves.toBeDefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects error diagnostics and reports their code", async () => {
     const root = await mkdtemp(join(tmpdir(), "crux-static-invariants-"));
 
     try {
@@ -87,10 +117,10 @@ describe("static repository invariants", () => {
     ).toThrow(/exactly once/);
   });
 
-  it("rejects local dependency paths outside the selected corpus", () => {
+  it("accepts local dependency paths inside the root when discovery skips them", () => {
     const extraction = {
       ...emptyExtraction("/repo/src/prompt.ts"),
-      dependencies: ["@acme/external", "/repo/src/missing.ts"],
+      dependencies: ["@acme/external", "/repo/src/helper.ts"],
     };
 
     expect(() =>
@@ -99,7 +129,22 @@ describe("static repository invariants", () => {
         [extraction.file],
         [extraction],
       ),
-    ).toThrow(/dependency.*missing\.ts/i);
+    ).not.toThrow();
+  });
+
+  it("rejects local dependency paths outside the repository root", () => {
+    const extraction = {
+      ...emptyExtraction("/repo/src/prompt.ts"),
+      dependencies: ["@acme/external", "/outside/helper.ts"],
+    };
+
+    expect(() =>
+      assertStaticRepositoryRunInvariants(
+        "/repo",
+        [extraction.file],
+        [extraction],
+      ),
+    ).toThrow(/dependency.*outside\/helper\.ts/i);
   });
 });
 
