@@ -47,6 +47,7 @@ export interface InternalWorkOwnerPort {
   /** Accept one Work occurrence and retain its typed handle under this owner. */
   spawnAndRetain<TOutput>(
     driver: InternalWorkTargetDriver<TOutput>,
+    options?: InternalWorkOwnerSpawnOptions,
   ): Promise<InternalRetainedWorkReference<TOutput>>;
 
   /** Recover a retained handle only when this port originated its reference. */
@@ -61,6 +62,14 @@ export interface InternalWorkOwnerPort {
   lookup(id: string): InternalWorkHandle<unknown> | undefined;
 }
 
+/** Cancellation-only linkage accepted by owner-retained child Work. @internal */
+export interface InternalWorkOwnerSpawnOptions {
+  readonly kind: "cancellation-only";
+  readonly signal?: AbortSignal;
+  /** Run without retaining this Work in the ambient Effect boundary. */
+  readonly effectParent?: "independent";
+}
+
 /** Create one isolated logical-owner capability over an injected Work kernel. */
 export function createInternalWorkOwnerPort(
   kernel: ProcessLocalWorkKernel,
@@ -71,8 +80,9 @@ export function createInternalWorkOwnerPort(
   return Object.freeze({
     async spawnAndRetain<TOutput>(
       driver: InternalWorkTargetDriver<TOutput>,
+      options?: InternalWorkOwnerSpawnOptions,
     ): Promise<InternalRetainedWorkReference<TOutput>> {
-      const handle = await kernel.spawn(driver);
+      const handle = await kernel.spawn(driver, options);
       const reference = new OwnerRetainedWorkReference<TOutput>(handle.id, owner);
       retainedHandles.set(handle.id, handle);
       return reference;

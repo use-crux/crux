@@ -19,6 +19,8 @@ export interface InternalWorkAttachment {
 export interface InternalWorkCancellationOnly {
   readonly kind: "cancellation-only";
   readonly signal?: AbortSignal;
+  /** Run without retaining this Work in the ambient Effect boundary. */
+  readonly effectParent?: "independent";
 }
 
 /** Explicit linkage supplied when accepting an internal Work. @internal */

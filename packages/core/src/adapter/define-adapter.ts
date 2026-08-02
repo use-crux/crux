@@ -33,6 +33,7 @@ import {
   bindForegroundAgentTools,
   createForegroundChildWorkPort,
 } from "../agent/foreground-tool-binder";
+import { bindBackgroundAgentTools } from "../agent/background-tool-binder";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
@@ -51,6 +52,7 @@ import { createStreamResult } from "./result-accumulator";
 import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
 import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
+import { createInternalWorkOwnerPort } from "../work/internal/owner-retained-work";
 
 export type {
   AdapterGenerateOptions,
@@ -274,7 +276,13 @@ export function adapter<
       // Merge agent tools + composition-level tools into the prompt
       // so the tool loop can pick them up from the resolved prompt.
       const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
-      const boundTools = bindForegroundAgentTools(mergedTools, {
+      const backgroundWork = createInternalWorkOwnerPort(workKernel);
+      const backgroundBoundTools = bindBackgroundAgentTools(mergedTools, {
+        executor,
+        model,
+        work: backgroundWork,
+      });
+      const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
         executor,
         model,
         work: foregroundWork,

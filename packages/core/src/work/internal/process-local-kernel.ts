@@ -206,56 +206,65 @@ export function createProcessLocalWorkKernel(
       const scheduled = new Promise<void>((resolve) => {
         start = resolve;
       });
-      const execution = runEffectBoundary(id, async (boundary) => {
-        acceptEffects(boundary.ref);
-        schedule(start);
-        await scheduled;
+      const execution = runEffectBoundary(
+        id,
+        async (boundary) => {
+          acceptEffects(boundary.ref);
+          schedule(start);
+          await scheduled;
 
-        const startedAt = now().getTime();
-        record.status = Object.freeze({
-          id,
-          state: "running",
-          acceptedAt,
-          startedAt,
-          updatedAt: startedAt,
-        });
-        const context: InternalWorkExecutionContext = Object.freeze({
-          id,
-          ...(attachment ? { attachedParentId: attachment.parentId } : undefined),
-          signal: cancellation.signal,
-          effects: boundary.ref,
-        });
-        let output: TOutput;
-        try {
-          output = await runWithInternalWorkContext(
-            id,
-            cancellation.signal,
-            () => driver.run(context),
-          );
-        } catch (failure) {
-          const failedAt = now().getTime();
+          const startedAt = now().getTime();
           record.status = Object.freeze({
             id,
-            state: "failed",
+            state: "running",
             acceptedAt,
             startedAt,
-            failedAt,
-            updatedAt: failedAt,
+            updatedAt: startedAt,
           });
-          throw failure;
-        }
-        const completedAt = now().getTime();
-        record.status = Object.freeze({
-          id,
-          state: "completed",
-          acceptedAt,
-          startedAt,
-          completedAt,
-          resultAvailable: true,
-          updatedAt: completedAt,
-        });
-        return output;
-      });
+          const context: InternalWorkExecutionContext = Object.freeze({
+            id,
+            ...(attachment ? { attachedParentId: attachment.parentId } : undefined),
+            signal: cancellation.signal,
+            effects: boundary.ref,
+          });
+          let output: TOutput;
+          try {
+            output = await runWithInternalWorkContext(
+              id,
+              cancellation.signal,
+              () => driver.run(context),
+            );
+          } catch (failure) {
+            const failedAt = now().getTime();
+            record.status = Object.freeze({
+              id,
+              state: "failed",
+              acceptedAt,
+              startedAt,
+              failedAt,
+              updatedAt: failedAt,
+            });
+            throw failure;
+          }
+          const completedAt = now().getTime();
+          record.status = Object.freeze({
+            id,
+            state: "completed",
+            acceptedAt,
+            startedAt,
+            completedAt,
+            resultAvailable: true,
+            updatedAt: completedAt,
+          });
+          return output;
+        },
+        undefined,
+        options &&
+          "effectParent" in options &&
+          options.effectParent === "independent"
+          ? { effectParent: "independent" }
+          : undefined,
+      );
       void execution.then(cancellation.dispose, cancellation.dispose);
       void execution.catch(() => undefined);
       let effects: EffectScopeRef;
