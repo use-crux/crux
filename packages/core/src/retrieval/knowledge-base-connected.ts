@@ -10,7 +10,7 @@
 
 import { indexedNamespacePrefix, indexedSourcePrefix, listIndexedEntries } from '../indexed-knowledge/keys'
 import { compileKnowledgeGeneration, deleteKnowledgeClaimsForSource } from '../knowledge/compile'
-import { runDeriveStages } from '../knowledge/derive/runner'
+import { runDeriveStages, type DeriveStageRunResult } from '../knowledge/derive/runner'
 import type { DeriveStage } from '../knowledge/derive/stage'
 import { createKnowledgeGraphStore } from '../knowledge/graph-store'
 import { communityScopeKey } from '../knowledge/communities/keys'
@@ -20,8 +20,11 @@ import { createKnowledgeViewRegistry, type KnowledgeViewRegistry } from '../know
 import type { KnowledgeGenerationRetention } from '../knowledge/generation'
 import { relateEntities } from '../knowledge/relate/entities'
 import type { CruxChunk, CruxDocument, IndexingPipeline } from '../indexing'
+import type { ConnectedKnowledgeStageSummary, ConnectedKnowledgeSummary } from '../indexing'
 import type { AssetStore, JsonObject, RecordStore } from '../storage'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
+
+const MAX_KNOWLEDGE_SUMMARY_WARNINGS = 50
 
 /** Configuration for {@link createConnectedKnowledgeIntegration}. Internal. */
 export interface ConnectedKnowledgeIntegrationConfig {
@@ -41,7 +44,7 @@ export interface ConnectedKnowledgeIntegration {
   /** Return the per-runtime view registry. */
   viewRegistry(): KnowledgeViewRegistry
   /** Update view membership, then run derive stages and compile when configured. */
-  afterIndex(sourceIds?: readonly string[]): Promise<void>
+  afterIndex(sourceIds?: readonly string[]): Promise<ConnectedKnowledgeSummary | undefined>
   /** Drop removed-source view membership and claims, then recompile when configured. */
   afterRemove(sourceId: string): Promise<void>
 }
@@ -71,25 +74,26 @@ export function createConnectedKnowledgeIntegration(
     graphStore = undefined
   }
 
-  async function afterIndex(sourceIds?: readonly string[]): Promise<void> {
+  async function afterIndex(sourceIds?: readonly string[]): Promise<ConnectedKnowledgeSummary | undefined> {
     await views.afterIndex(sourceIds)
-    if (records && hasConnectedFeature(deriveStages, config.communities)) {
-      await markCommunitiesDirty(sourceIds ?? await activeSourceIds(records, indexerId, namespace), 'indexed')
-      for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
-        const source = await activeSource(records, indexerId, namespace, sourceId)
-        if (!source) continue
-        await runDeriveStages({
-          records,
-          indexerId,
-          namespace,
-          stages: deriveStages,
-          document: source.document,
-          chunks: source.chunks,
-          ...(config.assets ? { assets: config.assets } : {}),
-        })
-      }
-      await compile()
+    if (!records || !hasConnectedFeature(deriveStages, config.communities)) return undefined
+    await markCommunitiesDirty(sourceIds ?? await activeSourceIds(records, indexerId, namespace), 'indexed')
+    const stageRuns: DeriveStageRunResult[] = []
+    for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
+      const source = await activeSource(records, indexerId, namespace, sourceId)
+      if (!source) continue
+      stageRuns.push(...await runDeriveStages({
+        records,
+        indexerId,
+        namespace,
+        stages: deriveStages,
+        document: source.document,
+        chunks: source.chunks,
+        ...(config.assets ? { assets: config.assets } : {}),
+      }))
     }
+    await compile()
+    return summarizeDeriveRuns(stageRuns)
   }
 
   async function afterRemove(sourceId: string): Promise<void> {
@@ -125,6 +129,47 @@ export function createConnectedKnowledgeIntegration(
 
 function hasConnectedFeature(stages: readonly DeriveStage[], communities: CommunitiesConfig | undefined): boolean {
   return stages.length > 0 || communities !== undefined
+}
+
+function summarizeDeriveRuns(runs: readonly DeriveStageRunResult[]): ConnectedKnowledgeSummary {
+  const byStage = new Map<string, {
+    readonly stageId: string
+    ran: number
+    cached: number
+    claims: number
+    warnings: string[]
+    extraWarnings: number
+  }>()
+  for (const run of runs) {
+    let stage = byStage.get(run.stageId)
+    if (!stage) {
+      stage = { stageId: run.stageId, ran: 0, cached: 0, claims: 0, warnings: [], extraWarnings: 0 }
+      byStage.set(run.stageId, stage)
+    }
+    stage[run.status] += 1
+    stage.claims += run.claims
+    appendBoundedWarnings(stage, run.warnings)
+  }
+  const stages: ConnectedKnowledgeStageSummary[] = [...byStage.values()].map((stage) => ({
+    stageId: stage.stageId,
+    status: { ran: stage.ran, cached: stage.cached },
+    claims: stage.claims,
+    warnings: stage.extraWarnings > 0 ? [...stage.warnings, `+${stage.extraWarnings} more`] : [...stage.warnings],
+  }))
+  return { stages }
+}
+
+function appendBoundedWarnings(
+  stage: { warnings: string[]; extraWarnings: number },
+  warnings: readonly string[],
+): void {
+  for (const warning of warnings) {
+    if (stage.warnings.length < MAX_KNOWLEDGE_SUMMARY_WARNINGS) {
+      stage.warnings.push(warning)
+    } else {
+      stage.extraWarnings += 1
+    }
+  }
 }
 
 function effectiveDeriveStages(

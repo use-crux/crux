@@ -191,7 +191,7 @@ describe('assertions', () => {
     expect(compiled.assertions[0]).toMatchObject({ type: 'fact', data: { value: 'valid' } })
 
     const second = await runDeriveStages(args)
-    expect(second).toEqual([{ stageId: 'facts', status: 'cached', claims: 1, warnings: [] }])
+    expect(second).toEqual([{ stageId: 'facts', status: 'cached', claims: 1, warnings: first[0]?.warnings }])
     expect(model.generateObject).toHaveBeenCalledTimes(2)
   })
 })

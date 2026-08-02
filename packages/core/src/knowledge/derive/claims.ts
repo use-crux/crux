@@ -30,6 +30,7 @@ export interface ClaimManifestRecord extends JsonObject {
   readonly _cruxRecordType: 'knowledge-claim-manifest'
   readonly sourceHash: string, readonly stageFingerprint: string
   readonly claimHashes: readonly string[]
+  readonly warnings?: readonly string[]
 }
 export type RawRelationClaim = {
   readonly type: unknown, readonly from: unknown, readonly to: unknown
@@ -172,6 +173,7 @@ export async function replaceClaimRecords(args: ClaimCacheArgs & {
   readonly sourceHash: string, readonly stageFingerprint: string
   readonly previous: ClaimManifestRecord | undefined
   readonly claims: readonly ClaimRecord[]
+  readonly warnings: readonly string[]
 }): Promise<void> {
   await deletePreviousClaims(args)
   await Promise.all(args.claims.map((claim) => args.records.put(knowledgeClaimsKey(
@@ -191,6 +193,7 @@ export async function replaceClaimRecords(args: ClaimCacheArgs & {
     sourceHash: args.sourceHash,
     stageFingerprint: args.stageFingerprint,
     claimHashes: args.claims.map((claim) => claim.claimHash).sort(),
+    ...(args.warnings.length > 0 ? { warnings: [...args.warnings] } : {}),
   })
 }
 
@@ -265,7 +268,11 @@ function isManifestRecord(value: unknown): value is ClaimManifestRecord {
     typeof value.sourceHash === 'string' &&
     typeof value.stageFingerprint === 'string' &&
     Array.isArray(value.claimHashes) &&
-    value.claimHashes.every((hash) => typeof hash === 'string')
+    value.claimHashes.every((hash) => typeof hash === 'string') &&
+    (
+      value.warnings === undefined ||
+      (Array.isArray(value.warnings) && value.warnings.every((warning) => typeof warning === 'string'))
+    )
 }
 
 function isCachedClaimRecord(value: unknown, stage: DeriveStage, sourceId: string, claimHash: string): value is ClaimRecord {

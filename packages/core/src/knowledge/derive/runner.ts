@@ -27,10 +27,8 @@ import {
   type RawRelationClaim,
 } from './claims'
 import { generateObjectWithEvidence } from './modality-validation'
+import { renderBoundedRelationPrompt, renderBoundedRepairPrompt } from './prompt-bounds'
 import type { DeriveStage } from './stage'
-
-const MAX_PROMPT_CHARS = 12000
-const MAX_CHUNK_CHARS = 1200
 
 /** Input for running configured derivations against one source. */
 export interface RunDeriveStagesInput {
@@ -78,7 +76,13 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         stageFingerprint,
       })
     if (cached !== undefined) {
-      results.push({ stageId: stage.id, status: 'cached', claims: cached, warnings: [] })
+      const manifest = await readClaimManifest(input.records, claimManifestKey({
+        indexerId: input.indexerId,
+        namespace: input.namespace,
+        stageId: stage.id,
+        sourceId: input.document.sourceId,
+      }))
+      results.push({ stageId: stage.id, status: 'cached', claims: cached, warnings: manifestWarnings(manifest) })
       continue
     }
 
@@ -105,6 +109,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         stageFingerprint,
         previous,
         claims: [...run.claims, ...run.relationClaims],
+        warnings: run.warnings,
       })
       results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
       continue
@@ -120,6 +125,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         stageFingerprint,
         previous,
         claims: run.claims,
+        warnings: run.warnings,
       })
       results.push({ stageId: stage.id, status: 'ran', claims: run.claims.length, warnings: run.warnings })
     }
@@ -172,14 +178,22 @@ async function runGenerated(
   input: RunDeriveStagesInput,
   stage: RelationStage<Record<string, RelationTypeSpec>>,
 ): Promise<{ readonly claims: readonly ClaimRecord[]; readonly warnings: readonly string[] }> {
-  const prompt = renderPrompt(input.document, input.chunks, stage)
+  const rendered = renderBoundedRelationPrompt(input.document, input.chunks, stage)
+  const prompt = rendered.prompt
   const first = await readGeneratedClaims(input, stage, prompt)
   const valid = new Map<string, ClaimRecord>()
-  const warnings: string[] = []
+  const warnings: string[] = [...rendered.warnings]
   addRecords(valid, toClaimRecords(stage, input.document.sourceId, first.claims))
 
   if (first.errors.length > 0) {
-    const repaired = await readGeneratedClaims(input, stage, `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`)
+    const repairedPrompt = renderBoundedRepairPrompt({
+      stageId: stage.id,
+      sourceId: input.document.sourceId,
+      prompt,
+      errors: first.errors,
+    })
+    warnings.push(...repairedPrompt.warnings)
+    const repaired = await readGeneratedClaims(input, stage, repairedPrompt.prompt)
     addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
     for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
       warnings.push(`Derive ${stage.id} dropped invalid claim: ${error}`)
@@ -262,26 +276,8 @@ function addRecords(target: Map<string, ClaimRecord>, records: readonly ClaimRec
   for (const record of records) target.set(record.claimHash, record)
 }
 
-function renderPrompt(
-  document: CruxDocument,
-  chunks: readonly CruxChunk[],
-  stage: RelationStage<Record<string, RelationTypeSpec>>,
-): string {
-  const vocabulary = Object.entries(stage.types).map(([name, spec]) =>
-    `${name}: ${spec.description}; from ${spec.from.join('|')}; to ${spec.to.join('|')}`,
-  )
-  return bound([
-    stage.instructions ?? '',
-    `Source: ${document.sourceId}`,
-    document.title ? `Title: ${document.title}` : '',
-    `Vocabulary:\n${vocabulary.join('\n')}`,
-    `Document:\n${bound(document.content ?? '', MAX_CHUNK_CHARS)}`,
-    `Chunks:\n${chunks.map((chunk) => `[${chunk.chunkId}] ${bound(chunk.content, MAX_CHUNK_CHARS)}`).join('\n')}`,
-  ].filter(Boolean).join('\n\n'), MAX_PROMPT_CHARS)
-}
-
-function bound(value: string, max = MAX_PROMPT_CHARS): string {
-  return value.length <= max ? value : value.slice(0, max)
+function manifestWarnings(manifest: { readonly warnings?: readonly string[] } | undefined): readonly string[] {
+  return manifest?.warnings ?? []
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

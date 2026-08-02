@@ -49,6 +49,8 @@ export type {
   PipelineCacheMode,
   PipelineCacheConfig,
   // Indexer
+  ConnectedKnowledgeStageSummary,
+  ConnectedKnowledgeSummary,
   IndexResult,
   IndexDryRunResult,
   IndexFingerprintOptions,

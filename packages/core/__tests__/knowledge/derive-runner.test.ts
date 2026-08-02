@@ -161,7 +161,7 @@ describe('runDeriveStages', () => {
     })
 
     const second = await runDeriveStages(args)
-    expect(second).toEqual([{ stageId: 'refs', status: 'cached', claims: 1, warnings: [] }])
+    expect(second).toEqual([{ stageId: 'refs', status: 'cached', claims: 1, warnings: first[0]?.warnings }])
     expect(source.generateObject).toHaveBeenCalledTimes(2)
   })
 

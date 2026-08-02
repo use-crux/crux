@@ -1,7 +1,9 @@
 import { runNativeEffect, type NativeEffectProvider } from '../effect/internal/native'
+import { recordEffectReceiptVerification } from '../effect/internal/receipt-verification-evidence'
 import { observe, type CruxPrimitiveName } from '../observability'
 import type { EffectResource } from '../effect'
-import type { CorpusSyncResult, IndexResult } from '../indexing'
+import type { ConnectedKnowledgeSummary, CorpusSyncResult, IndexResult } from '../indexing'
+import type { JsonValue } from '../storage'
 import type { KnowledgeBaseRemoveResult } from './knowledge-base-runtime'
 
 /** Public knowledge-base mutation operation represented as a native Effect. */
@@ -40,6 +42,8 @@ const provider: NativeEffectProvider<KnowledgeBaseMutation, never> = {
   },
 }
 
+const mutationReceipts = new WeakMap<object, { readonly kind: 'effect.receipt'; readonly id: string; readonly effectId: string }>()
+
 /** Run one public knowledge-base mutation as an audit-first native Effect. */
 export async function runKnowledgeBaseMutationEffect<
   TOutput extends IndexResult | CorpusSyncResult | KnowledgeBaseRemoveResult,
@@ -60,12 +64,26 @@ export async function runKnowledgeBaseMutationEffect<
   })
   try {
     const execution = await runNativeEffect(provider, operation, span, run)
+    if (typeof execution.output === 'object' && execution.output !== null) {
+      mutationReceipts.set(execution.output, execution.receipt)
+    }
     span.end({ attributes: mutationEndAttributes(execution.output) })
     return execution.output
   } catch (error) {
     span.error(error)
     throw error
   }
+}
+
+/** Record connected-knowledge diagnostics against the mutation receipt that produced a result. Internal. */
+export function recordKnowledgeBaseMutationKnowledgeEvidence(
+  output: IndexResult | CorpusSyncResult,
+  knowledge: ConnectedKnowledgeSummary | undefined,
+): void {
+  if (!knowledge) return
+  const receipt = mutationReceipts.get(output)
+  if (!receipt) return
+  recordEffectReceiptVerification(receipt, knowledgeEvidenceData(knowledge))
 }
 
 function recoveryFor(
@@ -99,6 +117,7 @@ function knowledgeBaseAttributes(
   }
   if (!output) return base
   if (output && 'sources' in output) {
+    const knowledge = knowledgeAttributes(output.knowledge)
     return {
       ...base,
       sourceCount: output.sources.length,
@@ -110,6 +129,7 @@ function knowledgeBaseAttributes(
       skipped: output.skipped,
       failed: output.failed,
       deleted: output.deleted,
+      ...knowledge,
     }
   }
   if ('deletedCount' in output) return { ...base, deletedCount: output.deletedCount }
@@ -118,6 +138,31 @@ function knowledgeBaseAttributes(
     sourceCount: output.sourceCount,
     chunkCount: output.chunkCount,
     stageCount: output.stages?.length ?? 0,
+    ...knowledgeAttributes(output.knowledge),
+  }
+}
+
+function knowledgeAttributes(
+  knowledge: ConnectedKnowledgeSummary | undefined,
+): Record<string, number> {
+  if (!knowledge) return {}
+  return {
+    knowledgeStageCount: knowledge.stages.length,
+    knowledgeClaimCount: knowledge.stages.reduce((total, stage) => total + stage.claims, 0),
+    knowledgeWarningCount: knowledge.stages.reduce((total, stage) => total + stage.warnings.length, 0),
+  }
+}
+
+function knowledgeEvidenceData(knowledge: ConnectedKnowledgeSummary): JsonValue {
+  return {
+    knowledge: {
+      stages: knowledge.stages.map((stage) => ({
+        stageId: stage.stageId,
+        status: { ran: stage.status.ran, cached: stage.status.cached },
+        claims: stage.claims,
+        warnings: [...stage.warnings],
+      })),
+    },
   }
 }
 

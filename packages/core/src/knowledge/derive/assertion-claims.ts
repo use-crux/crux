@@ -145,6 +145,7 @@ export async function replaceAssertionClaimRecords(args: {
   readonly stageFingerprint: string
   readonly previous: ClaimManifestRecord | undefined
   readonly claims: readonly (AssertionClaimRecord | AssertionRelationClaimRecord)[]
+  readonly warnings: readonly string[]
 }): Promise<void> {
   await deletePreviousClaims(args)
   await Promise.all(args.claims.map((claim) => args.records.put(claimKey(args, claim.claimHash), claim)))
@@ -158,6 +159,7 @@ export async function replaceAssertionClaimRecords(args: {
     sourceHash: args.sourceHash,
     stageFingerprint: args.stageFingerprint,
     claimHashes: args.claims.map((claim) => claim.claimHash).sort(),
+    ...(args.warnings.length > 0 ? { warnings: [...args.warnings] } : {}),
   })
 }
 

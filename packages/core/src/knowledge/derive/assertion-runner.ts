@@ -5,7 +5,6 @@
  */
 
 import { z } from 'zod'
-import { stableStringify } from '../../indexing/hash'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { AssetStore } from '../../storage'
 import type { AssertionStage } from '../assertions/assertions'
@@ -25,9 +24,7 @@ import {
   type RawAssertionRelationClaim,
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
-
-const MAX_PROMPT_CHARS = 12000
-const MAX_CHUNK_CHARS = 1200
+import { renderBoundedAssertionPrompt, renderBoundedRepairPrompt } from './prompt-bounds'
 
 const refSchema: z.ZodType<KnowledgeRef> = z.union([
   z.object({ kind: z.literal('document'), sourceId: z.string() }).strict(),
@@ -109,17 +106,22 @@ async function runGenerated(input: {
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
   readonly warnings: readonly string[]
 }> {
-  const prompt = renderPrompt(input.document, input.chunks, input.stage)
+  const rendered = renderBoundedAssertionPrompt(input.document, input.chunks, input.stage)
+  const prompt = rendered.prompt
   const first = await readGeneratedAssertionClaims(input, prompt)
   const valid = new Map<string, AssertionClaimRecord>()
-  const warnings: string[] = []
+  const warnings: string[] = [...rendered.warnings]
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
 
   if (first.errors.length > 0) {
-    const repaired = await readGeneratedAssertionClaims(
-      input,
-      `${prompt}\n\nFix these validation errors:\n${first.errors.join('\n')}`,
-    )
+    const repairedPrompt = renderBoundedRepairPrompt({
+      stageId: input.stage.id,
+      sourceId: input.document.sourceId,
+      prompt,
+      errors: first.errors,
+    })
+    warnings.push(...repairedPrompt.warnings)
+    const repaired = await readGeneratedAssertionClaims(input, repairedPrompt.prompt)
     addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
     for (const error of repaired.errors.length > 0 ? repaired.errors : first.errors) {
       warnings.push(`Derive ${input.stage.id} dropped invalid assertion: ${error}`)
@@ -171,25 +173,6 @@ function payloadSchema(stage: AssertionStage<Record<string, z.ZodType<unknown>>>
   }).strict()
 }
 
-function renderPrompt(
-  document: CruxDocument,
-  chunks: readonly CruxChunk[],
-  stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
-): string {
-  const vocabulary = Object.entries(stage.types).map(([name, schema]) =>
-    `${name}: ${stableStringify(z.toJSONSchema(schema))}`,
-  )
-  return bound([
-    stage.instructions ?? '',
-    `Source: ${document.sourceId}`,
-    document.title ? `Title: ${document.title}` : '',
-    `Vocabulary:\n${vocabulary.join('\n')}`,
-    `Document:\n${bound(document.content ?? '', MAX_CHUNK_CHARS)}`,
-    `Chunks:\n${chunks.map((chunk) =>
-      `[${chunk.sourceId}/${chunk.chunkId}] ${bound(chunk.content, MAX_CHUNK_CHARS)}`).join('\n')}`,
-  ].filter(Boolean).join('\n\n'), MAX_PROMPT_CHARS)
-}
-
 function addRecords(target: Map<string, AssertionClaimRecord>, records: readonly AssertionClaimRecord[]): void {
   for (const record of records) target.set(record.claimHash, record)
 }
@@ -211,8 +194,4 @@ function createEmittedRef(
       data: json ?? null,
     }),
   }
-}
-
-function bound(value: string, max = MAX_PROMPT_CHARS): string {
-  return value.length <= max ? value : value.slice(0, max)
 }

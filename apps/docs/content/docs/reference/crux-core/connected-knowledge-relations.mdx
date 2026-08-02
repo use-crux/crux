@@ -29,6 +29,19 @@ emitting edge claims during indexing. Use `relate()` for custom vocabularies,
 `relateReferences()` for explicit document references, and `relateEntities()`
 for generic entity mentions and entity relationships.
 
+## Prompt Bounds
+
+Model-mode relation derivation uses these exact exported constants:
+
+| Constant | Value | Applies To |
+| --- | ---: | --- |
+| `MAX_DERIVE_CHUNK_CHARS` | `1200` | Source document body and each chunk included in the derive prompt. |
+| `MAX_DERIVE_PROMPT_CHARS` | `12000` | Final derive prompt sent for a stage/source run. |
+
+Truncation warnings are returned on `result.knowledge` from
+`knowledgeBase().index()` and `knowledgeBase().reindex()`. The same bounded
+summary is recorded on the mutation effect receipt evidence.
+
 ## `relate(config)`
 
 Creates a frozen relation stage for an indexing pipeline.
