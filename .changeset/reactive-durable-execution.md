@@ -45,3 +45,6 @@ Complete the pre-launch alpha Runtime Engine queue-record migration. Use
 `RuntimeWorkItem` for queue records and `RuntimeWorkState` for their lifecycle;
 `WorkItem` and `WorkStatus` are removed. Adapter declaration merging targets
 `RuntimeWorkItem` directly through `@use-crux/core/runtime`.
+
+Add inert Runtime managed-transport declarations and pure validation for
+provider-neutral bindings and accepted envelopes.
