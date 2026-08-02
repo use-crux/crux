@@ -119,6 +119,7 @@ import {
 } from "../../request/prepare/resources";
 import type { ExecutionAmendment } from "../../request/prepare/amendment";
 import { commitPreparationDecision } from "../../request/prepare/journal";
+import { appendStepSystemContext } from "./step-system-context";
 import type { StepReason } from "../../request/prepare/step-context";
 import {
   alignThreadInvocationInput,
@@ -547,6 +548,7 @@ export async function generateCore<
 
           for (let step = 0; step < maxSteps; step++) {
             steps++;
+            const stepSystemContext = await args.projectStepSystemContext?.();
             const providerMessages = await prepareProviderMessages(messages);
             const boundary = await prepareBoundary(
               providerMessages,
@@ -562,16 +564,19 @@ export async function generateCore<
               lifecycle.descriptors,
               boundary.activeTools,
             );
+            const stepSystem = appendStepSystemContext(
+              boundary.resolved === resolved
+                ? currentSystem
+                : boundary.resolved.system,
+              boundary.resolved === resolved
+                ? currentSystemBlocks
+                : boundary.resolved.systemBlocks,
+              stepSystemContext,
+            );
             const callArgs: CallArgs<TExtra> = {
               model: boundary.model,
-              system:
-                boundary.resolved === resolved
-                  ? currentSystem
-                  : boundary.resolved.system,
-              systemBlocks:
-                boundary.resolved === resolved
-                  ? currentSystemBlocks
-                  : boundary.resolved.systemBlocks,
+              system: stepSystem.system,
+              systemBlocks: stepSystem.systemBlocks,
               messages: providerMessages,
               settings:
                 boundary.resolved === resolved
@@ -694,22 +699,26 @@ export async function generateCore<
                 [],
               );
               messages = [...messages, ...guardedWriteback.corrective];
+              const stepSystemContext = await args.projectStepSystemContext?.();
               const providerMessages = await prepareProviderMessages(messages);
               const boundary = await prepareBoundary(
                 providerMessages,
                 "validation-retry",
               );
+              const stepSystem = appendStepSystemContext(
+                boundary.resolved === resolved
+                  ? currentSystem
+                  : boundary.resolved.system,
+                boundary.resolved === resolved
+                  ? currentSystemBlocks
+                  : boundary.resolved.systemBlocks,
+                stepSystemContext,
+              );
               const regenArgs = {
                 ...lastCallArgs!,
                 model: boundary.model,
-                system:
-                  boundary.resolved === resolved
-                    ? currentSystem
-                    : boundary.resolved.system,
-                systemBlocks:
-                  boundary.resolved === resolved
-                    ? currentSystemBlocks
-                    : boundary.resolved.systemBlocks,
+                system: stepSystem.system,
+                systemBlocks: stepSystem.systemBlocks,
                 messages: providerMessages,
                 settings:
                   boundary.resolved === resolved

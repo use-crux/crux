@@ -58,6 +58,7 @@ import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
 import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { createInternalWorkOwnerPort } from "../work/internal/owner-retained-work";
+import { projectBackgroundWorkStatusContext } from "../agent/background-work-status-context";
 
 export type {
   AdapterGenerateOptions,
@@ -322,7 +323,16 @@ export function adapter<
         extra: {} as TExtra,
       };
 
-      const result = await generate(promptWithTools, generateOpts);
+      const result = await execution.generate({
+        prompt: promptWithTools,
+        ...generateOpts,
+        modelInfo: {
+          provider: spec.providerId,
+          modelId: model,
+        },
+        projectStepSystemContext: () =>
+          projectBackgroundWorkStatusContext(backgroundWork),
+      });
 
       return {
         agentId: agent.id,

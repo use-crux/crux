@@ -10,16 +10,18 @@ import { parseDuration } from "../flow/lifecycle";
 import type { AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
 import type {
-  InternalOwnedWork,
   InternalWorkOwnerPort,
 } from "../work/internal/owner-retained-work";
-import type { InternalWorkStatus } from "../work/internal/process-local-kernel";
 import { isBackgroundableAgent } from "./backgroundable";
+import {
+  OWNER_WORK_STATUS_SCAN_LIMIT,
+  projectOwnerWorkStatuses,
+  projectWorkStatus,
+} from "./work-status-projection";
 
 /** Reserved concise name of the automatic model-facing Work control Tool. */
 export const WORK_CONTROL_TOOL_NAME = "work";
 
-const LIST_LIMIT = 50;
 const DEFAULT_RESULT_WAIT_MS = 30_000;
 const workControlToolBrand: unique symbol = Symbol("work-control-tool");
 
@@ -28,27 +30,6 @@ const workControlInputSchema = z.object({
   id: z.string().optional(),
   timeout: z.string().optional(),
 });
-
-/** Content-free, immutable lifecycle data safe to return to a parent model. */
-interface WorkStatusProjection {
-  readonly work: {
-    readonly kind: "work.ref";
-    readonly id: string;
-    readonly targetId: string;
-    readonly guarantees: {
-      readonly execution: "process-local";
-      readonly rejoin: "process-local";
-    };
-  };
-  readonly targetLabel: string;
-  readonly state: InternalWorkStatus["state"];
-  readonly attachment: "attached";
-  readonly attempt: 1;
-  readonly createdAt: string;
-  readonly startedAt?: string;
-  readonly finishedAt?: string;
-  readonly resultAvailable: boolean;
-}
 
 interface WorkControlToolShape {
   readonly [workControlToolBrand]: true;
@@ -100,15 +81,7 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
         throw new TypeError("Invalid work control input.");
       }
       if (parsed.data.action === "list") {
-        const statuses = await Promise.all(
-          owner.list().slice(0, LIST_LIMIT).map(async ({ id }) => {
-            const retained = owner.inspect(id);
-            return retained
-              ? projectStatus(await retained.handle.status(), retained)
-              : notFound();
-          }),
-        );
-        return Object.freeze(statuses);
+        return projectOwnerWorkStatuses(owner, OWNER_WORK_STATUS_SCAN_LIMIT);
       }
 
       const id = requireId(parsed.data.id, parsed.data.action);
@@ -118,7 +91,7 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
 
       switch (parsed.data.action) {
         case "status":
-          return projectStatus(await handle.status(), retained);
+          return projectWorkStatus(await handle.status(), retained);
         case "result": {
           const status = await handle.status();
           if (status.state === "completed") return await handle.result();
@@ -129,7 +102,7 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
           );
           return waited.available
             ? waited.result
-            : projectStatus(await handle.status(), retained);
+            : projectWorkStatus(await handle.status(), retained);
         }
         case "cancel": {
           const accepted = handle.cancel();
@@ -195,56 +168,5 @@ async function waitForResult(
   } finally {
     if (timer !== undefined) clearTimeout(timer);
     if (onAbort) abortSignal?.removeEventListener("abort", onAbort);
-  }
-}
-
-function projectStatus(
-  status: InternalWorkStatus,
-  retained: InternalOwnedWork,
-): WorkStatusProjection {
-  const base = {
-    work: Object.freeze({
-      kind: "work.ref" as const,
-      id: status.id,
-      targetId: retained.targetId,
-      guarantees: Object.freeze({
-        execution: "process-local" as const,
-        rejoin: "process-local" as const,
-      }),
-    }),
-    targetLabel: retained.targetLabel,
-    state: status.state,
-    attachment: "attached" as const,
-    attempt: 1 as const,
-    createdAt: status.acceptedAt.toISOString(),
-    resultAvailable: status.state === "completed",
-  };
-  switch (status.state) {
-    case "queued":
-      return Object.freeze(base);
-    case "running":
-      return Object.freeze({ ...base, startedAt: status.startedAt.toISOString() });
-    case "completed":
-      return Object.freeze({
-        ...base,
-        startedAt: status.startedAt.toISOString(),
-        finishedAt: status.completedAt.toISOString(),
-      });
-    case "failed":
-      return Object.freeze({
-        ...base,
-        startedAt: status.startedAt.toISOString(),
-        finishedAt: status.failedAt.toISOString(),
-      });
-    case "cancel-requested":
-      return Object.freeze({ ...base, startedAt: status.startedAt.toISOString() });
-    case "cancelled":
-      return Object.freeze({
-        ...base,
-        ...(status.startedAt === undefined
-          ? undefined
-          : { startedAt: status.startedAt.toISOString() }),
-        finishedAt: status.cancelledAt.toISOString(),
-      });
   }
 }
