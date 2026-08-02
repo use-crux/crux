@@ -207,7 +207,7 @@ describe("runtime managed transport validation", () => {
         ...envelope(),
         payload: {
           ...envelope().payload,
-          value: "!".repeat(Math.ceil((1024 * 1024 * 4) / 3) + 1),
+          value: "A".repeat(Math.ceil((1024 * 1024 * 4) / 3) + 1),
         },
       }),
     ).toThrow("$.payload.value: must not exceed encoded length for 1 MiB of decoded bytes");
