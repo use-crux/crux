@@ -56,6 +56,7 @@ it("adds one bounded owner-scoped work control Tool for backgroundable children"
   let detachedSignal: AbortSignal | undefined;
   let detachedFinished = false;
   const workIds: string[] = [];
+  const spawnedRefs = new Map<string, unknown>();
   const actionOutputs = new Map<string, unknown>();
   let parentCalls = 0;
 
@@ -143,6 +144,7 @@ it("adds one bounded owner-scoped work control Tool for backgroundable children"
         if (result.name !== "work") {
           if (isRecord(result.output) && typeof result.output.id === "string") {
             workIds.push(result.output.id);
+            spawnedRefs.set(result.toolCallId, result.output);
           }
           continue;
         }
@@ -167,13 +169,42 @@ it("adds one bounded owner-scoped work control Tool for backgroundable children"
   expect(listed).toHaveLength(50);
   expect(Object.isFrozen(listed)).toBe(true);
   expect((listed as readonly unknown[]).every(Object.isFrozen)).toBe(true);
+  expect(listed).toContainEqual(expect.objectContaining({
+    targetLabel: "first",
+    attachment: "attached",
+    attempt: 1,
+    work: expect.objectContaining({
+      kind: "work.ref",
+      id: workIds[0],
+      targetId: "work-control-child",
+      guarantees: {
+        execution: "process-local",
+        rejoin: "process-local",
+      },
+    }),
+  }));
+  expect(Object.isFrozen((listed as readonly Record<string, unknown>[])[0]?.work)).toBe(true);
+  expect(spawnedRefs.get("spawn-0")).toEqual(expect.objectContaining({
+    kind: "work.ref",
+    targetId: "work-control-child",
+  }));
 
-  for (const action of ["status", "wait", "cancel"] as const) {
+  for (const action of ["status", "wait"] as const) {
     const output = actionOutputs.get(action);
-    expect(output).toMatchObject({ id: workIds[0] });
+    expect(output).toMatchObject({
+      work: { id: workIds[0], targetId: "work-control-child" },
+      attachment: "attached",
+      attempt: 1,
+    });
     expect(Object.isFrozen(output)).toBe(true);
     expect(JSON.stringify(output)).not.toContain("exact child result");
   }
+  expect(actionOutputs.get("cancel")).toMatchObject({
+    workId: workIds[0],
+    accepted: true,
+    state: "cancel-requested",
+  });
+  expect(Object.isFrozen(actionOutputs.get("cancel"))).toBe(true);
   expect(cancelledSignal?.aborted).toBe(true);
   expect(actionOutputs.get("detach")).toEqual({ id: workIds[1], detached: true });
   expect(actionOutputs.get("result")).toBe("exact child result");

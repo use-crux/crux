@@ -42,6 +42,13 @@ class OwnerRetainedWorkReference<TOutput>
   }
 }
 
+/** One retained handle and its safe target metadata. @internal */
+export interface InternalOwnedWork {
+  readonly handle: InternalWorkHandle<unknown>;
+  readonly targetId: string;
+  readonly targetLabel: string;
+}
+
 /** Internal capability for accepting and recovering one owner's child Work. */
 export interface InternalWorkOwnerPort {
   /** Accept one Work occurrence and retain its typed handle under this owner. */
@@ -61,6 +68,9 @@ export interface InternalWorkOwnerPort {
   /** Look up a retained handle by id within this owner's private inbox. */
   lookup(id: string): InternalWorkHandle<unknown> | undefined;
 
+  /** Inspect the private metadata-bearing record retained for one Work id. */
+  inspect(id: string): InternalOwnedWork | undefined;
+
   /** Remove one directly owned Work from this inbox without cancelling it. */
   detach(id: string): boolean;
 }
@@ -71,6 +81,10 @@ export interface InternalWorkOwnerSpawnOptions {
   readonly signal?: AbortSignal;
   /** Run without retaining this Work in the ambient Effect boundary. */
   readonly effectParent?: "independent";
+  /** Bound child Agent identity. */
+  readonly targetId: string;
+  /** Authored Tool map name for the bound child. */
+  readonly targetLabel: string;
 }
 
 /** Create one isolated logical-owner capability over an injected Work kernel. */
@@ -78,7 +92,7 @@ export function createInternalWorkOwnerPort(
   kernel: ProcessLocalWorkKernel,
 ): InternalWorkOwnerPort {
   const owner = Symbol("internal-work-owner");
-  const retainedHandles = new Map<string, InternalWorkHandle<unknown>>();
+  const retainedHandles = new Map<string, InternalOwnedWork>();
 
   return Object.freeze({
     async spawnAndRetain<TOutput>(
@@ -86,8 +100,15 @@ export function createInternalWorkOwnerPort(
       options?: InternalWorkOwnerSpawnOptions,
     ): Promise<InternalRetainedWorkReference<TOutput>> {
       const handle = await kernel.spawn(driver, options);
-      const reference = new OwnerRetainedWorkReference<TOutput>(handle.id, owner);
-      retainedHandles.set(handle.id, handle);
+      const reference = new OwnerRetainedWorkReference<TOutput>(
+        handle.id,
+        owner,
+      );
+      retainedHandles.set(handle.id, Object.freeze({
+        handle,
+        targetId: options?.targetId ?? "",
+        targetLabel: options?.targetLabel ?? "",
+      }));
       return reference;
     },
 
@@ -101,20 +122,27 @@ export function createInternalWorkOwnerPort(
         return undefined;
       }
 
-      return retainedHandles.get(reference.id) as
+      return retainedHandles.get(reference.id)?.handle as
         | InternalWorkHandle<TOutput>
         | undefined;
     },
 
     list(): readonly InternalRetainedWorkReference<unknown>[] {
       return Object.freeze(
-        [...retainedHandles.keys()].map(
-          (id) => new OwnerRetainedWorkReference<unknown>(id, owner),
+        [...retainedHandles.entries()].map(
+          ([id]) => new OwnerRetainedWorkReference<unknown>(
+            id,
+            owner,
+          ),
         ),
       );
     },
 
     lookup(id: string): InternalWorkHandle<unknown> | undefined {
+      return retainedHandles.get(id)?.handle;
+    },
+
+    inspect(id: string): InternalOwnedWork | undefined {
       return retainedHandles.get(id);
     },
 

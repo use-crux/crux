@@ -75,11 +75,18 @@ export function bindBackgroundAgentTools(
               },
             }, execution.abortSignal
               ? {
+                kind: "cancellation-only",
+                signal: execution.abortSignal,
+                effectParent: "independent",
+                targetId: agent.id,
+                targetLabel: name,
+              }
+              : {
                   kind: "cancellation-only",
-                  signal: execution.abortSignal,
                   effectParent: "independent",
-                }
-              : { kind: "cancellation-only", effectParent: "independent" });
+                  targetId: agent.id,
+                  targetLabel: name,
+                });
             return Object.freeze({
               kind: "work.ref" as const,
               id: reference.id,

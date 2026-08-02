@@ -9,7 +9,10 @@ import { z } from "zod";
 import { parseDuration } from "../flow/lifecycle";
 import type { AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
-import type { InternalWorkOwnerPort } from "../work/internal/owner-retained-work";
+import type {
+  InternalOwnedWork,
+  InternalWorkOwnerPort,
+} from "../work/internal/owner-retained-work";
 import type { InternalWorkStatus } from "../work/internal/process-local-kernel";
 import { isBackgroundableAgent } from "./backgroundable";
 
@@ -28,14 +31,23 @@ const workControlInputSchema = z.object({
 
 /** Content-free, immutable lifecycle data safe to return to a parent model. */
 interface WorkStatusProjection {
-  readonly id: string;
+  readonly work: {
+    readonly kind: "work.ref";
+    readonly id: string;
+    readonly targetId: string;
+    readonly guarantees: {
+      readonly execution: "process-local";
+      readonly rejoin: "process-local";
+    };
+  };
+  readonly targetLabel: string;
   readonly state: InternalWorkStatus["state"];
-  readonly acceptedAt: string;
-  readonly updatedAt: string;
+  readonly attachment: "attached";
+  readonly attempt: 1;
+  readonly createdAt: string;
   readonly startedAt?: string;
-  readonly completedAt?: string;
-  readonly failedAt?: string;
-  readonly resultAvailable?: true;
+  readonly finishedAt?: string;
+  readonly resultAvailable: boolean;
 }
 
 interface WorkControlToolShape {
@@ -90,20 +102,23 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
       if (parsed.data.action === "list") {
         const statuses = await Promise.all(
           owner.list().slice(0, LIST_LIMIT).map(async ({ id }) => {
-            const handle = owner.lookup(id);
-            return handle ? projectStatus(await handle.status()) : notFound();
+            const retained = owner.inspect(id);
+            return retained
+              ? projectStatus(await retained.handle.status(), retained)
+              : notFound();
           }),
         );
         return Object.freeze(statuses);
       }
 
       const id = requireId(parsed.data.id, parsed.data.action);
-      const handle = owner.lookup(id);
-      if (!handle) return notFound();
+      const retained = owner.inspect(id);
+      if (!retained) return notFound();
+      const { handle } = retained;
 
       switch (parsed.data.action) {
         case "status":
-          return projectStatus(await handle.status());
+          return projectStatus(await handle.status(), retained);
         case "result": {
           const status = await handle.status();
           if (status.state === "completed") return await handle.result();
@@ -114,12 +129,18 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
           );
           return waited.available
             ? waited.result
-            : projectStatus(await handle.status());
+            : projectStatus(await handle.status(), retained);
         }
-        case "cancel":
-          handle.cancel();
-          await Promise.resolve();
-          return projectStatus(await handle.status());
+        case "cancel": {
+          const accepted = handle.cancel();
+          const status = await handle.status();
+          return Object.freeze({
+            workId: id,
+            accepted,
+            state: status.state,
+            acceptedAt: new Date().toISOString(),
+          });
+        }
         case "detach":
           owner.detach(id);
           return Object.freeze({ id, detached: true as const });
@@ -177,12 +198,26 @@ async function waitForResult(
   }
 }
 
-function projectStatus(status: InternalWorkStatus): WorkStatusProjection {
+function projectStatus(
+  status: InternalWorkStatus,
+  retained: InternalOwnedWork,
+): WorkStatusProjection {
   const base = {
-    id: status.id,
+    work: Object.freeze({
+      kind: "work.ref" as const,
+      id: status.id,
+      targetId: retained.targetId,
+      guarantees: Object.freeze({
+        execution: "process-local" as const,
+        rejoin: "process-local" as const,
+      }),
+    }),
+    targetLabel: retained.targetLabel,
     state: status.state,
-    acceptedAt: status.acceptedAt.toISOString(),
-    updatedAt: status.updatedAt.toISOString(),
+    attachment: "attached" as const,
+    attempt: 1 as const,
+    createdAt: status.acceptedAt.toISOString(),
+    resultAvailable: status.state === "completed",
   };
   switch (status.state) {
     case "queued":
@@ -193,14 +228,23 @@ function projectStatus(status: InternalWorkStatus): WorkStatusProjection {
       return Object.freeze({
         ...base,
         startedAt: status.startedAt.toISOString(),
-        completedAt: status.completedAt.toISOString(),
-        resultAvailable: true,
+        finishedAt: status.completedAt.toISOString(),
       });
     case "failed":
       return Object.freeze({
         ...base,
         startedAt: status.startedAt.toISOString(),
-        failedAt: status.failedAt.toISOString(),
+        finishedAt: status.failedAt.toISOString(),
+      });
+    case "cancel-requested":
+      return Object.freeze({ ...base, startedAt: status.startedAt.toISOString() });
+    case "cancelled":
+      return Object.freeze({
+        ...base,
+        ...(status.startedAt === undefined
+          ? undefined
+          : { startedAt: status.startedAt.toISOString() }),
+        finishedAt: status.cancelledAt.toISOString(),
       });
   }
 }
