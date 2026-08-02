@@ -56,6 +56,28 @@ func TestNewDevServerDoesNotWaitForInitialRuntimeArtifacts(t *testing.T) {
 	}
 }
 
+func TestEvalDiscoveryStartupWaitsForRuntimeOnlyAfterIsolation(t *testing.T) {
+	journal := startup.NewJournal([]startup.TaskSpec{
+		{ID: "project-index", Phase: "Indexing project"},
+		{ID: "runtime-artifacts", Phase: "Generating runtime artifacts"},
+	})
+	journal.Update("project-index", "", startup.Succeeded, nil)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if err := waitForEvalDiscoveryStartup(ctx, journal, func() bool { return true }); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("isolated startup wait = %v, want runtime task deadline", err)
+	}
+	if err := waitForEvalDiscoveryStartup(t.Context(), journal, func() bool { return false }); err != nil {
+		t.Fatalf("small-project startup wait = %v", err)
+	}
+
+	journal.Update("runtime-artifacts", "", startup.Degraded, nil)
+	if err := waitForEvalDiscoveryStartup(t.Context(), journal, func() bool { return true }); err != nil {
+		t.Fatalf("settled isolated startup wait = %v", err)
+	}
+}
+
 func TestRuntimeEnrichmentFailureStillSettlesProjectIndexStartupGate(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)

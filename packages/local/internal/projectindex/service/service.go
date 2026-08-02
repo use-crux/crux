@@ -108,6 +108,42 @@ func (s *Service) HasProjectIndexer() bool {
 	return s != nil && s.indexer != nil
 }
 
+// AcquireEvalDiscoveryCapacity atomically admits Eval discovery against
+// saturated semantic compiler work. Alternate indexers need no coordination.
+func (s *Service) AcquireEvalDiscoveryCapacity(ctx context.Context) (func(), error) {
+	if s == nil {
+		return func() {}, nil
+	}
+	capacity, ok := s.indexer.(EvalDiscoveryCapacity)
+	if !ok {
+		return func() {}, nil
+	}
+	return capacity.AcquireEvalDiscoveryCapacity(ctx)
+}
+
+// AcquireContendedCompilerCapacity serializes another CPU-heavy compiler with
+// Eval discovery when this project has saturated semantic worker capacity.
+func (s *Service) AcquireContendedCompilerCapacity(ctx context.Context) (func(), error) {
+	if s == nil {
+		return func() {}, nil
+	}
+	capacity, ok := s.indexer.(ContendedCompilerCapacity)
+	if !ok || !capacity.EvalDiscoveryIsolationRequired() {
+		return func() {}, nil
+	}
+	return capacity.AcquireContendedCompilerCapacity(ctx)
+}
+
+// EvalDiscoveryIsolationRequired reports whether large-project compiler work
+// needs to be sequenced with Eval discovery.
+func (s *Service) EvalDiscoveryIsolationRequired() bool {
+	if s == nil {
+		return false
+	}
+	capacity, ok := s.indexer.(ContendedCompilerCapacity)
+	return ok && capacity.EvalDiscoveryIsolationRequired()
+}
+
 // WatchStatus returns a clone of the latest watcher scheduling status.
 func (s *Service) WatchStatus() api.ProjectIndexWatchStatus {
 	if s == nil {

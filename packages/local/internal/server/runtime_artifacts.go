@@ -27,6 +27,17 @@ func privacyGuardedRuntimeArtifactGenerator(generate RuntimeArtifactGenerator) R
 	}
 }
 
+func discoveryIsolatedRuntimeArtifactGenerator(generate RuntimeArtifactGenerator, service *devtools.Service) RuntimeArtifactGenerator {
+	return func(ctx context.Context, root string, definitions []store.ProjectDefinition) error {
+		release, err := service.AcquireContendedCompilerCapacity(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		return generate(ctx, root, definitions)
+	}
+}
+
 func (d *DevServer) runProjectIndexLifecycle() {
 	root := d.projectRoot
 	if root == "" || d.Devtools == nil {

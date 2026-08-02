@@ -77,3 +77,27 @@ func (s *Service) EnrichProjectRuntime(
 ) (store.IndexData, error) {
 	return s.indexService.EnrichProjectRuntime(ctx, root, configPath, projectName, previousIndex)
 }
+
+// AcquireEvalDiscoveryCapacity prevents Eval discovery from competing with a
+// semantic wave that would occupy the full compiler worker pool.
+func (s *Service) AcquireEvalDiscoveryCapacity(ctx context.Context) (func(), error) {
+	if s == nil || s.indexService == nil {
+		return func() {}, nil
+	}
+	return s.indexService.AcquireEvalDiscoveryCapacity(ctx)
+}
+
+// AcquireContendedCompilerCapacity serializes CPU-heavy compiler work with
+// Eval discovery only after full-pool semantic demand has been observed.
+func (s *Service) AcquireContendedCompilerCapacity(ctx context.Context) (func(), error) {
+	if s == nil || s.indexService == nil {
+		return func() {}, nil
+	}
+	return s.indexService.AcquireContendedCompilerCapacity(ctx)
+}
+
+// EvalDiscoveryIsolationRequired reports whether large-project compiler work
+// needs to be sequenced with Eval discovery.
+func (s *Service) EvalDiscoveryIsolationRequired() bool {
+	return s != nil && s.indexService != nil && s.indexService.EvalDiscoveryIsolationRequired()
+}

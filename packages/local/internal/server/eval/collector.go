@@ -16,6 +16,7 @@ type CollectorDeps struct {
 	FindNode           func() (string, error)
 	ExtractCoordinator func() (string, error)
 	WaitForStartup     func(context.Context) error
+	AcquireDiscovery   func(context.Context) (release func(), err error)
 	// Lifetime cancels shared flights when their owning dev session ends.
 	Lifetime context.Context
 	// StartFlight admits a discovery flight to the owning session worker group.
@@ -143,13 +144,37 @@ func (c *Collector) runFlight(ctx context.Context, flight *collectorFlight) {
 }
 
 func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
+	startupCtx, cancelStartup := context.WithTimeout(ctx, c.timeout)
 	if c.deps.WaitForStartup != nil {
-		if err := c.deps.WaitForStartup(ctx); err != nil {
+		err := c.deps.WaitForStartup(startupCtx)
+		if err != nil {
+			cancelStartup()
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				return nil, fmt.Errorf("Eval catalog discovery is still waiting for project startup after %s; retry when startup settles", c.timeout)
+			}
 			return nil, fmt.Errorf("wait for startup before Eval catalog discovery: %w", err)
 		}
 	}
+	release := func() {}
+	if c.deps.AcquireDiscovery != nil {
+		var err error
+		release, err = c.deps.AcquireDiscovery(startupCtx)
+		if err != nil {
+			cancelStartup()
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				return nil, fmt.Errorf("Eval catalog discovery is still waiting for compiler capacity after %s; retry when startup settles", c.timeout)
+			}
+			return nil, fmt.Errorf("wait for compiler capacity before Eval catalog discovery: %w", err)
+		}
+	}
+	if release == nil {
+		release = func() {}
+	}
+	cancelStartup()
+	defer release()
+	parentCtx := ctx
+	discoveryCtx, cancel := context.WithTimeout(parentCtx, c.timeout)
+	defer cancel()
 	node, err := c.deps.FindNode()
 	if err != nil {
 		return nil, err
@@ -161,7 +186,7 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 	var manifests []json.RawMessage
 	var collectErrors []json.RawMessage
 	found := false
-	result, err := workerproc.Stream(ctx, workerproc.OneShot{
+	result, err := workerproc.Stream(discoveryCtx, workerproc.OneShot{
 		CommandPath: node,
 		CommandArgs: []string{coordinator},
 		Args:        []string{"--list"},
@@ -178,11 +203,14 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 		return nil
 	})
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if parentCtx.Err() != nil {
+			return nil, parentCtx.Err()
+		}
+		if errors.Is(discoveryCtx.Err(), context.DeadlineExceeded) {
 			return nil, fmt.Errorf("Eval catalog discovery timed out after %s", c.timeout)
 		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if discoveryCtx.Err() != nil {
+			return nil, discoveryCtx.Err()
 		}
 		return nil, err
 	}

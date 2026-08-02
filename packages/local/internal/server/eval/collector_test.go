@@ -299,6 +299,101 @@ func TestCollectorWaitsForStartupBeforeStartingNodeDiscovery(t *testing.T) {
 	}
 }
 
+func TestCollectorGivesDiscoveryAFreshTimeoutAfterStartup(t *testing.T) {
+	worker := t.TempDir() + "/coordinator"
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\nsleep 0.12\nprintf '%s\\n' '{\"type\":\"collect:done\",\"evals\":[],\"errors\":[]}' '{\"type\":\"run:done\",\"exitCode\":0}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	collector := NewCollector(t.TempDir(), CollectorDeps{
+		WaitForStartup: func(ctx context.Context) error {
+			select {
+			case <-time.After(170 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+		FindNode:           func() (string, error) { return worker, nil },
+		ExtractCoordinator: func() (string, error) { return "ignored", nil },
+	})
+	collector.timeout = 250 * time.Millisecond
+	collector.collect = collector.collectFromWorker
+
+	startedAt := time.Now()
+	manifests, err := collector.EvalManifests(t.Context())
+	if err != nil || manifests == nil {
+		t.Fatalf("manifests = %#v, err = %v", manifests, err)
+	}
+	if elapsed := time.Since(startedAt); elapsed < 270*time.Millisecond {
+		t.Fatalf("segmented startup and discovery elapsed = %s, want both stages", elapsed)
+	}
+}
+
+func TestCollectorBoundsStartupWaitWithReadableRetry(t *testing.T) {
+	collector := NewCollector("", CollectorDeps{WaitForStartup: func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}})
+	collector.timeout = 20 * time.Millisecond
+	collector.collect = collector.collectFromWorker
+	_, err := collector.EvalManifests(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "retry when startup settles") {
+		t.Fatalf("startup wait error = %v", err)
+	}
+}
+
+func TestCollectorHoldsCompilerCapacityAcrossDiscovery(t *testing.T) {
+	worker := t.TempDir() + "/coordinator"
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\nsleep 0.08\nprintf '%s\\n' '{\"type\":\"collect:done\",\"evals\":[],\"errors\":[]}' '{\"type\":\"run:done\",\"exitCode\":0}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	held := make(chan struct{})
+	released := make(chan struct{})
+	collector := NewCollector(t.TempDir(), CollectorDeps{
+		AcquireDiscovery: func(context.Context) (func(), error) {
+			close(held)
+			return func() { close(released) }, nil
+		},
+		FindNode:           func() (string, error) { return worker, nil },
+		ExtractCoordinator: func() (string, error) { return "ignored", nil },
+	})
+	collector.collect = collector.collectFromWorker
+	done := make(chan error, 1)
+	go func() {
+		_, err := collector.EvalManifests(t.Context())
+		done <- err
+	}()
+	<-held
+	select {
+	case <-released:
+		t.Fatal("compiler capacity released before discovery worker exited")
+	case <-time.After(20 * time.Millisecond):
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("compiler capacity not released after discovery")
+	}
+}
+
+func TestCollectorPreservesEarlierCallerDeadline(t *testing.T) {
+	collector := NewCollector("", CollectorDeps{WaitForStartup: func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}})
+	collector.timeout = time.Second
+	collector.collect = collector.collectFromWorker
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	_, err := collector.EvalManifests(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "after 1s") {
+		t.Fatalf("caller deadline error = %v", err)
+	}
+}
+
 func TestCollectorFlightEndsWithOwningSession(t *testing.T) {
 	lifetime, cancelLifetime := context.WithCancel(context.Background())
 	started := make(chan struct{})

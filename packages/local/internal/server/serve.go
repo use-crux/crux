@@ -137,18 +137,6 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if serverOpts.ObservabilityDBPath == "" {
 		serverOpts.ObservabilityDBPath = ".crux/observability.sqlite"
 	}
-	evalCatalog := evalserver.NewFreshCollector(serverOpts.ProjectRoot, evalserver.CollectorDeps{
-		FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
-		WaitForStartup: func(waitCtx context.Context) error {
-			if opts.StartupJournal == nil {
-				return nil
-			}
-			return opts.StartupJournal.WaitTask(waitCtx, "project-index")
-		},
-		Lifetime:    ctx,
-		StartFlight: workers.Go,
-	})
-	serverOpts.EvalCatalog = evalCatalog
 	runtimeArtifacts := opts.RuntimeArtifacts
 	var closeRuntimeArtifacts func() error
 	if runtimeArtifacts == nil {
@@ -161,6 +149,17 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if opts.ProjectIndexer != nil {
 		devtoolsSvc.WithProjectIndexer(opts.ProjectIndexer)
 	}
+	runtimeArtifacts = discoveryIsolatedRuntimeArtifactGenerator(runtimeArtifacts, devtoolsSvc)
+	evalCatalog := evalserver.NewFreshCollector(serverOpts.ProjectRoot, evalserver.CollectorDeps{
+		FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
+		WaitForStartup: func(waitCtx context.Context) error {
+			return waitForEvalDiscoveryStartup(waitCtx, opts.StartupJournal, devtoolsSvc.EvalDiscoveryIsolationRequired)
+		},
+		AcquireDiscovery: devtoolsSvc.AcquireEvalDiscoveryCapacity,
+		Lifetime:         ctx,
+		StartFlight:      workers.Go,
+	})
+	serverOpts.EvalCatalog = evalCatalog
 	observabilitySvc, err := observability.OpenService(ctx, serverOpts.ObservabilityDBPath)
 	if err != nil {
 		logger.Error("observability service initialization failed", "error", err)
@@ -215,6 +214,19 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		startup:               opts.StartupJournal,
 	}
 	return devServer
+}
+
+func waitForEvalDiscoveryStartup(ctx context.Context, journal *startup.Journal, isolationRequired func() bool) error {
+	if journal == nil {
+		return nil
+	}
+	if err := journal.WaitTask(ctx, "project-index"); err != nil {
+		return err
+	}
+	if isolationRequired == nil || !isolationRequired() {
+		return nil
+	}
+	return journal.WaitTask(ctx, "runtime-artifacts")
 }
 
 // Start begins listening. Returns immediately. Use Shutdown to stop.

@@ -65,6 +65,9 @@ type refreshRun struct {
 // its AST/source patches are applied. It is the single home for the semantic
 // mode branching shared by the full and incremental flows.
 func (s *Service) completeSemanticAndLint(ctx context.Context, run *refreshRun) (store.IndexData, error) {
+	if run.semanticMode != ProjectSemanticDisabled {
+		s.prepareEvalDiscoveryIsolation(run.semanticRequest)
+	}
 	switch run.semanticMode {
 	case ProjectSemanticDisabled:
 		return s.completeDisabledSemantic(ctx, run)
@@ -72,6 +75,12 @@ func (s *Service) completeSemanticAndLint(ctx context.Context, run *refreshRun) 
 		return s.completeBackgroundSemantic(ctx, run)
 	default:
 		return s.applyPlannedSemanticPatch(ctx, run.semanticRequest, run.plannedSemantic, run.lintPrefetch, run.index, run.semanticMatch)
+	}
+}
+
+func (s *Service) prepareEvalDiscoveryIsolation(request projectindex.ProjectSemanticIndexRequest) {
+	if capacity, ok := s.indexer.(ContendedCompilerCapacity); ok {
+		capacity.PrepareEvalDiscoveryIsolation(request)
 	}
 }
 

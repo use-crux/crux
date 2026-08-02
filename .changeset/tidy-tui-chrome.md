@@ -28,4 +28,6 @@ Keep navigation and terminal quit responsive while a hard Project Index refresh 
 
 Use the same Eval catalog discovery mode and short-lived shared result cache as `crux eval list`, defer Node discovery until Project Index startup settles, show elapsed loading progress, surface readable timeout failures within 30 seconds, and provide an on-screen retry action.
 
+Keep large-project Eval discovery out of contended multi-worker semantic waves, and give discovery a fresh bounded window after startup waiting so the first post-startup retry can populate the shared catalog cache.
+
 Correct the TUI capture walk so Evals uses screen key `4` and Index uses screen key `5` in both tmux text captures and generated VHS tapes.

@@ -2,15 +2,72 @@ package semantic
 
 import (
 	"context"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/store"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestWorker_evalDiscoveryCapacityIsAtomicAtFullPoolDemand(t *testing.T) {
+	worker := New(Options{MaxWorkers: 2})
+	defer worker.Close()
+
+	releaseEval, err := worker.AcquireEvalDiscoveryCapacity(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan func(), 1)
+	go func() {
+		release, acquireErr := worker.AcquireEvalDiscoveryCapacity(t.Context())
+		if acquireErr == nil {
+			acquired <- release
+		}
+	}()
+	select {
+	case release := <-acquired:
+		release()
+		t.Fatal("competing full-pool work bypassed Eval discovery admission")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	releaseEval()
+	select {
+	case release := <-acquired:
+		release()
+	case <-time.After(time.Second):
+		t.Fatal("compiler capacity was not released")
+	}
+	releaseEval() // Release is intentionally safe on every cleanup path.
+
+	if !worker.usesFullWorkerPool(2) {
+		t.Fatal("two shards should occupy the configured two-worker pool")
+	}
+	if worker.usesFullWorkerPool(1) {
+		t.Fatal("a single semantic worker should not block Eval discovery")
+	}
+}
+
+func TestWorker_evalDiscoveryCapacityHonorsContext(t *testing.T) {
+	worker := New(Options{MaxWorkers: 2})
+	defer worker.Close()
+	release, err := worker.AcquireEvalDiscoveryCapacity(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := worker.AcquireEvalDiscoveryCapacity(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("capacity wait error = %v, want deadline exceeded", err)
+	}
+}
 
 func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
@@ -468,9 +525,27 @@ func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
 
 	worker := New(Options{ScriptPath: script, MaxWorkers: 2})
 	defer worker.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	worker.PrepareEvalDiscoveryIsolation(req)
+	if !worker.EvalDiscoveryIsolationRequired() {
+		t.Fatal("full-pool semantic demand was not published before execution")
+	}
+	releaseEval, err := worker.AcquireEvalDiscoveryCapacity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockedCtx, cancelBlocked := context.WithTimeout(ctx, 20*time.Millisecond)
+	_, blockedErr := worker.IndexProjectSemanticPatch(blockedCtx, req)
+	cancelBlocked()
+	if !errors.Is(blockedErr, context.DeadlineExceeded) {
+		t.Fatalf("semantic request blocked by Eval discovery = %v, want deadline exceeded", blockedErr)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("semantic worker started before Eval discovery released capacity: %v", err)
+	}
+	releaseEval()
+
 	patch, err := worker.IndexProjectSemanticPatch(ctx, req)
 	if err != nil {
 		t.Fatalf("IndexProjectSemanticPatch error = %v", err)
@@ -492,6 +567,9 @@ func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
 	timings := worker.LastSemanticTimings()
 	if len(timings) != 1 || timings[0].Name != "semantic.program.create" || timings[0].Count != 2 {
 		t.Fatalf("semantic timings = %+v, want merged program timing count 2", timings)
+	}
+	if !worker.EvalDiscoveryIsolationRequired() {
+		t.Fatal("full-pool semantic request did not retain discovery isolation")
 	}
 }
 
