@@ -1,0 +1,126 @@
+---
+title: Background Agent Work
+description: Let a coordinator model start, inspect, and rejoin process-local child Agent Work.
+---
+
+Use background Agent Work when a coordinator model has useful reasoning to do
+while a self-contained child Agent runs. Mark only the child entries that may
+run concurrently:
+
+```ts
+import { agent, backgroundable } from "@use-crux/core/agent";
+
+const coordinator = agent({
+  id: "coordinator",
+  prompt: coordinatorPrompt,
+  tools: { research: backgroundable(researchAgent) },
+});
+```
+
+`backgroundable()` is inert until its wrapped Agent appears in another Agent's
+`tools` map. The map key, `research`, is the model-facing tool name. The child
+Agent's `id` remains the Work target identity.
+
+## Foreground and background calls
+
+The child tool gains an optional `run_in_background` boolean:
+
+| Model call | Parent behavior |
+| --- | --- |
+| Omit it or pass `false` | Wait for the child and receive its exact result |
+| Pass `true` | Continue immediately with an immutable Work reference |
+
+The input shape follows the child Prompt:
+
+| Child input | Model-facing input |
+| --- | --- |
+| Object | Its fields plus `run_in_background?: boolean` |
+| Scalar or mixed root | `{ input, run_in_background? }` |
+| No input | `{ run_in_background? }` |
+
+`run_in_background` is reserved. An object child input cannot declare that
+field itself.
+
+A background call returns this shape without waiting for the child result:
+
+```ts
+{
+  kind: "work.ref",
+  id: "work_...",
+  targetId: "research-agent",
+  guarantees: {
+    execution: "process-local",
+    rejoin: "process-local",
+  },
+}
+```
+
+The reference is for model coordination inside the current Agent execution. It
+is not a public handle for application code.
+
+## Rejoin through the automatic tool
+
+When at least one backgroundable child is present, Crux adds one automatic
+model-facing tool named `work`. The model can list visible Work, inspect one
+status, wait briefly for a result, request cancellation, or detach it. Do not
+define your own `work` tool in that Agent or its Prompt: the collision fails
+during preparation.
+
+Teach the coordinator the policy, not the transport details:
+
+```txt
+Start independent research in the background. Keep its Work reference.
+Draft the answer structure while it runs. On a later step, use the work tool
+to retrieve the result before writing factual claims. If it is still running,
+continue only with tasks that do not depend on it.
+```
+
+The model receives safe lifecycle status automatically at the next sealed
+provider boundary. Crux never mutates an active provider request. The automatic
+status block is capped and contains no child result or failure content; exact
+results appear only after the model explicitly uses `work` with
+`action: "result"`.
+
+The `work` tool is automatic model infrastructure. Application code must not
+try to call it directly, and Crux does not expose a programmatic Work handle for
+this surface. See the [exact API reference](/docs/reference/crux-core/backgroundable-agent-work)
+for its input and response contracts.
+
+## Isolation
+
+The child executes only its own prompt, `use`, and tools. It does not inherit
+the parent prompt, conversation history, sibling tools, request details, or
+runtime controls. The parent sees only the Work reference and safe lifecycle
+projection until it explicitly retrieves a completed result.
+
+This prevents a long child response or failure payload from appearing in the
+parent's context merely because the child settled. It also keeps provider
+behavior consistent: status is sampled by Core before a new semantic provider
+request is sealed.
+
+## Process-local means best effort
+
+The registry, result, and control capability exist only in the current
+JavaScript process. Process exit, a serverless freeze, a crash, or a request
+landing on another worker loses them. There is no crash recovery, remote
+transport, API route, cross-process or Session rejoin, durable replay, or
+automatic application-level persistence.
+
+Do not use background Agent Work when the result must survive deployment, must
+be controlled from another request, or must resume after a wait. Choose an
+existing durable primitive instead:
+
+- [Flows](/docs/guides/flows) for explicit steps, retries, and suspend/resume.
+- [Runtime Engine](/docs/guides/durable-execution) for persisted named Work and
+  cross-process execution.
+- [Signals](/docs/guides/durable-execution/signals) for typed occurrences and
+  durable Flow waits when the deployment supports them.
+
+These are alternatives with different guarantees; background Agent Work is not
+integrated with them automatically.
+
+## Next
+
+Follow the [background research cookbook](/docs/cookbook/agents/background-research)
+for a complete coordinator example, or use the [exact reference](/docs/reference/crux-core/backgroundable-agent-work)
+when testing lifecycle responses.

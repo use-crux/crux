@@ -39,6 +39,39 @@ executor receives the child Agent, its declared input, the selected model, and
 the child signal only. Parent prompt state, tools, history, request data, and
 runtime controls never cross the binder boundary.
 
+## Backgroundable Agent-tool binding
+
+`backgroundable(agent)` is a frozen, inert wrapper. During Agent execution the
+background binder recognizes only that wrapper, adds the reserved
+`run_in_background` Tool input field, and preserves the ordinary foreground
+path when the field is absent or false. A true value accepts child execution
+through the same adapter-local process-local kernel, retains its internal
+handle in the current Agent owner's private inbox, and returns only an
+immutable model-facing Work reference.
+
+The control path is deliberately one-way and provider-neutral:
+
+```txt
+wrapper -> binder -> owner-retained inbox -> process-local kernel
+        -> safe step-system projection at the next sealed provider boundary
+```
+
+Only an Agent with backgroundable children receives the automatic `work` Tool.
+The inbox enforces ownership for list and id lookup; unknown, detached, or
+foreign ids expose no existence or content. List/status projection contains
+only bounded lifecycle metadata. Result and failure content is never injected
+into system context, and request sealing samples status before dispatch instead
+of mutating an active provider call. The child executor receives its own Agent
+definition, declared input, selected model, and child cancellation signal—no
+parent prompt, history, tools, or control authority.
+
+Core owns the wrapper, binding, owner retention, kernel lifecycle, automatic
+control, and safe projection. Provider packages changed tests only; there is no
+provider-specific behavior. The wrapper requires no Indexer, cache-identity, or
+LSP code change; direct-Agent indexing remains the separate lane G concern.
+There is no background-state Devtools UI in this surface. D/E/F code-dependent
+semantics remain outside this documentation boundary.
+
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
 rule options as data only. `@use-crux/indexer` owns extension manifest validation, trust enforcement,
