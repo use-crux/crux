@@ -106,21 +106,11 @@ export function createAssertionSet<
   ): Promise<AssertionListPage<AssertionOf<TTypes, TSelected>>> {
     if (!config.records) throw new Error('knowledgeBase().assertions() requires record storage.')
     const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
-    const items: Array<AssertionOf<TTypes, TSelected>> = []
-    let cursor = options.cursor
-    const limit = Math.max(0, Math.floor(options.limit ?? 100))
-    while (items.length < limit) {
-      const page = await config.records.list(snapshot.itemPrefix, { cursor, limit: Math.max(1, limit - items.length) })
-      for (const entry of page.entries) {
-        const record = asAssertionRecord(entry.value)
-        if (!record || (selected && !selected.has(record.type))) continue
-        const item = toVisibleAssertion<TTypes, TSelected>(record, members)
-        if (item) items.push(item)
-      }
-      cursor = page.cursor
-      if (!cursor) break
-    }
-    return { items, ...(cursor ? { cursor } : {}) }
+    return listVisiblePage(config.records, snapshot.itemPrefix, options, (value) => {
+      const record = asAssertionRecord(value)
+      if (!record || (selected && !selected.has(record.type))) return null
+      return toVisibleAssertion<TTypes, TSelected>(record, members)
+    })
   }
 
   async function* stream(): AsyncIterable<AssertionOf<TTypes, TSelected>> {
@@ -139,21 +129,11 @@ export function createAssertionSet<
     if (!snapshot.relationPrefix) return { items: [] }
     const members = snapshot.revision ? new Set(snapshot.revision.members.map((member) => member.sourceId)) : undefined
     const types = options.types ? new Set<string>(options.types) : undefined
-    const items: AssertionRelationRecord[] = []
-    let cursor = options.cursor
-    const limit = Math.max(0, Math.floor(options.limit ?? 100))
-    while (items.length < limit) {
-      const page = await config.records.list(snapshot.relationPrefix, { cursor, limit: Math.max(1, limit - items.length) })
-      for (const entry of page.entries) {
-        const relation = isAssertionRelationRecord(entry.value) ? entry.value : null
-        if (!relation || (types && !types.has(relation.type))) continue
-        const visible = toVisibleRelation(relation, members)
-        if (visible) items.push(visible)
-      }
-      cursor = page.cursor
-      if (!cursor) break
-    }
-    return { items, ...(cursor ? { cursor } : {}) }
+    return listVisiblePage(config.records, snapshot.relationPrefix, options, (value) => {
+      const relation = isAssertionRelationRecord(value) ? value : null
+      if (!relation || (types && !types.has(relation.type))) return null
+      return toVisibleRelation(relation, members)
+    })
   }
 
   async function countFromSnapshot(
@@ -202,6 +182,34 @@ export function createAssertionSet<
     inject: async () => ({ contexts: [handle.asContext()] }),
   }
   return Object.freeze(handle)
+}
+
+/**
+ * Page through a record prefix, keeping only the items a projection admits.
+ *
+ * Both assertion and relation listings share the cursor arithmetic: request at
+ * most the remaining page size, keep paging while the caller's limit is unmet,
+ * and return the store cursor only when more records remain. Internal.
+ */
+async function listVisiblePage<TItem>(
+  records: RecordStore,
+  prefix: string,
+  options: { readonly limit?: number; readonly cursor?: string },
+  project: (value: JsonObject) => TItem | null,
+): Promise<AssertionListPage<TItem>> {
+  const items: TItem[] = []
+  let cursor = options.cursor
+  const limit = Math.max(0, Math.floor(options.limit ?? 100))
+  while (items.length < limit) {
+    const page = await records.list(prefix, { cursor, limit: Math.max(1, limit - items.length) })
+    for (const entry of page.entries) {
+      const item = project(entry.value)
+      if (item) items.push(item)
+    }
+    cursor = page.cursor
+    if (!cursor) break
+  }
+  return { items, ...(cursor ? { cursor } : {}) }
 }
 
 /** Read assertion records and relations for the current generation. Internal. */
