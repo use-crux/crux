@@ -393,6 +393,24 @@ export type {
   FlowSignalSpec,
   NoPayloadSignal,
 } from "./flow";
+export { getWork, spawn } from "./work";
+export type {
+  CancelOptions,
+  CancelReceipt,
+  DetachReceipt,
+  ExecutionStats,
+  ExportedFlowTarget,
+  SpawnWorkOptions,
+  WorkEvent,
+  WorkHandle,
+  WorkId,
+  WorkInput,
+  WorkProgress,
+  WorkResult,
+  WorkStatus,
+  WorkStreamOptions,
+  WorkTargetId,
+} from "./work";
 export {
   CruxEffectError,
   EFFECT_ERROR_CODES,
@@ -1055,9 +1073,7 @@ export { RequestCompositionError } from "./request/errors";
 export { mergeInputBudget } from "./request/budget/input-budget";
 export { PreparationError } from "./request/prepare/step";
 export { ResourceReadError } from "./request/prepare/resources";
-export type {
-  InputBudget,
-} from "./request/budget/input-budget";
+export type { InputBudget } from "./request/budget/input-budget";
 export type {
   PreparationErrorReason,
   PrepareStep,
@@ -1096,9 +1112,7 @@ export type {
 } from "./request/prepare/step-context";
 export type { PreparationDecisionInspection } from "./request/prepare/journal";
 export { preview } from "./request/preview/preview";
-export type {
-  RequestPreviewTarget,
-} from "./request/preview/preview";
+export type { RequestPreviewTarget } from "./request/preview/preview";
 export type {
   PreviewAdaptation,
   PreviewAdaptationState,

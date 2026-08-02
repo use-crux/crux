@@ -1320,10 +1320,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * const resumed = await reviewFlow.resume(suspended.flowId)
  * ```
  */
-export function flow<THandler extends InferredFlowHandler>(
-  name: string,
+export function flow<
+  const TName extends string,
+  THandler extends InferredFlowHandler,
+>(
+  name: TName,
   handler: THandler,
-): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>;
+): FlowHandle<
+  HandlerOutput<THandler>,
+  HandlerInput<THandler>,
+  undefined,
+  TName
+>;
 /**
  * Define a Flow with local signal contracts, static Signal wait sources, or both.
  *
@@ -1333,13 +1341,14 @@ export function flow<THandler extends InferredFlowHandler>(
  * @returns A frozen handle whose static sources are accepted only by `waitFor()`.
  */
 export function flow<
+  const TName extends string,
   const TSignals extends FlowSignalMap,
   THandler extends InferredFlowHandler<TSignals>,
 >(
-  name: string,
+  name: TName,
   options: FlowDefinitionOptions<TSignals>,
   handler: THandler,
-): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals>;
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals, TName>;
 export function flow(
   name: string,
   optionsOrHandler:
