@@ -116,9 +116,11 @@ function chunkBatches(
       batches.push(current)
       current = []
     }
-    current.push(fitsWithoutDocument(args, [chunk]) ? chunk : truncateSingleChunk(args, chunk))
-    batches.push(current)
-    current = []
+    if (fitsWithoutDocument(args, [chunk])) {
+      current = [chunk]
+    } else {
+      batches.push([truncateSingleChunk(args, chunk)])
+    }
   }
   if (current.length > 0) batches.push(current)
   return batches

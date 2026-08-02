@@ -24,7 +24,6 @@ import {
   type ClaimRecord,
   type RawRelationClaim,
 } from './claims'
-import { claimManifestKey, readClaimManifest } from './manifest'
 import { generateObjectWithEvidence } from './modality-validation'
 import { renderBoundedRelationBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
 import type { DeriveStage } from './stage'
@@ -74,23 +73,17 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         sourceHash,
         stageFingerprint,
       })
-    if (cached !== undefined) {
-      const manifest = await readClaimManifest(input.records, claimManifestKey({
-        indexerId: input.indexerId,
-        namespace: input.namespace,
+    if (cached.count !== undefined) {
+      results.push({
         stageId: stage.id,
-        sourceId: input.document.sourceId,
-      }))
-      results.push({ stageId: stage.id, status: 'cached', claims: cached, warnings: manifestWarnings(manifest) })
+        status: 'cached',
+        claims: cached.count,
+        warnings: cached.manifest?.warnings ?? [],
+      })
       continue
     }
 
-    const previous = await readClaimManifest(input.records, claimManifestKey({
-      indexerId: input.indexerId,
-      namespace: input.namespace,
-      stageId: stage.id,
-      sourceId: input.document.sourceId,
-    }))
+    const previous = cached.manifest
     if (isAssertionStage(stage)) {
       const run = await runAssertionStage({
         document: input.document,
@@ -209,7 +202,9 @@ async function runGeneratedBatch(
   warnings.push(...repairedPrompt.warnings)
   const repaired = await readGeneratedClaims(input, stage, { ...batch, prompt: repairedPrompt.prompt })
   if (repaired.errors.length > 0) {
-    throw new Error(repaired.errors[0] ?? `Derive ${stage.id} batch ${batch.ordinal} failed after repair.`)
+    throw new Error(
+      repaired.errors.join('\n') || `Derive ${stage.id} batch ${batch.ordinal} failed after repair.`,
+    )
   }
   addRecords(valid, toClaimRecords(stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }
@@ -286,10 +281,6 @@ function isAssertionStage(stage: DeriveStage): stage is AssertionStage<Record<st
 
 function addRecords(target: Map<string, ClaimRecord>, records: readonly ClaimRecord[]): void {
   for (const record of records) target.set(record.claimHash, record)
-}
-
-function manifestWarnings(manifest: { readonly warnings?: readonly string[] } | undefined): readonly string[] {
-  return manifest?.warnings ?? []
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

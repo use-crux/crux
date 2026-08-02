@@ -44,6 +44,29 @@ describe('connected knowledge derive batching', () => {
     expect(prompts.some((prompt) => prompt.includes('LAST_CHUNK_MARKER'))).toBe(true)
   })
 
+  it('continues filling a batch after a mixed-size chunk overflows the previous batch', async () => {
+    const prompts: string[] = []
+    const model = relationModel(prompts)
+    const stage = relate({ id: 'refs', version: 1, types: relationTypes, model })
+    const sourceChunks = [5000, 5000, 3800, 3800, 3800].map((size, index) =>
+      chunk(`c${index + 1}`, index, sizedContent(size, `chunk-${index + 1}`)))
+
+    await runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document('mixed-size batches'),
+      chunks: sourceChunks,
+    })
+
+    expect(model.generateObject).toHaveBeenCalledTimes(2)
+    expect(prompts.map(chunkIdsFromPrompt)).toEqual([
+      ['c1', 'c2'],
+      ['c3', 'c4', 'c5'],
+    ])
+  })
+
   it('uses ordinal ordering for deterministic batches and manifest identity', async () => {
     const ordered = [
       chunk('c1', 0, sizedContent(5000, 'one')),
@@ -105,6 +128,51 @@ describe('connected knowledge derive batching', () => {
     expect(await records.get(key)).toEqual(prior)
   })
 
+  it('reports every relation validation error when repair fails', async () => {
+    const invalid = {
+      claims: ['missing-one', 'missing-two'].map((type) => ({
+        type,
+        from: chunkRef('c1'),
+        to: { kind: 'entity', entityId: type },
+        evidence: [chunkRef('c1')],
+      })),
+    }
+    const stage = relate({ id: 'refs', version: 1, types: relationTypes, model: fixedRelationModel([invalid, invalid]) })
+
+    await expect(runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: [chunk('c1', 0, 'alpha')],
+    })).rejects.toThrow(/Derive refs type missing-one: unknown type\nDerive refs type missing-two: unknown type/)
+  })
+
+  it('reports every assertion validation error when repair fails', async () => {
+    const types = {
+      first: z.object({ value: z.string() }),
+      second: z.object({ value: z.string() }),
+    }
+    const invalid = {
+      assertions: [
+        { type: 'first', data: { value: 1 }, evidence: [chunkRef('c1')] },
+        { type: 'second', data: { value: 2 }, evidence: [chunkRef('c1')] },
+      ],
+    }
+    const model = fixedAssertionModel([invalid, invalid])
+    const stage = assertions({ id: 'facts', version: 1, types, model })
+
+    await expect(runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: [chunk('c1', 0, 'alpha')],
+    })).rejects.toThrow(/Derive facts type first: invalid data\nDerive facts type second: invalid data/)
+  })
+
   it('truncates only an oversized single chunk and leaves surrounding batches intact', async () => {
     const prompts: string[] = []
     const model = relationModel(prompts)
@@ -146,6 +214,32 @@ describe('connected knowledge derive batching', () => {
 
     await runDeriveStages(args)
     expect(model.generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads each valid cache manifest only once on cache hits', async () => {
+    const stages = [
+      relate({ id: 'refs', version: 1, types: relationTypes, model: relationModel() }),
+      assertions({ id: 'facts', version: 1, types: assertionTypes, model: assertionModel([]) }),
+    ]
+
+    for (const stage of stages) {
+      const records = inMemoryRecordStore()
+      const args = {
+        records,
+        indexerId: 'kb',
+        namespace,
+        stages: [stage],
+        document: document(),
+        chunks: [chunk('c1', 0, 'alpha')],
+      }
+      await runDeriveStages(args)
+      const get = vi.spyOn(records, 'get')
+
+      await runDeriveStages(args)
+
+      const key = manifestKey(stage.id)
+      expect(get.mock.calls.filter(([recordKey]) => recordKey === key)).toHaveLength(1)
+    }
   })
 
   it('batches multimodal evidence with the same budget and keeps parts validation', async () => {
@@ -211,13 +305,23 @@ function fixedRelationModel(objects?: readonly unknown[], prompts: string[] = []
 }
 
 function assertionModel(prompts: string[]): KnowledgeModel {
+  return fixedAssertionModel(undefined, prompts)
+}
+
+function fixedAssertionModel(objects?: readonly unknown[], prompts: string[] = []): KnowledgeModel {
+  let index = 0
   return {
     name: 'assertion-extractor',
     fingerprint: 'assertion-fp',
     generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
     generateObject: vi.fn(async ({ prompt }) => {
       prompts.push(prompt)
-      return { object: { assertions: chunkIdsFromPrompt(prompt).map((chunkId) => ({ type: 'fact', data: { value: chunkId }, evidence: [chunkRef(chunkId)] })) } }
+      return {
+        object: objects?.[index++] ?? {
+          assertions: chunkIdsFromPrompt(prompt).map((chunkId) =>
+            ({ type: 'fact', data: { value: chunkId }, evidence: [chunkRef(chunkId)] })),
+        },
+      }
     }),
   }
 }

@@ -142,7 +142,9 @@ async function runGeneratedBatch(
   warnings.push(...repairedPrompt.warnings)
   const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
   if (repaired.errors.length > 0) {
-    throw new Error(repaired.errors[0] ?? `Derive ${input.stage.id} batch ${batch.ordinal} failed after repair.`)
+    throw new Error(
+      repaired.errors.join('\n') || `Derive ${input.stage.id} batch ${batch.ordinal} failed after repair.`,
+    )
   }
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }

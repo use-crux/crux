@@ -101,7 +101,7 @@ export function toAssertionClaimRecords(
   })
 }
 
-/** Return a valid cached assertion count, or undefined when cache is stale. */
+/** Read the assertion claim manifest and include a count when its cache is valid. */
 export async function readCachedAssertionClaimCount(args: {
   readonly records: RecordStore
   readonly indexerId: string
@@ -110,7 +110,10 @@ export async function readCachedAssertionClaimCount(args: {
   readonly sourceId: string
   readonly sourceHash: string
   readonly stageFingerprint: string
-}): Promise<number | undefined> {
+}): Promise<{
+  readonly manifest: ClaimManifestRecord | undefined
+  readonly count?: number
+}> {
   const manifest = await readClaimManifest(args.records, claimManifestKey({
     indexerId: args.indexerId,
     namespace: args.namespace,
@@ -118,7 +121,7 @@ export async function readCachedAssertionClaimCount(args: {
     sourceId: args.sourceId,
   }))
   if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint)) {
-    return undefined
+    return { manifest }
   }
   const keys = manifest.claimHashes.map((hash) => claimKey(args, hash))
   const values = args.records.getMany
@@ -130,8 +133,8 @@ export async function readCachedAssertionClaimCount(args: {
     args.sourceId,
     manifest.claimHashes[index] ?? '',
   ))
-    ? manifest.claimHashes.length
-    : undefined
+    ? { manifest, count: manifest.claimHashes.length }
+    : { manifest }
 }
 
 /** Replace cached assertion claims and their source manifest. */
