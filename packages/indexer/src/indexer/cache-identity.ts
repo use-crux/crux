@@ -13,7 +13,7 @@ export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v88";
  * alongside Thread definitions, context-planning structure, hook/budget refs,
  * and findings.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v43";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v44";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

@@ -115,10 +115,11 @@ describe("native semantic direct Crux projectors", () => {
 
         export const writerPrompt = prompt({ id: 'writer' })
         export const searchTool = tool({ name: 'search' })
+        export const reviewerAgent = agent({ id: 'reviewer-agent' })
         export const writerAgent = agent({
           id: 'writer-agent',
           prompt: writerPrompt,
-          tools: { searchTool },
+          tools: { searchTool, reviewerAgent },
           handoffs: ['reviewer-agent', { id: 'editor-agent', when: 'Needs editing' }],
           contextHandler,
           usageHandler,
@@ -127,7 +128,19 @@ describe("native semantic direct Crux projectors", () => {
       `,
     );
 
-    await expectDirectNativeParity(root, file);
+    const facts = await expectDirectNativeParity(root, file);
+    expect(facts.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "agent.uses_tool",
+          to: expect.stringContaining("tool:"),
+        }),
+        expect.objectContaining({
+          type: "agent.uses_agent_tool",
+          to: expect.stringContaining("agent:"),
+        }),
+      ]),
+    );
   }, 20_000);
 
   it("matches TypeScript facts for routing primitives", async () => {

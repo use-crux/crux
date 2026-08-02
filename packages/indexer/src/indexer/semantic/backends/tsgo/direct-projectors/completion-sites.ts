@@ -4,6 +4,7 @@ import type {
   NativeDirectIdentifierDependencySpec,
   NativeDirectPrimitiveSpec,
 } from "./manifest";
+import { objectDependencyTargetKinds } from "./manifest";
 
 /** Syntax shapes recognized by the cache-bypassing completion compiler. */
 export type CompletionSlot =
@@ -113,7 +114,7 @@ function completionSitesForDependency(
           callName,
           [dependency.property, "*"],
           "toolMapMember",
-          [dependency.targetKind],
+          objectDependencyTargetKinds(dependency),
           "toolMapMember",
         ),
       ];

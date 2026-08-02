@@ -64,23 +64,24 @@ export function semanticToolMapTargets(
   expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen = new Set<string>(),
+  targetKinds: readonly SemanticTarget["kind"][] = ["tool"],
 ): SemanticTarget[] {
   const object = semanticObjectExpression(expression, view, seen);
   if (!object) {
     const target = semanticTargetForExpression(expression, view, seen);
-    return target?.kind === "tool" ? [target] : [];
+    return target && targetKinds.includes(target.kind) ? [target] : [];
   }
   const targets: SemanticTarget[] = [];
   for (const property of view.syntax.objectProperties(object)) {
     const spread = view.syntax.spreadExpression(property);
     if (spread) {
-      targets.push(...semanticToolMapTargets(spread, view, seen));
+      targets.push(...semanticToolMapTargets(spread, view, seen, targetKinds));
       continue;
     }
     const member = objectMemberExpression(property, view);
     if (!member) continue;
     const target = semanticTargetForExpression(member, view, seen);
-    if (target?.kind === "tool") targets.push(target);
+    if (target && targetKinds.includes(target.kind)) targets.push(target);
   }
   return dedupeTargets(targets);
 }

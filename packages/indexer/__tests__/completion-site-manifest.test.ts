@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { completionSiteManifest } from "../src/indexer/semantic/backends/tsgo/direct-projectors/completion-sites";
 import {
   nativeDirectPrimitiveManifest,
+  objectDependencyTargetKinds,
   type NativeDirectIdentifierDependencySpec,
 } from "../src/indexer/semantic/backends/tsgo/direct-projectors/manifest";
 
@@ -102,7 +103,7 @@ describe("completion site manifest", () => {
         callNames: ["agent"],
         propertyPath: ["tools", "*"],
         slot: "toolMapMember",
-        acceptedKinds: ["tool"],
+        acceptedKinds: ["tool", "agent"],
         insertion: "toolMapMember",
       },
       {
@@ -171,7 +172,6 @@ describe("completion site manifest", () => {
                 roleKey(primitive.callName, [dependency.property], kind),
               );
             case "arrayIdentifier":
-            case "objectShorthand":
               return [
                 roleKey(
                   primitive.callName,
@@ -179,6 +179,14 @@ describe("completion site manifest", () => {
                   dependency.targetKind,
                 ),
               ];
+            case "objectShorthand":
+              return objectDependencyTargetKinds(dependency).map((kind) =>
+                roleKey(
+                  primitive.callName,
+                  [dependency.property, "*"],
+                  kind,
+                ),
+              );
             case "staticIdArray":
               return [
                 roleKey(

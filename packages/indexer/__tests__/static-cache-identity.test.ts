@@ -54,7 +54,7 @@ describe("static cache identity", () => {
   });
 
   it("takes the Connected Knowledge semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v43");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v44");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

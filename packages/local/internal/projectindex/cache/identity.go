@@ -37,6 +37,8 @@ package cache
 // Epoch 63 combines the independently advanced Effect boundary lint and
 // Connected Knowledge snapshot contracts so neither parent cache can mask the
 // other.
+// Epoch 64 advances the direct Agent-tool relation contract so mixed tool/agent
+// tool maps keep typed native-direct edges across restart boundaries.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 63
+const ProjectIndexSnapshotCacheEpoch = 64
