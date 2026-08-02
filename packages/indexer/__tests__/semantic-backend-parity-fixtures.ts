@@ -518,10 +518,11 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           system: WRITER_SYSTEM,
           prompt: renderPrompt,
         })
+        export const reviewerAgent = agent({ name: 'Reviewer' })
         export const writerAgent = agent({
           name: 'Writer',
           prompt: writerPrompt,
-          tools: sharedTools,
+          tools: { ...sharedTools, reviewer: reviewerAgent },
           usageHandler,
           handoffs: ['Reviewer', { id: 'Editor', when: 'Needs editing' }],
         })
@@ -532,6 +533,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         relationTypes: [
           "agent.uses_prompt",
           "agent.uses_tool",
+          "agent.uses_agent_tool",
           "agent.can_handoff_to",
         ],
         sourceRefRoles: ["schema", "system", "prompt", "config", "callback"],

@@ -132,3 +132,6 @@ ladders, `preview()`, and executed request receipts.
 Named Agent tool maps may now include direct child Agents as awaited foreground
 Tools. Object inputs project their object schema directly, no-input children
 project an empty object, and non-object inputs project through an `input` field.
+
+Project Index now distinguishes direct Agent tools with an `agent.uses_agent_tool`
+relation while retaining `agent.uses_tool` for ordinary Tools.
