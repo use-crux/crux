@@ -28,7 +28,7 @@ export function nextEntryFile(input: {
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
     registryDeclaration("evalRegistry", input.evalArtifacts),
-    ...evalHostCapabilityLines([]),
+    ...(hasEvals ? evalHostCapabilityLines([]) : []),
     "",
     ...(hasEvals
       ? nextEvalHostLines(input.manifestHash)

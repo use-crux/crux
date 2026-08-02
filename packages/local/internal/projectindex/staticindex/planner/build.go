@@ -57,6 +57,8 @@ func BuildWithExtensionManifestContext(
 		Root:                     root,
 		ProjectName:              projectName,
 		ConfigFile:               config.ConfigFile,
+		ConfigDependencies:       append([]string(nil), config.ConfigDependencies...),
+		CacheDisabled:            config.CacheDisabled,
 		RuntimeConfigured:        config.RuntimeConfigured,
 		RedactPatternsConfigured: config.RedactPatternsConfigured,
 		CallNames:                append([]string(nil), defaultCallNames...),
@@ -71,6 +73,9 @@ func BuildWithExtensionManifestContext(
 		LintConfig:               append(json.RawMessage(nil), config.Lint...),
 		CacheInputs:              cacheInputs,
 		StaticHost:               defaultHost(),
+	}
+	if config.CacheDisabled {
+		plan.CacheInputs = nil
 	}
 	if extensionManifest != nil {
 		if err := mergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
@@ -122,7 +127,7 @@ func applyCacheManifestStatus(plan *projectindex.ProjectStaticSyntaxPlan) {
 	if len(primaryFiles) == 0 {
 		primaryFiles = plan.Files
 	}
-	cacheStatus := cache.ManifestStatus(plan.Root, primaryFiles, plan.CacheInputs)
+	cacheStatus := cache.ManifestStatus(plan.Root, primaryFiles, plan.CacheInputs, plan.ConfigDependencies)
 	plan.CacheHits = cacheStatus.CacheHits
 	plan.CacheMisses = cacheStatus.CacheMisses
 	plan.CacheEntries = cacheStatus.CacheEntries

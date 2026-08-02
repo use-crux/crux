@@ -1,6 +1,7 @@
 ---
-"@use-crux/core": minor
-"@use-crux/indexer": minor
+'@use-crux/core': minor
+'@use-crux/indexer': minor
+'@use-crux/postgres': minor
 ---
 
 Add the new `@use-crux/core/knowledge` entrypoint as the canonical home for `knowledgeBase`, add `knowledgeBase` pipeline config, and add an inert fingerprinted derive slot to `indexingPipeline`.
@@ -34,6 +35,10 @@ Add `globalSearch({ model })` as a Connected Knowledge recipe producer over comm
 Integrate connected-knowledge contexts with request representation planning: view/retriever and assertion contexts keep exact required defaults, summarizable view contexts key derived artifacts by source revisions, retriever-owned tools remain sticky until explicit omission, request inspection projects redacted knowledge trace receipts, and `globalSearch()` can consult one injected admission hook before map calls.
 
 Export `runConnectedKnowledgeConformance()` from `@use-crux/core/knowledge` so storage adapters can run the connected knowledge storage contract against their own storage bundles.
+
+Add first-party PostgreSQL Connected Knowledge storage with JSONB records,
+explicit idempotent setup, pgvector dense/sparse/hybrid search, normalized RRF,
+shared pool ownership, and full storage conformance coverage.
 
 Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
 

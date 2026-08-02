@@ -12,7 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const Epoch = "static-parse-v87"
+const Epoch = "static-parse-v88"
 
 type Status struct {
 	CacheHits    []string
@@ -40,10 +40,11 @@ func ManifestStatus(
 	root string,
 	files []string,
 	compilerInputs []json.RawMessage,
+	configDependencies []string,
 ) Status {
 	wantedIdentities := manifestIdentities(root, files, compilerInputs)
 	entries := readManifestEntries(root, wantedIdentities)
-	configFiles := readConfigFileHashes(root)
+	configFiles := readConfigFileHashes(root, configDependencies)
 	sourceHashes := newSourceHashMemo()
 	statuses := manifestFileStatuses(root, files, compilerInputs, configFiles, entries, sourceHashes)
 	status := Status{
@@ -189,9 +190,12 @@ func manifestIdentity(root string, file string, compilerInputs []json.RawMessage
 	return string(data)
 }
 
-func readConfigFileHashes(root string) []sourceHashRecord {
+func readConfigFileHashes(root string, dependencies []string) []sourceHashRecord {
 	out := []sourceHashRecord{}
-	for _, name := range []string{"jsconfig.json", "tsconfig.json"} {
+	if dependencies == nil {
+		dependencies = []string{"jsconfig.json", "tsconfig.json"}
+	}
+	for _, name := range dependencies {
 		if hash, ok := sourceHash(filepath.Join(root, name), nil); ok {
 			out = append(out, sourceHashRecord{File: name, SourceHash: hash})
 		}

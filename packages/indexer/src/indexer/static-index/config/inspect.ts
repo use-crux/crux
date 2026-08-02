@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { CruxLintConfig } from '@use-crux/core'
 import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { loadConfigPolicyProjectConfig } from '../../config'
@@ -32,6 +32,10 @@ export interface ProjectStaticIndexConfig {
   readonly root: string
   /** Config file imported for policy, if one was discovered. */
   readonly configFile?: string
+  /** Root-relative TS/JS config files that influenced authored config imports. */
+  readonly configDependencies: readonly string[]
+  /** Prevent cache reads and writes when dependency identity cannot be bounded. */
+  readonly cacheDisabled?: boolean
   /** Configured Indexer Extension references. */
   readonly extensions: readonly ProjectStaticIndexExtensionReference[]
   /** Authored lint policy used by first-party graph lints. */
@@ -60,9 +64,12 @@ export async function inspectProjectStaticIndexConfig(
 ): Promise<ProjectStaticIndexConfig> {
   const root = resolve(options.root)
   const result = await loadConfigPolicyProjectConfig(root, options.configPath)
+  const dependencies = boundedConfigDependencies(root, result.configDependencies)
   return {
     root,
     ...(result.loaded.configFile ? { configFile: result.loaded.configFile } : {}),
+    configDependencies: dependencies.files,
+    ...(result.cacheDisabled || dependencies.omitted ? { cacheDisabled: true } : {}),
     extensions: (result.loaded.indexer?.extensions ?? []).map((extension) => ({
       package: extension.package,
       ...(extension.export ? { export: extension.export } : {}),
@@ -72,10 +79,29 @@ export async function inspectProjectStaticIndexConfig(
     ...(result.loaded.importFailed
       ? {}
       : {
-          redactPatternsConfigured:
-            (result.loaded.crux?.config.observability?.redactPatterns?.length ??
-              0) > 0,
+          redactPatternsConfigured: (result.loaded.crux?.config.observability?.redactPatterns?.length ?? 0) > 0,
         }),
     diagnostics: result.diagnostics,
   }
+}
+
+const MAX_CONFIG_DEPENDENCIES = 64
+
+function boundedConfigDependencies(
+  root: string,
+  files: readonly string[],
+): { readonly files: readonly string[]; readonly omitted: boolean } {
+  let omitted = false
+  const relativeFiles = new Set<string>()
+  for (const file of files) {
+    const path = relative(root, file)
+    if (path === '' || path === '..' || path.startsWith('../') || path.startsWith('..\\') || isAbsolute(path)) {
+      omitted = true
+      continue
+    }
+    relativeFiles.add(path.replaceAll('\\', '/'))
+  }
+  const sorted = [...relativeFiles].sort()
+  if (sorted.length > MAX_CONFIG_DEPENDENCIES) omitted = true
+  return { files: sorted.slice(0, MAX_CONFIG_DEPENDENCIES), omitted }
 }

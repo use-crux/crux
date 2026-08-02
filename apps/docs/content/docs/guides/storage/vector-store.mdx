@@ -140,6 +140,25 @@ Upstash index mode is deployment-owned, so the adapter defaults conservatively a
 
 See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Upstash storage](/docs/reference/storage/upstash) for the adapter reference, and the [Postgres storage cookbook](/docs/cookbook/basics/postgres-data-store) for a dense pgvector example.
 
+Use first-party PostgreSQL storage when pgvector is available:
+
+```ts
+import { postgresVectorStore } from "@use-crux/postgres";
+
+const vectors = postgresVectorStore({
+  dimensions: 1536,
+  sparseDimensions: 30_000,
+});
+await vectors.setup.apply();
+```
+
+Omit `sparseDimensions` for a dense-only store. When configured, PostgreSQL
+supports sparse and hybrid search with normalized RRF. It does not support
+DBSF. Metadata filters run before candidate ranking, writes are strongly
+consistent, and HNSW indexes provide approximate cosine search. The existing
+Postgres cookbook remains useful for custom schemas and exact-scan designs;
+most applications should start with `postgresVectorStore()`.
+
 ## Custom VectorStore
 
 Implement `VectorStore` when your vector database can upsert records by key and search them by dense, sparse, or hybrid query. This is the full contract:

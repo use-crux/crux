@@ -27,6 +27,9 @@ from that final project state. It never automatically performs destructive
 migrations, paid provisioning, production mutations, credentials, or ambiguous
 edits; anything requiring approval stays a finding with exact remediation.
 
+One safe additive action appends `.crux/` to the root `.gitignore` so local
+Crux state and generated runtime metadata do not get committed accidentally.
+
 Use `--cwd <path>` to inspect another project root. Findings may include a docs
 URL, a copy-paste remediation, and a privacy-safe coding-agent prompt. They do
 not include environment values, credentials, or connection strings.

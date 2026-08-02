@@ -71,6 +71,7 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 		s.restoreBaseAfterFailedReindex(previousState)
 		return store.IndexData{}, s.publishFailedFullReindex(root, projectName, run.startedAt, err)
 	}
+	s.setConfigDependencies(root, astResult.ConfigDependencies)
 
 	patch := astResult.Patch
 	if patch.Phase == "" {

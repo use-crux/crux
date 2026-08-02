@@ -224,6 +224,7 @@
       "name": "@use-crux/postgres",
       "manifest": "packages/postgres/package.json",
       "entrypoints": {
+        ".": "node-only",
         "./runtime": "node-only"
       }
     },

@@ -34,7 +34,7 @@ export async function discoverRuntimeEvalDefinitions(
   const evalDiagnostics: IndexDiagnostic[] = []
 
   const evalModules = await withCruxIndexMode(() =>
-    withUserImportSession(() => discoverModules(root, patterns, sources)),
+    withUserImportSession(() => discoverModules(root, patterns, sources), root),
   )
   for (const moduleResult of evalModules) {
     if (!moduleResult.ok) {

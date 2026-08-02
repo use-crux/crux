@@ -46,7 +46,7 @@ func TestWorkerStaticIndexWritesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("analyze files = %v, want cold source analyzed", compiler.analyzeFiles)
 	}
 
-	status := cache.ManifestStatus(root, []string{sourceFile}, planner.DefaultCacheCompilerInputs())
+	status := cache.ManifestStatus(root, []string{sourceFile}, planner.DefaultCacheCompilerInputs(), nil)
 	if !slices.Equal(status.CacheHits, []string{sourceFile}) {
 		t.Fatalf("cache hits = %v misses = %v, want written source hit", status.CacheHits, status.CacheMisses)
 	}

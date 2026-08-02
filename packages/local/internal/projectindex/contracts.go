@@ -28,8 +28,9 @@ type DeploymentManifestProjectionInput struct {
 // metadata here is carried into later phases instead of reading mutable worker
 // diagnostics such as "last timing" state.
 type ProjectAstIndexResult struct {
-	Patch           IndexPatch
-	UsedStaticIndex bool
+	Patch              IndexPatch
+	UsedStaticIndex    bool
+	ConfigDependencies []string
 }
 
 // ProjectAstResultIndexer optionally returns AST/source patch metadata together

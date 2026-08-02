@@ -7,6 +7,8 @@ import "encoding/json"
 type ProjectStaticIndexConfig struct {
 	Root                     string                                 `json:"root"`
 	ConfigFile               string                                 `json:"configFile,omitempty"`
+	ConfigDependencies       []string                               `json:"configDependencies"`
+	CacheDisabled            bool                                   `json:"cacheDisabled,omitempty"`
 	Extensions               []ProjectStaticIndexExtensionReference `json:"extensions"`
 	Lint                     json.RawMessage                        `json:"lint,omitempty"`
 	RuntimeConfigured        *bool                                  `json:"runtimeConfigured,omitempty"`

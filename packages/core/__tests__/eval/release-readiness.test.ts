@@ -1,8 +1,20 @@
-import { readdir, readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { promisify } from "node:util";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
+const execFileAsync = promisify(execFile);
 
 describe("Eval release readiness", () => {
   it("publishes Eval guides and reference pages in the docs navigation", async () => {
@@ -189,6 +201,62 @@ describe("Eval release readiness", () => {
       readRepoFile("packages/core/__tests__/eval/compile-perf.test.ts"),
     ).resolves.toContain("extendedDiagnostics");
   });
+
+  it("stages the Next runtime export for ESM import and CommonJS require resolution", async () => {
+    const root = await mkdtemp(join(repoRoot, ".tmp-next-runtime-stage-"));
+    try {
+      const stageRoot = join(root, "stage");
+      await execFileAsync(
+        "node",
+        ["scripts/stage-npm-packages.mjs", "--skip-local", "--out", stageRoot],
+        {
+          cwd: repoRoot,
+        },
+      );
+
+      const corePackage = JSON.parse(
+        await readFile(join(stageRoot, "@use-crux/core/package.json"), "utf8"),
+      ) as {
+        exports?: {
+          "./runtime/next"?: { default?: string; import?: string };
+        };
+      };
+      expect(corePackage.exports?.["./runtime/next"]?.import).toBe(
+        "./dist/runtime/next.js",
+      );
+      expect(corePackage.exports?.["./runtime/next"]?.default).toBe(
+        "./dist/runtime/next.js",
+      );
+
+      await mkdir(join(root, "consumer/node_modules/@use-crux"), {
+        recursive: true,
+      });
+      await cp(
+        join(stageRoot, "@use-crux/core"),
+        join(root, "consumer/node_modules/@use-crux/core"),
+        {
+          recursive: true,
+        },
+      );
+      const checkFile = join(root, "consumer/check.mjs");
+      await writeFile(
+        checkFile,
+        [
+          "import { createRequire } from 'node:module'",
+          "const imported = await import('@use-crux/core/runtime/next')",
+          "const required = createRequire(import.meta.url)('@use-crux/core/runtime/next')",
+          "if (typeof imported.withCruxBuild !== 'function') throw new Error('dynamic import missing withCruxBuild')",
+          "if (typeof required.withCruxBuild !== 'function') throw new Error('createRequire missing withCruxBuild')",
+        ].join("\n"),
+      );
+
+      await execFileAsync("node", [checkFile], {
+        cwd: join(root, "consumer"),
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 180_000);
 
   it("keeps CLI help and the feedback guide aligned", async () => {
     const cliHelpTest = await readRepoFile(

@@ -22,6 +22,7 @@ func writeCache(
 	cache.WriteFromPatch(
 		request.Root,
 		request.Plan.CacheInputs,
+		request.Plan.ConfigDependencies,
 		cache.SourceInput{
 			Files:                 sourceInput.Files,
 			SemanticSourceProfile: sourceInput.SemanticSourceProfile,

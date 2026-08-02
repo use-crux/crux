@@ -71,6 +71,7 @@ Bundled TTL behavior:
 | `inMemoryRecordStore()`     | Lazy expiry on `get()`, `list()`, and `scan()`   |
 | `convexRecordStore()`       | Lazy expiry through the Convex document contract |
 | `upstashRedisRecordStore()` | Native Redis `PX` key expiration                 |
+| `postgresRecordStore()`     | Lazy expiry suppressed by every read/list path   |
 
 If `capabilities().ttl === false`, passing `ttlMs` throws `StorageError` code `ttl_unsupported`.
 
@@ -111,6 +112,20 @@ const records = upstashRedisRecordStore({
   }),
 });
 ```
+
+Use PostgreSQL for durable records with native JSONB filters, batches, and
+versioned CAS:
+
+```ts
+import { postgresRecordStore } from "@use-crux/postgres";
+
+const records = postgresRecordStore({ url: process.env.DATABASE_URL });
+await records.setup.apply();
+```
+
+PostgreSQL setup is explicit. Application reads and writes never run DDL.
+Prefix scans treat `%`, `_`, and `\\` literally, and `null` filters match an
+explicit JSON `null` rather than a missing property.
 
 ## Watches And Reactive UI
 

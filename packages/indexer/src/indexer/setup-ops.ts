@@ -24,6 +24,7 @@ import type { RuntimeArtifactFinding } from './runtime-artifacts/types'
 import { loadProjectConfig } from './config'
 import { createRuntimeSetupContributor } from './setup/runtime-contributor'
 import { createDeferSetupContributor } from './setup/defer-contributor'
+import { createLocalStateSetupContributor } from './setup/local-state-contributor'
 
 export type SetupGenerationStatus =
   | 'current'
@@ -135,6 +136,7 @@ export async function runSetupPlanningOperation(
     | RuntimeEngineDefinition
     | undefined
   const planner = createSetupPlanner([
+    createLocalStateSetupContributor(),
     ...(loaded.importFailed ? [configFailureContributor()] : []),
     ...(runtime ? [createRuntimeSetupContributor(runtime)] : []),
     createDeferSetupContributor({

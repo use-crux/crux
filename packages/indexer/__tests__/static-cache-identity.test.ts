@@ -48,13 +48,13 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v87");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v88");
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v86");
   });
 
   it("takes the Connected Knowledge semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v42");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v43");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

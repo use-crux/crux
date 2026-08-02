@@ -32,6 +32,7 @@ func (p projectIndexPipeline) reindexProjectIncrementalWithOptions(
 		root,
 		configPath,
 		previous,
+		s.configDependencies(root),
 		files,
 		deletedFiles,
 	) {
@@ -142,12 +143,16 @@ func containsProjectConfigChange(
 	root string,
 	configPath string,
 	previous store.IndexData,
+	configDependencies []string,
 	files []string,
 	deletedFiles []string,
 ) bool {
 	candidates := []string{configPath}
 	if previous.Project != nil {
 		candidates = append(candidates, previous.Project.ConfigFile)
+	}
+	for _, dependency := range configDependencies {
+		candidates = append(candidates, projectPath(root, dependency))
 	}
 	for _, changed := range append(
 		append([]string(nil), files...),

@@ -11,7 +11,7 @@ on:
         type: boolean
         default: true
   schedule:
-    - cron: "17 3 * * *"
+    - cron: '17 3 * * *'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -106,7 +106,7 @@ jobs:
           - target: linux-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-unknown-linux-gnu
-            apt_packages: ""
+            apt_packages: ''
           - target: linux-arm64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: aarch64-unknown-linux-gnu
@@ -114,11 +114,11 @@ jobs:
           - target: darwin-x64
             runner: macos-latest
             rust_target: x86_64-apple-darwin
-            apt_packages: ""
+            apt_packages: ''
           - target: darwin-arm64
             runner: macos-latest
             rust_target: aarch64-apple-darwin
-            apt_packages: ""
+            apt_packages: ''
           - target: win32-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-pc-windows-gnu
@@ -159,7 +159,7 @@ jobs:
       - name: Install llvm-mingw for Windows arm64
         if: matrix.target == 'win32-arm64'
         env:
-          LLVM_MINGW_VERSION: "20260616"
+          LLVM_MINGW_VERSION: '20260616'
         run: |
           mkdir -p .tmp/toolchains
           curl -fsSL \
@@ -192,6 +192,23 @@ jobs:
     needs: [changesets, build-local-binary]
     if: github.event_name == 'push' && needs.changesets.outputs.hasChangesets == 'false'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_DB: crux_storage_release
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d crux_storage_release"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CRUX_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/crux_storage_release
+      CRUX_TEST_PGVECTOR_URL: postgres://postgres:postgres@localhost:5432/crux_storage_release
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -212,6 +229,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: PostgreSQL storage release coverage
+        run: pnpm --filter @use-crux/postgres test
 
       - name: Test, typecheck, and build editor extension
         run: |
@@ -355,7 +375,7 @@ jobs:
           - target: linux-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-unknown-linux-gnu
-            apt_packages: ""
+            apt_packages: ''
           - target: linux-arm64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: aarch64-unknown-linux-gnu
@@ -363,11 +383,11 @@ jobs:
           - target: darwin-x64
             runner: macos-latest
             rust_target: x86_64-apple-darwin
-            apt_packages: ""
+            apt_packages: ''
           - target: darwin-arm64
             runner: macos-latest
             rust_target: aarch64-apple-darwin
-            apt_packages: ""
+            apt_packages: ''
           - target: win32-x64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: x86_64-pc-windows-gnu
@@ -411,7 +431,7 @@ jobs:
       - name: Install llvm-mingw for Windows arm64
         if: matrix.target == 'win32-arm64'
         env:
-          LLVM_MINGW_VERSION: "20260616"
+          LLVM_MINGW_VERSION: '20260616'
         run: |
           mkdir -p .tmp/toolchains
           curl -fsSL \
@@ -444,6 +464,23 @@ jobs:
     needs: [nightly, nightly-build-local-binary]
     if: needs.nightly.outputs.shouldBuild == 'true'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_DB: crux_storage_release
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d crux_storage_release"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CRUX_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/crux_storage_release
+      CRUX_TEST_PGVECTOR_URL: postgres://postgres:postgres@localhost:5432/crux_storage_release
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -465,6 +502,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: PostgreSQL storage release coverage
+        run: pnpm --filter @use-crux/postgres test
 
       - name: Test, typecheck, and build editor extension
         run: |
