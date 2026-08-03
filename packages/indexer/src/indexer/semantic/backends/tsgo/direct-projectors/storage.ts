@@ -306,9 +306,24 @@ function nativeStorageDescriptor(
 ): SemanticStorageFactoryDescriptor | undefined {
   return semanticStorageFactoryDescriptor(
     storageCallName(expression),
+    hasLiteralDimensions(expression, bindings),
     hasLiteralSparseDimensions(expression, bindings),
     hasLiteralLexical(expression, bindings),
   );
+}
+
+function hasLiteralDimensions(
+  expression: Expression,
+  bindings?: ReadonlyMap<string, NativeSourceBinding>,
+): boolean {
+  if (!isCallExpression(expression)) return false;
+  const [firstArg] = nativeNodeList(expression.arguments);
+  const config = firstArg
+    ? nativeStorageConfigObject(firstArg, bindings, new Set())
+    : undefined;
+  if (!config) return false;
+  const value = storagePropertyExpression(config, "dimensions");
+  return Boolean(value && isNumericLiteral(value) && Number(value.text) > 0);
 }
 
 function hasLiteralSparseDimensions(

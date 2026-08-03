@@ -14,6 +14,9 @@ describe("compiler-owned PostgreSQL storage descriptors", () => {
     });
     expect(
       semanticStorageFactoryDescriptor("postgresSearchStore"),
+    ).not.toHaveProperty("capabilities");
+    expect(
+      semanticStorageFactoryDescriptor("postgresSearchStore", true),
     ).toMatchObject({
       capabilities: {
         search: {
@@ -23,7 +26,7 @@ describe("compiler-owned PostgreSQL storage descriptors", () => {
       },
     });
     expect(
-      semanticStorageFactoryDescriptor("postgresSearchStore", true),
+      semanticStorageFactoryDescriptor("postgresSearchStore", true, true),
     ).toMatchObject({
       capabilities: {
         search: {
@@ -33,17 +36,17 @@ describe("compiler-owned PostgreSQL storage descriptors", () => {
       },
     });
     expect(
-      semanticStorageFactoryDescriptor("postgresSearchStore", false, true),
+      semanticStorageFactoryDescriptor("postgresSearchStore", false, false, true),
     ).toMatchObject({
       capabilities: {
         search: {
-          legs: { dense: true, sparse: false, lexical: true },
-          fusion: ["rrf"],
+          legs: { dense: false, sparse: false, lexical: true },
+          fusion: [],
         },
       },
     });
     expect(
-      semanticStorageFactoryDescriptor("postgresStorage", true),
+      semanticStorageFactoryDescriptor("postgresStorage", true, true),
     ).toMatchObject({
       capabilities: {
         record: { ttl: "lazy", filter: "native", watch: false, batch: true },

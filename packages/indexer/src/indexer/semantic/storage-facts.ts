@@ -89,6 +89,7 @@ function storageDefinitionEnrichment(
 ): SemanticDefinitionEnrichment {
   const descriptor = semanticStorageFactoryDescriptor(
     candidate.call ? callExpressionName(candidate.call, view) : undefined,
+    hasLiteralDimensions(candidateConfigObject(candidate, view), view),
     hasLiteralSparseDimensions(candidateConfigObject(candidate, view), view),
     hasLiteralLexical(candidateConfigObject(candidate, view), view),
   );
@@ -147,6 +148,19 @@ function storageDefinitionEnrichment(
       view,
     ),
   };
+}
+
+function hasLiteralDimensions(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView> | undefined,
+  view: SemanticAnalyzerView,
+): boolean {
+  if (!object || !view.syntax.isKind(object, "objectLiteral")) return false;
+  const initializer = propertyInitializer(object, "dimensions", view);
+  if (!initializer) return false;
+  const text = view.syntax.numericLiteralText(
+    unwrapExpression(initializer, view),
+  );
+  return text !== undefined && Number(text) > 0;
 }
 
 function hasLiteralSparseDimensions(

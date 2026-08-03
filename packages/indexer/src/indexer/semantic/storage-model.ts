@@ -32,12 +32,13 @@ const inMemorySearchCapabilities = {
 } as const satisfies IndexedStorageCapabilities;
 
 const postgresSearchCapabilities = (
+  dense: boolean,
   sparse: boolean,
   lexical: boolean,
 ): IndexedStorageCapabilities => ({
   search: {
-    legs: { dense: true, sparse, lexical },
-    fusion: sparse || lexical ? ["rrf"] : [],
+    legs: { dense, sparse, lexical },
+    fusion: Number(dense) + Number(sparse) + Number(lexical) >= 2 ? ["rrf"] : [],
     filter: "pre",
     consistency: "strong",
   },
@@ -46,7 +47,7 @@ const postgresSearchCapabilities = (
 const upstashSearchCapabilities = {
   search: {
     legs: { dense: true, sparse: false, lexical: false },
-    fusion: [],
+    fusion: ["rrf"],
     filter: "pre",
     consistency: "eventual",
   },
@@ -121,14 +122,12 @@ const storageFactoryByCallName: Readonly<
   postgresSearchStore: {
     kind: "storage.searchStore",
     backend: "postgresSearchStore",
-    capabilities: postgresSearchCapabilities(false, false),
   },
   postgresStorage: {
     kind: "storage.bundle",
     backend: "postgresStorage",
     capabilities: {
       ...postgresRecordCapabilities,
-      ...postgresSearchCapabilities(false, false),
     },
   },
 };
@@ -141,13 +140,14 @@ export const semanticStorageCallNames = Object.keys(
 /** Returns the beta storage descriptor for a known factory call. */
 export function semanticStorageFactoryDescriptor(
   callName: string | undefined,
+  hasLiteralDimensions = false,
   hasLiteralSparseDimensions = false,
   hasLiteralLexical = false,
 ): SemanticStorageFactoryDescriptor | undefined {
   const descriptor = callName ? storageFactoryByCallName[callName] : undefined;
   if (
     !descriptor ||
-    (!hasLiteralSparseDimensions && !hasLiteralLexical) ||
+    (!hasLiteralDimensions && !hasLiteralSparseDimensions && !hasLiteralLexical) ||
     (callName !== "postgresSearchStore" && callName !== "postgresStorage")
   ) {
     return descriptor;
@@ -157,6 +157,7 @@ export function semanticStorageFactoryDescriptor(
     capabilities: {
       ...(callName === "postgresStorage" ? postgresRecordCapabilities : {}),
       ...postgresSearchCapabilities(
+        hasLiteralDimensions,
         hasLiteralSparseDimensions,
         hasLiteralLexical,
       ),
