@@ -67,26 +67,29 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
                         "sparse": false,
                         "lexical": false
                     },
-                    "fusion": [],
+                    "fusion": ["rrf"],
                     "filter": "pre",
                     "consistency": "eventual"
                 }
             })),
         },
+        "postgresRecordStore" => StorageFactoryDescriptor {
+            kind: "storage.recordStore",
+            backend: "postgresRecordStore",
+            capabilities: Some(json!({
+                "record": { "ttl": "lazy", "filter": "native", "watch": false, "batch": true }
+            })),
+        },
         "postgresSearchStore" => StorageFactoryDescriptor {
             kind: "storage.searchStore",
             backend: "postgresSearchStore",
+            capabilities: None,
+        },
+        "postgresStorage" => StorageFactoryDescriptor {
+            kind: "storage.bundle",
+            backend: "postgresStorage",
             capabilities: Some(json!({
-                "search": {
-                    "legs": {
-                        "dense": true,
-                        "sparse": false,
-                        "lexical": false
-                    },
-                    "fusion": [],
-                    "filter": "pre",
-                    "consistency": "strong"
-                }
+                "record": { "ttl": "lazy", "filter": "native", "watch": false, "batch": true }
             })),
         },
         _ => return None,

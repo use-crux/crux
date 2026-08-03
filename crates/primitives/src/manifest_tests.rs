@@ -148,7 +148,7 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:d3395b6151a88401ba18f88b5e4e2329f3da931e27b1080612427651cf119fba"
+        "sha256:addc6acf870f116cf528d45497d6fd0073d336f89458f8a86317c89b0d18d46c"
     );
 }
 
@@ -189,7 +189,7 @@ fn completion_manifest_covers_all_admitted_shapes() {
     assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "21");
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:d3395b6151a88401ba18f88b5e4e2329f3da931e27b1080612427651cf119fba"
+        "sha256:addc6acf870f116cf528d45497d6fd0073d336f89458f8a86317c89b0d18d46c"
     );
 }
 

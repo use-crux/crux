@@ -294,7 +294,9 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
             "convexStorage",
             "upstashRedisRecordStore",
             "upstashSearchStore",
+            "postgresRecordStore",
             "postgresSearchStore",
+            "postgresStorage",
         ],
         &[],
         &[
