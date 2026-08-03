@@ -16,6 +16,7 @@ import { createKnowledgeGraphStore } from '../knowledge/graph-store'
 import { communityScopeKey } from '../knowledge/communities/keys'
 import { createCommunityStore } from '../knowledge/communities/store'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import type { RetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 import { createKnowledgeViewRegistry, type KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { KnowledgeGenerationRetention } from '../knowledge/generation'
 import { relateEntities } from '../knowledge/relate/entities'
@@ -34,6 +35,7 @@ export interface ConnectedKnowledgeIntegrationConfig {
   readonly namespace: string
   readonly pipeline?: IndexingPipeline
   readonly communities?: CommunitiesConfig
+  readonly communityRefreshHost?: RetainedCommunityRefreshHost
   readonly retention: KnowledgeGenerationRetention
 }
 
@@ -77,7 +79,10 @@ export function createConnectedKnowledgeIntegration(
   async function afterIndex(sourceIds?: readonly string[]): Promise<ConnectedKnowledgeSummary | undefined> {
     await views.afterIndex(sourceIds)
     if (!records || !hasConnectedFeature(deriveStages, config.communities)) return undefined
-    await markCommunitiesDirty(sourceIds ?? await activeSourceIds(records, indexerId, namespace), 'indexed')
+    const refreshDescriptor = await markCommunitiesDirty(
+      sourceIds ?? await activeSourceIds(records, indexerId, namespace),
+      'indexed',
+    )
     const stageRuns: DeriveStageRunResult[] = []
     for (const sourceId of await activeSourceIds(records, indexerId, namespace)) {
       const source = await activeSource(records, indexerId, namespace, sourceId)
@@ -93,13 +98,14 @@ export function createConnectedKnowledgeIntegration(
       }))
     }
     await compile()
+    if (refreshDescriptor) config.communityRefreshHost?.schedule(refreshDescriptor)
     return summarizeDeriveRuns(stageRuns)
   }
 
   async function afterRemove(sourceId: string): Promise<void> {
     await views.afterRemove(sourceId)
     if (records && hasConnectedFeature(deriveStages, config.communities)) {
-      await markCommunitiesDirty([sourceId], 'removed')
+      const refreshDescriptor = await markCommunitiesDirty([sourceId], 'removed')
       await deleteKnowledgeClaimsForSource({
         records,
         indexerId,
@@ -108,6 +114,7 @@ export function createConnectedKnowledgeIntegration(
         stageIds: deriveStages.map((stage) => stage.id),
       })
       await compile()
+      if (refreshDescriptor) config.communityRefreshHost?.schedule(refreshDescriptor)
     }
   }
 
@@ -115,13 +122,17 @@ export function createConnectedKnowledgeIntegration(
     return views
   }
 
-  async function markCommunitiesDirty(sourceIds: readonly string[], reason: 'indexed' | 'removed'): Promise<void> {
-    if (!records || !config.communities) return
+  async function markCommunitiesDirty(
+    sourceIds: readonly string[],
+    reason: 'indexed' | 'removed',
+  ): Promise<{ readonly indexerId: string; readonly namespace: string; readonly scopeKey: string } | undefined> {
+    if (!records || !config.communities) return undefined
     const scopeKey = communityScopeKey({
       strategyFingerprint: config.communities.strategyFingerprint,
     })
     const store = createCommunityStore({ records, indexerId, namespace, scopeKey, retention: config.retention })
     await Promise.all(Array.from(new Set(sourceIds)).sort().map((sourceId) => store.markDirty(sourceId, reason)))
+    return { indexerId, namespace, scopeKey }
   }
 
   return Object.freeze({ binding, viewRegistry, afterIndex, afterRemove })

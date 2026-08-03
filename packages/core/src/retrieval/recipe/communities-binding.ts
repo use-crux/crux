@@ -1,7 +1,7 @@
 /** Internal Connected Knowledge recipe binding helpers. @module */
 
 import type { CommunitiesConfig } from '../../knowledge/communities/communities'
-import { createKnowledgeCommunitiesSurface, type KnowledgeCommunitiesSurface } from '../../knowledge/communities/lifecycle'
+import { createKnowledgeCommunitiesSurface, type CommunityRefreshHost, type KnowledgeCommunitiesSurface } from '../../knowledge/communities/lifecycle'
 import type { ViewRevision } from '../../knowledge/view/revision'
 import type { AssetStore, RecordStore } from '../../storage'
 import type { Retriever } from '../types'
@@ -16,6 +16,7 @@ export function createRecipeCommunitiesBinding(input: {
   readonly viewId?: string
   readonly resolveView?: () => Promise<ViewRevision>
   readonly retention?: 'cleanup' | 'retain-inactive'
+  readonly refreshHost?: CommunityRefreshHost
 }): { readonly surface?: KnowledgeCommunitiesSurface; readonly binding?: RetrievalCommunitiesBinding } {
   if (!input.config) return {}
   const surface = createKnowledgeCommunitiesSurface({
@@ -27,6 +28,7 @@ export function createRecipeCommunitiesBinding(input: {
     ...(input.viewId ? { viewId: input.viewId } : {}),
     ...(input.resolveView ? { resolveView: input.resolveView } : {}),
     ...(input.retention ? { retention: input.retention } : {}),
+    ...(input.refreshHost ? { refreshHost: input.refreshHost } : {}),
   })
   return {
     surface,
