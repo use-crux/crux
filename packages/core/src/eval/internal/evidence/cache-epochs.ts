@@ -7,10 +7,8 @@
  * identity, so evidence from the policy-unaware epoch must not be reused.
  * 12: accepted preparation amendments and pinned control-resource revisions
  * participate in provider-call decisions, invalidating earlier task evidence.
- * 13: host storage capabilities use the canonical search-store name, so older
- * storage-capability evidence contracts must not be reused.
  */
-export const TASK_EVIDENCE_CACHE_EPOCH = 13;
+export const TASK_EVIDENCE_CACHE_EPOCH = 12;
 
 /** Bump when managed external-scorer result identity changes. */
 export const SCORER_RESULT_CACHE_EPOCH = 3;

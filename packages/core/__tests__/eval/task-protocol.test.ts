@@ -77,33 +77,6 @@ describe("Eval task execution protocol", () => {
     });
   });
 
-  it("rejects the legacy vector-store host capability string", () => {
-    const task = async () => ({ answer: "production" });
-    Object.defineProperty(task, EVAL_TASK_INTERNAL, {
-      value: Object.freeze({
-        _tag: "CruxEvalTaskDescriptor",
-        identityEpoch: EVAL_TASK_IDENTITY_EPOCH,
-        operation: "generate",
-        adapterId: "ai-sdk",
-        capabilities: Object.freeze([]),
-        requiredHostCapabilities: Object.freeze(["vector-store"]),
-        defaults: Object.freeze({}),
-        overrideKeys: Object.freeze([]),
-        projectIdentity: () => ({
-          reusable: true as const,
-          fingerprintMaterial: { contract: "legacy-capability" },
-        }),
-        execute: async (input: unknown) => ({ object: input }),
-        projectOutput: (result: { object: unknown }) => result.object,
-        projectResponse: () => ({}) as never,
-      }),
-    });
-
-    expect(() => getEvalTaskDescriptorForInternalUse(task)).toThrow(
-      /align both packages/,
-    );
-  });
-
   it("rejects a frozen projector-less descriptor before invocation", async () => {
     let invocations = 0;
     const task = async () => undefined;

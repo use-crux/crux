@@ -112,7 +112,7 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "injectable",
       "rag.knowledgeBase",
       "storage.recordStore",
-      "storage.vectorStore",
+      "storage.searchStore",
       "storage.assetStore",
       "toolPolicy",
     ];
@@ -133,7 +133,7 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       DEFINITION_KIND_COVERAGE["storage.recordStore"].runtimeIdentity,
     ).toBe("none");
     expect(
-      DEFINITION_KIND_COVERAGE["storage.vectorStore"].runtimeIdentity,
+      DEFINITION_KIND_COVERAGE["storage.searchStore"].runtimeIdentity,
     ).toBe("none");
     expect(DEFINITION_KIND_COVERAGE["storage.assetStore"].runtimeIdentity).toBe(
       "none",
