@@ -50,7 +50,7 @@ export function nextEntryFile(input: {
     ...(hasEvals
       ? nextEvalHostLines()
       : [
-          "export const { GET, POST } = createRuntimeHandler({ targets: runtimeProgram.targets, manifestHash: runtimeProgram.manifestHash })",
+          "export const { GET, POST } = createRuntimeHandler({ program: runtimeProgram })",
         ]),
     "",
   ].join("\n");
@@ -208,7 +208,7 @@ function registryDeclaration(
 function nextEvalHostLines(): string[] {
   return [
     "const runtime = projectConfig.config.runtime",
-    "const runtimeHandlers = createRuntimeHandler({ targets: runtimeProgram.targets, runtime, manifestHash: runtimeProgram.manifestHash })",
+    "const runtimeHandlers = createRuntimeHandler({ program: runtimeProgram, runtime })",
     "let evalHost: ServerlessEvalHost<EvalHostStore> | undefined",
     "",
     "async function dispatch(request: Request): Promise<Response> {",

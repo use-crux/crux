@@ -30,6 +30,13 @@ export {
 export { createRuntimeProgram } from "./program";
 export type { CreateRuntimeProgramOptions, RuntimeProgram } from "./program";
 
+export { createRuntimeWorker } from "./worker/create-runtime-worker";
+export type {
+  CreateRuntimeWorkerOptions,
+  RuntimeWorker,
+  RuntimeWorkerStopOptions,
+} from "./worker/create-runtime-worker";
+
 export type {
   RuntimeArtifactManifest,
   RuntimeArtifactManifestEval,

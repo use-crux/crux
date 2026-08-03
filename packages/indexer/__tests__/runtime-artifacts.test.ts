@@ -62,7 +62,7 @@ describe("runtime artifacts", () => {
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
     ).resolves.toContain(
-      "createRuntimeHandler({ targets: runtimeProgram.targets, manifestHash: runtimeProgram.manifestHash })",
+      "createRuntimeHandler({ program: runtimeProgram })",
     );
     const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
     expect(entry).toContain("export const evalRegistry");
