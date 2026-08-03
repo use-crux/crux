@@ -6,7 +6,10 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
 import { caseFile, evaluate } from "../../src/eval";
-import { getEvalDefinitionForInternalUse } from "../../src/eval/internal/definition";
+import {
+  EVAL_INTERNAL,
+  getEvalDefinitionForInternalUse,
+} from "../../src/eval/internal/definition";
 import { isEval } from "../../src/eval/node/discovery";
 import { defineTimeoutAuthoringBehavior } from "./authoring-timeout.behavior";
 
@@ -108,6 +111,39 @@ describe("evaluate()", () => {
     expect(getEvalDefinitionForInternalUse(legacyEval as never)).toBe(
       definition,
     );
+  });
+
+  it("does not recognize arbitrary objects carrying Eval definition symbols", () => {
+    const evalValue = evaluate({
+      id: "real-core",
+      task: async (input: string) => input,
+      cases: [{ input: "hello" }],
+    });
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+    const untaggedCarrier = {};
+    Object.defineProperty(untaggedCarrier, EVAL_INTERNAL, {
+      value: definition,
+      enumerable: false,
+    });
+
+    expect(isEval(untaggedCarrier)).toBe(false);
+    expect(() =>
+      getEvalDefinitionForInternalUse(untaggedCarrier as never),
+    ).toThrowError(/Expected a Crux Eval/);
+
+    const malformedTaggedCarrier = {
+      _tag: "CruxEval" as const,
+      id: "spoof",
+    };
+    Object.defineProperty(malformedTaggedCarrier, EVAL_INTERNAL, {
+      value: { schemaVersion: 1 },
+      enumerable: false,
+    });
+
+    expect(isEval(malformedTaggedCarrier)).toBe(false);
+    expect(() =>
+      getEvalDefinitionForInternalUse(malformedTaggedCarrier as never),
+    ).toThrowError(/Expected a Crux Eval/);
   });
 
   it("carries a frozen Current-first definition without cloning user-owned values", () => {

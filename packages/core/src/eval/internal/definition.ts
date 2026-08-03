@@ -91,7 +91,7 @@ export interface EvalDefinitionV1 {
 export function getEvalDefinitionForInternalUse(
   evalValue: AnyEval,
 ): EvalDefinitionV1 {
-  if (!canCarryEvalDefinition(evalValue)) {
+  if (!isEvalShell(evalValue)) {
     throw new TypeError("Expected a Crux Eval (missing internal definition).");
   }
   const definition =
@@ -101,7 +101,7 @@ export function getEvalDefinitionForInternalUse(
         EvalDefinitionV1 | undefined
       >
     )[EVAL_INTERNAL] ?? getLegacyEvalDefinitionForInternalUse(evalValue);
-  if (definition === undefined) {
+  if (!isEvalDefinitionV1(definition)) {
     throw new TypeError("Expected a Crux Eval (missing internal definition).");
   }
   return definition;
@@ -123,16 +123,37 @@ function getLegacyEvalDefinitionForInternalUse(
   return undefined;
 }
 
-function canCarryEvalDefinition(value: unknown): value is object {
+function isEvalShell(
+  value: unknown,
+): value is object & { readonly _tag: "CruxEval" } {
   return (
-    value !== null && (typeof value === "object" || typeof value === "function")
+    value !== null &&
+    typeof value === "object" &&
+    "_tag" in value &&
+    value._tag === "CruxEval"
   );
 }
 
 function isEvalDefinitionV1(value: unknown): value is EvalDefinitionV1 {
+  if (value === null || typeof value !== "object") return false;
+  const candidate = value as Readonly<Record<string, unknown>>;
   return (
-    value !== null &&
-    typeof value === "object" &&
-    (value as { readonly schemaVersion?: unknown }).schemaVersion === 1
+    candidate.schemaVersion === 1 &&
+    "task" in candidate &&
+    Array.isArray(candidate.cases) &&
+    Array.isArray(candidate.caseFiles) &&
+    Array.isArray(candidate.caseSourceOrder) &&
+    isObjectRecord(candidate.variants) &&
+    Array.isArray(candidate.arms) &&
+    "scorers" in candidate &&
+    typeof candidate.trials === "number" &&
+    Array.isArray(candidate.tags) &&
+    Array.isArray(candidate.covers)
   );
+}
+
+function isObjectRecord(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

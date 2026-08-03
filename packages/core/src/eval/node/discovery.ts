@@ -212,7 +212,8 @@ async function walk(
     if (
       ["node_modules", "dist", ".crux", ".git", ".next", ".turbo"].includes(
         entry.name,
-      ) || isTestFixtureDirectory(directory, entry.name)
+      ) ||
+      isTestFixtureDirectory(directory, entry.name)
     )
       continue;
     const relativeFile = normalizePath(join(directory, entry.name));
@@ -297,12 +298,12 @@ function duplicateIdErrors(
 }
 
 export function isEval(value: unknown): value is AnyEval {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "_tag" in value &&
-    value._tag === "CruxEval"
-  );
+  try {
+    getEvalDefinitionForInternalUse(value as AnyEval);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function wildcardPattern(value: string): RegExp {

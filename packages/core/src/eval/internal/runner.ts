@@ -53,12 +53,12 @@ export const EVAL_RUNNER_PROTOCOL = 1 as const;
 
 /** Return whether a module export is an Eval authored by this Core contract. */
 export function isEvalForInternalUse(value: unknown): value is AnyEval {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "_tag" in value &&
-    value._tag === "CruxEval"
-  );
+  try {
+    getEvalDefinitionForInternalUse(value as AnyEval);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export { getEvalDefinitionForInternalUse };
