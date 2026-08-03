@@ -1,23 +1,23 @@
 ---
 title: Semantic RAG with Upstash
-description: Index a doc corpus into Upstash Vector, compose a retrieval recipe, and answer questions with citations.
+description: Index a doc corpus into Upstash SearchStore, compose a retrieval recipe, and answer questions with citations.
 ---
 
-This recipe sets up a complete production-style RAG flow: ingest a directory of docs, chunk + embed + write into Upstash Vector, compose a named retrieval recipe, then answer questions with grounded citations. Hybrid mode gives you both semantic and keyword recall, while recipe steps improve the final evidence before it reaches the prompt.
+This recipe sets up a complete production-style RAG flow: ingest a directory of docs, chunk + embed + write into Upstash-backed search, compose a named retrieval recipe, then answer questions with grounded citations. Fused dense/sparse retrieval gives you both semantic and keyword recall, while recipe steps improve the final evidence before it reaches the prompt.
 
 ## Primitives used
 
 - `@use-crux/ingest` for document loading
 - `@use-crux/core/indexing`: `indexer()` for chunk + embed + write, `corpus()` for incremental sync
 - `@use-crux/core/retrieval`: `retriever()` and `retrievalRecipe()` for query-time evidence selection
-- `@use-crux/convex` and `@use-crux/upstash`: `convexRecordStore()` for JSON records and `upstashVectorStore()` for managed vector search
+- `@use-crux/convex` and `@use-crux/upstash`: `convexRecordStore()` for JSON records and `upstashSearchStore()` for managed search
 - `embedding()`: one dense + one sparse embedding
 
 ## When to reach for this pattern
 
 - You need a **production-ready RAG** without managing vector infrastructure yourself
 - Your corpus is **document-shaped**: Markdown, HTML, files
-- Both **semantic** and **keyword** matching matter (most real corpora benefit from hybrid)
+- Both **semantic** and **keyword** matching matter (most real corpora benefit from fused retrieval)
 
 ## Full code
 
@@ -47,7 +47,7 @@ export const dense = embedding({
 
 export const sparse = embedding({
   kind: "sparse",
-  name: "bm25",
+  name: "keyword-sparse",
   maxInputTokens: 8191,
   embed: async (texts) => ({ embeddings: texts.map(toSparseVector) }),
 });
@@ -57,7 +57,7 @@ export const sparse = embedding({
 
 ```ts
 import { convexRecordStore } from "@use-crux/convex";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 import { Index } from "@upstash/vector";
 
 export const records = convexRecordStore({
@@ -65,12 +65,16 @@ export const records = convexRecordStore({
   ctx,
 });
 
-export const vectors = upstashVectorStore({
+export const search = upstashSearchStore({
   index: new Index({
     url: process.env.UPSTASH_VECTOR_URL!,
     token: process.env.UPSTASH_VECTOR_TOKEN!,
   }),
   namespace: "product-docs",
+  capabilities: {
+    legs: { sparse: true },
+    fusion: ["rrf"],
+  },
 });
 ```
 
@@ -87,13 +91,13 @@ import {
 import { filesSource } from "@use-crux/ingest/files";
 
 import { dense, sparse } from "./embedding";
-import { records, vectors } from "./storage";
+import { records, search } from "./storage";
 
 export const docsIndexer = indexer({
   id: "product-docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
   cache: true,
@@ -147,16 +151,16 @@ import {
 
 import { dense, sparse } from "./embedding";
 import { retrievalModel } from "./retrieval-model";
-import { records, vectors } from "./storage";
+import { records, search } from "./storage";
 
 export const docs = retriever({
   id: "product-docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid", limit: 5, fusion: "rrf" },
+  limit: 5,
 });
 
 export const docsAnswer = retrievalRecipe({
@@ -177,7 +181,7 @@ const { hits, trace } = await docsAnswer.retrieveWithTrace(
 );
 ```
 
-Use the plain `docs` retriever when hybrid retrieval is enough. Use `docsAnswer` when you need traceable recipe steps such as reranking, parent expansion, compression, or federation.
+Use the plain `docs` retriever when fused retrieval is enough. Use `docsAnswer` when you need traceable recipe steps such as reranking, parent expansion, compression, or federation.
 
 ### `lib/rag/answer.ts`
 
@@ -226,7 +230,7 @@ export async function answer(question: string) {
 ## How it works
 
 1. **Sync deliberately, query many times.** Syncing is expensive (pipeline work + embedding + writes); querying is cheap. `corpus.sync()` makes repeated syncs safe by skipping unchanged sources and tracking failures.
-2. **Hybrid retrieval combines two strengths.** Dense embeddings catch semantic similarity, while sparse embeddings catch exact terms and rare keywords. RRF (Reciprocal Rank Fusion) merges those rankings without needing manual score normalization.
+2. **Fused retrieval combines two strengths.** Dense embeddings catch semantic similarity, while sparse embeddings catch exact terms and rare keywords. RRF (Reciprocal Rank Fusion) merges those rankings without needing manual score normalization.
 3. **The recipe sharpens the final shortlist.** Retrieval gets candidate chunks. Recipe steps can rerank, expand parents, compress evidence, and produce a structured trace.
 4. **`grounding()` runs retrieval at prompt-resolve time.** Every call to `answer()` re-runs retrieval with the user's question, injects the allowed evidence, and contributes a citation constraint.
 5. **Structured citations are validated.** Each citation captures `sourceId`, `chunkId`, and optional quotes. Crux validates that cited chunks came from the retrieved hit set, whose `source` contains the allowed URL/path attribution.
@@ -288,7 +292,7 @@ const urlGrounding = grounding({
   />
   <Card
     title="@use-crux/upstash reference"
-    description="Upstash VectorStore and Redis RecordStore APIs."
+    description="Upstash SearchStore and Redis RecordStore APIs."
     href="/docs/reference/storage/upstash"
   />
 </Cards>

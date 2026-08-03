@@ -19,7 +19,7 @@ const mem = memory({
 });
 ```
 
-For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [store reference](/docs/reference/crux-core/store). For vector search, use the [VectorStore guide](/docs/guides/storage/vector-store). For workspace files and generated binary outputs, use `AssetStore`, not memory storage.
+For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [store reference](/docs/reference/crux-core/store). For retrieval search, use the [SearchStore guide](/docs/guides/storage/search-store). For workspace files and generated binary outputs, use `AssetStore`, not memory storage.
 
 ## What Memory Stores
 
@@ -51,7 +51,7 @@ const mem = memory({
 });
 ```
 
-For production, pass a durable `RecordStore`. Convex apps can use `convexRecordStore()` or `convexStorage()`. Upstash-backed apps can use `upstashRedisRecordStore()` for Redis records and `upstashVectorStore()` for vector recall.
+For production, pass a durable `RecordStore`. Convex apps can use `convexRecordStore()` or `convexStorage()`. Upstash-backed apps can use `upstashRedisRecordStore()` for Redis records and `upstashSearchStore()` for retrieval recall.
 
 ## Vector Recall
 
@@ -66,11 +66,11 @@ const history = episodes({
 
 Rules:
 
-1. If `vectors` is configured, embedding-backed blocks can recall semantically relevant entries.
-2. If `vectors` is not configured, blocks that can degrade safely fall back to non-vector behavior such as recency or listing.
-3. Memory vector search filters by `namespace` and `blockId`, hydrates JSON records before returning public entries, skips expired or missing records, and applies threshold and limit.
+1. If `search` is configured, embedding-backed blocks can recall semantically relevant entries.
+2. If `search` is not configured, blocks that can degrade safely fall back to non-vector behavior such as recency or listing.
+3. Memory search filters by `namespace` and `blockId`, hydrates JSON records before returning public entries, skips expired or missing records, and applies threshold and limit.
 
-For dense, sparse, and hybrid vector capabilities, see [VectorStore](/docs/guides/storage/vector-store).
+For dense, sparse, and lexical retrieval capabilities, see [SearchStore](/docs/guides/storage/search-store).
 
 ## TTL And Cache-Like Memory
 
@@ -128,7 +128,7 @@ For memory, choose storage based on the behavior you need:
 | Tests and examples                    | `inMemoryRecordStore()`                              |
 | Convex app state and reactivity       | `convexRecordStore()` or `convexStorage()`           |
 | Redis-backed key-value records        | `upstashRedisRecordStore()` from `@use-crux/upstash` |
-| Dense vector recall                   | `upstashVectorStore()` with an Upstash Vector index  |
+| Dense vector recall                   | `upstashSearchStore()` with an Upstash Vector index  |
 | Workspace files and generated outputs | `AssetStore`, not memory storage                     |
 
 ## Related

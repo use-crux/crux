@@ -1,6 +1,6 @@
 ---
 title: Embeddings
-description: Dense, sparse, and hybrid retrieval in Crux without mixing vector generation and search orchestration.
+description: Dense and sparse embeddings in Crux without mixing vector generation and search orchestration.
 ---
 
 You want to search your docs by meaning, so "docs about login problems" finds the SSO troubleshooting page even though it never says "login problems". That needs vectors, and `embedding()` is the Crux primitive that turns text or native media into them:
@@ -46,27 +46,27 @@ const dense = embedding({ kind: 'dense', ... })
 // Exact terms, identifiers, product names: "ERR_AUTH_401"
 const sparse = embedding({ kind: 'sparse', ... })
 
-// Production docs search: use both, then retrieve in hybrid mode
+// Production docs search: use both, then retrieve with a fused search plan
 const docs = retriever({
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: 'hybrid' },
 })
 ```
 
-One note on the architecture: `embedding()` only generates vectors. Stores execute vector search, and higher-level features such as retrievers and memory decide whether a query should be dense, sparse, or hybrid. That is why there is no `kind: 'hybrid'`; hybrid is a query strategy, not a vector shape. The [retrieval reference](/docs/reference/crux-core/retrieval#embedding-governance) covers the design rationale.
+One note on the architecture: `embedding()` only generates vectors. Search stores execute retrieval search, and higher-level features such as retrievers and memory decide whether a query should be dense, sparse, lexical, or fused. That is why there is no `kind: 'hybrid'`; multi-leg retrieval is a query strategy, not a vector shape. The [retrieval reference](/docs/reference/crux-core/retrieval#embedding-governance) covers the design rationale.
 
 ## Choose the right pattern
 
-| Goal                                                                | Use                                                                                                 |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding                                                                                 |
-| Keyword-weighted or BM25-style retrieval                            | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })`                              |
-| Upstash hybrid retrieval                                            | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
+| Goal                                                                | Use                                                                                                         |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding                                                                                         |
+| Keyword-weighted sparse retrieval                                   | One sparse embedding plus `search.search({ legs: [{ kind: 'sparse', vector: sparseVector }] })`             |
+| Fused dense plus sparse retrieval                                   | One dense embedding, one sparse embedding, plus a `SearchQuery` with dense and sparse legs                   |
+| PostgreSQL lexical retrieval                                        | Indexed chunk `content` plus a lexical-capable `SearchStore`; no embedding call for the lexical leg          |
 | Cross-modal text/media search                                       | One native multimodal dense embedding and an `AssetStore`                                                    |
-| Store-specific or fully custom retrieval                            | Your own store or retriever logic                                                                   |
+| Store-specific or fully custom retrieval                            | Your own store or retriever logic                                                                           |
 
 ## Dense: semantic similarity
 
@@ -119,7 +119,7 @@ declare function toSparseVector(text: string): SparseVector;
 
 const sparse = embedding({
   kind: "sparse",
-  name: "bm25",
+  name: "keyword-sparse",
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
   embed: async (texts) => ({
@@ -132,29 +132,32 @@ Sparse embeddings expose `embed()` and `embedMany()`, but not `asEmbedFn()`, bec
 
 Use sparse embeddings when exact tokens matter: error codes, symbols, SKUs, function names, product names, legal phrases, or short keyword-style queries.
 
-## Hybrid: use dense plus sparse
+## Fused retrieval: use dense plus sparse
 
-You do not define a hybrid embedding. You define one dense embedding and one sparse embedding, then compose them in a retriever or store query.
+You do not define a hybrid embedding. You define one dense embedding and one sparse embedding, then compose them in a retriever plan or store query.
 
 ```ts
 const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: {
-    mode: "hybrid",
-    fusion: "dbsf",
-    limit: 8,
-  },
 });
 
-const hits = await docs.retrieve("SAML setup error SSO_403");
+const hits = await docs.retrieve({
+  query: "SAML setup error SSO_403",
+  search: {
+    dense: true,
+    sparse: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
+  limit: 8,
+});
 ```
 
-Crux embeds the query with both embeddings and asks the store to search with both vectors. Stores that cannot support sparse or hybrid search throw clearly instead of silently falling back to dense-only behavior.
+Crux embeds the query with both embeddings and asks the store to search with both vectors. Stores that cannot support sparse or fused search throw clearly instead of silently falling back to dense-only behavior.
 
 ## Governance: make embedding behavior repeatable
 
@@ -273,7 +276,7 @@ const profileFacts = facts({
 });
 ```
 
-Memory does not consume sparse or hybrid embeddings directly. If you need sparse-only or hybrid recall over documents, use `retriever()` with a `VectorStore`.
+Memory does not consume sparse embeddings directly. If you need sparse-only or fused recall over documents, use `retriever()` with a `SearchStore`.
 
 ### Indexing and retrieval
 
@@ -284,7 +287,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
 });
@@ -293,62 +296,65 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid" },
 });
 ```
 
 That symmetry is important: the query vector should be produced by the same embedding definition as the indexed vectors.
 
-### Vector stores
+### Search stores
 
-Vector stores receive the vector query shape directly:
+Search stores receive composable query legs directly:
 
 ```ts
-const denseResults = await vectors.search({
-  mode: "dense",
-  dense: await dense.embed("roadmap"),
+const denseResults = await search.search({
+  legs: [{ kind: "dense", vector: await dense.embed("roadmap") }],
 });
 ```
 
-Sparse-only and hybrid-capable stores use the same method:
+Sparse-only and fused stores use the same method:
 
 ```ts
-const sparseResults = await vectors.search({
-  mode: "sparse",
-  sparse: await sparse.embed("roadmap"),
+const sparseResults = await search.search({
+  legs: [{ kind: "sparse", vector: await sparse.embed("roadmap") }],
 });
 
-const hybridResults = await vectors.search({
-  mode: "hybrid",
-  dense: await dense.embed("roadmap"),
-  sparse: await sparse.embed("roadmap"),
-  fusion: "dbsf",
+const fusedResults = await search.search({
+  legs: [
+    { kind: "dense", vector: await dense.embed("roadmap") },
+    { kind: "sparse", vector: await sparse.embed("roadmap") },
+  ],
+  fusion: { strategy: "rrf", k: 60 },
 });
 ```
 
-A store that cannot support the requested mode fails explicitly instead of degrading to dense-only search.
+A store that cannot support the requested leg or fusion fails explicitly instead of degrading to dense-only search.
 
-## Upstash hybrid example
+## Upstash fused example
 
-Upstash is the reference hybrid-capable adapter in Crux. Users define one dense embedding and one sparse embedding once, then let the store combine them.
+Upstash Vector can back a dense/sparse `SearchStore`. Users define one dense embedding and one sparse embedding once, then let the store combine supported legs.
 
 ```ts
 import { Index } from "@upstash/vector";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 
-const vectors = upstashVectorStore({
+const search = upstashSearchStore({
   index: new Index({ url: "...", token: "..." }),
   namespace: "docs",
+  capabilities: {
+    legs: { sparse: true },
+    fusion: ["rrf"],
+  },
 });
 
-const results = await vectors.search({
-  mode: "hybrid",
-  dense: await dense.embed("latest roadmap"),
-  sparse: await sparse.embed("latest roadmap"),
-  fusion: "dbsf",
+const results = await search.search({
+  legs: [
+    { kind: "dense", vector: await dense.embed("latest roadmap") },
+    { kind: "sparse", vector: await sparse.embed("latest roadmap") },
+  ],
+  fusion: { strategy: "rrf", k: 60 },
 });
 ```
 
@@ -356,7 +362,7 @@ This keeps the user story clean:
 
 - define dense once
 - define sparse once
-- search in dense, sparse, or hybrid mode without hand-assembling provider payloads everywhere
+- search with dense, sparse, or fused plans without hand-assembling provider payloads everywhere
 
 ## Provider helpers
 
@@ -407,7 +413,7 @@ OTel receives the same privacy-safe counts as span attributes. It does not recei
   />
   <Card
     title="Querying"
-    description="Use dense, sparse, or hybrid embeddings through retrievers."
+    description="Use dense, sparse, lexical, or fused retrieval through retrievers."
     href="/docs/guides/retrieval/querying"
   />
   <Card
@@ -417,7 +423,7 @@ OTel receives the same privacy-safe counts as span attributes. It does not recei
   />
   <Card
     title="Upstash"
-    description="Reference adapter for dense, sparse, and hybrid search."
+    description="Reference adapter for dense and sparse SearchStore retrieval."
     href="/docs/reference/storage/upstash"
   />
   <Card

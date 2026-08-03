@@ -16,7 +16,7 @@ await records.put("notes:1", { title: "First note" });
 const note = await records.get("notes:1");
 ```
 
-It is not a vector index and it is not an asset store. If a feature needs similarity search, give it a [`VectorStore`](/docs/guides/storage/vector-store). If a workspace needs binary files, give it an [`AssetStore`](/docs/guides/storage/asset-storage).
+It is not a retrieval index and it is not an asset store. If a feature needs similarity search, give it a [`SearchStore`](/docs/guides/storage/search-store). If a workspace needs binary files, give it an [`AssetStore`](/docs/guides/storage/asset-storage).
 
 ## Common Uses
 
@@ -31,13 +31,13 @@ workspace({
 });
 ```
 
-Retrieval systems usually pair records with vectors:
+Retrieval systems usually pair records with search storage:
 
 ```ts
 retriever({
   id: "docs",
   records,
-  vectors,
+  search,
   dense,
 });
 ```
@@ -235,6 +235,6 @@ export function myRecordStore(): RecordStore {
 }
 ```
 
-If your database also supports vectors or assets, implement [`VectorStore`](/docs/guides/storage/vector-store) or [`AssetStore`](/docs/guides/storage/asset-storage) as separate capabilities and bundle them with `storage()`.
+If your database also supports search or assets, implement [`SearchStore`](/docs/guides/storage/search-store) or [`AssetStore`](/docs/guides/storage/asset-storage) as separate capabilities and bundle them with `storage()`.
 
 For a complete SQL implementation, see the [Postgres RecordStore cookbook](/docs/cookbook/basics/postgres-data-store).

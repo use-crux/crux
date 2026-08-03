@@ -1,23 +1,23 @@
 ---
 title: "@use-crux/upstash"
-description: Upstash VectorStore and Redis RecordStore adapters for Crux.
+description: Upstash SearchStore and Redis RecordStore adapters for Crux.
 ---
 
 Peer dependencies:
 
-- `@upstash/vector` >=1.2.2 for `upstashVectorStore()`
+- `@upstash/vector` >=1.2.2 for `upstashSearchStore()`
 - `@upstash/redis` when you use `upstashRedisRecordStore()`
 - `@upstash/qstash` when you use `qstash()` from `@use-crux/upstash/runtime`
 
 ```ts
-import { upstashRedisRecordStore, upstashVectorStore } from "@use-crux/upstash";
+import { upstashRedisRecordStore, upstashSearchStore } from "@use-crux/upstash";
 ```
 
 <Callout type="info">
   For setup guidance and usage patterns, see the [Storage
   guide](/docs/guides/storage), [RecordStore
-  guide](/docs/guides/storage/crux-store), and [VectorStore
-  guide](/docs/guides/storage/vector-store).
+  guide](/docs/guides/storage/crux-store), and [SearchStore
+  guide](/docs/guides/storage/search-store).
 </Callout>
 
 ## `upstashRedisRecordStore(config)`
@@ -62,18 +62,18 @@ Use it with a bundle:
 ```ts
 import { storage } from "@use-crux/core/storage";
 
-const appStorage = storage({ records, vectors });
+const appStorage = storage({ records, search });
 ```
 
-## `upstashVectorStore(config)`
+## `upstashSearchStore(config)`
 
-Create a Storage Beta `VectorStore` backed by Upstash Vector.
+Create a Storage Beta `SearchStore` backed by Upstash Vector.
 
 ```ts
 import { Index } from "@upstash/vector";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 
-const vectors = upstashVectorStore({
+const search = upstashSearchStore({
   index: new Index({
     url: process.env.UPSTASH_VECTOR_REST_URL!,
     token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
@@ -82,34 +82,33 @@ const vectors = upstashVectorStore({
 });
 ```
 
-### Vector Capabilities
+### Search Capabilities
 
 Upstash index mode is deployment configuration, so the adapter defaults conservatively:
 
 | Capability    | Default      | Notes                                                           |
 | ------------- | ------------ | --------------------------------------------------------------- |
-| Dense search  | `true`       | Dense vectors are the default Upstash path.                     |
-| Sparse search | `false`      | Opt in only when the backing index supports sparse vectors.     |
-| Hybrid search | `false`      | Opt in only when the backing index supports hybrid search.      |
-| Fusion        | `[]`         | Configure supported fusion modes, such as `['rrf', 'dbsf']`.    |
+| Dense leg     | `true`       | Dense vectors are the default Upstash path.                     |
+| Sparse leg    | `false`      | Opt in only when the backing index supports sparse vectors.     |
+| Lexical leg   | `false`      | Upstash Vector is not the PostgreSQL lexical implementation.    |
+| Fusion        | `[]`         | Configure `['rrf']` when the backing index supports fusion.     |
 | Filters       | `'pre'`      | Upstash applies supported metadata filters before top-k search. |
 | Consistency   | `'eventual'` | Matches managed vector-index behavior.                          |
 
-Declare sparse, hybrid, or fusion support explicitly:
+Declare sparse or fusion support explicitly:
 
 ```ts
-const vectors = upstashVectorStore({
+const search = upstashSearchStore({
   index,
   namespace: "product-docs",
   capabilities: {
-    sparse: true,
-    hybrid: true,
-    fusion: ["rrf", "dbsf"],
+    legs: { sparse: true },
+    fusion: ["rrf"],
   },
 });
 ```
 
-Unsupported query modes throw `StorageError` code `unsupported_capability`. Unsupported filter values throw `StorageError` code `invalid_filter` before querying Upstash.
+Unsupported query legs or fusion throw `StorageError` code `unsupported_capability`. Unsupported filter values throw `StorageError` code `invalid_filter` before querying Upstash.
 
 ## With Retrieval
 
@@ -120,7 +119,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
 });
@@ -129,20 +128,29 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid", fusion: "dbsf", limit: 10 },
+});
+
+const hits = await docs.retrieve({
+  query: "enterprise SSO setup",
+  search: {
+    dense: true,
+    sparse: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
+  limit: 10,
 });
 ```
 
-Filtered retrieval requires a vector store with `capabilities().filter === 'pre'`.
+Filtered retrieval requires a search store with `capabilities().filter === 'pre'`.
 
 ## Recommended Wiring
 
 - `upstashRedisRecordStore()` for Redis-backed records
-- `upstashVectorStore()` for Upstash Vector search
-- `storage({ records, vectors })` to pass a bundle to Crux primitives
+- `upstashSearchStore()` for Upstash Vector search
+- `storage({ records, search })` to pass a bundle to Crux primitives
 
 ## Runtime Wake: `qstash()`
 
@@ -169,7 +177,7 @@ QStash publishes small wake envelopes to the configured runtime endpoint and ver
 - Guide: [Storage](/docs/guides/storage)
 - Guide: [Next/Vercel Runtime](/docs/guides/durable-execution/next-vercel)
 - Guide: [RecordStore](/docs/guides/storage/crux-store)
-- Guide: [VectorStore](/docs/guides/storage/vector-store)
+- Guide: [SearchStore](/docs/guides/storage/search-store)
 - Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
 - Reference: [Indexing](/docs/reference/crux-core/indexing)
 - Reference: [Retrieval](/docs/reference/crux-core/retrieval)

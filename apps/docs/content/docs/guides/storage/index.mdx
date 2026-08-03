@@ -1,9 +1,9 @@
 ---
 title: Storage
-description: Choose the right Crux storage capability for records, vector search, and workspace files.
+description: Choose the right Crux storage capability for records, retrieval search, and workspace files.
 ---
 
-You are wiring up memory, retrieval, a workspace, or flow state, and the feature asks for a store. Crux splits storage into three capabilities so each feature can ask for exactly what it needs. Most production apps compose all three: a `RecordStore` for records, a `VectorStore` for retrieval, and an `AssetStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
+You are wiring up memory, retrieval, a workspace, or flow state, and the feature asks for a store. Crux splits storage into three capabilities so each feature can ask for exactly what it needs. Most production apps compose all three: a `RecordStore` for records, a `SearchStore` for retrieval, and an `AssetStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
 
 ## Which One Do I Need?
 
@@ -13,16 +13,15 @@ Use `RecordStore` for structured Crux records: memory records, flow state, eval 
 workspace({ id: "files", namespace, records });
 ```
 
-Use `VectorStore` when a feature needs dense, sparse, or hybrid similarity search, such as indexing and retrieval:
+Use `SearchStore` when a feature needs dense, sparse, or lexical retrieval search, such as indexing and retrieval:
 
 ```ts
 retriever({
   id: "docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid" },
 });
 ```
 
@@ -41,13 +40,14 @@ Small text and JSON can live inline in `RecordStore`. Binary and oversized paylo
 | Package                  | Capability                  | Use for                                                               |
 | ------------------------ | --------------------------- | --------------------------------------------------------------------- |
 | `@use-crux/core/storage` | `inMemoryRecordStore()`     | Tests, local demos, non-durable JSON records                          |
-| `@use-crux/core/storage` | `inMemoryVectorStore()`     | Tests and local vector search                                         |
+| `@use-crux/core/storage` | `inMemorySearchStore()`     | Tests and local dense/sparse search                                   |
 | `@use-crux/core/storage` | `inMemoryAssetStore()`      | Tests and demos that need asset behavior                              |
-| `@use-crux/core/storage` | `inMemoryStorage()`         | Complete in-memory `{ records, vectors, assets }` bundle              |
+| `@use-crux/core/storage` | `inMemoryStorage()`         | Complete in-memory `{ records, search, assets }` bundle               |
 | `@use-crux/convex`       | `convexRecordStore()`       | Durable Convex-backed JSON records                                    |
 | `@use-crux/convex`       | `convexAssetStore()`        | Workspace binary/large files in Convex file storage                   |
 | `@use-crux/upstash`      | `upstashRedisRecordStore()` | Durable Redis-backed records with native TTL                          |
-| `@use-crux/upstash`      | `upstashVectorStore()`      | Upstash Vector dense search by default, sparse/hybrid when configured |
+| `@use-crux/upstash`      | `upstashSearchStore()`      | Upstash Vector dense search by default, sparse/RRF when configured    |
+| `@use-crux/postgres`     | `postgresSearchStore()`     | PostgreSQL dense, sparse, lexical, and fused retrieval search         |
 
 Bundle capabilities with `storage()`:
 
@@ -56,7 +56,7 @@ import { storage } from "@use-crux/core/storage";
 
 const appStorage = storage({
   records,
-  vectors,
+  search,
   assets,
 });
 ```
@@ -69,11 +69,7 @@ const userStorage = storage.scope(appStorage, `user:${userId}`);
 
 ## Why Three Capabilities?
 
-The split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be asset storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement records and assets, and can expose vector search only when configured truthfully.
-
-## Migration Note
-
-Storage Beta is a pre-launch API. Treat the current `@use-crux/core/storage` contract as the source of truth; old pre-beta storage examples should be updated to `RecordStore`, `{ records }`, `put()`, `create()`, and `{ ttlMs }` rather than bridged.
+The split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be asset storage. Upstash Vector can be a `SearchStore` without owning JSON records. Convex can implement records and assets without claiming retrieval-index support.
 
 ## Where To Go Next
 
@@ -84,9 +80,9 @@ Storage Beta is a pre-launch API. Treat the current `@use-crux/core/storage` con
     href="/docs/guides/storage/crux-store"
   />
   <Card
-    title="VectorStore"
-    description="Dense, sparse, hybrid search, capability checks, and vector adapter expectations."
-    href="/docs/guides/storage/vector-store"
+    title="SearchStore"
+    description="Dense, sparse, lexical search, capability checks, and adapter expectations."
+    href="/docs/guides/storage/search-store"
   />
   <Card
     title="AssetStore"

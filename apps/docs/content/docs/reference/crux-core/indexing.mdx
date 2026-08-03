@@ -35,7 +35,7 @@ import type {
 - versioned document transforms, chunkers, and chunk transforms
 - dense and sparse embedding at write time
 - generation-aware replacement
-- `RecordStore` and `VectorStore` writes
+- `RecordStore` and `SearchStore` writes
 - source replacement and clearing
 
 It does not load files or URLs. That belongs to `@use-crux/ingest`.
@@ -51,7 +51,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -81,14 +81,14 @@ await docsCorpus.sync(source.load(), {
 });
 ```
 
-### Hybrid indexing
+### Fused-search indexing
 
 ```ts
 const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
 });
@@ -101,7 +101,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   cache: true,
   pipeline: indexingPipeline({
@@ -127,7 +127,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   pipeline: indexingPipeline({
     chunker: chunker.parentChild({
@@ -146,7 +146,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   pipeline: indexingPipeline({
     chunker: chunker.semantic({
@@ -167,7 +167,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
   cache: true,
@@ -189,7 +189,7 @@ const docsIndexer = indexer({
 | `id`        | `string`                | Stable indexer identifier                          |
 | `namespace` | `string`                | Required corpus boundary                           |
 | `records`   | `RecordStore`           | Chunk, parent, and corpus record storage           |
-| `vectors`   | `VectorStore?`          | Dense, sparse, or hybrid vector index              |
+| `search`    | `SearchStore?`          | Dense, sparse, or lexical retrieval index          |
 | `dense`     | `DenseEmbedding?`       | Dense write-time embedding                         |
 | `sparse`    | `SparseEmbedding?`      | Sparse write-time embedding                        |
 | `pipeline`  | `IndexingPipeline?`     | Document transforms, chunker, and chunk transforms |

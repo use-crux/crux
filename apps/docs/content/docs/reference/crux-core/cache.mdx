@@ -31,7 +31,7 @@ Required fields:
 | Field       | Description                                                                                    |
 | ----------- | ---------------------------------------------------------------------------------------------- |
 | `store`     | `RecordStore` with TTL, dense vector search, and isolated semantic-cache namespace capability. |
-| `embedding` | `DenseEmbedding`. Sparse and hybrid lookup are intentionally not accepted.                     |
+| `embedding` | `DenseEmbedding`. Sparse and fused lookup are intentionally not accepted.                      |
 | `ttl`       | Maximum cache lifetime in milliseconds. Must be greater than zero.                             |
 | `scope`     | `'global'` or a function returning a safety boundary string.                                   |
 
@@ -67,11 +67,11 @@ Custom `shouldLookup` and `shouldCache` callbacks receive the prompt id, operati
 
 ## Dense-Only Embeddings
 
-`createSemanticCache()` accepts a `DenseEmbedding` only; sparse and hybrid embeddings are rejected.
+`createSemanticCache()` accepts a `DenseEmbedding` only; sparse embeddings and fused retrieval plans are rejected.
 
-Sparse and hybrid retrieval are supported elsewhere in Crux through `retriever()` and `VectorStore.search()`, and they are excellent for document search. Response caching has a different job: decide whether a completed prompt result can be reused. That decision needs a single threshold with predictable meaning. Hybrid retrieval introduces fusion choices and adapter-specific ranking behavior, which makes a default response-cache threshold misleading.
+Sparse and multi-leg retrieval are supported elsewhere in Crux through `retriever()` and `SearchStore.search()`, and they are excellent for document search. Response caching has a different job: decide whether a completed prompt result can be reused. That decision needs a single threshold with predictable meaning. Multi-leg retrieval introduces fusion choices and adapter-specific ranking behavior, which makes a default response-cache threshold misleading.
 
-If you need sparse or hybrid cache lookup, implement it as a custom cache or retrieval policy. Crux does not block that pattern; it only avoids presenting it as the default semantic response cache.
+If you need sparse or fused cache lookup, implement it as a custom cache or retrieval policy. Crux does not block that pattern; it only avoids presenting it as the default semantic response cache.
 
 ## Events
 
@@ -96,11 +96,11 @@ The devtools wire protocol uses matching `semantic-cache:*` event names.
 
 ```ts
 records.capabilities().ttl !== false; // record store must support TTL
-vectors.capabilities().filter === "pre"; // vector store must pre-filter
+search.capabilities().filter === "pre"; // search store must pre-filter
 ```
 
-This is deliberate. Cache entries expire through record-store TTL, and lookups scope by namespace and version before ranking, so a vector store that only post-filters can let unrelated vectors crowd out cache entries. Keep semantic-cache entries in a dedicated vector namespace/index rather than sharing one with memory or RAG vectors.
+This is deliberate. Cache entries expire through record-store TTL, and lookups scope by namespace and version before ranking, so a search store that only post-filters can let unrelated records crowd out cache entries. Keep semantic-cache entries in a dedicated search namespace/index rather than sharing one with memory or RAG chunks.
 
-`inMemoryStorage()` satisfies both by default. Durable adapters qualify when the record store supports TTL and the vector backend applies filters before ranking. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
+`inMemoryStorage()` satisfies both by default. Durable adapters qualify when the record store supports TTL and the search backend applies filters before ranking. Plain Redis stores do not expose search unless product-specific search hooks are configured.
 
-Convex bundled storage provides records but not vector search. Pair `convexRecordStore()` with an explicit pre-filter-capable `VectorStore`, such as `upstashVectorStore()` in a dedicated semantic-cache namespace.
+Convex bundled storage provides records but not search. Pair `convexRecordStore()` with an explicit pre-filter-capable `SearchStore`, such as `upstashSearchStore()` in a dedicated semantic-cache namespace.

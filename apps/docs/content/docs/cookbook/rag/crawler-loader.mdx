@@ -91,19 +91,19 @@ function extractLinks(html: string, baseUrl: string, origin: string): string[] {
 ```ts
 import { embedding } from '@use-crux/core/embedding'
 import { corpus, indexer } from '@use-crux/core/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '@use-crux/core/storage'
 
 import { crawlSite } from './site-loader'
 
 const dense = embedding({ kind: 'dense', ... })
 const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
+const search = inMemorySearchStore()
 
 const docsIndexer = indexer({
   id: 'site-docs',
   namespace: 'site-docs',
   records,
-  vectors,
+  search,
   dense,
 })
 
