@@ -1,12 +1,12 @@
 # SearchStore and PostgreSQL lexical retrieval
 
-Status: binding implementation specification. The product direction is approved; implementation must preserve these names and shapes unless this document is amended and re-approved.
+Status: binding implementation specification. This is a pre-launch contract: `SearchStore` is the sole retrieval-index API.
 
 ## Decision and scope
 
-`SearchStore` becomes the primary Storage Beta retrieval-index contract. A query composes one or more independent dense, sparse, and lexical legs; it never selects a fixed combination mode. Indexed Knowledge writes raw chunk content into the same search record as its vectors. PostgreSQL stores that content beside pgvector columns, indexes a generated `tsvector` with GIN, and executes dense plus lexical reciprocal-rank fusion (RRF) in one server-side statement.
+`SearchStore` is the Storage Beta retrieval-index contract. A query composes one or more independent dense, sparse, and lexical legs. Indexed Knowledge writes normalized chunk content into the same `SearchRecord` as its dense and sparse payloads. PostgreSQL stores that content beside pgvector columns, indexes a generated `tsvector` with GIN, and executes multi-leg reciprocal-rank fusion (RRF) in one server-side statement.
 
-This release uses PostgreSQL full-text ranking, not BM25. True BM25 is deferred to RFC #352. Shipping learned sparse providers is deferred to RFC #353; the existing sparse-vector port remains composable.
+This release uses PostgreSQL full-text ranking, not BM25. True BM25 is deferred to RFC #352. Shipping learned sparse providers is deferred to RFC #353; sparse search remains a composable leg.
 
 ## Core public contract
 
@@ -35,9 +35,7 @@ export interface LexicalSearchLeg {
 
 export type SearchLeg = DenseSearchLeg | SparseSearchLeg | LexicalSearchLeg
 
-export type SearchFusion =
-  | { readonly strategy: 'rrf'; readonly k?: number }
-  | { readonly strategy: 'dbsf' }
+export type SearchFusion = { readonly strategy: 'rrf'; readonly k?: number }
 
 export interface SearchQuery {
   readonly legs: readonly [SearchLeg, ...SearchLeg[]]
@@ -65,61 +63,55 @@ export interface SearchHit {
   readonly key: string
   readonly score: number
   readonly metadata?: ExactFilter
-  readonly matches?: readonly SearchLegMatch[]
+  readonly matches: readonly SearchLegMatch[]
 }
 
 export interface SearchStoreCapabilities {
   readonly legs: Readonly<Record<SearchLegKind, boolean>>
-  readonly fusion: readonly ('rrf' | 'dbsf')[]
+  readonly fusion: readonly 'rrf'[]
   readonly filter: 'pre' | 'post' | false
   readonly consistency: 'strong' | 'eventual'
-  /** @deprecated compatibility projections */
-  readonly dense: boolean
-  readonly sparse: boolean
-  readonly hybrid: boolean
 }
 
-/** Derive deprecated projections; providers do not hand-author them. */
+export interface SearchStoreCapabilityConfig {
+  readonly legs: Partial<Readonly<Record<SearchLegKind, boolean>>>
+  readonly fusion?: readonly 'rrf'[]
+  readonly filter?: 'pre' | 'post' | false
+  readonly consistency?: 'strong' | 'eventual'
+}
+
 export function searchStoreCapabilities(
-  capabilities: Omit<SearchStoreCapabilities, 'dense' | 'sparse' | 'hybrid'>,
+  config: SearchStoreCapabilityConfig,
 ): SearchStoreCapabilities
 
 export interface SearchStore {
-  readonly _tag?: 'SearchStore' | 'VectorStore'
+  readonly _tag?: 'SearchStore'
   upsert(records: readonly SearchRecord[]): Promise<void>
   delete(keys: readonly string[]): Promise<void>
-  search(query: SearchQuery | VectorSearchQuery): Promise<readonly SearchHit[]>
+  search(query: SearchQuery): Promise<readonly SearchHit[]>
   capabilities(): SearchStoreCapabilities
 }
 
 export interface Storage {
   readonly records: RecordStore
   readonly search?: SearchStore
-  /** @deprecated Use `search`. */
-  readonly vectors?: VectorStore
   readonly assets?: AssetStore
 }
-
-// Existing VectorStore, VectorRecord, VectorSearchQuery, VectorHit, and
-// VectorStoreCapabilities declarations remain deprecated but otherwise
-// source-compatible for third-party implementations.
 ```
 
-`VectorSearchQuery` and its three existing mode-shaped members remain deprecated source-compatible types. `SearchStore.search()` accepts them and normalizes `dense`, `sparse`, and `hybrid` to one dense leg, one sparse leg, and dense+sparse legs respectively. Legacy `hybrid` uses its requested fusion; omitted fusion means RRF with `k = 60`. Existing `dbsf` requests are accepted only by stores advertising `dbsf`.
+`searchStoreCapabilities()` fills absent leg booleans as `false`, defaults `filter` to `false`, defaults `consistency` to `'strong'`, and defaults `fusion` to `['rrf']` when at least two legs are enabled and `[]` otherwise. An explicit `fusion` value cannot advertise RRF with fewer than two enabled legs. Providers derive capabilities from construction options through this helper so advertised support cannot drift from enabled payloads. Distribution-based score fusion is intentionally omitted from this pre-launch API; adding another fusion strategy later requires a complete scoring and conformance contract.
 
-`searchStoreCapabilities()` defines `dense === legs.dense`, `sparse === legs.sparse`, and `hybrid === legs.dense && legs.sparse && fusion.length > 0`. New providers use this helper so compatibility projections cannot drift.
-
-`storage({ search })` is canonical. `storage({ vectors })` remains valid for existing third-party stores: normalization detects capabilities without `legs`, retains the original store at `vectors`, and installs a `SearchStore` adapter at `search`. The adapter derives legs from legacy `dense`/`sparse`/`hybrid`, translates supported leg queries to legacy mode queries, rescales legacy raw RRF sums to the normalized contract, and rejects lexical or unrepresentable fusion with `StorageError('unsupported_capability')`. Adapter hits may omit `matches` because legacy stores do not expose per-leg ranks. Supplying both fields with different explicit stores throws `StorageError('invalid_value')`. New built-in stores expose the same object through both names; a wrapped third-party legacy store may not preserve identity. `storage.scope()` prefixes keys exactly once in either case.
+`storage({ search })` is the only storage binding for retrieval indexes. `storage.scope()` prefixes search keys exactly once.
 
 ## Query rules
 
-- A query contains one to three legs and at most one leg of each kind. Empty legs, duplicates, unknown kinds, empty lexical queries, invalid vectors, negative or non-integer counts, and non-finite thresholds throw `StorageError('invalid_value')` before provider I/O. An object carrying both new `legs` and legacy `mode` is also invalid even though TypeScript can structurally satisfy the union.
-- `limit` defaults to `10` and may be zero. Zero returns `[]` before embedding or provider I/O. Each `candidates` defaults to `clamp(4 * limit, 50, 1000)`, raised to at least `limit`; it must be a positive integer and at least `limit`. Counts are independent per leg.
-- One leg ignores `fusion`. Two or more legs require an advertised fusion strategy; omitted `fusion` means `{ strategy: 'rrf', k: 60 }`. `k` defaults to `60` and must be a positive integer.
-- A store checks every requested leg, fusion, and pre-filter capability before search I/O. A missing leg or fusion and any Indexed Knowledge store without `filter: 'pre'` throws `StorageError('unsupported_capability')`.
-- `threshold` is applied to the final score, after fusion, with `score >= threshold`, and defaults to `0`. Callers must not compare raw single-leg scores across leg kinds or providers.
+- A query contains one to three legs and at most one leg of each kind. Empty legs, duplicate kinds, unknown kinds, empty lexical queries, invalid dense or sparse payloads, negative or non-integer counts, and non-finite thresholds throw `StorageError('invalid_value')` before provider I/O.
+- `limit` defaults to `10` and may be zero. Zero returns `[]` before embedding or provider I/O. Each leg's `candidates` defaults to `clamp(4 * limit, 50, 1000)`, raised to at least `limit`; it must be a positive integer and at least `limit`. Counts are independent per leg.
+- One leg ignores `fusion`. Two or more legs require advertised RRF support; omitted `fusion` means `{ strategy: 'rrf', k: 60 }`. `k` defaults to `60` and must be a positive integer.
+- A store checks every requested leg, fusion, and pre-filter capability before search I/O. A missing leg or fusion, or any Indexed Knowledge store without `filter: 'pre'`, throws `StorageError('unsupported_capability')`.
+- `threshold` is applied to the final score with `score >= threshold` and defaults to `0`. Callers must not compare raw single-leg scores across leg kinds or providers.
 
-For each leg, candidates rank by raw score descending, then `key` ascending. RRF uses one-based rank:
+For each leg, candidates rank by raw score descending, then `key` ascending. Fused search uses one-based rank and deterministic normalized RRF:
 
 ```ts
 rrfScore = sum(matches.map(({ rank }) => 1 / (k + rank)))
@@ -133,7 +125,9 @@ Missing legs contribute zero, so fused scores are in `[0, 1]`. Final results ord
 Retrievers select generated legs without spelling store payloads:
 
 ```ts
-export interface RetrievalLegOptions { readonly candidates?: number }
+export interface RetrievalLegOptions {
+  readonly candidates?: number
+}
 
 export interface RetrievalSearchPlan {
   readonly dense?: boolean | RetrievalLegOptions
@@ -147,10 +141,6 @@ export interface RetrieveOptions<TFilter extends ExactFilter = ExactFilter> {
   threshold?: number
   filter?: TFilter
   search?: RetrievalSearchPlan
-  /** @deprecated Translated to `search`; no new modes will be added. */
-  mode?: 'dense' | 'sparse' | 'hybrid'
-  /** @deprecated Put fusion inside `search`. */
-  fusion?: { strategy: 'rrf'; k?: number }
   // existing trace, caller, and admit fields remain
 }
 
@@ -159,25 +149,20 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends ExactFilter = Exac
   threshold?: number
   filter?: TFilter
   search?: RetrievalSearchPlan
-  /** @deprecated compatibility fields, with the same translation */
-  mode?: 'dense' | 'sparse' | 'hybrid'
-  fusion?: { strategy: 'rrf'; k?: number }
 }
 
-export type RetrieverMode = 'search' | 'dense' | 'sparse' | 'hybrid' | 'custom'
+export type RetrieverMode = 'search' | 'custom'
 ```
 
-`DenseStoreBackedRetrieverConfig` and `KnowledgeBaseConfig` gain primary `search?: SearchStore`; their `vectors?: VectorStore` fields remain aliases. `Storage.search` wins only when the alias is absent; differing explicit stores are invalid. Inspection reports `storage.search`, per-leg capabilities, fusion, delete, and filter; deprecated `storage.vectors` and `dense`/`sparse`/`hybrid` projections remain.
+`SearchStoreBackedRetrieverConfig` and `KnowledgeBaseConfig` accept `search?: SearchStore`. Inspection reports `storage.search`, per-leg capabilities, fusion, delete, and filter. A retriever configured with a `search` plan exposes `mode: 'search'`; caller-provided retrievers expose `mode: 'custom'`. Spans use `mode: 'search'` plus `searchLegs` for composable queries.
 
-A retriever configured with the new `search` plan exposes `mode: 'search'`; one configured only through deprecated `mode` preserves that legacy discriminant. Spans use `mode: 'search'` plus `searchLegs` for composable queries. No lexical or combination string is added to `RetrieverMode`.
-
-Adding `'search'` to `RetrieverMode` can break exhaustive consumer switches and is called out in the migration note even though Retrieval remains beta.
-
-Defaults preserve existing behavior: configured dense+sparse embeddings produce dense+sparse legs; sparse alone produces sparse; otherwise dense. Lexical is opt-in through `search.lexical`. Dense requires a dense embedding, sparse requires a sparse embedding, and lexical requires normalized text plus a lexical-capable store. Lexical never calls an embedding. A media request cannot include sparse or lexical; the existing legacy hybrid-media fallback remains dense-only, while a new composable plan fails with `unsupported_capability` rather than silently dropping legs. Providing both new `search` and deprecated `mode`/`fusion` is `invalid_value`.
+Default retrieval plans are derived from configured generators: dense+sparse embeddings produce dense+sparse legs, sparse alone produces sparse, and otherwise dense. Lexical is opt-in through `search.lexical`. Dense requires a dense embedding, sparse requires a sparse embedding, and lexical requires normalized text plus a lexical-capable store. Lexical never calls an embedding. A media request cannot include sparse or lexical; plans that require unsupported legs fail with `unsupported_capability`.
 
 ```ts
 const kb = knowledgeBase({
-  id: 'docs', records, search: postgres,
+  id: 'docs',
+  records,
+  search: postgres,
   embeddings,
 })
 
@@ -188,20 +173,23 @@ const hits = await kb.retriever({
     fusion: { strategy: 'rrf', k: 60 },
   },
   limit: 12,
-}).retrieve({ query: 'transaction retry semantics', filter: { tenantId: 'acme' } })
+}).retrieve({
+  query: 'transaction retry semantics',
+  filter: { tenantId: 'acme' },
+})
 ```
 
-## Indexed Knowledge persistence
+## Indexed Knowledge and Project Index vocabulary
 
-`IndexedKnowledgeStoreConfig.search?: SearchStore` is primary and `vectors?: VectorStore` is its deprecated alias. For every child chunk, `persistGeneration()` first writes the canonical record, then upserts one `SearchRecord` with `content: chunk.content`, optional dense/sparse vectors, and existing exact-filter metadata. It upserts when any search store exists, even for lexical-only records. Parents remain only in `RecordStore`.
+`IndexedKnowledgeStoreConfig.search?: SearchStore` is the only retrieval-index store field. For every child chunk, `persistGeneration()` first writes the canonical record, then upserts one `SearchRecord` with `content: chunk.content`, optional dense/sparse payloads, and exact-filter metadata. It upserts whenever a search store exists, including lexical-only records. Parents remain only in `RecordStore`.
 
 Deletion, namespace scoping, active-generation replacement, hydration, and embedding-space checks keep their current key contracts. Active-generation and tenant filters are merged and applied before every leg ranks. Deactivation must update search metadata as well as the canonical record; the implementation may reuse the existing upsert path. Hydration mismatches remain hard failures, never silently skipped.
 
-`SearchStore.upsert()` is full-record replacement, matching the existing `VectorStore` contract: omitted `content`, `dense`, or `sparse` clears that stored payload. Metadata-only lifecycle updates therefore reconstruct and write the complete current search record; they must not erase content or vectors accidentally.
+`SearchStore.upsert()` is full-record replacement: omitted `content`, `dense`, or `sparse` clears that stored payload. Metadata-only lifecycle updates therefore reconstruct and write the complete current `SearchRecord`; they must not erase content or embedding payloads accidentally.
 
-`createIndexWriter()` always passes normalized chunk content to Indexed Knowledge. Lexical-only indexing runs without dense or sparse embedding stages. Adding lexical configuration changes runtime knowledge-index output, so reindexing is required; it does not affect Project Index cache epochs.
+`createIndexWriter()` always passes normalized chunk content to Indexed Knowledge. Lexical-only indexing runs without dense or sparse embedding stages. New Project Index definitions, facts, or source refs introduced by this work use `search`, `SearchStore`, and `SearchRecord` vocabulary. Adding lexical configuration changes runtime knowledge-index output, so reindexing is required; it does not affect Project Index cache epochs unless Project Index output shape changes.
 
-## PostgreSQL adapter
+## PostgreSQL package
 
 ```ts
 export interface PostgresLexicalOptions {
@@ -222,31 +210,25 @@ export interface PostgresSearchStore extends SearchStore {
 
 export function postgresSearchStore(options: PostgresSearchStoreOptions): PostgresSearchStore
 
-/** @deprecated Alias of `postgresSearchStore`; `dimensions` stays required by its type. */
-export type PostgresVectorStoreOptions = PostgresSearchStoreOptions & { readonly dimensions: number }
-export type PostgresVectorStore = PostgresSearchStore
-export const postgresVectorStore: (options: PostgresVectorStoreOptions) => PostgresVectorStore
-
 export interface PostgresStorageOptions extends PostgresSearchStoreOptions {}
+
 export interface PostgresStorage extends Storage {
   readonly records: RecordStore
   readonly search: PostgresSearchStore
-  /** @deprecated Same object as `search`. */
-  readonly vectors: PostgresVectorStore
   readonly setup: PostgresStorageSetup
   close(): Promise<void>
 }
 ```
 
-At least one of `dimensions`, `sparseDimensions`, or `lexical` is required. `sparseDimensions` continues to require pgvector; dense is no longer required for lexical-only storage. `postgresStorage()` and `postgresSearchStore()` advertise exactly the configured legs. `postgresVectorStore()` delegates without changing ownership or setup behavior. `inMemorySearchStore(): SearchStore` is the primary core factory; `export const inMemoryVectorStore = inMemorySearchStore` is its deprecated alias. The in-memory store advertises dense, sparse, and RRF but not lexical; RRF is a new capability for that store, not preserved legacy behavior. Lexical conformance is provider-gated.
+At least one of `dimensions`, `sparseDimensions`, or `lexical` is required. `sparseDimensions` requires pgvector; dense is not required for lexical-only storage. `postgresStorage()` and `postgresSearchStore()` derive capabilities from options: configured payloads set `legs`, two or more configured legs advertise RRF, PostgreSQL filtering is `pre`, and consistency is `strong`. `inMemorySearchStore(): SearchStore` is the core in-memory factory; it advertises dense, sparse, and RRF, but not lexical.
 
-PostgreSQL resolves the configuration with a parameterized `$1::regconfig` lookup before DDL or queries. Invalid or unavailable names produce `StorageError('invalid_value')`; unchecked names are never interpolated. Lexical search uses `websearch_to_tsquery(configuration, query)` and `ts_rank_cd(search_document, tsquery)`. An empty resulting query returns no lexical candidates.
+PostgreSQL resolves the lexical configuration with a parameterized `$1::regconfig` lookup before DDL or queries. Invalid or unavailable names produce `StorageError('invalid_value')`; unchecked names are never interpolated. Lexical search uses `websearch_to_tsquery(configuration, query)` and `ts_rank_cd(search_document, tsquery)`. An empty resulting query returns no lexical candidates.
 
-For dense+lexical, one SQL statement uses filtered dense and lexical candidate CTEs, ranks each with `row_number()` and `key ASC`, full-joins by key, calculates normalized RRF, applies final threshold, orders by fused score then key, and limits. Other supported multi-leg combinations use the same single-statement pattern. No candidate list is fused in application code.
+For multi-leg queries, one SQL statement uses filtered candidate CTEs, ranks each with `row_number()` and `key ASC`, full-joins by key, calculates normalized RRF, applies final threshold, orders by fused score then key, and limits. No candidate list is fused in application code.
 
-## Setup, migration, and schema ownership
+## Setup and schema ownership
 
-When lexical is enabled, the existing search table gains:
+When lexical is enabled, the Crux-owned search table includes:
 
 ```sql
 content text,
@@ -255,26 +237,26 @@ search_document tsvector GENERATED ALWAYS AS (
 ) STORED
 ```
 
-and `vectors_search_document_gin_idx USING gin (search_document)`. A new table contains only configured payload columns; its presence constraint ORs `IS NOT NULL` across those columns. An existing dense/sparse table adds `content IS NOT NULL` to its Crux-owned presence constraint. Existing `vectors` table and index names remain in this release to keep migration additive; renaming them is out of scope.
+and a GIN index on `search_document`. The search table contains only configured payload columns. Its presence constraint ORs `IS NOT NULL` across configured payload columns, including `content` when lexical is enabled.
 
-`setup.check()` is non-mutating and reports missing columns, generated expression/configuration, GIN index, pgvector requirements, dimensions, and presence constraint with stable finding codes. `setup.apply()` retains the schema advisory transaction lock and may create the extension/schema/table, add nullable columns, replace only the Crux-owned presence constraint, and create missing indexes. It never drops user data, rewrites content from the records table, or changes a text-search configuration silently.
+`setup.check()` is non-mutating and reports missing columns, generated expression/configuration, GIN index, pgvector requirements, dimensions, and presence constraint with stable finding codes. `setup.apply()` retains the schema advisory transaction lock and may create the extension/schema/table, add nullable columns, replace only the Crux-owned presence constraint, and create missing indexes. It never rewrites content from the records table or changes a text-search configuration silently.
 
-Existing rows remain valid with null content. After `apply()`, users run `knowledgeBase.reindex()` to populate lexical content; `check()` reports `POSTGRES_SEARCH_LEXICAL_CONTENT_MISSING` while active indexed chunks have null content, with reindex remediation. A configuration mismatch reports `POSTGRES_SEARCH_CONFIGURATION_INCOMPATIBLE`; changing it requires an explicit migration/reindex because PostgreSQL must rebuild the generated column and GIN index.
+Existing rows with null content remain valid. After enabling lexical search, users run `knowledgeBase.reindex()` to populate content; `check()` reports `POSTGRES_SEARCH_LEXICAL_CONTENT_MISSING` while active indexed chunks have null content, with reindex remediation. A configuration mismatch reports `POSTGRES_SEARCH_CONFIGURATION_INCOMPATIBLE`; changing it requires an explicit schema change and reindex because PostgreSQL must rebuild the generated column and GIN index.
 
 ## Observability and errors
 
-Retrieval spans and `retrieval.hits` artifacts add `searchLegs`, per-leg candidate counts, fusion strategy, and `rrfK`; hit previews may include `matches` but never vectors or full stored content. PostgreSQL backend failures remain `new StorageError('backend_error', message, { cause })`. Validation and capability errors occur before embedding/provider I/O where possible. Dense embedding-space mismatch, hydration miss, and setup finding behavior retain their current typed errors.
+Retrieval spans and `retrieval.hits` artifacts add `searchLegs`, per-leg candidate counts, fusion strategy, and `rrfK`; hit previews may include `matches` but never embedding payloads or full stored content. PostgreSQL backend failures remain `new StorageError('backend_error', message, { cause })`. Validation and capability errors occur before embedding/provider I/O where possible. Dense embedding-space mismatch, hydration miss, and setup finding behavior retain their current typed errors.
 
 ## Conformance and delivery
 
-Implementation must add shared SearchStore conformance tests for validation, capability rejection, exact pre-filtering, full-replacement upsert/delete, per-leg candidate bounds, normalized RRF, thresholds, match details, and deterministic ties. The legacy suite remains as a compatibility suite and adds adapter/translation tests for third-party `VectorStore`, `storage.vectors`, `postgresVectorStore`, and `inMemoryVectorStore`.
+Implementation must add shared SearchStore conformance tests for validation, capability derivation, capability rejection, exact pre-filtering, full-replacement upsert/delete, limit-zero short circuiting, per-leg candidate bounds, normalized RRF, `>=` thresholds, match details, and deterministic ties.
 
-PostgreSQL integration tests cover setup check/apply from empty and existing vector schemas, idempotency, lexical-only records, configuration validation, GIN use, punctuation and empty queries, filters before ranking, inactive generations, reindex population, dense+lexical single-statement RRF with unequal candidate counts and custom `k`, score/tie determinism, deletes, and caller-owned pool behavior.
+PostgreSQL integration tests cover setup check/apply from empty SearchStore schemas, idempotency, lexical-only records, configuration validation, GIN use, punctuation and empty queries, filters before ranking, inactive generations, reindex population, multi-leg single-statement RRF with unequal candidate counts and custom `k`, score/tie determinism, deletes, and caller-owned pool behavior.
 
-Docs must make `storage.search`, `postgresSearchStore`, composable plans, setup/apply, and reindexing canonical; old names appear only in a migration note. That note explicitly calls out the new `RetrieverMode` member and the legacy PostgreSQL hybrid score-scale change: hybrid RRF moves from a raw sum (maximum near `2 / 61` for two legs at `k = 60`) to normalized `[0, 1]`, so thresholds may need retuning. The implementation updates an existing relevant pending changeset or adds a minor changeset for `@use-crux/core` and `@use-crux/postgres`, following repository policy.
+Docs must make `storage.search`, `SearchStore`, `SearchRecord`, `SearchQuery`, `SearchHit`, `SearchStoreCapabilities`, `postgresSearchStore`, `inMemorySearchStore`, composable plans, setup/apply, and reindexing canonical. The implementation updates an existing relevant pending changeset or adds a minor changeset for `@use-crux/core` and `@use-crux/postgres`, following repository policy.
 
 ## Rejected alternatives
 
-- Fixed strings such as `lexical-hybrid`, `dense-lexical`, or an expanding mode matrix: rejected because legs are independently composable.
+- Fixed strings for every leg combination: rejected because legs are independently composable.
 - Treating PostgreSQL lexical search or BM25 as `SparseEmbedding`: rejected because corpus-owned ranking is not a stateless embedding.
 - A separate lexical store with dual writes and core-side fusion: rejected for this release because PostgreSQL can keep one row, one filter boundary, and one query.
