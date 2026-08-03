@@ -29,7 +29,7 @@ describe("embedding native static projection", () => {
           `  version: '', truncate: {}, tasks: { query: '' },`,
           `  batch: { maxSize: 1 }, embed: async () => [],`,
           `})`,
-          `const writer = indexer({ id: 'writer', namespace: 'shared', records, storage: search, dense: vision, credential: 'PHASE7_PRIVATE_SENTINEL' })`,
+          `const writer = indexer({ id: 'writer', namespace: 'shared', records, search, dense: vision, credential: 'PHASE7_PRIVATE_SENTINEL' })`,
           `void vision.embed({ type: 'image', source: 'data:image/png;base64,PHASE7_PRIVATE_SENTINEL' } as never)`,
         ].join("\n"),
       });
@@ -306,7 +306,7 @@ describe("embedding native static projection", () => {
           `  batch: { maxSize: 1 }, embed: async () => [],`,
           `})`,
           `export const catalog = indexer({`,
-          `  id: 'catalog', namespace: 'shared', dense, records, storage: search,`,
+          `  id: 'catalog', namespace: 'shared', dense, records, search,`,
           `})`,
         ].join("\n"),
       });

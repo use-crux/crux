@@ -479,7 +479,7 @@
       "definitionRef": null
     },
     {
-      "kind": "storage.vectorStore",
+      "kind": "storage.searchStore",
       "primary": "runtime-contributor",
       "secondary": [],
       "runtimePrimitiveNames": [

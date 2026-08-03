@@ -258,7 +258,7 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["indexing.pipeline", "ingest.parse", "corpus.sync"],
   },
-  "storage.vectorStore": {
+  "storage.searchStore": {
     primary: "runtime-contributor",
     runtimeIdentity: "none",
     runtimePrimitiveNames: [

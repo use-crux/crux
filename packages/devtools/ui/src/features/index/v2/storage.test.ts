@@ -52,7 +52,7 @@ describe("index storage view model", () => {
         metadata: {
           facts: {
             kind: "storage.searchStore",
-            backend: "convexSearchStore",
+            backend: "customSearchStore",
             capabilities: {
               search: {
                 legs: { dense: true, sparse: false, lexical: false },

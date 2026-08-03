@@ -43,15 +43,6 @@ const postgresSearchCapabilities = (
   },
 });
 
-const convexSearchCapabilities = {
-  search: {
-    legs: { dense: true, sparse: false, lexical: false },
-    fusion: [],
-    filter: "post",
-    consistency: "strong",
-  },
-} as const satisfies IndexedStorageCapabilities;
-
 const upstashSearchCapabilities = {
   search: {
     legs: { dense: true, sparse: false, lexical: false },
@@ -99,11 +90,6 @@ const storageFactoryByCallName: Readonly<
       record: { ttl: "lazy", filter: "scan", watch: false, batch: false },
     },
   },
-  convexSearchStore: {
-    kind: "storage.searchStore",
-    backend: "convexSearchStore",
-    capabilities: convexSearchCapabilities,
-  },
   convexAssetStore: {
     kind: "storage.assetStore",
     backend: "convexAssetStore",
@@ -113,7 +99,6 @@ const storageFactoryByCallName: Readonly<
     backend: "convexStorage",
     capabilities: {
       record: { ttl: "lazy", filter: "scan", watch: false, batch: false },
-      ...convexSearchCapabilities,
     },
   },
   upstashRedisRecordStore: {

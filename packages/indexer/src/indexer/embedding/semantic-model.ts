@@ -58,7 +58,9 @@ export interface SemanticEmbeddingConsumer {
   readonly indexerId?: string;
   readonly namespace?: string;
   readonly searchStorageKey?: string;
-  readonly mode: "dense" | "sparse" | "hybrid" | "unknown";
+  readonly retrievalLegs:
+    | Readonly<{ dense: boolean; sparse: boolean }>
+    | "unknown";
   readonly dense?: SemanticEmbeddingDescriptor;
   readonly sparse?: SemanticEmbeddingDescriptor;
 }
@@ -155,26 +157,10 @@ export function semanticEmbeddingConsumerForCall(
   const sparse = sparseExpression
     ? semanticEmbeddingForExpression(root, sparseExpression, view)
     : undefined;
-  const explicitMode = stringProperty(config, "mode", view);
-  const search = propertyInitializer(config, "search", view);
-  const searchConfig = search
-    ? semanticObjectExpression(search, view, new Set())
-    : undefined;
-  const configuredMode =
-    explicitMode ??
-    (searchConfig ? stringProperty(searchConfig, "mode", view) : undefined);
-  const mode =
-    configuredMode === "dense" ||
-    configuredMode === "sparse" ||
-    configuredMode === "hybrid"
-      ? configuredMode
-      : dense && sparse
-        ? "hybrid"
-        : dense
-          ? "dense"
-          : sparse
-            ? "sparse"
-            : "unknown";
+  const planProperty = kind === "rag.retriever" ? "plan" : undefined;
+  const retrievalLegs = planProperty
+    ? retrievalLegSelection(config, planProperty, dense, sparse, view)
+    : defaultRetrievalLegs(dense, sparse);
   return {
     id,
     kind,
@@ -191,10 +177,49 @@ export function semanticEmbeddingConsumerForCall(
     ...(searchStorageKey(config, view)
       ? { searchStorageKey: searchStorageKey(config, view) }
       : {}),
-    mode,
+    retrievalLegs,
     ...(dense ? { dense } : {}),
     ...(sparse ? { sparse } : {}),
   };
+}
+
+export function retrievalLegSelection(
+  config: Node,
+  property: string,
+  dense: SemanticEmbeddingDescriptor | undefined,
+  sparse: SemanticEmbeddingDescriptor | undefined,
+  view: SemanticAnalyzerView,
+): SemanticEmbeddingConsumer["retrievalLegs"] {
+  const expression = propertyInitializer(config, property, view);
+  if (!expression) return defaultRetrievalLegs(dense, sparse);
+  const plan = semanticObjectExpression(expression, view, new Set());
+  if (!plan) return "unknown";
+  const denseEnabled = searchLegEnabled(plan, "dense", view);
+  const sparseEnabled = searchLegEnabled(plan, "sparse", view);
+  return denseEnabled === undefined || sparseEnabled === undefined
+    ? "unknown"
+    : { dense: denseEnabled, sparse: sparseEnabled };
+}
+
+function defaultRetrievalLegs(
+  dense: SemanticEmbeddingDescriptor | undefined,
+  sparse: SemanticEmbeddingDescriptor | undefined,
+): SemanticEmbeddingConsumer["retrievalLegs"] {
+  return dense || sparse ? { dense: Boolean(dense), sparse: Boolean(sparse) } : "unknown";
+}
+
+function searchLegEnabled(
+  plan: Node,
+  property: "dense" | "sparse",
+  view: SemanticAnalyzerView,
+): boolean | undefined {
+  const expression = propertyInitializer(plan, property, view);
+  if (!expression) return false;
+  const literal = semanticLiteral(expression, view);
+  if (typeof literal === "boolean") return literal;
+  return semanticObjectExpression(expression, view, new Set())
+    ? true
+    : undefined;
 }
 
 function consumerIndexerId(

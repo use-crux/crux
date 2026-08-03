@@ -4,6 +4,7 @@ import {
   isNumericLiteral,
   isObjectLiteralExpression,
   isStringLiteral,
+  SyntaxKind,
   type Expression,
   type ObjectLiteralExpression,
   type SourceFile,
@@ -334,7 +335,7 @@ function hasLiteralLexical(
     ? nativeStorageConfigObject(firstArg, bindings, new Set())
     : undefined;
   const value = config ? storagePropertyExpression(config, "lexical") : undefined;
-  return Boolean(value && value.kind === "TrueKeyword");
+  return Boolean(value && value.kind === SyntaxKind.TrueKeyword);
 }
 
 function nativeStorageConfigObject(

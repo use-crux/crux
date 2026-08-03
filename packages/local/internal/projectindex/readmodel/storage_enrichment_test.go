@@ -25,7 +25,7 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 				Name:     "search",
 				Fidelity: "resolved",
 				Status:   "active",
-				Metadata: json.RawMessage(`{"facts":{"kind":"storage.searchStore","backend":"convexSearchStore","capabilities":{"search":{"legs":{"dense":true,"sparse":false,"lexical":false},"fusion":[],"filter":"post","consistency":"strong"}}}}`),
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.searchStore","backend":"customSearchStore","capabilities":{"search":{"legs":{"dense":true,"sparse":false,"lexical":false},"fusion":[],"filter":"post","consistency":"strong"}}}}`),
 			},
 			{
 				ID:       "storage.bundle:appStorage",
