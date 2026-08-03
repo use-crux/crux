@@ -21,6 +21,7 @@ import { createPostgresTimerStore } from './timers'
 import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
+import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -144,6 +145,7 @@ export function postgres(
     id: 'postgres',
     ...ports,
     leases: createPostgresLeasePort(pool, schema),
+    maintenanceOwnership: createPostgresMaintenanceOwnership(pool, schema),
     setup: createPostgresSetupPort(pool, schema),
     async transact<T>(
       fn: (tx: RuntimeStoreTransaction) => Promise<T>,

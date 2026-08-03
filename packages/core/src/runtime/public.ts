@@ -36,6 +36,7 @@ export type {
   RuntimeWorker,
   RuntimeWorkerStopOptions,
 } from "./worker/create-runtime-worker";
+export type * from "./ports/maintenance-ownership";
 
 export type {
   RuntimeArtifactManifest,

@@ -14,6 +14,10 @@ import type {
   WorkId,
 } from '@use-crux/core/runtime'
 import {
+  CruxRuntimeError,
+  createRuntimeProgram,
+  createRuntimeWorker,
+  node,
   runDefaultRuntimeComposite,
   type RuntimeCompositeRunner,
 } from '@use-crux/core/runtime'
@@ -37,7 +41,13 @@ describe('@use-crux/postgres runtime', () => {
 
   async function createStore(): Promise<PostgresRuntimeStore> {
     const schema = `crux_runtime_test_${Date.now()}_${schemas.length}`
-    schemas.push(schema)
+    return await createStoreInSchema(schema)
+  }
+
+  async function createStoreInSchema(
+    schema: string,
+  ): Promise<PostgresRuntimeStore> {
+    if (!schemas.includes(schema)) schemas.push(schema)
     const pool = createPostgresTestPool(testDatabase.url)
     const store = postgres({ pool, schema })
     stores.push({
@@ -95,6 +105,135 @@ describe('@use-crux/postgres runtime', () => {
       expect(statement, `${tableName} create table statement`).toBeDefined()
       expect(columnsFromCreateTable(statement!)).toEqual(expectedColumns)
     }
+  })
+
+  it('excludes maintenance across pools and allows restart after release', async () => {
+    const schema = `crux_runtime_owner_${Date.now()}`
+    const firstStore = await createStoreInSchema(schema)
+    const secondStore = await createStoreInSchema(schema)
+    const namespace = 'shared-worker'
+    const program = createRuntimeProgram({ targets: [], transports: [] })
+    let firstMaintenanceCalls = 0
+    let secondMaintenanceCalls = 0
+    let duplicateMaintenance!: () => void
+    const duplicateTick = new Promise<void>((resolve) => {
+      duplicateMaintenance = resolve
+    })
+    const firstClaimPending =
+      firstStore.outbox.claimPending.bind(firstStore.outbox)
+    const secondClaimPending =
+      secondStore.outbox.claimPending.bind(secondStore.outbox)
+    const firstRuntime = node({
+      store: {
+        ...firstStore,
+        outbox: {
+          ...firstStore.outbox,
+          async claimPending(options: Parameters<typeof firstClaimPending>[0]) {
+            firstMaintenanceCalls += 1
+            return await firstClaimPending(options)
+          },
+        },
+      },
+      namespace,
+      autoStartMaintenance: false,
+    })
+    const secondRuntime = node({
+      store: {
+        ...secondStore,
+        outbox: {
+          ...secondStore.outbox,
+          async claimPending(options: Parameters<typeof secondClaimPending>[0]) {
+            secondMaintenanceCalls += 1
+            duplicateMaintenance()
+            return await secondClaimPending(options)
+          },
+        },
+      },
+      namespace,
+      autoStartMaintenance: false,
+    })
+    const first = createRuntimeWorker({
+      runtime: firstRuntime,
+      program,
+      pollIntervalMs: 100,
+    })
+    await expect.poll(() => firstMaintenanceCalls).toBe(1)
+    const duplicate = createRuntimeWorker({ runtime: secondRuntime, program })
+
+    try {
+      await expect(
+        Promise.race([duplicate.closed, duplicateTick]),
+      ).rejects.toBeInstanceOf(CruxRuntimeError)
+      expect(secondMaintenanceCalls).toBe(0)
+    } finally {
+      await duplicate.stop().catch(() => undefined)
+      await first.stop()
+    }
+
+    const replacement = createRuntimeWorker({
+      runtime: secondRuntime,
+      program,
+      pollIntervalMs: 100,
+    })
+    await expect.poll(() => secondMaintenanceCalls).toBe(1)
+    await replacement.stop()
+  })
+
+  it('allows concurrent maintenance for different namespaces', async () => {
+    const schema = `crux_runtime_owner_namespaces_${Date.now()}`
+    const firstStore = await createStoreInSchema(schema)
+    const secondStore = await createStoreInSchema(schema)
+    const program = createRuntimeProgram({ targets: [], transports: [] })
+    let firstMaintenanceCalls = 0
+    let secondMaintenanceCalls = 0
+    const firstClaimPending =
+      firstStore.outbox.claimPending.bind(firstStore.outbox)
+    const secondClaimPending =
+      secondStore.outbox.claimPending.bind(secondStore.outbox)
+    const first = createRuntimeWorker({
+      runtime: node({
+        store: {
+          ...firstStore,
+          outbox: {
+            ...firstStore.outbox,
+            async claimPending(
+              options: Parameters<typeof firstClaimPending>[0],
+            ) {
+              firstMaintenanceCalls += 1
+              return await firstClaimPending(options)
+            },
+          },
+        },
+        namespace: 'worker-a',
+        autoStartMaintenance: false,
+      }),
+      program,
+      pollIntervalMs: 100,
+    })
+    const second = createRuntimeWorker({
+      runtime: node({
+        store: {
+          ...secondStore,
+          outbox: {
+            ...secondStore.outbox,
+            async claimPending(
+              options: Parameters<typeof secondClaimPending>[0],
+            ) {
+              secondMaintenanceCalls += 1
+              return await secondClaimPending(options)
+            },
+          },
+        },
+        namespace: 'worker-b',
+        autoStartMaintenance: false,
+      }),
+      program,
+      pollIntervalMs: 100,
+    })
+
+    await expect.poll(() => firstMaintenanceCalls).toBe(1)
+    await expect.poll(() => secondMaintenanceCalls).toBe(1)
+    await Promise.all([first.stop(), second.stop()])
   })
 
   it('setup check reports missing resources and apply is idempotent', async () => {

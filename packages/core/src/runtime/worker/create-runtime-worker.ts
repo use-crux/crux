@@ -8,11 +8,15 @@ import { createRuntime } from '../api/create-runtime'
 import type { ResolvedRuntimeEngine } from '../api/create-runtime'
 import type { InProcessRuntimeEngineDefinition } from '../api/runtime-definition'
 import type { RuntimeStoreAdapter } from '../store'
+import type { RuntimeMaintenanceOwnershipLease } from '../ports/maintenance-ownership'
 import type { RuntimeProgram } from '../program'
 import { normalizeRuntimeHandlerTargets } from '../handler/targets'
 import type { RuntimeTargetRuntimeRef } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
-import { acquireRuntimeWorkerOwnership } from './ownership'
+import {
+  acquireDurableRuntimeWorkerOwnership,
+  acquireRuntimeWorkerOwnership,
+} from './ownership'
 
 const DEFAULT_STOP_TIMEOUT_MS = 10_000
 
@@ -82,9 +86,9 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     startMaintenance: false,
   })
   runtimeRef.current = runtime
-  let releaseOwnership: () => void
+  let releaseLocalOwnership: () => void
   try {
-    releaseOwnership = acquireRuntimeWorkerOwnership(
+    releaseLocalOwnership = acquireRuntimeWorkerOwnership(
       runtime.store,
       runtime.namespace,
     )
@@ -96,8 +100,12 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   let state: 'running' | 'stopping' | 'closed' = 'running'
   let timer: ReturnType<typeof setTimeout> | undefined
   let activeTick: Promise<void> | undefined
+  let acquisition: Promise<void>
+  let durableLease: RuntimeMaintenanceOwnershipLease | undefined
   let stopPromise: Promise<void> | undefined
   let fatalFailure: { readonly error: unknown } | undefined
+  let ownershipReleased = false
+  let closedSettled = false
   let resolveClosed!: () => void
   let rejectClosed!: (reason: unknown) => void
   const closed = new Promise<void>((resolve, reject) => {
@@ -106,22 +114,41 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   })
   void closed.catch(() => undefined)
 
-  const closeAfterFailure = (error: unknown): void => {
+  const settleClosed = (error?: unknown): void => {
+    if (closedSettled) return
+    closedSettled = true
+    if (error === undefined) resolveClosed()
+    else rejectClosed(error)
+  }
+  const releaseOwnership = async (): Promise<void> => {
+    if (ownershipReleased) return
+    ownershipReleased = true
+    try {
+      await durableLease?.release()
+    } finally {
+      releaseLocalOwnership()
+    }
+  }
+  const closeAfterFailure = async (error: unknown): Promise<void> => {
+    if (!fatalFailure) fatalFailure = { error }
     if (state === 'closed') return
-    fatalFailure = { error }
     state = 'closed'
     if (timer) clearTimeout(timer)
     runtime.maintenance.stop()
     runtime.dispose()
-    releaseOwnership()
-    rejectClosed(error)
+    try {
+      await releaseOwnership()
+    } catch {
+      // Preserve the fatal lifecycle error while still releasing local ownership.
+    }
+    settleClosed(error)
   }
   const tick = async (): Promise<void> => {
     if (state !== 'running') return
     try {
       await runtime.maintenance.tick()
     } catch (error) {
-      closeAfterFailure(error)
+      await closeAfterFailure(error)
       return
     }
     if (state === 'running') {
@@ -147,25 +174,51 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
       if (timer) clearTimeout(timer)
       runtime.maintenance.stop()
       stopPromise = (async () => {
-        if (activeTick && !(await settlesWithin(activeTick, timeoutMs))) {
+        const activeWork = activeTick ?? acquisition
+        if (!(await settlesWithin(activeWork, timeoutMs))) {
           const error = stopTimeoutError(timeoutMs)
           runtime.dispose()
-          releaseOwnership()
+          void activeWork.then(
+            () => releaseOwnership().catch(() => undefined),
+            () => releaseOwnership().catch(() => undefined),
+          )
           state = 'closed'
-          rejectClosed(error)
+          settleClosed(error)
           throw error
         }
         if (fatalFailure) throw fatalFailure.error
         runtime.dispose()
-        releaseOwnership()
+        try {
+          await releaseOwnership()
+        } catch (error) {
+          fatalFailure = { error }
+          state = 'closed'
+          settleClosed(error)
+          throw error
+        }
         state = 'closed'
-        resolveClosed()
+        settleClosed()
       })()
       return stopPromise
     },
   })
 
-  startTick()
+  acquisition = (async () => {
+    try {
+      const lease = await acquireDurableRuntimeWorkerOwnership(
+        runtime.store,
+        runtime.namespace,
+      )
+      if (state !== 'running') {
+        await lease?.release()
+        return
+      }
+      durableLease = lease
+      startTick()
+    } catch (error) {
+      await closeAfterFailure(error)
+    }
+  })()
   return worker
 }
 
@@ -204,10 +257,10 @@ function stopTimeoutError(
 ): ReturnType<typeof createRuntimeError> {
   return createRuntimeError({
     code: 'CAPABILITY_MISSING',
-    whatFailed: `The active maintenance tick did not settle within ${timeoutMs}ms and was not cancelled.`,
-    why: 'Runtime workers can bound shutdown waiting, but cannot physically cancel external work already started by a target or store adapter.',
+    whatFailed: `The active maintenance tick or ownership acquisition did not settle within ${timeoutMs}ms and was not cancelled.`,
+    why: 'Runtime workers can bound shutdown waiting, but cannot physically cancel ownership acquisition or external work already started by a target or store adapter.',
     whatStillWorks:
-      'Future maintenance ticks are stopped, the resolved runtime is disposed, and process-local ownership is released.',
+      'Future maintenance ticks are stopped, the resolved runtime is disposed, and acquired ownership is released after the active operation settles.',
     nextStep:
       'Inspect the active target or store operation, then increase timeoutMs only if that operation is expected to finish safely.',
   })
