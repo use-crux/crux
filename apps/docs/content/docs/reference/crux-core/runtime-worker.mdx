@@ -1,0 +1,160 @@
+---
+title: Runtime program and worker
+description: API reference for immutable Runtime programs and the self-hosted execution worker lifecycle.
+---
+
+```ts
+import {
+  createRuntimeProgram,
+  createRuntimeWorker,
+  type RuntimeProgram,
+  type RuntimeWorker,
+} from "@use-crux/core/runtime";
+```
+
+Most applications use the generated program through `crux runtime worker`.
+The APIs on this page support generated hosts, tests, and advanced hand-written
+hosts. [View the Core source](https://github.com/use-crux/crux/tree/main/packages/core/src/runtime).
+
+## `RuntimeProgram`
+
+```ts
+interface RuntimeProgram {
+  readonly manifestHash: string;
+  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly transports: readonly RuntimeManagedTransportBinding[];
+}
+```
+
+A provider-neutral declaration of the executable targets and inert
+managed-transport bindings for one project with shallow structural
+immutability. `manifestHash` is the SHA-256 hash
+of the canonical program declaration. It is distinct from the generated
+artifact hash that binds `program.ts` to the exact bytes of `manifest.json`.
+
+`createRuntimeProgram()` freezes the program, its copied arrays, and detached
+transport records, while target object references remain the supplied
+references.
+The object does not contain live clients, credentials, Requests, mutable
+registration, or configuration lookup.
+
+## `createRuntimeProgram(options)`
+
+```ts
+interface CreateRuntimeProgramOptions {
+  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly transports: readonly RuntimeManagedTransportBinding[];
+}
+
+declare function createRuntimeProgram(
+  options: CreateRuntimeProgramOptions,
+): RuntimeProgram;
+```
+
+Purely validates, canonicalizes, hashes, and freezes one program. It performs no
+I/O or discovery. Generated code calls this same function.
+
+Validation rejects duplicate target or binding identities, bindings whose
+Signal target is absent from `targets`, and one adapter identity declared with
+incompatible providers. `transports` are represented in the program but the
+current execution worker leaves them inert.
+
+```ts
+import { createRuntimeProgram, durableTask } from "@use-crux/core/runtime";
+
+const rebuild = durableTask("rebuild", {
+  run: async (input: { documentId: string }) => {
+    await rebuildDocument(input.documentId);
+  },
+});
+
+export const runtimeProgram = createRuntimeProgram({
+  targets: [rebuild],
+  transports: [],
+});
+```
+
+## `createRuntimeWorker(options)`
+
+```ts
+interface CreateRuntimeWorkerOptions<TStore extends RuntimeStoreAdapter> {
+  readonly runtime: InProcessRuntimeEngineDefinition<TStore>;
+  readonly program: RuntimeProgram;
+  readonly pollIntervalMs?: number;
+}
+
+declare function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
+  options: CreateRuntimeWorkerOptions<TStore>,
+): RuntimeWorker<TStore>;
+```
+
+Creates and immediately starts a process-local worker. It resolves executable
+targets only from `program.targets`, disables composer-owned maintenance, and
+runs one immediate serial maintenance loop. `pollIntervalMs` defaults to the
+composer's maintenance interval, then 1000 ms, and must be positive and finite.
+
+`runtime` must be an in-process definition such as `node()`, not a host-bound
+definition. The low-level API can use any conforming Runtime store, but safe
+cross-process single-worker operation requires the store's durable
+`maintenanceOwnership` port. The first-party CLI requires it and currently
+supports `node({ store: postgres() })`.
+
+Creation synchronously rejects unresolved or duplicate program targets and a
+duplicate owner on the same store object and namespace. Durable ownership is
+asynchronous: failure rejects `worker.closed` before a maintenance tick runs.
+
+## `RuntimeWorker`
+
+```ts
+interface RuntimeWorker<TStore extends RuntimeStoreAdapter> {
+  readonly program: RuntimeProgram;
+  readonly runtime: ResolvedRuntimeEngine<TStore>;
+  readonly closed: Promise<void>;
+  readonly stop: (options?: { timeoutMs?: number }) => Promise<void>;
+}
+```
+
+- `program` is the exact Runtime program being executed.
+- `runtime` is the resolved executable Runtime owned by the worker.
+- `closed` resolves after a clean stop and rejects after fatal maintenance,
+  ownership release failure, or a stop timeout.
+- `stop()` is idempotent. It stops future ticks, waits for acquisition or the
+  active tick, disposes the Runtime, and releases ownership. `timeoutMs`
+  defaults to 10,000 and must be positive and finite.
+
+A timeout rejects without claiming external work was cancelled. Ownership is
+released after the still-active operation eventually settles.
+
+## Ownership contract
+
+Only one worker may maintain a given store and namespace in a process. When a
+store implements `maintenanceOwnership`, only one may maintain that namespace
+across processes. Different namespaces can run concurrently.
+
+The worker acquires local ownership before returning and durable ownership
+before its first tick. It releases both on clean stop or fatal failure. Replace
+a worker only after `await worker.stop()` or after the prior process exits.
+
+## Generated program loading
+
+The loader used by `crux runtime worker` is internal. It reads
+`.crux/generated/runtime/program.ts` and `manifest.json`, validates manifest
+version and shape, imports the program with an 8-second bound, compares the
+manifest byte hash, validates the exported program shape, and compares ordered
+target names and kinds. Users regenerate artifacts rather than calling this
+loader.
+
+`loadRuntimeWorkerHost({ root, configPath? })` from
+`@use-crux/indexer/host/runtime` is a Crux-owned compiler/build host contract,
+not an application SDK surface. It loads project config in Runtime-rich indexing
+mode and returns only an in-process Runtime whose store has durable maintenance
+ownership. It reports config import, missing ownership, and missing Runtime
+errors with remediation. It does not load the generated program or start a
+worker.
+
+## Related
+
+- [Node execution worker](/docs/guides/durable-execution/node)
+- [`crux runtime worker`](/docs/reference/local#crux-runtime-worker)
+- [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- [Runtime adapter contract](/docs/reference/crux-core/runtime-adapter)

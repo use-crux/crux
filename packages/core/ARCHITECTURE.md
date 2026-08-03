@@ -4,6 +4,10 @@ Internal implementation details of `@use-crux/core`. For usage documentation,
 see the [Crux docs](../../apps/docs/content/docs); the
 [package README](./README.md) is the concise npm landing page.
 
+The cross-package Runtime program, execution-worker ownership, replay, and
+shutdown design is documented in
+[`packages/local/docs/runtime-program-worker-architecture.md`](../local/docs/runtime-program-worker-architecture.md).
+
 ## Tool-source boundary
 
 Core treats execution-time tool discovery as a provider-neutral, branded
@@ -534,7 +538,7 @@ stream the returned `raw` is SDK-shaped but may be a runtime-composed logical st
 spanning attempts rather than object-identical to one provider attempt.
 
 Constraint settlement is occurrence- and value-precise: the streaming gate records which
-occurrence *value* passed (identity path plus a canonical subject fingerprint), and
+occurrence _value_ passed (identity path plus a canonical subject fingerprint), and
 completion suppresses a terminal re-check only when the same occurrence still carries the
 same subject. A rewrite of the constrained path invalidates its settlement; a rewrite
 elsewhere preserves it. This is what keeps a `constraint.judge()` from running twice.
@@ -1822,9 +1826,9 @@ Five functions extracted from adapter duplication, exported as `@internal`. `Orc
 
 Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` implementations for use with primitives that need SDK-agnostic generation (compaction, scoring, extraction):
 
-| Adapter               | Object                                  | Text                                  | Embeddings             | Rerankers          |
-| --------------------- | --------------------------------------- | ------------------------------------- | ---------------------- | ------------------ |
-| `@use-crux/ai`        | `generateObjectFn` (singleton)          | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`       |
+| Adapter               | Object                           | Text                                  | Embeddings             | Rerankers          |
+| --------------------- | -------------------------------- | ------------------------------------- | ---------------------- | ------------------ |
+| `@use-crux/ai`        | `generateObjectFn` (singleton)   | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`       |
 | `@use-crux/openai`    | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/google`    | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/anthropic` | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | generation-only        | via `@use-crux/ai` |

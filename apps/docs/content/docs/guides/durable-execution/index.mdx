@@ -36,13 +36,13 @@ You add the Runtime Engine when you need work to survive the process. These APIs
 
 Pick the runtime shape that matches where your code runs, and pass it to your Crux setup:
 
-| Shape                                               | Use when                                                                      |
-| --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `node()`                                            | Local development, tests, single-process demos                                |
-| `node({ store: postgres() })`                       | Long-lived Node processes that need state across restarts or multiple workers |
-| `serverless({ store: postgres(), wake: qstash() })` | Next.js or Vercel-style apps where a cold function needs an external wake     |
-| `convex()`                                          | Convex apps that run runtime work inside Convex functions and the scheduler   |
-| `genericQueue()`                                    | You own a queue and want to adapt it without a bundled Crux package           |
+| Shape                                               | Use when                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------- |
+| `node()`                                            | Local development, tests, single-process demos                              |
+| `node({ store: postgres() })`                       | One separately supervised Node worker whose state survives restarts         |
+| `serverless({ store: postgres(), wake: qstash() })` | Next.js or Vercel-style apps where a cold function needs an external wake   |
+| `convex()`                                          | Convex apps that run runtime work inside Convex functions and the scheduler |
+| `genericQueue()`                                    | You own a queue and want to adapt it without a bundled Crux package         |
 
 ```ts
 import { node } from "@use-crux/core/runtime";
@@ -68,8 +68,8 @@ Each environment has a focused setup guide:
     href="/docs/guides/durable-execution/next-vercel"
   />
   <Card
-    title="Long-lived Node"
-    description="A persistent Node process with a Postgres store."
+    title="Node execution worker"
+    description="One persistent execution worker with a PostgreSQL store."
     href="/docs/guides/durable-execution/node"
   />
   <Card
@@ -98,4 +98,5 @@ Retention (how long settled records are kept), lease fencing (how a reclaimed wo
 - [Flows](/docs/guides/flows): the orchestration primitive the Runtime Engine makes durable
 - [Background Work](/docs/guides/background-work): best-effort vs durable follow-up work
 - [Runtime Engine API reference](/docs/reference/crux-core/runtime-engine): composers, handlers, retention, and the store contract
+- [Runtime program and worker reference](/docs/reference/crux-core/runtime-worker): immutable programs, ownership, and shutdown
 - [Runtime Recipes](/docs/cookbook/runtime): queue mappings for BullMQ, Inngest, Temporal, and Cloudflare

@@ -118,6 +118,7 @@ In tests, the package conformance suite can run against `CRUX_TEST_DATABASE_URL`
 ## Deployment notes
 
 - Use a shared Postgres database for multi-process or serverless deployments.
+- Run exactly one [`crux runtime worker`](/docs/guides/durable-execution/node) per namespace for the self-hosted Node topology; PostgreSQL advisory-lock ownership rejects an overlapping worker.
 - Keep the runtime schema separate from application tables.
 - Pair Postgres with an external wake adapter such as `qstash()` in serverless deployments; a database row cannot wake a cold function by itself.
 - Namespace isolates environments sharing the same database. It is not an authorization boundary.

@@ -3,6 +3,7 @@
   "description": "Runtime Engine adapter mappings and queue recipes.",
   "pages": [
     "index",
+    "execution-worker",
     "named-defer-serverless",
     "generic-queue-bullmq",
     "cloudflare",

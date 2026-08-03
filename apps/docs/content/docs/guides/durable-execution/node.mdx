@@ -1,26 +1,20 @@
 ---
-title: Long-lived Node Runtime
-description: Use node() for local development, tests, and durable multi-worker Node processes.
+title: Node execution worker
+description: Run one generated Runtime program in a durable, separately supervised Node process.
 ---
 
-`node()` is the in-process Runtime Engine composer. With no options it uses the in-memory reference store, which is ideal for tests and local development but not durable across process restarts.
+Use the execution worker when Runtime work must continue outside the process
+that accepted it. An API process can commit a durable task, timer, or suspended
+Flow to PostgreSQL; `crux runtime worker` then discovers and executes that work.
 
-## Local development
+This is the supported long-lived Node topology when work must survive an app
+restart or deployment. For tests and process-local development, `node()` with
+its in-memory store is simpler and does not use the worker command.
 
-```ts
-import { config } from "@use-crux/core";
-import { node } from "@use-crux/core/runtime";
+## Configure PostgreSQL
 
-export default config({
-  runtime: node(),
-});
-```
-
-This supports runtime-bound APIs in one process: event waits, timers, deferred tasks, scoped idle, and automatic signal resume.
-
-## Durable Node
-
-Use a durable store for long-lived workers or multiple Node processes:
+Install `@use-crux/postgres` and its `pg` peer, then configure the in-process
+Node composer in `crux.config.ts`:
 
 ```ts
 import { config } from "@use-crux/core";
@@ -29,39 +23,123 @@ import { postgres } from "@use-crux/postgres/runtime";
 
 export default config({
   runtime: node({
-    store: postgres({ url: process.env.DATABASE_URL }),
-    retention: {
-      terminalWork: "7d",
-      terminalSnapshots: "30d",
-    },
+    store: postgres(),
   }),
 });
 ```
 
-Run setup before deployment:
+`postgres()` reads `DATABASE_URL` by default. Apply its additive schema setup
+before starting application or worker processes:
 
 ```bash
-crux setup --check
+crux setup --apply
 ```
 
-## Maintenance
+## Generate the program
 
-`node()` starts the maintenance loop by default. It dispatches pending outbox rows, scans due timers, reclaims expired leases, expires waiters, resolves scoped idle, and prunes retained terminal records.
+Export every Flow and durable task that the worker may execute as a top-level,
+named export. Then generate the immutable program:
 
-Outbox delivery is bounded and defaults to eight in-flight wake deliveries per maintenance pass.
-
-For tests or custom hosts, disable auto-start and call maintenance explicitly through the resolved runtime:
-
-```ts
-const runtime = createRuntime({
-  runtime: node({ autoStartMaintenance: false }),
-  targets: runtimeTargetMap([reviewFlow, embedDocument]),
-});
-
-await runtime.maintenance.tick();
+```bash
+crux runtime generate
 ```
+
+Crux writes `.crux/generated/runtime/manifest.json` and
+`.crux/generated/runtime/program.ts`. The program contains static imports for
+the discovered targets. Do not edit either file. `crux dev` refreshes them
+during development; build integrations and explicit generation cover builds
+and deployments.
+
+Package the generated files with the same application source that the worker
+runs. Generate before building the deployable image, not on each replica at
+startup. `.crux` is normally gitignored, so include it from the build context
+without treating generated output as authored source.
+
+## Start and stop the worker
+
+From the project root, run:
+
+```bash
+crux runtime worker
+```
+
+Use `--cwd <project-root>` in a monorepo. The command accepts no positional
+arguments. It imports the configured `node({ store: postgres() })` host, loads
+the generated program, acquires durable ownership, and starts an immediate
+serial maintenance loop.
+
+Stop it with `SIGINT` or `SIGTERM`. The worker stops future maintenance ticks,
+waits up to 10 seconds for ownership acquisition or the active tick, disposes
+the Runtime, and releases ownership. The Go supervisor allows 11 seconds before
+forcibly terminating the worker process group.
+
+## One worker per namespace
+
+Run exactly one execution worker for each PostgreSQL store and Runtime
+namespace. A second worker fails ownership acquisition before it executes
+maintenance. Other namespaces may have their own workers; a namespace isolates
+Runtime records but is not an authorization boundary.
+
+Do not configure a deployment controller to overlap old and new worker
+replicas. Use a stop-then-start replacement strategy and wait for the old
+process to exit before starting its replacement.
+
+## What survives a restart
+
+PostgreSQL stores work records, Flow snapshots, timers, waiters, leases,
+outbox rows, idempotency records, and scoped-idle counters. After a worker
+restart, maintenance can rediscover queued work, reclaim expired leases, fire
+due timers, expire waiters, and resume suspended Flows.
+
+Durability is committed at Runtime step boundaries. Deferred child work,
+timers, suspension state, and terminal progress become durable together at a
+suspension or completion barrier. If a process stops between boundaries, Crux
+replays from the last committed snapshot. Runtime effects use recorded
+identities so replay does not schedule a second committed child or overwrite a
+committed terminal result.
+
+This does not make arbitrary side effects exactly-once. Keep external effects
+idempotent, or use an application idempotency key derived from the work or
+effect identity.
+
+## Keep generated programs fresh
+
+The manifest is activated last during generation. At startup the worker checks
+that both files exist, the manifest decodes, the generated format is supported,
+the program was generated from the exact manifest bytes, and its target list
+matches the manifest. It does not run a partial or mixed artifact set.
+
+Regenerate after adding, removing, renaming, or moving an exported Runtime
+target. Before removing a target from a deployment, make sure no non-terminal
+work still names it. See the [execution worker recipes](/docs/cookbook/runtime/execution-worker)
+for rollout and recovery procedures.
+
+## Deployment topology
+
+Run the application and execution worker as separate processes built from the
+same source and generated artifacts. Both use the same PostgreSQL database and
+namespace. Supervise the worker as a long-lived service with restart-on-failure
+and a shutdown grace period longer than 11 seconds.
+
+The worker's generated target imports execute trusted application code. Give
+the worker the application environment and credentials its targets need, plus
+database access. It does not need an HTTP listener, and PostgreSQL notification
+is not required for correctness; maintenance polling discovers durable work.
+
+## Failure recovery
+
+If a target or store operation makes a maintenance tick fail, the worker closes
+and rejects its lifecycle promise. Let the process supervisor restart it after
+the underlying failure is corrected. Committed work remains in PostgreSQL;
+expired leases make interrupted work eligible for recovery.
+
+Do not delete `.crux` or Runtime database rows as a routine fix. Regenerate
+artifacts for artifact errors, repair PostgreSQL connectivity or setup for store
+errors, and replace a duplicate owner cleanly for ownership errors.
 
 ## Related
 
-- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
-- Reference: [@use-crux/postgres](/docs/reference/postgres)
+- [Execution worker recipes](/docs/cookbook/runtime/execution-worker)
+- [Runtime program and worker API](/docs/reference/crux-core/runtime-worker)
+- [`crux runtime worker` CLI](/docs/reference/local#crux-runtime-worker)
+- [PostgreSQL Runtime store](/docs/reference/postgres#runtime-engine)

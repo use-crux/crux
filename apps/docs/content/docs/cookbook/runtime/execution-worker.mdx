@@ -1,0 +1,134 @@
+---
+title: Execution worker recipes
+description: Develop, deploy, diagnose, recover, and safely replace the Node/PostgreSQL Runtime worker.
+---
+
+These recipes assume the supported worker host:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+
+export default config({
+  runtime: node({ store: postgres() }),
+});
+```
+
+## Local development
+
+Run PostgreSQL, apply setup once, and keep the dev server and execution worker
+in separate terminals:
+
+```bash
+crux setup --apply
+crux dev
+```
+
+```bash
+crux runtime worker
+```
+
+`crux dev` refreshes generated artifacts after relevant saves. Restart the
+execution worker after a target changes so its imported program matches the new
+files. Use a separate database or namespace for each developer when sharing a
+PostgreSQL server.
+
+## Supervise production shutdown
+
+Build one image containing the application source, dependencies, Crux CLI, and
+generated Runtime files. Run the application and worker as separate service
+commands from that image.
+
+Configure the supervisor to:
+
+1. send `SIGTERM`, not an immediate kill;
+2. allow more than 11 seconds before `SIGKILL`;
+3. restart the worker after an unexpected non-zero exit; and
+4. keep the worker replica count at one per namespace.
+
+For a container, make `crux runtime worker` the signal-receiving process (for
+example, use an exec-form command). Crux forwards shutdown to the full worker
+process tree: a Unix process group receives `SIGTERM`; a Windows Job Object
+receives a console break and is closed to terminate descendants after timeout.
+
+## Diagnose a duplicate worker
+
+The actionable error says maintenance ownership is already held for the
+namespace in the durable store. Check for:
+
+- an old container still terminating;
+- a deployment strategy that overlaps replicas;
+- two supervisors managing the same command; or
+- two environments using the same database and namespace.
+
+Keep the existing healthy owner running. Stop the unintended process and wait
+for it to exit before retrying the replacement. PostgreSQL holds ownership with
+a session-scoped advisory lock on a dedicated pooled connection. Shutdown
+unlocks and releases that connection; closing the database session also
+releases the lock.
+
+## Repair missing, stale, or incompatible artifacts
+
+| Error                                    | Meaning                                                                | Recovery                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `SETUP_REQUIRED`                         | `program.ts` or `manifest.json` is missing.                            | Run `crux runtime generate` in the deployed project root.     |
+| `ARTIFACTS_STALE`                        | Program hash or target list does not match the manifest.               | Regenerate the complete set and rebuild/redeploy it together. |
+| `RUNTIME_ARTIFACT_MANIFEST_INVALID`      | JSON, generated module, config import, or exported program is invalid. | Fix the reported import or source error, then regenerate.     |
+| `RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE` | Manifest or program format is unsupported by this CLI.                 | Generate and run with the same installed Crux release.        |
+
+Never copy only one generated file between releases. Generation stages all
+changes and activates the manifest last so the worker sees one coherent set.
+
+## Set up PostgreSQL and verify restart recovery
+
+Set `DATABASE_URL`, then inspect and apply the Crux-owned schema:
+
+```bash
+crux setup --check
+crux setup --apply
+crux setup --check
+```
+
+For a restart drill:
+
+1. start the worker and submit work that suspends, waits on a timer, or remains queued;
+2. send `SIGTERM` and wait for the command to exit;
+3. start `crux runtime worker` again with the same database and namespace; and
+4. verify the work resumes or completes once, from its last committed boundary.
+
+Use application or observability evidence to verify the result. Do not infer
+recovery merely from a clean process exit.
+
+## Recover from a worker failure
+
+Artifact and config failures happen before execution and leave durable data
+unchanged. Correct the error and restart. A fatal maintenance error closes the
+worker; correct database connectivity or the target failure and let the
+supervisor restart it. Work whose lease expired can then be reclaimed.
+
+If shutdown reports that an active tick did not settle within 10 seconds,
+inspect the target or store operation. Future ticks are stopped, but Crux cannot
+physically cancel external work that already began. Make that operation
+idempotent before retrying.
+
+## Roll out or replace safely
+
+Use stop-then-start deployment for a namespace:
+
+1. generate artifacts from the release source and build the image;
+2. confirm pending work does not reference a target removed by the release;
+3. send `SIGTERM` to the old worker and wait for exit;
+4. start exactly one new worker; and
+5. verify it acquires ownership and processes a known durable item.
+
+Application processes may roll independently if they preserve every target
+needed by non-terminal work. When a target must be renamed or removed, first
+deploy code that stops creating old work, drain or migrate the old work, then
+deploy the generated program without that target.
+
+## Related
+
+- [Node execution worker guide](/docs/guides/durable-execution/node)
+- [Runtime worker API reference](/docs/reference/crux-core/runtime-worker)
+- [PostgreSQL reference](/docs/reference/postgres)
