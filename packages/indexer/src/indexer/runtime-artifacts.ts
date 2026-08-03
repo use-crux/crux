@@ -205,6 +205,7 @@ async function prepareRuntimeArtifactsUnchecked(
     {
       destination: ".crux/generated/runtime/program.ts",
       contents: runtimeProgramFile({
+        artifactManifestHash: contentHash,
         manifest,
         outputFile: runtimeProgramOutputFile,
         root: options.root,

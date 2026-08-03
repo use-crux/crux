@@ -24,6 +24,9 @@ var embeddedProjectSemanticIndexer []byte
 //go:embed embed/project-runtime-indexer.mjs
 var embeddedProjectRuntimeIndexer []byte
 
+//go:embed embed/runtime-worker.mjs
+var embeddedRuntimeWorker []byte
+
 //go:embed ui-embed/*
 var embeddedUI embed.FS
 
@@ -35,6 +38,11 @@ func ExtractEmbeddedEvalCoordinator() (string, error) {
 // ExtractEmbeddedSourceResolver extracts the embedded source resolver script.
 func ExtractEmbeddedSourceResolver() (string, error) {
 	return ExtractSourceResolver(embeddedSourceResolver)
+}
+
+// ExtractEmbeddedRuntimeWorker extracts the self-hosted Runtime worker script.
+func ExtractEmbeddedRuntimeWorker() (string, error) {
+	return ExtractEmbedded("runtime-worker", embeddedRuntimeWorker)
 }
 
 // EmbeddedSourceResolverScript returns the embedded source resolver worker.

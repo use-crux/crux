@@ -5,6 +5,7 @@ import { GENERATED_HEADER } from "./generated-files";
 
 /** Render the canonical Runtime program shared by generated host entries. */
 export function runtimeProgramFile(input: {
+  readonly artifactManifestHash: string;
   readonly manifest: RuntimeArtifactManifest;
   readonly outputFile: string;
   readonly root: string;
@@ -13,6 +14,9 @@ export function runtimeProgramFile(input: {
     GENERATED_HEADER,
     "import { createRuntimeProgram } from '@use-crux/core/runtime'",
     ...targetImports(input.manifest, input.outputFile, input.root),
+    "",
+    `export const runtimeArtifactManifestHash = '${input.artifactManifestHash}'`,
+    "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
     "const transports = [] as const",

@@ -123,6 +123,16 @@ describe("runtime artifacts", () => {
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("createRuntimeProgram({ targets, transports })");
     await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      `export const runtimeArtifactManifestHash = '${result.contentHash}'`,
+    );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
+    );
+    await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
     ).resolves.toContain(
       "import { runtimeProgram } from '../.crux/generated/runtime/program'",

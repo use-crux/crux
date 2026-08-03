@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { indexProjectRuntimeForHost } from "../src/host/runtime";
+import { indexProjectRuntimeForHost, loadRuntimeWorkerHost } from "../src/host/runtime";
 
 const roots: string[] = [];
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -12,6 +12,41 @@ afterEach(async () => {
 });
 
 describe("runtime-rich host indexing", () => {
+  it("loads the configured in-process Runtime host for a worker", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
+    roots.push(root);
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        "export default {",
+        "  config: { runtime: { kind: 'in-process', id: 'fixture', store: { maintenanceOwnership: { acquire() {} } }, capabilities: {}, createWake() {} } },",
+        "  prompts: [], contexts: [], get() {},",
+        "}",
+      ].join("\n"),
+    );
+
+    await expect(loadRuntimeWorkerHost({ root })).resolves.toMatchObject({ id: "fixture" });
+  });
+
+  it("rejects an in-process Runtime without durable maintenance ownership", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
+    roots.push(root);
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        "export default {",
+        "  config: { runtime: { kind: 'in-process', id: 'memory', store: {}, capabilities: {}, createWake() {} } },",
+        "  prompts: [], contexts: [], get() {},",
+        "}",
+      ].join("\n"),
+    );
+
+    await expect(loadRuntimeWorkerHost({ root })).rejects.toMatchObject({
+      code: "CAPABILITY_MISSING",
+      nextStep: expect.stringContaining("node({ store: postgres() })"),
+    });
+  });
+
   it("adds execution placement for authored Evals to the runtime patch", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
     roots.push(root);

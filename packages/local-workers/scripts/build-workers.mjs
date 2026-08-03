@@ -42,7 +42,7 @@ try {
   // Recreate generated output so workers removed by a clean migration cannot
   // survive a rebuild as stale, accidentally packaged artifacts.
   await rm(distDir, { recursive: true, force: true })
-  const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
+  const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult, runtimeWorkerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/eval-coordinator.ts')],
@@ -72,13 +72,19 @@ try {
       entryPoints: [resolve(rootDir, 'bin/project-runtime-indexer.ts')],
       outfile: resolve(rootDir, 'dist/project-runtime-indexer.mjs'),
     }),
+    build({
+      ...shared,
+      entryPoints: [resolve(rootDir, 'bin/runtime-worker.ts')],
+      outfile: resolve(rootDir, 'dist/runtime-worker.mjs'),
+    }),
   ])
   console.log(
     `Built dist/eval-coordinator.mjs (${evalResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors), ` +
       `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors), ` +
-      `dist/project-runtime-indexer.mjs (${runtimeIndexerResult.errors.length} errors)`,
+      `dist/project-runtime-indexer.mjs (${runtimeIndexerResult.errors.length} errors), ` +
+      `dist/runtime-worker.mjs (${runtimeWorkerResult.errors.length} errors)`,
   )
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)

@@ -717,6 +717,9 @@ importers:
       embedded-postgres:
         specifier: 18.4.0-beta.17
         version: 18.4.0-beta.17
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.1
       pg:
         specifier: ^8.22.0
         version: 8.22.0

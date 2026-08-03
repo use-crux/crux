@@ -1,5 +1,7 @@
 ---
 "@use-crux/core": minor
+"@use-crux/indexer": minor
+"@use-crux/local": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -52,3 +54,7 @@ provider-neutral bindings and accepted envelopes.
 Add immutable `RuntimeProgram` construction with canonical manifest hashes,
 shared Runtime target normalization, and managed-binding resolution and
 compatibility diagnostics for generated and hand-written hosts.
+
+Generate a freshness-bound Runtime program and add `crux runtime worker` for
+one configured Node/PostgreSQL execution worker with durable ownership and
+bounded signal shutdown.

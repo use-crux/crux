@@ -28,6 +28,7 @@ type runtimeGenerateOptions struct {
 type runtimeArtifactGenerateFunc func(ctx context.Context, root string, process commandWorkerProcess) (json.RawMessage, error)
 type runtimeOperationFunc func(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error)
 type setupOperationFunc func(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error)
+type runtimeWorkerFunc func(ctx context.Context, root string, process commandWorkerProcess) error
 
 type setupOperationWorker interface {
 	projectindex.ProjectIndexer
@@ -39,6 +40,7 @@ type setupOperationWorker interface {
 var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRuntimeArtifactsWithWorker
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
 var runSetupOperationForCommand setupOperationFunc = runSetupOperationWithWorker
+var runRuntimeWorkerForCommand runtimeWorkerFunc = runRuntimeWorkerProcess
 
 // Leave enough time for worker process-group cleanup while keeping the command
 // inside its user-visible 30-second failure bound.
@@ -109,6 +111,7 @@ manifest and host entry files, and never creates infrastructure or credentials.`
 	cmd.AddCommand(newRuntimeInspectCmd(f, opts))
 	cmd.AddCommand(newRuntimeRetryCmd(f, opts))
 	cmd.AddCommand(newRuntimeCancelCmd(f, opts))
+	cmd.AddCommand(newRuntimeWorkerCmd(f, opts))
 	return cmd
 }
 
