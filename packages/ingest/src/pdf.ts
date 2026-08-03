@@ -62,10 +62,11 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
               }),
             { sourceId: input.sourceId, pageNumber },
           )
-        } catch {
+        } catch (error) {
           const part = emptyPagePart(pageNumber)
           parts.push(part)
-          warnTextlessPage(ctx, input.sourceId, part, 'media.describe failed')
+          const reason = error instanceof Error ? error.message : String(error)
+          warnTextlessPage(ctx, input.sourceId, part, `media.describe failed: ${reason}`)
           continue
         }
         if (generated.text.trim()) {

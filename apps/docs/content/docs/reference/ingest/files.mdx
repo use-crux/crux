@@ -22,7 +22,7 @@ import type {
 | `.txt`             | Plain text | Loaded verbatim                                                     |
 | `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables       |
 | `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables      |
-| `.pdf`             | PDF        | Retains every page; textless pages warn and can use `media.describe` |
+| `.pdf`             | PDF        | Retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails |
 | image formats      | Image      | Derives text through `media.describe`                               |
 | audio formats      | Audio      | Derives text and time segments through `media.transcribe`           |
 | video formats      | Video      | Uses explicitly bound `media.describe`, `media.transcribe`, or both |

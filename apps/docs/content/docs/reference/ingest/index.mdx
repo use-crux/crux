@@ -68,7 +68,7 @@ Parsers turn bytes into structured `parts`. The source decides the format from f
 | `text`     | `txt`, `unknown` | `text` part            | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them.      |
 | `markdown` | `md`             | `text`, `table` parts  | Parses Markdown + GFM. Preserves heading paths and table rows.                                          |
 | `html`     | `html`           | `text`, `table` parts  | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables.                          |
-| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; retains textless pages with warnings and optionally enriches them through `media.describe`. |
+| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails. |
 | `image`    | `image`          | `text` parts           | Uses the explicitly bound `media.describe` operation.                                                   |
 | `audio`    | `audio`          | `text` parts           | Uses `media.transcribe` and preserves measured seconds intervals.                                       |
 | `video`    | `video`          | `text` parts           | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly.   |

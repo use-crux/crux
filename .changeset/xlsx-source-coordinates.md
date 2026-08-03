@@ -11,3 +11,5 @@ numeric storage values.
 Keep every physical PDF page in ingest output. Textless pages now produce a
 located warning and remain addressable when media description is unavailable,
 empty, or fails, rather than failing the whole document.
+XLSX malformed number-format warnings now include the sheet name, and failed PDF
+media descriptions include the underlying error text in the warning message.

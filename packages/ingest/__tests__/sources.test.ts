@@ -504,7 +504,7 @@ describe('@use-crux/ingest structured sources', () => {
     expect(document.warnings).toMatchObject([
       { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
     ])
-    expect(document.warnings?.[0]?.message).toContain('media.describe failed')
+    expect(document.warnings?.[0]?.message).toContain('media.describe failed: vision unavailable')
   })
 
   it('urlSource extracts page parts from pdf responses', async () => {
@@ -628,6 +628,46 @@ describe('@use-crux/ingest structured sources', () => {
     expect(table?.content).toBe('Rate\n20%')
   })
 
+  it('renders xlsx plain numeric cells without explicit number formats as raw values', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'plain-numeric.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('PlainNumbers')
+    sheet.getCell('A1').value = 'Metric'
+    sheet.getCell('B1').value = 'Value'
+    sheet.getCell('A2').value = 'Users'
+    sheet.getCell('B2').value = 1234.5
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rows: [
+        ['Metric', 'Value'],
+        ['Users', '1234.5'],
+      ],
+      sourceRows: [
+        {
+          row: 1,
+          cells: [
+            { row: 1, column: 1, address: 'A1', value: 'Metric' },
+            { row: 1, column: 2, address: 'B1', value: 'Value' },
+          ],
+        },
+        {
+          row: 2,
+          cells: [
+            { row: 2, column: 1, address: 'A2', value: 'Users' },
+            { row: 2, column: 2, address: 'B2', value: '1234.5' },
+          ],
+        },
+      ],
+    })
+    expect(table?.content).toBe('Metric | Value\nUsers | 1234.5')
+    expect(document.warnings).toBeUndefined()
+  })
+
   it('renders xlsx currency cells with their saved number format', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'currency.xlsx')
@@ -703,7 +743,7 @@ describe('@use-crux/ingest structured sources', () => {
       expect.objectContaining({
         code: 'parser_warning',
         message: expect.stringContaining('cell A2'),
-        metadata: expect.objectContaining({ address: 'A2', numFmt: '0n' }),
+        metadata: expect.objectContaining({ sheetName: 'BadFormat', address: 'A2', numFmt: '0n' }),
       }),
     ])
   })

@@ -298,7 +298,7 @@ export const xlsxParser: IngestParser = {
             row: row.number,
             column,
             address: cell.address,
-            value: formatCell(cell, date1904, ctx.warn),
+            value: formatCell(cell, date1904, worksheet.name, ctx.warn),
             ...(cell.formula ? { formula: cell.formula } : {}),
           }
         })
@@ -475,7 +475,7 @@ function formatJsonValue(value: unknown): string {
   return String(value)
 }
 
-function formatCell(cell: ExcelJS.Cell, date1904: boolean, warn: (warning: IngestWarning) => void): string {
+function formatCell(cell: ExcelJS.Cell, date1904: boolean, sheetName: string, warn: (warning: IngestWarning) => void): string {
   const value = cell.value
   const displayValue = cell.formula ? cell.result : value
   const fallback = formatCellValue(displayValue)
@@ -489,6 +489,7 @@ function formatCell(cell: ExcelJS.Cell, date1904: boolean, warn: (warning: Inges
       code: 'parser_warning',
       message: `Could not apply XLSX number format for cell ${cell.address}; emitted raw value.`,
       metadata: {
+        sheetName,
         address: cell.address,
         numFmt: cell.numFmt,
         reason: error instanceof Error ? error.message : String(error),
