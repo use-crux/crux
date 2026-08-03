@@ -28,6 +28,13 @@ export const put = mutation({
       ) {
         throw new Error('Runtime result location is already bound to different content.')
       }
+      const chunks = await ctx.db
+        .query('runtimeResultChunks')
+        .withIndex('by_location_index', (query) => query.eq('location', args.location))
+        .collect()
+      if (chunks.some((chunk, index) => chunk.content !== args.chunks[index])) {
+        throw new Error('Runtime result location is already bound to different content.')
+      }
       return null
     }
     await ctx.db.insert('runtimeResults', {

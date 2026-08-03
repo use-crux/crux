@@ -3,6 +3,7 @@
 "@use-crux/indexer": minor
 "@use-crux/local": minor
 "@use-crux/postgres": patch
+"@use-crux/convex": patch
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -94,3 +95,8 @@ content-addressed terminal result. Independent application hosts can reconnect
 after worker restart and read the exact typed Flow result. Referenced payloads
 survive retention pruning; missing payloads raise `WorkResultExpiredError`
 without re-enqueuing or re-executing Work.
+
+Convex Runtime storage now persists the pinned Work definition and result
+obligation with content-addressed terminal results. Independent application
+hosts reconnect after worker restart, duplicate wakes preserve the first result,
+and expired payloads raise `WorkResultExpiredError` without re-executing Work.

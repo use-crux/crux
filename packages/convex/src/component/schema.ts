@@ -83,6 +83,15 @@ export default defineSchema({
     flowId: v.string(),
     workId: v.string(),
     targetId: v.string(),
+    definition: v.optional(
+      v.object({
+        targetId: v.string(),
+        definitionId: v.string(),
+        fingerprint: v.string(),
+        manifestHash: v.string(),
+      }),
+    ),
+    resultObligation: v.optional(v.object({ kind: v.literal('required') })),
     namespace: v.string(),
     status: v.string(),
     effects: v.optional(

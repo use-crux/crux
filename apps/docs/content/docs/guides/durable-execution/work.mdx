@@ -90,16 +90,16 @@ A Runtime-supported Flow barrier may move the same Work through `suspended`
 before it resumes and completes. Terminal failures expose only the safe public
 Work failure summary; thrown provider and user details are not retained there.
 
-## PostgreSQL result retention
+## Durable result retention
 
-The PostgreSQL Runtime store retains the typed terminal result as canonical,
-content-addressed JSON. A restarted host reconnects with `getWork()` and reads
-the exact same value after an independent worker completes the pinned Flow.
-Duplicate wake delivery neither executes the Flow again nor replaces its
+The PostgreSQL and Convex Runtime stores retain the typed terminal result as
+canonical, content-addressed JSON. A restarted host reconnects with `getWork()`
+and reads the exact same value after an independent worker completes the pinned
+Flow. Duplicate wake delivery neither executes the Flow again nor replaces its
 result.
 
-Referenced result payloads are retained during PostgreSQL cleanup. If an
-operator removes a payload or its retention policy expires it, `result()` throws
+Referenced result payloads are retained during provider cleanup. If an operator
+removes a payload or its retention policy expires it, `result()` throws
 `WorkResultExpiredError`; it never re-enqueues or re-executes the Work. Store
 large application content separately and return a bounded reference from the
 Flow result.
