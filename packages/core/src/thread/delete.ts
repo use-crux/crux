@@ -32,36 +32,13 @@ import {
 
 const CLEANUP_ATTEMPTS = 8;
 
-/** Internal owner lookup seam reserved for durable Sessions. */
-export interface ThreadOwnerRegistry {
-  /** List every open or closed-but-undeleted owner of one Thread. */
-  listOwners(threadId: string): Promise<readonly {
-    readonly id: string;
-    readonly state: "open" | "closed";
-  }[]>;
-}
-
-/** Standalone Threads have no durable Session owners. */
-export const emptyThreadOwnerRegistry: ThreadOwnerRegistry = Object.freeze({
-  async listOwners() {
-    return [];
-  },
-});
-
 /** Publish permanent deletion and erase every owned child record. */
 export async function deleteThread(
   storage: Storage,
   threadId: string,
-  owners: ThreadOwnerRegistry,
 ): Promise<void> {
   ensureMutationCapability(storage, threadId);
   try {
-    const current = await storage.records.get(threadControlKey(threadId));
-    const observed = current ? parseThreadControlRecord(current) : null;
-    if (observed?.state !== "deleted") {
-      const registered = await owners.listOwners(threadId);
-      if (registered.length > 0) throw inUse(threadId);
-    }
     await publishDeletion(storage, threadId);
   } catch (error) {
     throw mapDeletionError(threadId, error, false);
@@ -114,6 +91,7 @@ async function publishDeletion(
         const tombstone: ThreadControlRecord = {
           schema: 1,
           state: "deleted",
+          owners: {},
           heads: {},
           leaves: {},
           redactions: {},
@@ -131,11 +109,15 @@ async function publishDeletion(
       ) {
         return { type: "none" };
       }
+      if (control.state === "live" && Object.keys(control.owners).length > 0) {
+        throw inUse(threadId);
+      }
       return {
         type: "put",
         value: {
           ...control,
           state: "deleted",
+          owners: {},
           heads: {},
           leaves: {},
           redactions: {},

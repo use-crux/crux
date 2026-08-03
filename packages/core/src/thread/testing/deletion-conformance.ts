@@ -6,43 +6,16 @@
 
 import { expect, it } from "vitest";
 import { inMemoryAssetStore, type RecordStore } from "../../storage";
-import type { ThreadOwnerRegistry } from "../delete";
-import { ThreadInUseError } from "../errors";
-import { createThreadHandle, thread } from "../thread";
+import { thread } from "../thread";
 import { registerThreadDeletionEdgeConformance } from "./deletion-edge-conformance";
 import type { ErasureConformanceOptions } from "./erasure-conformance";
+import { registerThreadOwnerConformance } from "./owner-conformance";
 
 /** Register owner gating, complete cleanup, and writer-fence behaviors. */
 export function registerThreadDeletionConformance(
   options: ErasureConformanceOptions,
 ): void {
   it("blocks owned deletion and permanently erases unowned Thread records", async () => {
-    const ownedStorage = await options.prepare();
-    for (const state of ["open", "closed"] as const) {
-      const owners: ThreadOwnerRegistry = {
-        async listOwners() {
-          return [{ id: `${state}-session`, state }];
-        },
-      };
-      const owned = createThreadHandle(
-        { id: `${state}-owned`, storage: ownedStorage },
-        owners,
-      );
-      await owned.append({
-        id: `${state}-message`,
-        role: "user",
-        content: "Owned",
-      });
-      const error = await owned.delete().catch((failure: unknown) => failure);
-      expect(error).toBeInstanceOf(ThreadInUseError);
-      expect(error).toMatchObject({
-        code: "in_use",
-        message: expect.stringMatching(
-          /close or kill.*delete.*session.*delete.*thread/iu,
-        ),
-      });
-    }
-
     const storage = await options.prepare();
     const backing = storage.records;
     let failReceipt = true;
@@ -208,6 +181,7 @@ export function registerThreadDeletionConformance(
   });
 
   registerThreadDeletionEdgeConformance(options);
+  registerThreadOwnerConformance(options);
 }
 
 function mediaMessage(byte: number) {

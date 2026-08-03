@@ -156,6 +156,11 @@ function activeHost(api: string): DurableWorkHostContext {
   });
 }
 
+/** Read the active application Runtime host for Session admission. @internal */
+export function activeSessionHost(api: string): DurableWorkHostContext {
+  return activeHost(api);
+}
+
 function targetDefinition(
   context: DurableWorkHostContext,
   targetId: string,

@@ -37,6 +37,10 @@
       "types": "./src/work/index.ts",
       "import": "./src/work/index.ts"
     },
+    "./session": {
+      "types": "./src/session/index.ts",
+      "import": "./src/session/index.ts"
+    },
     "./eval": {
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
@@ -271,6 +275,9 @@
     "*": {
       "signal": [
         "src/signal/index.ts"
+      ],
+      "session": [
+        "src/session/index.ts"
       ],
       "eval": [
         "src/eval/index.ts"

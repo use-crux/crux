@@ -30,6 +30,7 @@ export function threadControlRevision(
         control
           ? {
               state: control.state,
+              owners: control.owners,
               heads: control.heads,
               redactions: control.redactions,
               removals: control.removals,

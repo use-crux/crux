@@ -394,6 +394,21 @@ export type {
   NoPayloadSignal,
 } from "./flow";
 export { createWorkHost, getWork, spawn } from "./work";
+export {
+  getSession,
+  session,
+  SessionCapabilityError,
+  SessionIdentityConflictError,
+  SessionInputError,
+  SessionNotFoundError,
+} from "./session";
+export type {
+  Session,
+  SessionFor,
+  SessionInputHandle,
+  SessionOptions,
+  SessionThreadView,
+} from "./session";
 export type {
   CancelOptions,
   CancelReceipt,

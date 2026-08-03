@@ -30,6 +30,7 @@ import type {
 import type { RuntimeResultPayloadPort } from "./results/types";
 import type { RuntimeSignalStorePort } from "./reactive/records";
 import type { RuntimeMaintenanceOwnershipPort } from "./ports/maintenance-ownership";
+import type { RuntimeSessionStorePort } from "./ports/sessions";
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = "scheduled" | "fired" | "cancelled";
@@ -230,6 +231,8 @@ export interface RuntimeStoreTransaction {
   readonly deferred: RuntimeDeferredStorePort;
   /** Optional internal storage for atomically accepted Work-control commands. */
   readonly workControl?: RuntimeWorkControlPort;
+  /** Optional transactional durable Agent Session identity and ingress records. */
+  readonly sessions?: RuntimeSessionStorePort;
   /**
    * Optional durable Signal occurrence and delivery storage.
    *

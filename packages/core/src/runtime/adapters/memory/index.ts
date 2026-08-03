@@ -36,10 +36,17 @@ import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
 import type { RuntimeWorkControlPort } from "../../ports/work-control";
 import { createMemoryWorkControlPort } from "./work-control";
+import { createMemorySessionStore } from "./sessions";
+import type { RuntimeSessionStorePort } from "../../ports/sessions";
+import type {
+  RuntimeSessionInputRecord,
+  RuntimeSessionRecord,
+} from "../../ports/sessions";
 
 type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
   readonly workControl: RuntimeWorkControlPort;
+  readonly sessions: RuntimeSessionStorePort;
 };
 
 /** Fault-injection controls used by adapter conformance tests. */
@@ -48,6 +55,18 @@ export interface InMemoryRuntimeStoreTesting {
   failAfter(writes: number): void;
   /** Throw once before confirming the next outbox item. */
   crashBeforeConfirm(): void;
+  /** Inspect accepted Session inputs in cursor order for adapter tests. */
+  sessionInputs(
+    namespace: string,
+    sessionId: string,
+  ): readonly RuntimeSessionInputRecord[];
+  /** Inspect one Session control record for adapter tests. */
+  sessionRecord(
+    namespace: string,
+    sessionId: string,
+  ): RuntimeSessionRecord | undefined;
+  /** Inspect Session control records in one Runtime namespace. */
+  sessionRecords(namespace: string): readonly RuntimeSessionRecord[];
 }
 
 /** Process-local runtime store reference implementation. */
@@ -98,6 +117,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       deferred: createMemoryDeferredStore(target, recordWrite),
       signals: createMemorySignalStore(target, recordWrite),
       workControl: createMemoryWorkControlPort(target, recordWrite),
+      sessions: createMemorySessionStore(target, recordWrite),
     };
   }
 
@@ -136,6 +156,27 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       },
       crashBeforeConfirm(): void {
         outboxFaults.crashBeforeConfirm = true;
+      },
+      sessionInputs(namespace: string, sessionId: string) {
+        return Object.freeze(
+          [...data.sessionInputs.values()]
+            .filter(
+              (record) =>
+                record.namespace === namespace &&
+                record.sessionId === sessionId,
+            )
+            .sort((left, right) => left.cursor - right.cursor),
+        );
+      },
+      sessionRecord(namespace: string, sessionId: string) {
+        return data.sessionsById.get(`${namespace}\0${sessionId}`);
+      },
+      sessionRecords(namespace: string) {
+        return Object.freeze(
+          [...data.sessionsById.values()].filter(
+            (record) => record.namespace === namespace,
+          ),
+        );
       },
     }),
   });
