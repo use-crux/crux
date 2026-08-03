@@ -477,6 +477,7 @@ describe("runtime artifacts", () => {
     const artifactFiles = [
       join(root, ".crux/generated/runtime/manifest.json"),
       join(root, ".crux/generated/runtime/privacy.json"),
+      join(root, ".crux/generated/runtime/program.ts"),
       join(root, "convex/_crux/generated.ts"),
       join(root, "convex/_crux/targets.ts"),
       join(root, "convex/_crux/http.ts"),
