@@ -286,6 +286,45 @@ only host-required Eval arms in host artifacts. During normal development,
 `crux dev` keeps files fresh and retries after relevant saves, so manual
 generation is not a prerequisite for each start.
 
+## `crux runtime worker`
+
+Run exactly one generated Runtime program in a supervised Node process. The
+exact syntax is `crux runtime worker [flags]` and positional arguments are
+rejected.
+
+```bash
+crux runtime worker
+crux runtime worker --cwd packages/backend
+```
+
+| Flag             | Description                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--cwd <string>` | Project root; defaults to the nearest config or package root.                                                     |
+| `--json`         | Accepted as an inherited Runtime flag, but this command does not branch on it; lifecycle errors remain text.      |
+| `--no-color`     | Accepted as a global CLI flag; the worker itself emits no decorated status output.                                |
+| `--port <int>`   | Accepted as a global CLI flag and defaults to `4400`; the execution worker does not start or connect to Devtools. |
+| `--help`         | Print worker usage and the local/global flags without starting the worker.                                        |
+
+The command accepts no positional arguments. It requires Node.js, a current
+`.crux/generated/runtime/{manifest.json,program.ts}` pair, and project config
+that resolves to `node({ store: postgres() })` or an equivalent in-process
+Runtime with durable maintenance ownership.
+
+Startup fails actionably when the project root cannot be resolved, Node or the
+embedded worker cannot start, config import fails, the Runtime is missing or
+host-bound, durable ownership is unavailable or already held, artifacts are
+missing/stale/invalid/incompatible, a target import times out, or program
+targets do not match the manifest. It never starts maintenance with a partial
+artifact set.
+
+`SIGINT` and `SIGTERM` prevent future maintenance ticks and allow the Node
+worker 10 seconds to settle ownership acquisition or the active tick and
+release ownership. The Go supervisor forwards shutdown to the process tree and
+force-stops it after 11 seconds.
+
+See the [Node execution worker guide](/docs/guides/durable-execution/node) and
+[operational recipes](/docs/cookbook/runtime/execution-worker).
+
 ## `crux catalog`
 
 Inspect the current authored Catalog through the running local server. Catalog

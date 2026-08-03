@@ -4,6 +4,10 @@
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Eval and insight filesystem boundary.
 
+The generated Runtime program, Go-to-Node supervision, durable ownership, and
+cross-process recovery design is documented in
+[`docs/runtime-program-worker-architecture.md`](docs/runtime-program-worker-architecture.md).
+
 ## Local Configuration Boundary
 
 Local Crux tooling should treat source and runtime evidence as the primary description of the

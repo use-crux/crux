@@ -28,7 +28,19 @@ export {
 } from "./transport";
 
 export { createRuntimeProgram } from "./program";
-export type { CreateRuntimeProgramOptions, RuntimeProgram } from "./program";
+export type {
+  CreateRuntimeProgramOptions,
+  RuntimeProgram,
+  RuntimeProgramTarget,
+} from "./program";
+
+export { createRuntimeWorker } from "./worker/create-runtime-worker";
+export type {
+  CreateRuntimeWorkerOptions,
+  RuntimeWorker,
+  RuntimeWorkerStopOptions,
+} from "./worker/create-runtime-worker";
+export type * from "./ports/maintenance-ownership";
 
 export type {
   RuntimeArtifactManifest,

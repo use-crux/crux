@@ -29,6 +29,7 @@ import type {
 } from "./ports/retention";
 import type { RuntimeResultPayloadPort } from "./results/types";
 import type { RuntimeSignalStorePort } from "./reactive/records";
+import type { RuntimeMaintenanceOwnershipPort } from "./ports/maintenance-ownership";
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = "scheduled" | "fired" | "cancelled";
@@ -251,6 +252,8 @@ export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
   readonly durability?: "durable" | "process-local";
   /** Durable leases for concurrent workers. */
   readonly leases: LeasePort;
+  /** Optional cross-process ownership capability for one maintenance worker per namespace. */
+  readonly maintenanceOwnership?: RuntimeMaintenanceOwnershipPort;
   /** Optional private content-addressed result storage capability. */
   readonly results?: RuntimeResultPayloadPort;
   /**

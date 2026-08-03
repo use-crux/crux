@@ -1,5 +1,8 @@
 ---
 "@use-crux/core": minor
+"@use-crux/indexer": minor
+"@use-crux/local": minor
+"@use-crux/postgres": patch
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -52,3 +55,14 @@ provider-neutral bindings and accepted envelopes.
 Add immutable `RuntimeProgram` construction with canonical manifest hashes,
 shared Runtime target normalization, and managed-binding resolution and
 compatibility diagnostics for generated and hand-written hosts.
+
+Generate a freshness-bound Runtime program and add `crux runtime worker` for
+one configured Node/PostgreSQL execution worker with durable ownership and
+bounded signal shutdown.
+
+Ensure an interrupted Runtime worker exits cleanly even while its configured
+host is still loading.
+
+Give Runtime worker ownership conflicts and shutdown timeouts distinct public
+error codes. PostgreSQL workers now reject undersized pools, terminate when
+their advisory-lock connection is lost, and verify that lock release succeeds.

@@ -105,6 +105,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/runtime-worker.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/runtime-worker.mjs" "$(EMBED_DIR)/runtime-worker.mjs"; \
+		echo "Embedded runtime-worker.mjs from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/runtime-worker.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
+		exit 1; \
+	fi
 
 .PHONY: embed-ui
 embed-ui: $(UI_EMBED_DIR)

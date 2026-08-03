@@ -3,7 +3,9 @@ import {
   type CreateRuntimeProgramOptions,
   type RuntimeManagedTransportBinding,
   type RuntimeProgram,
+  type RuntimeProgramTarget,
 } from "@use-crux/core/runtime";
+import { flow } from "@use-crux/core/flow";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -13,7 +15,9 @@ type Equal<Left, Right> =
     : false;
 type Expect<Value extends true> = Value;
 
-const targets = [{ name: "orders.created" }] as const;
+const targets = [
+  { name: "orders.created", kind: "flow" },
+] as const satisfies readonly RuntimeProgramTarget[];
 const transports = [
   {
     _tag: "RuntimeManagedTransportBinding",
@@ -34,6 +38,17 @@ const options = {
   transports,
 } satisfies CreateRuntimeProgramOptions;
 const program = createRuntimeProgram(options);
+const flowTarget: RuntimeProgramTarget = flow(
+  "orders.flow",
+  async () => undefined,
+);
+void flowTarget;
+
+// @ts-expect-error Runtime program targets require an explicit executable kind.
+const missingKindTarget: RuntimeProgramTarget = {
+  name: "orders.missing-kind",
+};
+void missingKindTarget;
 
 type _ProgramReturn = Expect<Equal<typeof program, RuntimeProgram>>;
 type _TargetsAreReadonly = Expect<
@@ -46,6 +61,6 @@ type _TransportsAreReadonly = Expect<
 // @ts-expect-error Runtime program metadata is readonly.
 program.manifestHash = "changed";
 // @ts-expect-error Runtime program target arrays are readonly.
-program.targets.push({ name: "orders.updated" });
+program.targets.push({ name: "orders.updated", kind: "flow" });
 // @ts-expect-error Runtime program transport arrays are readonly.
 program.transports.pop();

@@ -21,6 +21,7 @@ import { createPostgresTimerStore } from './timers'
 import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
+import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -46,10 +47,12 @@ export interface PostgresRuntimeStoreOptions {
    * Caller-owned `pg` pool.
    *
    * Use this when your app already manages pooling. Crux will not close a
-   * caller-owned pool from {@link PostgresRuntimeStore.close}.
+   * caller-owned pool from {@link PostgresRuntimeStore.close}. Runtime workers
+   * require the pool's `max` to be at least 2 because ownership reserves one
+   * connection while maintenance uses another.
    */
   readonly pool?: Pool
-  /** Additional `pg` pool options when Crux creates the pool. */
+  /** Additional `pg` pool options. Runtime workers require `max >= 2`. */
   readonly poolOptions?: Omit<PoolConfig, 'connectionString'>
   /** SQL schema that owns Crux runtime tables. Defaults to `crux_runtime`. */
   readonly schema?: string
@@ -144,6 +147,7 @@ export function postgres(
     id: 'postgres',
     ...ports,
     leases: createPostgresLeasePort(pool, schema),
+    maintenanceOwnership: createPostgresMaintenanceOwnership(pool, schema),
     setup: createPostgresSetupPort(pool, schema),
     async transact<T>(
       fn: (tx: RuntimeStoreTransaction) => Promise<T>,

@@ -42,6 +42,7 @@
     "effect",
     "defer",
     "runtime-engine",
+    "runtime-worker",
     "runtime-work-records",
     "runtime-adapter",
     "plan",

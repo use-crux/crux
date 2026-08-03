@@ -10,11 +10,16 @@
 
 import { resolve } from 'node:path'
 import type { ProjectIdentity, ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { createRuntimeError, type InProcessRuntimeEngineDefinition } from '@use-crux/core/runtime'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@use-crux/core/project-index/serializers'
 import { loadProjectConfig } from '../indexer/config'
 import { discoverRuntimeEvalDefinitions } from '../indexer/eval-discovery'
 import { evalGlobs } from '../indexer/files'
 import type { IndexPatch } from '../indexer/patches'
+export {
+  decodeRuntimeArtifactManifest,
+  RuntimeArtifactManifestDecodeError,
+} from '../indexer/runtime-artifacts/manifest-codec'
 
 /** Host-only options for the runtime-rich worker phase. */
 export interface IndexProjectRuntimeHostOptions {
@@ -26,6 +31,44 @@ export interface IndexProjectRuntimeHostOptions {
   readonly projectName?: string
   /** Source/native snapshot that this runtime phase enriches. */
   readonly previousIndex?: ProjectIndexSnapshot
+}
+
+/** Options for loading the configured self-hosted Runtime worker definition. */
+export interface LoadRuntimeWorkerHostOptions {
+  /** Project root containing the selected Crux config. */
+  readonly root: string
+  /** Optional Crux config path, relative to `root` unless absolute. */
+  readonly configPath?: string
+}
+
+/** Load the provider-neutral in-process Runtime definition selected by project config. */
+export async function loadRuntimeWorkerHost(
+  options: LoadRuntimeWorkerHostOptions,
+): Promise<InProcessRuntimeEngineDefinition> {
+  const result = await loadProjectConfig(resolve(options.root), options.configPath, 'runtime-rich')
+  const runtime = result.loaded.crux?.config.runtime
+  if (runtime?.kind === 'in-process' && runtime.store.maintenanceOwnership) return runtime
+  const importFailed = result.loaded.importFailed === true
+  const ownershipMissing = runtime?.kind === 'in-process'
+  throw createRuntimeError({
+    code: importFailed
+      ? 'RUNTIME_ARTIFACT_MANIFEST_INVALID'
+      : ownershipMissing
+        ? 'CAPABILITY_MISSING'
+        : 'RUNTIME_REQUIRED',
+    whatFailed: importFailed
+      ? `Crux could not load the Runtime host from \`${result.loaded.configFile}\`.`
+      : ownershipMissing
+        ? 'The configured Runtime store cannot coordinate worker ownership across processes.'
+      : 'Crux could not resolve an in-process Runtime host for this worker.',
+    why: importFailed
+      ? 'The selected config failed to import or did not export a Crux config instance.'
+      : ownershipMissing
+        ? 'Exactly one execution worker requires a durable maintenance ownership port before it can admit work.'
+      : 'The worker command requires `runtime: node({ store: postgres() })` in project config.',
+    whatStillWorks: 'Generated artifacts and host-bound Runtime entries remain unchanged.',
+    nextStep: 'Configure `runtime: node({ store: postgres() })`, fix config imports, then retry `crux runtime worker`.',
+  })
 }
 
 /**

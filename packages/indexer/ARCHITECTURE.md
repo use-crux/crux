@@ -4,6 +4,10 @@
 `@use-crux/local`. It owns static source discovery, semantic enrichment, source references, index
 relations, index lint facts, and the source graph read model used to explain authored Crux systems.
 
+Runtime program generation and its boundary with the Core worker and Local
+supervisor are documented in
+[`packages/local/docs/runtime-program-worker-architecture.md`](../local/docs/runtime-program-worker-architecture.md).
+
 The package should stay correctness-first: when source graph evidence is incomplete, stale, or
 ambiguous, indexing must fall back to a full project reindex instead of publishing a partial index
 that might omit affected facts.

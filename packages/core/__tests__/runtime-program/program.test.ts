@@ -25,14 +25,20 @@ function binding(id: string, signalId: string): RuntimeManagedTransportBinding {
 describe("createRuntimeProgram", () => {
   it("canonicalizes declaration order into one immutable manifest", () => {
     const first = createRuntimeProgram({
-      targets: [{ name: "orders.updated" }, { name: "orders.created" }],
+      targets: [
+        { name: "orders.updated", kind: "flow" },
+        { name: "orders.created", kind: "flow" },
+      ],
       transports: [
         binding("updated", "orders.updated"),
         binding("created", "orders.created"),
       ],
     });
     const reordered = createRuntimeProgram({
-      targets: [{ name: "orders.created" }, { name: "orders.updated" }],
+      targets: [
+        { name: "orders.created", kind: "flow" },
+        { name: "orders.updated", kind: "flow" },
+      ],
       transports: [
         binding("created", "orders.created"),
         binding("updated", "orders.updated"),
@@ -64,13 +70,19 @@ describe("createRuntimeProgram", () => {
   it("rejects duplicate target identities with the Runtime diagnostic shape", () => {
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.created" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.created", kind: "flow" },
+        ],
         transports: [],
       }),
     ).toThrow(CruxRuntimeError);
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.created" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.created", kind: "flow" },
+        ],
         transports: [],
       }),
     ).toThrow(/Code: TARGET_DUPLICATE/);
@@ -79,7 +91,7 @@ describe("createRuntimeProgram", () => {
   it("rejects duplicate managed-binding identities", () => {
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
+        targets: [{ name: "orders.created", kind: "flow" }],
         transports: [
           binding("created", "orders.created"),
           binding("created", "orders.created"),
@@ -91,7 +103,7 @@ describe("createRuntimeProgram", () => {
   it("rejects a managed binding whose Signal target is not declared", () => {
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
+        targets: [{ name: "orders.created", kind: "flow" }],
         transports: [binding("updated", "orders.updated")],
       }),
     ).toThrow(/Code: TARGET_NOT_FOUND/);
@@ -105,7 +117,7 @@ describe("createRuntimeProgram", () => {
 
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
+        targets: [{ name: "orders.created", kind: "flow" }],
         transports: [malformed],
       }),
     ).toThrow(RuntimeManagedTransportContractError);
@@ -117,7 +129,10 @@ describe("createRuntimeProgram", () => {
 
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.updated" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.updated", kind: "flow" },
+        ],
         transports: [
           created,
           {

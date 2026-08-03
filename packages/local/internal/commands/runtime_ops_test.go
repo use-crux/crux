@@ -110,6 +110,32 @@ func TestRuntimeSetupIsNotACommand(t *testing.T) {
 	}
 }
 
+func TestRuntimeWorkerCommandRunsOneSupervisedProcess(t *testing.T) {
+	previous := runRuntimeWorkerForCommand
+	t.Cleanup(func() { runRuntimeWorkerForCommand = previous })
+	root := t.TempDir()
+	called := 0
+	runRuntimeWorkerForCommand = func(_ context.Context, gotRoot string, process commandWorkerProcess) error {
+		called++
+		if gotRoot != root {
+			t.Fatalf("root = %q, want %q", gotRoot, root)
+		}
+		if process.stderr == nil {
+			t.Fatal("worker diagnostic stream is nil")
+		}
+		return nil
+	}
+
+	cmd := NewRuntimeCmd(cli.NewFactoryWithStreams(output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{})))
+	cmd.SetArgs([]string{"--cwd", root, "worker"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if called != 1 {
+		t.Fatalf("worker starts = %d, want 1", called)
+	}
+}
+
 func TestRuntimeStatusPrintsTruncatedCountMarkers(t *testing.T) {
 	var out, errOut bytes.Buffer
 	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})

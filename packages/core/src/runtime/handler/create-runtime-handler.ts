@@ -1,8 +1,9 @@
 /**
  * Fetch-compatible Runtime Engine handler factory.
  *
- * Generated and hand-written entry files call `createRuntimeHandler({
- * targets })` to expose a small Next-compatible `{ GET, POST }` surface.
+ * Generated and hand-written entry files call `createRuntimeHandler()` with a
+ * Runtime program or an explicit target list to expose a small Next-compatible
+ * `{ GET, POST }` surface.
  * Target discovery and code generation are optional DX layers over this API.
  *
  * @module
@@ -21,6 +22,7 @@ import {
 import type { RuntimeTargetRuntimeRef } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
 import type { WorkId } from '../ports'
+import type { RuntimeProgram } from '../program'
 import { handleWakeRequest } from './core'
 import {
   normalizeRuntimeHandlerTargets,
@@ -33,10 +35,7 @@ import {
 
 export type { RuntimeHandlerTarget } from './targets'
 
-/** Options for {@link createRuntimeHandler}. */
-export interface CreateRuntimeHandlerOptions {
-  /** Exported `flow()` handles and `durableTask()` targets. */
-  readonly targets: readonly RuntimeHandlerTarget[]
+interface CreateRuntimeHandlerSharedOptions {
   /** Runtime composer. Defaults to the globally configured `config({ runtime })`. */
   readonly runtime?: RuntimeEngineDefinition
   /**
@@ -48,9 +47,34 @@ export interface CreateRuntimeHandlerOptions {
   readonly verify?: RuntimeWakeRequestVerifier
   /** Override the work id generator for deterministic tests. */
   readonly newWorkId?: () => WorkId
+}
+
+interface CreateRuntimeHandlerProgramInput {
+  /** Immutable Runtime program whose targets and manifest hash are authoritative. */
+  readonly program: RuntimeProgram
+  /** Explicit targets cannot be combined with a Runtime program. */
+  readonly targets?: never
+  /** An explicit hash cannot override a Runtime program's manifest hash. */
+  readonly manifestHash?: never
+}
+
+interface CreateRuntimeHandlerTargetsInput {
+  /** Exported `flow()` handles and `durableTask()` targets. */
+  readonly targets: readonly RuntimeHandlerTarget[]
   /** Hash of the generated runtime manifest, when codegen has produced one. */
   readonly manifestHash?: string
+  /** A Runtime program cannot be combined with explicit targets. */
+  readonly program?: never
 }
+
+/**
+ * Mutually exclusive Runtime handler inputs plus shared runtime and verifier options.
+ *
+ * Supply either an immutable `program`, or the hand-written `targets` and
+ * optional `manifestHash` form.
+ */
+export type CreateRuntimeHandlerOptions = CreateRuntimeHandlerSharedOptions &
+  (CreateRuntimeHandlerProgramInput | CreateRuntimeHandlerTargetsInput)
 
 /** Fetch-compatible runtime handler pair suitable for Next route exports. */
 export interface RuntimeFetchHandlers {
@@ -64,6 +88,18 @@ export interface RuntimeFetchHandlers {
 export function createRuntimeHandler(
   options: CreateRuntimeHandlerOptions,
 ): RuntimeFetchHandlers {
+  if (!hasRuntimeProgram(options) && options.targets === undefined) {
+    throw createRuntimeError({
+      code: 'TARGET_NOT_FOUND',
+      whatFailed:
+        'createRuntimeHandler() requires a Runtime program or an explicit target list.',
+      why: 'Neither `program` nor `targets` was provided.',
+      whatStillWorks:
+        'Runtime handlers with a generated program or explicit targets still work.',
+      nextStep:
+        'Pass `program: runtimeProgram` or `targets: []` to createRuntimeHandler().',
+    })
+  }
   const runtimeDefinition =
     options.runtime ?? getHooks().runtimeEngine ?? missingRuntime()
   if (runtimeDefinition.kind === 'host-bound') {
@@ -77,9 +113,15 @@ export function createRuntimeHandler(
     options.verify,
     runtimeDefinition.verifyWakeRequest,
   )
+  const declaration = hasRuntimeProgram(options)
+    ? {
+        targets: options.program.targets,
+        manifestHash: options.program.manifestHash,
+      }
+    : { targets: options.targets, manifestHash: options.manifestHash }
   const runtimeRef: RuntimeTargetRuntimeRef = {}
   const targets = normalizeRuntimeHandlerTargets({
-    targets: options.targets,
+    targets: declaration.targets,
     runtimeRef,
     entry: 'createRuntimeHandler()',
   })
@@ -96,7 +138,7 @@ export function createRuntimeHandler(
       return jsonResponse({
         ok: true,
         namespace: runtime.namespace,
-        manifestHash: options.manifestHash ?? null,
+        manifestHash: declaration.manifestHash ?? null,
         targets: Object.keys(targets).sort(),
       })
     },
@@ -104,6 +146,13 @@ export function createRuntimeHandler(
       return await handleWakeRequest(request, { runtime, verify })
     },
   })
+}
+
+function hasRuntimeProgram(
+  options: CreateRuntimeHandlerOptions,
+): options is CreateRuntimeHandlerSharedOptions &
+  CreateRuntimeHandlerProgramInput {
+  return options.program !== undefined
 }
 
 function resolveWakeRequestVerifier(

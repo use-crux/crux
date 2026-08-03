@@ -1,0 +1,20 @@
+---
+title: SHUTDOWN_TIMEOUT
+description: A Runtime worker operation did not settle within the shutdown bound.
+---
+
+## What failed
+
+A Runtime worker stopped future maintenance but its active tick or ownership acquisition did not settle before `timeoutMs` elapsed.
+
+## Why
+
+The worker can bound how long shutdown waits, but it cannot physically cancel external work already started by a target or store adapter.
+
+## What still works
+
+The resolved Runtime is disposed, future maintenance ticks remain stopped, and ownership is released after the active operation eventually settles.
+
+## Fix
+
+Inspect the active target or store operation. Increase `timeoutMs` only when that operation is expected to finish safely within the larger bound.

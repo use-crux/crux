@@ -34,10 +34,12 @@ export interface NormalizeRuntimeHandlerTargetsOptions {
 }
 
 /** Canonicalize Runtime target declarations without resolving executable targets. */
-export function canonicalizeRuntimeHandlerTargets(
-  targets: readonly RuntimeHandlerTarget[],
+export function canonicalizeRuntimeHandlerTargets<
+  TTarget extends RuntimeHandlerTarget,
+>(
+  targets: readonly TTarget[],
   entry = 'runtime entry',
-): readonly RuntimeHandlerTarget[] {
+): readonly TTarget[] {
   const seen = new Set<string>()
   const canonical = [...targets].sort((left, right) =>
     compareText(
@@ -64,18 +66,23 @@ export function runtimeHandlerTargetIdentity(
 export function normalizeRuntimeHandlerTargets(
   options: NormalizeRuntimeHandlerTargetsOptions,
 ): RuntimeTargetMap {
-  const registeredTargets = runtimeTargetMap(options.runtimeRef)
   const entries: Array<[string, RuntimeTarget]> = []
   const entry = options.entry ?? 'runtime entry'
-
-  for (const target of canonicalizeRuntimeHandlerTargets(
+  const canonicalTargets = canonicalizeRuntimeHandlerTargets(
     options.targets,
     entry,
-  )) {
+  )
+  const registeredTargets = canonicalTargets.some(
+    (target) => !isRuntimeTarget(target),
+  )
+    ? runtimeTargetMap(options.runtimeRef)
+    : undefined
+
+  for (const target of canonicalTargets) {
     const name = runtimeHandlerTargetIdentity(target)
     const runtimeTarget = isRuntimeTarget(target)
       ? target
-      : registeredTargets[name]
+      : registeredTargets?.[name]
     if (!runtimeTarget) throw unresolvedTargetError(name, entry)
     entries.push([name, runtimeTarget])
   }

@@ -26,6 +26,7 @@ describe("@use-crux/core runtime store public surface", () => {
     expect(typeof createRuntimeKernel).toBe("function");
     expect(typeof createOutboxDispatcher).toBe("function");
     expect(typeof createRuntime).toBe("function");
+    expect(typeof runtimePublic.createRuntimeWorker).toBe("function");
     expect(typeof durableTask).toBe("function");
     expect("task" in runtimePublic).toBe(false);
     expect(typeof node).toBe("function");
