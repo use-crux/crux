@@ -11,8 +11,12 @@ import type { EvalCoverageTargetId } from "../evaluate";
 import type { AnyEval } from "../evaluate";
 import type { NormalizedEvalTimeoutPolicy } from "../timeout-policy";
 
+const LEGACY_EVAL_INTERNAL_DESCRIPTION = "crux.eval.definition";
+
 /** Private storage key for an Eval's normalized definition. */
-export const EVAL_INTERNAL: unique symbol = Symbol("crux.eval.definition");
+export const EVAL_INTERNAL: unique symbol = Symbol.for(
+  "@use-crux/core/eval/internal-definition",
+) as never;
 
 /** Frozen callback declaration consumed by planning without invocation. */
 export interface NormalizedEvalCheck {
@@ -87,14 +91,48 @@ export interface EvalDefinitionV1 {
 export function getEvalDefinitionForInternalUse(
   evalValue: AnyEval,
 ): EvalDefinitionV1 {
-  const definition = (
-    evalValue as unknown as Record<
-      typeof EVAL_INTERNAL,
-      EvalDefinitionV1 | undefined
-    >
-  )[EVAL_INTERNAL];
+  if (!canCarryEvalDefinition(evalValue)) {
+    throw new TypeError("Expected a Crux Eval (missing internal definition).");
+  }
+  const definition =
+    (
+      evalValue as unknown as Record<
+        typeof EVAL_INTERNAL,
+        EvalDefinitionV1 | undefined
+      >
+    )[EVAL_INTERNAL] ?? getLegacyEvalDefinitionForInternalUse(evalValue);
   if (definition === undefined) {
     throw new TypeError("Expected a Crux Eval (missing internal definition).");
   }
   return definition;
+}
+
+function getLegacyEvalDefinitionForInternalUse(
+  evalValue: AnyEval,
+): EvalDefinitionV1 | undefined {
+  for (const key of Object.getOwnPropertySymbols(evalValue)) {
+    if (
+      key.description !== LEGACY_EVAL_INTERNAL_DESCRIPTION ||
+      key === EVAL_INTERNAL
+    ) {
+      continue;
+    }
+    const candidate = (evalValue as unknown as Record<symbol, unknown>)[key];
+    if (isEvalDefinitionV1(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function canCarryEvalDefinition(value: unknown): value is object {
+  return (
+    value !== null && (typeof value === "object" || typeof value === "function")
+  );
+}
+
+function isEvalDefinitionV1(value: unknown): value is EvalDefinitionV1 {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as { readonly schemaVersion?: unknown }).schemaVersion === 1
+  );
 }

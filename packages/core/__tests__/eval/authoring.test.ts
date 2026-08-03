@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
 import { caseFile, evaluate } from "../../src/eval";
 import { getEvalDefinitionForInternalUse } from "../../src/eval/internal/definition";
+import { isEval } from "../../src/eval/node/discovery";
 import { defineTimeoutAuthoringBehavior } from "./authoring-timeout.behavior";
 
 describe("evaluate()", () => {
@@ -52,6 +57,57 @@ describe("evaluate()", () => {
       tags: [],
       covers: [],
     });
+  });
+
+  it("reads an Eval definition authored by an independently loaded Core copy", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "crux-eval-core-copy-"));
+    const sourceCopy = join(tempRoot, "src");
+    await cp(new URL("../../src", import.meta.url), sourceCopy, {
+      recursive: true,
+    });
+
+    try {
+      const copiedEvaluateModule = (await import(
+        pathToFileURL(join(sourceCopy, "eval", "evaluate.ts")).href
+      )) as typeof import("../../src/eval/evaluate");
+      const task = async (input: string) => input.toUpperCase();
+      const evalValue = copiedEvaluateModule.evaluate({
+        id: "copied-core",
+        task,
+        cases: [{ id: "one", input: "hello" }],
+      });
+
+      expect(isEval(evalValue)).toBe(true);
+      expect(getEvalDefinitionForInternalUse(evalValue)).toMatchObject({
+        explicitId: "copied-core",
+        task,
+        cases: [{ id: "one", input: "hello" }],
+      });
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves lookup for legacy locally keyed Eval definitions", () => {
+    const task = async (input: string) => input;
+    const evalValue = evaluate({
+      id: "legacy-core",
+      task,
+      cases: [{ input: "hello" }],
+    });
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+    const legacyEval = {
+      _tag: "CruxEval" as const,
+      id: "legacy-core",
+    };
+    Object.defineProperty(legacyEval, Symbol("crux.eval.definition"), {
+      value: definition,
+      enumerable: false,
+    });
+
+    expect(getEvalDefinitionForInternalUse(legacyEval as never)).toBe(
+      definition,
+    );
   });
 
   it("carries a frozen Current-first definition without cloning user-owned values", () => {
