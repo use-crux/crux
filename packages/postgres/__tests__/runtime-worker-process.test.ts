@@ -15,7 +15,7 @@ let fixtureNumber = 0
 let workerNumber = 0
 
 describe('generated Runtime worker process', () => {
-  let database: PostgresTestDatabase
+  let database: PostgresTestDatabase | undefined
   const roots: string[] = []
 
   beforeAll(async () => {
@@ -27,7 +27,7 @@ describe('generated Runtime worker process', () => {
 
   afterAll(async () => {
     await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
-    await database.close()
+    await database?.close()
   })
 
   afterEach(async () => {
@@ -35,7 +35,7 @@ describe('generated Runtime worker process', () => {
   })
 
   it('rejects stale artifacts and releases durable ownership on signal for restart', async () => {
-    const fixture = await projectFixture(database.url)
+    const fixture = await projectFixture(testDatabase().url)
     roots.push(fixture.root)
     const first = startWorker(fixture.root)
     await waitForOwnership(first)
@@ -63,7 +63,7 @@ describe('generated Runtime worker process', () => {
   })
 
   it('handles SIGTERM deterministically while the configured host is loading', async () => {
-    const fixture = await projectFixture(database.url, true)
+    const fixture = await projectFixture(testDatabase().url, true)
     roots.push(fixture.root)
     const marker = join(fixture.root, 'startup.marker')
     const worker = startWorker(fixture.root, { CRUX_RUNTIME_WORKER_STARTUP_MARKER: marker })
@@ -76,6 +76,11 @@ describe('generated Runtime worker process', () => {
 
     await expect(exitOf(worker)).resolves.toEqual({ code: 0, signal: null, stderr: '' })
   })
+
+  function testDatabase(): PostgresTestDatabase {
+    if (!database) throw new Error('PostgreSQL test database is unavailable.')
+    return database
+  }
 
   async function projectFixture(
     url: string,
