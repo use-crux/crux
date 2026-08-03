@@ -1,5 +1,5 @@
 /**
- * Private immutable definition carried by every inert Eval.
+ * Global internal immutable definition carried by every inert Eval.
  *
  * @internal
  * @module
@@ -13,10 +13,10 @@ import type { NormalizedEvalTimeoutPolicy } from "../timeout-policy";
 
 const LEGACY_EVAL_INTERNAL_DESCRIPTION = "crux.eval.definition";
 
-/** Private storage key for an Eval's normalized definition. */
+/** Global internal storage key for an Eval's normalized definition. */
 export const EVAL_INTERNAL: unique symbol = Symbol.for(
   "@use-crux/core/eval/internal-definition",
-) as never;
+);
 
 /** Frozen callback declaration consumed by planning without invocation. */
 export interface NormalizedEvalCheck {
@@ -107,14 +107,21 @@ export function getEvalDefinitionForInternalUse(
   return definition;
 }
 
+/** Return whether a value is an Eval authored by a compatible Core contract. */
+export function isEvalForInternalUse(value: unknown): value is AnyEval {
+  try {
+    getEvalDefinitionForInternalUse(value as AnyEval);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getLegacyEvalDefinitionForInternalUse(
   evalValue: AnyEval,
 ): EvalDefinitionV1 | undefined {
   for (const key of Object.getOwnPropertySymbols(evalValue)) {
-    if (
-      key.description !== LEGACY_EVAL_INTERNAL_DESCRIPTION ||
-      key === EVAL_INTERNAL
-    ) {
+    if (key.description !== LEGACY_EVAL_INTERNAL_DESCRIPTION) {
       continue;
     }
     const candidate = (evalValue as unknown as Record<symbol, unknown>)[key];

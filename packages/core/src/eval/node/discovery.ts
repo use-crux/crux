@@ -4,7 +4,10 @@ import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnyEval } from "../evaluate";
-import { getEvalDefinitionForInternalUse } from "../internal/definition";
+import {
+  getEvalDefinitionForInternalUse,
+  isEvalForInternalUse,
+} from "../internal/definition";
 
 export interface EvalModule {
   readonly relativeFile: string;
@@ -298,12 +301,7 @@ function duplicateIdErrors(
 }
 
 export function isEval(value: unknown): value is AnyEval {
-  try {
-    getEvalDefinitionForInternalUse(value as AnyEval);
-    return true;
-  } catch {
-    return false;
-  }
+  return isEvalForInternalUse(value);
 }
 
 function wildcardPattern(value: string): RegExp {

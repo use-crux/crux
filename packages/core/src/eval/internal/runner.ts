@@ -13,6 +13,7 @@ import type { AnyEval } from "../evaluate";
 import {
   EVAL_INTERNAL,
   getEvalDefinitionForInternalUse,
+  isEvalForInternalUse,
   type EvalDefinitionV1,
   type RawEvalCase,
 } from "./definition";
@@ -51,17 +52,7 @@ export type { EvalPlan, EvalRun, EvalTaskHostRequest } from "./types";
 /** Worker/Core compatibility marker checked before project discovery. */
 export const EVAL_RUNNER_PROTOCOL = 1 as const;
 
-/** Return whether a module export is an Eval authored by this Core contract. */
-export function isEvalForInternalUse(value: unknown): value is AnyEval {
-  try {
-    getEvalDefinitionForInternalUse(value as AnyEval);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export { getEvalDefinitionForInternalUse };
+export { getEvalDefinitionForInternalUse, isEvalForInternalUse };
 export type { AnyEval, EvalDefinitionV1, RawEvalCase };
 
 /** Canonical Case-input fingerprint used when an explicit id is absent. */
