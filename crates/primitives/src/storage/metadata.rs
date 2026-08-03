@@ -55,8 +55,8 @@ pub(crate) fn bundle_metadata(
                     .map(|reference| Value::String(reference.name)),
             ),
             (
-                "vectorsVariable",
-                refs.vectors
+                "searchVariable",
+                refs.search
                     .clone()
                     .map(|reference| Value::String(reference.name)),
             ),
@@ -178,8 +178,8 @@ fn storage_facts(
     );
     insert_string(
         &mut facts,
-        "vectors",
-        refs.vectors.map(|reference| reference.name),
+        "search",
+        refs.search.map(|reference| reference.name),
     );
     insert_string(
         &mut facts,

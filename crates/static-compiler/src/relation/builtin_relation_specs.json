@@ -1032,9 +1032,9 @@
     "runtimeJoin": false
   },
   {
-    "type": "rag.retriever.uses_vector_store",
+    "type": "rag.retriever.uses_search_store",
     "fromKinds": ["rag.retriever"],
-    "toKinds": ["storage.vectorStore"],
+    "toKinds": ["storage.searchStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
@@ -1288,9 +1288,9 @@
     "runtimeJoin": false
   },
   {
-    "type": "storage.bundle.uses_vector_store",
+    "type": "storage.bundle.uses_search_store",
     "fromKinds": ["storage.bundle"],
-    "toKinds": ["storage.vectorStore"],
+    "toKinds": ["storage.searchStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
@@ -1400,9 +1400,9 @@
     "runtimeJoin": false
   },
   {
-    "type": "workspace.uses_vector_store",
+    "type": "workspace.uses_search_store",
     "fromKinds": ["workspace"],
-    "toKinds": ["storage.vectorStore"],
+    "toKinds": ["storage.searchStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
