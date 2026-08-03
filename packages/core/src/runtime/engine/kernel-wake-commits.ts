@@ -10,7 +10,6 @@
 import type { LeaseToken, WorkId } from "../ports/ids";
 import type { FlowSnapshot } from "../ports/state";
 import type { RuntimeStoreTransaction } from "../store";
-import type { CruxRuntimeErrorCode } from "./errors";
 import type { RuntimeTargetOutcome, RuntimeWakeResult } from "./kernel-types";
 import { recordSuspensionInTransaction } from "./kernel-events";
 import {
@@ -36,22 +35,12 @@ import {
   settleCompletedSignalWork,
   settleFailedSignalWork,
 } from "./signal-delivery-settlement";
-/** Serialized failure details carried into a wake failure composite. */
-export type WakeFailureInput =
-  | {
-      /** Dead-letter ordinary failures after attempts are exhausted. */
-      readonly kind: "dead-letter";
-      /** Message preserved from the original thrown value. */
-      readonly message: string;
-    }
-  | {
-      /** Block public runtime diagnostics without retrying. */
-      readonly kind: "blocked";
-      /** Stable runtime error code that caused the terminal block. */
-      readonly code: CruxRuntimeErrorCode;
-      /** Message preserved from the original thrown value. */
-      readonly message: string;
-    };
+import {
+  applicationWorkFailure,
+  type WakeFailureInput,
+} from "./application-work-failure";
+
+export type { WakeFailureInput } from "./application-work-failure";
 interface FailWorkOptions {
   readonly runComposite: RuntimeCompositeRunner;
   readonly work: RuntimeWorkItem;
@@ -192,24 +181,15 @@ export async function failWorkInTransaction(
     input.work,
     input.leaseToken,
   );
-  const failedWork =
-    input.failure.kind === "dead-letter"
-      ? transition(current, {
-          status: "dead-letter",
-          lastError: {
-            code: "WORK_DEAD_LETTERED",
-            message: input.failure.message,
-            at: deps.now(),
-          },
-        })
-      : transition(current, {
-          status: "blocked",
-          lastError: {
-            code: input.failure.code,
-            message: input.failure.message,
-            at: deps.now(),
-          },
-        });
+  const failedWork = transition(current, {
+    status: input.failure.kind === "dead-letter" ? "dead-letter" : "blocked",
+    lastError: await applicationWorkFailure(
+      tx,
+      current,
+      input.failure,
+      deps.now,
+    ),
+  });
 
   await settleFailedSignalWork(
     tx,

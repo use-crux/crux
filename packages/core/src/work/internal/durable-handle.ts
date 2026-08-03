@@ -10,6 +10,7 @@ import type { CancelReceipt } from "../cancellation";
 import type { DetachReceipt } from "../detachment";
 import type { ExecutionStats } from "../handle";
 import type { WorkStatus } from "../status";
+import { durableWorkResult } from "./durable-result";
 
 /** Project durable Runtime records into the canonical public Work handle. */
 export function durableWorkHandle<TResult>(
@@ -36,20 +37,12 @@ export function durableWorkHandle<TResult>(
     id,
     effects,
     status,
-    result: () => unavailable<TResult>("result()", id),
+    result: () => durableWorkResult<TResult>(runtime, work.workId),
     progress: () => unavailable<void>("progress()", id),
     cancel: () => unavailable<CancelReceipt>("cancel()", id),
     detach: () => unavailable<DetachReceipt>("detach()", id),
     stream: async function* () {
-      const current = await status();
-      yield Object.freeze({
-        id: `${id}:snapshot`,
-        cursor: "snapshot",
-        workId: id,
-        occurredAt: current.updatedAt,
-        type: "work.snapshot" as const,
-        status: current,
-      });
+      await unavailable<void>("stream()", id);
     },
     stats: () => unavailable<ExecutionStats>("stats()", id),
   });
@@ -122,10 +115,11 @@ function unavailable<TResult>(api: string, id: string): Promise<TResult> {
     createRuntimeError({
       code: "CAPABILITY_MISSING",
       whatFailed: `${api} is not available for durable Work \`${id}\` in this runtime slice.`,
-      why: "This host currently provides durable admission, status, and reconnection only.",
-      whatStillWorks: "The Work remains durably queued and reconnectable.",
+      why: "This host has no durable implementation for this capability.",
+      whatStillWorks:
+        "status(), result(), and reconnection remain available for the Work.",
       nextStep:
-        "Use status() until the durable control and result slice is installed.",
+        "Use status() or result() until the requested durable capability is installed.",
     }),
   );
 }

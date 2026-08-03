@@ -160,6 +160,7 @@ import {
   flowResultOperation,
   suspendedFlowResultPayload,
 } from "./result";
+import { persistRuntimeFlowWorkResult } from "./runtime-work-result";
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -790,8 +791,13 @@ async function executeFlow<
 
     if (runtimeExecution) {
       runtimeExecution.fingerprint.complete();
+      const resultRef = await persistRuntimeFlowWorkResult(
+        runtimeExecution,
+        result,
+      );
       runtimeExecution.outcome = {
         status: "completed",
+        ...(resultRef ? { resultRef } : {}),
         flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
           status: "completed",
           effects: requireFlowEffectBoundary(effectBoundary).ref,

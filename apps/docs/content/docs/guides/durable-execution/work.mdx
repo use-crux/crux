@@ -71,20 +71,32 @@ import { getWork } from "@use-crux/core";
 
 const work = await workHost.run(() => getWork(reviewDocument, workId));
 const status = await work.status();
+const result = await work.result();
 ```
 
 Passing another target rejects with `WORK_TARGET_MISMATCH`. A Work ID and an
 idempotency key are identifiers, not authorization; authenticate and authorize
 each application request before calling either API.
 
+`result()` may be called immediately after acceptance. It waits while the
+generated Runtime worker executes the pinned Flow definition, then returns the
+Flow's exact inferred output. The terminal Work state and its immutable result
+reference commit together. Replayed wakes observe that terminal state without
+running another logical occurrence or replacing the result.
+
+A Runtime-supported Flow barrier may move the same Work through `suspended`
+before it resumes and completes. Terminal failures expose only the safe public
+Work failure summary; thrown provider and user details are not retained there.
+
 ## Current control boundary
 
-This release slice provides durable acceptance, `status()`, and reconnection
-for memory-backed Runtime storage. The remaining canonical handle operations,
-terminal result publication, Flow suspension/resumption proof, and durable
-provider conformance land with the following Work slices. Until then,
-`result()`, `progress()`, `cancel()`, `detach()`, and `stats()` reject with
-`CAPABILITY_MISSING`; `stream()` yields its current safe snapshot.
+This release slice provides acceptance, generated-worker execution,
+`status()`, `result()`, reconnection, and Flow suspension/resumption for the
+memory-backed Runtime store. Durable provider conformance, result retention,
+and the remaining canonical handle controls land with later Work slices.
+Until then, `progress()`, `cancel()`, `detach()`, and `stats()` reject with
+`CAPABILITY_MISSING`; iterating `stream()` rejects with the same explicit
+diagnostic until cursor-backed Work events are implemented.
 
 Use `flow.run()` when the request should await foreground completion. Use
 `defer()` for resultless follow-up work. Replay-safe child Work created inside

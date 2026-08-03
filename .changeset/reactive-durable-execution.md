@@ -79,3 +79,12 @@ same Work, conflicting input rejects, target namespaces remain independent,
 and `getWork()` validates the exported target. Process-local Agent Work uses
 the shared safe lifecycle and control types privately without promoting its
 retained-owner registry to storage.
+
+Execute accepted application Flow Work through the generated Runtime worker
+and publish its canonical write-once result reference with the existing fenced
+terminal commit. `WorkHandle.result()` now joins the exact inferred output from
+both original and reconnected handles, duplicate wakes retain one terminal
+result, Runtime Flow suspension preserves the pinned definition/result
+obligation through resume, and terminal Work failures persist only safe public
+summaries. Progress, cancellation, detachment, statistics, and live event
+streaming remain explicitly unsupported for durable Work in this slice.

@@ -97,6 +97,12 @@ export async function recordSuspensionInTransaction(
     flowId: input.flowId,
     workId: input.workId,
     targetId: input.targetId,
+    ...(currentSnapshot?.definition
+      ? { definition: currentSnapshot.definition }
+      : {}),
+    ...(currentSnapshot?.resultObligation
+      ? { resultObligation: currentSnapshot.resultObligation }
+      : {}),
     namespace: input.namespace,
     status: "suspended",
     input: input.snapshot.input,

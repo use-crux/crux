@@ -30,7 +30,16 @@ export interface WorkHandle<TResult> {
   readonly effects: EffectScopeRef;
   /** Read the latest safe lifecycle snapshot. */
   status(): Promise<WorkStatus>;
-  /** Wait for and return the exact successful Work result. */
+  /**
+   * Wait for and return the exact successful Work result.
+   *
+   * @remarks The Promise observes this accepted occurrence; reconnecting the
+   * same Work never starts another execution.
+   * @returns The target's exact inferred output after terminal publication.
+   * @throws `WorkFailedError` for a safe terminal failure.
+   * @throws `WorkCancelledError` when Work terminalizes through cancellation.
+   * @throws `WorkResultExpiredError` when the terminal payload is no longer retained.
+   */
   result(): Promise<TResult>;
   /** Replace the current bounded progress snapshot for live Work. */
   progress(update: WorkProgress): Promise<void>;
