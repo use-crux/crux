@@ -68,14 +68,14 @@ Parsers turn bytes into structured `parts`. The source decides the format from f
 | `text`     | `txt`, `unknown` | `text` part            | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them.      |
 | `markdown` | `md`             | `text`, `table` parts  | Parses Markdown + GFM. Preserves heading paths and table rows.                                          |
 | `html`     | `html`           | `text`, `table` parts  | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables.                          |
-| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; visual-only pages can use the caller's `media.describe` operation.                   |
+| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; retains textless pages with warnings and optionally enriches them through `media.describe`. |
 | `image`    | `image`          | `text` parts           | Uses the explicitly bound `media.describe` operation.                                                   |
 | `audio`    | `audio`          | `text` parts           | Uses `media.transcribe` and preserves measured seconds intervals.                                       |
 | `video`    | `video`          | `text` parts           | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly.   |
 | `csv`      | `csv`            | `table` part           | Produces one table with rows, columns, and row range metadata.                                          |
 | `json`     | `json`           | `json` parts           | Produces one part per JSON path, including nested objects and arrays.                                   |
 | `docx`     | `docx`           | `text`, `table` parts  | Converts DOCX to HTML with Mammoth, then uses the HTML parser. Mammoth warnings become ingest warnings. |
-| `xlsx`     | `xlsx`           | `sheet`, `table` parts | Uses ExcelJS. Produces a sheet part and a table part for each non-empty worksheet.                      |
+| `xlsx`     | `xlsx`           | `sheet`, `table` parts | Uses ExcelJS. Retains exact source coordinates, formulas, and number-format-rendered cell values.       |
 
 Override parsers source-locally when a format needs domain-specific handling:
 

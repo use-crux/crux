@@ -17,7 +17,7 @@ Fetches the URL with `fetch`, inspects the `Content-Type` header, and:
 
 - **HTML** (`text/html`, or content that looks like HTML) → extracts title, text blocks, headings, lists, code, and tables
 - **Plain text / Markdown / CSV / JSON** → parses into structured parts
-- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts; visual pages can use `media.describe`
+- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → retains every page; textless pages warn and can use `media.describe`
 - **Image/audio/video** → derives ordinary text through explicitly bound `media.describe` / `media.transcribe` operations
 - **DOCX / XLSX** (`.docx`, `.xlsx`) → parses remote Office files when the URL extension identifies the format
 

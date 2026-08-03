@@ -22,14 +22,14 @@ import type {
 | `.txt`             | Plain text | Loaded verbatim                                                     |
 | `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables       |
 | `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables      |
-| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.describe`          |
+| `.pdf`             | PDF        | Retains every page; textless pages warn and can use `media.describe` |
 | image formats      | Image      | Derives text through `media.describe`                               |
 | audio formats      | Audio      | Derives text and time segments through `media.transcribe`           |
 | video formats      | Video      | Uses explicitly bound `media.describe`, `media.transcribe`, or both |
 | `.csv`             | CSV        | Extracts a table part                                               |
 | `.json`            | JSON       | Extracts JSON path parts                                            |
 | `.docx`            | DOCX       | Extracts text and tables through Mammoth                            |
-| `.xlsx`            | XLSX       | Extracts sheet and table parts through ExcelJS                      |
+| `.xlsx`            | XLSX       | Extracts source coordinates and displayed values through ExcelJS   |
 
 The file extension determines the parser. For other formats, pre-extract to text, provide a custom parser, or use `textSource()`.
 
