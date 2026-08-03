@@ -281,11 +281,14 @@ export const xlsxParser: IngestParser = {
       const rows: string[][] = []
       const sourceRows: IngestSpreadsheetRow[] = []
       worksheet.eachRow({ includeEmpty: false }, (row) => {
-        let columnEnd = sourceRange.columnStart
-        row.eachCell((_, column) => {
-          columnEnd = Math.max(columnEnd, column)
-        })
-        const cells = Array.from({ length: columnEnd - sourceRange.columnStart + 1 }, (_, index) => {
+        const rowSourceRange = {
+          address: `${row.getCell(sourceRange.columnStart).address}:${row.getCell(sourceRange.columnEnd).address}`,
+          rowStart: row.number,
+          rowEnd: row.number,
+          columnStart: sourceRange.columnStart,
+          columnEnd: sourceRange.columnEnd,
+        }
+        const cells = Array.from({ length: sourceRange.columnEnd - sourceRange.columnStart + 1 }, (_, index) => {
           const column = sourceRange.columnStart + index
           const cell = row.getCell(column)
           return {
@@ -297,7 +300,12 @@ export const xlsxParser: IngestParser = {
           }
         })
         rows.push(cells.map((cell) => cell.value))
-        sourceRows.push({ row: row.number, cells })
+        sourceRows.push({
+          row: row.number,
+          address: rowSourceRange.address,
+          sourceRange: rowSourceRange,
+          cells,
+        })
       })
 
       if (rows.length === 0) return

@@ -84,6 +84,10 @@ export interface IngestSpreadsheetCell {
 export interface IngestSpreadsheetRow {
   /** One-based worksheet row. */
   row: number
+  /** A1 row range represented by this emitted row. */
+  address: string
+  /** Exact worksheet row bounds represented by this emitted row. */
+  sourceRange: IngestSpreadsheetRange
   cells: IngestSpreadsheetCell[]
 }
 

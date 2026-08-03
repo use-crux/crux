@@ -610,6 +610,71 @@ describe('@use-crux/ingest structured sources', () => {
     expect(table?.content).toBe('Plan | Price\nPro | 20')
   })
 
+  it('retains xlsx source coordinates for sparse cells across the sheet range', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'sparse-cells.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('SparseCells')
+    sheet.getCell('B2').value = 'Plan'
+    sheet.getCell('D2').value = 'Price'
+    sheet.getCell('B4').value = 'Pro'
+    sheet.getCell('D5').value = 20
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rowStart: 2,
+      rowEnd: 5,
+      rows: [
+        ['Plan', '', 'Price'],
+        ['Pro', '', ''],
+        ['', '', '20'],
+      ],
+      sourceRange: {
+        address: 'B2:D5',
+        rowStart: 2,
+        rowEnd: 5,
+        columnStart: 2,
+        columnEnd: 4,
+      },
+      sourceRows: [
+        {
+          row: 2,
+          address: 'B2:D2',
+          sourceRange: { address: 'B2:D2', rowStart: 2, rowEnd: 2, columnStart: 2, columnEnd: 4 },
+          cells: [
+            { row: 2, column: 2, address: 'B2', value: 'Plan' },
+            { row: 2, column: 3, address: 'C2', value: '' },
+            { row: 2, column: 4, address: 'D2', value: 'Price' },
+          ],
+        },
+        {
+          row: 4,
+          address: 'B4:D4',
+          sourceRange: { address: 'B4:D4', rowStart: 4, rowEnd: 4, columnStart: 2, columnEnd: 4 },
+          cells: [
+            { row: 4, column: 2, address: 'B4', value: 'Pro' },
+            { row: 4, column: 3, address: 'C4', value: '' },
+            { row: 4, column: 4, address: 'D4', value: '' },
+          ],
+        },
+        {
+          row: 5,
+          address: 'B5:D5',
+          sourceRange: { address: 'B5:D5', rowStart: 5, rowEnd: 5, columnStart: 2, columnEnd: 4 },
+          cells: [
+            { row: 5, column: 2, address: 'B5', value: '' },
+            { row: 5, column: 3, address: 'C5', value: '' },
+            { row: 5, column: 4, address: 'D5', value: '20' },
+          ],
+        },
+      ],
+    })
+    expect(table?.content).toBe('Plan |  | Price\nPro |  | \n |  | 20')
+  })
+
   it('retains xlsx displayed formula values, expressions, and ranges', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'formulas.xlsx')
