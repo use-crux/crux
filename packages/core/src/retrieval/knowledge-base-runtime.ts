@@ -38,6 +38,7 @@ import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import type { Retriever } from './types'
 import type { KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import type { RetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
 export type KnowledgeBaseIndexInput = readonly KnowledgeBaseIndexItem[] | AsyncIterable<KnowledgeBaseIndexItem>
 
@@ -95,6 +96,8 @@ export interface KnowledgeBaseRuntimeConfig<TModality extends EmbeddingModality 
   pipeline?: IndexingPipeline
   /** Connected knowledge communities configuration. */
   communities?: CommunitiesConfig
+  /** Internal retained refresh host shared with the public communities surface. */
+  communityRefreshHost?: RetainedCommunityRefreshHost
   /** Metadata schema used to validate indexed metadata. */
   metadataSchema?: z.ZodType<unknown>
   /** Indexing cache configuration. */
@@ -145,6 +148,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     namespace: config.namespace,
     pipeline: config.pipeline,
     communities: config.communities,
+    communityRefreshHost: config.communityRefreshHost,
     retention,
   })
 

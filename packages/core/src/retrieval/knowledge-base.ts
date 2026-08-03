@@ -40,6 +40,7 @@ import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from 
 import type { AssertionStage } from '../knowledge/assertions/assertions'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
 import type { KnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
+import { createRetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
 import type { Context } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
@@ -218,8 +219,19 @@ function createKnowledgeBaseHandle<
   config: KnowledgeBaseConfig<TMetadataSchema, TModality> & { namespace: string },
   includeScope: boolean,
 ): KnowledgeBase<TMetadataSchema, TModality> {
-  const runtime = createKnowledgeBaseRuntime(config)
   const records = config.records ?? config.storage?.records
+  const communityRefreshHost = config.communities && records
+    ? createRetainedCommunityRefreshHost({
+        records,
+        ...(config.storage?.assets ? { assets: config.storage.assets } : {}),
+        config: config.communities,
+        ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
+      })
+    : undefined
+  const runtime = createKnowledgeBaseRuntime({
+    ...config,
+    ...(communityRefreshHost ? { communityRefreshHost } : {}),
+  })
   const communities = createRecipeCommunitiesBinding({
     records,
     assets: config.storage?.assets,
@@ -227,6 +239,7 @@ function createKnowledgeBaseHandle<
     namespace: config.namespace,
     config: config.communities,
     retention: config.lifecycle?.retention,
+    ...(communityRefreshHost ? { refreshHost: communityRefreshHost } : {}),
   })
 
   const handle = {

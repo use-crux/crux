@@ -127,6 +127,15 @@ Returns:
 | `"ready"` | Current pointer matches view revision, graph generation, strategy fingerprint, and has no dirty sources. |
 | `"stale"` | Lease is stale, pointer metadata changed, or dirty sources exist. |
 
+After `index()`, `reindex()`, or `remove()` marks communities dirty, Crux
+schedules a retained refresh when the mutation runs inside a defer-capable
+execution boundary. While that retained refresh is pending in the same process,
+`status()` returns `"building"`.
+
+If no defer-capable boundary is active, scheduling is skipped and the stale
+state remains visible. Indexed retrieval remains correct; community reports
+refresh when a caller awaits `prepare()` or `reports()`.
+
 `status()` throws `Error("knowledgeBase().communities requires record storage.")`
 without record storage.
 
@@ -139,6 +148,10 @@ without record storage.
 Without a refresh host, `prepare()` builds communities in process. With a
 refresh host, it calls `refreshHost.ensure(descriptor)`.
 
+The built-in retained refresh host joins a scheduled background refresh when
+one exists. Otherwise, `prepare()` performs the in-process refresh, preserving
+the existing readiness contract.
+
 ```ts
 interface CommunityBuildDescriptor {
   readonly indexerId: string;
@@ -148,7 +161,8 @@ interface CommunityBuildDescriptor {
 }
 
 interface CommunityRefreshHost {
-  ensure(descriptor: CommunityBuildDescriptor): Promise<void>;
+  ensure(descriptor: CommunityBuildDescriptor, options?: { readonly force?: boolean }): Promise<void>;
+  hasPending?(descriptor: CommunityBuildDescriptor): boolean;
 }
 ```
 
