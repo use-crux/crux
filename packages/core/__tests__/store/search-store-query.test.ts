@@ -53,7 +53,7 @@ describe('SearchStore.search', () => {
     expect(result[0]?.key).toBe('k1')
   })
 
-  it('throws for invalid query modes at runtime', async () => {
+  it('throws for invalid query shapes at runtime', async () => {
     const search = inMemorySearchStore()
 
     await expect(search.search({} as never)).rejects.toThrow('Search query requires one to three legs')

@@ -9,7 +9,11 @@ describeSearchStoreConformance(
     name: 'upstashSearchStore',
     prepare: () => {
       const { index } = createFakeUpstashSearchIndex()
-      return upstashSearchStore({ index, namespace: 'docs' })
+      return upstashSearchStore({
+        index,
+        namespace: 'docs',
+        capabilities: { legs: { sparse: true } },
+      })
     },
   },
   { describe, expect, it },
@@ -18,7 +22,11 @@ describeSearchStoreConformance(
 describe('upstashSearchStore', () => {
   it('rejects unsupported filter values before querying Upstash', async () => {
     const { index, namespace } = createFakeUpstashSearchIndex()
-    const search = upstashSearchStore({ index, namespace: 'docs' })
+    const search = upstashSearchStore({
+      index,
+      namespace: 'docs',
+      capabilities: { legs: { sparse: true } },
+    })
 
     await expect(
       search.search({
@@ -39,7 +47,11 @@ describe('upstashSearchStore', () => {
 
   it('queries dense and sparse legs separately and returns raw per-leg matches', async () => {
     const { index, namespace } = createFakeUpstashSearchIndex()
-    const search = upstashSearchStore({ index, namespace: 'docs' })
+    const search = upstashSearchStore({
+      index,
+      namespace: 'docs',
+      capabilities: { legs: { sparse: true } },
+    })
     await search.upsert([
       { key: 'a', dense: [1, 0], sparse: { indices: [1], values: [0.2] } },
       { key: 'b', dense: [0.9, 0.1], sparse: { indices: [1], values: [1] } },

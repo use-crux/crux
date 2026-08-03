@@ -2,7 +2,7 @@ import { StorageError, type StorageSetupPort } from '@use-crux/core/storage'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { postgresRecordStore, postgresSearchStore, postgresStorage } from '../src/index'
-import { sparsePayloadSql } from '../src/storage/validation'
+import { normalizeSearchRecord, sparsePayloadSql } from '../src/storage/validation'
 
 describe('PostgreSQL storage validation and SQL shaping', () => {
   it('requires positive configured dimensions', () => {
@@ -14,6 +14,15 @@ describe('PostgreSQL storage validation and SQL shaping', () => {
 
   it('converts zero-based sparse indices to sorted one-based sparsevec text', () => {
     expect(sparsePayloadSql({ indices: [4, 0, 2], values: [5, 1, 3] }, 8)).toBe('{1:1,3:3,5:5}/8')
+  })
+
+  it('accepts indexed content when lexical storage is disabled', () => {
+    expect(
+      normalizeSearchRecord(
+        { key: 'docs:a', content: 'Stored for lexical-capable adapters.', dense: [1, 0] },
+        { dimensions: 2, lexical: false },
+      ),
+    ).toMatchObject({ key: 'docs:a', content: 'Stored for lexical-capable adapters.', dense: [1, 0] })
   })
 
   it('validates record JSON, filters, keys, TTL, cursors, and options before SQL', async () => {

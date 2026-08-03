@@ -1,7 +1,10 @@
 ---
 '@use-crux/core': minor
 '@use-crux/indexer': minor
+'@use-crux/local': minor
 '@use-crux/postgres': minor
+'@use-crux/upstash': minor
+'@use-crux/convex': minor
 ---
 
 Add the new `@use-crux/core/knowledge` entrypoint as the canonical home for `knowledgeBase`, add `knowledgeBase` pipeline config, and add an inert fingerprinted derive slot to `indexingPipeline`.
@@ -47,7 +50,9 @@ redacts adapter findings, and releases only adapter-owned resources.
 Rename the Core retrieval index contract to `SearchStore`, making
 `storage.search` and `inMemorySearchStore()` canonical, removing the pre-launch
 retrieval index API, and adding composable dense, sparse, and lexical retrieval
-plans with normalized RRF match details.
+plans with normalized RRF match details. PostgreSQL adds native full-text search
+and server-side RRF, Upstash exposes `upstashSearchStore()`, and Convex storage
+requires an explicit search store instead of advertising an unsupported one.
 
 Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
 

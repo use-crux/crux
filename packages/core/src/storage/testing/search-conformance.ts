@@ -81,7 +81,7 @@ export function describeSearchStoreConformance(
       const hits = await search.search({
         legs: [
           { kind: "dense", vector: [1, 0], candidates: 3 },
-          { kind: "sparse", vector: { indices: [1], values: [1] }, candidates: 2 },
+          { kind: "sparse", vector: { indices: [1], values: [1] }, candidates: 3 },
         ],
         fusion: { strategy: "rrf", k: 60 },
         limit: 3,

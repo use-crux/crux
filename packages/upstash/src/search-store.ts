@@ -14,7 +14,6 @@ import type {
   SearchQuery,
   SearchRecord,
   SearchStore,
-  SearchStoreCapabilities,
   SparseVector,
 } from '@use-crux/core/storage'
 import { upstashFilter } from './vector-filter'
@@ -24,6 +23,7 @@ import {
   normalizeUpsertRecord,
   searchHitMetadata,
   type NormalizedSearchLeg,
+  type UpstashSearchStoreCapabilityConfig,
 } from './search-store-contract'
 
 interface UpstashQueryData {
@@ -73,7 +73,7 @@ export interface UpstashSearchStoreConfig {
    * Upstash index mode is deployment configuration, so apps may narrow dense
    * or sparse support when the backing index is not hybrid-capable.
    */
-  capabilities?: Partial<SearchStoreCapabilities>
+  capabilities?: UpstashSearchStoreCapabilityConfig
 }
 
 /** Create a standalone Crux `SearchStore` backed by Upstash Vector. */
@@ -179,12 +179,6 @@ function fuseRrf(
 
 function compareHits(a: SearchHit, b: SearchHit): number {
   if (b.score !== a.score) return b.score - a.score
-  const firstDenseA = a.matches.find((match) => match.kind === 'dense')?.rank ?? Number.POSITIVE_INFINITY
-  const firstDenseB = b.matches.find((match) => match.kind === 'dense')?.rank ?? Number.POSITIVE_INFINITY
-  if (firstDenseA !== firstDenseB) return firstDenseA - firstDenseB
-  const bestRankA = Math.min(...a.matches.map((match) => match.rank))
-  const bestRankB = Math.min(...b.matches.map((match) => match.rank))
-  if (bestRankA !== bestRankB) return bestRankA - bestRankB
   return a.key.localeCompare(b.key)
 }
 

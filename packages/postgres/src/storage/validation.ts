@@ -123,7 +123,7 @@ export function normalizeListOptions(options?: RecordListOptions): {
 
 export function normalizeSearchRecord(record: SearchRecord, options: SearchPayloadOptions): NormalizedSearchRecord {
   assertKey(record.key, 'Search')
-  const content = record.content === undefined ? undefined : cloneContent(record.content, options.lexical)
+  const content = record.content === undefined ? undefined : cloneContent(record.content)
   const dense = record.dense === undefined ? undefined : cloneDense(record.dense, options.dimensions)
   const sparse = record.sparse === undefined ? undefined : cloneSparse(record.sparse, options.sparseDimensions)
   if (content === undefined && !dense && !sparse) {
@@ -153,7 +153,8 @@ export function normalizeSearchQuery(
   const seen = new Set<string>()
   const defaultCandidates = Math.max(limit, Math.min(1000, Math.max(50, 4 * limit)))
   const legs = input.legs.map((leg) => normalizeSearchLeg(leg, options, capabilities, limit, defaultCandidates, seen))
-  const fusion = legs.length < 2 ? undefined : normalizeFusion(input.fusion, capabilities)
+  const authoredFusion = input.fusion === undefined ? undefined : normalizeFusion(input.fusion, capabilities)
+  const fusion = legs.length < 2 ? undefined : (authoredFusion ?? normalizeFusion(undefined, capabilities))
   return {
     legs,
     ...(fusion ? { fusion } : {}),
@@ -229,10 +230,7 @@ function normalizeCandidates(value: unknown, limit: number, fallback: number): n
   return value
 }
 
-function cloneContent(value: unknown, lexical: boolean): string {
-  if (!lexical) {
-    throw new StorageError('unsupported_capability', 'This PostgreSQL search store does not support lexical content.')
-  }
+function cloneContent(value: unknown): string {
   if (typeof value !== 'string') {
     throw new StorageError('invalid_value', 'Search record content must be a string.')
   }

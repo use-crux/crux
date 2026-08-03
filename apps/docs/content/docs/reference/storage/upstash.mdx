@@ -91,11 +91,11 @@ Upstash index mode is deployment configuration, so the adapter defaults conserva
 | Dense leg     | `true`       | Dense vectors are the default Upstash path.                     |
 | Sparse leg    | `false`      | Opt in only when the backing index supports sparse vectors.     |
 | Lexical leg   | `false`      | Upstash Vector is not the PostgreSQL lexical implementation.    |
-| Fusion        | `[]`         | Configure `['rrf']` when the backing index supports fusion.     |
+| Fusion        | `['rrf']`    | The adapter performs deterministic RRF across query legs.       |
 | Filters       | `'pre'`      | Upstash applies supported metadata filters before top-k search. |
 | Consistency   | `'eventual'` | Matches managed vector-index behavior.                          |
 
-Declare sparse or fusion support explicitly:
+Declare sparse support explicitly:
 
 ```ts
 const search = upstashSearchStore({
@@ -103,7 +103,6 @@ const search = upstashSearchStore({
   namespace: "product-docs",
   capabilities: {
     legs: { sparse: true },
-    fusion: ["rrf"],
   },
 });
 ```

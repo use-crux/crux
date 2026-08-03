@@ -179,7 +179,6 @@ function normalizeSearchLeg(value: unknown, limit: number): NormalizedSearchLeg 
 }
 
 function normalizeFusion(value: unknown, legCount: number): { readonly strategy: 'rrf'; readonly k: number } {
-  if (legCount === 1) return { strategy: 'rrf', k: 60 }
   if (value === undefined) return { strategy: 'rrf', k: 60 }
   if (!value || typeof value !== 'object') {
     throw new StorageError('invalid_value', 'Search fusion must be an object.')

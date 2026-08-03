@@ -31,12 +31,17 @@ export type NormalizedSearchLeg =
   | { readonly kind: 'dense'; readonly vector: readonly number[]; readonly candidates: number }
   | { readonly kind: 'sparse'; readonly vector: SparseVector; readonly candidates: number }
 
+/** Capability overrides for the configured Upstash index. */
+export type UpstashSearchStoreCapabilityConfig = Omit<Partial<SearchStoreCapabilities>, 'legs'> & {
+  readonly legs?: Partial<SearchStoreCapabilities['legs']>
+}
+
 /** Normalize optional adapter capabilities into a complete SearchStore capability set. */
-export function normalizeCapabilities(config: Partial<SearchStoreCapabilities> | undefined): SearchStoreCapabilities {
+export function normalizeCapabilities(config: UpstashSearchStoreCapabilityConfig | undefined): SearchStoreCapabilities {
   return {
     legs: {
       dense: config?.legs?.dense ?? true,
-      sparse: config?.legs?.sparse ?? true,
+      sparse: config?.legs?.sparse ?? false,
       lexical: false,
     },
     fusion: normalizeCapabilityFusion(config?.fusion),
@@ -102,8 +107,8 @@ export function normalizeSearchQuery(
     }
     seen.add(leg.kind)
   }
-  if (legs.reduce((sum, leg) => sum + leg.candidates, 0) < limit) {
-    throw new StorageError('invalid_value', 'Search leg candidates must cover the query limit.')
+  if (legs.length > 1 && !capabilities.fusion.includes('rrf')) {
+    throw new StorageError('unsupported_capability', 'This Upstash SearchStore does not support RRF fusion.')
   }
   return {
     legs,
@@ -139,8 +144,8 @@ function normalizeFusion(value: unknown, capabilities: SearchStoreCapabilities):
   if (!capabilities.fusion.includes('rrf')) {
     throw new StorageError('unsupported_capability', 'This Upstash SearchStore does not support RRF fusion.')
   }
-  if (fusion.k !== undefined && (typeof fusion.k !== 'number' || !Number.isFinite(fusion.k) || fusion.k < 0)) {
-    throw new StorageError('invalid_value', 'RRF fusion k must be a non-negative finite number.')
+  if (fusion.k !== undefined && (typeof fusion.k !== 'number' || !Number.isInteger(fusion.k) || fusion.k <= 0)) {
+    throw new StorageError('invalid_value', 'RRF fusion k must be a positive integer.')
   }
   return fusion.k === undefined ? { strategy: 'rrf' } : { strategy: 'rrf', k: fusion.k }
 }
@@ -190,8 +195,8 @@ function normalizeLimit(value: unknown): number {
 
 function normalizeCandidates(value: unknown, limit: number): number {
   if (value === undefined) return limit
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new StorageError('invalid_value', 'Search leg candidates must be a non-negative integer.')
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0 || value < limit) {
+    throw new StorageError('invalid_value', 'Search leg candidates must be a positive integer at least as large as limit.')
   }
   return value
 }
