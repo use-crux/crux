@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { flow, getWork, spawn, type WorkId } from "../../src";
+import { flow, getWork, spawn } from "../../src";
 
 describe("public durable Work API", () => {
   it("reports the missing durable host bridge without executing the Flow inline", async () => {
@@ -13,7 +13,7 @@ describe("public durable Work API", () => {
       code: "CAPABILITY_MISSING",
     });
     await expect(
-      getWork(target, "work_missing" as WorkId<typeof target>),
+      getWork(target, "work_missing"),
     ).rejects.toMatchObject({
       name: "CruxRuntimeError",
       code: "CAPABILITY_MISSING",

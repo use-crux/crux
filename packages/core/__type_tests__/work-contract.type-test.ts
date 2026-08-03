@@ -1,19 +1,25 @@
-/** Public durable Work type contract for exported Flows. */
+/** Compile the canonical public Work contract against exported Flow targets. */
 
 import { expectTypeOf } from "vitest";
+import { flow, getWork, spawn } from "@use-crux/core";
 import {
-  flow,
-  getWork,
-  spawn,
+  type CancelReceipt,
+  type DetachReceipt,
   type WorkEvent,
+  type WorkFailure,
   type WorkHandle,
-  type WorkId,
   type WorkProgress,
   type WorkStatus,
-} from "@use-crux/core";
+} from "@use-crux/core/work";
+import { z } from "zod";
 
 const review = flow(
   "review-document",
+  {
+    signals: {
+      approval: z.object({ approvedBy: z.string() }),
+    },
+  },
   async (
     _scope,
     input: {
@@ -27,76 +33,63 @@ const review = flow(
     }) as const,
 );
 
-const translate = flow(
-  "translate-document",
-  async (_scope, input: { readonly documentId: string }) =>
-    ({
-      translated: input.documentId,
-    }) as const,
-);
+const cleanup = flow("cleanup-document", async () => "done" as const);
 
-declare const work: WorkHandle<typeof review>;
-expectTypeOf(review.name).toEqualTypeOf<"review-document">();
-expectTypeOf(work.id).toEqualTypeOf<WorkId<typeof review>>();
-expectTypeOf(work.targetId).toEqualTypeOf<"review-document">();
-expectTypeOf(work.result()).toEqualTypeOf<
-  Promise<{
-    readonly documentId: string;
-    readonly acceptedRoute: readonly [
-      kind: "legal" | "policy",
-      priority: 1 | 2,
-    ];
-  }>
->();
-expectTypeOf(work.status()).toEqualTypeOf<Promise<WorkStatus<typeof review>>>();
+type ReviewResult = {
+  readonly documentId: string;
+  readonly acceptedRoute: readonly [
+    kind: "legal" | "policy",
+    priority: 1 | 2,
+  ];
+};
+
+declare const work: WorkHandle<ReviewResult>;
+expectTypeOf(work.id).toEqualTypeOf<string>();
+expectTypeOf(work.result()).toEqualTypeOf<Promise<ReviewResult>>();
+expectTypeOf(work.status()).toEqualTypeOf<Promise<WorkStatus>>();
 expectTypeOf(work.progress).parameter(0).toEqualTypeOf<WorkProgress>();
-expectTypeOf(work.stream()).toEqualTypeOf<
-  AsyncIterable<WorkEvent<typeof review>>
->();
+expectTypeOf(work.stream()).toEqualTypeOf<AsyncIterable<WorkEvent>>();
+expectTypeOf(work.cancel()).toEqualTypeOf<Promise<CancelReceipt>>();
+expectTypeOf(work.detach()).toEqualTypeOf<Promise<DetachReceipt>>();
+// @ts-expect-error — handles are result-generic, never target-qualified.
+work.targetId;
 
 const spawned = await spawn(
   review,
   { documentId: "doc_1", route: ["legal", 1] },
   { idempotencyKey: "request_1" },
 );
-expectTypeOf(spawned).toEqualTypeOf<WorkHandle<typeof review>>();
+expectTypeOf(spawned).toEqualTypeOf<WorkHandle<ReviewResult>>();
 expectTypeOf(await getWork(review, spawned.id)).toEqualTypeOf<
-  WorkHandle<typeof review>
+  WorkHandle<ReviewResult>
 >();
 
-declare const status: WorkStatus<typeof review>;
-declare const readonlyStatus: WorkStatus<typeof review>;
-// @ts-expect-error — public Work state is a readonly snapshot.
-readonlyStatus.state = "running";
-if (status.state === "completed") {
-  expectTypeOf(status.result).toEqualTypeOf<{
-    readonly documentId: string;
-    readonly acceptedRoute: readonly [
-      kind: "legal" | "policy",
-      priority: 1 | 2,
-    ];
-  }>();
-  // @ts-expect-error — terminal results are readonly snapshot data.
-  status.result = { documentId: "doc_2", acceptedRoute: ["policy", 2] };
-} else {
-  // @ts-expect-error — a result exists only after successful completion.
-  status.result;
-}
+const inputless = await spawn(cleanup, { idempotencyKey: "request_2" });
+const explicitUndefined = await spawn(
+  cleanup,
+  undefined,
+  { idempotencyKey: "request_3" },
+);
+expectTypeOf(inputless.result()).toEqualTypeOf<Promise<"done">>();
+expectTypeOf(explicitUndefined.result()).toEqualTypeOf<Promise<"done">>();
+
+declare const status: WorkStatus;
 if (status.state === "failed") {
-  expectTypeOf(status.error).toEqualTypeOf<unknown>();
-  // @ts-expect-error — failed Work has no successful result.
+  expectTypeOf(status.failure).toEqualTypeOf<WorkFailure>();
+  // @ts-expect-error — safe status summaries never carry raw failures.
+  status.error;
+}
+if (status.state === "completed") {
+  expectTypeOf(status.resultAvailable).toEqualTypeOf<boolean>();
+  // @ts-expect-error — results are obtained only through result().
   status.result;
 }
 
-// @ts-expect-error — Flow input retains its exact tuple and literals.
-await spawn(
-  review,
-  { documentId: "doc_1", route: ["finance", 1] },
-  { idempotencyKey: "bad" },
-);
-// @ts-expect-error — target input fields cannot be omitted.
-await spawn(review, { documentId: "doc_1" }, { idempotencyKey: "bad" });
-// @ts-expect-error — top-level Work requires a caller-owned idempotency key.
+// @ts-expect-error — required Flow input cannot be omitted.
+await spawn(review, { idempotencyKey: "missing-input" });
+// @ts-expect-error — inline callbacks are not Work targets.
+await spawn(async () => "nope", { idempotencyKey: "inline" });
+// @ts-expect-error — unsupported values are not Work targets.
+await spawn("review-document", { idempotencyKey: "unsupported" });
+// @ts-expect-error — caller-owned idempotency is required.
 await spawn(review, { documentId: "doc_1", route: ["legal", 1] }, {});
-// @ts-expect-error — lookup IDs are qualified by stable target identity.
-await getWork(translate, spawned.id);

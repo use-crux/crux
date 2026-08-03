@@ -43,7 +43,6 @@ describe("process-local public Work projection", () => {
     expect(work).not.toHaveProperty("list");
     await expect(work.status()).resolves.toMatchObject({
       id: "work_agent_child",
-      targetId: "agent:researcher",
       state: "running",
     });
 
@@ -52,11 +51,15 @@ describe("process-local public Work projection", () => {
     const completed = await work.status();
     expect(completed).toMatchObject({
       state: "completed",
-      result: { answer: 42 },
+      resultAvailable: true,
     });
     expect(Object.isFrozen(completed)).toBe(true);
 
-    await expect(work.detach()).resolves.toEqual({ detached: true });
+    await expect(work.detach()).resolves.toMatchObject({
+      workId: work.id,
+      outcome: "detached",
+      ownership: { state: "detached", reason: "explicit" },
+    });
     expect(owner.lookup(work.id)).toBeUndefined();
     await expect(work.result()).resolves.toEqual({ answer: 42 });
   });
@@ -95,8 +98,10 @@ describe("process-local public Work projection", () => {
     if (!cancelled) throw new Error("Expected cancellable Work projection.");
     await cancelledStarted;
 
-    await expect(cancelled.cancel({ reason: "stop" })).resolves.toEqual({
-      cancelled: true,
+    await expect(cancelled.cancel({ reason: "stop" })).resolves.toMatchObject({
+      workId: cancelled.id,
+      outcome: "cancelled",
+      status: { state: "cancelled", reason: "stop" },
     });
     expect(owner.lookup(cancelled.id)).toBeDefined();
     await expect(cancelled.result()).rejects.toBeInstanceOf(DOMException);
@@ -125,7 +130,11 @@ describe("process-local public Work projection", () => {
     const detached = projectProcessLocalWork(owner, detachedReference);
     if (!detached) throw new Error("Expected detachable Work projection.");
 
-    await expect(detached.detach()).resolves.toEqual({ detached: true });
+    await expect(detached.detach()).resolves.toMatchObject({
+      workId: detached.id,
+      outcome: "detached",
+      ownership: { state: "detached", reason: "explicit" },
+    });
     expect(owner.lookup(detached.id)).toBeUndefined();
     expect(detachedSignal.aborted).toBe(false);
     finishDetached();

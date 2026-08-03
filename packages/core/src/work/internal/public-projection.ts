@@ -1,12 +1,9 @@
 /** Canonical public-shape projection of retained process-local Agent Work. */
 
 import type { EffectScopeRef } from "../../effect";
-import type {
-  CancelOptions,
-  CancelReceipt,
-  DetachReceipt,
-  WorkStatusSnapshot,
-} from "../types";
+import type { CancelOptions, CancelReceipt } from "../cancellation";
+import type { DetachReceipt } from "../detachment";
+import type { WorkOwnership, WorkStatus } from "../status";
 import type {
   InternalRetainedWorkReference,
   InternalWorkOwnerPort,
@@ -21,7 +18,7 @@ export interface ProcessLocalWorkProjection<TOutput> {
   readonly id: string;
   readonly targetId: string;
   readonly effects: EffectScopeRef;
-  status(): Promise<WorkStatusSnapshot<string, string, TOutput>>;
+  status(): Promise<WorkStatus>;
   result(): Promise<TOutput>;
   cancel(options?: CancelOptions): Promise<CancelReceipt>;
   detach(): Promise<DetachReceipt>;
@@ -30,9 +27,9 @@ export interface ProcessLocalWorkProjection<TOutput> {
 /**
  * Project one owner's retained Agent child without exposing its private inbox.
  *
- * @remarks Detachment removes only the owner's retained reference. The
- * process-local execution and this already-issued projection remain usable.
- *
+ * @remarks This pre-existing process-local projection retains its private
+ * target metadata, while lifecycle, control receipts, and safe summaries use
+ * the shared public Work contracts. It does not provide durable persistence.
  * @internal
  */
 export function projectProcessLocalWork<TOutput>(
@@ -42,83 +39,108 @@ export function projectProcessLocalWork<TOutput>(
   const handle = owner.recover(reference);
   const owned = owner.inspect(reference.id);
   if (!handle || !owned) return undefined;
-  const targetId = owned.targetId;
+  let ownership: WorkOwnership = Object.freeze({ state: "attached" });
 
   return Object.freeze({
     id: handle.id,
-    targetId,
+    targetId: owned.targetId,
     effects: handle.effects,
-    status: () => projectStatus(handle, targetId),
+    status: () => projectStatus(handle, ownership),
     result: () => handle.result(),
-    cancel: async (_options?: CancelOptions) =>
-      Object.freeze({ cancelled: handle.cancel() }),
-    detach: async () => Object.freeze({ detached: owner.detach(handle.id) }),
+    cancel: async (options?: CancelOptions) => {
+      const cancelled = handle.cancel();
+      if (cancelled) await handle.result().catch(() => undefined);
+      const status = await projectStatus(handle, ownership, options?.reason);
+      return Object.freeze({
+        workId: handle.id,
+        outcome: cancelled ? "cancelled" : "already-terminal",
+        status: terminalStatus(status),
+      });
+    },
+    detach: async () => {
+      const detached = owner.detach(handle.id);
+      if (detached) {
+        ownership = Object.freeze({
+          state: "detached",
+          reason: "explicit",
+          detachedAt: new Date(),
+        });
+      }
+      const status = await projectStatus(handle, ownership);
+      return Object.freeze({
+        workId: handle.id,
+        outcome: detached
+          ? "detached"
+          : status.state === "completed" ||
+              status.state === "failed" ||
+              status.state === "cancelled"
+            ? "already-terminal"
+            : "already-detached",
+        ownership,
+      });
+    },
   });
 }
 
 async function projectStatus<TOutput>(
   handle: InternalWorkHandle<TOutput>,
-  targetId: string,
-): Promise<WorkStatusSnapshot<string, string, TOutput>> {
+  ownership: WorkOwnership,
+  reason?: string,
+): Promise<WorkStatus> {
   const status = await handle.status();
-  const base = {
-    id: status.id,
-    targetId,
-    acceptedAt: status.acceptedAt,
-    updatedAt: status.updatedAt,
-  };
+  const base = { id: status.id, ownership, updatedAt: status.updatedAt };
 
   switch (status.state) {
     case "queued":
-      return Object.freeze({ ...base, state: status.state });
+      return Object.freeze({ ...base, state: "queued", acceptedAt: status.acceptedAt });
     case "running":
     case "cancel-requested":
-      return Object.freeze({
-        ...base,
-        state: "running",
-        startedAt: status.startedAt,
-      });
+      return Object.freeze({ ...base, state: "running", startedAt: status.startedAt });
     case "completed":
       return Object.freeze({
         ...base,
-        state: status.state,
-        startedAt: status.startedAt,
+        state: "completed",
         completedAt: status.completedAt,
-        result: await handle.result(),
+        resultAvailable: status.resultAvailable,
       });
     case "failed":
-      return failedStatus(base, status, handle);
+      return failedStatus(base, status);
     case "cancelled":
       return Object.freeze({
         ...base,
-        state: status.state,
-        ...(status.startedAt ? { startedAt: status.startedAt } : undefined),
+        state: "cancelled",
         cancelledAt: status.cancelledAt,
+        ...(reason ? { reason } : undefined),
       });
   }
 }
 
-async function failedStatus<TOutput>(
-  base: {
-    readonly id: string;
-    readonly targetId: string;
-    readonly acceptedAt: Date;
-    readonly updatedAt: Date;
-  },
+function failedStatus(
+  base: { readonly id: string; readonly ownership: WorkOwnership; readonly updatedAt: Date },
   status: Extract<InternalWorkStatus, { readonly state: "failed" }>,
-  handle: InternalWorkHandle<TOutput>,
-): Promise<WorkStatusSnapshot<string, string, TOutput>> {
-  let error: unknown;
-  try {
-    await handle.result();
-  } catch (failure) {
-    error = failure;
-  }
+): WorkStatus {
   return Object.freeze({
     ...base,
-    state: status.state,
-    startedAt: status.startedAt,
+    state: "failed",
     failedAt: status.failedAt,
-    error,
+    failure: Object.freeze({
+      code: "process_local_failure",
+      message: "Process-local Work failed.",
+      retryable: false,
+    }),
   });
+}
+
+function terminalStatus(status: WorkStatus): Extract<
+  WorkStatus,
+  { readonly state: "completed" | "failed" | "cancelled" }
+> {
+  if (
+    status.state === "completed" ||
+    status.state === "failed" ||
+    status.state === "cancelled"
+  ) {
+    return status;
+  }
+  throw new Error("Process-local Work cancellation did not terminalize.");
 }

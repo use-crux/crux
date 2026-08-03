@@ -399,17 +399,12 @@ export type {
   CancelReceipt,
   DetachReceipt,
   ExecutionStats,
-  ExportedFlowTarget,
   SpawnWorkOptions,
   WorkEvent,
   WorkHandle,
-  WorkId,
-  WorkInput,
   WorkProgress,
-  WorkResult,
   WorkStatus,
   WorkStreamOptions,
-  WorkTargetId,
 } from "./work";
 export {
   CruxEffectError,

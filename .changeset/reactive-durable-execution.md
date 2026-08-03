@@ -67,8 +67,10 @@ Give Runtime worker ownership conflicts and shutdown timeouts distinct public
 error codes. PostgreSQL workers now reject undersized pools, terminate when
 their advisory-lock connection is lost, and verify that lock release succeeds.
 
-Add the public, Flow-targeted Work contract with exact input/result inference,
-target-qualified Work IDs, readonly lifecycle snapshots, and canonical control
-and observability types. Until durable host acceptance lands, `spawn()` and
-`getWork()` explicitly reject unsupported hosts; process-local Agent Work is
-projected privately without promoting its retained-owner registry to storage.
+Add the canonical public, Flow-targeted Work contract with exact input/result
+inference, string Work IDs, result-generic handles, safe readonly lifecycle
+snapshots, typed terminal errors, and canonical control and observability
+types. The typed `spawn()` and `getWork()` factories accept only exported Flow
+targets; durable host acceptance follows in the next Work slice. Process-local
+Agent Work uses the shared safe lifecycle and control types privately without
+promoting its retained-owner registry to storage.
