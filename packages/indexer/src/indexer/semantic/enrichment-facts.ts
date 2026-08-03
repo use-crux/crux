@@ -80,7 +80,7 @@ export function semanticDefinitionEnrichments(
       ];
     case "rag.retriever":
     case "storage.recordStore":
-    case "storage.vectorStore":
+    case "storage.searchStore":
     case "storage.assetStore":
     case "storage.bundle":
     case "storage.scope":

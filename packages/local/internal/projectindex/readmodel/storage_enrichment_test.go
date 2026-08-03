@@ -20,12 +20,12 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 				Metadata: json.RawMessage(`{"facts":{"kind":"storage.recordStore","backend":"customRecords","capabilities":{"record":{"ttl":false,"filter":"scan","watch":false,"batch":false}}}}`),
 			},
 			{
-				ID:       "storage.vectorStore:vectors",
-				Kind:     "storage.vectorStore",
-				Name:     "vectors",
+				ID:       "storage.searchStore:search",
+				Kind:     "storage.searchStore",
+				Name:     "search",
 				Fidelity: "resolved",
 				Status:   "active",
-				Metadata: json.RawMessage(`{"facts":{"kind":"storage.vectorStore","backend":"convexVectorStore","capabilities":{"vector":{"dense":true,"sparse":false,"hybrid":false,"fusion":[],"filter":"post","consistency":"strong"}}}}`),
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.searchStore","backend":"convexSearchStore","capabilities":{"search":{"legs":{"dense":true,"sparse":false,"lexical":false},"fusion":[],"filter":"post","consistency":"strong"}}}}`),
 			},
 			{
 				ID:       "storage.bundle:appStorage",
@@ -33,14 +33,14 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 				Name:     "appStorage",
 				Fidelity: "resolved",
 				Status:   "active",
-				Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records","vectors":"vectors","capabilities":{"asset":{"multipart":false,"signedUrls":false}}}}`),
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records","search":"search","capabilities":{"asset":{"multipart":false,"signedUrls":false}}}}`),
 			},
 			{ID: "workspace:docs", Kind: "workspace", Name: "docs", Fidelity: "resolved", Status: "active"},
 			{ID: "rag.retriever:docs", Kind: "rag.retriever", Name: "docs", Fidelity: "resolved", Status: "active"},
 		},
 		Relations: []store.ProjectRelation{
 			{ID: "rel:bundle:records", Type: "storage.bundle.uses_record_store", From: "storage.bundle:appStorage", To: "storage.recordStore:records", Fidelity: "resolved"},
-			{ID: "rel:bundle:vectors", Type: "storage.bundle.uses_vector_store", From: "storage.bundle:appStorage", To: "storage.vectorStore:vectors", Fidelity: "resolved"},
+			{ID: "rel:bundle:search", Type: "storage.bundle.uses_search_store", From: "storage.bundle:appStorage", To: "storage.searchStore:search", Fidelity: "resolved"},
 			{ID: "rel:workspace:storage", Type: "workspace.uses_storage", From: "workspace:docs", To: "storage.bundle:appStorage", Fidelity: "resolved"},
 			{ID: "rel:retriever:storage", Type: "rag.retriever.uses_storage", From: "rag.retriever:docs", To: "storage.bundle:appStorage", Fidelity: "resolved"},
 		},
@@ -53,13 +53,13 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 	}
 	storage := metadataMapAt(t, bundle.Metadata, "storage")
 	components := mapValue(t, storage, "components")
-	if components["recordStoreId"] != "storage.recordStore:records" || components["vectorStoreId"] != "storage.vectorStore:vectors" {
+	if components["recordStoreId"] != "storage.recordStore:records" || components["searchStoreId"] != "storage.searchStore:search" {
 		t.Fatalf("components = %+v, want record/vector component ids", components)
 	}
 	capabilities := mapValue(t, storage, "capabilities")
-	vector := mapValue(t, capabilities, "vector")
-	if vector["filter"] != "post" {
-		t.Fatalf("vector capabilities = %+v, want post-filter vector store surfaced", vector)
+	search := mapValue(t, capabilities, "search")
+	if search["filter"] != "post" {
+		t.Fatalf("search capabilities = %+v, want post-filter search store surfaced", search)
 	}
 	usedBy, ok := storage["usedBy"].([]any)
 	if !ok || len(usedBy) != 2 {
@@ -67,10 +67,10 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 	}
 	warnings, ok := storage["warnings"].([]any)
 	if !ok || len(warnings) != 2 {
-		t.Fatalf("warnings = %+v, want vector filter and missing asset warnings", storage["warnings"])
+		t.Fatalf("warnings = %+v, want search filter and missing asset warnings", storage["warnings"])
 	}
-	if !hasStorageLint(got.LintFindings, "storage.vector_filter_not_prefiltered", "storage.bundle:appStorage") {
-		t.Fatalf("lint findings = %+v, want vector filter warning on appStorage", got.LintFindings)
+	if !hasStorageLint(got.LintFindings, "storage.search_filter_not_prefiltered", "storage.bundle:appStorage") {
+		t.Fatalf("lint findings = %+v, want search filter warning on appStorage", got.LintFindings)
 	}
 	if !hasStorageLint(got.LintFindings, "storage.workspace_asset_missing", "workspace:docs") {
 		t.Fatalf("lint findings = %+v, want workspace asset warning", got.LintFindings)

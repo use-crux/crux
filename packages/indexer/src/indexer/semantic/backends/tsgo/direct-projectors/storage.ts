@@ -156,7 +156,7 @@ function storageDefinitionFact(
     backend: definition.descriptor.backend,
     capabilities: definition.descriptor.capabilities,
     records: storageReferenceTarget(refs, "records")?.id,
-    vectors: storageReferenceTarget(refs, "vectors")?.id,
+    search: storageReferenceTarget(refs, "search")?.id,
     assets: storageReferenceTarget(refs, "assets")?.id,
     storage: scope?.target.id,
     prefix: scope?.prefix,
@@ -175,7 +175,7 @@ function storageDefinitionFact(
       backend: definition.descriptor.backend,
       capabilities: definition.descriptor.capabilities,
       recordsVariable: storageReferenceVariable(refs, "records"),
-      vectorsVariable: storageReferenceVariable(refs, "vectors"),
+      searchVariable: storageReferenceVariable(refs, "search"),
       assetsVariable: storageReferenceVariable(refs, "assets"),
       baseStorageVariable: scope
         ? expressionIdentifier(scope.expression)
@@ -261,7 +261,7 @@ function storageObjectReferences(
   object: ObjectLiteralExpression,
   definitionsByVariable: ReadonlyMap<string, NativeStorageDefinition>,
 ): NativeStorageReference[] {
-  return (["records", "vectors", "assets"] as const).flatMap((property) => {
+  return (["records", "search", "assets"] as const).flatMap((property) => {
     const expression = storagePropertyExpression(object, property);
     const variable = expression ? expressionIdentifier(expression) : undefined;
     const target = variable ? definitionsByVariable.get(variable) : undefined;
@@ -306,6 +306,7 @@ function nativeStorageDescriptor(
   return semanticStorageFactoryDescriptor(
     storageCallName(expression),
     hasLiteralSparseDimensions(expression, bindings),
+    hasLiteralLexical(expression, bindings),
   );
 }
 
@@ -321,6 +322,19 @@ function hasLiteralSparseDimensions(
   if (!config) return false;
   const value = storagePropertyExpression(config, "sparseDimensions");
   return Boolean(value && isNumericLiteral(value) && Number(value.text) > 0);
+}
+
+function hasLiteralLexical(
+  expression: Expression,
+  bindings?: ReadonlyMap<string, NativeSourceBinding>,
+): boolean {
+  if (!isCallExpression(expression)) return false;
+  const [firstArg] = nativeNodeList(expression.arguments);
+  const config = firstArg
+    ? nativeStorageConfigObject(firstArg, bindings, new Set())
+    : undefined;
+  const value = config ? storagePropertyExpression(config, "lexical") : undefined;
+  return Boolean(value && value.kind === "TrueKeyword");
 }
 
 function nativeStorageConfigObject(
@@ -345,7 +359,7 @@ function bundleRelationType(
   property: NativeStorageReference["property"],
 ): ProjectRelation["type"] | undefined {
   if (property === "records") return "storage.bundle.uses_record_store";
-  if (property === "vectors") return "storage.bundle.uses_vector_store";
+  if (property === "search") return "storage.bundle.uses_search_store";
   if (property === "assets") return "storage.bundle.uses_asset_store";
   return undefined;
 }

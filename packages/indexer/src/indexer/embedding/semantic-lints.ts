@@ -38,8 +38,8 @@ export function namespaceIdentityFindings(
         !left.namespace ||
         left.namespace !== right.namespace ||
         !sharesWriteReadBoundary(left, right) ||
-        !left.vectorStorageKey ||
-        left.vectorStorageKey !== right.vectorStorageKey ||
+        !left.searchStorageKey ||
+        left.searchStorageKey !== right.searchStorageKey ||
         !hasIdentityMismatch(left, right)
       ) {
         continue;

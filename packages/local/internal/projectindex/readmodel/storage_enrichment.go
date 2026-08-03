@@ -9,7 +9,7 @@ import (
 
 type storageComponentSummary struct {
 	RecordStoreID string `json:"recordStoreId,omitempty"`
-	VectorStoreID string `json:"vectorStoreId,omitempty"`
+	SearchStoreID string `json:"searchStoreId,omitempty"`
 	AssetStoreID  string `json:"assetStoreId,omitempty"`
 	StorageID     string `json:"storageId,omitempty"`
 }
@@ -118,8 +118,8 @@ func storageComponents(defID string, relations storageRelationIndex) storageComp
 		switch relation.Type {
 		case "storage.bundle.uses_record_store":
 			components.RecordStoreID = relation.To
-		case "storage.bundle.uses_vector_store":
-			components.VectorStoreID = relation.To
+		case "storage.bundle.uses_search_store":
+			components.SearchStoreID = relation.To
 		case "storage.bundle.uses_asset_store":
 			components.AssetStoreID = relation.To
 		case "storage.scope.wraps_storage":
@@ -142,7 +142,7 @@ func resolvedStorageCapabilities(defID string, byID map[string]store.ProjectDefi
 	delete(capabilities, "asset")
 	for _, relation := range relations.outgoing[defID] {
 		switch relation.Type {
-		case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage":
+		case "storage.bundle.uses_record_store", "storage.bundle.uses_search_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage":
 			mergeCapabilityMaps(capabilities, resolvedStorageCapabilities(relation.To, byID, relations, seen))
 		}
 	}
@@ -201,7 +201,7 @@ func storageUsedBy(defID string, relations storageRelationIndex, byID map[string
 
 func isStorageKind(kind string) bool {
 	switch kind {
-	case "storage.recordStore", "storage.vectorStore", "storage.assetStore", "storage.bundle", "storage.scope":
+	case "storage.recordStore", "storage.searchStore", "storage.assetStore", "storage.bundle", "storage.scope":
 		return true
 	default:
 		return false
@@ -210,9 +210,9 @@ func isStorageKind(kind string) bool {
 
 func isStorageRelation(relationType string) bool {
 	switch relationType {
-	case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage",
-		"rag.retriever.uses_storage", "rag.retriever.uses_record_store", "rag.retriever.uses_vector_store", "rag.retriever.uses_asset_store",
-		"workspace.uses_storage", "workspace.uses_record_store", "workspace.uses_vector_store", "workspace.uses_asset_store":
+	case "storage.bundle.uses_record_store", "storage.bundle.uses_search_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage",
+		"rag.retriever.uses_storage", "rag.retriever.uses_record_store", "rag.retriever.uses_search_store", "rag.retriever.uses_asset_store",
+		"workspace.uses_storage", "workspace.uses_record_store", "workspace.uses_search_store", "workspace.uses_asset_store":
 		return true
 	default:
 		return false

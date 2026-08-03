@@ -229,7 +229,7 @@ describe("runtime artifacts", () => {
     expect(targets).not.toContain("if (!evalHostToken)");
     expect(targets).toContain("token: evalHostToken");
     expect(targets).toContain(
-      "const supportedEvalHostCapabilities = ['record-store', 'vector-store']",
+      "const supportedEvalHostCapabilities = ['record-store', 'search-store']",
     );
     expect(targets).toContain("hostCapabilities: evalHostCapabilities");
     expect(http).toContain("import { httpRouter } from 'convex/server'");

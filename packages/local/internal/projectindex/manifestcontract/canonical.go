@@ -39,7 +39,7 @@ func validDefinitionKind(value string) bool {
 		"rag.knowledgeBase", "rag.knowledgeBase.view", "rag.indexer", "rag.recipe", "rag.recipe.step", "rag.pipeline", "rag.pipeline.stage", "rag.reranker", "rag.retriever",
 		"knowledge.relation", "knowledge.assertions", "knowledge.communities", "knowledge.model",
 		"registry", "skill", "memory", "memory.store", "memory.block", "blackboard", "workspace",
-		"storage.recordStore", "storage.vectorStore", "storage.assetStore", "storage.bundle", "storage.scope",
+		"storage.recordStore", "storage.searchStore", "storage.assetStore", "storage.bundle", "storage.scope",
 		"constraint", "guardrail", "toolPolicy", "scorer", "eval", "eval.case",
 		"media.operation", "ingest.source", "unknown",
 	)

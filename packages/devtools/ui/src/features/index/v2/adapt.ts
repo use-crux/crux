@@ -242,7 +242,7 @@ export interface IndexFacts {
   // storage
   capabilities?: IndexedStorageCapabilities;
   records?: string;
-  vectors?: string;
+  search?: string;
   assets?: string;
   storage?: string;
   prefix?: string;
@@ -1285,16 +1285,16 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       push("ttl", f.capabilities?.record?.ttl);
       push("filter", f.capabilities?.record?.filter);
       break;
-    case "storage.vectorStore":
+    case "storage.searchStore":
       push("backend", f.backend);
       push("variable", f.variableName);
       push(
         "dense",
-        f.capabilities?.vector?.dense === true
+        f.capabilities?.search?.legs?.dense === true
           ? "yes"
-          : f.capabilities?.vector?.dense,
+          : f.capabilities?.search?.legs?.dense,
       );
-      push("filter", f.capabilities?.vector?.filter);
+      push("filter", f.capabilities?.search?.filter);
       break;
     case "storage.assetStore":
       push("backend", f.backend);
@@ -1302,7 +1302,7 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       break;
     case "storage.bundle":
       push("records", f.records);
-      push("vectors", f.vectors);
+      push("search", f.search);
       push("assets", f.assets);
       break;
     case "storage.scope":

@@ -6,7 +6,7 @@ import type {
 export type SemanticStorageDefinitionKind = Extract<
   ProjectDefinitionKind,
   | "storage.recordStore"
-  | "storage.vectorStore"
+  | "storage.searchStore"
   | "storage.assetStore"
   | "storage.bundle"
   | "storage.scope"
@@ -22,35 +22,48 @@ const inMemoryRecordCapabilities = {
   record: { ttl: "lazy", filter: "scan", watch: true, batch: false },
 } as const satisfies IndexedStorageCapabilities;
 
-const inMemoryVectorCapabilities = {
-  vector: {
-    dense: true,
-    sparse: true,
-    hybrid: true,
-    fusion: [],
+const inMemorySearchCapabilities = {
+  search: {
+    legs: { dense: true, sparse: true, lexical: false },
+    fusion: ["rrf"],
     filter: "pre",
     consistency: "strong",
+  },
+} as const satisfies IndexedStorageCapabilities;
+
+const postgresSearchCapabilities = (
+  sparse: boolean,
+  lexical: boolean,
+): IndexedStorageCapabilities => ({
+  search: {
+    legs: { dense: true, sparse, lexical },
+    fusion: sparse || lexical ? ["rrf"] : [],
+    filter: "pre",
+    consistency: "strong",
+  },
+});
+
+const convexSearchCapabilities = {
+  search: {
+    legs: { dense: true, sparse: false, lexical: false },
+    fusion: [],
+    filter: "post",
+    consistency: "strong",
+  },
+} as const satisfies IndexedStorageCapabilities;
+
+const upstashSearchCapabilities = {
+  search: {
+    legs: { dense: true, sparse: false, lexical: false },
+    fusion: [],
+    filter: "pre",
+    consistency: "eventual",
   },
 } as const satisfies IndexedStorageCapabilities;
 
 const postgresRecordCapabilities = {
   record: { ttl: "lazy", filter: "native", watch: false, batch: true },
 } as const satisfies IndexedStorageCapabilities;
-
-function postgresVectorCapabilities(
-  sparse: boolean,
-): IndexedStorageCapabilities {
-  return {
-    vector: {
-      dense: true,
-      sparse,
-      hybrid: sparse,
-      fusion: sparse ? ["rrf"] : [],
-      filter: "pre",
-      consistency: "strong",
-    },
-  };
-}
 
 const storageFactoryByCallName: Readonly<
   Record<string, SemanticStorageFactoryDescriptor | undefined>
@@ -62,10 +75,10 @@ const storageFactoryByCallName: Readonly<
     backend: "inMemoryRecordStore",
     capabilities: inMemoryRecordCapabilities,
   },
-  inMemoryVectorStore: {
-    kind: "storage.vectorStore",
-    backend: "inMemoryVectorStore",
-    capabilities: inMemoryVectorCapabilities,
+  inMemorySearchStore: {
+    kind: "storage.searchStore",
+    backend: "inMemorySearchStore",
+    capabilities: inMemorySearchCapabilities,
   },
   inMemoryAssetStore: {
     kind: "storage.assetStore",
@@ -76,7 +89,7 @@ const storageFactoryByCallName: Readonly<
     backend: "inMemoryStorage",
     capabilities: {
       ...inMemoryRecordCapabilities,
-      ...inMemoryVectorCapabilities,
+      ...inMemorySearchCapabilities,
     },
   },
   convexRecordStore: {
@@ -86,19 +99,10 @@ const storageFactoryByCallName: Readonly<
       record: { ttl: "lazy", filter: "scan", watch: false, batch: false },
     },
   },
-  convexVectorStore: {
-    kind: "storage.vectorStore",
-    backend: "convexVectorStore",
-    capabilities: {
-      vector: {
-        dense: true,
-        sparse: false,
-        hybrid: false,
-        fusion: [],
-        filter: "post",
-        consistency: "strong",
-      },
-    },
+  convexSearchStore: {
+    kind: "storage.searchStore",
+    backend: "convexSearchStore",
+    capabilities: convexSearchCapabilities,
   },
   convexAssetStore: {
     kind: "storage.assetStore",
@@ -109,14 +113,7 @@ const storageFactoryByCallName: Readonly<
     backend: "convexStorage",
     capabilities: {
       record: { ttl: "lazy", filter: "scan", watch: false, batch: false },
-      vector: {
-        dense: true,
-        sparse: false,
-        hybrid: false,
-        fusion: [],
-        filter: "post",
-        consistency: "strong",
-      },
+      ...convexSearchCapabilities,
     },
   },
   upstashRedisRecordStore: {
@@ -126,36 +123,27 @@ const storageFactoryByCallName: Readonly<
       record: { ttl: "native", filter: "scan", watch: "unknown", batch: false },
     },
   },
-  upstashVectorStore: {
-    kind: "storage.vectorStore",
-    backend: "upstashVectorStore",
-    capabilities: {
-      vector: {
-        dense: true,
-        sparse: false,
-        hybrid: false,
-        fusion: [],
-        filter: "pre",
-        consistency: "eventual",
-      },
-    },
+  upstashSearchStore: {
+    kind: "storage.searchStore",
+    backend: "upstashSearchStore",
+    capabilities: upstashSearchCapabilities,
   },
   postgresRecordStore: {
     kind: "storage.recordStore",
     backend: "postgresRecordStore",
     capabilities: postgresRecordCapabilities,
   },
-  postgresVectorStore: {
-    kind: "storage.vectorStore",
-    backend: "postgresVectorStore",
-    capabilities: postgresVectorCapabilities(false),
+  postgresSearchStore: {
+    kind: "storage.searchStore",
+    backend: "postgresSearchStore",
+    capabilities: postgresSearchCapabilities(false, false),
   },
   postgresStorage: {
     kind: "storage.bundle",
     backend: "postgresStorage",
     capabilities: {
       ...postgresRecordCapabilities,
-      ...postgresVectorCapabilities(false),
+      ...postgresSearchCapabilities(false, false),
     },
   },
 };
@@ -169,12 +157,13 @@ export const semanticStorageCallNames = Object.keys(
 export function semanticStorageFactoryDescriptor(
   callName: string | undefined,
   hasLiteralSparseDimensions = false,
+  hasLiteralLexical = false,
 ): SemanticStorageFactoryDescriptor | undefined {
   const descriptor = callName ? storageFactoryByCallName[callName] : undefined;
   if (
     !descriptor ||
-    !hasLiteralSparseDimensions ||
-    (callName !== "postgresVectorStore" && callName !== "postgresStorage")
+    (!hasLiteralSparseDimensions && !hasLiteralLexical) ||
+    (callName !== "postgresSearchStore" && callName !== "postgresStorage")
   ) {
     return descriptor;
   }
@@ -182,7 +171,10 @@ export function semanticStorageFactoryDescriptor(
     ...descriptor,
     capabilities: {
       ...(callName === "postgresStorage" ? postgresRecordCapabilities : {}),
-      ...postgresVectorCapabilities(true),
+      ...postgresSearchCapabilities(
+        hasLiteralSparseDimensions,
+        hasLiteralLexical,
+      ),
     },
   };
 }
@@ -193,7 +185,7 @@ export function isSemanticStorageDefinitionKind(
 ): kind is SemanticStorageDefinitionKind {
   return (
     kind === "storage.recordStore" ||
-    kind === "storage.vectorStore" ||
+    kind === "storage.searchStore" ||
     kind === "storage.assetStore" ||
     kind === "storage.bundle" ||
     kind === "storage.scope"
@@ -204,5 +196,5 @@ export function isSemanticStorageDefinitionKind(
 export function hasSemanticStorageBundleFields(
   fields: ReadonlySet<string>,
 ): boolean {
-  return fields.has("records") || fields.has("vectors") || fields.has("assets");
+  return fields.has("records") || fields.has("search") || fields.has("assets");
 }

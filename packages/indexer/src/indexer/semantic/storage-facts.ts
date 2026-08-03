@@ -30,7 +30,7 @@ import {
   semanticStorageFactoryDescriptor,
   type SemanticStorageDefinitionKind,
 } from "./storage-model";
-type StorageReferenceProperty = "storage" | "records" | "vectors" | "assets";
+type StorageReferenceProperty = "storage" | "records" | "search" | "assets";
 interface StorageReference {
   readonly property: StorageReferenceProperty;
   readonly expression: SemanticAnalyzerNode<SemanticAnalyzerView>;
@@ -90,6 +90,7 @@ function storageDefinitionEnrichment(
   const descriptor = semanticStorageFactoryDescriptor(
     candidate.call ? callExpressionName(candidate.call, view) : undefined,
     hasLiteralSparseDimensions(candidateConfigObject(candidate, view), view),
+    hasLiteralLexical(candidateConfigObject(candidate, view), view),
   );
   const refs =
     candidate.kind === "storage.bundle"
@@ -109,7 +110,7 @@ function storageDefinitionEnrichment(
     backend: descriptor?.backend,
     capabilities: descriptor?.capabilities,
     records: storageReferenceTarget(refs, "records")?.id,
-    vectors: storageReferenceTarget(refs, "vectors")?.id,
+    search: storageReferenceTarget(refs, "search")?.id,
     assets: storageReferenceTarget(refs, "assets")?.id,
     storage: scope?.target.id,
     prefix: scope?.prefix,
@@ -125,7 +126,7 @@ function storageDefinitionEnrichment(
     backend: descriptor?.backend,
     capabilities: descriptor?.capabilities,
     recordsVariable: storageReferenceVariable(refs, "records", view),
-    vectorsVariable: storageReferenceVariable(refs, "vectors", view),
+    searchVariable: storageReferenceVariable(refs, "search", view),
     assetsVariable: storageReferenceVariable(refs, "assets", view),
     baseStorageVariable: scope
       ? expressionVariable(scope.expression, view)
@@ -160,6 +161,18 @@ function hasLiteralSparseDimensions(
   );
   return text !== undefined && Number(text) > 0;
 }
+
+function hasLiteralLexical(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView> | undefined,
+  view: SemanticAnalyzerView,
+): boolean {
+  if (!object || !view.syntax.isKind(object, "objectLiteral")) return false;
+  const initializer = propertyInitializer(object, "lexical", view);
+  return Boolean(
+    initializer && view.syntax.literalValue(unwrapExpression(initializer, view)),
+  );
+}
+
 function primitiveStorageDefinitionEnrichment(
   candidate: SemanticDefinitionCandidate,
   refs: readonly StorageReference[],
@@ -286,7 +299,7 @@ function storageReferencesForObject(
   view: SemanticAnalyzerView,
 ): StorageReference[] {
   if (!object || !view.syntax.isKind(object, "objectLiteral")) return [];
-  return (["storage", "records", "vectors", "assets"] as const).flatMap(
+  return (["storage", "records", "search", "assets"] as const).flatMap(
     (property) => {
       const initializer = propertyInitializer(object, property, view);
       if (!initializer) return [];
@@ -337,8 +350,8 @@ function storagePropertyMatchesTarget(
       );
     case "records":
       return target.kind === "storage.recordStore";
-    case "vectors":
-      return target.kind === "storage.vectorStore";
+    case "search":
+      return target.kind === "storage.searchStore";
     case "assets":
       return target.kind === "storage.assetStore";
   }
@@ -351,7 +364,7 @@ function storageDependencies(
     storage: uniqueTargets(refs, "storage"),
     storageScopes: uniqueTargets(refs, "storage", "storage.scope"),
     recordStores: uniqueTargets(refs, "records"),
-    vectorStores: uniqueTargets(refs, "vectors"),
+    searchStores: uniqueTargets(refs, "search"),
     assetStores: uniqueTargets(refs, "assets"),
   });
   return Object.keys(dependencies).length > 0 ? dependencies : undefined;
@@ -397,8 +410,8 @@ function bundleRelationType(
   switch (property) {
     case "records":
       return "storage.bundle.uses_record_store";
-    case "vectors":
-      return "storage.bundle.uses_vector_store";
+    case "search":
+      return "storage.bundle.uses_search_store";
     case "assets":
       return "storage.bundle.uses_asset_store";
     default:
@@ -410,7 +423,7 @@ function primitiveRelationType(
   ownerKind: "rag.retriever" | "workspace",
   property: StorageReferenceProperty,
 ): ProjectRelation["type"] | undefined {
-  return `${ownerKind}.uses_${property === "records" ? "record_store" : property === "vectors" ? "vector_store" : property === "assets" ? "asset_store" : "storage"}`;
+  return `${ownerKind}.uses_${property === "records" ? "record_store" : property === "search" ? "search_store" : property === "assets" ? "asset_store" : "storage"}`;
 }
 
 function storageReferenceTarget(

@@ -13,17 +13,33 @@ describe("compiler-owned PostgreSQL storage descriptors", () => {
       },
     });
     expect(
-      semanticStorageFactoryDescriptor("postgresVectorStore"),
+      semanticStorageFactoryDescriptor("postgresSearchStore"),
     ).toMatchObject({
       capabilities: {
-        vector: { dense: true, sparse: false, hybrid: false, fusion: [] },
+        search: {
+          legs: { dense: true, sparse: false, lexical: false },
+          fusion: [],
+        },
       },
     });
     expect(
-      semanticStorageFactoryDescriptor("postgresVectorStore", true),
+      semanticStorageFactoryDescriptor("postgresSearchStore", true),
     ).toMatchObject({
       capabilities: {
-        vector: { dense: true, sparse: true, hybrid: true, fusion: ["rrf"] },
+        search: {
+          legs: { dense: true, sparse: true, lexical: false },
+          fusion: ["rrf"],
+        },
+      },
+    });
+    expect(
+      semanticStorageFactoryDescriptor("postgresSearchStore", false, true),
+    ).toMatchObject({
+      capabilities: {
+        search: {
+          legs: { dense: true, sparse: false, lexical: true },
+          fusion: ["rrf"],
+        },
       },
     });
     expect(
@@ -31,7 +47,10 @@ describe("compiler-owned PostgreSQL storage descriptors", () => {
     ).toMatchObject({
       capabilities: {
         record: { ttl: "lazy", filter: "native", watch: false, batch: true },
-        vector: { dense: true, sparse: true, hybrid: true, fusion: ["rrf"] },
+        search: {
+          legs: { dense: true, sparse: true, lexical: false },
+          fusion: ["rrf"],
+        },
       },
     });
   });

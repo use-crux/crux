@@ -57,7 +57,7 @@ export interface SemanticEmbeddingConsumer {
   readonly binding: string;
   readonly indexerId?: string;
   readonly namespace?: string;
-  readonly vectorStorageKey?: string;
+  readonly searchStorageKey?: string;
   readonly mode: "dense" | "sparse" | "hybrid" | "unknown";
   readonly dense?: SemanticEmbeddingDescriptor;
   readonly sparse?: SemanticEmbeddingDescriptor;
@@ -188,8 +188,8 @@ export function semanticEmbeddingConsumerForCall(
     ...(consumerNamespace(kind, authoredId, config, view)
       ? { namespace: consumerNamespace(kind, authoredId, config, view) }
       : {}),
-    ...(vectorStorageKey(config, view)
-      ? { vectorStorageKey: vectorStorageKey(config, view) }
+    ...(searchStorageKey(config, view)
+      ? { searchStorageKey: searchStorageKey(config, view) }
       : {}),
     mode,
     ...(dense ? { dense } : {}),
@@ -285,13 +285,16 @@ function embeddingModalities(
   return ["text"];
 }
 
-function vectorStorageKey(
+function searchStorageKey(
   config: Node,
   view: SemanticAnalyzerView,
 ): string | undefined {
+  const search = propertyInitializer(config, "search", view);
   const expression =
-    propertyInitializer(config, "vectors", view) ??
-    propertyInitializer(config, "storage", view);
+    search &&
+    !view.syntax.isKind(view.syntax.unwrapExpression(search), "objectLiteral")
+      ? search
+      : propertyInitializer(config, "storage", view);
   if (!expression) return undefined;
   const resolved = resolveSemanticExpression(expression, view);
   return resolved

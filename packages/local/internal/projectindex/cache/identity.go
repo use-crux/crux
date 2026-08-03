@@ -49,6 +49,8 @@ package cache
 // runtime-rich Eval lineage. It preserves the historical Epoch 55, 59, and 60
 // collision reconciliations while ensuring neither parent snapshot can mask the
 // other's Project Index contract.
+// Epoch 67 renames Storage Beta retrieval-index Project Index read-model
+// metadata from vector-store/vectors to search-store/search.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 66
+const ProjectIndexSnapshotCacheEpoch = 67

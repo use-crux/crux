@@ -44,20 +44,18 @@ describe("index storage view model", () => {
         },
       },
       {
-        id: "storage.vectorStore:vectors",
-        kind: "storage.vectorStore",
-        name: "vectors",
+        id: "storage.searchStore:search",
+        kind: "storage.searchStore",
+        name: "search",
         fidelity: "resolved",
         status: "active",
         metadata: {
           facts: {
-            kind: "storage.vectorStore",
-            backend: "convexVectorStore",
+            kind: "storage.searchStore",
+            backend: "convexSearchStore",
             capabilities: {
-              vector: {
-                dense: true,
-                sparse: false,
-                hybrid: false,
+              search: {
+                legs: { dense: true, sparse: false, lexical: false },
                 fusion: [],
                 filter: "post",
               },
@@ -75,13 +73,13 @@ describe("index storage view model", () => {
           facts: {
             kind: "storage.bundle",
             records: "records",
-            vectors: "vectors",
+            search: "search",
           },
           storage: {
             kind: "storage.bundle",
             components: {
               recordStoreId: "storage.recordStore:records",
-              vectorStoreId: "storage.vectorStore:vectors",
+              searchStoreId: "storage.searchStore:search",
             },
             capabilities: {
               record: {
@@ -90,10 +88,8 @@ describe("index storage view model", () => {
                 watch: true,
                 batch: false,
               },
-              vector: {
-                dense: true,
-                sparse: false,
-                hybrid: false,
+              search: {
+                legs: { dense: true, sparse: false, lexical: false },
                 fusion: [],
                 filter: "post",
               },
@@ -109,14 +105,14 @@ describe("index storage view model", () => {
             ],
             warnings: [
               {
-                code: "storage.vector_filter_not_prefiltered",
+                code: "storage.search_filter_not_prefiltered",
                 severity: "warning",
                 message:
-                  "Retriever is wired to a vector store that filters after search.",
+                  "Retriever is wired to a search store that filters after search.",
                 primaryDefinitionId: "storage.bundle:appStorage",
                 relatedDefinitionIds: [
                   "rag.retriever:docs",
-                  "storage.vectorStore:vectors",
+                  "storage.searchStore:search",
                 ],
               },
             ],
@@ -135,7 +131,7 @@ describe("index storage view model", () => {
             confidence: "static",
             dependencies: {
               storage: ["appStorage"],
-              vectorStores: ["vectors"],
+              searchStores: ["search"],
             },
           },
         },
@@ -150,10 +146,10 @@ describe("index storage view model", () => {
         fidelity: "resolved",
       },
       {
-        id: "rel:vectors",
-        type: "storage.bundle.uses_vector_store",
+        id: "rel:search",
+        type: "storage.bundle.uses_search_store",
         from: "storage.bundle:appStorage",
-        to: "storage.vectorStore:vectors",
+        to: "storage.searchStore:search",
         fidelity: "resolved",
       },
       {
@@ -174,8 +170,8 @@ describe("index storage view model", () => {
       label: "Storage bundle",
       family: "state",
     });
-    expect(kindMeta("storage.vectorStore")).toMatchObject({
-      label: "Vector store",
+    expect(kindMeta("storage.searchStore")).toMatchObject({
+      label: "Search store",
       family: "state",
     });
   });
@@ -185,16 +181,16 @@ describe("index storage view model", () => {
     const inventory = storageInventoryForIndex(idx);
     expect(inventory.map((item) => item.id)).toEqual([
       "storage.recordStore:records",
-      "storage.vectorStore:vectors",
+      "storage.searchStore:search",
       "storage.bundle:appStorage",
     ]);
     const bundle = inventory.find(
       (item) => item.id === "storage.bundle:appStorage",
     );
-    expect(bundle?.components.vectorStoreId).toBe(
-      "storage.vectorStore:vectors",
+    expect(bundle?.components.searchStoreId).toBe(
+      "storage.searchStore:search",
     );
-    expect(bundle?.capabilities?.vector?.filter).toBe("post");
+    expect(bundle?.capabilities?.search?.filter).toBe("post");
     expect(bundle?.capabilities).not.toHaveProperty("asset");
     expect(bundle?.usedBy.map((use) => use.definitionId)).toEqual([
       "rag.retriever:docs",
@@ -203,7 +199,7 @@ describe("index storage view model", () => {
       storageWarningsForDef(idx.byId("storage.bundle:appStorage")!),
     ).toEqual([
       expect.objectContaining({
-        code: "storage.vector_filter_not_prefiltered",
+        code: "storage.search_filter_not_prefiltered",
       }),
     ]);
   });
