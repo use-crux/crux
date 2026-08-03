@@ -12,6 +12,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workerScript = resolve(packageRoot, '../local-workers/dist/runtime-worker.mjs')
 const activeChildren = new Set<WorkerProcess>()
 let fixtureNumber = 0
+let workerNumber = 0
 
 describe('generated Runtime worker process', () => {
   let database: PostgresTestDatabase
@@ -37,7 +38,7 @@ describe('generated Runtime worker process', () => {
     const fixture = await projectFixture(database.url)
     roots.push(fixture.root)
     const first = startWorker(fixture.root)
-    await waitForOwnership(database.url, fixture.schema, first)
+    await waitForOwnership(first)
 
     const duplicate = startWorker(fixture.root)
     await expect(exitOf(duplicate)).resolves.toMatchObject({
@@ -49,7 +50,7 @@ describe('generated Runtime worker process', () => {
     await expect(exitOf(first)).resolves.toMatchObject({ code: 0 })
 
     const replacement = startWorker(fixture.root)
-    await waitForOwnership(database.url, fixture.schema, replacement)
+    await waitForOwnership(replacement)
     replacement.child.kill('SIGINT')
     await expect(exitOf(replacement)).resolves.toMatchObject({ code: 0 })
 
@@ -90,9 +91,9 @@ describe('generated Runtime worker process', () => {
     await writeFile(
       join(root, 'config-entry.ts'),
       [
+        "import { writeFile } from 'node:fs/promises'",
         ...(delayStartup
           ? [
-              "import { writeFile } from 'node:fs/promises'",
               "if (process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER) {",
               "  await writeFile(process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER, 'loading')",
               "  await new Promise((resolve) => setTimeout(resolve, 30_000))",
@@ -102,7 +103,16 @@ describe('generated Runtime worker process', () => {
         "import { config } from '@use-crux/core'",
         "import { node } from '@use-crux/core/runtime'",
         "import { postgres } from '@use-crux/postgres/runtime'",
-        `export default config({ runtime: node({ store: postgres({ url: ${JSON.stringify(url)}, schema: '${schema}' }), namespace: 'process-test' }) })`,
+        `const store = postgres({ url: ${JSON.stringify(url)}, schema: '${schema}' })`,
+        "const maintenanceOwnership = store.maintenanceOwnership",
+        "if (!maintenanceOwnership) throw new Error('Postgres maintenance ownership is unavailable.')",
+        "const markedStore = { ...store, maintenanceOwnership: { async acquire(namespace: string) {",
+        "  const ownership = await maintenanceOwnership.acquire(namespace)",
+        "  const marker = process.env.CRUX_RUNTIME_WORKER_OWNERSHIP_MARKER",
+        "  if (ownership.acquired && marker) await writeFile(marker, 'owned')",
+        "  return ownership",
+        "} } }",
+        "export default config({ runtime: node({ store: markedStore, namespace: 'process-test' }) })",
       ].join('\n'),
     )
     await writeFile(
@@ -148,12 +158,18 @@ interface RuntimeWorkerProjectFixture {
 interface WorkerProcess {
   readonly child: ChildProcess
   readonly exited: Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>
+  readonly ownershipMarker: string
   readonly stderr: () => string
 }
 
 function startWorker(root: string, env: Readonly<Record<string, string>> = {}): WorkerProcess {
+  const ownershipMarker = join(root, `.runtime-worker-ownership-${workerNumber++}`)
   const child = spawn(process.execPath, [workerScript, root], {
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      CRUX_RUNTIME_WORKER_OWNERSHIP_MARKER: ownershipMarker,
+      ...env,
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   })
   let stderr = ''
@@ -162,7 +178,7 @@ function startWorker(root: string, env: Readonly<Record<string, string>> = {}): 
   const exited = new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>(
     (resolveExit) => child.once('exit', (code, signal) => resolveExit({ code, signal })),
   )
-  const worker = { child, exited, stderr: () => stderr }
+  const worker = { child, exited, ownershipMarker, stderr: () => stderr }
   activeChildren.add(worker)
   void exited.finally(() => activeChildren.delete(worker))
   return worker
@@ -172,22 +188,13 @@ async function exitOf(worker: WorkerProcess): Promise<{ code: number | null; sig
   return { ...await worker.exited, stderr: worker.stderr() }
 }
 
-async function waitForOwnership(url: string, schema: string, worker: WorkerProcess): Promise<void> {
-  const store = postgres({ url, schema })
-  const ownershipPort = store.maintenanceOwnership
-  if (!ownershipPort) throw new Error('Postgres maintenance ownership is unavailable.')
-  try {
-    await expect.poll(async () => {
-      if (worker.child.exitCode !== null) {
-        throw new Error(`worker exited ${worker.child.exitCode}: ${worker.stderr()}`)
-      }
-      const ownership = await ownershipPort.acquire('process-test')
-      if (ownership.acquired) await ownership.release()
-      return ownership.acquired
-    }, { timeout: 30_000 }).toBe(false)
-  } finally {
-    await store.close()
-  }
+async function waitForOwnership(worker: WorkerProcess): Promise<void> {
+  await expect.poll(async () => {
+    if (worker.child.exitCode !== null) {
+      throw new Error(`worker exited ${worker.child.exitCode}: ${worker.stderr()}`)
+    }
+    return await access(worker.ownershipMarker).then(() => true, () => false)
+  }, { timeout: 30_000 }).toBe(true)
 }
 
 async function stopWorker(worker: WorkerProcess): Promise<void> {
