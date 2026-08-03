@@ -188,7 +188,16 @@ describe('convexRuntimeStore()', () => {
         if (ref === refs.state.hasIdempotencyKey) return false as TResult
         if (ref === refs.state.getWork) return work as TResult
         if (ref === refs.leases.claim) return lease as TResult
-        if (ref === refs.composites.run) return undefined as TResult
+        if (ref === refs.composites.run) {
+          if (args.kind === 'work.lease') {
+            return encodeCompositeValue({
+              ...work,
+              status: 'leased',
+              leaseToken: lease.token,
+            }) as TResult
+          }
+          return undefined as TResult
+        }
         return null as TResult
       },
     }
@@ -235,8 +244,12 @@ describe('convexRuntimeStore()', () => {
 
     const targetIndex = calls.findIndex((call) => call.ref === targetMarker)
     expect(calls.slice(targetIndex + 1).map((call) => call.ref)).toEqual([refs.composites.run, refs.leases.release])
-    expect(calls.find((call) => call.ref === refs.composites.run)).toMatchObject({
-      args: { kind: 'wake.complete' },
-    })
+    expect(
+      calls.find(
+        (call) =>
+          call.ref === refs.composites.run &&
+          call.args.kind === 'wake.complete',
+      ),
+    ).toMatchObject({ args: { kind: 'wake.complete' } })
   })
 })

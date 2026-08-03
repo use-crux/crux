@@ -10,6 +10,8 @@ import type { RuntimeCompositeDeps } from "../composites";
 import { wakeEnvelopeForWork } from "../kernel-shared";
 import type { RuntimeWorkItem } from "../work";
 import { createRuntimeError } from "../errors";
+import { initialApplicationWorkState } from "../application-work-state";
+import { appendApplicationWorkStatusEvent } from "../application-work-events";
 
 /** Immutable inputs for one top-level application Work occurrence. */
 export interface WorkAcceptCompositeInput {
@@ -60,7 +62,7 @@ export async function acceptWorkInTransaction(
   }
 
   const now = deps.now();
-  const work = await tx.state.createWork({
+  const created = await tx.state.createWork({
     workId: input.workId,
     namespace: input.namespace,
     work: { kind: "flow.resume", flowId: input.flowId },
@@ -68,6 +70,14 @@ export async function acceptWorkInTransaction(
     idempotencyKey: input.deliveryKey,
     now,
   });
+  const work = await appendApplicationWorkStatusEvent(
+    tx,
+    Object.freeze({
+      ...created,
+      application: initialApplicationWorkState(created.workId, created.createdAt),
+    }),
+  );
+  await tx.state.putWork(work);
   const snapshot: FlowSnapshot = Object.freeze({
     flowId: input.flowId,
     workId: input.workId,

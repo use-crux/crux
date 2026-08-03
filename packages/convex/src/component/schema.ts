@@ -54,6 +54,7 @@ export default defineSchema({
     leaseToken: v.optional(v.string()),
     lastError: v.optional(v.any()),
     resultRef: v.optional(v.any()),
+    application: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

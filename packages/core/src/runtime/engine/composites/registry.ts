@@ -30,6 +30,9 @@ import type { RuntimeCompositeBody, RuntimeCompositeKind } from "../composites";
 import { publishSignalInTransaction } from "./signal";
 import { resumeFlowManuallyInTransaction } from "./flow-manual-resume";
 import { acceptWorkInTransaction } from "./work-accept";
+import { updateWorkProgressInTransaction } from "./work-progress";
+import { detachWorkInTransaction } from "./work-detach";
+import { leaseWorkInTransaction } from "./work-lease";
 
 /** Transaction body selected for every known composite name. */
 export const runtimeCompositeBodies: {
@@ -47,6 +50,9 @@ export const runtimeCompositeBodies: {
   "timers.fire-due": fireDueTimersInTransaction,
   "task.enqueue": enqueueTaskInTransaction,
   "work.accept": acceptWorkInTransaction,
+  "work.progress": updateWorkProgressInTransaction,
+  "work.detach": detachWorkInTransaction,
+  "work.lease": leaseWorkInTransaction,
   "work.cancel": cancelWorkInTransaction,
   "work.operator-retry": retryWorkInTransaction,
   "maintenance.reclaim-lease": reclaimLeasedWorkInTransaction,

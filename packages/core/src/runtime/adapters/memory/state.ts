@@ -137,6 +137,9 @@ export function createMemoryStatePort(
         maxAttempts: existing.maxAttempts,
         idempotencyKey: options.idempotencyKey,
         idleScope: existing.idleScope,
+        application: existing.application
+          ? structuredClone(existing.application)
+          : undefined,
         createdAt: new Date(existing.createdAt),
         updatedAt: options.now ? new Date(options.now) : new Date(),
       });
@@ -296,6 +299,9 @@ export function cloneWorkItem(work: RuntimeWorkItem): RuntimeWorkItem {
       : undefined,
     resultRef: work.resultRef
       ? cloneRuntimeResultRef(work.resultRef)
+      : undefined,
+    application: work.application
+      ? structuredClone(work.application)
       : undefined,
     createdAt: new Date(work.createdAt),
     updatedAt: new Date(work.updatedAt),

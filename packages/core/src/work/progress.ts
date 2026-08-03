@@ -7,11 +7,11 @@
  * wakes an owner, or changes Work ownership.
  */
 export interface WorkProgress {
-  /** Human-readable safe progress summary. */
+  /** Human-readable safe progress summary, limited to 1,024 characters. */
   readonly message?: string;
-  /** Completed units when progress is countable. */
+  /** Completed finite non-negative units when progress is countable. */
   readonly current?: number;
-  /** Total units when known. */
+  /** Finite non-negative total units, greater than or equal to `current`. */
   readonly total?: number;
 }
 

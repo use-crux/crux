@@ -212,43 +212,6 @@ describe("durable application Work execution", () => {
       host.dispose();
     }
   });
-
-  it("keeps unimplemented durable controls explicitly unavailable", async () => {
-    const review = flow("review-capability-truth", async () => "done");
-    const store = inMemoryRuntimeStore();
-    const runtime = node({
-      store,
-      namespace: "capability-truth-test",
-      autoStartMaintenance: false,
-    });
-    const program = createRuntimeProgram({ targets: [review], transports: [] });
-    const host = createWorkHost({ runtime, program });
-    const accepted = await host.run(() =>
-      spawn(review, { idempotencyKey: "request_1" }),
-    );
-
-    try {
-      await expect(
-        accepted.progress({ message: "waiting" }),
-      ).rejects.toMatchObject({
-        code: "CAPABILITY_MISSING",
-      });
-      await expect(accepted.cancel()).rejects.toMatchObject({
-        code: "CAPABILITY_MISSING",
-      });
-      await expect(accepted.detach()).rejects.toMatchObject({
-        code: "CAPABILITY_MISSING",
-      });
-      await expect(accepted.stats()).rejects.toMatchObject({
-        code: "CAPABILITY_MISSING",
-      });
-      await expect(
-        accepted.stream()[Symbol.asyncIterator]().next(),
-      ).rejects.toMatchObject({ code: "CAPABILITY_MISSING" });
-    } finally {
-      host.dispose();
-    }
-  });
 });
 
 async function waitForState(

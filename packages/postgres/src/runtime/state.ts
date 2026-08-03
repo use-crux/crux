@@ -74,8 +74,8 @@ export function createPostgresStatePort(
         `INSERT INTO ${workTable}
           (namespace, work_id, work, target_id, status, attempt, max_attempts,
            not_before, idempotency_key, idle_scope, lease_token, last_error,
-           result_ref, created_at, updated_at)
-         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14, $15)
+           result_ref, application, created_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16)
          ON CONFLICT (namespace, work_id) DO UPDATE SET
            work = EXCLUDED.work,
            target_id = EXCLUDED.target_id,
@@ -88,6 +88,7 @@ export function createPostgresStatePort(
            lease_token = EXCLUDED.lease_token,
            last_error = EXCLUDED.last_error,
            result_ref = EXCLUDED.result_ref,
+           application = EXCLUDED.application,
            created_at = EXCLUDED.created_at,
            updated_at = EXCLUDED.updated_at`,
         [
@@ -104,6 +105,7 @@ export function createPostgresStatePort(
           work.leaseToken,
           work.lastError ? encodeJson(work.lastError) : null,
           work.resultRef ? encodeJson(work.resultRef) : null,
+          work.application ? encodeJson(work.application) : null,
           work.createdAt,
           work.updatedAt,
         ],

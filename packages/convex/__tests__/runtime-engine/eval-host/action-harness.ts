@@ -120,6 +120,16 @@ export function createConvexEvalActionHarness() {
         return null as TResult;
       }
       if (ref === refs.composites.run) {
+        if (args.kind === "work.lease") {
+          return encodeCompositeValue(
+            await runComposite(
+              "work.lease",
+              decodeCompositeValue<RuntimeCompositeInput["work.lease"]>(
+                args.input,
+              ),
+            ),
+          ) as TResult;
+        }
         if (args.kind === "wake.complete") {
           return encodeCompositeValue(
             await runComposite(
@@ -224,7 +234,9 @@ export function createConvexEvalActionHarness() {
     });
   }
 
-  function runComposite<K extends "wake.complete" | "wake.retry" | "wake.fail">(
+  function runComposite<
+    K extends "work.lease" | "wake.complete" | "wake.retry" | "wake.fail",
+  >(
     kind: K,
     input: RuntimeCompositeInput[K],
   ) {

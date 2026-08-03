@@ -60,7 +60,13 @@ export function createMemoryEventPort(
         options.limit === undefined ? selected : selected.slice(0, options.limit)
       const events = limited.map((event) => cloneRuntimeEvent(event))
       const cursor = events.at(-1)?.eventId
-      return cursor ? { events, cursor } : { events }
+      return {
+        events,
+        ...(cursor ? { cursor } : {}),
+        ...(options.after === undefined
+          ? {}
+          : { afterFound: afterIndex >= 0 }),
+      }
     },
 
     async prune(options) {

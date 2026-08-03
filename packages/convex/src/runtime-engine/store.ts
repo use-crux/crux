@@ -165,10 +165,17 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         }),
       ),
     read: async (query) => {
-      const result = await run<{ events: readonly unknown[]; cursor?: string }>(refs.events.read, { ...query })
+      const result = await run<{
+        events: readonly unknown[]
+        cursor?: string
+        afterFound?: boolean
+      }>(refs.events.read, { ...query })
       return {
         events: result.events.map(decodeEvent),
         cursor: result.cursor as EventCursor | undefined,
+        ...(result.afterFound === undefined
+          ? {}
+          : { afterFound: result.afterFound }),
       }
     },
     prune: (query) =>

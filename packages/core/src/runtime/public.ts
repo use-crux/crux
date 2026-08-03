@@ -87,6 +87,11 @@ export type {
   WorkItemError,
   WorkTransition,
 } from "./engine/work";
+export type {
+  RuntimeApplicationWorkOwnership,
+  RuntimeApplicationWorkProgress,
+  RuntimeApplicationWorkState,
+} from "./engine/application-work-state";
 
 export { createRuntimeKernel, wakeEnvelopeForWork } from "./engine/kernel";
 export type {

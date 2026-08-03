@@ -4,7 +4,7 @@ import type { WorkStatus } from "./status";
 
 /** Optional safe caller context for a Work cancellation request. */
 export interface CancelOptions {
-  /** Safe reason retained with a successful cancellation, when supported. */
+  /** Safe reason retained with a successful cancellation, up to 512 characters. */
   readonly reason?: string;
 }
 

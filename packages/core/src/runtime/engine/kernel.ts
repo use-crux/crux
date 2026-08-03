@@ -40,6 +40,8 @@ import type {
 import type { SignalPublishCompositeInput } from "./composites/signal";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import type { WorkAcceptCompositeInput } from "./composites/work-accept";
+import type { WorkProgressCompositeInput } from "./composites/work-progress";
+import type { WorkDetachCompositeInput } from "./composites/work-detach";
 
 const DEFAULT_LEASE_TTL_MS = 60_000;
 
@@ -116,6 +118,10 @@ export function createRuntimeKernel(
   return Object.freeze({
     acceptWork: (input: WorkAcceptCompositeInput) =>
       runComposite("work.accept", input),
+    progressWork: (input: WorkProgressCompositeInput) =>
+      runComposite("work.progress", input),
+    detachWork: (input: WorkDetachCompositeInput) =>
+      runComposite("work.detach", input),
     resumeFlow: (input: FlowManualResumeInput) =>
       runComposite("flow.manual-resume", input),
     publishSignal: (input: SignalPublishCompositeInput) =>

@@ -42,7 +42,11 @@ export const read = mutation({
       sorted.slice(afterIndex + 1).map(toRuntimeEvent),
       limit,
     )
-    return { events, cursor: events.at(-1)?.eventId ?? after }
+    return {
+      events,
+      cursor: events.at(-1)?.eventId ?? after,
+      ...(after ? { afterFound: afterIndex >= 0 } : {}),
+    }
   },
 })
 

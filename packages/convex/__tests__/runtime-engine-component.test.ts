@@ -181,6 +181,7 @@ describe('Crux Convex Runtime Engine component', () => {
     await expect(t.mutation(readEvents, { namespace: 'tenant-a', after: 'evt-first' })).resolves.toEqual({
       events: [expect.objectContaining({ eventId: second.eventId, name: 'second' })],
       cursor: second.eventId,
+      afterFound: true,
     })
   })
 

@@ -2,15 +2,22 @@
 
 import type { EffectScopeRef } from "../../effect";
 import type { ResolvedRuntimeEngine } from "../../runtime/api/create-runtime";
-import { createRuntimeError } from "../../runtime/engine/errors";
 import type { RuntimeWorkItem } from "../../runtime/engine/work";
 import type { FlowSnapshot } from "../../runtime/ports/state";
+import type { WorkId } from "../../runtime/ports/ids";
 import type { WorkHandle } from "../handle";
-import type { CancelReceipt } from "../cancellation";
+import type { CancelOptions, CancelReceipt } from "../cancellation";
 import type { DetachReceipt } from "../detachment";
 import type { ExecutionStats } from "../handle";
 import type { WorkStatus } from "../status";
 import { durableWorkResult } from "./durable-result";
+import { WorkNotActiveError } from "../errors";
+import type { WorkProgress } from "../progress";
+import { applicationWorkStatistics } from "../../runtime/engine/application-work-statistics";
+import type { WorkStreamOptions } from "../events";
+import { durableWorkStatus } from "./durable-status";
+import { durableWorkStream } from "./durable-stream";
+import { retainedWorkMissing } from "./durable-errors";
 
 /** Project durable Runtime records into the canonical public Work handle. */
 export function durableWorkHandle<TResult>(
@@ -30,7 +37,7 @@ export function durableWorkHandle<TResult>(
       namespace: runtime.namespace,
     });
     if (!current) throw retainedWorkMissing(id);
-    return publicStatus(current);
+    return durableWorkStatus(current);
   };
 
   return Object.freeze({
@@ -38,98 +45,146 @@ export function durableWorkHandle<TResult>(
     effects,
     status,
     result: () => durableWorkResult<TResult>(runtime, work.workId),
-    progress: () => unavailable<void>("progress()", id),
-    cancel: () => unavailable<CancelReceipt>("cancel()", id),
-    detach: () => unavailable<DetachReceipt>("detach()", id),
-    stream: async function* () {
-      await unavailable<void>("stream()", id);
-    },
-    stats: () => unavailable<ExecutionStats>("stats()", id),
+    progress: (update: WorkProgress) => updateProgress(runtime, id, update),
+    cancel: (options?: CancelOptions) => cancelWork(runtime, id, options),
+    detach: () => detachWork(runtime, id),
+    stream: (options?: WorkStreamOptions) =>
+      durableWorkStream(runtime, id, options),
+    stats: () => readStatistics(runtime, id),
   });
 }
 
-function publicStatus(work: RuntimeWorkItem): WorkStatus {
-  const base = Object.freeze({
-    id: work.workId,
-    ownership: Object.freeze({ state: "attached" as const }),
-    updatedAt: new Date(work.updatedAt),
+async function readStatistics(
+  runtime: ResolvedRuntimeEngine,
+  id: WorkId,
+): Promise<ExecutionStats> {
+  const current = await runtime.store.state.getWork(id, {
+    namespace: runtime.namespace,
   });
-  switch (work.status) {
-    case "pending":
-      return Object.freeze({
-        ...base,
-        state: "queued",
-        acceptedAt: new Date(work.createdAt),
-      });
-    case "leased":
-      return Object.freeze({
-        ...base,
-        state: "running",
-        startedAt: new Date(work.updatedAt),
-      });
-    case "suspended":
-      return Object.freeze({
-        ...base,
-        state: "suspended",
-        suspendedOn: Object.freeze({ kind: "other" }),
-      });
-    case "blocked":
-      return Object.freeze({
-        ...base,
-        state: "blocked",
-        blockedOn: Object.freeze({
-          kind: "other",
-          code: work.lastError?.code ?? "work_blocked",
-          message: work.lastError?.message ?? "Work is blocked.",
-        }),
-      });
-    case "dead-letter":
-      return Object.freeze({
-        ...base,
-        state: "failed",
-        failedAt: new Date(work.updatedAt),
-        failure: Object.freeze({
-          code: work.lastError?.code ?? "work_failed",
-          message: work.lastError?.message ?? "Work failed.",
-          retryable: false,
-        }),
-      });
-    case "completed":
-      return Object.freeze({
-        ...base,
-        state: "completed",
-        completedAt: new Date(work.updatedAt),
-        resultAvailable: work.resultRef !== undefined,
-      });
-    case "cancelled":
-      return Object.freeze({
-        ...base,
-        state: "cancelled",
-        cancelledAt: new Date(work.updatedAt),
-      });
-  }
-}
-
-function unavailable<TResult>(api: string, id: string): Promise<TResult> {
-  return Promise.reject(
-    createRuntimeError({
-      code: "CAPABILITY_MISSING",
-      whatFailed: `${api} is not available for durable Work \`${id}\` in this runtime slice.`,
-      why: "This host has no durable implementation for this capability.",
-      whatStillWorks:
-        "status(), result(), and reconnection remain available for the Work.",
-      nextStep:
-        "Use status() or result() until the requested durable capability is installed.",
-    }),
+  if (!current) throw retainedWorkMissing(id);
+  return applicationWorkStatistics(
+    current.application,
+    current.workId,
+    current.createdAt,
   );
 }
 
-function retainedWorkMissing(id: string): Error {
-  return createRuntimeError({
-    code: "TARGET_NOT_FOUND",
-    whatFailed: `Work \`${id}\` is no longer retained.`,
-    why: "Its Runtime control record is absent from the configured namespace.",
-    whatStillWorks: "Other retained Work occurrences remain readable.",
-    nextStep: "Check the retention policy before reconnecting this Work.",
+async function detachWork(
+  runtime: ResolvedRuntimeEngine,
+  id: WorkId,
+): Promise<DetachReceipt> {
+  const result = await runtime.kernel.detachWork({
+    namespace: runtime.namespace,
+    workId: id,
   });
+  if (result.outcome === "not-found") throw retainedWorkMissing(id);
+  return Object.freeze({
+    workId: id,
+    outcome: result.outcome,
+    ownership: durableWorkStatus(result.work).ownership,
+  });
+}
+
+async function cancelWork(
+  runtime: ResolvedRuntimeEngine,
+  id: WorkId,
+  options?: CancelOptions,
+): Promise<CancelReceipt> {
+  const reason = validatedCancellationReason(options?.reason);
+  const result = await runtime.kernel.cancelWork({
+    namespace: runtime.namespace,
+    workId: id,
+    ...(reason === undefined ? {} : { reason }),
+  });
+  const current = await runtime.store.state.getWork(id, {
+    namespace: runtime.namespace,
+  });
+  if (!current) throw retainedWorkMissing(id);
+  const status = terminalStatus(durableWorkStatus(current));
+  return Object.freeze({
+    workId: id,
+    outcome: result.cancelled ? "cancelled" : "already-terminal",
+    status,
+  });
+}
+
+function validatedCancellationReason(
+  reason: string | undefined,
+): string | undefined {
+  if (reason === undefined) return undefined;
+  if (typeof reason !== "string" || reason.length > 512) {
+    throw new TypeError(
+      "Work cancellation reason must be at most 512 characters.",
+    );
+  }
+  return reason;
+}
+
+function terminalStatus(
+  status: WorkStatus,
+): Extract<
+  WorkStatus,
+  { readonly state: "completed" | "failed" | "cancelled" }
+> {
+  if (
+    status.state === "completed" ||
+    status.state === "failed" ||
+    status.state === "cancelled"
+  ) {
+    return status;
+  }
+  throw new Error("Work cancellation did not reach a terminal state.");
+}
+
+async function updateProgress(
+  runtime: ResolvedRuntimeEngine,
+  id: WorkId,
+  update: WorkProgress,
+): Promise<void> {
+  const progress = validatedProgress(update);
+  const result = await runtime.kernel.progressWork({
+    namespace: runtime.namespace,
+    workId: id,
+    progress,
+  });
+  if (result.outcome === "already-terminal") throw new WorkNotActiveError(id);
+  if (result.outcome === "not-found") throw retainedWorkMissing(id);
+}
+
+function validatedProgress(update: WorkProgress): WorkProgress {
+  if (!update || typeof update !== "object" || Array.isArray(update)) {
+    throw new TypeError("Work progress must be an object.");
+  }
+  const message = update.message;
+  if (
+    message !== undefined &&
+    (typeof message !== "string" || message.length > 1_024)
+  ) {
+    throw new TypeError(
+      "Work progress message must be at most 1024 characters.",
+    );
+  }
+  const current = progressNumber(update.current, "current");
+  const total = progressNumber(update.total, "total");
+  if (current !== undefined && total !== undefined && current > total) {
+    throw new TypeError("Work progress current must not exceed total.");
+  }
+  return Object.freeze({
+    ...(message === undefined ? {} : { message }),
+    ...(current === undefined ? {} : { current }),
+    ...(total === undefined ? {} : { total }),
+  });
+}
+
+function progressNumber(
+  value: number | undefined,
+  name: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new TypeError(
+      `Work progress ${name} must be a non-negative finite number.`,
+    );
+  }
+  return value;
 }

@@ -13,6 +13,7 @@ import "../../src/runtime/api/host-context";
 import "../../src/runtime/execution-context";
 import "../../src/scope/kernel";
 import "../../src/work/internal/attached-context";
+import "../../src/work/internal/durable-host-context";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
 const facetDeclaration =

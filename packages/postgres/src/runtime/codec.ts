@@ -52,6 +52,12 @@ export function decodeWorkItem(row: JsonRecord): RuntimeWorkItem {
       : {}),
     ...withLastError(row.last_error),
     ...(row.result_ref ? { resultRef: decodeResultRef(row.result_ref) } : {}),
+    ...(row.application
+      ? {
+          application:
+            row.application as NonNullable<RuntimeWorkItem['application']>,
+        }
+      : {}),
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
   })

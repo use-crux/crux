@@ -124,11 +124,12 @@ export async function handleWake(
       return { status: 200, outcome: 'retry-scheduled' }
     }
 
-    const leased = transition(fresh, {
-      status: 'leased',
+    const leased = await deps.runComposite('work.lease', {
+      namespace: fresh.namespace,
+      workId: fresh.workId,
       leaseToken: lease.token,
     })
-    await deps.store.state.putWork(leased)
+    if (!leased) return { status: 409, outcome: 'busy' }
 
     const heartbeat = startLeaseExtensionHeartbeat(
       {

@@ -55,6 +55,8 @@ export interface ReadEventsResult {
   readonly events: readonly RuntimeEvent[]
   /** Cursor for the last returned event, absent when no events were returned. */
   readonly cursor?: EventCursor
+  /** Whether the requested `after` cursor is still retained. */
+  readonly afterFound?: boolean
 }
 
 /** Durable append-only event port. */

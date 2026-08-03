@@ -41,14 +41,28 @@ export interface WorkHandle<TResult> {
    * @throws `WorkResultExpiredError` when the terminal payload is no longer retained.
    */
   result(): Promise<TResult>;
-  /** Replace the current bounded progress snapshot for live Work. */
+  /**
+   * Replace the current bounded progress snapshot for live Work.
+   *
+   * @throws `WorkNotActiveError` after completion, failure, or cancellation.
+   * @throws `TypeError` when the update exceeds its public safety bounds.
+   */
   progress(update: WorkProgress): Promise<void>;
-  /** Request cooperative cancellation without promising physical preemption. */
+  /**
+   * Request idempotent cooperative cancellation.
+   *
+   * @remarks A concurrent completion that commits first remains authoritative.
+   */
   cancel(options?: CancelOptions): Promise<CancelReceipt>;
-  /** Release the current owner's obligation without cancelling execution. */
+  /** Release the current owner's obligation without cancelling or waking Work. */
   detach(): Promise<DetachReceipt>;
-  /** Read a snapshot followed by ordered, deduplicable safe events. */
+  /**
+   * Read ordered, deduplicable safe events until the terminal boundary.
+   *
+   * @remarks Without `after`, or when its cursor expired, the first event is a
+   * replacement snapshot. Streams never contain results or raw failures.
+   */
   stream(options?: WorkStreamOptions): AsyncIterable<WorkEvent>;
-  /** Read bounded execution statistics for this Work occurrence. */
+  /** Read the bounded owner-scoped statistics-ledger projection. */
   stats(): Promise<ExecutionStats>;
 }

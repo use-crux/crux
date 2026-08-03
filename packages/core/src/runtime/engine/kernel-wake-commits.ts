@@ -39,6 +39,11 @@ import {
   applicationWorkFailure,
   type WakeFailureInput,
 } from "./application-work-failure";
+import {
+  appendApplicationWorkStatusEvent,
+  recordApplicationWorkStatusTransition,
+} from "./application-work-events";
+import { recordApplicationWorkTransition } from "./application-work-statistics";
 
 export type { WakeFailureInput } from "./application-work-failure";
 interface FailWorkOptions {
@@ -153,14 +158,23 @@ export async function retryWorkAfterFailureInTransaction(
     input.work,
     input.leaseToken,
   );
-  const retryWork = transition(current, {
+  let retryWork = transition(current, {
     status: "pending",
     attempt: current.attempt + 1,
     notBefore: input.retryAt,
   });
   await persistMergedRetrySnapshot(tx, input.retrySnapshot);
   await recordSignalDeliveryAttempt(tx, current, "pending", deps.now());
-  await tx.state.putWork(retryWork);
+  if (retryWork.application) {
+    retryWork = await recordApplicationWorkStatusTransition(
+      tx,
+      current,
+      retryWork,
+      deps.now(),
+    );
+  } else {
+    await tx.state.putWork(retryWork);
+  }
   await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
     deliverAt: input.retryAt,
   });
@@ -181,7 +195,7 @@ export async function failWorkInTransaction(
     input.work,
     input.leaseToken,
   );
-  const failedWork = transition(current, {
+  let failedWork = transition(current, {
     status: input.failure.kind === "dead-letter" ? "dead-letter" : "blocked",
     lastError: await applicationWorkFailure(
       tx,
@@ -190,6 +204,16 @@ export async function failWorkInTransaction(
       deps.now,
     ),
   });
+  const failedAt = deps.now();
+  failedWork = await appendApplicationWorkStatusEvent(
+    tx,
+    recordApplicationWorkTransition(current, failedWork, failedAt, {
+      completed: failedWork.status === "dead-letter",
+      ...(failedWork.status === "dead-letter"
+        ? { facts: [{ kind: "failure", failureKind: "work" }] }
+        : {}),
+    }),
+  );
 
   await settleFailedSignalWork(
     tx,
@@ -233,7 +257,7 @@ export async function completeWorkInTransaction(
     return;
   }
 
-  const completed =
+  let completed =
     input.outcome.status === "completed"
       ? transition(current, {
           status: "completed",
@@ -245,6 +269,17 @@ export async function completeWorkInTransaction(
             status: "blocked",
             lastError: input.outcome.error,
           });
+  const completedAt = deps.now();
+  completed = await appendApplicationWorkStatusEvent(
+    tx,
+    recordApplicationWorkTransition(current, completed, completedAt, {
+      completed:
+        completed.status === "completed" || completed.status === "cancelled",
+      ...(completed.status === "cancelled"
+        ? { facts: [{ kind: "lifecycle" as const, event: "cancellation" as const }] }
+        : {}),
+    }),
+  );
   if (
     (input.outcome.status === "completed" ||
       input.outcome.status === "cancelled") &&

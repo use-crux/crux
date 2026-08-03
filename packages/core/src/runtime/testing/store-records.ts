@@ -66,6 +66,7 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
     ).resolves.toEqual({
       events: [expect.objectContaining({ eventId: second.eventId })],
       cursor: second.eventId,
+      afterFound: true,
     })
   })
 

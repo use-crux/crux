@@ -2,8 +2,8 @@
 "@use-crux/core": minor
 "@use-crux/indexer": minor
 "@use-crux/local": minor
-"@use-crux/postgres": patch
-"@use-crux/convex": patch
+"@use-crux/postgres": minor
+"@use-crux/convex": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -87,16 +87,21 @@ terminal commit. `WorkHandle.result()` now joins the exact inferred output from
 both original and reconnected handles, duplicate wakes retain one terminal
 result, Runtime Flow suspension preserves the pinned definition/result
 obligation through resume, and terminal Work failures persist only safe public
-summaries. Progress, cancellation, detachment, statistics, and live event
-streaming remain explicitly unsupported for durable Work in this slice.
+summaries. Durable Work now supports bounded latest progress, cooperative
+idempotent cancellation, ownership-only detachment, safe cursor-resumable event
+streams, and restart-safe owner-scoped statistics through the existing Runtime
+state machine, cancellation composite, durable event port, and statistics
+ledger.
 
 PostgreSQL Runtime storage now persists the pinned Work result obligation and
-content-addressed terminal result. Independent application hosts can reconnect
+content-addressed terminal result, safe control metadata, and statistics ledger
+export. Independent application hosts can reconnect
 after worker restart and read the exact typed Flow result. Referenced payloads
 survive retention pruning; missing payloads raise `WorkResultExpiredError`
 without re-enqueuing or re-executing Work.
 
 Convex Runtime storage now persists the pinned Work definition and result
-obligation with content-addressed terminal results. Independent application
+obligation with content-addressed terminal results and safe Work control
+metadata. Independent application
 hosts reconnect after worker restart, duplicate wakes preserve the first result,
 and expired payloads raise `WorkResultExpiredError` without re-executing Work.

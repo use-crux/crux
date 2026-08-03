@@ -43,6 +43,7 @@ export const REQUIRED_COLUMNS: Readonly<
     'lease_token',
     'last_error',
     'result_ref',
+    'application',
     'created_at',
     'updated_at',
   ],
@@ -153,12 +154,15 @@ export function ddlStatements(schema: string): readonly string[] {
       lease_token text,
       last_error jsonb,
       result_ref jsonb,
+      application jsonb,
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (namespace, work_id)
     )`,
     `ALTER TABLE ${work}
       ADD COLUMN IF NOT EXISTS result_ref jsonb`,
+    `ALTER TABLE ${work}
+      ADD COLUMN IF NOT EXISTS application jsonb`,
     `CREATE TABLE IF NOT EXISTS ${snapshots} (
       namespace text NOT NULL,
       flow_id text NOT NULL,

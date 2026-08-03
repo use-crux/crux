@@ -9,14 +9,14 @@ import {
   WorkFailedError,
   WorkResultExpiredError,
 } from "../errors";
-
-const RESULT_POLL_INTERVAL_MS = 10;
+import { waitForDurableWorkChange } from "./durable-wait";
 
 /** Wait for one terminal Work row and return its retained typed result. */
 export async function durableWorkResult<TResult>(
   runtime: ResolvedRuntimeEngine,
   id: WorkId,
 ): Promise<TResult> {
+  let waitAttempt = 0;
   for (;;) {
     const work = await runtime.store.state.getWork(id, {
       namespace: runtime.namespace,
@@ -35,12 +35,12 @@ export async function durableWorkResult<TResult>(
           }),
         );
       case "cancelled":
-        throw new WorkCancelledError(id);
+        throw new WorkCancelledError(id, work.application?.cancellationReason);
       case "pending":
       case "leased":
       case "suspended":
       case "blocked":
-        await waitForResultPoll();
+        waitAttempt = await waitForDurableWorkChange(waitAttempt);
     }
   }
 }
@@ -65,8 +65,4 @@ async function readCompletedResult<TResult>(
   const result = await results.get(ref);
   if (result === null) throw new WorkResultExpiredError(id);
   return result as TResult;
-}
-
-function waitForResultPoll(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, RESULT_POLL_INTERVAL_MS));
 }

@@ -46,10 +46,14 @@ export function createPostgresEventPort(
     },
 
     async read(options: ReadEventsOptions): Promise<ReadEventsResult> {
+      const afterFound =
+        options.after === undefined
+          ? undefined
+          : await containsCursor(options.namespace, options.after)
       const values: unknown[] = [options.namespace]
       const filters = ['namespace = $1']
-      if (options.after !== undefined) {
-        values.push(Number(options.after))
+      if (options.after !== undefined && /^\d+$/.test(options.after)) {
+        values.push(options.after)
         filters.push(`event_id > $${values.length}`)
       }
       values.push(options.limit ?? 100)
@@ -62,7 +66,11 @@ export function createPostgresEventPort(
       )
       const readEvents = result.rows.map(decodeRuntimeEvent)
       const cursor = readEvents.at(-1)?.eventId
-      return cursor ? { events: readEvents, cursor } : { events: readEvents }
+      return {
+        events: readEvents,
+        ...(cursor ? { cursor } : {}),
+        ...(afterFound === undefined ? {} : { afterFound }),
+      }
     },
 
     async prune(options) {
@@ -77,6 +85,18 @@ export function createPostgresEventPort(
         limit: options.limit,
       })
     },
+  }
+
+  async function containsCursor(
+    namespace: string,
+    cursor: string,
+  ): Promise<boolean> {
+    if (!/^\d+$/.test(cursor)) return false
+    const result = await db.query(
+      `SELECT 1 FROM ${events} WHERE namespace = $1 AND event_id = $2`,
+      [namespace, cursor],
+    )
+    return Boolean(result.rows[0])
   }
 
   async function findDuplicate(

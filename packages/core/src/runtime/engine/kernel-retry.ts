@@ -13,6 +13,7 @@ import { operatorRetryEventName, operatorRetryKey } from './idempotency'
 import type { RetryWorkInput, RetryWorkResult } from './kernel-types'
 import { wakeEnvelopeForWork } from './kernel-shared'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
+import { recordApplicationWorkStatusTransition } from './application-work-events'
 
 /** Dependencies for operator retry. */
 export interface KernelRetryDeps extends RuntimeCompositeDeps {
@@ -44,7 +45,7 @@ export async function retryWorkInTransaction(
     return { retried: false }
   }
 
-  const retried = await tx.state.setWorkPending(input.workId, {
+  let retried = await tx.state.setWorkPending(input.workId, {
     namespace: input.namespace,
     work: current.work,
     idempotencyKey: operatorRetryKey(input.workId, deps.now()),
@@ -52,6 +53,14 @@ export async function retryWorkInTransaction(
     from: ['blocked', 'dead-letter'],
   })
   if (!retried) return { retried: false }
+  if (retried.application) {
+    retried = await recordApplicationWorkStatusTransition(
+      tx,
+      current,
+      retried,
+      deps.now(),
+    )
+  }
 
   if (current.idleScope) {
     await tx.state.incrementIdle(current.namespace, current.idleScope)
