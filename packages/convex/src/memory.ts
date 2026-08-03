@@ -15,7 +15,7 @@ import { convexRuntimeStorage, resolveConvexMemoryNamespace } from './runtime'
 export {
   inMemoryRecordStore,
   inMemoryStorage,
-  inMemoryVectorStore,
+  inMemorySearchStore,
   memoryBlock,
   workingState,
   episodes,
@@ -49,19 +49,21 @@ export type {
   RecordListOptions,
   RecordPage,
   RecordStore,
+  SearchHit,
+  SearchQuery,
+  SearchStore,
   SparseVector,
   Storage,
-  VectorHit,
-  VectorSearchQuery,
-  VectorStore,
 } from '@use-crux/core/memory'
+
+export type { SearchRecord } from '@use-crux/core/storage'
 
 export type ConvexMemoryConfig = Omit<MemoryConfig, 'namespace'> & {
   namespace?: MemoryNamespace
 }
 
 export function memory(config: ConvexMemoryConfig): Memory {
-  const resolved = config.storage || config.records ? config : { ...config, storage: convexRuntimeStorage }
+  const resolved = config.storage || config.records || config.search ? config : { ...config, storage: convexRuntimeStorage }
   return coreMemory({
     ...resolved,
     namespace: config.namespace ?? ((args) => resolveConvexMemoryNamespace(args)),

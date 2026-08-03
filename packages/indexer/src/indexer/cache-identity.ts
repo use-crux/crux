@@ -7,12 +7,12 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  * Cache epochs are intentional invalidation levers for compiler behavior that is not captured by
  * source/config hashes or structured dependency identities.
  */
-export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v88";
+export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v89";
 /**
- * Semantic v45 combines the independently advanced Agent-tool projection and
- * canonical PromptText identities nested inside callback interpolations.
+ * Semantic v46 renames Storage Beta retrieval-index Project Index output from
+ * vector-store/vectors facts to search-store/search facts.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v45";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v46";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

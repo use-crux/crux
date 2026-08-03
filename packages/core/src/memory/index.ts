@@ -13,7 +13,7 @@ export { toStoreValue } from './utils'
 export type { RawMemoryDocument } from './utils'
 
 // Re-export Storage Beta helpers for convenience
-export { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../storage'
+export { inMemoryRecordStore, inMemoryStorage, inMemorySearchStore } from '../storage'
 export type {
   ExactFilter,
   JsonObject,
@@ -21,11 +21,11 @@ export type {
   RecordListOptions,
   RecordPage,
   RecordStore,
+  SearchHit,
+  SearchQuery,
+  SearchStore,
   SparseVector,
-  VectorSearchQuery,
   Storage,
-  VectorHit,
-  VectorStore,
 } from '../storage'
 
 // Block-based memory primitives

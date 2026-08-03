@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { corpus, indexer, indexingPipeline, transform } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 describe('corpus', () => {
   function setup() {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const dense = embedding({
       kind: 'dense',
@@ -21,14 +21,14 @@ describe('corpus', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       dense,
     })
     const docs = corpus({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       indexer: docsIndexer,
     })
 
@@ -76,9 +76,9 @@ describe('corpus', () => {
     expect(source?.indexedAt).toEqual(expect.any(Number))
   })
 
-  it('accepts explicit RecordStore and VectorStore capabilities', async () => {
+  it('accepts explicit RecordStore and SearchStore capabilities', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const dense = embedding({
       kind: 'dense',
       name: 'dense-test',
@@ -91,10 +91,10 @@ describe('corpus', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       dense,
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, search, indexer: docsIndexer })
 
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
@@ -103,12 +103,12 @@ describe('corpus', () => {
 
     it('records the indexing pipeline stages on source records', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       cache: true,
       pipeline: indexingPipeline({
         documents: [
@@ -122,7 +122,7 @@ describe('corpus', () => {
         ],
       }),
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, search, indexer: docsIndexer })
 
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: '  Hello pipeline  ' }])
 
@@ -164,13 +164,13 @@ describe('corpus', () => {
 
     it('ignores excluded volatile metadata when hashing sources', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
-    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', records, vectors })
+    const search = inMemorySearchStore()
+    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', records, search })
     const docs = corpus({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       indexer: docsIndexer,
       hash: { excludeMetadata: ['mtimeMs'] },
     })
@@ -231,12 +231,12 @@ describe('corpus', () => {
 
     it('records failed sources while continuing the sync', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -250,7 +250,7 @@ describe('corpus', () => {
         ],
       }),
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, search, indexer: docsIndexer })
 
     const result = await docs.sync([
       { namespace: 'kb', sourceId: 'bad', content: 'Bad' },

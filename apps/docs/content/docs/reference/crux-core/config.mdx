@@ -262,7 +262,7 @@ locality from source discovery.
 | Option            | Type          | Default     | Notes                                                                      |
 | ----------------- | ------------- | ----------- | -------------------------------------------------------------------------- |
 | `storage.records` | `RecordStore` | required    | Used by durable flows, plans, tasks, and Runtime Bridge record reads.      |
-| `storage.vectors` | `VectorStore` | `undefined` | Optional vector-search capability.                                         |
+| `storage.search`  | `SearchStore` | `undefined` | Optional retrieval-search capability.                                      |
 | `storage.assets`  | `AssetStore`  | `undefined` | Optional media and oversized-payload capability.                           |
 
 ```ts title="crux.config.ts"

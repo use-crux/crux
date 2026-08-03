@@ -116,10 +116,10 @@ Each media document part produces one independently retrievable chunk. Split a
 PDF into pages, an audio file into intervals, or a video into clips upstream
 when those units need independent hits and source locations.
 
-## Search Modes
+## Search Plans
 
-Media queries use the dense embedding. A hybrid retriever therefore runs its
-dense side only for media input; sparse embeddings remain text-only. Custom
+Media queries use the dense embedding. A multi-leg retriever therefore runs its
+dense side only for media input; sparse embeddings and lexical search remain text-only. Custom
 retrievers and model-backed query rewrite/fanout steps accept text queries only
 unless their own contract explicitly supports media.
 

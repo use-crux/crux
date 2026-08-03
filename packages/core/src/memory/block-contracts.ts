@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod'
-import type { RecordStore, Storage, VectorStore } from '../storage'
+import type { RecordStore, SearchStore, Storage } from '../storage'
 import type { AnyToolSet } from '../types'
 import type { MemoryBudget } from './rendering'
 
@@ -55,8 +55,8 @@ export interface MemoryRuntimeOptions {
   readonly storage?: Storage
   /** Record store used for block reads, writes, and listing. */
   readonly records: RecordStore
-  /** Optional vector store used by semantic block recall. */
-  readonly vectors?: VectorStore
+  /** Optional search store used by semantic block recall. */
+  readonly search?: SearchStore
   /** Stable tenant, user, thread, session, or agent scope. */
   readonly namespace: string
   /** Composed memory id used in storage keys. Defaults to `standalone`. */

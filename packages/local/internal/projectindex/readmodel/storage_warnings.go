@@ -14,17 +14,17 @@ func storageWarnings(def store.ProjectDefinition, summary storageDefinitionSumma
 				RelatedDefinitionIDs: []string{def.ID},
 			})
 		}
-		if use.Kind == "rag.retriever" && vectorFilterCapability(summary.Capabilities) == "post" {
+		if use.Kind == "rag.retriever" && searchFilterCapability(summary.Capabilities) == "post" {
 			warnings = append(warnings, storageWarningSummary{
-				Code:                 "storage.vector_filter_not_prefiltered",
+				Code:                 "storage.search_filter_not_prefiltered",
 				Severity:             "warning",
-				Message:              "Retriever is wired to a vector store that filters after search; filtered retrieval needs pre-filtering for production correctness.",
+				Message:              "Retriever is wired to a search store that filters after search; filtered retrieval needs pre-filtering for production correctness.",
 				PrimaryDefinitionID:  def.ID,
-				RelatedDefinitionIDs: []string{use.DefinitionID, summary.Components.VectorStoreID},
+				RelatedDefinitionIDs: []string{use.DefinitionID, summary.Components.SearchStoreID},
 			})
 		}
 	}
-	if def.Kind == "storage.vectorStore" && vectorFilterCapability(summary.Capabilities) == "post" {
+	if def.Kind == "storage.searchStore" && searchFilterCapability(summary.Capabilities) == "post" {
 		for _, relation := range relations.incoming[def.ID] {
 			parent := byID[relation.From]
 			if parent.Kind == "storage.bundle" || parent.Kind == "storage.scope" {
@@ -32,9 +32,9 @@ func storageWarnings(def store.ProjectDefinition, summary storageDefinitionSumma
 			}
 			if parent.Kind == "rag.retriever" {
 				warnings = append(warnings, storageWarningSummary{
-					Code:                 "storage.vector_filter_not_prefiltered",
+					Code:                 "storage.search_filter_not_prefiltered",
 					Severity:             "warning",
-					Message:              "Retriever is wired to a vector store that filters after search; filtered retrieval needs pre-filtering for production correctness.",
+					Message:              "Retriever is wired to a search store that filters after search; filtered retrieval needs pre-filtering for production correctness.",
 					PrimaryDefinitionID:  def.ID,
 					RelatedDefinitionIDs: []string{parent.ID},
 				})
@@ -44,9 +44,9 @@ func storageWarnings(def store.ProjectDefinition, summary storageDefinitionSumma
 	return dedupeStorageWarnings(warnings)
 }
 
-func vectorFilterCapability(capabilities map[string]any) string {
-	vector := rawMapAny(capabilities["vector"])
-	filter, _ := vector["filter"].(string)
+func searchFilterCapability(capabilities map[string]any) string {
+	search := rawMapAny(capabilities["search"])
+	filter, _ := search["filter"].(string)
 	return filter
 }
 
@@ -89,8 +89,8 @@ func storageWarningTitle(code string) string {
 	switch code {
 	case "storage.workspace_asset_missing":
 		return "Workspace has no asset store"
-	case "storage.vector_filter_not_prefiltered":
-		return "Vector filters are not pre-filtered"
+	case "storage.search_filter_not_prefiltered":
+		return "Search filters are not pre-filtered"
 	default:
 		return "Storage capability warning"
 	}

@@ -7,10 +7,13 @@ import {
 
 export interface RetrievalEntries {
   query?: string;
-  /** retrieval mode (e.g. `hybrid`, `dense`, `sparse`). */
+  /** retrieval mode (`search` or `custom`). */
   mode?: string;
   /** fusion strategy (e.g. `rrf`). */
   fusion?: string;
+  rrfK?: number;
+  searchLegs?: string[];
+  searchCandidates?: Record<string, number>;
   /** number of hits returned after the pipeline. */
   returned?: number;
   /** requested top-k limit. */
@@ -25,6 +28,18 @@ function asString(v: unknown): string | undefined {
 function asNumber(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
+function asStringArray(v: unknown): string[] | undefined {
+  return Array.isArray(v) && v.every((entry) => typeof entry === "string")
+    ? v
+    : undefined;
+}
+function asNumberRecord(v: unknown): Record<string, number> | undefined {
+  if (v == null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const entries = Object.entries(v);
+  return entries.every(([, entry]) => typeof entry === "number")
+    ? Object.fromEntries(entries)
+    : undefined;
+}
 
 export function retrievalEntries(
   node: ObservabilityRunDetailNode,
@@ -36,13 +51,16 @@ export function retrievalEntries(
     : [];
 
   // Prefer the typed `retrieval.hits` preview (CruxRetrievalHitsPreview): it
-  // carries query/mode/fusion/limit/returned + hits[] + stages[] in one place.
+  // carries query/mode/search metadata/limit/returned + hits[] + stages[] in one place.
   const hitsArt = findArtifact(node, "retrieval.hits")?.preview;
   if (hitsArt && typeof hitsArt === "object" && !Array.isArray(hitsArt)) {
     const p = hitsArt as {
       query?: unknown;
       mode?: unknown;
       fusion?: unknown;
+      rrfK?: unknown;
+      searchLegs?: unknown;
+      searchCandidates?: unknown;
       limit?: unknown;
       returned?: unknown;
       hits?: unknown;
@@ -58,6 +76,9 @@ export function retrievalEntries(
       query: asString(p.query) ?? attrQuery,
       mode: asString(p.mode),
       fusion: asString(p.fusion),
+      rrfK: asNumber(p.rrfK),
+      searchLegs: asStringArray(p.searchLegs),
+      searchCandidates: asNumberRecord(p.searchCandidates),
       returned: asNumber(p.returned) ?? hits.length,
       limit: asNumber(p.limit),
       hits,

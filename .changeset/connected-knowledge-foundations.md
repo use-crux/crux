@@ -1,7 +1,10 @@
 ---
 '@use-crux/core': minor
 '@use-crux/indexer': minor
+'@use-crux/local': minor
 '@use-crux/postgres': minor
+'@use-crux/upstash': minor
+'@use-crux/convex': minor
 ---
 
 Add the new `@use-crux/core/knowledge` entrypoint as the canonical home for `knowledgeBase`, add `knowledgeBase` pipeline config, and add an inert fingerprinted derive slot to `indexingPipeline`.
@@ -37,12 +40,23 @@ Integrate connected-knowledge contexts with request representation planning: vie
 Export `runConnectedKnowledgeConformance()` from `@use-crux/core/knowledge` so storage adapters can run the connected knowledge storage contract against their own storage bundles.
 
 Add first-party PostgreSQL Connected Knowledge storage with JSONB records,
-explicit idempotent setup, pgvector dense/sparse/hybrid search, normalized RRF,
+explicit idempotent setup, SearchStore dense/sparse retrieval, normalized RRF,
 shared pool ownership, and full storage conformance coverage.
 
 Let configured storage bundles expose a provider-neutral setup capability so
 `crux setup --check/--apply` verifies and safely provisions PostgreSQL storage,
 redacts adapter findings, and releases only adapter-owned resources.
+
+Rename the Core retrieval index contract to `SearchStore`, making
+`storage.search` and `inMemorySearchStore()` canonical, removing the pre-launch
+retrieval index API, and adding composable dense, sparse, and lexical retrieval
+plans with normalized RRF match details. PostgreSQL adds native full-text search
+and server-side RRF, Upstash exposes `upstashSearchStore()`, and Convex storage
+requires an explicit search store instead of advertising an unsupported one.
+
+Align Eval host storage capabilities and Local retrieval telemetry with the
+SearchStore contract: hosted Eval tasks now declare `search-store`, and devtools
+retrieval events use `search`/`custom` modes with RRF/search-leg metadata.
 
 Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
 

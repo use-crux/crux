@@ -73,7 +73,7 @@ const docs = knowledgeBase({
 });
 ```
 
-Core config fields are `id`, optional `source` or `corpus`, storage or explicit stores, dense/sparse embeddings, chunking, metadata schema, lifecycle retention, and indexing cache policy.
+Core config fields are `id`, optional `source` or `corpus`, storage or explicit stores, dense/sparse embeddings, chunking, metadata schema, lifecycle retention, retrieval search plan, and indexing cache policy.
 
 Handles expose `index`, `reindex`, `remove`, `scope`, `retriever`, `recipe`, `grounding`, `tools`, and `inspect`.
 
@@ -97,19 +97,13 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: {
-    mode: "hybrid",
-    limit: 8,
-    threshold: 0.2,
-    filter: { section: "planning" },
-  },
 });
 ```
 
-Store-backed retrievers require `id`, `namespace`, record/vector storage, and the embeddings needed by the selected mode. `indexerId` points hydration at a writer id when it differs from the public retriever id.
+Store-backed retrievers require `id`, `namespace`, record/search storage, and the embeddings needed by the selected retrieval plan. `indexerId` points hydration at a writer id when it differs from the public retriever id.
 
 ### Custom
 
@@ -137,13 +131,16 @@ await docs.retrieve({
   limit: 5,
   threshold: 0.2,
   filter: { section: "guide" },
-  mode: "hybrid",
-  fusion: { strategy: "rrf", k: 60 },
+  search: {
+    dense: true,
+    lexical: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
   caller: { promptId: "answer-docs" },
 });
 ```
 
-`RetrieveRequest<TFilter>` includes `query`, `limit`, `threshold`, `filter`, `mode`, `fusion`, `trace`, and `caller`.
+`RetrieveRequest<TFilter>` includes `query`, `limit`, `threshold`, `filter`, `search`, `trace`, and `caller`. The `search` plan composes dense, sparse, and lexical legs with optional per-leg candidate counts and RRF fusion.
 
 ## Observability
 
@@ -368,7 +365,7 @@ managed scorers. See the [Eval reference](/docs/reference/crux-core/eval).
 
 Store-backed retrievers accept a string, typed `EmbeddingInput`, bare media
 asset, or an exact `{ query }` / `{ input }` request object. Text queries may run
-dense, sparse, or hybrid search. Media queries run the dense branch only;
+dense, sparse, lexical, or fused multi-leg search. Media queries run the dense branch only;
 sparse/custom retrieval and text-producing recipe query steps reject them.
 
 Media supplied to `retriever.retrieve()` is an embedding query, not generative
@@ -377,7 +374,7 @@ model ingress, so `boundary.input.media()` does not run on that query.
 retrieval result has a real canonical media-ingress path.
 
 The retriever checks the namespace's dense space before query embedding or
-vector search. A mismatch throws `EmbeddingSpaceMismatchError` with stored and
+search. A mismatch throws `EmbeddingSpaceMismatchError` with stored and
 configured name/dimension descriptors and directs the caller to reindex or use
 the embedding that built the namespace. Returned media hits keep the existing
 `RetrieverHit` shape and expose `source.assetRef` for explicit asset hydration.
@@ -426,11 +423,11 @@ const dense = embedding({
 - sparse output is `{ indices, values }`
 - hybrid output is both, plus search-time fusion semantics
 
-If Crux modeled hybrid as an embedding kind, the primitive would have to own search orchestration concerns that belong in stores or retrievers. Instead, hybrid is a query strategy: one dense embedding plus one sparse embedding, combined at search time through `retriever()` or `VectorStore.search({ mode: 'hybrid' })`.
+If Crux modeled hybrid as an embedding kind, the primitive would have to own search orchestration concerns that belong in stores or retrievers. Instead, multi-leg retrieval is a query strategy: one dense embedding plus one sparse embedding, optionally combined with lexical search content through `retriever()` or `SearchStore.search()`.
 
 This split is designed to hold as Crux grows:
 
-- retrieval APIs compose dense and sparse embeddings on top of `VectorStore.search()`
+- retrieval APIs compose dense and sparse embeddings on top of `SearchStore.search()`
 - semantic cache and observational memory remain dense-oriented unless they gain a concrete sparse use case
 - store adapters can expose native capabilities without forcing every feature into a dense-only contract
 

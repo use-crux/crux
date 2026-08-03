@@ -140,7 +140,7 @@ export interface EvalTaskExecutionResult<TOutput> {
 export type EvalRequiredHostCapability =
   | "asset-store"
   | "record-store"
-  | "vector-store";
+  | "search-store";
 
 /** Coded configuration failure raised by the managed Eval task protocol. */
 export class EvalTaskExecutionError extends Error {

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   inMemoryAssetStore,
   inMemoryRecordStore,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "../../src/storage";
 import {
   describeAssetStoreConformance,
   describeRecordStoreConformance,
-  vectorStoreConformanceSuite,
+  searchStoreConformanceSuite,
 } from "../../src/storage/testing/vitest";
 import type { RecordEvent } from "../../src/storage";
 
@@ -16,14 +16,12 @@ describeRecordStoreConformance({
   prepare: () => inMemoryRecordStore(),
 });
 
-vectorStoreConformanceSuite({
-  name: "inMemoryVectorStore",
+searchStoreConformanceSuite({
+  name: "inMemorySearchStore",
   create: () => ({
     records: inMemoryRecordStore(),
-    vectors: inMemoryVectorStore(),
-    cleanup: async () => {},
+    search: inMemorySearchStore(),
   }),
-  capabilities: { sparse: true, hybrid: true, delete: true },
 });
 
 describeAssetStoreConformance({

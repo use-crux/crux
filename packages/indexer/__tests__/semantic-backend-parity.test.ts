@@ -53,8 +53,14 @@ describe("semantic backend parity", () => {
         files,
       });
 
-      expect(typescriptPatch.status).toBe("ok");
-      expect(nativePatch.status).toBe("ok");
+      expect(
+        typescriptPatch.status,
+        JSON.stringify(typescriptPatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
+      expect(
+        nativePatch.status,
+        JSON.stringify(nativePatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
       expect(typescriptPatch.semanticBackend).toBe("typescript");
       expect(nativePatch.semanticBackend).toBe("native");
       assertFixtureCoverage(fixture, root, typescriptPatch.facts);
@@ -93,8 +99,14 @@ describe("semantic backend parity", () => {
         semanticBackend: { name: "native" },
       });
 
-      expect(typescriptPatch.status).toBe("ok");
-      expect(nativePatch.status).toBe("ok");
+      expect(
+        typescriptPatch.status,
+        JSON.stringify(typescriptPatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
+      expect(
+        nativePatch.status,
+        JSON.stringify(nativePatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
       expect(typescriptPatch.semanticBackend).toBe("typescript");
       expect(nativePatch.semanticBackend).toBe("native");
       expect(cachedTypescriptPatch.status).toBe("ok");

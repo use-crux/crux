@@ -54,9 +54,9 @@ function knowledgeBase<
 | `corpus` | `Corpus` | `undefined` | Managed source tracker. Its `namespace` becomes the handle namespace when present. |
 | `storage` | `Storage` | `undefined` | Storage bundle used by indexing and retrieval. |
 | `records` | `RecordStore` | `storage?.records` | Explicit record store override. Required for connected knowledge graph, view, assertion, and community storage. |
-| `vectors` | `VectorStore` | `storage?.vectors` | Explicit vector store override. |
+| `search` | `SearchStore` | `storage?.search` | Explicit search store override. |
 | `embeddings` | `DenseEmbedding<TModality>` | `undefined` | Enables dense retrieval. |
-| `sparseEmbeddings` | `SparseEmbedding` | `undefined` | Enables sparse retrieval. With `embeddings`, enables hybrid retrieval. |
+| `sparseEmbeddings` | `SparseEmbedding` | `undefined` | Enables sparse retrieval. With `embeddings`, enables fused retrieval. |
 | `chunking` | `ChunkingOptions` | `undefined` | Forwarded to indexing. Cannot be combined with `pipeline`. |
 | `pipeline` | `IndexingPipeline` | `undefined` | Explicit indexing pipeline. Cannot be combined with `chunking`. |
 | `communities` | `CommunitiesConfig` | `undefined` | Enables `handle.communities` and community bindings for recipes. |
@@ -177,13 +177,15 @@ interface KnowledgeBaseRetrieverConfig<TFilter = ExactFilter> {
   limit?: number;
   threshold?: number;
   filter?: TFilter;
-  mode?: "dense" | "sparse" | "hybrid";
+  search?: RetrievalSearchPlan;
 }
 ```
 
-Returns this knowledge base as a `Retriever`. Defaults are inherited from the
-underlying retriever implementation. `filter` is typed from `metadataSchema`
-when the schema is an object.
+Returns this knowledge base as a `Retriever`. Defaults are derived from the
+configured embeddings: dense+sparse embeddings produce dense+sparse legs,
+sparse alone produces sparse, and otherwise dense. Lexical is opt in through
+`search.lexical`. `filter` is typed from `metadataSchema` when the schema is an
+object.
 
 ### `recipe(config?)`
 
@@ -233,11 +235,10 @@ interface KnowledgeBaseInspection {
   id: string;
   namespace: string;
   source: { kind: "corpus" | "direct" };
-  storage: { records: boolean; vectors: boolean };
+  storage: { records: boolean; search: boolean };
   capabilities: {
-    dense: boolean;
-    sparse: boolean;
-    hybrid: boolean;
+    legs: { dense: boolean; sparse: boolean; lexical: boolean };
+    fusion: readonly "rrf"[];
     delete: boolean;
     filter: "pre" | "post" | false;
   };

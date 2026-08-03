@@ -116,21 +116,21 @@ createSemanticCache({
 
 If the built-in helpers are not enough, provide your own callback. See the [semantic cache reference](/docs/reference/crux-core/cache#policy-callbacks) for the arguments policy callbacks receive.
 
-Lookup uses dense embeddings only; the [reference](/docs/reference/crux-core/cache#dense-only-embeddings) explains why sparse and hybrid embeddings are not accepted here.
+Lookup uses dense embeddings only; the [reference](/docs/reference/crux-core/cache#dense-only-embeddings) explains why sparse and fused retrieval plans are not accepted here.
 
 ## Durable Stores
 
-The cache needs records with TTL support and a dense vector store with pre-filter support:
+The cache needs records with TTL support and a dense `SearchStore` with pre-filter support:
 
 ```ts
-import { upstashRedisRecordStore, upstashVectorStore } from "@use-crux/upstash";
+import { upstashRedisRecordStore, upstashSearchStore } from "@use-crux/upstash";
 
 createSemanticCache({
   records: upstashRedisRecordStore({
     redis,
     prefix: "semantic-cache:",
   }),
-  vectors: upstashVectorStore({
+  search: upstashSearchStore({
     index,
     namespace: "semantic-cache",
   }),
@@ -140,17 +140,17 @@ createSemanticCache({
 });
 ```
 
-Use a dedicated namespace/table/index for cache entries. Do not point the cache at the same vector namespace used for RAG chunks or long-term memory.
+Use a dedicated namespace/table/index for cache entries. Do not point the cache at the same search namespace used for RAG chunks or long-term memory.
 
-For Convex, use component-backed records with an explicit vector backend and a dedicated semantic-cache namespace:
+For Convex, use component-backed records with an explicit search backend and a dedicated semantic-cache namespace:
 
 ```ts
 import { convexRecordStore } from "@use-crux/convex";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 
 const cache = createSemanticCache({
   records: convexRecordStore({ component: components.crux, ctx }),
-  vectors: upstashVectorStore({
+  search: upstashSearchStore({
     index: vectorIndex,
     namespace: "semantic-cache",
   }),
@@ -161,7 +161,7 @@ const cache = createSemanticCache({
 
 See the [store capability rule](/docs/reference/crux-core/cache#store-capability-rule) for why shared indexes are refused.
 
-Redis records alone are not enough for semantic cache lookup. Pair `upstashRedisRecordStore()` with `upstashVectorStore()` or another pre-filter-capable `VectorStore`.
+Redis records alone are not enough for semantic cache lookup. Pair `upstashRedisRecordStore()` with `upstashSearchStore()` or another pre-filter-capable `SearchStore`.
 
 ## Safety Release Gates
 

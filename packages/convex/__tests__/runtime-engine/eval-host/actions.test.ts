@@ -90,7 +90,7 @@ describe("createConvexEvalHost()", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       now: () => NOW,
-      hostCapabilities: ["record-store", "vector-store", "asset-store"],
+      hostCapabilities: ["record-store", "search-store", "asset-store"],
     });
     const ctx = {
       runMutation: async () => {

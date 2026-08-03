@@ -187,7 +187,7 @@ invocation and never silently falls back to another.
 
 ### Storage Beta adapters
 
-Use `convexRecordStore()` and `convexStorage()` for component-backed Crux records. `convexStorage()` can also include explicitly configured Convex file assets; it does not provide vector search.
+Use `convexRecordStore()` and `convexStorage()` for component-backed Crux records. `convexStorage()` can also include explicitly configured Convex file assets and an explicit caller-provided `SearchStore`; it does not provide search by default.
 
 ```ts
 import { convexRecordStore } from "@use-crux/convex";
@@ -208,7 +208,7 @@ const assistantMemory = memory({
 });
 ```
 
-`convexRecordStore()` exposes `get`, `put`, `create`, `delete`, and `list`. Record values with an `embedding` array mirror it to the top-level Convex document field, but the bundled component does not declare a vector index or perform vector search.
+`convexRecordStore()` exposes `get`, `put`, `create`, `delete`, and `list`. Record values with an `embedding` array mirror it to the top-level Convex document field, but the bundled component does not declare a search index or perform search.
 
 The component boundary is page-shaped. `components.crux.memory.list` accepts
 `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns
@@ -244,16 +244,16 @@ Use `ComponentDocumentPort` or `convexComponentDocumentPort()` only when you nee
 to test or replace the raw document I/O layer directly. App code should usually
 use `convexRecordStore({ component: components.crux, ctx })` or `convexStorage({ component: components.crux, ctx })`.
 
-For semantic response caching, pair Convex records with an explicit pre-filter-capable vector backend in a dedicated namespace:
+For semantic response caching, pair Convex records with an explicit pre-filter-capable search backend in a dedicated namespace:
 
 ```ts
 import { createSemanticCache } from "@use-crux/core/cache";
 import { convexRecordStore } from "@use-crux/convex";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 
 const cache = createSemanticCache({
   records: convexRecordStore({ component: components.crux, ctx }),
-  vectors: upstashVectorStore({
+  search: upstashSearchStore({
     index: vectorIndex,
     namespace: "semantic-cache",
   }),
@@ -262,7 +262,7 @@ const cache = createSemanticCache({
 });
 ```
 
-Semantic cache lookup needs a dedicated vector space so unrelated vectors cannot crowd out cache entries before filtering.
+Semantic cache lookup needs a dedicated search namespace so unrelated records cannot crowd out cache entries before filtering.
 
 ### Storage Beta
 
@@ -279,13 +279,10 @@ const storage = convexStorage({
 ```
 
 `convexRecordStore()` exposes component-backed JSON records with lazy TTL and
-scan-backed exact filters. `convexStorage()` contains `records` and only adds
-`assets` when configured explicitly. Memory blocks without an explicit
-`VectorStore` fall back to record listing/recency for recall.
-
-`convexVectorStore()` remains temporarily as a compatibility symbol. It throws
-`StorageError('unsupported_capability')` at construction with guidance to pass
-an explicit `VectorStore`, such as `upstashVectorStore()`.
+scan-backed exact filters. `convexStorage()` contains `records`, preserves a
+caller-provided `search` store, and only adds `assets` when configured
+explicitly. Memory blocks without an explicit `SearchStore` fall back to record
+listing/recency for recall.
 
 ### `convexAssetStore(config)`
 

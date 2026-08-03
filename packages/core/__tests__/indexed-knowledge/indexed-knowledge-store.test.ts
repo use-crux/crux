@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
 import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 describe('indexed knowledge store', () => {
-  it('persists only validated allowlisted source facts outside vector metadata', async () => {
+  it('persists only validated allowlisted source facts outside search metadata', async () => {
     const data = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
-    const records = createIndexedKnowledgeStore({ indexerId: 'docs', namespace: 'kb', records: data, vectors })
+    const search = inMemorySearchStore()
+    const records = createIndexedKnowledgeStore({ indexerId: 'docs', namespace: 'kb', records: data, search })
 
     await records.persistGeneration({
       chunks: [{
@@ -26,7 +26,7 @@ describe('indexed knowledge store', () => {
       url: 'https://example.com/manual.pdf', path: '/docs/manual.pdf', assetRef: { uri: 'asset://manual' },
       mediaType: 'application/pdf', location: { type: 'page', pageNumber: 2 },
     })
-    const vector = await vectors.search({ mode: 'dense', dense: [1, 0], limit: 1 })
+    const vector = await search.search({ legs: [{ kind: 'dense', vector: [1, 0] }], limit: 1 })
     expect(vector[0]?.metadata).toEqual({
       _cruxRecordType: 'chunk', namespace: 'kb', sourceId: 'visual', chunkId: 'page-2',
       generationId: expect.any(String), active: true, topic: 'architecture',
@@ -36,12 +36,12 @@ describe('indexed knowledge store', () => {
 
   it('persists generations, searches active chunks, and expands parents through the read model', async () => {
     const data = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
       records: data,
-      vectors,
+      search,
     })
 
     await records.persistGeneration({
@@ -97,8 +97,7 @@ describe('indexed knowledge store', () => {
     })
 
     const hits = await records.searchChunks({
-      mode: 'dense',
-      dense: [1, 0],
+      legs: { dense: { vector: [1, 0] } },
       filter: { topic: 'pricing' },
     })
 
@@ -114,14 +113,14 @@ describe('indexed knowledge store', () => {
     })
   })
 
-  it('deletes source and namespace records from record and vector stores consistently', async () => {
+  it('deletes source and namespace records from record and search stores consistently', async () => {
     const data = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
       records: data,
-      vectors,
+      search,
     })
 
     await records.persistGeneration({
@@ -152,11 +151,11 @@ describe('indexed knowledge store', () => {
     })
 
     await expect(records.deleteSource('pricing')).resolves.toBe(1)
-    await expect(records.searchChunks({ mode: 'dense', dense: [1, 0], threshold: 0.5 })).resolves.toEqual([])
-    await expect(records.searchChunks({ mode: 'dense', dense: [0, 1], threshold: 0.5 })).resolves.toHaveLength(1)
+    await expect(records.searchChunks({ legs: { dense: { vector: [1, 0] } }, threshold: 0.5 })).resolves.toEqual([])
+    await expect(records.searchChunks({ legs: { dense: { vector: [0, 1] } }, threshold: 0.5 })).resolves.toHaveLength(1)
 
     await expect(records.clearNamespace()).resolves.toBe(1)
-    await expect(records.searchChunks({ mode: 'dense', dense: [0, 1], threshold: 0.5 })).resolves.toEqual([])
+    await expect(records.searchChunks({ legs: { dense: { vector: [0, 1] } }, threshold: 0.5 })).resolves.toEqual([])
   })
 
   it('expands parents from derived refs and supports missing-parent errors', async () => {
@@ -216,7 +215,7 @@ describe('indexed knowledge store', () => {
     ).rejects.toThrow('parentExpand could not find parent record')
   })
 
-  it('fails fast when searching without a vector store', async () => {
+  it('fails fast when searching without a search store', async () => {
     const data = inMemoryRecordStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
@@ -228,11 +227,11 @@ describe('indexed knowledge store', () => {
       chunks: [
         {
           namespace: 'kb',
-          sourceId: 'missing-vectors',
+          sourceId: 'missing-search',
           chunkId: 'a',
           ordinal: 0,
           content: 'chunk',
-          metadata: { topic: 'vectors' },
+          metadata: { topic: 'search' },
         },
       ],
       parents: [],
@@ -242,21 +241,20 @@ describe('indexed knowledge store', () => {
 
     await expect(
       records.searchChunks({
-        mode: 'dense',
-        dense: [1, 0],
+        legs: { dense: { vector: [1, 0] } },
         filter: { namespace: 'kb' },
       }),
-    ).rejects.toThrow('Indexed knowledge search requires vectors')
+    ).rejects.toThrow('Indexed knowledge search requires search')
   })
 
-  it('fails with a hydration diagnostic when vector hits cannot be read from records', async () => {
+  it('fails with a hydration diagnostic when search hits cannot be read from records', async () => {
     const data = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
       records: data,
-      vectors,
+      search,
     })
 
     await records.persistGeneration({
@@ -266,7 +264,7 @@ describe('indexed knowledge store', () => {
           sourceId: 'orphan',
           chunkId: 'a',
           ordinal: 0,
-          content: 'orphaned vector',
+          content: 'orphaned search',
           metadata: { topic: 'diagnostics' },
         },
       ],
@@ -276,10 +274,10 @@ describe('indexed knowledge store', () => {
     })
     await data.delete(indexedChunkKey('docs', 'kb', 'orphan', 'a'))
 
-    await expect(records.searchChunks({ mode: 'dense', dense: [1, 0], threshold: 0.8 })).rejects.toMatchObject({
+    await expect(records.searchChunks({ legs: { dense: { vector: [1, 0] } }, threshold: 0.8 })).rejects.toMatchObject({
       name: 'RetrievalRunError',
       code: 'hydration_miss',
-      message: expect.stringContaining('Vector hits could not be hydrated'),
+      message: expect.stringContaining('Search hits could not be hydrated'),
     })
   })
 })

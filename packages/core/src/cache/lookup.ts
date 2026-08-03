@@ -89,7 +89,7 @@ export async function performLookup(
       const dense = await config.embedding.embed(queryText);
       queryHash = hashStable(queryText);
 
-      const hit = await lookupEntry(stores.records, stores.vectors, {
+      const hit = await lookupEntry(stores.records, stores.search, {
         namespace,
         promptId,
         scopeHash,

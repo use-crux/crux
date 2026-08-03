@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { corpus, indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 const document = { namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }
@@ -9,8 +9,8 @@ const document = { namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }
 describe('corpus embedding-stage cache integration', () => {
   it('reuses vectors when only indexVersion triggers a reindex', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
-    const { docs, embed } = setup(records, vectors, 'embedding-v1')
+    const search = inMemorySearchStore()
+    const { docs, embed } = setup(records, search, 'embedding-v1')
 
     await docs.sync([document], { indexVersion: 'index-v1' })
     embed.mockClear()
@@ -28,12 +28,12 @@ describe('corpus embedding-stage cache integration', () => {
 
   it('keeps skipping an append-only source after an embedding fingerprint changes', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
-    const initial = setup(records, vectors, 'embedding-v1')
+    const search = inMemorySearchStore()
+    const initial = setup(records, search, 'embedding-v1')
     await initial.docs.sync([document])
     const previous = await initial.docs.getSource('intro')
 
-    const changed = setup(records, vectors, 'embedding-v2')
+    const changed = setup(records, search, 'embedding-v2')
     const first = await changed.docs.sync([document], { mode: 'appendOnly' })
     const second = await changed.docs.sync([document], { mode: 'appendOnly' })
 
@@ -50,7 +50,7 @@ describe('corpus embedding-stage cache integration', () => {
 
 function setup(
   records: ReturnType<typeof inMemoryRecordStore>,
-  vectors: ReturnType<typeof inMemoryVectorStore>,
+  search: ReturnType<typeof inMemorySearchStore>,
   version: string,
 ) {
   const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
@@ -58,7 +58,7 @@ function setup(
     id: 'docs',
     namespace: 'kb',
     records,
-    vectors,
+    search,
     dense: embedding({
       kind: 'dense',
       name: 'dense-test',

@@ -13,14 +13,14 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for the npm 
 - **`/memory`** — `memory()`, `memoryBlock()`, `workingState()`, `episodes()`, `facts()`, `procedures()`
 - **`/thread`** — `thread()`, immutable hydrated history, branches, edits, redaction/deletion, commit receipts, and devtools topology
 - **`/embedding`** — `embedding()` (dense or sparse vector primitive)
-- **`/indexing`** — `indexer()` (chunk + embed + write documents to record/vector stores)
+- **`/indexing`** — `indexer()` (chunk + embed + write documents to record/search stores)
 - **`/retrieval`** — `knowledgeBase()`, `retriever()`, `retrievalRecipe()`, `expandRelations()`, `globalSearch()` (indexed knowledge → scored hits, tools, grounding)
 - **`/knowledge`** — canonical Connected Knowledge home: `knowledgeBase()` + `view()`, `relate()` + built-ins, `assertions()` + `resolve()`, `communities()`, `knowledgeModel()`, storage conformance suite
 - **`/scoring`** — `judge()`, pre-built metrics; runtime enforcement uses `constraint.judge(...)` from `/safety`
 - **`/eval`** — inert `evaluate()` definitions, typed Cases and Variants; execution is coordinated by `crux eval`
 - **`/feedback`** — awaited, run-linked production feedback submissions
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
-- **`/storage`** — `RecordStore`, `VectorStore`, `AssetStore`, `storage()`, `inMemoryStorage()`
+- **`/storage`** — `RecordStore`, `SearchStore`, `AssetStore`, `storage()`, `inMemoryStorage()`
 - **`/plan` + `/tasks`** — `plan()`, `tasks()`, `task()`, handle contexts, handle tools, and workers
 - **`/index`** — project index contracts, schemas, serializers, and source metadata helpers
 - **`/lint`** — index lint contracts and rule registry metadata

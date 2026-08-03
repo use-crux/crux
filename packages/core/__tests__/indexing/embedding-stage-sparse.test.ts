@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 describe('indexer sparse embedding-stage cache', () => {
@@ -13,7 +13,7 @@ describe('indexer sparse embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       sparse: embedding({
         kind: 'sparse',
         name: 'sparse-test',
@@ -46,7 +46,7 @@ describe('indexer sparse embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       sparse: embedding({
         kind: 'sparse',
         name: 'sparse-test',
@@ -72,7 +72,7 @@ describe('indexer sparse embedding-stage cache', () => {
 
   it('preserves hybrid ordering when sparse changes and rejects a dense space change', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const input = [
       { namespace: 'kb', sourceId: 'source-z', content: 'z' },
       { namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' },
@@ -84,7 +84,7 @@ describe('indexer sparse embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       dense: denseV1.value,
       sparse: sparseV1.value,
       cache: true,
@@ -95,7 +95,7 @@ describe('indexer sparse embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       dense: denseV1.value,
       sparse: sparseV2.value,
       cache: true,
@@ -117,7 +117,7 @@ describe('indexer sparse embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       dense: denseV2.value,
       sparse: sparseV2.value,
       cache: true,

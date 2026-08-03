@@ -36,12 +36,12 @@ export function indexer<const TModality extends EmbeddingModality = 'text'>(
 
   const pipeline = config.pipeline ?? indexingPipeline()
   const recordStore = getIndexerRecordStore(config)
-  const vectorStore = config.vectors ?? config.storage?.vectors
+  const searchStore = config.search ?? config.storage?.search
   const indexed = createIndexedKnowledgeStore({
     indexerId: config.id,
     namespace: config.namespace,
     records: recordStore,
-    vectors: vectorStore,
+    search: searchStore,
   })
   const cache = normalizePipelineCache(config.cache, recordStore, config.id)
   const preparePipeline = createPipelineRunner({

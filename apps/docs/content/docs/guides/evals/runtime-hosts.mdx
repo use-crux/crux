@@ -70,7 +70,7 @@ Eval routes on a router, not both.
 
 Convex advertises `record-store` only when a deployed Eval requires it and the
 request context can bind the component service. Unsupported requirements such
-as `vector-store` and `asset-store` remain visible in the Eval manifest but
+as `search-store` and `asset-store` remain visible in the Eval manifest but
 absent from host capabilities, so readiness fails before inference instead of
 claiming a service that is not present.
 

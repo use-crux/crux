@@ -17,7 +17,7 @@ import { embedding } from "@use-crux/core/embedding";
 import { corpus, indexer } from "@use-crux/core/indexing";
 import {
   inMemoryRecordStore,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "@use-crux/core/storage";
 import { filesSource } from "@use-crux/ingest/files";
 
@@ -34,13 +34,13 @@ const dense = embedding({
   }),
 });
 const records = inMemoryRecordStore();
-const vectors = inMemoryVectorStore();
+const search = inMemorySearchStore();
 
 const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -64,7 +64,7 @@ const result = await docsCorpus.sync(source.load(), {
 console.log(result);
 ```
 
-Add a `sparse` embedding to the indexer when your retriever runs sparse or hybrid search. See [Embeddings](/docs/guides/retrieval/embeddings) for defining both.
+Add a `sparse` embedding to the indexer when your retriever runs sparse or fused search. See [Embeddings](/docs/guides/retrieval/embeddings) for defining both.
 
 Typical result:
 

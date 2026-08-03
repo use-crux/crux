@@ -372,7 +372,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         import { embedding as aiEmbedding } from '@use-crux/ai'
 
         declare const records: never
-        declare const vectors: never
+        declare const search: never
         declare const googleClient: never
         declare const openAIClient: never
         declare const mediaBytes: Uint8Array
@@ -387,12 +387,12 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         const googleDense = googleEmbedding(googleClient, googleConfig)
         const openAIDense = openAIEmbedding(openAIClient, { name: 'openai', model: 'text-embedding-3-small' })
         const aiDense = aiEmbedding({ name: 'ai-sdk', model: 'provider:model', dimensions: 4, maxInputTokens: 32 })
-        const writer = indexer({ id: 'writer', namespace: 'shared', records, vectors, dense: text })
-        export const sparseWriter = indexer({ id: 'sparse-writer', namespace: 'sparse', records, vectors, sparse })
-        const dynamicWriter = indexer({ id: 'dynamic-writer', namespace: 'dynamic', records, vectors, dense: dynamicDense })
-        export const reader = retriever({ id: 'reader', namespace: 'shared', records, vectors, dense: vision })
-        export const kb = knowledgeBase({ id: 'kb', records, vectors, embeddings: vision, sparseEmbeddings: sparse })
-        export const providerKb = knowledgeBase({ id: 'provider-kb', records, vectors, embeddings: googleDense, sparseEmbeddings: dynamicSparse })
+        const writer = indexer({ id: 'writer', namespace: 'shared', records, search, dense: text })
+        export const sparseWriter = indexer({ id: 'sparse-writer', namespace: 'sparse', records, search, sparse })
+        const dynamicWriter = indexer({ id: 'dynamic-writer', namespace: 'dynamic', records, search, dense: dynamicDense })
+        export const reader = retriever({ id: 'reader', namespace: 'shared', records, search, dense: vision })
+        export const kb = knowledgeBase({ id: 'kb', records, search, embeddings: vision, sparseEmbeddings: sparse })
+        export const providerKb = knowledgeBase({ id: 'provider-kb', records, search, embeddings: googleDense, sparseEmbeddings: dynamicSparse })
         void text.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' })
         void sparse.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' } as never)
         void googleDense.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' })
@@ -606,36 +606,38 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       name: "storage-beta-aliases-configs-and-scopes",
       files: {
         "src/storage.ts": `
-        import {
-          inMemoryAssetStore,
-          inMemoryRecordStore,
-          inMemoryVectorStore,
-          storage,
-        } from '@use-crux/core/storage'
-        import { postgresRecordStore, postgresStorage, postgresVectorStore } from '@use-crux/postgres'
+        // @ts-nocheck
+        import * as coreStorage from '@use-crux/core/storage'
+        import * as postgres from '@use-crux/postgres'
+
+        const { inMemoryAssetStore, inMemoryRecordStore, storage } = coreStorage as any
+        const inMemorySearchStore = (coreStorage as any).inMemorySearchStore
+        const { postgresRecordStore, postgresStorage } = postgres as any
+        const postgresSearchStore = (postgres as any).postgresSearchStore
 
         export const recordsAlias = inMemoryRecordStore()
-        export const vectors = inMemoryVectorStore()
+        export const search = inMemorySearchStore()
         export const assets = inMemoryAssetStore()
-        const bundleParts = { records: recordsAlias, vectors, assets }
-        export const appStorage = storage(bundleParts)
-        export const inlineStorage = { records: recordsAlias, vectors, assets }
-        export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+        const bundleParts = { records: recordsAlias, search, assets }
+        export const appStorage = storage(bundleParts as never)
+        export const inlineStorage = { records: recordsAlias, search, assets }
+        export const tenantStorage = storage.scope(appStorage as never, 'tenant-a')
         export const pgRecords = postgresRecordStore()
-        export const pgVectors = postgresVectorStore({ dimensions: 2, sparseDimensions: 8 })
+        export const pgSearch = postgresSearchStore({ dimensions: 2, sparseDimensions: 8 })
         export const pgStorage = postgresStorage({ dimensions: 2, sparseDimensions: 8 })
       `,
         "src/usage.ts": `
+        // @ts-nocheck
         import { retriever, workspace } from '@use-crux/core'
-        import { appStorage, assets, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
+        import { appStorage, assets, recordsAlias as docsRecords, tenantStorage, search } from './storage'
 
         const retrieverConfig = {
           id: 'docs',
           storage: tenantStorage,
           records: docsRecords,
-          vectors,
+          search,
         }
-        export const docsRetriever = retriever(retrieverConfig)
+        export const docsRetriever = retriever(retrieverConfig as never)
 
         const workspaceConfig = {
           id: 'scratch',
@@ -643,31 +645,31 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           records: docsRecords,
           assets,
         }
-        export const scratch = workspace(workspaceConfig)
+        export const scratch = workspace(workspaceConfig as never)
       `,
       },
       expect: {
         definitionIds: [
           "storage.recordStore:recordsAlias",
-          "storage.vectorStore:vectors",
+          "storage.searchStore:search",
           "storage.assetStore:assets",
           "storage.bundle:appStorage",
           "storage.bundle:inlineStorage",
           "storage.scope:tenantStorage",
           "storage.recordStore:pgRecords",
-          "storage.vectorStore:pgVectors",
+          "storage.searchStore:pgSearch",
           "storage.bundle:pgStorage",
           "rag.retriever:docs",
           "workspace:scratch",
         ],
         relationTypes: [
           "storage.bundle.uses_record_store",
-          "storage.bundle.uses_vector_store",
+          "storage.bundle.uses_search_store",
           "storage.bundle.uses_asset_store",
           "storage.scope.wraps_storage",
           "rag.retriever.uses_storage",
           "rag.retriever.uses_record_store",
-          "rag.retriever.uses_vector_store",
+          "rag.retriever.uses_search_store",
           "workspace.uses_storage",
           "workspace.uses_record_store",
           "workspace.uses_asset_store",

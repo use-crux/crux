@@ -97,12 +97,10 @@ function capabilityRows(summary: StorageReadModelSummary): Row[] {
   push("record", "filter", caps.record?.filter);
   push("record", "watch", caps.record?.watch);
   push("record", "batch", caps.record?.batch);
-  push("vector", "dense", caps.vector?.dense);
-  push("vector", "sparse", caps.vector?.sparse);
-  push("vector", "hybrid", caps.vector?.hybrid);
-  push("vector", "fusion", caps.vector?.fusion);
-  push("vector", "filter", caps.vector?.filter);
-  push("vector", "consistency", caps.vector?.consistency);
+  push("search", "legs", caps.search?.legs);
+  push("search", "fusion", caps.search?.fusion);
+  push("search", "filter", caps.search?.filter);
+  push("search", "consistency", caps.search?.consistency);
   return rows;
 }
 
@@ -136,7 +134,7 @@ function ComponentLinks({ summary }: { summary: StorageReadModelSummary }) {
   const select = useIndexSelect();
   const entries = [
     ["record", summary.components.recordStoreId],
-    ["vector", summary.components.vectorStoreId],
+    ["search", summary.components.searchStoreId],
     ["asset", summary.components.assetStoreId],
     ["base", summary.components.storageId],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));

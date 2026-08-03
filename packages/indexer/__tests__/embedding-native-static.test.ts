@@ -17,7 +17,7 @@ describe("embedding native static projection", () => {
           `import { embedding } from '@use-crux/core/embedding'`,
           `import { indexer } from '@use-crux/core/indexing'`,
           `declare const records: never`,
-          `declare const vectors: never`,
+          `declare const search: never`,
           `const vision = embedding({`,
           `  kind: 'dense', name: 'vision', dimensions: 3, maxInputTokens: 32,`,
           `  version: '', truncate: {},`,
@@ -29,7 +29,7 @@ describe("embedding native static projection", () => {
           `  version: '', truncate: {}, tasks: { query: '' },`,
           `  batch: { maxSize: 1 }, embed: async () => [],`,
           `})`,
-          `const writer = indexer({ id: 'writer', namespace: 'shared', records, vectors, dense: vision, credential: 'PHASE7_PRIVATE_SENTINEL' })`,
+          `const writer = indexer({ id: 'writer', namespace: 'shared', records, search, dense: vision, credential: 'PHASE7_PRIVATE_SENTINEL' })`,
           `void vision.embed({ type: 'image', source: 'data:image/png;base64,PHASE7_PRIVATE_SENTINEL' } as never)`,
         ].join("\n"),
       });
@@ -306,7 +306,7 @@ describe("embedding native static projection", () => {
           `  batch: { maxSize: 1 }, embed: async () => [],`,
           `})`,
           `export const catalog = indexer({`,
-          `  id: 'catalog', namespace: 'shared', dense, records, vectors,`,
+          `  id: 'catalog', namespace: 'shared', dense, records, search,`,
           `})`,
         ].join("\n"),
       });

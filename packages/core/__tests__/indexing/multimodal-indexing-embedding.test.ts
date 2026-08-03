@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EmbeddingModalityError, EmbeddingSpaceMismatchError, embedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 describe('multimodal indexing embedding stage', () => {
   it('embeds media densely as documents and omits media from the sparse leg', async () => {
@@ -14,7 +14,7 @@ describe('multimodal indexing embedding stage', () => {
       id: 'hybrid',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense', name: 'multimodal', dimensions: 2, maxInputTokens: 100,
         modalities: ['text', 'image'], batch: { maxSize: 8 }, embed: denseProvider,
@@ -58,7 +58,7 @@ describe('multimodal indexing embedding stage', () => {
       id: 'text-only',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense', name: 'text-only', dimensions: 2, maxInputTokens: 100,
         batch: { maxSize: 8 }, embed: provider,
@@ -85,7 +85,7 @@ describe('multimodal indexing embedding stage', () => {
     const records = inMemoryRecordStore()
     const provider = vi.fn(async () => [[1, 0]])
     const docs = indexer({
-      id: 'remote', namespace: 'kb', records, vectors: inMemoryVectorStore(), cache: true,
+      id: 'remote', namespace: 'kb', records, search: inMemorySearchStore(), cache: true,
       dense: embedding({
         kind: 'dense', name: 'remote-media', dimensions: 2, maxInputTokens: 100,
         modalities: ['image'], batch: { maxSize: 8 }, embed: provider,
@@ -112,18 +112,18 @@ describe('multimodal indexing embedding stage', () => {
 describe('indexer embedding-space guard', () => {
   it('rejects a mixed-space write before embedding and permits it after clear', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const firstProvider = vi.fn(async () => [[1, 0]])
     const secondProvider = vi.fn(async () => [[1, 0, 0]])
     const first = indexer({
-      id: 'docs', namespace: 'kb', records, vectors,
+      id: 'docs', namespace: 'kb', records, search,
       dense: embedding({
         kind: 'dense', name: 'first', dimensions: 2, maxInputTokens: 100,
         batch: { maxSize: 8 }, embed: firstProvider,
       }),
     })
     const second = indexer({
-      id: 'docs', namespace: 'kb', records, vectors,
+      id: 'docs', namespace: 'kb', records, search,
       dense: embedding({
         kind: 'dense', name: 'second', dimensions: 3, maxInputTokens: 100,
         batch: { maxSize: 8 }, embed: secondProvider,
@@ -147,14 +147,14 @@ describe('indexer embedding-space guard', () => {
 
   it('checks an existing mismatch during dry-run without mutating it', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const first = indexer({
-      id: 'docs', namespace: 'kb', records, vectors,
+      id: 'docs', namespace: 'kb', records, search,
       dense: textEmbedding('first', 2),
     })
     const secondProvider = vi.fn(async () => [[1, 0, 0]])
     const second = indexer({
-      id: 'docs', namespace: 'kb', records, vectors,
+      id: 'docs', namespace: 'kb', records, search,
       dense: textEmbedding('second', 3, secondProvider),
     })
     await first.indexDocuments([{ namespace: 'kb', sourceId: 'one', content: 'first' }])
@@ -171,9 +171,9 @@ describe('indexer embedding-space guard', () => {
 
   it('retains the namespace space claim when only one source is deleted', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
-    const first = indexer({ id: 'docs', namespace: 'kb', records, vectors, dense: textEmbedding('first', 2) })
-    const second = indexer({ id: 'docs', namespace: 'kb', records, vectors, dense: textEmbedding('second', 3) })
+    const search = inMemorySearchStore()
+    const first = indexer({ id: 'docs', namespace: 'kb', records, search, dense: textEmbedding('first', 2) })
+    const second = indexer({ id: 'docs', namespace: 'kb', records, search, dense: textEmbedding('second', 3) })
 
     await first.indexDocuments([{ namespace: 'kb', sourceId: 'one', content: 'first' }])
     await first.deleteSource('one')

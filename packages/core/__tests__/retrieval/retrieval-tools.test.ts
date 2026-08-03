@@ -5,7 +5,7 @@ import { embedding as makeEmbedding } from '../../src/embedding'
 import { indexer as makeIndexer } from '../../src/indexing'
 import { prompt } from '../../src/prompt/prompt'
 import { RETRIEVAL_HITS_KIND, retriever as makeRetriever } from '../../src/retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { boundary, guardrail } from '../../src/safety'
 import type { Message } from '../../src/generation/messages'
 import { textOf } from '../embedding/text-input'
@@ -206,13 +206,13 @@ describe('retriever tools', () => {
 
   it('reads active source chunks through store-backed getSource namespace visibility', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const dense = createDenseEmbedding()
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'docs',
       records,
-      vectors,
+      search,
       dense,
     })
     await indexer.indexDocuments([
@@ -226,7 +226,7 @@ describe('retriever tools', () => {
       id: 'docs',
       namespace: 'docs',
       records,
-      vectors,
+      search,
       dense,
     })
 

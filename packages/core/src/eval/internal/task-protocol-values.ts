@@ -68,7 +68,7 @@ function isRequiredHostCapability(value: unknown): boolean {
   return (
     value === "asset-store" ||
     value === "record-store" ||
-    value === "vector-store"
+    value === "search-store"
   );
 }
 

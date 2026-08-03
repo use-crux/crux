@@ -7,7 +7,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../src/observability'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 const privateContent = 'private chunk text 7f64f'
 const privateVersion = 'private-model-revision-93e2'
@@ -98,7 +98,7 @@ describe('embedding-stage observability', () => {
       embed: async (inputs) => inputs.map(() => [1, 0]),
     })
     const docs = indexer({
-      id: 'media', namespace: 'kb', records, vectors: inMemoryVectorStore(), dense,
+      id: 'media', namespace: 'kb', records, search: inMemorySearchStore(), dense,
     })
 
     await docs.indexDocuments([{
@@ -132,7 +132,7 @@ function setup() {
     id: 'docs',
     namespace: 'kb',
     records: inMemoryRecordStore(),
-    vectors: inMemoryVectorStore(),
+    search: inMemorySearchStore(),
     dense: embedding({
       kind: 'dense',
       name: 'dense-test',

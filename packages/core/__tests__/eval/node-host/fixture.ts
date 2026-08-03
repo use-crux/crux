@@ -158,7 +158,7 @@ function remoteTask(
   requiredHostCapabilities: readonly (
     | "asset-store"
     | "record-store"
-    | "vector-store"
+    | "search-store"
   )[] = ["record-store"],
   execute: RemoteExecute = async () => ({ output: "yes" }),
 ) {

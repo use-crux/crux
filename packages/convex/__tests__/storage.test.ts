@@ -2,9 +2,10 @@ import {
   describeAssetStoreConformance,
   describeRecordStoreConformance,
 } from "@use-crux/core/storage/testing/vitest";
+import { inMemorySearchStore } from "@use-crux/core/storage";
 import { workspace } from "@use-crux/core/workspace";
 import { describe, expect, it } from "vitest";
-import { convexAssetStore, convexRecordStore } from "../src";
+import { convexAssetStore, convexRecordStore, convexStorage } from "../src";
 import { createInMemoryConvexStoreDocumentComponent } from "../src/store-document-component";
 
 describeRecordStoreConformance({
@@ -16,6 +17,14 @@ describeRecordStoreConformance({
 });
 
 describe("convexRecordStore workspace transactions", () => {
+  it("preserves an explicit caller-provided SearchStore", () => {
+    const component = createInMemoryConvexStoreDocumentComponent();
+    const search = inMemorySearchStore();
+    const storage = convexStorage({ component, ctx: component.ctx, search });
+
+    expect(storage.search).toBe(search);
+  });
+
   it("supports staged multi-file workspace commits through the generic RecordStore contract", async () => {
     const component = createInMemoryConvexStoreDocumentComponent();
     const ws = workspace({

@@ -13,6 +13,7 @@ const storage = postgresStorage({
   url: process.env.DATABASE_URL,
   dimensions: 1536,
   sparseDimensions: 30_000,
+  lexical: { configuration: "english" },
 });
 
 const checked = await storage.setup.check();
@@ -22,9 +23,9 @@ await storage.close();
 
 The root package exports `postgresRecordStore(options?)` for JSONB records,
 lazy TTL, native scalar filters, batches, and versioned CAS;
-`postgresVectorStore({ dimensions, sparseDimensions? })` for pgvector dense,
-optional sparse, and RRF hybrid search; and `postgresStorage(options)` for both
-adapters over one pool and setup lifecycle.
+`postgresSearchStore({ dimensions?, sparseDimensions?, lexical? })` for dense,
+sparse, lexical, and RRF fused retrieval; and `postgresStorage(options)` for
+both adapters over one pool and setup lifecycle.
 
 Storage defaults to the dedicated `crux_storage` schema. Setup is always
 explicit: `check()` is read-only and `apply()` performs idempotent additive
@@ -32,9 +33,10 @@ DDL. Data operations never create extensions, schemas, tables, or indexes. A
 caller-supplied `Pool` remains caller-owned; `close()` only ends a pool the
 adapter created.
 
-Dense and sparse searches use pgvector cosine HNSW indexes. HNSW is
-approximate, so recall depends on PostgreSQL/pgvector tuning. Hybrid search
-uses Crux's fixed RRF semantics; DBSF is intentionally unsupported.
+Dense and sparse search legs use pgvector cosine HNSW indexes. Lexical legs use
+PostgreSQL `websearch_to_tsquery`, a generated `tsvector`, and a GIN index.
+Multi-leg queries run deterministic normalized RRF in PostgreSQL and return
+per-leg match ranks and raw scores. DBSF is intentionally unsupported.
 
 ## Runtime Engine
 

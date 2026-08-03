@@ -190,8 +190,8 @@ export interface ProjectRuntimeJoin {
   memoryStoreId?: string;
   /** Runtime join key for a Storage Beta record-store definition. */
   recordStoreId?: string;
-  /** Runtime join key for a Storage Beta vector-store definition. */
-  vectorStoreId?: string;
+  /** Runtime join key for a Storage Beta search-store definition. */
+  searchStoreId?: string;
   /** Runtime join key for a Storage Beta asset-store definition. */
   assetStoreId?: string;
   /** Runtime join key for a Storage Beta bundle definition. */
@@ -314,7 +314,7 @@ export interface DataAccessFact {
     | "store"
     | "block"
     | "storage.recordStore"
-    | "storage.vectorStore"
+    | "storage.searchStore"
     | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
@@ -377,8 +377,8 @@ export interface DependencyFacts {
   stores?: string[];
   /** Storage Beta record-store dependencies referenced by variable or definition id. */
   recordStores?: string[];
-  /** Storage Beta vector-store dependencies referenced by variable or definition id. */
-  vectorStores?: string[];
+  /** Storage Beta search-store dependencies referenced by variable or definition id. */
+  searchStores?: string[];
   /** Storage Beta asset-store dependencies referenced by variable or definition id. */
   assetStores?: string[];
   /** Storage Beta bundle dependencies referenced by variable or definition id. */
@@ -767,19 +767,15 @@ export interface IndexedStorageCapabilities {
     /** Whether native batch record operations are available. */
     batch?: boolean | "unknown";
   };
-  /** Vector-index capabilities when the definition is a vector store or bundle. */
-  vector?: {
-    /** Whether dense-vector similarity search is available. */
-    dense?: boolean | "unknown";
-    /** Whether sparse-vector search is available. */
-    sparse?: boolean | "unknown";
-    /** Whether dense and sparse queries can be combined by the same store. */
-    hybrid?: boolean | "unknown";
-    /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
-    fusion?: readonly ("rrf" | "dbsf")[] | "unknown";
-    /** Whether metadata filters run before vector search, after vector search, or not at all. */
+  /** Search-index capabilities when the definition is a search store or bundle. */
+  search?: {
+    /** Search legs available from this store. */
+    legs?: Partial<Record<"dense" | "sparse" | "lexical", boolean>>;
+    /** Supported multi-leg result fusion algorithms, or `unknown` when the adapter cannot report them. */
+    fusion?: readonly "rrf"[] | "unknown";
+    /** Whether metadata filters run before search, after search, or not at all. */
     filter?: "pre" | "post" | false | "unknown";
-    /** Read-after-write visibility expected from the vector backend. */
+    /** Read-after-write visibility expected from the search backend. */
     consistency?: "strong" | "eventual" | "unknown";
   };
 }
@@ -788,7 +784,7 @@ export interface IndexedStorageCapabilities {
 export interface StorageFacts {
   kind:
     | "storage.recordStore"
-    | "storage.vectorStore"
+    | "storage.searchStore"
     | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
@@ -800,8 +796,8 @@ export interface StorageFacts {
   capabilities?: IndexedStorageCapabilities;
   /** Record store variable or definition id used by a bundle. */
   records?: string;
-  /** Vector store variable or definition id used by a bundle. */
-  vectors?: string;
+  /** Search store variable or definition id used by a bundle. */
+  search?: string;
   /** Asset store variable or definition id used by a bundle. */
   assets?: string;
   /** Base storage variable or definition id wrapped by a scope. */
@@ -1832,12 +1828,15 @@ export interface RetrievalStartEvent {
   retrievalId: string;
   retrieverId: string;
   namespace: string;
-  mode: "dense" | "sparse" | "hybrid" | "custom";
+  mode: "search" | "custom";
   query: string;
   limit?: number;
   threshold?: number;
   filter?: Record<string, unknown>;
-  fusion?: "rrf" | "dbsf";
+  fusion?: "rrf";
+  rrfK?: number;
+  searchLegs?: readonly string[];
+  searchCandidates?: Record<string, number>;
   traceId?: string;
   timestamp: number;
 }
@@ -1846,12 +1845,15 @@ export interface RetrievalEndEvent {
   retrievalId: string;
   retrieverId: string;
   namespace: string;
-  mode: "dense" | "sparse" | "hybrid" | "custom";
+  mode: "search" | "custom";
   query: string;
   limit?: number;
   threshold?: number;
   filter?: Record<string, unknown>;
-  fusion?: "rrf" | "dbsf";
+  fusion?: "rrf";
+  rrfK?: number;
+  searchLegs?: readonly string[];
+  searchCandidates?: Record<string, number>;
   resultCount: number;
   durationMs: number;
   error?: string;

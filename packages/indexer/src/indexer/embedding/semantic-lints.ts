@@ -38,8 +38,8 @@ export function namespaceIdentityFindings(
         !left.namespace ||
         left.namespace !== right.namespace ||
         !sharesWriteReadBoundary(left, right) ||
-        !left.vectorStorageKey ||
-        left.vectorStorageKey !== right.vectorStorageKey ||
+        !left.searchStorageKey ||
+        left.searchStorageKey !== right.searchStorageKey ||
         !hasIdentityMismatch(left, right)
       ) {
         continue;
@@ -123,7 +123,7 @@ export function modalityFindings(
     : [];
 }
 
-/** Applies modality checks to the active dense/sparse branch of a retriever. */
+/** Applies modality checks to the active dense/sparse legs of a retriever. */
 export function consumerModalityFindings(
   consumer: SemanticEmbeddingConsumer,
   modalities: readonly ProjectIndexMediaModality[] | undefined,
@@ -131,7 +131,12 @@ export function consumerModalityFindings(
   view: SemanticAnalyzerView,
 ): readonly IndexLintFinding[] {
   if (!modalities?.some((item) => item !== "text")) return [];
-  if (consumer.mode === "sparse" && consumer.sparse) {
+  if (
+    consumer.retrievalLegs !== "unknown" &&
+    consumer.retrievalLegs.sparse &&
+    !consumer.retrievalLegs.dense &&
+    consumer.sparse
+  ) {
     return modalityFindings(
       consumer.id,
       consumer.sparse,
@@ -141,7 +146,8 @@ export function consumerModalityFindings(
     );
   }
   if (
-    (consumer.mode === "dense" || consumer.mode === "hybrid") &&
+    consumer.retrievalLegs !== "unknown" &&
+    consumer.retrievalLegs.dense &&
     consumer.dense
   ) {
     return modalityFindings(
@@ -162,7 +168,12 @@ export function sparseMediaIndexingFinding(
   call: Node,
   view: SemanticAnalyzerView,
 ): IndexLintFinding | undefined {
-  return consumer?.mode === "sparse" && containsMediaEvidence(input, view)
+  const sparseOnly =
+    consumer !== undefined &&
+    consumer.retrievalLegs !== "unknown" &&
+    consumer.retrievalLegs.sparse &&
+    !consumer.retrievalLegs.dense;
+  return sparseOnly && containsMediaEvidence(input, view)
     ? embeddingFinding({
         ruleId: "embedding.sparse-media",
         definitionId: consumer.id,

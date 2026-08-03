@@ -1,40 +1,28 @@
 /**
  * Store-backed retriever configuration helpers.
  *
- * Query embedding, vector search, active-generation filtering, and hit
+ * Query embedding, search planning, active-generation filtering, and hit
  * hydration are owned by the indexed knowledge read-model boundary.
  *
  * @module
  */
 
-import type { RecordStore, VectorStore } from '../storage'
+import { StorageError, type RecordStore, type SearchStore } from '../storage'
 import type { EmbeddingModality } from '../embedding'
 import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
 import type { guardRetrievedEmbeddingSpace } from '../indexed-knowledge'
 import { assertSparseRetrievalInput, type PreparedRetrievalInput } from './query-input'
 import type {
   DenseStoreBackedRetrieverConfig,
+  RetrievalSearchPlan,
   RetrieveOptions,
   RetrieverHit,
   RetrieverMode,
 } from './types'
 
-type StoreBackedRetrieverMode = Exclude<RetrieverMode, 'custom'>
-
-/** Derive the default mode from configured embeddings or an explicit search mode. */
-export function deriveStoreBackedMode<TModality extends EmbeddingModality>(
-  config: Partial<DenseStoreBackedRetrieverConfig<TModality>>,
-): StoreBackedRetrieverMode {
-  if (config.search?.mode) {
-    return config.search.mode
-  }
-  if (config.dense && config.sparse) {
-    return 'hybrid'
-  }
-  if (config.sparse) {
-    return 'sparse'
-  }
-  return 'dense'
+/** Built-in store-backed retrievers expose composable search. */
+export function deriveStoreBackedMode(): Exclude<RetrieverMode, 'custom'> {
+  return 'search'
 }
 
 /** Resolve the record store from explicit config or a storage bundle. */
@@ -44,11 +32,11 @@ export function getRetrieverRecordStore<TModality extends EmbeddingModality>(
   return config.records ?? config.storage?.records
 }
 
-/** Resolve the vector store from explicit config or storage bundle. */
-export function getRetrieverVectorStore<TModality extends EmbeddingModality>(
+/** Resolve the search store from explicit config or storage bundle. */
+export function getRetrieverSearchStore<TModality extends EmbeddingModality>(
   config: Partial<DenseStoreBackedRetrieverConfig<TModality>>,
-): VectorStore | undefined {
-  return config.vectors ?? config.storage?.vectors
+): SearchStore | undefined {
+  return config.search ?? config.storage?.search
 }
 
 /** Embed one prepared input and build the indexed read-model query. */
@@ -56,45 +44,37 @@ export async function prepareIndexedChunkSearch<TModality extends EmbeddingModal
   config: DenseStoreBackedRetrieverConfig<TModality>,
   prepared: PreparedRetrievalInput<TModality>,
   options: RetrieveOptions,
-  mode: IndexedChunkSearchQuery['mode'],
   guardedSpace: Awaited<ReturnType<typeof guardRetrievedEmbeddingSpace>> | undefined,
 ): Promise<IndexedChunkSearchQuery> {
-  const common = searchQueryOptions(config, options)
-  const embeddingSpace = guardedSpace && config.dense
+  const plan = resolveSearchPlan(config, options)
+  if (prepared.media && (plan.sparse || plan.lexical)) {
+    throw new StorageError('unsupported_capability', 'Media retrieval supports dense search only.')
+  }
+  const embeddingSpace = guardedSpace && config.dense && plan.dense
     ? {
         digest: guardedSpace.digest,
         name: config.dense.name,
         dimensions: config.dense.dimensions,
       }
     : undefined
+  const common = searchQueryOptions(config, options)
 
-  if (mode === 'dense') {
-    return {
-      mode,
-      dense: await config.dense!.embed(prepared.input, { role: 'query' }),
-      ...common,
-      ...(embeddingSpace ? { embeddingSpace } : {}),
-    }
+  const lexicalQuery = plan.lexical ? prepared.text : undefined
+  if (plan.lexical && lexicalQuery === undefined) {
+    throw new StorageError('unsupported_capability', 'Lexical search requires text input.')
   }
-  assertSparseRetrievalInput(prepared, config.sparse!)
-  if (mode === 'sparse') {
-    return {
-      mode,
-      sparse: await config.sparse!.embed(prepared.text),
-      ...common,
-    }
-  }
-
   const [dense, sparse] = await Promise.all([
-    config.dense!.embed(prepared.input, { role: 'query' }),
-    config.sparse!.embed(prepared.text),
+    plan.dense ? config.dense!.embed(prepared.input, { role: 'query' }) : undefined,
+    plan.sparse ? embedSparse(config, prepared) : undefined,
   ])
   return {
-    mode,
-    dense,
-    sparse,
+    legs: {
+      ...(dense ? { dense: { vector: dense, ...legOptions(plan.dense) } } : {}),
+      ...(sparse ? { sparse: { vector: sparse, ...legOptions(plan.sparse) } } : {}),
+      ...(lexicalQuery !== undefined ? { lexical: { query: lexicalQuery, ...legOptions(plan.lexical) } } : {}),
+    },
     ...common,
-    fusion: normalizeFusion(options.fusion) ?? config.search?.fusion,
+    ...(plan.fusion ? { fusion: plan.fusion } : {}),
     ...(embeddingSpace ? { embeddingSpace } : {}),
   }
 }
@@ -111,20 +91,63 @@ export function withMediaQueryProvenance(hit: RetrieverHit, marker: string): Ret
   }
 }
 
+export function resolveSearchPlan<TModality extends EmbeddingModality>(
+  config: DenseStoreBackedRetrieverConfig<TModality>,
+  options: RetrieveOptions,
+): Required<Pick<RetrievalSearchPlan, never>> & RetrievalSearchPlan {
+  const authored = options.search ?? config.plan
+  const defaultPlan = defaultSearchPlan(config)
+  const plan = authored
+    ? {
+        dense: authored.dense,
+        sparse: authored.sparse,
+        lexical: authored.lexical,
+        fusion: authored.fusion,
+      }
+    : defaultPlan
+
+  if (!plan.dense && !plan.sparse && !plan.lexical) {
+    throw new StorageError('invalid_value', 'Search retrieval plan requires at least one leg.')
+  }
+  if (plan.dense && !config.dense) {
+    throw new StorageError('unsupported_capability', 'Dense search requires a dense embedding.')
+  }
+  if (plan.sparse && !config.sparse) {
+    throw new StorageError('unsupported_capability', 'Sparse search requires a sparse embedding.')
+  }
+  return plan
+}
+
+function defaultSearchPlan<TModality extends EmbeddingModality>(
+  config: DenseStoreBackedRetrieverConfig<TModality>,
+): RetrievalSearchPlan {
+  if (config.dense && config.sparse) return { dense: true, sparse: true }
+  if (config.sparse) return { sparse: true }
+  return { dense: true }
+}
+
+async function embedSparse<TModality extends EmbeddingModality>(
+  config: DenseStoreBackedRetrieverConfig<TModality>,
+  prepared: PreparedRetrievalInput<TModality>,
+) {
+  assertSparseRetrievalInput(prepared, config.sparse!)
+  return config.sparse!.embed(prepared.text)
+}
+
+function legOptions(value: boolean | { readonly candidates?: number } | undefined): { readonly candidates?: number } {
+  return typeof value === 'object' && value.candidates !== undefined ? { candidates: value.candidates } : {}
+}
+
 function searchQueryOptions<TModality extends EmbeddingModality>(
   config: DenseStoreBackedRetrieverConfig<TModality>,
   options: RetrieveOptions,
 ): Pick<IndexedChunkSearchQuery, 'limit' | 'threshold' | 'filter'> {
   return {
-    limit: options.limit ?? config.search?.limit,
-    threshold: options.threshold ?? config.search?.threshold,
+    limit: options.limit ?? config.limit,
+    threshold: options.threshold ?? config.threshold,
     filter: {
-      ...(config.search?.filter ?? {}),
+      ...(config.filter ?? {}),
       ...(options.filter ?? {}),
     },
   }
-}
-
-function normalizeFusion(fusion: RetrieveOptions['fusion']): 'rrf' | undefined {
-  return fusion?.strategy
 }

@@ -36,7 +36,7 @@ import { deferTerminalResult } from '../runtime/internal/terminal-result-finaliz
  *
  * @example
  * ```ts
- * config({ plugins: [createSemanticCache({ records, vectors, embedding, ttl: 86_400_000, scope: 'global' })] })
+ * config({ plugins: [createSemanticCache({ records, search, embedding, ttl: 86_400_000, scope: 'global' })] })
  * ```
  */
 export function createSemanticCache<TModality extends EmbeddingModality>(

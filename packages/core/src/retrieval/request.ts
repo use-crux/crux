@@ -1,7 +1,7 @@
 /** Canonical text-or-media retrieval request normalization. @module */
 
 import type { EmbeddingInput, EmbeddingModality } from '../embedding'
-import type { ExactFilter, FilterValue } from '../storage'
+import type { ExactFilter, FilterValue, SearchFusion } from '../storage'
 
 /** Metadata filter inferred from a schema, restricted to exact scalar values. */
 export type MetadataFilter<TMetadata extends object> = {
@@ -10,18 +10,29 @@ export type MetadataFilter<TMetadata extends object> = {
     : K]?: Extract<TMetadata[K], FilterValue>
 }
 
+/** Candidate override for one generated retrieval leg. */
+export interface RetrievalLegOptions {
+  readonly candidates?: number
+}
+
+/** Composable generated search plan for store-backed retrieval. */
+export interface RetrievalSearchPlan {
+  readonly dense?: boolean | RetrievalLegOptions
+  readonly sparse?: boolean | RetrievalLegOptions
+  readonly lexical?: boolean | RetrievalLegOptions
+  readonly fusion?: SearchFusion
+}
+
 /** Options shared by text and media retrieval requests. */
 export interface RetrieveOptions<TFilter extends ExactFilter = ExactFilter> {
   /** Maximum number of hits to return. */
   limit?: number
-  /** Minimum similarity score accepted by the configured vector store. */
+  /** Minimum final search score accepted by the configured search store. */
   threshold?: number
   /** Exact metadata constraints applied before vector scoring. */
   filter?: TFilter
-  /** Search leg override for this request. */
-  mode?: 'dense' | 'sparse' | 'hybrid'
-  /** Query-fusion settings used by hybrid search and retrieval recipes. */
-  fusion?: { strategy: 'rrf'; k?: number }
+  /** Search plan override for this request. */
+  search?: RetrievalSearchPlan
   /** Whether a caller wants the enclosing primitive to retain a recipe trace. */
   trace?: boolean
   /** Opaque caller attribution forwarded to retrieval recipes. */

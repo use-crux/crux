@@ -1,6 +1,6 @@
 ---
 title: Storage Interfaces
-description: RecordStore, VectorStore, AssetStore, storage(), and in-memory Storage Beta implementations.
+description: RecordStore, SearchStore, AssetStore, storage(), and in-memory Storage Beta implementations.
 ---
 
 ```ts
@@ -8,7 +8,7 @@ import {
   inMemoryAssetStore,
   inMemoryRecordStore,
   inMemoryStorage,
-  inMemoryVectorStore,
+  inMemorySearchStore,
   mutateRecord,
   storage,
   StorageError,
@@ -17,8 +17,8 @@ import {
 import type {
   AssetStore,
   RecordStore,
+  SearchStore,
   Storage,
-  VectorStore,
 } from "@use-crux/core/storage";
 ```
 
@@ -29,9 +29,9 @@ Crux storage is split into explicit capabilities:
 | Interface     | Purpose                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------ |
 | `RecordStore` | JSON records with reads, writes, linearizable single-key mutation, listing, TTL, filters, and watches       |
-| `VectorStore` | Dense, sparse, and hybrid vector indexes with explicit capability claims                                     |
+| `SearchStore` | Dense, sparse, and lexical retrieval indexes with explicit capability claims                                 |
 | `AssetStore`  | Binary and oversized payload storage with `put`, `get`, and `delete`                                         |
-| `Storage`     | A capability bundle: `{ records, vectors?, assets? }`                                                        |
+| `Storage`     | A capability bundle: `{ records, search?, assets? }`                                                         |
 
 Use this module for application code. `@use-crux/core/storage` is the canonical Storage Beta entry point.
 
@@ -42,7 +42,7 @@ Normalize and shallow-freeze a capability bundle:
 ```ts
 const appStorage = storage({
   records,
-  vectors,
+  search,
   assets,
 });
 ```
@@ -51,7 +51,7 @@ Primitives can consume the whole bundle or the specific capability they need:
 
 ```ts
 workspace({ id: "files", namespace, storage: appStorage });
-retriever({ id: "docs", records, vectors, dense });
+retriever({ id: "docs", records, search, dense });
 ```
 
 Use `storage.scope()` for tenant, user, session, or workspace isolation:
@@ -60,7 +60,7 @@ Use `storage.scope()` for tenant, user, session, or workspace isolation:
 const tenantStorage = storage.scope(appStorage, `tenant:${tenantId}`);
 ```
 
-Scoped storage preserves capability claims while prefixing record and vector keys.
+Scoped storage preserves capability claims while prefixing record and search keys.
 
 ## `RecordStore`
 
@@ -130,25 +130,39 @@ await records.list("docs:", {
 
 Adapters must reject unsupported filters with `StorageError` code `invalid_filter`; they must not silently drop filter clauses.
 
-## `VectorStore`
+## `SearchStore`
 
 ```ts
-interface VectorStore {
-  upsert(records: readonly VectorRecord[]): Promise<void>;
+interface SearchStore {
+  readonly _tag?: "SearchStore";
+  upsert(records: readonly SearchRecord[]): Promise<void>;
   delete(keys: readonly string[]): Promise<void>;
-  search(query: VectorSearchQuery): Promise<readonly VectorHit[]>;
-  capabilities(): VectorStoreCapabilities;
+  search(query: SearchQuery): Promise<readonly SearchHit[]>;
+  capabilities(): SearchStoreCapabilities;
 }
 ```
 
-`search()` uses a discriminated query:
+Search records can include lexical content, dense vectors, sparse vectors, metadata, or any supported combination:
 
 ```ts
-await vectors.search({
-  mode: "hybrid",
-  dense: [0.12, 0.4, 0.9],
-  sparse: { indices: [12, 98], values: [0.8, 0.3] },
-  fusion: "dbsf",
+type SearchRecord = {
+  key: string;
+  content?: string;
+  dense?: readonly number[];
+  sparse?: SparseVector;
+  metadata?: ExactFilter;
+};
+```
+
+`search()` composes one or more legs:
+
+```ts
+await search.search({
+  legs: [
+    { kind: "dense", vector: [0.12, 0.4, 0.9], candidates: 120 },
+    { kind: "lexical", query: "refund policy", candidates: 80 },
+  ],
+  fusion: { strategy: "rrf", k: 60 },
   limit: 10,
   filter: { namespace: "docs" },
 });
@@ -157,17 +171,17 @@ await vectors.search({
 Capability levels are part of correctness:
 
 ```ts
-type VectorStoreCapabilities = {
-  dense: boolean;
-  sparse: boolean;
-  hybrid: boolean;
-  fusion: readonly ("rrf" | "dbsf")[];
+type SearchStoreCapabilities = {
+  legs: Readonly<Record<"dense" | "sparse" | "lexical", boolean>>;
+  fusion: readonly "rrf"[];
   filter: "pre" | "post" | false;
   consistency: "strong" | "eventual";
 };
 ```
 
 Production filtered retrieval requires `filter: 'pre'`. A `post` filter can be useful for local tooling, but Crux primitives that rely on exact filtered top-k results reject it unless they explicitly opt into approximate behavior.
+
+`SearchStore.upsert()` is full-record replacement: omitted `content`, `dense`, or `sparse` clears that stored payload. Multi-leg searches use deterministic normalized RRF when two or more legs are requested. Single-leg searches ignore `fusion`.
 
 ## `AssetStore`
 
@@ -203,12 +217,12 @@ Use these for tests, demos, and local examples:
 
 ```ts
 const records = inMemoryRecordStore();
-const vectors = inMemoryVectorStore();
+const search = inMemorySearchStore();
 const assets = inMemoryAssetStore();
 const all = inMemoryStorage();
 ```
 
-In-memory stores are process-local and not durable. They are contract-correct reference implementations: records use lazy TTL and scan filtering, vectors pre-filter metadata before scoring, and assets support explicit `put()`, `get()`, and `delete()` lifecycle behavior.
+In-memory stores are process-local and not durable. They are contract-correct reference implementations: records use lazy TTL and scan filtering, search pre-filters metadata before scoring, and assets support explicit `put()`, `get()`, and `delete()` lifecycle behavior.
 
 ## Related
 
@@ -219,9 +233,9 @@ In-memory stores are process-local and not durable. They are contract-correct re
     href="/docs/guides/storage/crux-store"
   />
   <Card
-    title="VectorStore guide"
-    description="Dense, sparse, and hybrid vector search."
-    href="/docs/guides/storage/vector-store"
+    title="SearchStore guide"
+    description="Dense, sparse, lexical search, capability checks, and adapter expectations."
+    href="/docs/guides/storage/search-store"
   />
   <Card
     title="AssetStore guide"

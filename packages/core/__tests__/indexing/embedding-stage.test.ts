@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer, indexingPipeline, transform } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage cache', () => {
@@ -21,7 +21,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense,
       cache: true,
     })
@@ -54,7 +54,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense,
       cache: true,
     })
@@ -83,7 +83,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -125,7 +125,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -159,7 +159,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -187,7 +187,7 @@ describe('indexer embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
