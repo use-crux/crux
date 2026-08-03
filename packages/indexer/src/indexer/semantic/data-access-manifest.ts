@@ -65,7 +65,7 @@ const targetKindDeclarations = [
   { kind: "blackboard", aliases: ["blackboard", "board"] },
   { kind: "workspace", aliases: ["workspace", "file", "fs"] },
   { kind: "storage.recordStore", aliases: ["record"] },
-  { kind: "storage.vectorStore", aliases: ["vector"] },
+  { kind: "storage.searchStore", aliases: ["search"] },
   { kind: "storage.assetStore", aliases: ["asset"] },
   { kind: "storage.bundle", aliases: ["storage"] },
   { kind: "store", aliases: ["store"] },

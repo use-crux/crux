@@ -10,18 +10,18 @@
 import { storage } from "./bundle";
 import { inMemoryAssetStore } from "../asset";
 import { inMemoryRecordStore } from "./memory-record";
-import { inMemoryVectorStore } from "./memory-vector";
+import { inMemorySearchStore } from "./memory-search";
 import type { Storage } from "./types";
 
 export { inMemoryAssetStore } from "../asset";
 export { inMemoryRecordStore } from "./memory-record";
-export { inMemoryVectorStore } from "./memory-vector";
+export { inMemorySearchStore } from "./memory-search";
 
 /** Create the default in-memory storage bundle. */
 export function inMemoryStorage(): Storage {
   return storage({
     records: inMemoryRecordStore(),
-    vectors: inMemoryVectorStore(),
+    search: inMemorySearchStore(),
     assets: inMemoryAssetStore(),
   });
 }

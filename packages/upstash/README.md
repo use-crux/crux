@@ -8,25 +8,25 @@ Upstash-backed Storage Beta adapters for Crux.
 pnpm add @use-crux/upstash @use-crux/core @upstash/vector @upstash/qstash
 ```
 
-`@upstash/vector` is a required peer dependency for vector stores.
+`@upstash/vector` is a required peer dependency for search stores.
 `@upstash/redis` is optional and only needed when you use
 `upstashRedisRecordStore()`. `@upstash/qstash` is optional and only needed for
 the Runtime Engine wake adapter.
 
-## VectorStore
+## SearchStore
 
-Use `upstashVectorStore()` for Upstash Vector indexes. The adapter defaults to
-dense-only search because index mode is configured in Upstash, not in Crux.
-Opt into sparse or hybrid capabilities only when the backing index supports
-them.
+Use `upstashSearchStore()` for Upstash Vector indexes. The adapter supports
+SearchStore dense and sparse query legs, exact pre-filtering, and RRF fusion.
+Narrow capabilities when the backing Upstash index does not support both dense
+and sparse vectors.
 
 ```ts
-import { upstashVectorStore } from '@use-crux/upstash'
+import { upstashSearchStore } from '@use-crux/upstash'
 
-const vectors = upstashVectorStore({
+const search = upstashSearchStore({
   index,
   namespace: 'docs',
-  capabilities: { dense: true, filter: 'pre' },
+  capabilities: { legs: { dense: true, sparse: true }, filter: 'pre' },
 })
 ```
 
@@ -47,19 +47,19 @@ Pass the adapters explicitly to Crux primitives that need them.
 
 ```ts
 import { storage } from '@use-crux/core/storage'
-import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
+import { upstashRedisRecordStore, upstashSearchStore } from '@use-crux/upstash'
 
 const appStorage = storage({
   records: upstashRedisRecordStore({ redis }),
-  vectors: upstashVectorStore({
+  search: upstashSearchStore({
     index,
     namespace: 'memory',
-    capabilities: { dense: true, filter: 'pre' },
+    capabilities: { legs: { dense: true, sparse: true }, filter: 'pre' },
   }),
 })
 ```
 
-Use dedicated vector namespaces for separate workloads such as RAG chunks,
+Use dedicated search namespaces for separate workloads such as RAG chunks,
 memory recall, and semantic response cache entries.
 
 ## Runtime Wake

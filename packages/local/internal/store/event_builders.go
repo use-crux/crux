@@ -64,9 +64,16 @@ func retrievalStartData(event RetrievalStartEvent) RetrievalEventData {
 		Limit:       event.Limit,
 		Threshold:   event.Threshold,
 		Filter:      event.Filter,
+		RRFK:        event.RRFK,
 	}
 	if event.Fusion != "" {
 		entry.Fusion = &event.Fusion
+	}
+	if len(event.SearchLegs) > 0 {
+		entry.SearchLegs = append([]string(nil), event.SearchLegs...)
+	}
+	if len(event.SearchCandidates) > 0 {
+		entry.SearchCandidates = cloneStringIntMap(event.SearchCandidates)
 	}
 	return entry
 }
@@ -84,16 +91,31 @@ func retrievalEndData(event RetrievalEndEvent) RetrievalEventData {
 		Limit:       event.Limit,
 		Threshold:   event.Threshold,
 		Filter:      event.Filter,
+		RRFK:        event.RRFK,
 		ResultCount: &event.ResultCount,
 		DurationMs:  &event.DurationMs,
 	}
 	if event.Fusion != "" {
 		entry.Fusion = &event.Fusion
 	}
+	if len(event.SearchLegs) > 0 {
+		entry.SearchLegs = append([]string(nil), event.SearchLegs...)
+	}
+	if len(event.SearchCandidates) > 0 {
+		entry.SearchCandidates = cloneStringIntMap(event.SearchCandidates)
+	}
 	if event.Error != "" {
 		entry.Error = &event.Error
 	}
 	return entry
+}
+
+func cloneStringIntMap(input map[string]int) map[string]int {
+	output := make(map[string]int, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }
 
 func retrievalStageStartData(event RetrievalStageStartEvent) RetrievalStageEventData {

@@ -12,7 +12,7 @@ import {
   retrieve,
   retriever,
 } from '../../src/retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { RetrieverHit } from '../../src/retrieval'
 
 function hit(id: string, content: string, score = 1): RetrieverHit {
@@ -192,12 +192,12 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -282,18 +282,18 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
     })
     const docs = corpus({
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors,
+      search,
       indexer: docsIndexer,
     })
 

@@ -5,7 +5,7 @@
  */
 
 import type { AssetPutOptions, AssetStore } from "../asset";
-import type { RecordStore, Storage, VectorStore } from "./types";
+import type { RecordStore, SearchStore, Storage } from "./types";
 
 /** Factory for normalizing storage bundles and scoped wrappers. */
 export interface StorageFactory {
@@ -26,7 +26,7 @@ export interface StorageFactory {
    * `get()`/`delete()` refs through unchanged.
    *
    * @param base - Storage bundle to scope.
-   * @param prefix - Prefix applied to record, vector, and asset keys.
+   * @param prefix - Prefix applied to record, search, and asset keys.
    * @returns A shallow-frozen scoped storage bundle.
    */
   scope(base: Storage, prefix: string): Storage;
@@ -45,8 +45,8 @@ function scope(base: Storage, prefix: string): Storage {
   const normalizedPrefix = prefix.endsWith(":") ? prefix : `${prefix}:`;
   return storage({
     records: scopeRecords(base.records, normalizedPrefix),
-    ...(base.vectors
-      ? { vectors: scopeVectors(base.vectors, normalizedPrefix) }
+    ...(base.search
+      ? { search: scopeSearch(base.search, normalizedPrefix) }
       : {}),
     ...(base.assets
       ? { assets: scopeAssets(base.assets, normalizedPrefix) }
@@ -130,23 +130,23 @@ function scopeRecords(records: RecordStore, prefix: string): RecordStore {
   };
 }
 
-function scopeVectors(vectors: VectorStore, prefix: string): VectorStore {
+function scopeSearch(search: SearchStore, prefix: string): SearchStore {
   return {
-    _tag: "VectorStore",
+    _tag: "SearchStore",
     upsert: (records) =>
-      vectors.upsert(
+      search.upsert(
         records.map((record) => ({
           ...record,
           key: prefixKey(prefix, record.key),
         })),
       ),
-    delete: (keys) => vectors.delete(keys.map((key) => prefixKey(prefix, key))),
+    delete: (keys) => search.delete(keys.map((key) => prefixKey(prefix, key))),
     search: async (query) =>
-      (await vectors.search(query)).map((hit) => ({
+      (await search.search(query)).map((hit) => ({
         ...hit,
         key: unprefixKey(prefix, hit.key),
       })),
-    capabilities: () => vectors.capabilities(),
+    capabilities: () => search.capabilities(),
   };
 }
 

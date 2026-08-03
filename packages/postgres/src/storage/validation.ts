@@ -5,24 +5,38 @@ import type {
   JsonValue,
   RecordListOptions,
   RecordWriteOptions,
+  SearchLegKind,
+  SearchQuery,
+  SearchRecord,
+  SearchStoreCapabilities,
   SparseVector,
-  VectorRecord,
-  VectorSearchQuery,
-  VectorStoreCapabilities,
 } from '@use-crux/core/storage'
 
-export interface NormalizedVectorRecord {
+export interface SearchPayloadOptions {
+  readonly dimensions?: number
+  readonly sparseDimensions?: number
+  readonly lexical: boolean
+}
+
+export interface NormalizedSearchRecord {
   readonly key: string
+  readonly content?: string
   readonly dense?: readonly number[]
   readonly sparse?: SparseVector
   readonly metadata: ExactFilter
 }
 
-export interface NormalizedVectorQuery {
-  readonly mode: 'dense' | 'sparse' | 'hybrid'
+export interface NormalizedSearchLeg {
+  readonly kind: SearchLegKind
   readonly dense?: readonly number[]
   readonly sparse?: SparseVector
-  readonly fusion?: 'rrf'
+  readonly lexical?: string
+  readonly candidates: number
+}
+
+export interface NormalizedSearchQuery {
+  readonly legs: readonly NormalizedSearchLeg[]
+  readonly fusion?: { readonly strategy: 'rrf'; readonly k: number }
   readonly limit: number
   readonly threshold: number
   readonly filter?: ExactFilter
@@ -34,8 +48,15 @@ export function assertSchema(schema: unknown): asserts schema is string {
   }
 }
 
+export function assertOptionalDimensions(value: unknown, label: string): asserts value is number | undefined {
+  if (value !== undefined && (typeof value !== 'number' || !Number.isInteger(value) || value <= 0)) {
+    throw new StorageError('invalid_value', `${label} must be a positive integer.`)
+  }
+}
+
 export function assertDimensions(value: unknown, label: string): asserts value is number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  assertOptionalDimensions(value, label)
+  if (value === undefined) {
     throw new StorageError('invalid_value', `${label} must be a positive integer.`)
   }
 }
@@ -100,82 +121,50 @@ export function normalizeListOptions(options?: RecordListOptions): {
   }
 }
 
-export function normalizeVectorRecord(
-  record: VectorRecord,
-  dimensions: number,
-  sparseDimensions: number | undefined,
-): NormalizedVectorRecord {
-  assertKey(record.key, 'Vector')
-  const dense = record.dense === undefined ? undefined : cloneDense(record.dense, dimensions)
-  const sparse = record.sparse === undefined ? undefined : cloneSparse(record.sparse, sparseDimensions)
-  if (!dense && !sparse) {
-    throw new StorageError('invalid_value', 'Vector records require a dense or sparse vector.')
-  }
-  if (sparse && sparseDimensions === undefined) {
-    throw new StorageError('unsupported_capability', 'This PostgreSQL vector store does not support sparse vectors.')
-  }
-  if (dense && sparse && sparseDimensions === undefined) {
-    throw new StorageError('unsupported_capability', 'This PostgreSQL vector store does not support hybrid vectors.')
+export function normalizeSearchRecord(record: SearchRecord, options: SearchPayloadOptions): NormalizedSearchRecord {
+  assertKey(record.key, 'Search')
+  const content = record.content === undefined ? undefined : cloneContent(record.content)
+  const dense = record.dense === undefined ? undefined : cloneDense(record.dense, options.dimensions)
+  const sparse = record.sparse === undefined ? undefined : cloneSparse(record.sparse, options.sparseDimensions)
+  if (content === undefined && !dense && !sparse) {
+    throw new StorageError('invalid_value', 'Search records require content, a dense payload, or a sparse payload.')
   }
   return {
     key: record.key,
+    ...(content !== undefined ? { content } : {}),
     ...(dense ? { dense } : {}),
     ...(sparse ? { sparse } : {}),
-    metadata: record.metadata === undefined ? {} : cloneExactFilter(record.metadata, 'Vector'),
+    metadata: record.metadata === undefined ? {} : cloneExactFilter(record.metadata, 'Search'),
   }
 }
 
-export function normalizeVectorQuery(
-  query: VectorSearchQuery,
-  dimensions: number,
-  sparseDimensions: number | undefined,
-  capabilities: VectorStoreCapabilities,
-): NormalizedVectorQuery {
+export function normalizeSearchQuery(
+  query: SearchQuery,
+  options: SearchPayloadOptions,
+  capabilities: SearchStoreCapabilities,
+): NormalizedSearchQuery {
   const input = query as unknown as Record<string, unknown>
   const limit = normalizeLimit(input.limit)
   const threshold = normalizeThreshold(input.threshold)
-  const filter = input.filter === undefined ? undefined : cloneExactFilter(input.filter, 'Vector')
-  if (input.mode === 'dense') {
-    return {
-      mode: 'dense',
-      dense: cloneDense(input.dense, dimensions),
-      limit,
-      threshold,
-      ...(filter ? { filter } : {}),
-    }
+  const filter = input.filter === undefined ? undefined : cloneExactFilter(input.filter, 'Search')
+  if (!Array.isArray(input.legs) || input.legs.length < 1 || input.legs.length > 3) {
+    throw new StorageError('invalid_value', 'Search queries require one to three legs.')
   }
-  if (input.mode === 'sparse') {
-    if (!capabilities.sparse)
-      throw new StorageError('unsupported_capability', 'This PostgreSQL vector store does not support sparse search.')
-    return {
-      mode: 'sparse',
-      sparse: cloneSparse(input.sparse, sparseDimensions),
-      limit,
-      threshold,
-      ...(filter ? { filter } : {}),
-    }
+  const seen = new Set<string>()
+  const defaultCandidates = Math.max(limit, Math.min(1000, Math.max(50, 4 * limit)))
+  const legs = input.legs.map((leg) => normalizeSearchLeg(leg, options, capabilities, limit, defaultCandidates, seen))
+  const authoredFusion = input.fusion === undefined ? undefined : normalizeFusion(input.fusion, capabilities)
+  const fusion = legs.length < 2 ? undefined : (authoredFusion ?? normalizeFusion(undefined, capabilities))
+  return {
+    legs,
+    ...(fusion ? { fusion } : {}),
+    limit,
+    threshold,
+    ...(filter ? { filter } : {}),
   }
-  if (input.mode === 'hybrid') {
-    if (!capabilities.hybrid)
-      throw new StorageError('unsupported_capability', 'This PostgreSQL vector store does not support hybrid search.')
-    if (input.fusion === 'dbsf')
-      throw new StorageError('unsupported_capability', 'PostgreSQL vector storage does not support DBSF fusion.')
-    if (input.fusion !== undefined && input.fusion !== 'rrf')
-      throw new StorageError('unsupported_capability', 'Unsupported PostgreSQL vector fusion mode.')
-    return {
-      mode: 'hybrid',
-      dense: cloneDense(input.dense, dimensions),
-      sparse: cloneSparse(input.sparse, sparseDimensions),
-      fusion: 'rrf',
-      limit,
-      threshold,
-      ...(filter ? { filter } : {}),
-    }
-  }
-  throw new StorageError('invalid_value', 'Vector search mode must be dense, sparse, or hybrid.')
 }
 
-export function sparseVectorSql(vector: SparseVector, dimensions: number): string {
+export function sparsePayloadSql(vector: SparseVector, dimensions: number): string {
   const entries = vector.indices
     .map((index, position) => [index + 1, vector.values[position]!] as const)
     .sort(([left], [right]) => left - right)
@@ -183,39 +172,103 @@ export function sparseVectorSql(vector: SparseVector, dimensions: number): strin
   return `{${entries.join(',')}}/${dimensions}`
 }
 
-export function denseVectorSql(vector: readonly number[]): string {
+export function densePayloadSql(vector: readonly number[]): string {
   return `[${vector.join(',')}]`
 }
 
-function cloneDense(value: unknown, dimensions: number): readonly number[] {
+function normalizeSearchLeg(
+  value: unknown,
+  options: SearchPayloadOptions,
+  capabilities: SearchStoreCapabilities,
+  limit: number,
+  defaultCandidates: number,
+  seen: Set<string>,
+): NormalizedSearchLeg {
+  if (!isPlainObject(value)) {
+    throw new StorageError('invalid_value', 'Search legs must be plain objects.')
+  }
+  const kind = value.kind
+  if (kind !== 'dense' && kind !== 'sparse' && kind !== 'lexical') {
+    throw new StorageError('invalid_value', 'Search leg kind must be dense, sparse, or lexical.')
+  }
+  if (seen.has(kind)) {
+    throw new StorageError('invalid_value', 'Search queries cannot contain duplicate leg kinds.')
+  }
+  seen.add(kind)
+  if (!capabilities.legs[kind]) {
+    throw new StorageError('unsupported_capability', `This PostgreSQL search store does not support ${kind} search.`)
+  }
+  const candidates = normalizeCandidates(value.candidates, limit, defaultCandidates)
+  if (kind === 'dense') return { kind, dense: cloneDense(value.vector, options.dimensions), candidates }
+  if (kind === 'sparse') return { kind, sparse: cloneSparse(value.vector, options.sparseDimensions), candidates }
+  if (typeof value.query !== 'string' || value.query.length === 0) {
+    throw new StorageError('invalid_value', 'Lexical search queries must be non-empty strings.')
+  }
+  return { kind, lexical: value.query, candidates }
+}
+
+function normalizeFusion(value: unknown, capabilities: SearchStoreCapabilities): { readonly strategy: 'rrf'; readonly k: number } {
+  if (!capabilities.fusion.includes('rrf')) {
+    throw new StorageError('unsupported_capability', 'This PostgreSQL search store does not support RRF fusion.')
+  }
+  if (value === undefined) return { strategy: 'rrf', k: 60 }
+  if (!isPlainObject(value) || value.strategy !== 'rrf') {
+    throw new StorageError('unsupported_capability', 'Unsupported PostgreSQL search fusion strategy.')
+  }
+  const k = value.k ?? 60
+  if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
+    throw new StorageError('invalid_value', 'RRF k must be a positive integer.')
+  }
+  return { strategy: 'rrf', k }
+}
+
+function normalizeCandidates(value: unknown, limit: number, fallback: number): number {
+  if (value === undefined) return fallback
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0 || value < limit) {
+    throw new StorageError('invalid_value', 'Search leg candidates must be a positive integer at least as large as limit.')
+  }
+  return value
+}
+
+function cloneContent(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new StorageError('invalid_value', 'Search record content must be a string.')
+  }
+  return value
+}
+
+function cloneDense(value: unknown, dimensions: number | undefined): readonly number[] {
+  if (dimensions === undefined) {
+    throw new StorageError('unsupported_capability', 'This PostgreSQL search store does not support dense payloads.')
+  }
   if (!Array.isArray(value) || value.length !== dimensions || !value.every(isFiniteNumber)) {
-    throw new StorageError('invalid_value', `Dense vectors must contain exactly ${dimensions} finite numbers.`)
+    throw new StorageError('invalid_value', `Dense payloads must contain exactly ${dimensions} finite numbers.`)
   }
   return [...value]
 }
 
 function cloneSparse(value: unknown, dimensions: number | undefined): SparseVector {
   if (!isPlainObject(value) || !Array.isArray(value.indices) || !Array.isArray(value.values)) {
-    throw new StorageError('invalid_value', 'Sparse vectors must include indices and values arrays.')
+    throw new StorageError('invalid_value', 'Sparse payloads must include indices and values arrays.')
   }
   if (dimensions === undefined) {
-    throw new StorageError('unsupported_capability', 'This PostgreSQL vector store does not support sparse vectors.')
+    throw new StorageError('unsupported_capability', 'This PostgreSQL search store does not support sparse payloads.')
   }
   if (value.indices.length === 0 || value.indices.length !== value.values.length) {
-    throw new StorageError('invalid_value', 'Sparse vector indices and values must be non-empty and equal length.')
+    throw new StorageError('invalid_value', 'Sparse payload indices and values must be non-empty and equal length.')
   }
   const seen = new Set<number>()
   for (const index of value.indices) {
     if (!Number.isInteger(index) || index < 0 || index >= dimensions || seen.has(index)) {
       throw new StorageError(
         'invalid_value',
-        `Sparse vector indices must be unique integers between 0 and ${dimensions - 1}.`,
+        `Sparse payload indices must be unique integers between 0 and ${dimensions - 1}.`,
       )
     }
     seen.add(index)
   }
   if (!value.values.every(isFiniteNumber)) {
-    throw new StorageError('invalid_value', 'Sparse vector values must be finite numbers.')
+    throw new StorageError('invalid_value', 'Sparse payload values must be finite numbers.')
   }
   return { indices: [...value.indices] as number[], values: [...value.values] as number[] }
 }
@@ -223,7 +276,7 @@ function cloneSparse(value: unknown, dimensions: number | undefined): SparseVect
 function normalizeLimit(value: unknown): number {
   if (value === undefined) return 10
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new StorageError('invalid_value', 'Vector search limit must be a non-negative integer.')
+    throw new StorageError('invalid_value', 'Search limit must be a non-negative integer.')
   }
   return value
 }
@@ -231,7 +284,7 @@ function normalizeLimit(value: unknown): number {
 function normalizeThreshold(value: unknown): number {
   if (value === undefined) return 0
   if (!isFiniteNumber(value)) {
-    throw new StorageError('invalid_value', 'Vector search threshold must be a finite number.')
+    throw new StorageError('invalid_value', 'Search threshold must be a finite number.')
   }
   return value
 }

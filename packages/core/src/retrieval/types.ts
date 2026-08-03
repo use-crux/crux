@@ -10,7 +10,7 @@
 
 import type { z } from 'zod'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
-import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
+import type { ExactFilter, RecordStore, SearchStore, Storage } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
@@ -20,10 +20,10 @@ import type { CruxSourceFacts } from '../indexing'
 import type { AssetRef } from '../asset'
 import type { KnowledgeRef } from '../knowledge/refs'
 
-export type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
+export type { RetrievalLegOptions, RetrievalSearchPlan, RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 
 /** How a retriever resolves queries to hits. */
-export type RetrieverMode = 'dense' | 'sparse' | 'hybrid' | 'custom'
+export type RetrieverMode = 'search' | 'custom'
 /** How a retriever injects into a prompt: context text, tools, or both. */
 export type RetrievalInjectMode = 'context' | 'tool' | 'both'
 /** The built-in retrieval tool names. */
@@ -172,7 +172,7 @@ export interface RetrievalInjectionConfig {
   tools?: false | RetrievalToolConfig
 }
 
-/** Configuration for a store-backed dense/sparse/hybrid retriever. Internal. */
+/** Configuration for a store-backed search retriever. Internal. */
 export interface DenseStoreBackedRetrieverConfig<
   TModality extends EmbeddingModality = 'text',
 > {
@@ -183,17 +183,14 @@ export interface DenseStoreBackedRetrieverConfig<
   indexerId?: string
   namespace: string
   records?: RecordStore
-  vectors?: VectorStore
+  search?: SearchStore
   storage?: Storage
   dense?: DenseEmbedding<TModality>
   sparse?: SparseEmbedding
-  search?: {
-    mode?: 'dense' | 'sparse' | 'hybrid'
-    limit?: number
-    threshold?: number
-    filter?: ExactFilter
-    fusion?: 'rrf' | 'dbsf'
-  }
+  limit?: number
+  threshold?: number
+  filter?: ExactFilter
+  plan?: import('./request').RetrievalSearchPlan
   context?: RetrieverContextConfig
   inject?: RetrievalInjectMode
   tools?: false | RetrievalToolConfig

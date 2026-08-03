@@ -278,19 +278,19 @@ Capability claims are intentionally narrow:
 | `convexRecordStore()` | Watch          | `false`  |
 | `convexRecordStore()` | Batch          | `false`  |
 
-`convexStorage()` contains `records` and includes `assets` only when its `assets` option is configured. It does not contain `vectors`. Embeddings inside record values are mirrored to the component document's top-level `embedding` field, but the bundled component does not declare a vector index or perform vector search.
+`convexStorage()` contains `records` and includes `assets` only when its `assets` option is configured. It does not contain `search`. Embeddings inside record values are mirrored to the component document's top-level `embedding` field, but the bundled component does not declare a retrieval index or perform search ranking.
 
-Memory blocks configured with `embed` therefore fall back to record listing/recency when only Convex storage is present. For similarity-ranked recall, pass an explicit `VectorStore` such as Upstash:
+Memory blocks configured with `embed` therefore fall back to record listing/recency when only Convex storage is present. For similarity-ranked recall, pass an explicit `SearchStore` such as Upstash:
 
 ```ts
 import { memory, episodes } from "@use-crux/convex/memory";
 import { convexRecordStore } from "@use-crux/convex";
-import { upstashVectorStore } from "@use-crux/upstash";
+import { upstashSearchStore } from "@use-crux/upstash";
 
 const assistantMemory = memory({
   id: "assistant",
   records: convexRecordStore({ component: components.crux, ctx }),
-  vectors: upstashVectorStore({
+  search: upstashSearchStore({
     index: vectorIndex,
     namespace: `memory:${threadId}`,
   }),
@@ -298,8 +298,6 @@ const assistantMemory = memory({
   blocks: [episodes({ id: "episodes", embed })],
 });
 ```
-
-`convexVectorStore()` remains temporarily as a compatibility symbol, but construction throws `StorageError('unsupported_capability')` with guidance to pass an explicit `VectorStore`.
 
 ### `convexAssetStore(config)`
 

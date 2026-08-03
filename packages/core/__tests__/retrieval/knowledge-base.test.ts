@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { corpus as createCorpus, indexer as createIndexer } from '../../src/indexing'
 import { knowledgeBase } from '../../src/retrieval'
-import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemoryStorage, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 function createTopicEmbedding() {
@@ -65,11 +65,10 @@ describe('knowledgeBase', () => {
         indexedChunks: 2,
       },
       source: { kind: 'direct' },
-      storage: { records: true, vectors: true },
+      storage: { records: true, search: true },
       capabilities: {
-        dense: true,
-        sparse: false,
-        hybrid: false,
+        legs: { dense: true, sparse: true, lexical: false },
+        fusion: ['rrf'],
         delete: true,
       },
     })
@@ -246,13 +245,13 @@ describe('knowledgeBase', () => {
 
   it('indexes through a configured corpus and keeps retrieval store-backed', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const embeddings = createTopicEmbedding()
     const index = createIndexer({
       id: 'docs',
       namespace: 'docs',
       records,
-      vectors,
+      search,
       dense: embeddings,
     })
     const corpus = createCorpus({
@@ -265,7 +264,7 @@ describe('knowledgeBase', () => {
       id: 'docs',
       corpus,
       records,
-      vectors,
+      search,
       embeddings,
     })
 

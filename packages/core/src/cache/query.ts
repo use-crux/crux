@@ -9,7 +9,7 @@
  */
 
 import { StorageError } from '../storage'
-import type { RecordStore, VectorStore } from '../storage'
+import type { RecordStore, SearchStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCachePromptOptions, SemanticCacheQueryContext } from '../prompt/prompt-types'
 import type { NormalizedPromptHint, SemanticCacheConfig, SemanticCacheScopeContext } from './types'
@@ -27,7 +27,7 @@ export const DEFAULT_THRESHOLD = 0.95
 export function validateConfig(config: SemanticCacheConfig): void {
   if (config.embedding.kind !== 'dense') {
     throw new Error(
-      'createSemanticCache() requires a dense embedding. Sparse and hybrid cache lookup are out of scope.',
+      'createSemanticCache() requires a dense embedding. Sparse cache lookup is out of scope.',
     )
   }
   if (!Number.isFinite(config.ttl) || config.ttl <= 0) {
@@ -38,26 +38,26 @@ export function validateConfig(config: SemanticCacheConfig): void {
 /** Resolve and validate the beta storage ports used by semantic cache. */
 export function resolveSemanticCacheStores(config: SemanticCacheConfig): {
   readonly records: RecordStore
-  readonly vectors: VectorStore
+  readonly search: SearchStore
 } {
   const records = config.records ?? config.storage?.records
-  const vectors = config.vectors ?? config.storage?.vectors
+  const search = config.search ?? config.storage?.search
   if (!records) {
     throw new Error('createSemanticCache() requires records or storage.records.')
   }
-  if (!vectors) {
-    throw new Error('createSemanticCache() requires vectors or storage.vectors.')
+  if (!search) {
+    throw new Error('createSemanticCache() requires search or storage.search.')
   }
   if (records.capabilities().ttl === false) {
     throw new StorageError('ttl_unsupported', 'createSemanticCache() requires a record store with TTL support.')
   }
-  if (vectors.capabilities().filter !== 'pre') {
+  if (search.capabilities().filter !== 'pre') {
     throw new StorageError(
       'unsupported_capability',
-      'createSemanticCache() requires a vector store with pre-filter support.',
+      'createSemanticCache() requires a search store with pre-filter support.',
     )
   }
-  return { records, vectors }
+  return { records, search }
 }
 
 /** Normalize the per-prompt `cache.semantic` hint to a {@link NormalizedPromptHint}. */

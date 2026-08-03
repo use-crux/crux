@@ -1,0 +1,244 @@
+---
+title: SearchStore
+description: Store dense, sparse, and lexical search records for retrieval.
+---
+
+`SearchStore` is Crux's retrieval-index interface.
+
+Use it when a feature needs searchable chunks. Keep full JSON records in [`RecordStore`](/docs/guides/storage/crux-store), then write searchable `SearchRecord` rows with the same keys. Search records may contain dense vectors, sparse vectors, lexical content, or any supported combination.
+
+```ts
+import {
+  inMemoryRecordStore,
+  inMemorySearchStore,
+  storage,
+} from "@use-crux/core/storage";
+
+const records = inMemoryRecordStore();
+const search = inMemorySearchStore();
+
+const appStorage = storage({ records, search });
+```
+
+`search()` returns keys, scores, metadata, and per-leg match details. Crux hydrates full records through `RecordStore` when it needs document content or parent metadata.
+
+## Query Legs
+
+A `SearchQuery` composes one to three independent legs:
+
+```ts
+await search.search({
+  legs: [
+    { kind: "dense", vector: [0.12, 0.4, 0.9], candidates: 120 },
+    {
+      kind: "sparse",
+      vector: { indices: [12, 98, 322], values: [0.8, 0.3, 0.6] },
+      candidates: 80,
+    },
+    { kind: "lexical", query: "SAML setup error", candidates: 80 },
+  ],
+  fusion: { strategy: "rrf", k: 60 },
+  limit: 10,
+  filter: { namespace: "product-docs", active: true },
+});
+```
+
+Use a single leg for dense-only, sparse-only, or lexical-only search:
+
+```ts
+await search.search({
+  legs: [{ kind: "lexical", query: "ERR_AUTH_401" }],
+  limit: 10,
+});
+```
+
+Two or more legs use reciprocal-rank fusion. Omitted `fusion` defaults to `{ strategy: "rrf", k: 60 }` when the store advertises RRF support.
+
+## Records
+
+`SearchStore.upsert()` is full-record replacement:
+
+```ts
+await search.upsert([
+  {
+    key: "docs:chunk:1",
+    content: "Configure SAML SSO in the admin settings...",
+    dense: [0.12, 0.4, 0.9],
+    sparse: { indices: [12, 98], values: [0.8, 0.3] },
+    metadata: { namespace: "product-docs", active: true },
+  },
+]);
+```
+
+Omitting `content`, `dense`, or `sparse` clears that stored payload. Metadata-only lifecycle updates should therefore reconstruct and write the complete current `SearchRecord`.
+
+## Capabilities
+
+Search capability claims are part of correctness:
+
+```ts
+type SearchStoreCapabilities = {
+  legs: {
+    dense: boolean;
+    sparse: boolean;
+    lexical: boolean;
+  };
+  fusion: readonly "rrf"[];
+  filter: "pre" | "post" | false;
+  consistency: "strong" | "eventual";
+};
+```
+
+Production filtered retrieval requires `filter: "pre"`. A `post` filter can be useful for local tooling, but Crux indexed-knowledge paths reject it because filtered top-k results must be exact. Unsupported legs, fusion, or filters throw `StorageError` code `unsupported_capability` before provider I/O where possible.
+
+## With Retriever
+
+Most users do not call `SearchStore` directly. They pass records and search storage to `retriever()` or `knowledgeBase()`:
+
+```ts
+const docs = retriever({
+  id: "docs",
+  namespace: "product-docs",
+  records,
+  search,
+  dense,
+  sparse,
+  limit: 8,
+});
+
+const hits = await docs.retrieve({
+  query: "transaction retry semantics",
+  search: {
+    dense: { candidates: 120 },
+    lexical: { candidates: 80 },
+    fusion: { strategy: "rrf", k: 60 },
+  },
+});
+```
+
+Knowledge bases use the same retrieval plan shape:
+
+```ts
+const kb = knowledgeBase({
+  id: "docs",
+  records,
+  search,
+  embeddings: dense,
+  sparseEmbeddings: sparse,
+});
+
+const hits = await kb
+  .retriever({
+    search: { dense: true, lexical: { candidates: 80 } },
+    limit: 8,
+  })
+  .retrieve({
+    query: "transaction retry semantics",
+    filter: { tenantId: "acme" },
+  });
+```
+
+Dense legs require a dense embedding, sparse legs require a sparse embedding, and lexical legs require normalized text plus a lexical-capable store. Lexical retrieval never calls an embedding.
+
+## Bundled Search Stores
+
+Use `inMemorySearchStore()` for tests and examples:
+
+```ts
+import { inMemorySearchStore } from "@use-crux/core/storage";
+
+const search = inMemorySearchStore();
+```
+
+The in-memory store advertises dense, sparse, and RRF, but not lexical.
+
+Use first-party PostgreSQL storage when pgvector, sparse vectors, or native full-text search should live in the same database:
+
+```ts
+import { postgresSearchStore } from "@use-crux/postgres";
+
+const search = postgresSearchStore({
+  dimensions: 1536,
+  sparseDimensions: 30_000,
+  lexical: { configuration: "simple" },
+});
+
+const setup = await search.setup.check();
+if (!setup.ok) await search.setup.apply();
+```
+
+At least one of `dimensions`, `sparseDimensions`, or `lexical` is required. PostgreSQL derives capabilities from the configured payloads, applies metadata filters before ranking, and uses normalized server-side RRF for multi-leg search.
+
+## PostgreSQL Lexical Search
+
+When `lexical` is enabled, the Crux-owned search table stores normalized chunk content and a generated full-text document:
+
+```sql
+content text,
+search_document tsvector GENERATED ALWAYS AS (
+  to_tsvector('simple'::regconfig, coalesce(content, ''))
+) STORED
+```
+
+Crux creates a GIN index on `search_document`. Queries use `websearch_to_tsquery(configuration, query)` and rank lexical candidates with PostgreSQL full-text ranking. Empty lexical queries or queries that become empty after parsing return no lexical candidates.
+
+`setup.check()` is non-mutating. It reports missing columns, generated expression/configuration mismatches, missing GIN indexes, pgvector requirements, dimensions, and the Crux-owned presence constraint. `setup.apply()` creates missing schemas, tables, nullable columns, pgvector extension requirements, constraints, and indexes while holding the storage setup lock. It does not rewrite content or silently change the text-search configuration.
+
+After enabling lexical search for an existing indexed knowledge base, run `knowledgeBase.reindex()` so active chunks populate `content`. `setup.check()` reports `POSTGRES_SEARCH_LEXICAL_CONTENT_MISSING` while active indexed chunks still have null search content. Changing the text-search configuration requires an explicit schema change and reindex because PostgreSQL must rebuild the generated column and GIN index.
+
+PostgreSQL lexical search is not BM25 in this release. True BM25 is deferred to RFC #352, and learned sparse providers are deferred to RFC #353. Sparse search remains a composable search leg; the current PostgreSQL lexical leg uses PostgreSQL native full-text search.
+
+## Custom SearchStore
+
+Implement `SearchStore` when your backend can upsert records by key and search them by dense, sparse, lexical, or fused query:
+
+```ts
+import type { SearchStore } from "@use-crux/core/storage";
+
+export function mySearchStore(): SearchStore {
+  return {
+    async upsert(records) {
+      await searchDb.upsert(
+        records.map((record) => ({
+          id: record.key,
+          content: record.content,
+          vector: record.dense,
+          sparseVector: record.sparse,
+          metadata: record.metadata,
+        })),
+      );
+    },
+
+    async delete(keys) {
+      await searchDb.delete(keys);
+    },
+
+    async search(query) {
+      const results = await searchDb.query({
+        legs: query.legs,
+        limit: query.limit ?? 10,
+        filter: query.filter,
+        fusion: query.fusion,
+      });
+
+      return results.map((result) => ({
+        key: result.id,
+        score: result.score,
+        metadata: result.metadata,
+        matches: result.matches,
+      }));
+    },
+
+    capabilities() {
+      return {
+        legs: { dense: true, sparse: true, lexical: true },
+        fusion: ["rrf"],
+        filter: "pre",
+        consistency: "eventual",
+      };
+    },
+  };
+}
+```
+
+If your search database also stores full JSON documents, expose that separately as a `RecordStore`. The public Crux contract stays clear: records hydrate data; search stores rank retrievable records.

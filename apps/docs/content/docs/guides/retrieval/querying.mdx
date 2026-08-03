@@ -17,7 +17,7 @@ const docs = knowledgeBase({
 
 const hits = await docs
   .retriever({
-    mode: "hybrid",
+    search: { dense: true, lexical: true },
     limit: 8,
   })
   .retrieve("how do refunds work?");
@@ -32,40 +32,59 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid", limit: 8 },
 });
 ```
 
 Store-backed retrievers read indexed chunk and parent records written by `indexer()` or `knowledgeBase().index()`.
 
-## Search Modes
+## Search Plans
 
 Dense is the natural-language default:
 
 ```ts
-await docs.retrieve({ query: "refund policy", mode: "dense", limit: 5 });
+await docs.retrieve({
+  query: "refund policy",
+  search: { dense: true },
+  limit: 5,
+});
 ```
 
 Sparse is useful for exact terms, codes, identifiers, and product names:
 
 ```ts
-await docs.retrieve({ query: "ERR_BILLING_CREDIT_409", mode: "sparse" });
+await docs.retrieve({
+  query: "ERR_BILLING_CREDIT_409",
+  search: { sparse: true },
+});
 ```
 
-Hybrid combines dense and sparse signals when the vector store supports it:
+Lexical uses normalized indexed content and a lexical-capable store:
 
 ```ts
 await docs.retrieve({
   query: "enterprise SSO setup",
-  mode: "hybrid",
-  fusion: { strategy: "rrf", k: 60 },
+  search: { lexical: true },
 });
 ```
 
-Unsupported combinations fail clearly. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
+Fused retrieval combines multiple legs when the search store supports RRF:
+
+```ts
+await docs.retrieve({
+  query: "enterprise SSO setup",
+  search: {
+    dense: { candidates: 120 },
+    lexical: { candidates: 80 },
+    sparse: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
+});
+```
+
+Unsupported combinations fail clearly. Crux does not silently downgrade sparse, lexical, or fused retrieval to dense-only search.
 
 Native media queries use the dense branch:
 
@@ -78,12 +97,12 @@ await docs.retrieve({
 });
 ```
 
-A hybrid retriever runs dense-only for media because sparse embeddings are
-text-only. Custom retrievers and text-producing recipe steps reject media unless
+A multi-leg retriever runs dense-only for media because sparse embeddings are
+text-only and lexical search uses indexed text. Custom retrievers and text-producing recipe steps reject media unless
 their own contract supports it. See [Multimodal search](/docs/guides/retrieval/multimodal-search)
 for the complete path.
 
-Before embedding a query or searching vectors, store-backed retrievers compare
+Before embedding a query or searching, store-backed retrievers compare
 their dense space with the namespace record. `EmbeddingSpaceMismatchError`
 means the namespace must be fully reindexed with the configured embedding, or
 queried with the embedding that built it.
@@ -97,7 +116,7 @@ const docs = retriever({
   indexerId: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 ```
@@ -157,7 +176,7 @@ const searchableDocs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   inject: "tool",
   tools: {
@@ -187,7 +206,7 @@ For citation validation, prefer [grounding](/docs/guides/retrieval/grounding). I
 
 ## Custom Retrieval
 
-Use a custom retriever when your backend is not a Crux `RecordStore` plus `VectorStore` pair.
+Use a custom retriever when your backend is not a Crux `RecordStore` plus `SearchStore` pair.
 
 ```ts
 const docs = retriever({

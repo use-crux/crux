@@ -105,10 +105,10 @@ pub(crate) fn fallback_relation_target_id(
             "storage.recordStore:{}",
             safe_use_entry_id(variable)
         )),
-        "storage.bundle.uses_vector_store"
-        | "rag.retriever.uses_vector_store"
-        | "workspace.uses_vector_store" => Some(format!(
-            "storage.vectorStore:{}",
+        "storage.bundle.uses_search_store"
+        | "rag.retriever.uses_search_store"
+        | "workspace.uses_search_store" => Some(format!(
+            "storage.searchStore:{}",
             safe_use_entry_id(variable)
         )),
         "storage.bundle.uses_asset_store"

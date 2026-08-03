@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { convexStorage, convexVectorStore } from '../src'
-import { episodes, inMemoryRecordStore, inMemoryVectorStore, memory } from '../src/memory'
+import { convexStorage } from '../src'
+import { episodes, inMemoryRecordStore, inMemorySearchStore, memory } from '../src/memory'
 import { convexRuntimeStorage } from '../src/runtime'
 import { createInMemoryConvexStoreDocumentComponent } from '../src/store-document-component'
 
@@ -33,22 +33,15 @@ describe('Convex memory storage', () => {
     })
   })
 
-  it('does not expose bundled vector storage', () => {
+  it('does not expose bundled search storage', () => {
     const component = createInMemoryConvexStoreDocumentComponent()
     const storage = convexStorage({ component, ctx: component.ctx })
 
-    expect(storage.vectors).toBeUndefined()
-    expect(convexRuntimeStorage.vectors).toBeUndefined()
-    expect(() => convexVectorStore({ component, ctx: component.ctx })).toThrowError(
-      expect.objectContaining({
-        code: 'unsupported_capability',
-        message:
-          'Convex bundled vector search is not yet supported; pass an explicit VectorStore such as @use-crux/upstash upstashVectorStore()',
-      }),
-    )
+    expect(storage.search).toBeUndefined()
+    expect(convexRuntimeStorage.search).toBeUndefined()
   })
 
-  it('falls back to record listing for semantic episodes without vectors', async () => {
+  it('falls back to record listing for semantic episodes without search', async () => {
     const component = createInMemoryConvexStoreDocumentComponent()
     const storage = convexStorage({ component, ctx: component.ctx })
     const block = episodes({
@@ -101,17 +94,17 @@ describe('Convex memory storage', () => {
     await expect(records.get(entries[0].key)).resolves.toMatchObject({ embedding: [1, 0] })
   })
 
-  it('preserves an explicit user-provided VectorStore', async () => {
+  it('preserves an explicit user-provided SearchStore', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const block = episodes({
       id: 'episodes',
       embed: async () => [1, 0],
     })
     const configuredMemory = memory({
-      id: 'explicit-vectors',
+      id: 'explicit-search',
       records,
-      vectors,
+      search,
       namespace: 'user:1',
       blocks: [block],
       capture: { mode: 'inline' },
@@ -122,7 +115,7 @@ describe('Convex memory storage', () => {
     })
     const results = await block.recall('pricing', {
       records,
-      vectors,
+      search,
       namespace: 'user:1',
       memoryId: configuredMemory.id,
     })

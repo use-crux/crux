@@ -58,7 +58,7 @@ interface MemoryConfig {
   id: string;
   storage?: Storage;
   records?: RecordStore;
-  vectors?: VectorStore;
+  search?: SearchStore;
   namespace: MemoryNamespace;
   blocks: readonly MemoryBlock[];
   capture?: MemoryCaptureConfig;
@@ -139,7 +139,7 @@ Direct block methods accept:
 type MemoryRuntimeOptions = {
   storage?: Storage;
   records: RecordStore;
-  vectors?: VectorStore;
+  search?: SearchStore;
   namespace: string;
   memoryId?: string;
   traceId?: string;

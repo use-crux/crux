@@ -132,6 +132,9 @@ export const convexRuntimeRecords: RecordStore = {
 
 export const convexRuntimeStorage: Storage = {
   records: convexRuntimeRecords,
+  get search() {
+    return getConvexCruxRuntime()?.storage.search
+  },
   get assets() {
     return resolveRuntimeStorage().assets
   },

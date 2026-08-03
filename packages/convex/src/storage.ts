@@ -7,8 +7,8 @@
  * @module
  */
 
-import { StorageError, storage as createStorage } from "@use-crux/core/storage";
-import type { RecordStore, Storage, VectorStore } from "@use-crux/core/storage";
+import { storage as createStorage } from "@use-crux/core/storage";
+import type { RecordStore, SearchStore, Storage } from "@use-crux/core/storage";
 import type { ConvexCtxPort, ConvexMemoryStoreConfig } from "./store";
 import { convexComponentDocumentPort } from "./store";
 import { isConvexStoreDocumentComponent } from "./store-document-component";
@@ -19,6 +19,8 @@ import { convexAssetStore, type ConvexAssetStoreConfig } from "./workspace";
 export interface ConvexStorageConfig<
   TCtx extends ConvexCtxPort = ConvexCtxPort,
 > extends ConvexMemoryStoreConfig<TCtx> {
+  /** Optional caller-provided search store. Convex does not provide one by default. */
+  readonly search?: SearchStore;
   /** Optional Convex file-storage binding for asset payloads. */
   readonly assets?: ConvexAssetStoreConfig;
 }
@@ -33,26 +35,13 @@ export function convexRecordStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   });
 }
 
-/**
- * Reject the removed bundled Convex vector adapter with migration guidance.
- *
- * @deprecated Pass an explicit `VectorStore`, such as `upstashVectorStore()`.
- */
-export function convexVectorStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
-  _config: ConvexMemoryStoreConfig<TCtx>,
-): VectorStore {
-  throw new StorageError(
-    "unsupported_capability",
-    "Convex bundled vector search is not yet supported; pass an explicit VectorStore such as @use-crux/upstash upstashVectorStore()",
-  );
-}
-
 /** Create a Convex-backed beta `Storage` bundle. */
 export function convexStorage<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   config: ConvexStorageConfig<TCtx>,
 ): Storage {
   return createStorage({
     records: convexRecordStore(config),
+    ...(config.search ? { search: config.search } : {}),
     ...(config.assets ? { assets: convexAssetStore(config.assets) } : {}),
   });
 }

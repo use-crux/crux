@@ -9,7 +9,7 @@ use crate::{
 pub(crate) struct StorageReferences {
     pub storage: Option<StorageReference>,
     pub records: Option<StorageReference>,
-    pub vectors: Option<StorageReference>,
+    pub search: Option<StorageReference>,
     pub assets: Option<StorageReference>,
 }
 
@@ -29,7 +29,7 @@ pub(crate) fn storage_config_references(
     StorageReferences {
         storage: storage_reference_property(config, "storage", initializers),
         records: storage_reference_property(config, "records", initializers),
-        vectors: storage_reference_property(config, "vectors", initializers),
+        search: storage_reference_property(config, "search", initializers),
         assets: storage_reference_property(config, "assets", initializers),
     }
 }
@@ -55,8 +55,8 @@ pub(crate) fn storage_relation_refs(owner: &str, refs: &StorageReferences) -> Ve
     );
     push_relation(
         &mut references,
-        format!("{owner}.uses_vector_store"),
-        refs.vectors.as_ref(),
+        format!("{owner}.uses_search_store"),
+        refs.search.as_ref(),
     );
     push_relation(
         &mut references,
@@ -69,7 +69,7 @@ pub(crate) fn storage_relation_refs(owner: &str, refs: &StorageReferences) -> Ve
 pub(crate) fn has_storage_references(refs: &StorageReferences) -> bool {
     refs.storage.is_some()
         || refs.records.is_some()
-        || refs.vectors.is_some()
+        || refs.search.is_some()
         || refs.assets.is_some()
 }
 
@@ -77,7 +77,7 @@ pub(crate) fn storage_dependency_map(refs: &StorageReferences) -> Map<String, Va
     let mut dependencies = Map::new();
     insert_dependency(&mut dependencies, "storage", refs.storage.as_ref());
     insert_dependency(&mut dependencies, "recordStores", refs.records.as_ref());
-    insert_dependency(&mut dependencies, "vectorStores", refs.vectors.as_ref());
+    insert_dependency(&mut dependencies, "searchStores", refs.search.as_ref());
     insert_dependency(&mut dependencies, "assetStores", refs.assets.as_ref());
     dependencies
 }
@@ -148,10 +148,10 @@ fn storage_fallback_id(relation_type: &str, name: &str) -> Option<String> {
         | "workspace.uses_record_store" => {
             Some(format!("storage.recordStore:{}", safe_reference_id(name)))
         }
-        "storage.bundle.uses_vector_store"
-        | "rag.retriever.uses_vector_store"
-        | "workspace.uses_vector_store" => {
-            Some(format!("storage.vectorStore:{}", safe_reference_id(name)))
+        "storage.bundle.uses_search_store"
+        | "rag.retriever.uses_search_store"
+        | "workspace.uses_search_store" => {
+            Some(format!("storage.searchStore:{}", safe_reference_id(name)))
         }
         "storage.bundle.uses_asset_store"
         | "rag.retriever.uses_asset_store"

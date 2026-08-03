@@ -251,8 +251,8 @@ fn data_access_target_kind(target_variable: &str) -> Option<&'static str> {
     if normalized.contains("record") {
         return Some("storage.recordStore");
     }
-    if normalized.contains("vector") {
-        return Some("storage.vectorStore");
+    if normalized.contains("search") {
+        return Some("storage.searchStore");
     }
     if normalized.contains("asset") {
         return Some("storage.assetStore");

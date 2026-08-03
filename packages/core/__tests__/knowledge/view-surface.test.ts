@@ -8,7 +8,7 @@ import { createKnowledgeEdgeRecord, type KnowledgeEdgeRecord } from '../../src/k
 import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { expandRelations, knowledgeBase, retrieve } from '../../src/retrieval'
 import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
-import { inMemoryStorage, type ExactFilter, type JsonObject, type VectorSearchQuery } from '../../src/storage'
+import { inMemoryStorage, type ExactFilter, type JsonObject, type SearchQuery } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 const schema = z.object({
@@ -65,17 +65,17 @@ describe('connected knowledge view surface', () => {
     expect(() => docs.view({ id: 'same', where: { team: 'core' } })).toThrow(/different where predicate/)
   })
 
-  it('fans out disjunctive predicates into exact vector filters and unions hits', async () => {
+  it('fans out disjunctive predicates into exact search filters and unions hits', async () => {
     const storage = inMemoryStorage()
     const observed: ExactFilter[] = []
-    const vectors = {
-      ...storage.vectors!,
-      search: async (query: VectorSearchQuery) => {
+    const search = {
+      ...storage.search!,
+      search: async (query: SearchQuery) => {
         if (query.filter) observed.push(query.filter)
-        return storage.vectors!.search(query)
+        return storage.search!.search(query)
       },
     }
-    const docs = knowledgeBase({ id: 'docs', records: storage.records, vectors, embeddings: testEmbedding(), metadataSchema: schema })
+    const docs = knowledgeBase({ id: 'docs', records: storage.records, search, embeddings: testEmbedding(), metadataSchema: schema })
     await docs.index([
       chunk({ sourceId: 'a', content: 'alpha', metadata: { status: 'open', team: 'core' } }),
       chunk({ sourceId: 'b', content: 'beta', metadata: { status: 'closed', team: 'web' } }),
@@ -106,7 +106,7 @@ describe('connected knowledge view surface', () => {
     const view = docs.view({ id: 'open', where: { status: 'open' } })
     await docs.index([chunk({ sourceId: 'member', content: 'member', metadata: { status: 'open', team: 'core' } })])
     await expect(view.resolve()).resolves.toMatchObject({ members: ['member'] })
-    await writeUnindexedVectorHit(storage, 'outside', { status: 'open', team: 'core' })
+    await writeUnindexedSearchHit(storage, 'outside', { status: 'open', team: 'core' })
 
     const hits = await view.retriever().retrieve('anything', { limit: 10 })
 
@@ -146,7 +146,7 @@ function testEmbedding() {
   })
 }
 
-async function writeUnindexedVectorHit(
+async function writeUnindexedSearchHit(
   storage: ReturnType<typeof inMemoryStorage>,
   sourceId: string,
   metadata: Record<string, unknown>,
@@ -165,7 +165,7 @@ async function writeUnindexedVectorHit(
     createdAt: 1,
     updatedAt: 1,
   })
-  await storage.vectors!.upsert([{
+  await storage.search!.upsert([{
     key,
     dense: [1, 0],
     metadata: { _cruxRecordType: 'chunk', namespace: 'docs', sourceId, chunkId: 'main', active: true, ...metadata },

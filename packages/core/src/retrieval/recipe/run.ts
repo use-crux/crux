@@ -65,8 +65,8 @@ export async function runRetrievalRecipe(
         ? { threshold: request.threshold }
         : {}),
       ...(request.filter ? { filter: request.filter } : {}),
-      ...(request.mode ? { mode: request.mode } : {}),
-      ...(request.fusion ? { fusion: request.fusion.strategy } : {}),
+      ...(request.search?.fusion ? { fusion: request.search.fusion.strategy } : {}),
+      ...(request.search?.fusion?.k !== undefined ? { rrfK: request.search.fusion.k } : {}),
     },
   })
   try {
@@ -130,7 +130,8 @@ async function runRetrievalRecipeInternal(
       mode: 'recipe',
       query: label,
       limit: request.limit,
-      fusion: request.fusion?.strategy,
+      fusion: request.search?.fusion?.strategy,
+      rrfK: request.search?.fusion?.k,
       hits,
     })
     recipeSpan.end({

@@ -12,7 +12,7 @@
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
-import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
+import type { JsonObject, RecordStore, SearchStore, Storage } from '../storage'
 import type { DeriveStage } from '../knowledge/derive/stage'
 
 /** A loaded source document, optionally split into typed parts. */
@@ -415,7 +415,7 @@ export interface IndexerConfig<
   id: string
   namespace: string
   records?: RecordStore
-  vectors?: VectorStore
+  search?: SearchStore
   storage?: Storage
   dense?: DenseEmbedding<TModality>
   sparse?: SparseEmbedding

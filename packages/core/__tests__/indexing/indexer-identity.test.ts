@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 function indexerFingerprint(options: {
   version?: string
@@ -22,7 +22,7 @@ function indexerFingerprint(options: {
     id: 'docs',
     namespace: 'kb',
     records: inMemoryRecordStore(),
-    vectors: inMemoryVectorStore(),
+    search: inMemorySearchStore(),
     dense,
   }).fingerprint()
 }

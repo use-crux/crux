@@ -13,7 +13,7 @@ It is a good starting point when your source material already lives on disk and 
 - `@use-crux/core/indexing` for corpus sync, chunking, and write-time embedding
 - `@use-crux/core/retrieval` for query-time search, recipes, and grounding
 - `@use-crux/ai` for prompt execution
-- `inMemoryRecordStore()` and `inMemoryVectorStore()` for a lightweight local corpus
+- `inMemoryRecordStore()` and `inMemorySearchStore()` for a lightweight local corpus
 
 ## Full code
 
@@ -48,11 +48,11 @@ export const dense = embedding({
 ```ts
 import {
   inMemoryRecordStore,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "@use-crux/core/storage";
 
 export const records = inMemoryRecordStore();
-export const vectors = inMemoryVectorStore();
+export const search = inMemorySearchStore();
 ```
 
 ### `lib/rag/index.ts`
@@ -62,13 +62,13 @@ import { corpus, indexer } from "@use-crux/core/indexing";
 import { filesSource } from "@use-crux/ingest/files";
 
 import { dense } from "./embedding";
-import { records, vectors } from "./store";
+import { records, search } from "./store";
 
 export const docsIndexer = indexer({
   id: "local-docs",
   namespace: "local-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -104,15 +104,15 @@ import {
 
 import { dense } from "./embedding";
 import { retrievalModel } from "./retrieval-model";
-import { records, vectors } from "./store";
+import { records, search } from "./store";
 
 export const docs = retriever({
   id: "local-docs",
   namespace: "local-docs",
   records,
-  vectors,
+  search,
   dense,
-  search: { mode: "dense", limit: 10 },
+  limit: 10,
 });
 
 export const docsAnswer = retrievalRecipe({
@@ -184,7 +184,7 @@ That split is what makes the recipe easy to evolve. If you later move from local
 
 If you want the cheapest possible version, use the dense retriever directly and skip the recipe.
 
-If you want a persistent local-dev workflow, swap `inMemoryRecordStore()` and `inMemoryVectorStore()` for production adapters and keep the same indexer and retriever shapes.
+If you want a persistent local-dev workflow, swap `inMemoryRecordStore()` and `inMemorySearchStore()` for production adapters and keep the same indexer and retriever shapes.
 
 If you only need a throwaway fixture, you can call `docsIndexer.indexDocuments()` directly. For an app or background job that runs more than once, prefer `docsCorpus.sync()` so unchanged files do not rewrite the whole corpus.
 
@@ -193,7 +193,7 @@ If you only need a throwaway fixture, you can call `docsIndexer.indexDocuments()
 <Cards>
   <Card
     title="Semantic RAG with Upstash"
-    description="The same architecture on top of a hybrid-capable production store."
+    description="The same architecture on top of a fused-search-capable production store."
     href="/docs/cookbook/rag/semantic-rag"
   />
   <Card

@@ -152,7 +152,7 @@ export function convexTargetEntryFile(input: {
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
     registryDeclaration("evalRegistry", input.evalArtifacts),
-    ...evalHostCapabilityLines(["record-store", "vector-store"]),
+    ...evalHostCapabilityLines(["record-store", "search-store"]),
     "",
     "const deploymentId = process.env.CONVEX_CLOUD_URL",
     "if (!deploymentId) throw new Error('Generated Crux Eval host requires Convex to provide CONVEX_CLOUD_URL.')",

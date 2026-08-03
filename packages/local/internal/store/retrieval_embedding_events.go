@@ -51,15 +51,18 @@ func (s *Store) RetrievalStart(event RetrievalStartEvent) {
 		s.retrievalEvents.Push(retrievalStartData(event))
 
 		s.correlate(event.TraceID, "retrieval:start", event.Timestamp, map[string]any{
-			"retrievalId": event.RetrievalID,
-			"retrieverId": event.RetrieverID,
-			"namespace":   event.Namespace,
-			"mode":        event.Mode,
-			"query":       event.Query,
-			"limit":       event.Limit,
-			"threshold":   event.Threshold,
-			"filter":      event.Filter,
-			"fusion":      event.Fusion,
+			"retrievalId":      event.RetrievalID,
+			"retrieverId":      event.RetrieverID,
+			"namespace":        event.Namespace,
+			"mode":             event.Mode,
+			"query":            event.Query,
+			"limit":            event.Limit,
+			"threshold":        event.Threshold,
+			"filter":           event.Filter,
+			"fusion":           event.Fusion,
+			"rrfK":             event.RRFK,
+			"searchLegs":       event.SearchLegs,
+			"searchCandidates": event.SearchCandidates,
 		})
 	})
 }
@@ -70,18 +73,21 @@ func (s *Store) RetrievalEnd(event RetrievalEndEvent) {
 		s.retrievalEvents.Push(retrievalEndData(event))
 
 		s.correlate(event.TraceID, "retrieval:end", event.Timestamp, map[string]any{
-			"retrievalId": event.RetrievalID,
-			"retrieverId": event.RetrieverID,
-			"namespace":   event.Namespace,
-			"mode":        event.Mode,
-			"query":       event.Query,
-			"limit":       event.Limit,
-			"threshold":   event.Threshold,
-			"filter":      event.Filter,
-			"fusion":      event.Fusion,
-			"resultCount": event.ResultCount,
-			"durationMs":  event.DurationMs,
-			"error":       event.Error,
+			"retrievalId":      event.RetrievalID,
+			"retrieverId":      event.RetrieverID,
+			"namespace":        event.Namespace,
+			"mode":             event.Mode,
+			"query":            event.Query,
+			"limit":            event.Limit,
+			"threshold":        event.Threshold,
+			"filter":           event.Filter,
+			"fusion":           event.Fusion,
+			"rrfK":             event.RRFK,
+			"searchLegs":       event.SearchLegs,
+			"searchCandidates": event.SearchCandidates,
+			"resultCount":      event.ResultCount,
+			"durationMs":       event.DurationMs,
+			"error":            event.Error,
 		})
 	})
 }

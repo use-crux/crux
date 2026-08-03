@@ -62,7 +62,7 @@ export async function runFederatedRetrieveStep(
   )
 
   return {
-    hits: fuseQueryGroups(groups, request.fusion?.k),
+    hits: fuseQueryGroups(groups, request.search?.fusion?.k),
     ...(warnings.length ? { warnings } : {}),
     sources: traces.toTrace(),
   }

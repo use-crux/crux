@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { contextWithFullPromptInput } from '../prompt/context'
 import type { AnyToolSet } from '../types'
-import type { ExactFilter, FilterValue, JsonObject, RecordStore, Storage, VectorHit, VectorStore } from '../storage'
+import type { ExactFilter, FilterValue, JsonObject, RecordStore, SearchHit, SearchStore, Storage } from '../storage'
 import { inMemoryStorage } from '../storage'
 import type { DenseEmbedding } from '../embedding'
 import { getHooks } from '../runtime/runtime'
@@ -112,7 +112,7 @@ export interface MemoryEntryApi {
 interface ResolvedMemoryStorage {
   storage: Storage
   records: RecordStore
-  vectors?: VectorStore
+  search?: SearchStore
   backend: 'configured' | 'inMemory'
 }
 
@@ -220,7 +220,7 @@ function toExactFilter(value: Record<string, unknown> | ExactFilter | undefined)
   return filter
 }
 
-function vectorMetadata(
+function searchMetadata(
   blockId: string,
   namespace: string,
   metadata: Record<string, unknown> | undefined,
@@ -232,7 +232,7 @@ function vectorMetadata(
   }
 }
 
-function mergeVectorFilter(
+function mergeSearchFilter(
   blockId: string,
   namespace: string,
   filter: Record<string, unknown> | ExactFilter | undefined,
@@ -244,7 +244,7 @@ function mergeVectorFilter(
   }
 }
 
-async function hydrateVectorHits(records: RecordStore, hits: readonly VectorHit[]): Promise<MemoryEntryApi[]> {
+async function hydrateSearchHits(records: RecordStore, hits: readonly SearchHit[]): Promise<MemoryEntryApi[]> {
   const entries: MemoryEntryApi[] = []
   for (const hit of hits) {
     const value = await records.get(hit.key)
@@ -253,20 +253,20 @@ async function hydrateVectorHits(records: RecordStore, hits: readonly VectorHit[
   return entries
 }
 
-function resolveMemoryStorage(config: Pick<MemoryConfig, 'storage' | 'records' | 'vectors'>): ResolvedMemoryStorage {
+function resolveMemoryStorage(config: Pick<MemoryConfig, 'storage' | 'records' | 'search'>): ResolvedMemoryStorage {
   if (config.storage) {
     return {
       storage: config.storage,
       records: config.records ?? config.storage.records,
-      vectors: config.vectors ?? config.storage.vectors,
+      search: config.search ?? config.storage.search,
       backend: 'configured',
     }
   }
   if (config.records) {
     return {
-      storage: { records: config.records, vectors: config.vectors },
+      storage: { records: config.records, ...(config.search ? { search: config.search } : {}) },
       records: config.records,
-      vectors: config.vectors,
+      search: config.search,
       backend: 'configured',
     }
   }
@@ -274,30 +274,30 @@ function resolveMemoryStorage(config: Pick<MemoryConfig, 'storage' | 'records' |
   return {
     storage,
     records: storage.records,
-    vectors: storage.vectors,
+    search: storage.search,
     backend: 'inMemory',
   }
 }
 
 function resolveRuntimeStorage(
   fallback: ResolvedMemoryStorage,
-  options: Pick<Partial<MemoryRuntimeOptions>, 'storage' | 'records' | 'vectors'>,
+  options: Pick<Partial<MemoryRuntimeOptions>, 'storage' | 'records' | 'search'>,
 ): ResolvedMemoryStorage {
   if (options.storage) {
     return {
       storage: options.storage,
       records: options.records ?? options.storage.records,
-      vectors: options.vectors ?? options.storage.vectors,
+      search: options.search ?? options.storage.search,
       backend: 'configured',
     }
   }
-  if (options.records || options.vectors) {
+  if (options.records || options.search) {
     const records = options.records ?? fallback.records
-    const vectors = options.vectors ?? fallback.vectors
+    const search = options.search ?? fallback.search
     return {
-      storage: { records, vectors },
+      storage: { records, ...(search ? { search } : {}) },
       records,
-      vectors,
+      search,
       backend: 'configured',
     }
   }
@@ -817,7 +817,7 @@ export function memory(config: MemoryConfig): Memory {
     return attachManagedMemoryWriteGuard({
       storage: activeStorage.storage,
       records: activeStorage.records,
-      vectors: activeStorage.vectors,
+      search: activeStorage.search,
       namespace,
       memoryId: config.id,
       traceId: options.traceId,
@@ -854,7 +854,7 @@ export function memory(config: MemoryConfig): Memory {
       {
         storage: activeStorage.storage,
         records: activeStorage.records,
-        vectors: activeStorage.vectors,
+        search: activeStorage.search,
         namespace,
         memoryId: config.id,
         traceId: source?.traceId,
@@ -941,7 +941,7 @@ export function memory(config: MemoryConfig): Memory {
         const maybeTools = block.tools({
           storage: activeStorage.storage,
           records: activeStorage.records,
-          vectors: activeStorage.vectors,
+          search: activeStorage.search,
           namespace,
           memoryId: config.id,
           input,
@@ -1013,7 +1013,7 @@ export function memory(config: MemoryConfig): Memory {
           {
             storage: memoryStorage.storage,
             records,
-            vectors: memoryStorage.vectors,
+            search: memoryStorage.search,
             namespace: proposal.namespace,
             memoryId: config.id,
             promptId: proposal.source?.promptId,
@@ -1234,8 +1234,8 @@ export function episodes(config: {
         updatedAt: timestamp,
       }),
     )
-    if (embedding && options.vectors) {
-      await options.vectors.upsert([{ key, dense: embedding, metadata: vectorMetadata(config.id, options.namespace, entry.metadata) }])
+    if (embedding && options.search) {
+      await options.search.upsert([{ key, dense: embedding, metadata: searchMetadata(config.id, options.namespace, entry.metadata) }])
     }
     emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'record', {
       entryKey: key,
@@ -1277,15 +1277,14 @@ export function episodes(config: {
     options: MemoryRuntimeOptions & { limit?: number; filter?: ExactFilter },
   ): Promise<MemoryEntryApi[]> {
     const startedAt = now()
-    if (embed && options.vectors) {
+    if (embed && options.search) {
       const queryEmbedding = await embed(query)
-      const results = await options.vectors.search({
-        mode: 'dense',
-        dense: queryEmbedding,
+      const results = await options.search.search({
+        legs: [{ kind: 'dense', vector: queryEmbedding }],
         limit: options.limit,
-        filter: mergeVectorFilter(config.id, options.namespace, options.filter),
+        filter: mergeSearchFilter(config.id, options.namespace, options.filter),
       })
-      const entries = await hydrateVectorHits(options.records, results)
+      const entries = await hydrateSearchHits(options.records, results)
       const topScore = entries.length ? entries[0].score : undefined
       emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'recall', entries.length, startedAt, {
         query,
@@ -1301,7 +1300,7 @@ export function episodes(config: {
   async function deleteEntry(key: string, options: MemoryRuntimeOptions) {
     const before = await options.records.get(key)
     await options.records.delete(key)
-    await options.vectors?.delete([key])
+    await options.search?.delete([key])
     emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'delete', {
       entryKey: key,
       ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
@@ -1317,7 +1316,7 @@ export function episodes(config: {
 
   async function evict(key: string, options: MemoryRuntimeOptions & { evictedCount?: number; gcAt?: number }) {
     await options.records.delete(key)
-    await options.vectors?.delete([key])
+    await options.search?.delete([key])
     const gcMeta = retentionMeta({
       lastGcAt: options.gcAt ?? now(),
       ...(typeof options.evictedCount === 'number' ? { lastGcEvicted: options.evictedCount } : {}),
@@ -1431,8 +1430,8 @@ function extractiveBlock(
         updatedAt: timestamp,
       }),
     )
-    if (embedding && options.vectors) {
-      await options.vectors.upsert([{ key, dense: embedding, metadata: vectorMetadata(config.id, options.namespace, metadata) }])
+    if (embedding && options.search) {
+      await options.search.upsert([{ key, dense: embedding, metadata: searchMetadata(config.id, options.namespace, metadata) }])
     }
     emitBlockWrite(options, { id: config.id, kind }, 'add', {
       entryKey: key,
@@ -1472,15 +1471,14 @@ function extractiveBlock(
     options: MemoryRuntimeOptions & { limit?: number; filter?: ExactFilter },
   ): Promise<MemoryEntryApi[]> {
     const startedAt = now()
-    if (embed && options.vectors) {
+    if (embed && options.search) {
       const queryEmbedding = await embed(query)
-      const results = await options.vectors.search({
-        mode: 'dense',
-        dense: queryEmbedding,
+      const results = await options.search.search({
+        legs: [{ kind: 'dense', vector: queryEmbedding }],
         limit: options.limit,
-        filter: mergeVectorFilter(config.id, options.namespace, options.filter),
+        filter: mergeSearchFilter(config.id, options.namespace, options.filter),
       })
-      const entries = await hydrateVectorHits(options.records, results)
+      const entries = await hydrateSearchHits(options.records, results)
       emitBlockRead(options, { id: config.id, kind }, 'find', entries.length, startedAt, {
         query,
         recall: { query, results: entries },
@@ -1500,7 +1498,7 @@ function extractiveBlock(
   async function deleteEntry(key: string, options: MemoryRuntimeOptions) {
     const before = await options.records.get(key)
     await options.records.delete(key)
-    await options.vectors?.delete([key])
+    await options.search?.delete([key])
     emitBlockWrite(options, { id: config.id, kind }, 'delete', {
       entryKey: key,
       ...(before

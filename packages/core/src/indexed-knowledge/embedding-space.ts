@@ -27,7 +27,7 @@ export interface IndexedEmbeddingSpaceRecord extends JsonObject {
  *
  * The disjoint `indexer-namespace` prefix prevents collisions with the
  * id-first indexed-record key space. Because the storage contract has no
- * VectorStore identity, distinct vector stores sharing one RecordStore and
+ * SearchStore identity, distinct search stores sharing one RecordStore and
  * namespace intentionally share this loud guard; use distinct namespaces.
  */
 export function indexedEmbeddingSpaceKey(namespace: string): string {

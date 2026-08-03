@@ -19,7 +19,7 @@
 
 export { convexAssetStore } from "./workspace";
 export type { ConvexAssetStoreConfig } from "./workspace";
-export { convexRecordStore, convexStorage, convexVectorStore } from "./storage";
+export { convexRecordStore, convexStorage } from "./storage";
 export type { ConvexStorageConfig } from "./storage";
 export { flushObservability, withObservabilityFlush } from "./observability";
 export type {

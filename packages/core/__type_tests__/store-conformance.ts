@@ -2,25 +2,25 @@ import { expectTypeOf } from "vitest";
 import {
   inMemoryAssetStore,
   inMemoryRecordStore,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "@use-crux/core/storage";
 import {
   describeAssetStoreConformance,
   describeRecordStoreConformance,
-  describeVectorStoreConformance,
-  vectorStoreConformanceSuite,
+  describeSearchStoreConformance,
+  searchStoreConformanceSuite,
 } from "@use-crux/core/storage/testing/vitest";
 import type {
   DescribeAssetStoreConformanceOptions,
   DescribeRecordStoreConformanceOptions,
-  DescribeVectorStoreConformanceOptions,
-  VectorStoreConformanceSuiteOptions,
+  DescribeSearchStoreConformanceOptions,
+  SearchStoreConformanceSuiteOptions,
 } from "@use-crux/core/storage/testing/vitest";
 import type {
   AssetStore,
   JsonObject,
   RecordStore,
-  VectorStore,
+  SearchStore,
 } from "@use-crux/core/storage";
 
 interface ConformanceRecord extends JsonObject {
@@ -30,12 +30,12 @@ interface ConformanceRecord extends JsonObject {
 expectTypeOf(describeRecordStoreConformance<ConformanceRecord>)
   .parameter(0)
   .toEqualTypeOf<DescribeRecordStoreConformanceOptions<ConformanceRecord>>();
-expectTypeOf(describeVectorStoreConformance)
+expectTypeOf(describeSearchStoreConformance)
   .parameter(0)
-  .toEqualTypeOf<DescribeVectorStoreConformanceOptions>();
-expectTypeOf(vectorStoreConformanceSuite)
+  .toEqualTypeOf<DescribeSearchStoreConformanceOptions>();
+expectTypeOf(searchStoreConformanceSuite)
   .parameter(0)
-  .toEqualTypeOf<VectorStoreConformanceSuiteOptions>();
+  .toEqualTypeOf<SearchStoreConformanceSuiteOptions>();
 expectTypeOf(describeAssetStoreConformance)
   .parameter(0)
   .toEqualTypeOf<DescribeAssetStoreConformanceOptions>();
@@ -46,9 +46,9 @@ const recordOptions: DescribeRecordStoreConformanceOptions<ConformanceRecord> =
     prepare: () => inMemoryRecordStore<ConformanceRecord>(),
   };
 
-const vectorOptions: DescribeVectorStoreConformanceOptions = {
-  name: "type-test-vectors",
-  prepare: () => inMemoryVectorStore(),
+const searchOptions: DescribeSearchStoreConformanceOptions = {
+  name: "type-test-search",
+  prepare: () => inMemorySearchStore(),
 };
 
 const assetOptions: DescribeAssetStoreConformanceOptions = {
@@ -56,21 +56,19 @@ const assetOptions: DescribeAssetStoreConformanceOptions = {
   prepare: () => inMemoryAssetStore(),
 };
 
-const vectorSuiteOptions: VectorStoreConformanceSuiteOptions = {
-  name: "type-test-vector-suite",
+const searchSuiteOptions: SearchStoreConformanceSuiteOptions = {
+  name: "type-test-search-suite",
   create: async () => ({
     records: inMemoryRecordStore(),
-    vectors: inMemoryVectorStore(),
-    cleanup: async () => {},
+    search: inMemorySearchStore(),
   }),
-  capabilities: { sparse: true, hybrid: true, delete: true },
 };
 
 expectTypeOf(recordOptions.prepare()).toEqualTypeOf<
   RecordStore<ConformanceRecord> | Promise<RecordStore<ConformanceRecord>>
 >();
-expectTypeOf(vectorOptions.prepare()).toEqualTypeOf<
-  VectorStore | Promise<VectorStore>
+expectTypeOf(searchOptions.prepare()).toEqualTypeOf<
+  SearchStore | Promise<SearchStore>
 >();
 expectTypeOf(assetOptions.prepare()).toEqualTypeOf<
   AssetStore | Promise<AssetStore>
@@ -79,11 +77,11 @@ expectTypeOf(assetOptions.prepare()).toEqualTypeOf<
 const invalidOptions: DescribeRecordStoreConformanceOptions = {
   name: "invalid-store",
   // @ts-expect-error Record conformance requires a RecordStore factory.
-  prepare: () => inMemoryVectorStore(),
+  prepare: () => inMemorySearchStore(),
 };
 
 void recordOptions;
-void vectorOptions;
-void vectorSuiteOptions;
+void searchOptions;
+void searchSuiteOptions;
 void assetOptions;
 void invalidOptions;

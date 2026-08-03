@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { embedding } from '../../src/embedding'
 import { corpus as createCorpus, indexer as createIndexer } from '../../src/indexing'
 import { knowledgeBase } from '../../src/retrieval'
-import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemoryStorage, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 import type { CruxChunk } from '../../src/indexing'
 
@@ -145,13 +145,13 @@ describe('knowledgeBase metadataSchema enforcement', () => {
 
   it('reports corpus-backed metadata failures as per-source outcomes', async () => {
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const embeddings = topicEmbedding()
     const index = createIndexer({
       id: 'docs',
       namespace: 'docs',
       records,
-      vectors,
+      search,
       dense: embeddings,
     })
     const corpus = createCorpus({
@@ -164,7 +164,7 @@ describe('knowledgeBase metadataSchema enforcement', () => {
       id: 'docs',
       corpus,
       records,
-      vectors,
+      search,
       embeddings,
       metadataSchema,
     })

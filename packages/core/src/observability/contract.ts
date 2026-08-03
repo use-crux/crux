@@ -220,6 +220,9 @@ export interface CruxRetrievalHitsPreview {
   mode?: string;
   recipeId?: string;
   fusion?: string;
+  rrfK?: number;
+  searchLegs?: readonly string[];
+  searchCandidates?: Record<string, number>;
   limit?: number;
   returned: number;
   hits: readonly CruxRetrievalHitPreview[];

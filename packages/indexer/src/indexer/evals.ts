@@ -26,7 +26,7 @@ export type AuthoredEvalExecutionArm = Readonly<
 const REQUIRED_HOST_CAPABILITIES = new Set([
   "asset-store",
   "record-store",
-  "vector-store",
+  "search-store",
 ]);
 
 /** Identify an inert Eval without reading callbacks, schemas, or tasks. */
