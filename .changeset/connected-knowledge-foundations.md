@@ -54,6 +54,10 @@ plans with normalized RRF match details. PostgreSQL adds native full-text search
 and server-side RRF, Upstash exposes `upstashSearchStore()`, and Convex storage
 requires an explicit search store instead of advertising an unsupported one.
 
+Align Eval host storage capabilities and Local retrieval telemetry with the
+SearchStore contract: hosted Eval tasks now declare `search-store`, and devtools
+retrieval events use `search`/`custom` modes with RRF/search-leg metadata.
+
 Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
 
 Add Project Index discovery for Connected Knowledge definitions, relation/assertion vocabularies, model bindings, communities, and knowledge-base views.

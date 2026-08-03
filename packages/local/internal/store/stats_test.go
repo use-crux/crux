@@ -211,24 +211,33 @@ func TestGetStats_retrieval_and_indexing(t *testing.T) {
 	retrievalDuration := 18.0
 	indexDuration := 42.0
 	replaceSources := true
+	rrfK := 60
 
 	s.RetrievalStart(RetrievalStartEvent{
-		RetrievalID: "ret1",
-		RetrieverID: "docs",
-		Namespace:   "knowledge",
-		Mode:        "hybrid",
-		Query:       "hybrid retrieval",
-		Timestamp:   1000,
+		RetrievalID:      "ret1",
+		RetrieverID:      "docs",
+		Namespace:        "knowledge",
+		Mode:             "search",
+		Query:            "composable retrieval",
+		Fusion:           "rrf",
+		RRFK:             &rrfK,
+		SearchLegs:       []string{"dense", "sparse"},
+		SearchCandidates: map[string]int{"dense": 20, "sparse": 30},
+		Timestamp:        1000,
 	})
 	s.RetrievalEnd(RetrievalEndEvent{
-		RetrievalID: "ret1",
-		RetrieverID: "docs",
-		Namespace:   "knowledge",
-		Mode:        "hybrid",
-		Query:       "hybrid retrieval",
-		ResultCount: 3,
-		DurationMs:  retrievalDuration,
-		Timestamp:   1010,
+		RetrievalID:      "ret1",
+		RetrieverID:      "docs",
+		Namespace:        "knowledge",
+		Mode:             "search",
+		Query:            "composable retrieval",
+		Fusion:           "rrf",
+		RRFK:             &rrfK,
+		SearchLegs:       []string{"dense", "sparse"},
+		SearchCandidates: map[string]int{"dense": 20, "sparse": 30},
+		ResultCount:      3,
+		DurationMs:       retrievalDuration,
+		Timestamp:        1010,
 	})
 
 	s.IndexStart(IndexStartEvent{

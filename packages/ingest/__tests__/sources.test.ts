@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { indexer, resetHooks, retriever } from '@use-crux/core'
 import { embedding } from '@use-crux/core/embedding'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '@use-crux/core/storage'
 import {
   subscribeObservability,
   type CruxGraphRecord,
@@ -229,7 +229,7 @@ describe('@use-crux/ingest structured sources', () => {
       }) },
     }).documents())
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const searchStore = inMemorySearchStore()
     const dense = embedding({
       kind: 'dense', name: 'media-attribution', dimensions: 2, maxInputTokens: 100, batch: { maxSize: 8 },
       modalities: ['text', 'audio', 'document'],
@@ -238,9 +238,9 @@ describe('@use-crux/ingest structured sources', () => {
         return input.type === 'document' ? [1, 0] : [0, 1]
       }),
     })
-    await indexer({ id: 'media', namespace: 'kb', records, vectors, dense })
+    await indexer({ id: 'media', namespace: 'kb', records, search: searchStore, dense })
       .indexDocuments([pdfDocument, audioDocument])
-    const search = retriever({ id: 'media', namespace: 'kb', records, vectors, dense })
+    const search = retriever({ id: 'media', namespace: 'kb', records, search: searchStore, dense })
 
     await expect(search.retrieve('diagram', { limit: 1 })).resolves.toMatchObject([{
       source: {

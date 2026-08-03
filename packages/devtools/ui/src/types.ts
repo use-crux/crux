@@ -1828,12 +1828,15 @@ export interface RetrievalStartEvent {
   retrievalId: string;
   retrieverId: string;
   namespace: string;
-  mode: "dense" | "sparse" | "hybrid" | "custom";
+  mode: "search" | "custom";
   query: string;
   limit?: number;
   threshold?: number;
   filter?: Record<string, unknown>;
-  fusion?: "rrf" | "dbsf";
+  fusion?: "rrf";
+  rrfK?: number;
+  searchLegs?: readonly string[];
+  searchCandidates?: Record<string, number>;
   traceId?: string;
   timestamp: number;
 }
@@ -1842,12 +1845,15 @@ export interface RetrievalEndEvent {
   retrievalId: string;
   retrieverId: string;
   namespace: string;
-  mode: "dense" | "sparse" | "hybrid" | "custom";
+  mode: "search" | "custom";
   query: string;
   limit?: number;
   threshold?: number;
   filter?: Record<string, unknown>;
-  fusion?: "rrf" | "dbsf";
+  fusion?: "rrf";
+  rrfK?: number;
+  searchLegs?: readonly string[];
+  searchCandidates?: Record<string, number>;
   resultCount: number;
   durationMs: number;
   error?: string;

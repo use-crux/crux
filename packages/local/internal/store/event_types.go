@@ -273,35 +273,41 @@ type EmbedEndEvent struct {
 
 // RetrievalStartEvent is the incoming event for retrieval:start.
 type RetrievalStartEvent struct {
-	RetrievalID string         `json:"retrievalId"`
-	RetrieverID string         `json:"retrieverId"`
-	Namespace   string         `json:"namespace"`
-	Mode        string         `json:"mode"`
-	Query       string         `json:"query"`
-	Limit       *int           `json:"limit,omitempty"`
-	Threshold   *float64       `json:"threshold,omitempty"`
-	Filter      map[string]any `json:"filter,omitempty"`
-	Fusion      string         `json:"fusion,omitempty"`
-	TraceID     string         `json:"traceId,omitempty"`
-	Timestamp   int64          `json:"timestamp"`
+	RetrievalID      string         `json:"retrievalId"`
+	RetrieverID      string         `json:"retrieverId"`
+	Namespace        string         `json:"namespace"`
+	Mode             string         `json:"mode"`
+	Query            string         `json:"query"`
+	Limit            *int           `json:"limit,omitempty"`
+	Threshold        *float64       `json:"threshold,omitempty"`
+	Filter           map[string]any `json:"filter,omitempty"`
+	Fusion           string         `json:"fusion,omitempty"`
+	RRFK             *int           `json:"rrfK,omitempty"`
+	SearchLegs       []string       `json:"searchLegs,omitempty"`
+	SearchCandidates map[string]int `json:"searchCandidates,omitempty"`
+	TraceID          string         `json:"traceId,omitempty"`
+	Timestamp        int64          `json:"timestamp"`
 }
 
 // RetrievalEndEvent is the incoming event for retrieval:end.
 type RetrievalEndEvent struct {
-	RetrievalID string         `json:"retrievalId"`
-	RetrieverID string         `json:"retrieverId"`
-	Namespace   string         `json:"namespace"`
-	Mode        string         `json:"mode"`
-	Query       string         `json:"query"`
-	Limit       *int           `json:"limit,omitempty"`
-	Threshold   *float64       `json:"threshold,omitempty"`
-	Filter      map[string]any `json:"filter,omitempty"`
-	Fusion      string         `json:"fusion,omitempty"`
-	ResultCount int            `json:"resultCount"`
-	DurationMs  float64        `json:"durationMs"`
-	Error       string         `json:"error,omitempty"`
-	TraceID     string         `json:"traceId,omitempty"`
-	Timestamp   int64          `json:"timestamp"`
+	RetrievalID      string         `json:"retrievalId"`
+	RetrieverID      string         `json:"retrieverId"`
+	Namespace        string         `json:"namespace"`
+	Mode             string         `json:"mode"`
+	Query            string         `json:"query"`
+	Limit            *int           `json:"limit,omitempty"`
+	Threshold        *float64       `json:"threshold,omitempty"`
+	Filter           map[string]any `json:"filter,omitempty"`
+	Fusion           string         `json:"fusion,omitempty"`
+	RRFK             *int           `json:"rrfK,omitempty"`
+	SearchLegs       []string       `json:"searchLegs,omitempty"`
+	SearchCandidates map[string]int `json:"searchCandidates,omitempty"`
+	ResultCount      int            `json:"resultCount"`
+	DurationMs       float64        `json:"durationMs"`
+	Error            string         `json:"error,omitempty"`
+	TraceID          string         `json:"traceId,omitempty"`
+	Timestamp        int64          `json:"timestamp"`
 }
 
 // RetrievalStagePreview is a bounded preview for retrieval pipeline stage debugging.

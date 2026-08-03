@@ -133,22 +133,25 @@ type EmbeddingEventData struct {
 
 // RetrievalEventData represents a retrieval:start or retrieval:end event.
 type RetrievalEventData struct {
-	Kind        string         `json:"_kind"` // "start" | "end"
-	TraceID     string         `json:"traceId,omitempty"`
-	SessionID   string         `json:"sessionId,omitempty"`
-	Timestamp   int64          `json:"timestamp"`
-	RetrievalID string         `json:"retrievalId"`
-	RetrieverID string         `json:"retrieverId"`
-	Namespace   string         `json:"namespace"`
-	Mode        string         `json:"mode"`
-	Query       string         `json:"query"`
-	Limit       *int           `json:"limit,omitempty"`
-	Threshold   *float64       `json:"threshold,omitempty"`
-	Filter      map[string]any `json:"filter,omitempty"`
-	Fusion      *string        `json:"fusion,omitempty"`
-	ResultCount *int           `json:"resultCount,omitempty"`
-	DurationMs  *float64       `json:"durationMs,omitempty"`
-	Error       *string        `json:"error,omitempty"`
+	Kind             string         `json:"_kind"` // "start" | "end"
+	TraceID          string         `json:"traceId,omitempty"`
+	SessionID        string         `json:"sessionId,omitempty"`
+	Timestamp        int64          `json:"timestamp"`
+	RetrievalID      string         `json:"retrievalId"`
+	RetrieverID      string         `json:"retrieverId"`
+	Namespace        string         `json:"namespace"`
+	Mode             string         `json:"mode"`
+	Query            string         `json:"query"`
+	Limit            *int           `json:"limit,omitempty"`
+	Threshold        *float64       `json:"threshold,omitempty"`
+	Filter           map[string]any `json:"filter,omitempty"`
+	Fusion           *string        `json:"fusion,omitempty"`
+	RRFK             *int           `json:"rrfK,omitempty"`
+	SearchLegs       []string       `json:"searchLegs,omitempty"`
+	SearchCandidates map[string]int `json:"searchCandidates,omitempty"`
+	ResultCount      *int           `json:"resultCount,omitempty"`
+	DurationMs       *float64       `json:"durationMs,omitempty"`
+	Error            *string        `json:"error,omitempty"`
 }
 
 // RetrievalStageEventData represents a retrieval pipeline stage event.
