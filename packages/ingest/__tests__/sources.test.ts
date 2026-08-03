@@ -521,6 +521,140 @@ describe('@use-crux/ingest structured sources', () => {
     expect(docs[0].content).toContain('Plan | Price')
   })
 
+  it('retains xlsx source coordinates across skipped blank rows', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'sparse.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Sparse')
+    sheet.getCell('A3').value = 'Plan'
+    sheet.getCell('B3').value = 'Price'
+    sheet.getCell('A5').value = 'Pro'
+    sheet.getCell('B5').value = 20
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      kind: 'table',
+      rowStart: 3,
+      rowEnd: 5,
+      rows: [
+        ['Plan', 'Price'],
+        ['Pro', '20'],
+      ],
+      sourceRows: [
+        {
+          row: 3,
+          cells: [
+            { row: 3, column: 1, address: 'A3', value: 'Plan' },
+            { row: 3, column: 2, address: 'B3', value: 'Price' },
+          ],
+        },
+        {
+          row: 5,
+          cells: [
+            { row: 5, column: 1, address: 'A5', value: 'Pro' },
+            { row: 5, column: 2, address: 'B5', value: '20' },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('anchors xlsx rows and ranges after leading blank columns', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'offset.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Offset')
+    sheet.getCell('B2').value = 'Plan'
+    sheet.getCell('C2').value = 'Price'
+    sheet.getCell('B4').value = 'Pro'
+    sheet.getCell('C4').value = 20
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+    const sheetPart = document.parts.find((part) => part.kind === 'sheet')
+
+    expect(table).toMatchObject({
+      rows: [
+        ['Plan', 'Price'],
+        ['Pro', '20'],
+      ],
+      sourceRange: {
+        address: 'B2:C4',
+        rowStart: 2,
+        rowEnd: 4,
+        columnStart: 2,
+        columnEnd: 3,
+      },
+      sourceRows: [
+        {
+          row: 2,
+          cells: [
+            { row: 2, column: 2, address: 'B2', value: 'Plan' },
+            { row: 2, column: 3, address: 'C2', value: 'Price' },
+          ],
+        },
+        {
+          row: 4,
+          cells: [
+            { row: 4, column: 2, address: 'B4', value: 'Pro' },
+            { row: 4, column: 3, address: 'C4', value: '20' },
+          ],
+        },
+      ],
+    })
+    expect(sheetPart).toMatchObject({ sourceRange: table?.sourceRange })
+    expect(table?.content).toBe('Plan | Price\nPro | 20')
+  })
+
+  it('retains xlsx displayed formula values, expressions, and ranges', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'formulas.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Formulas')
+    sheet.getCell('C7').value = 'Item'
+    sheet.getCell('D7').value = 'Price'
+    sheet.getCell('E7').value = 'Total'
+    sheet.getCell('C8').value = 'Pro'
+    sheet.getCell('D8').value = 20
+    sheet.getCell('E8').value = { formula: 'D8*2', result: 40 }
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rowStart: 7,
+      rowEnd: 8,
+      rows: [
+        ['Item', 'Price', 'Total'],
+        ['Pro', '20', '40'],
+      ],
+      sourceRange: {
+        address: 'C7:E8',
+        rowStart: 7,
+        rowEnd: 8,
+        columnStart: 3,
+        columnEnd: 5,
+      },
+      sourceRows: [
+        { row: 7 },
+        {
+          row: 8,
+          cells: [
+            { row: 8, column: 3, address: 'C8', value: 'Pro' },
+            { row: 8, column: 4, address: 'D8', value: '20' },
+            { row: 8, column: 5, address: 'E8', value: '40', formula: 'D8*2' },
+          ],
+        },
+      ],
+    })
+    expect(table?.content).toBe('Item | Price | Total\nPro | 20 | 40')
+  })
+
   it('fileSource extracts docx text and table content', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'guide.docx')

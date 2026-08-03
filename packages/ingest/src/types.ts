@@ -66,6 +66,37 @@ export interface IngestPagePart extends IngestPartBase {
   headingPath?: string[]
 }
 
+/** Provider-neutral source facts for one emitted spreadsheet cell. */
+export interface IngestSpreadsheetCell {
+  /** One-based worksheet row. */
+  row: number
+  /** One-based worksheet column. */
+  column: number
+  /** A1 worksheet address. */
+  address: string
+  /** Displayed value retained in `IngestTablePart.rows`. */
+  value: string
+  /** Formula expression without the leading `=`, when present. */
+  formula?: string
+}
+
+/** Provider-neutral source facts for one emitted spreadsheet row. */
+export interface IngestSpreadsheetRow {
+  /** One-based worksheet row. */
+  row: number
+  cells: IngestSpreadsheetCell[]
+}
+
+/** Exact occupied worksheet bounds represented by a sheet or table part. */
+export interface IngestSpreadsheetRange {
+  /** A1 range, such as `B2:C4`. */
+  address: string
+  rowStart: number
+  rowEnd: number
+  columnStart: number
+  columnEnd: number
+}
+
 export interface IngestTablePart extends IngestPartBase {
   kind: 'table'
   content: string
@@ -76,6 +107,8 @@ export interface IngestTablePart extends IngestPartBase {
   sheetName?: string
   rowStart?: number
   rowEnd?: number
+  sourceRange?: IngestSpreadsheetRange
+  sourceRows?: IngestSpreadsheetRow[]
 }
 
 export interface IngestSheetPart extends IngestPartBase {
@@ -83,6 +116,7 @@ export interface IngestSheetPart extends IngestPartBase {
   content: string
   sheetName: string
   index: number
+  sourceRange?: IngestSpreadsheetRange
   tables?: IngestTablePart[]
 }
 
