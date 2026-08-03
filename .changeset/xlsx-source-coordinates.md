@@ -13,3 +13,5 @@ located warning and remain addressable when media description is unavailable,
 empty, or fails, rather than failing the whole document.
 XLSX malformed number-format warnings now include the sheet name, and failed PDF
 media descriptions include the underlying error text in the warning message.
+Load the XLSX number formatter correctly from published ESM packages so saved
+formats remain active outside the Crux source workspace.
