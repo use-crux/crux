@@ -249,6 +249,7 @@ describe('runSetupOperation', () => {
           metadata: {
             exportName: 'default',
             evalContract: 'crux.eval',
+            runtimeDiscovered: true,
             evalExecutionArms: [
               {
                 name: 'current',

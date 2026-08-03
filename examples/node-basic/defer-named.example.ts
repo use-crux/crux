@@ -8,7 +8,7 @@ import { defer } from "@use-crux/core";
 import { withNamedOnlyDefer } from "@use-crux/core/defer/serverless";
 import { durableTask } from "@use-crux/core/runtime";
 
-const postProcess = durableTask("example-post-process", {
+export const postProcess = durableTask("example-post-process", {
   run: async (input: { readonly jobId: string }) => input.jobId,
 });
 

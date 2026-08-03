@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
@@ -139,10 +140,14 @@ func (c *definitionChooser) View() string {
 	lines = append(lines, detailHeader)
 	lines = append(lines, details...)
 	lines = append(lines, rule, footer)
+	for index := range lines {
+		lines[index] = theme.SurfaceLine(shell.SurfaceOverlay, lines[index], width)
+	}
 	inner := strings.Join(lines, "\n")
 	return lipgloss.NewStyle().
 		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
+		BorderBackground(shell.ColorPanel).
+		BorderForeground(shell.ColorBorder).
 		Border(lipgloss.RoundedBorder()).
 		Render(inner)
 }

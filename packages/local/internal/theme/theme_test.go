@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
@@ -33,6 +34,21 @@ func TestResolvePinsANSI256Palette(t *testing.T) {
 		if tc.got != tc.want {
 			t.Fatalf("%s = %v, want %v", name, tc.got, tc.want)
 		}
+	}
+}
+
+func TestSurfaceRolesReusePaletteAndSurviveNestedResets(t *testing.T) {
+	palette := Resolve(colorprofile.TrueColor)
+	styles := NewStyles(palette)
+	if styles.SurfaceRail.GetBackground() != palette.Bg2 || styles.SurfaceBand.GetBackground() != palette.Bg2 {
+		t.Fatal("rail and KPI band must share the secondary background token")
+	}
+	if styles.SurfaceBody.GetBackground() != palette.Bg || styles.SurfaceOverlay.GetBackground() != palette.Bg {
+		t.Fatal("body and overlay must share the default background token")
+	}
+	line := SurfaceLine(styles.SurfaceRail, styles.Accent.Render("x"), 3)
+	if got := strings.Count(line, "48;2;16;22;20"); got < 2 {
+		t.Fatalf("surface was not reapplied after nested reset: %q", line)
 	}
 }
 

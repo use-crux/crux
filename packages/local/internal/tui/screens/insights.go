@@ -12,7 +12,9 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -31,17 +33,25 @@ const (
 // live updates arrive through the bridge interest contract, and all rendering
 // is bounded by the Rects supplied by the kit layout engine.
 type Insights struct {
-	items      []api.InspectInsightRecord
-	selectedID string
-	loaded     bool
-	err        string
-	tab        string
-	focus      insightsFocus
-	list       kit.VList[api.InspectInsightRecord]
+	insightsResource *resource.Resource[[]api.InspectInsightRecord]
+	evalRunsResource *resource.Resource[[]json.RawMessage]
+	items            []api.InspectInsightRecord
+	evalRuns         []evalRunItem
+	selectedID       string
+	loaded           bool
+	err              string
+	evalEvidenceErr  string
+	tab              string
+	focus            insightsFocus
+	list             kit.VList[api.InspectInsightRecord]
 }
 
 func NewInsights() *Insights {
-	s := &Insights{tab: "diagnosis"}
+	s := &Insights{
+		insightsResource: resource.New(func(items []api.InspectInsightRecord) bool { return len(items) == 0 }),
+		evalRunsResource: resource.New(func(runs []json.RawMessage) bool { return len(runs) == 0 }),
+		tab:              "diagnosis",
+	}
 	s.list.SetIdentity(func(ins api.InspectInsightRecord) string { return ins.InsightID })
 	s.list.SetRowHeight(func(api.InspectInsightRecord) int { return 2 })
 	return s
@@ -49,22 +59,70 @@ func NewInsights() *Insights {
 
 func (s *Insights) ID() string { return "insights" }
 
-func (s *Insights) Interested(domains bridge.Domains) bool {
-	return domains.Has(bridge.DomainInsights)
+func (s *Insights) Init(ctx context.Context, client DataClient) tea.Cmd {
+	return s.fetchData(ctx, client)
 }
 
-func (s *Insights) Init(ctx context.Context, client DataClient) tea.Cmd {
-	return fetchInsightsList(ctx, client)
+func (s *Insights) Deactivate() bridge.Invalidations {
+	invalidations := bridge.Invalidations{}
+	cancelPendingResource(invalidations, bridge.InsightsListResource, s.insightsResource)
+	cancelPendingResource(invalidations, bridge.InsightsEvalRunsResource, s.evalRunsResource)
+	// Cases evidence is a focus-scoped projection. Always refresh it when the
+	// user returns so completed evidence cannot remain stale across navigation.
+	invalidations.Add(bridge.InsightsEvalRunsResource, s.evalRunsResource.Snapshot().Token.Revision)
+	return invalidations
+}
+
+func (s *Insights) Refresh(ctx context.Context, client DataClient, invalidations bridge.Invalidations) tea.Cmd {
+	commands := make([]tea.Cmd, 0, 2)
+	listRevision, listInvalid := invalidations.Revision(bridge.InsightsListResource)
+	if listInvalid || s.insightsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchInsightsList(ctx, client, listRevision))
+	}
+	evalRevision, evalInvalid := invalidations.Revision(bridge.InsightsEvalRunsResource)
+	if evalInvalid || s.evalRunsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchInsightsEvalRuns(ctx, client, evalRevision))
+	}
+	return tea.Batch(commands...)
 }
 
 func (s *Insights) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
-		s.applyInsights([]api.InspectInsightRecord(m))
-	case api.InspectEvent:
-		return fetchInsightsList(ctx, client)
+		if !s.insightsResource.Apply(resource.ResourceResult[[]api.InspectInsightRecord](m)) {
+			return nil
+		}
+		snapshot := s.insightsResource.Snapshot()
+		s.loaded = snapshot.State != resource.ResourceLoading && snapshot.State != resource.ResourceIdle
+		s.err = ""
+		if snapshot.Err != nil {
+			s.err = snapshot.Err.Error()
+		}
+		if snapshot.HasValue {
+			s.applyInsights(snapshot.Value)
+		}
+	case insightsEvalRunsLoadedMsg:
+		if !s.evalRunsResource.Apply(resource.ResourceResult[[]json.RawMessage](m)) {
+			return nil
+		}
+		snapshot := s.evalRunsResource.Snapshot()
+		s.evalEvidenceErr = ""
+		if snapshot.Err != nil {
+			s.evalEvidenceErr = snapshot.Err.Error()
+		}
+		if snapshot.HasValue {
+			s.evalRuns = projectEvalRuns(snapshot.Value)
+		}
 	case dataErrMsg:
 		s.err = string(m)
+	case insightStatusMsg:
+		for index := range s.items {
+			if s.items[index].InsightID == m.id {
+				s.items[index].Status = m.status
+				break
+			}
+		}
+		s.list.SetItems(s.items)
 	case tea.KeyPressMsg:
 		return s.updateKey(ctx, m, client)
 	}
@@ -72,40 +130,8 @@ func (s *Insights) Update(ctx context.Context, msg tea.Msg, client DataClient) t
 }
 
 func (s *Insights) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
-	switch msg.String() {
-	case "j", "down":
-		s.moveSelection(1)
-	case "k", "up":
-		s.moveSelection(-1)
-	case "h", "left":
-		s.shiftFocus(-1)
-	case "l", "right", "enter":
-		s.shiftFocus(1)
-	case "esc":
-		s.shiftFocus(-1)
-	case "shift+tab", "[":
-		s.cycleTab(-1)
-	case "tab", "]":
-		s.cycleTab(1)
-	case "x":
-		return s.dismiss(ctx, client)
-	case "f":
-		return s.markFixed(ctx, client)
-	case "t":
-		return s.openLinkedTrace()
-	case "e":
-		return s.exportInsight()
-	}
-	return nil
-}
-
-func (s *Insights) HandlesKey(msg tea.KeyPressMsg) bool {
-	switch msg.String() {
-	case "j", "down", "k", "up", "h", "left", "l", "right", "enter", "esc", "shift+tab", "[", "tab", "]", "x", "f", "t", "e":
-		return true
-	default:
-		return false
-	}
+	cmd, _ := interaction.Dispatch(s.Actions(ctx, client), msg)
+	return cmd
 }
 
 func (s *Insights) applyInsights(items []api.InspectInsightRecord) {
@@ -172,23 +198,7 @@ func (s *Insights) Breadcrumb() ([]string, string) {
 }
 
 func (s *Insights) Keybinds() []shell.Keybind {
-	binds := []shell.Keybind{
-		shell.Bind("j/k", "move"),
-		shell.Bind("h/l", "pane"),
-		shell.Bind("[/]", "tabs"),
-	}
-	if current := s.currentInsight(); current != nil {
-		if len(current.LinkedTraceIDs) > 0 {
-			binds = append(binds, shell.Bind("t", "linked traces"))
-		}
-		binds = append(binds,
-			shell.Bind("f", "mark fixed"),
-			shell.Bind("x", "dismiss"),
-			shell.Bind("e", "export"),
-		)
-	}
-	binds = append(binds, shell.Bind(":", "cmd"), shell.Bind("?", "help"))
-	return binds
+	return actionKeybinds(s.Actions(context.TODO(), nil), nil)
 }
 
 func (s *Insights) Counts() map[string]int {

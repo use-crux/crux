@@ -29,6 +29,19 @@ type Service struct {
 	bus   *EventBus
 	obs   *observability.Service
 
+	runsMu       sync.Mutex
+	runsRevision int64
+	runsReady    bool
+	runsCache    []inspectRunRecord
+
+	insightsMu              sync.Mutex
+	insightsRevision        int64
+	insightsState           string
+	insightsIndexGeneration uint64
+	insightsTimeBucket      int64
+	insightsReady           bool
+	insightsCache           []inspectInsightRecord
+
 	derivedMu         sync.Mutex
 	insightSignatures map[string]string
 	insightsPrimed    bool
@@ -80,7 +93,16 @@ func (s *Service) Events() *EventBus {
 }
 
 func (s *Service) WithObservability(obs *observability.Service) *Service {
+	s.runsMu.Lock()
 	s.obs = obs
+	s.runsRevision = 0
+	s.runsReady = false
+	s.runsCache = nil
+	s.runsMu.Unlock()
+	s.insightsMu.Lock()
+	s.insightsReady = false
+	s.insightsCache = nil
+	s.insightsMu.Unlock()
 	return s
 }
 
@@ -101,13 +123,7 @@ func (s *Service) Runs(ctx context.Context) ([]inspectRunRecord, error) {
 // RunsWithOptions returns runs filtered/sorted/limited per opts. Empty
 // options return everything in newest-first time order.
 func (s *Service) RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]inspectRunRecord, error) {
-	var all []inspectRunRecord
-	var err error
-	if s.obs != nil {
-		all, err = buildInspectRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, projectRootFromStore(s.store), observabilityRunListOptionsForInspect(opts))
-	} else {
-		all = []inspectRunRecord{}
-	}
+	all, err := s.projectedRuns(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +132,6 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.InspectRunsOptio
 
 func (s *Service) RunsWithOptionsAPI(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
 	return toAPI[[]api.InspectRunRecord](s.RunsWithOptions(ctx, opts))
-}
-
-func observabilityRunListOptionsForInspect(opts api.InspectRunsOptions) observability.RunListOptions {
-	return observability.RunListOptions{}
 }
 
 func (s *Service) RunDetail(ctx context.Context, operationID string) (inspectRunDetailRecord, bool, error) {

@@ -547,6 +547,7 @@ describe("runtime artifacts", () => {
         metadata: {
           exportName: "default",
           evalContract: "crux.eval",
+          runtimeDiscovered: true,
           evalExecutionArms: [
             {
               name: "current",
@@ -590,6 +591,7 @@ describe("runtime artifacts", () => {
         metadata: {
           exportName: "default",
           evalContract: "crux.eval",
+          runtimeDiscovered: true,
           evalExecutionArms: [
             {
               name: "current",
@@ -609,6 +611,7 @@ describe("runtime artifacts", () => {
         metadata: {
           exportName: "default",
           evalContract: "crux.eval",
+          runtimeDiscovered: true,
           evalExecutionArms: [
             {
               name: "current",

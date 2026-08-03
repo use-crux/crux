@@ -3,11 +3,13 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 )
 
 func startupDiagnosticsBinding() key.Binding {
@@ -20,7 +22,7 @@ func (w *Workbench) startupDiagnosticsAction() interaction.Action {
 		Binding: startupDiagnosticsBinding(),
 		Run: func() tea.Cmd {
 			if w.startupDiagnostic == nil {
-				return nil
+				return w.showStatusToast("no startup issues", 2*time.Second)
 			}
 			count := len(w.startupDiagnostic.Children)
 			if count == 0 {
@@ -28,7 +30,7 @@ func (w *Workbench) startupDiagnosticsAction() interaction.Action {
 			}
 			w.inspect.OpenText(
 				"Runtime setup",
-				fmt.Sprintf("%d %s", count, plural(count, "issue", "issues")),
+				fmt.Sprintf("%d %s", count, kit.Pluralize(count, "issue")),
 				renderStartupDiagnostics(*w.startupDiagnostic),
 			)
 			return nil
@@ -78,11 +80,4 @@ func renderStartupDiagnostics(diagnostic startup.Diagnostic) string {
 		sections = append(sections, strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n\n")
-}
-
-func plural(count int, singular, plural string) string {
-	if count == 1 {
-		return singular
-	}
-	return plural
 }

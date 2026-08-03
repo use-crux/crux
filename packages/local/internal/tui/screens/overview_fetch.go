@@ -5,16 +5,30 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
-type overviewLoadedMsg resource.ResourceResult[api.InspectOverviewRecord]
+const overviewStatsBuckets = 14
+
+type overviewLoadedMsg struct {
+	Result           resource.ResourceResult[api.InspectOverviewRecord]
+	Stats            *store.StatsResult
+	StatsLoaded      bool
+	Timeseries       []store.TimeseriesBucket
+	TimeseriesLoaded bool
+}
 type insightsLoadedMsg resource.ResourceResult[[]api.InspectInsightRecord]
-type runsLoadedMsg resource.ResourceResult[[]api.InspectRunRecord]
 type activityLoadedMsg resource.ResourceResult[[]api.InspectActivityEvent]
 
+type runsLoadedMsg struct {
+	Result   resource.ResourceResult[[]api.InspectRunRecord]
+	Names    map[string]string
+	Sessions map[string]string
+}
+
 func (m overviewLoadedMsg) ResourceOwner() resource.ResourceOwner {
-	return resource.ResourceResult[api.InspectOverviewRecord](m).Token.Owner
+	return m.Result.Token.Owner
 }
 
 func (m insightsLoadedMsg) ResourceOwner() resource.ResourceOwner {
@@ -22,7 +36,7 @@ func (m insightsLoadedMsg) ResourceOwner() resource.ResourceOwner {
 }
 
 func (m runsLoadedMsg) ResourceOwner() resource.ResourceOwner {
-	return resource.ResourceResult[[]api.InspectRunRecord](m).Token.Owner
+	return m.Result.Token.Owner
 }
 
 func (m activityLoadedMsg) ResourceOwner() resource.ResourceOwner {
@@ -49,7 +63,21 @@ func (o *Overview) fetchSummaryAtRevision(parent context.Context, client DataCli
 	ctx, token := o.summaryResource.Begin(parent, overviewSummaryOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return func() tea.Msg {
 		value, err := client.Overview(ctx)
-		return overviewLoadedMsg(resource.ResourceResult[api.InspectOverviewRecord]{Token: token, Value: value, Err: err})
+		message := overviewLoadedMsg{
+			Result: resource.ResourceResult[api.InspectOverviewRecord]{Token: token, Value: value, Err: err},
+		}
+		if err != nil {
+			return message
+		}
+		if stats, statsErr := client.Stats(ctx); statsErr == nil {
+			message.Stats = &stats
+			message.StatsLoaded = true
+		}
+		if timeseries, timeseriesErr := client.StatsTimeseries(ctx, overviewStatsBuckets); timeseriesErr == nil {
+			message.Timeseries = timeseries
+			message.TimeseriesLoaded = true
+		}
+		return message
 	}
 }
 
@@ -75,7 +103,26 @@ func (o *Overview) fetchRunsAtRevision(parent context.Context, client DataClient
 	ctx, token := o.runsResource.Begin(parent, overviewRunsOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return func() tea.Msg {
 		value, err := client.Runs(ctx)
-		return runsLoadedMsg(resource.ResourceResult[[]api.InspectRunRecord]{Token: token, Value: value, Err: err})
+		names := map[string]string{}
+		sessions := map[string]string{}
+		if err == nil {
+			page, pageErr := client.ObservabilityRunsPage(ctx)
+			if pageErr == nil {
+				for _, run := range page.Rows {
+					if run.RunID != "" && run.Name != "" {
+						names[run.RunID] = run.Name
+					}
+					if run.RunID != "" && run.SessionID != "" {
+						sessions[run.RunID] = run.SessionID
+					}
+				}
+			}
+		}
+		return runsLoadedMsg{
+			Result:   resource.ResourceResult[[]api.InspectRunRecord]{Token: token, Value: value, Err: err},
+			Names:    names,
+			Sessions: sessions,
+		}
 	}
 }
 

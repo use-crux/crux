@@ -10,6 +10,7 @@ import (
 )
 
 func runEvals(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSet bool) error {
+	opts.json = f.JSONOutput(opts.json)
 	if err := validateRunOptions(opts, maxCostSet); err != nil {
 		return failBeforeExecution(f.Streams(), err.Error())
 	}
@@ -38,13 +39,15 @@ func runEvals(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSet bo
 	}
 	if !opts.plan && !maxCostSet {
 		io := f.Streams()
-		if io.IsStderrTTY() && !io.IsCI() {
+		if opts.json {
+			args = append(args, "--decline-unknown-cost-confirmation")
+		} else if io.IsStderrTTY() && !io.IsCI() {
 			args = append(args, "--request-unknown-cost-confirmation")
 		} else {
 			args = append(args, "--decline-unknown-cost-confirmation")
 		}
 	}
-	return runCoordinator(f.Streams(), opts.cwd, args)
+	return runCoordinator(f.Streams(), opts.cwd, args, opts.json)
 }
 
 func failBeforeExecution(streams *output.IO, message string) error {

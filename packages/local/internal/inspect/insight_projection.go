@@ -5,11 +5,15 @@ import (
 )
 
 func enrichInspectInsightFromRuns(insight inspectInsightRecord, runs []inspectRunRecord, now time.Time) inspectInsightRecord {
+	return enrichInspectInsightFromRunIndex(insight, runs, indexInspectRuns(runs), now)
+}
+
+func enrichInspectInsightFromRunIndex(insight inspectInsightRecord, runs []inspectRunRecord, byID map[string]inspectRunRecord, now time.Time) inspectInsightRecord {
 	insight.OccurrenceCount = len(insight.LinkedTraceIDs)
 	if insight.OccurrenceCount == 0 {
 		insight.OccurrenceCount = len(insight.LinkedCaseIDs)
 	}
-	runs = filterInspectInsightRuns(insight, runs)
+	runs = filterInspectInsightRunsFromIndex(insight, runs, byID)
 	insight.Trend = inspectInsightOccurrenceTrendAt(insight, runs, now)
 	tokens := 0.0
 	for _, run := range runs {
@@ -41,6 +45,14 @@ func enrichInspectInsightFromRuns(insight inspectInsightRecord, runs []inspectRu
 		CostDeltaVsBaseline:    inspectDeltaLabel(costSpark),
 	}
 	return insight
+}
+
+func indexInspectRuns(runs []inspectRunRecord) map[string]inspectRunRecord {
+	byID := make(map[string]inspectRunRecord, len(runs))
+	for _, run := range runs {
+		byID[inspectRunIdentity(run)] = run
+	}
+	return byID
 }
 
 func inspectDiagnosticSeverity(codes []string) string {
@@ -82,12 +94,16 @@ func inspectSignalSeverity(blocked int) string {
 }
 
 func filterInspectInsightRuns(insight inspectInsightRecord, runs []inspectRunRecord) []inspectRunRecord {
+	return filterInspectInsightRunsFromIndex(insight, runs, indexInspectRuns(runs))
+}
+
+func filterInspectInsightRunsFromIndex(insight inspectInsightRecord, runs []inspectRunRecord, byID map[string]inspectRunRecord) []inspectRunRecord {
 	if len(insight.LinkedTraceIDs) == 0 {
 		return runs
 	}
-	filtered := make([]inspectRunRecord, 0, len(runs))
-	for _, run := range runs {
-		if containsString(insight.LinkedTraceIDs, inspectRunIdentity(run)) {
+	filtered := make([]inspectRunRecord, 0, len(insight.LinkedTraceIDs))
+	for _, id := range insight.LinkedTraceIDs {
+		if run, ok := byID[id]; ok {
 			filtered = append(filtered, run)
 		}
 	}

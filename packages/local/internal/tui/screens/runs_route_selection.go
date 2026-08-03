@@ -34,7 +34,7 @@ func (s *Runs) replaceSelectedRunSummary(run api.ObservabilityRunSummary) {
 	}
 	if s.routedRun != nil && s.routedRun.RunID == run.RunID {
 		s.routedRun = &run
-		s.runList.SetItems(s.filteredRuns())
+		s.syncVisibleRuns()
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 )
 
 // LogoMark is the Crux brand glyph (a diamond) shown at the top of the
@@ -31,7 +32,8 @@ var DefaultNav = []NavItem{
 	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
 	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},
 	{Key: "3", ID: "runs", Label: "Runs", Group: "Inspect", Count: 0, Show: true},
-	{Key: "4", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
+	{Key: "4", ID: "evals", Label: "Evals", Group: "Evals", Count: 0, Show: true},
+	{Key: "5", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
 }
 
 // NavRailFooter is rendered under the nav rail (target + baseline blocks).
@@ -94,50 +96,32 @@ func NavRail(height int, items []NavItem, active string, footer NavRailFooter) s
 		} else {
 			row = padLine(NavRailWidth, row)
 		}
-		if sel {
-			// Subtle teal-tinted tint behind the entire row — sits just
-			// above the rail's panel bg so the selection reads at a
-			// glance without becoming a "glow." The earlier saturated
-			// `#082b31` was too bright; this is closer to the design's
-			// near-imperceptible row tint. Approximates the design's
-			// rgba(94,234,212,.06) overlay on the panel bg.
-			row = lipgloss.NewStyle().
-				Background(ColorSelectedNav).
-				Width(NavRailWidth).
-				Render(row)
-		}
-		lines = append(lines, row)
+		lines = append(lines, navLine(row))
 	}
 
 	footerLines := make([]string, 0, 7)
-	footerLines = append(footerLines, navLine(" "))
-	footerLines = append(footerLines, navLine(" "+tag("TARGET")))
-	target := footer.TargetID
-	if target == "" {
-		target = TextMuted.Render("(none)")
+	if footer.TargetID != "" {
+		footerLines = append(footerLines, navLine(" "))
+		footerLines = append(footerLines, navLine(" "+tag("TARGET")))
+		footerLines = append(footerLines, navLine(" "+Text.Render(footer.TargetID)))
+		targetParts := make([]string, 0, 2)
+		if footer.TargetKind != "" {
+			targetParts = append(targetParts, footer.TargetKind)
+		}
+		if footer.TargetModel != "" {
+			targetParts = append(targetParts, footer.TargetModel)
+		}
+		if len(targetParts) > 0 {
+			footerLines = append(footerLines, navLine(" "+TextMuted.Render(strings.Join(targetParts, " · "))))
+		}
 	}
-	footerLines = append(footerLines, navLine(" "+Text.Render(target)))
-	targetParts := make([]string, 0, 2)
-	if footer.TargetKind != "" {
-		targetParts = append(targetParts, footer.TargetKind)
-	}
-	if footer.TargetModel != "" {
-		targetParts = append(targetParts, footer.TargetModel)
-	}
-	targetSub := strings.Join(targetParts, " · ")
-	if targetSub == "" {
-		targetSub = " "
-	}
-	footerLines = append(footerLines, navLine(" "+TextMuted.Render(targetSub)))
-	footerLines = append(footerLines, navLine(" "))
-	footerLines = append(footerLines, navLine(" "+tag("BASELINE")))
-	bl := footer.BaselineLabel
-	if bl == "" {
-		bl = TextMuted.Render("(none)")
-	}
-	footerLines = append(footerLines, navLine(" "+Text.Render(bl)))
-	if footer.BaselineRelative != "" {
-		footerLines = append(footerLines, navLine(" "+TextMuted.Render(footer.BaselineRelative)))
+	if footer.BaselineLabel != "" {
+		footerLines = append(footerLines, navLine(" "))
+		footerLines = append(footerLines, navLine(" "+tag("BASELINE")))
+		footerLines = append(footerLines, navLine(" "+Text.Render(footer.BaselineLabel)))
+		if footer.BaselineRelative != "" {
+			footerLines = append(footerLines, navLine(" "+TextMuted.Render(footer.BaselineRelative)))
+		}
 	}
 
 	spacerRows := height - len(lines) - len(footerLines)
@@ -151,12 +135,10 @@ func NavRail(height int, items []NavItem, active string, footer NavRailFooter) s
 	if len(lines) > height {
 		lines = lines[:height]
 	}
-	rendered := strings.Join(lines, "\n")
-
-	return lipgloss.NewStyle().
-		Background(ColorPanel).
-		Width(NavRailWidth).
-		Render(rendered)
+	for index := range lines {
+		lines[index] = theme.SurfaceLine(SurfaceRail, lines[index], NavRailWidth)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func navLine(s string) string {

@@ -67,10 +67,13 @@ func TestOverviewLayoutTwoKeepsChartAndActivity(t *testing.T) {
 func fixtureOverview() (*Overview, time.Time) {
 	client := uitest.NewFixtureClient()
 	overview, _ := client.Overview(nil)
+	stats, _ := client.Stats(nil)
+	timeseries, _ := client.StatsTimeseries(nil, overviewStatsBuckets)
 	insights, _ := client.Insights(nil)
 	runs, _ := client.Runs(nil)
 	activity, _ := client.Activity(nil, 12)
 	screen := NewOverview()
 	setOverviewDataForTest(screen, overview, insights, runs, activity)
+	applyOverviewStatsForTest(screen, stats, timeseries)
 	return screen, client.Now
 }

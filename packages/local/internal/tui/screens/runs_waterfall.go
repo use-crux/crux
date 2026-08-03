@@ -17,7 +17,9 @@ func (s *Runs) renderWaterfall(width, height int) string {
 		header := s.waterfallHeaderBlock(width)
 		message := "loading trace…"
 		snapshot := s.detailResource.Snapshot()
-		if snapshot.Err != nil {
+		if s.SelectedRunID() == "" {
+			message = "No run selected — use your app with `crux dev` running, or run `crux eval`."
+		} else if snapshot.Err != nil {
 			message = truncateRunsInline("error: "+snapshot.Err.Error(), width)
 		}
 		body := centerMsg(Size{Width: width, Height: height - 2}, message)

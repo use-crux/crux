@@ -121,6 +121,28 @@ func TestWorkbenchDefersInactiveOverviewInvalidationsAndDrainsOnlyAffectedResour
 	}
 }
 
+func TestInsightStatusEventInvalidatesOverviewInsightsProjection(t *testing.T) {
+	client := &bridgeCountingClient{FixtureClient: uitest.NewFixtureClient()}
+	w := newTestWorkbench(client, nil, "http://localhost:4400")
+	runWorkbenchCommands(w, w.Init())
+	runWorkbenchCommands(w, w.gotoNav("insights"))
+	client.reset()
+
+	runWorkbenchCommands(w, w.Update(bridge.Batch{
+		Inspect: []api.InspectEvent{{Kind: "insight", Action: "activity", RefID: "INS-014"}},
+		Changed: bridge.NewDomains(bridge.DomainInsights, bridge.DomainActivity),
+		Revs:    bridge.Revisions{Insights: 4, Activity: 4},
+	}))
+	if client.insightsCalls != 1 {
+		t.Fatalf("active Insights refresh calls = %d, want 1", client.insightsCalls)
+	}
+
+	runWorkbenchCommands(w, w.gotoNav("overview"))
+	if client.insightsCalls != 2 {
+		t.Fatalf("Overview named insights refresh calls = %d, want 2 total", client.insightsCalls)
+	}
+}
+
 func TestWorkbenchBridgeBurstRefreshesActiveIndexSnapshotOnce(t *testing.T) {
 	client := &bridgeCountingClient{FixtureClient: uitest.NewFixtureClient()}
 	w := newTestWorkbench(client, nil, "http://localhost:4400")

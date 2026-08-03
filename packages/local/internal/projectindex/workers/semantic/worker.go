@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -32,9 +33,11 @@ type Options struct {
 // Worker runs semantic Project Index enrichment through its own V3 NDJSON
 // worker process.
 type Worker struct {
-	phases      []source.Client
-	mu          sync.Mutex
-	lastTimings []projectindex.ProjectIndexPhaseTiming
+	phases                []source.Client
+	evalDiscoveryCapacity chan struct{}
+	isolationRequired     atomic.Bool
+	mu                    sync.Mutex
+	lastTimings           []projectindex.ProjectIndexPhaseTiming
 }
 
 // New creates a semantic worker backed by project-semantic-indexer.mjs.
@@ -47,7 +50,9 @@ func New(options Options) *Worker {
 	for i := 0; i < size; i++ {
 		phases = append(phases, newPhaseClient(options))
 	}
-	return &Worker{phases: phases}
+	capacity := make(chan struct{}, 1)
+	capacity <- struct{}{}
+	return &Worker{phases: phases, evalDiscoveryCapacity: capacity}
 }
 
 func (w *Worker) IndexProjectSemanticPatch(ctx context.Context, semanticRequest projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
@@ -55,6 +60,14 @@ func (w *Worker) IndexProjectSemanticPatch(ctx context.Context, semanticRequest 
 		return projectindex.IndexPatch{}, fmt.Errorf("project semantic worker is not configured")
 	}
 	if shards := projectindex.ProjectSemanticShardRequests(semanticRequest); len(shards) > 1 && len(w.phases) > 1 {
+		if w.usesFullWorkerPool(len(shards)) {
+			w.isolationRequired.Store(true)
+			release, err := w.AcquireContendedCompilerCapacity(ctx)
+			if err != nil {
+				return projectindex.IndexPatch{}, err
+			}
+			defer release()
+		}
 		return w.indexProjectSemanticShardPatches(ctx, shards)
 	}
 	patch, timings, err := w.indexProjectSemanticPatch(ctx, w.phases[0], semanticRequest)
@@ -63,6 +76,52 @@ func (w *Worker) IndexProjectSemanticPatch(ctx context.Context, semanticRequest 
 	}
 	w.setLastTimings(timings)
 	return patch, nil
+}
+
+func (w *Worker) usesFullWorkerPool(shardCount int) bool {
+	return w != nil && len(w.phases) > 1 && shardCount >= len(w.phases)
+}
+
+// AcquireEvalDiscoveryCapacity admits Eval discovery when no semantic request
+// is using the full configured worker pool. The release function is idempotent.
+func (w *Worker) AcquireEvalDiscoveryCapacity(ctx context.Context) (func(), error) {
+	return w.acquireCapacity(ctx)
+}
+
+// AcquireContendedCompilerCapacity serializes other CPU-heavy compiler work
+// with Eval discovery after full-pool semantic demand has been observed.
+func (w *Worker) AcquireContendedCompilerCapacity(ctx context.Context) (func(), error) {
+	return w.acquireCapacity(ctx)
+}
+
+// EvalDiscoveryIsolationRequired reports whether this project has produced a
+// semantic request large enough to consume the configured worker pool.
+func (w *Worker) EvalDiscoveryIsolationRequired() bool {
+	return w != nil && w.isolationRequired.Load()
+}
+
+// PrepareEvalDiscoveryIsolation publishes full-pool demand before an
+// orchestrator exposes the AST snapshot as ready.
+func (w *Worker) PrepareEvalDiscoveryIsolation(request projectindex.ProjectSemanticIndexRequest) {
+	if w == nil {
+		return
+	}
+	if w.usesFullWorkerPool(len(projectindex.ProjectSemanticShardRequests(request))) {
+		w.isolationRequired.Store(true)
+	}
+}
+
+func (w *Worker) acquireCapacity(ctx context.Context) (func(), error) {
+	if w == nil || w.evalDiscoveryCapacity == nil {
+		return func() {}, nil
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-w.evalDiscoveryCapacity:
+		var once sync.Once
+		return func() { once.Do(func() { w.evalDiscoveryCapacity <- struct{}{} }) }, nil
+	}
 }
 
 func newPhaseClient(options Options) source.Client {

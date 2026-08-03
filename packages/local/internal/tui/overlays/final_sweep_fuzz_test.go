@@ -16,7 +16,7 @@ func TestFinalSweepOverlaysFuzzResize(t *testing.T) {
 	help.SetScreenKeybinds("runs", []shell.Keybind{
 		shell.Bind("j/k", "move"),
 		shell.Bind("↵", "expand"),
-		shell.Bind("e", "export"),
+		shell.Bind("x", "export"),
 	})
 	help.Open()
 

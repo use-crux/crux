@@ -22,7 +22,7 @@ func TestRunManifestWritesVerifiedArtifactAndStableJSONSummary(t *testing.T) {
 	io := output.NewTestIO(&stdout, &stderr, output.TestIOOptions{})
 	err := runManifest(context.Background(), io, manifestOptions{
 		root: t.TempDir(), projectID: "manifest-fixture", out: outPath, json: true,
-	}, func(context.Context, manifestOptions) ([]byte, error) {
+	}, func(context.Context, manifestOptions, commandWorkerProcess) ([]byte, error) {
 		return artifact, nil
 	})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestRunManifestDoesNotReplaceValidArtifactAfterFailure(t *testing.T) {
 	io := output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{})
 	err := runManifest(context.Background(), io, manifestOptions{
 		root: t.TempDir(), projectID: "fixture", out: outPath,
-	}, func(context.Context, manifestOptions) ([]byte, error) {
+	}, func(context.Context, manifestOptions, commandWorkerProcess) ([]byte, error) {
 		return nil, errors.New("compiler failed")
 	})
 	assertExitCode(t, err, 2)
@@ -68,12 +68,30 @@ func TestRunManifestRejectsInvalidArtifactBeforeReplacement(t *testing.T) {
 	io := output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{})
 	err := runManifest(context.Background(), io, manifestOptions{
 		root: t.TempDir(), projectID: "fixture", out: outPath,
-	}, func(context.Context, manifestOptions) ([]byte, error) {
+	}, func(context.Context, manifestOptions, commandWorkerProcess) ([]byte, error) {
 		return []byte(`{"schemaVersion":1,"secret":"unsafe"}`), nil
 	})
 	assertExitCode(t, err, 2)
 	if _, statErr := os.Stat(outPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("invalid artifact was written: %v", statErr)
+	}
+}
+
+func TestManifestWorkerLifecycleLogsStayQuiet(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	io := output.NewTestIO(&stdout, &stderr, output.TestIOOptions{})
+	err := runManifest(
+		context.Background(),
+		io,
+		manifestOptions{root: ".", projectID: "fixture"},
+		func(_ context.Context, _ manifestOptions, process commandWorkerProcess) ([]byte, error) {
+			process.logger.Info("worker process started", "script", "project-indexer-worker")
+			return nil, errors.New("compile stopped")
+		},
+	)
+	assertExitCode(t, err, 2)
+	if strings.Contains(stderr.String(), "worker process started") {
+		t.Fatalf("stderr leaked worker lifecycle log: %q", stderr.String())
 	}
 }
 
@@ -109,7 +127,7 @@ func TestCompileDeploymentManifestIsStableAcrossCheckoutRoots(t *testing.T) {
 		}
 		artifact, err := compileDeploymentManifest(context.Background(), manifestOptions{
 			root: root, projectID: "fixture",
-		})
+		}, newCommandWorkerProcess(output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{})))
 		if err != nil {
 			t.Fatal(err)
 		}

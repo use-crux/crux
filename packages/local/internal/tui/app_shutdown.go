@@ -32,12 +32,8 @@ type shutdownRequestMsg struct {
 	cause ShutdownCause
 }
 
-type shutdownFinishedMsg struct {
-	result ShutdownResult
-}
-
 // SetShutdownCallback installs the one cleanup operation which must finish
-// before Bubble Tea restores the terminal and returns from Program.Run.
+// after Bubble Tea restores the terminal and returns from Program.Run.
 func (a *App) SetShutdownCallback(fn func() error) {
 	a.shutdownMu.Lock()
 	defer a.shutdownMu.Unlock()
@@ -67,24 +63,36 @@ func (a *App) watchRootCancellation() tea.Cmd {
 
 func (a *App) beginShutdown(cause ShutdownCause) tea.Cmd {
 	if !a.shutdownStarted.CompareAndSwap(false, true) {
-		return nil
+		return tea.Quit
 	}
 	a.quitRequested = true
-	a.shutdownMu.RLock()
-	cleanup := a.shutdownCallback
-	a.shutdownMu.RUnlock()
-	return func() tea.Msg {
+	a.shutdownMu.Lock()
+	a.shutdownResult.Cause = cause
+	a.shutdownMu.Unlock()
+
+	// Program.Run is the terminal-ownership boundary. Do not start cleanup from
+	// the Bubble Tea command queue: a blocked cleanup command can race tea.Quit
+	// and strand the alternate screen. The command root calls FinishShutdown
+	// immediately after Run returns.
+	return tea.Quit
+}
+
+// FinishShutdown runs the App cleanup exactly once. It is safe to call after
+// Program.Run so the terminal is already restored while server cleanup waits.
+func (a *App) FinishShutdown() ShutdownResult {
+	a.shutdownCleanupOnce.Do(func() {
+		a.shutdownMu.RLock()
+		cleanup := a.shutdownCallback
+		cause := a.shutdownResult.Cause
+		a.shutdownMu.RUnlock()
+
 		var err error
 		if cleanup != nil {
 			err = cleanup()
 		}
-		return shutdownFinishedMsg{result: ShutdownResult{Cause: cause, Err: err, Completed: true}}
-	}
-}
-
-func (a *App) finishShutdown(result ShutdownResult) tea.Cmd {
-	a.shutdownMu.Lock()
-	a.shutdownResult = result
-	a.shutdownMu.Unlock()
-	return tea.Quit
+		a.shutdownMu.Lock()
+		a.shutdownResult = ShutdownResult{Cause: cause, Err: err, Completed: true}
+		a.shutdownMu.Unlock()
+	})
+	return a.ShutdownResult()
 }

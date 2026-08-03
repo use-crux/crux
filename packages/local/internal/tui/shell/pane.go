@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 )
 
 // PaneHeader renders the header strip at the top of a pane:
@@ -21,17 +22,13 @@ func PaneHeader(width int, title string, subtitle string, right string) string {
 	mainStyle := lipgloss.NewStyle().Foreground(ColorText)
 	muted := lipgloss.NewStyle().Foreground(ColorTextMuted)
 
-	left := " " + mainStyle.Render(title)
+	leading := mainStyle.Render(title)
+	middle := ""
 	if subtitle != "" {
-		left += "  " + muted.Render("· "+subtitle)
+		middle = "  " + muted.Render("· "+subtitle)
 	}
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
-	pad := width - leftW - rightW - 1
-	if pad < 1 {
-		pad = 1
-	}
-	row := left + strings.Repeat(" ", pad) + right + " "
+	innerWidth := max(0, width-2)
+	row := " " + kit.FitMiddle(innerWidth, leading, middle, right, muted.Render("…")) + " "
 	// Sandwich the title row with top + bottom dividers so every section
 	// header has a clear top boundary regardless of what sits above it
 	// in the composition (was: only a bottom rule, leaving stacked
@@ -95,8 +92,7 @@ func horizontalBorderDim(width int) string {
 	// Use the subtler `ColorBorder` (#242929) instead of the
 	// `ColorBorderBright` (#343b3b) the function used to render with.
 	// The design's section dividers are barely-there hairlines — the
-	// brighter shade was reading as a heavy rule. Foreground-only;
-	// the line inherits whichever bg the surrounding content uses.
+	// brighter shade was reading as a heavy rule.
 	return lipgloss.NewStyle().
 		Foreground(ColorBorder).
 		Render(strings.Repeat("─", width))
@@ -107,6 +103,10 @@ func horizontalBorderDim(width int) string {
 func horizontalBorder(width int) string {
 	return lipgloss.NewStyle().
 		Foreground(ColorBorder).
-		Background(ColorBG).
 		Render(strings.Repeat("─", width))
+}
+
+// HorizontalBorder exposes the shared pane rule for layout seams.
+func HorizontalBorder(width int) string {
+	return horizontalBorder(width)
 }

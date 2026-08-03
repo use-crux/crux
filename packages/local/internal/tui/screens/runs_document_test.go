@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 func TestRunsSpanDetailScrollsWhenFocusedAndShowsPosition(t *testing.T) {
@@ -54,6 +55,44 @@ func TestRunsSpanDetailRoutesPageHomeEndOnlyWhileFocused(t *testing.T) {
 	if got := runs.spanDocument.Position().Offset; got != 0 {
 		t.Fatalf("unfocused document offset = %d, want 0", got)
 	}
+}
+
+func TestRunsSpanDetailRoutesSharedDocumentAliases(t *testing.T) {
+	runs := newLongSpanRuns()
+	renderSpanDetailForTest(runs, 40, 10)
+
+	runs.Update(testContext, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}, nil)
+	if got := runs.spanDocument.Position().Offset; got != 7 {
+		t.Fatalf("offset after ^d = %d, want one detail page", got)
+	}
+	runs.Update(testContext, tea.KeyPressMsg{Text: "G", Code: 'G'}, nil)
+	position := runs.spanDocument.Position()
+	if got, want := position.Offset, position.TotalLines-7; got != want {
+		t.Fatalf("offset after G = %d, want %d", got, want)
+	}
+	runs.Update(testContext, tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}, nil)
+	if got := runs.spanDocument.Position().Offset; got >= position.Offset {
+		t.Fatalf("offset after ^u = %d, want before %d", got, position.Offset)
+	}
+	runs.Update(testContext, tea.KeyPressMsg{Text: "g", Code: 'g'}, nil)
+	if got := runs.spanDocument.Position().Offset; got != 0 {
+		t.Fatalf("offset after g = %d, want top", got)
+	}
+
+	help := strings.Join(keybindLabels(runs.Keybinds()), " · ")
+	for _, want := range []string{"pgdn/^d", "pgup/^u", "home/g", "end/G"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("run-detail help omitted %q: %s", want, help)
+		}
+	}
+}
+
+func keybindLabels(bindings []shell.Keybind) []string {
+	labels := make([]string, 0, len(bindings))
+	for _, binding := range bindings {
+		labels = append(labels, binding.Key+" "+binding.Label)
+	}
+	return labels
 }
 
 func TestRunsResizeInitializesDocumentBeforeInput(t *testing.T) {

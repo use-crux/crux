@@ -9,9 +9,9 @@
  * default, package metadata, or the presence of a non-serializable binding
  * (record store, tokenizer, middleware, transport).
  *
- * It is a representation of configuration, not of authored primitives. A compact
- * discovery summary (definition/relation counts) is included for context; the
- * full authored index lives behind `crux index`.
+ * It is a representation of configuration, not of authored primitives. Its
+ * explicitly scoped config-model counts cover definitions imported through
+ * configuration; the compiled authored Project Index lives behind `crux index`.
  *
  * @module
  */
@@ -177,6 +177,7 @@ async function inspectProjectConfigInSession(
         ? { values: cfg.plugins.map((plugin) => plugin.name), origin: "config" }
         : { values: [], origin: "default" },
     discovered: {
+      scope: "config-model",
       definitions: model.definitions.length,
       relations: model.relations.length,
       evals: model.definitions.filter(

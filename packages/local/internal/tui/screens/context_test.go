@@ -25,10 +25,10 @@ func viewRunsForTest(runs *Runs, size Size) string {
 func runsListLoadedForTest(runs *Runs, values ...api.ObservabilityRunSummary) runsListLoadedMsg {
 	_, token := runs.runsResource.Begin(testContext, runsListOwner, 0)
 	token.Revision = maxRunRevision(token.Revision, values)
-	return runsListLoadedMsg(resource.ResourceResult[[]api.ObservabilityRunSummary]{
-		Token: token,
-		Value: values,
-	})
+	return runsListLoadedMsg{
+		ResourceResult: resource.ResourceResult[[]api.ObservabilityRunSummary]{Token: token, Value: values},
+		filters:        runs.filters,
+	}
 }
 
 func setRunsForTest(runs *Runs, values ...api.ObservabilityRunSummary) {

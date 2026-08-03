@@ -7,9 +7,11 @@ package screens
 
 import (
 	"context"
+	"encoding/json"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
@@ -24,10 +26,20 @@ type DataClient interface {
 	Insights(ctx context.Context) ([]api.InspectInsightRecord, error)
 	Runs(ctx context.Context) ([]api.InspectRunRecord, error)
 	RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error)
-	ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error)
+	ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error)
+	ObservabilityRunsPageWithOptions(ctx context.Context, opts api.InspectRunsOptions, definitionID ...string) (api.ObservabilityRunsPage, error)
+	Sessions(ctx context.Context) ([]store.SessionInfo, error)
+	Stats(ctx context.Context) (store.StatsResult, error)
+	StatsTimeseries(ctx context.Context, buckets int) ([]store.TimeseriesBucket, error)
+	EvalCatalog(ctx context.Context) ([]json.RawMessage, error)
+	EvalRuns(ctx context.Context) ([]json.RawMessage, error)
+	EvalRun(ctx context.Context, id string) (json.RawMessage, error)
+	EvalBaselines(ctx context.Context) ([]json.RawMessage, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
+	DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error)
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
+	ProjectIndexWatchStatus(ctx context.Context) (api.ProjectIndexWatchStatus, error)
 	Activity(ctx context.Context, limit int) ([]api.InspectActivityEvent, error)
 	DevtoolsContext(ctx context.Context) (api.DevtoolsContext, error)
 	InsightSilences(ctx context.Context, includeDeleted bool) ([]api.InspectInsightSilenceRecord, error)
@@ -89,6 +101,13 @@ type Screen interface {
 	// the Insights screen knows the insight count). Keys are nav IDs. Empty
 	// map = no contribution.
 	Counts() map[string]int
+}
+
+// MovementBurstScreen applies already-coalesced cursor input behind one
+// Bubble Tea render boundary.
+type MovementBurstScreen interface {
+	Screen
+	UpdateMovementBurst(context.Context, []tea.KeyPressMsg, DataClient) tea.Cmd
 }
 
 // LegacyInvalidationScreen is the temporary domain-level refresh adapter for

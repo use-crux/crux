@@ -53,6 +53,7 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 			tuiMode := mode == devModeTUI
 			alreadyRunning := dependencies.serverRunning(port)
 			sessionWorkers := &lifecycle.Group{}
+			joinOwnedByShutdown := false
 			sessionCtx, cancelSession := context.WithCancel(context.WithoutCancel(ctx))
 			var stopSessionOnce sync.Once
 			stopSession := func() {
@@ -83,7 +84,11 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 			defer func() {
 				stopParentCancellation()
 				stopSession()
-				_ = sessionWorkers.Wait(context.Background())
+				if !joinOwnedByShutdown {
+					joinCtx, cancelJoin := context.WithTimeout(context.Background(), dependencies.shutdownTimeout)
+					defer cancelJoin()
+					_ = sessionWorkers.Wait(joinCtx)
+				}
 			}()
 
 			if alreadyRunning {
@@ -162,12 +167,14 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 				SessionWorkers: sessionWorkers,
 			})
 			shutdown := newShutdownCoordinator(stopSession, dependencies.shutdownTimeout, func(ctx context.Context) error {
-				serverErr := devSrv.Shutdown(ctx)
-				return errors.Join(serverErr, sessionWorkers.Wait(ctx))
+				// The owned DevServer is the sole join owner for SessionWorkers.
+				// Waiting the aliased group again creates a second unbounded waiter
+				// whenever the common shutdown deadline expires.
+				return devSrv.Shutdown(ctx)
 			})
+			joinOwnedByShutdown = true
 			shutdownAndJoin := func() error {
-				shutdownErr := shutdown.Shutdown()
-				return errors.Join(shutdownErr, sessionWorkers.Wait(context.Background()))
+				return shutdown.Shutdown()
 			}
 			if err := devSrv.Start(); err != nil {
 				return errors.Join(err, shutdownAndJoin())

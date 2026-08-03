@@ -57,6 +57,30 @@ describe('Eval discovery', () => {
     expect(result.errors[1]?.message).toMatch(/default export/i)
   })
 
+  it('scopes duplicate explicit ids to their owning package', async () => {
+    const crossPackage = await collectEvalModules({
+      projectRoot: '/repo',
+      core,
+      modules: [
+        { relativeFile: 'packages/a/evals/support.eval.ts', scope: 'packages/a', exports: { default: evalValue('support') } },
+        { relativeFile: 'packages/b/evals/support.eval.ts', scope: 'packages/b', exports: { default: evalValue('support') } },
+      ],
+    })
+    expect(crossPackage.errors).toEqual([])
+    expect(crossPackage.evals).toHaveLength(2)
+
+    const samePackageFixture = await collectEvalModules({
+      projectRoot: '/repo/packages/a/__tests__/fixtures/duplicate-project',
+      core,
+      modules: [
+        { relativeFile: 'evals/a.eval.ts', scope: '.', exports: { default: evalValue('duplicate') } },
+        { relativeFile: 'evals/b.eval.ts', scope: '.', exports: { default: evalValue('duplicate') } },
+      ],
+    })
+    expect(samePackageFixture.evals).toEqual([])
+    expect(samePackageFixture.errors[0]?.message).toMatch(/Duplicate Eval id 'duplicate'.*unique within one package/i)
+  })
+
   it('resolves exact ids before paths and reports ambiguous selectors with copyable ids', () => {
     const entries = [
       { id: 'support', sourceKey: { relativeFile: 'evals/support.eval.ts', export: 'default' as const } },

@@ -79,8 +79,8 @@ func TestOverviewEmptySummaryIsDistinctFromReadyZeroMetrics(t *testing.T) {
 	overview.Resize(Size{Width: 100, Height: 30})
 
 	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
-	if !strings.Contains(view, "no overview summary") {
-		t.Fatalf("empty summary did not render its explicit state:\n%s", view)
+	if !strings.Contains(view, "No run metrics yet") || !strings.Contains(view, "crux eval") {
+		t.Fatalf("empty summary did not render its actionable state:\n%s", view)
 	}
 }
 
@@ -103,16 +103,18 @@ func TestOverviewAcceptedRunsRefreshPreservesStableSelectionAndVisibility(t *tes
 		{TraceID: "run-a"}, {TraceID: "run-b"}, {TraceID: "run-c"},
 	}
 	_, token := overview.runsResource.Begin(testContext, overviewRunsOwner, 0)
-	overview.Update(testContext, runsLoadedMsg(resource.ResourceResult[[]api.InspectRunRecord]{
-		Token: token,
-		Value: refreshed,
-	}), nil)
+	overview.Update(testContext, runsLoadedMsg{
+		Result: resource.ResourceResult[[]api.InspectRunRecord]{
+			Token: token,
+			Value: refreshed,
+		},
+	}, nil)
 
 	if got := overview.SelectedRunID(); got != "keep-me" {
 		t.Fatalf("selected run after accepted refresh = %q, want stable ID keep-me", got)
 	}
 	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
-	if !strings.Contains(view, "keep-me") {
+	if !strings.Contains(view, "selected-target") {
 		t.Fatalf("accepted refresh did not keep selected run visible:\n%s", view)
 	}
 }
@@ -178,6 +180,33 @@ func TestOverviewRunEventRefreshesStandaloneRunsAuthority(t *testing.T) {
 	}
 	if overview.insightsResource.Snapshot().Refreshing {
 		t.Fatal("run event refreshed unrelated insights resource")
+	}
+}
+
+func TestOverviewInsightsRefreshExcludesClosedRowsFromOpenQueue(t *testing.T) {
+	overview := NewOverview()
+	overview.Resize(Size{Width: 100, Height: 30})
+	_, token := overview.insightsResource.Begin(testContext, overviewInsightsOwner, 3)
+	overview.Update(testContext, insightsLoadedMsg(resource.ResourceResult[[]api.InspectInsightRecord]{
+		Token: token,
+		Value: []api.InspectInsightRecord{
+			{InsightID: "open", Title: "Open insight", Status: "open"},
+			{InsightID: "dismissed", Title: "Dismissed insight", Status: "dismissed"},
+			{InsightID: "resolved", Title: "Resolved insight", Status: "resolved"},
+		},
+	}), nil)
+
+	if got := len(overview.insightRows()); got != 1 {
+		t.Fatalf("open insight rows = %d, want 1", got)
+	}
+	view := stripANSI(overview.View(Size{Width: 100, Height: 30}))
+	if !strings.Contains(view, "1 open") || !strings.Contains(view, "Open insight") {
+		t.Fatalf("Overview open queue did not reflect refreshed status:\n%s", view)
+	}
+	for _, closed := range []string{"Dismissed insight", "Resolved insight"} {
+		if strings.Contains(view, closed) {
+			t.Fatalf("Overview open queue retained %q:\n%s", closed, view)
+		}
 	}
 }
 

@@ -20,7 +20,7 @@ type cancelingInvalidationClient struct {
 	started chan context.Context
 }
 
-func (c *cancelingInvalidationClient) ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error) {
+func (c *cancelingInvalidationClient) ObservabilityRunsPage(ctx context.Context, _ ...string) (api.ObservabilityRunsPage, error) {
 	c.mu.Lock()
 	c.calls++
 	call := c.calls
@@ -84,7 +84,7 @@ type invalidationRevisionClient struct {
 	detailCalls int
 }
 
-func (c *invalidationRevisionClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *invalidationRevisionClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	c.listCalls++
 	rowRevision := c.rowRevision
 	if rowRevision == 0 {

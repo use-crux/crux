@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/observability"
 )
 
 func inspectHourlyTokenSpark(runs []inspectRunRecord) []float64 {
@@ -44,12 +46,18 @@ func inspectHourlyPassRateSpark(runs []inspectRunRecord) []float64 {
 }
 
 func isPassingRunStatus(status string) bool {
-	switch status {
-	case "ok", "success", "passed":
-		return true
-	default:
-		return false
+	normalized, eligible := observability.NormalizeExecutionStatus(status)
+	return eligible && normalized == "ok"
+}
+
+func inspectExecutionRuns(runs []inspectRunRecord) []inspectRunRecord {
+	executions := make([]inspectRunRecord, 0, len(runs))
+	for _, run := range runs {
+		if _, eligible := observability.NormalizeExecutionStatus(run.Status); eligible {
+			executions = append(executions, run)
+		}
 	}
+	return executions
 }
 
 func inspectHourlyCostSpark(runs []inspectRunRecord) []float64 {

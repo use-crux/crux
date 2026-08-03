@@ -11,13 +11,29 @@ import (
 
 // showTraceDetail renders one trace under a branded header. The --json branch
 // preserves the raw API detail and writes it through the injected output.
-func showTraceDetail(io *output.IO, ctx context.Context, c *api.Client, traceID string, jsonOut bool) error {
-	detail, found, err := c.ObservabilityRunDetail(ctx, traceID)
+func showTraceDetail(io *output.IO, ctx context.Context, c *api.Client, id string, jsonOut bool) error {
+	detail, found, err := c.ObservabilityRunDetail(ctx, id)
 	if err != nil {
 		return err
 	}
 	if !found {
-		return fmt.Errorf("not found")
+		runs, listErr := c.ObservabilityRuns(ctx)
+		if listErr != nil {
+			return listErr
+		}
+		for _, run := range runs {
+			if run.TraceID != id {
+				continue
+			}
+			detail, found, err = c.ObservabilityRunDetail(ctx, run.RunID)
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("trace %q not found; expected a run ID or trace ID", id)
 	}
 	if jsonOut {
 		return io.WriteJSON(detail)

@@ -18,6 +18,18 @@ type runExportedMsg struct {
 // runExportErrMsg is emitted when the export cmd fails (e.g. fs error).
 type runExportErrMsg struct{ err string }
 
+type runExportState struct {
+	runID   string
+	message string
+}
+
+func (s *Runs) currentRunExportState() string {
+	if s.exportState.runID != s.SelectedRunID() {
+		return ""
+	}
+	return s.exportState.message
+}
+
 // exportRun returns a tea.Cmd that writes the focused run's detail
 // record as pretty-printed JSON to ~/.crux/exports/run-{id}.json. No-op
 // (returns nil) when nothing is focused.

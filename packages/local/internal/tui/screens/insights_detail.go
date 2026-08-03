@@ -19,7 +19,7 @@ func (s *Insights) renderDetail(width, height int) string {
 
 	body := make([]string, 0, height)
 	body = append(body, s.renderBadgeLine(*ins, width))
-	body = append(body, padRow(" "+shell.Text.Render(kit.Truncate(ins.Title, max(0, width-2), "...")), width))
+	body = append(body, padRow(" "+shell.Text.Render(kit.Truncate(ins.Title, max(0, width-2), "…")), width))
 	body = append(body, wrapLines(ins.Summary, width, shell.TextDim)...)
 	body = append(body, horizontalRuleDim(width))
 	body = append(body, s.renderTabs(width))
@@ -65,10 +65,12 @@ func (s *Insights) renderTabs(width int) string {
 	parts := make([]string, 0, len(tabs))
 	for _, tab := range tabs {
 		style := insightsStyles.Dim
+		label := "  " + tab.label
 		if tab.id == s.tab {
 			style = insightsStyles.AccentHeader
+			label = "▸ " + tab.label
 		}
-		parts = append(parts, style.Render(tab.label))
+		parts = append(parts, style.Render(label))
 	}
 	return padRow(" "+strings.Join(parts, insightsStyles.Border.Render(" · ")), width)
 }
@@ -78,7 +80,7 @@ func (s *Insights) renderTabBody(ins api.InspectInsightRecord, width, height int
 	case "traces":
 		return s.renderLinkedIDs("LINKED TRACES", ins.LinkedTraceIDs, width, height)
 	case "cases":
-		return s.renderLinkedIDs("LINKED CASES", ins.LinkedCaseIDs, width, height)
+		return s.renderEvalCases(ins, width, height)
 	case "fix":
 		return s.renderFixTab(ins, width, height)
 	default:
@@ -87,11 +89,15 @@ func (s *Insights) renderTabBody(ins api.InspectInsightRecord, width, height int
 }
 
 func (s *Insights) renderDiagnosisTab(ins api.InspectInsightRecord, width, height int) []string {
-	lines := []string{padRow(" "+insightsStyles.Accent.Render("PATTERN"), width)}
 	pattern := ins.SuspectedCause
 	if pattern == "" {
-		pattern = "No pattern details are available yet."
+		lines := []string{padRow(" "+shell.TextMuted.Render("Pattern details unavailable — inspect linked traces."), width)}
+		if ins.DetailStats != nil && len(lines) < height {
+			lines = append(lines, s.renderStatCells(*ins.DetailStats, width)...)
+		}
+		return clampLines(lines, width, height)
 	}
+	lines := []string{padRow(" "+insightsStyles.Accent.Render("PATTERN"), width)}
 	boxH := min(6, max(3, height/2))
 	lines = append(lines, kit.Box("", wrapPlain(pattern, max(1, width-4)), kit.Rect{W: width, H: boxH}, true, insightsStyles)...)
 	if ins.DetailStats != nil && len(lines) < height {
@@ -114,7 +120,9 @@ func statCell(label, value, delta string, spark []float64, width int) string {
 	lines := []string{
 		" " + shell.TextMuted.Render(label),
 		" " + shell.Text.Render(value) + " " + shell.Amber.Render(delta),
-		" " + kit.Sparkline(spark, max(1, width-2), shell.ColorAmber),
+	}
+	if trend := kit.Sparkline(spark, max(1, width-2), shell.ColorAmber); trend != "" {
+		lines = append(lines, " "+trend)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -122,7 +130,7 @@ func statCell(label, value, delta string, spark []float64, width int) string {
 func (s *Insights) renderLinkedIDs(title string, ids []string, width, height int) []string {
 	lines := []string{padRow(" "+insightsStyles.Accent.Render(fmt.Sprintf("%s · %d", title, len(ids))), width)}
 	if len(ids) == 0 {
-		lines = append(lines, padRow(" "+shell.TextMuted.Render("none linked yet"), width))
+		lines = append(lines, padRow(" "+shell.TextMuted.Render("No linked records yet — run `crux eval` to collect evidence."), width))
 		return clampLines(lines, width, height)
 	}
 	for _, id := range ids {
@@ -138,7 +146,7 @@ func (s *Insights) renderFixTab(ins api.InspectInsightRecord, width, height int)
 		fix = ins.ProposedFixConfig.YAML
 	}
 	if fix == "" {
-		lines = append(lines, padRow(" "+shell.TextMuted.Render("no fix proposed"), width))
+		lines = append(lines, padRow(" "+shell.TextMuted.Render("No fix proposed — inspect the diagnosis and linked traces."), width))
 		return clampLines(lines, width, height)
 	}
 	boxH := min(height-1, max(3, len(strings.Split(fix, "\n"))+2))

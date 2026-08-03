@@ -185,6 +185,26 @@ func (r *Resource[T]) Cancel() {
 	r.refreshing = false
 }
 
+// Discard cancels the current request and forgets its retained value. The
+// request sequence remains monotonic so a result from before the discard can
+// never collide with the next Begin.
+func (r *Resource[T]) Discard() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cancel != nil {
+		r.cancel()
+		r.cancel = nil
+	}
+	r.request++
+	var zero T
+	r.value = zero
+	r.hasValue = false
+	r.active = false
+	r.state = ResourceIdle
+	r.err = nil
+	r.refreshing = false
+}
+
 func (r *Resource[T]) finishRequest() {
 	r.active = false
 	if r.cancel != nil {

@@ -17,7 +17,7 @@ func (s *Insights) View(size Size) string {
 		return ""
 	}
 	if len(s.items) == 0 {
-		return centerMsg(size, "no insights yet - collect more traces or wait for the analyzer.")
+		return centerMsg(size, "No insights yet — run `crux eval`, or use your app with `crux dev` running.")
 	}
 
 	root := kit.Rect{W: size.Width, H: size.Height}

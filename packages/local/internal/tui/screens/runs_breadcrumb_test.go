@@ -7,29 +7,32 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-// TestRunsBreadcrumbUsesRunNotTrace asserts that the Runs screen's
-// breadcrumb path identifies the selected record as a "run", never a
-// "trace". Per CONTEXT.md's Run entry, "Trace" is not a UI synonym for
-// Run — breadcrumbs, labels, and nav items in the TUI must say "run".
-func TestRunsBreadcrumbUsesRunNotTrace(t *testing.T) {
+func TestRunsBreadcrumbUsesDisplayName(t *testing.T) {
 	r := NewRuns()
-	selectRunForTest(r, "8af2f1c0deadbeef")
+	setRunsForTest(r, api.ObservabilityRunSummary{
+		RunID: "run_demo_support_regression",
+		Name:  "Refund answer · regression",
+	})
+	selectRunForTest(r, "run_demo_support_regression")
 
 	path, _ := r.Breadcrumb()
+	if got := path[len(path)-1]; got != "Refund answer · regression" {
+		t.Fatalf("breadcrumb tail = %q, want display name", got)
+	}
+}
 
-	joined := strings.Join(path, " / ")
-	if strings.Contains(joined, "trace ") {
-		t.Errorf("breadcrumb contains \"trace \" segment: %q — should say \"run \" per CONTEXT.md", joined)
+func TestRunsBreadcrumbFallsBackToMiddleTruncatedID(t *testing.T) {
+	r := NewRuns()
+	id := "run_demo_shared_prefix_with_a_distinguishing_tail"
+	selectRunForTest(r, id)
+
+	path, _ := r.Breadcrumb()
+	got := path[len(path)-1]
+	if !strings.Contains(got, "…") || !strings.HasPrefix(got, "run_demo") || !strings.HasSuffix(got, "tail") {
+		t.Fatalf("fallback breadcrumb tail = %q, want middle-truncated id", got)
 	}
-	foundRunSegment := false
-	for _, seg := range path {
-		if strings.HasPrefix(seg, "run ") {
-			foundRunSegment = true
-			break
-		}
-	}
-	if !foundRunSegment {
-		t.Errorf("breadcrumb has no \"run {id}\" segment: %q", path)
+	if strings.HasPrefix(got, "run ") {
+		t.Fatalf("fallback breadcrumb retained redundant run prefix: %q", got)
 	}
 }
 

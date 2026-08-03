@@ -2,8 +2,12 @@ package screens
 
 import (
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
+
+var codeStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 
 func boxedPre(text string, width int) string {
 	style := lipgloss.NewStyle().

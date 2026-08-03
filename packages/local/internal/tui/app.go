@@ -65,6 +65,7 @@ type App struct {
 	dashboardNotified   bool
 	quitRequested       bool
 	shutdownStarted     atomic.Bool
+	shutdownCleanupOnce sync.Once
 	shutdownCallback    func() error
 	shutdownResult      ShutdownResult
 	shutdownMu          sync.RWMutex
@@ -152,22 +153,36 @@ func (a *App) Init() tea.Cmd {
 		close(a.programStarted)
 	})
 	if a.bootComplete {
-		return tea.Batch(a.watchRootCancellation(), a.spinner.Tick, a.workbench.Init())
+		return tea.Batch(a.watchRootCancellation(), a.workbench.Init())
 	}
 	return tea.Batch(a.watchRootCancellation(), a.spinner.Tick)
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if finished, ok := msg.(shutdownFinishedMsg); ok {
-		return a, a.finishShutdown(finished.result)
-	}
 	if a.shutdownStarted.Load() {
-		return a, nil
+		// Quit is idempotent. Re-emitting it keeps a second q/Ctrl+C or a late
+		// root-cancellation message from being swallowed while Bubble Tea is
+		// draining commands from the pre-shutdown queue.
+		return a, tea.Quit
 	}
 
 	switch m := msg.(type) {
 	case shutdownRequestMsg:
 		return a, a.beginShutdown(m.cause)
+	case movementBurstMsg:
+		commands := make([]tea.Cmd, 0, 2)
+		if cmd := a.workbench.updateMovementBurst(m.keys); cmd != nil {
+			commands = append(commands, cmd)
+		}
+		if m.next != nil {
+			// The wrapped message still belongs to App dispatch: it may be root
+			// cancellation, resize, boot state, or another top-level event.
+			// Routing it straight to Workbench can silently swallow shutdown.
+			if _, cmd := a.Update(m.next); cmd != nil {
+				commands = append(commands, cmd)
+			}
+		}
+		return a, tea.Batch(commands...)
 
 	case tea.WindowSizeMsg:
 		a.width = m.Width
@@ -181,18 +196,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !a.bootComplete || a.bootError != "" {
 			switch m.String() {
 			case "q":
-				return a, a.requestShutdown(ShutdownClean)
+				return a, a.beginShutdown(ShutdownClean)
 			case "ctrl+c":
-				return a, a.requestShutdown(ShutdownRawInterrupt)
+				return a, a.beginShutdown(ShutdownRawInterrupt)
 			}
 			return a, nil
 		}
 		if m.String() == "ctrl+c" {
-			return a, a.requestShutdown(ShutdownRawInterrupt)
+			return a, a.beginShutdown(ShutdownRawInterrupt)
 		}
 		return a, a.workbench.Update(m)
 
 	case spinner.TickMsg:
+		if a.bootComplete {
+			return a, nil
+		}
 		var cmd tea.Cmd
 		a.spinner, cmd = a.spinner.Update(m)
 		return a, cmd

@@ -163,6 +163,34 @@ func TestIndexRendererEmptyStillBranded(t *testing.T) {
 	}
 }
 
+func TestIndexCatalogCompatibilityRenderersUseIndexChrome(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	io := output.NewTestIO(&out, &errBuf, output.TestIOOptions{ColorEnabled: false})
+	catalog := api.CatalogListV1{Definitions: []api.CatalogListDefinitionV1{{
+		ID: "prompt:demo.support", Kind: "prompt",
+	}}}
+	printCatalogListWithHeader(io, catalog, "index")
+	if !strings.Contains(out.String(), "◇ crux index") || strings.Contains(out.String(), "◇ crux catalog") {
+		t.Fatalf("index list chrome = %q", out.String())
+	}
+
+	out.Reset()
+	printCatalogDefinitionWithHeader(io, api.CatalogDefinitionV1{
+		Definition: api.ProjectDefinition{ID: "prompt:demo.support", Kind: "prompt"},
+	}, "index show")
+	if !strings.Contains(out.String(), "◇ crux index show") || strings.Contains(out.String(), "◇ crux catalog show") {
+		t.Fatalf("index show chrome = %q", out.String())
+	}
+}
+
+func TestInspectAcceptsBareAndPromptPrefixedIDs(t *testing.T) {
+	for _, input := range []string{"demo.support", "prompt:demo.support"} {
+		if got := normalizeInspectPromptID(input); got != "demo.support" {
+			t.Fatalf("normalizeInspectPromptID(%q) = %q", input, got)
+		}
+	}
+}
+
 func TestTracesRendererColorlessAndBranded(t *testing.T) {
 	forceAsciiProfile(t)
 	var out, errBuf bytes.Buffer

@@ -107,7 +107,7 @@ func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
 }
 
 func TestSpanDetailSurfacesObservedError(t *testing.T) {
-	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
+	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","code":"TOOL_TIMEOUT","phase":"execution","retryable":false}`)
 	r := NewRuns()
 	selectRunForTest(r, "run-error")
 	setRunDiagnosisForTest(r, runDiagnosisFixture{
@@ -141,7 +141,7 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	selectSpanForTest(r, "sp-error")
 
 	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))
-	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {
+	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "code", "TOOL_TIMEOUT", "phase", "execution", "retryable", "false", "error.stack", "search.ts:10:3"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("rendered error span missing %q\nfull output:\n%s", want, plain)
 		}
@@ -235,14 +235,14 @@ func TestSpanDetailFlowRunShowsFlowFields(t *testing.T) {
 // call variant.
 func TestSpanDetailGenerationStreamUsesGenerationRenderer(t *testing.T) {
 	out := renderSpanWithPayload(t, api.SpanPrimitiveGenerationStream, map[string]any{
-		"provider": "anthropic",
-		"model":    "claude-3.5-sonnet",
+		"provider": "mistralai",
+		"model":    "mistral-large-2",
 	})
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "GENERATION") {
 		t.Errorf("generation.stream span missing GENERATION header\n%s", plain)
 	}
-	if !strings.Contains(plain, "anthropic/claude-3.5-sonnet") {
+	if !strings.Contains(plain, "mistralai/mistral-large-2") {
 		t.Errorf("generation.stream span missing provider/model row\n%s", plain)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
@@ -49,12 +50,18 @@ func (o *Overview) renderCompact(size Size) string {
 	}
 	meta := appendResourceStatus("compact · h/l pane", resourceStatus(snapshot))
 	appendBlock(overviewPaneHeader(size.Width, "Overview", "", meta))
-	if !snapshot.HasValue || snapshot.State == resource.ResourceEmpty {
+	if !snapshot.HasValue {
 		appendBlock(padRow(" "+shell.TextMuted.Render(resourceStateMessage(snapshot.State, snapshot.Err, "overview summary")), size.Width))
+	} else if snapshot.State == resource.ResourceEmpty || !overviewSummaryHasData(summary) {
+		appendBlock(padRow(" "+shell.TextMuted.Render("No run metrics yet — run `crux eval`, or use your app with `crux dev` running."), size.Width))
 	} else {
+		stats := o.projectedStats()
 		appendBlock(padRow(" "+shell.Text.Render(fmt.Sprintf("insights %d", summary.InsightCount))+"  "+shell.TextDim.Render(fmt.Sprintf("%dH %dM %dL", summary.OpenInsightSeverityCounts["high"], summary.OpenInsightSeverityCounts["medium"], summary.OpenInsightSeverityCounts["low"])), size.Width))
-		appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(summary.PassRate)), size.Width))
-		appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(summary.CostPer100Runs)), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(firstFloat(stats.PassRate, summary.PassRate))), size.Width))
+		if summary.MeanScore != nil {
+			appendBlock(padRow(" "+shell.Text.Render("mean score")+"  "+shell.Teal.Render(score(summary.MeanScore)), size.Width))
+		}
+		appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(stats.CostPer100Runs)), size.Width))
 		appendBlock(padRow(" "+shell.Text.Render("p95 latency")+"  "+shell.Amber.Render(latency(summary.P95LatencyMs)), size.Width))
 	}
 	remaining := max(1, size.Height-len(lines))
@@ -104,8 +111,11 @@ func overviewListPosition(label string, position kit.ListPosition) string {
 
 func (o *Overview) renderKPIState(width, height int) string {
 	snapshot := o.summaryResource.Snapshot()
-	if !snapshot.HasValue || snapshot.State == resource.ResourceEmpty {
+	if !snapshot.HasValue {
 		return centerMsg(Size{Width: width, Height: height}, resourceStateMessage(snapshot.State, snapshot.Err, "overview summary"))
+	}
+	if snapshot.State == resource.ResourceEmpty || !overviewSummaryHasData(o.overviewSummary()) {
+		return centerMsg(Size{Width: width, Height: height}, "No run metrics yet — run `crux eval`, or use your app with `crux dev` running.")
 	}
 	view := o.renderKPIStrip(width)
 	status := resourceStatus(snapshot)
@@ -117,4 +127,8 @@ func (o *Overview) renderKPIState(width, height int) string {
 		lines[0] = padRow(" "+shell.Amber.Render(truncate(status, max(0, width-2))), width)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func overviewSummaryHasData(summary api.InspectOverviewRecord) bool {
+	return summary.RunCount > 0
 }

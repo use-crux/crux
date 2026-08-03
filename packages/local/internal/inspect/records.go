@@ -178,6 +178,101 @@ type inspectInsightDetailStats struct {
 	CostDeltaVsBaseline    string    `json:"costDeltaVsBaseline"`
 }
 
+func cloneInspectRunRecords(runs []inspectRunRecord) []inspectRunRecord {
+	cloned := make([]inspectRunRecord, len(runs))
+	for i, run := range runs {
+		cloned[i] = run
+		cloned[i].PromptID = cloneStringPointer(run.PromptID)
+		cloned[i].DurationMs = cloneFloatPointer(run.DurationMs)
+		cloned[i].Cost = cloneFloatPointer(run.Cost)
+		cloned[i].Score = cloneFloatPointer(run.Score)
+		cloned[i].Input = cloneInspectStringMap(run.Input)
+		cloned[i].Output = cloneInspectValue(run.Output)
+		cloned[i].Error = cloneInspectValue(run.Error)
+		cloned[i].Usage = cloneInspectValue(run.Usage)
+		cloned[i].DiagnosticCodes = append([]string(nil), run.DiagnosticCodes...)
+	}
+	return cloned
+}
+
+func cloneInspectInsightRecords(insights []inspectInsightRecord) []inspectInsightRecord {
+	cloned := make([]inspectInsightRecord, len(insights))
+	for i, insight := range insights {
+		cloned[i] = insight
+		cloned[i].Tags = append([]string(nil), insight.Tags...)
+		cloned[i].LinkedTraceIDs = append([]string(nil), insight.LinkedTraceIDs...)
+		cloned[i].LinkedCaseIDs = append([]string(nil), insight.LinkedCaseIDs...)
+		cloned[i].LinkedDefinitionIDs = append([]string(nil), insight.LinkedDefinitionIDs...)
+		cloned[i].LinkedSources = append([]store.SourceLoc(nil), insight.LinkedSources...)
+		for sourceIndex := range cloned[i].LinkedSources {
+			if column := cloned[i].LinkedSources[sourceIndex].Column; column != nil {
+				clonedColumn := *column
+				cloned[i].LinkedSources[sourceIndex].Column = &clonedColumn
+			}
+		}
+		cloned[i].Trend = append([]float64(nil), insight.Trend...)
+		if insight.ProposedFixConfig != nil {
+			config := *insight.ProposedFixConfig
+			config.ConfigKeys = append([]string(nil), insight.ProposedFixConfig.ConfigKeys...)
+			cloned[i].ProposedFixConfig = &config
+		}
+		if insight.DetailStats != nil {
+			stats := *insight.DetailStats
+			stats.TokensSpark = append([]float64(nil), insight.DetailStats.TokensSpark...)
+			stats.LatencySpark = append([]float64(nil), insight.DetailStats.LatencySpark...)
+			stats.CostSpark = append([]float64(nil), insight.DetailStats.CostSpark...)
+			cloned[i].DetailStats = &stats
+		}
+	}
+	return cloned
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneFloatPointer(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneInspectStringMap(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = cloneInspectValue(value)
+	}
+	return cloned
+}
+
+func cloneInspectValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneInspectStringMap(value)
+	case []any:
+		cloned := make([]any, len(value))
+		for i := range value {
+			cloned[i] = cloneInspectValue(value[i])
+		}
+		return cloned
+	case json.RawMessage:
+		return append(json.RawMessage(nil), value...)
+	case []byte:
+		return append([]byte(nil), value...)
+	default:
+		return value
+	}
+}
+
 type inspectInsightStatusRequest struct {
 	Status string  `json:"status"`
 	Note   *string `json:"note,omitempty"`

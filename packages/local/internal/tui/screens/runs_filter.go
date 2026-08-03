@@ -11,13 +11,13 @@ func (s *Runs) updateRunFilter(ctx context.Context, msg tea.KeyPressMsg, c DataC
 	case "esc", "enter":
 		s.filteringRuns = false
 	case "backspace":
-		if s.runQuery != "" {
-			rs := []rune(s.runQuery)
-			s.runQuery = string(rs[:len(rs)-1])
+		if s.filters.Query != "" {
+			rs := []rune(s.filters.Query)
+			s.filters.Query = string(rs[:len(rs)-1])
 		}
 	default:
 		if msg.Text != "" {
-			s.runQuery += msg.Text
+			s.filters.Query += msg.Text
 		}
 	}
 	return s.ensureFilteredRunSelection(ctx, c)

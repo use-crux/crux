@@ -26,15 +26,26 @@ func invalidationsForBatch(batch bridge.Batch) bridge.Invalidations {
 		invalidations.Add(bridge.OverviewRunsResource, batch.Revs.Runs)
 		addRunsInvalidations(invalidations, batch.Inspect)
 	}
+	if batch.Changed.Has(bridge.DomainEvals) {
+		invalidations.Add(bridge.InsightsEvalRunsResource, batch.Revs.Evals)
+		invalidations.Add(bridge.EvalsCatalogResource, batch.Revs.Evals)
+		invalidations.Add(bridge.EvalsRunsResource, batch.Revs.Evals)
+		invalidations.Add(bridge.EvalsAnyRunResource, batch.Revs.Evals)
+	}
+	if batch.Changed.Has(bridge.DomainBaselines) {
+		invalidations.Add(bridge.EvalsBaselinesResource, batch.Revs.Baselines)
+	}
 	if batch.Changed.Has(bridge.DomainInsights) {
 		invalidations.Add(bridge.OverviewSummaryResource, batch.Revs.Activity)
 		invalidations.Add(bridge.OverviewInsightsResource, batch.Revs.Insights)
+		invalidations.Add(bridge.InsightsListResource, batch.Revs.Insights)
 	}
 	if batch.Changed.Has(bridge.DomainActivity) {
 		invalidations.Add(bridge.OverviewActivityResource, batch.Revs.Activity)
 	}
 	if batch.Changed.Has(bridge.DomainIndex) {
 		invalidations.Add(bridge.IndexSnapshotResource, batch.Revs.Index)
+		invalidations.Add(bridge.EvalsCatalogResource, batch.Revs.Index)
 	}
 	return invalidations
 }
@@ -69,15 +80,18 @@ func addRunsInvalidations(invalidations bridge.Invalidations, events []api.Inspe
 		}
 		if len(ids) == 0 {
 			invalidations.Add(bridge.RunsAnyDetailResource, revision)
+			invalidations.Add(bridge.EvalsAnyLocalRunResource, revision)
 			continue
 		}
 		for _, id := range ids {
 			invalidations.Add(bridge.RunsDetailResource(id), revision)
+			invalidations.Add(bridge.EvalsLocalRunResource(id), revision)
 		}
 	}
 	if !foundRunEvent {
 		invalidations.Add(bridge.RunsListResource, 0)
 		invalidations.Add(bridge.RunsAnyDetailResource, 0)
+		invalidations.Add(bridge.EvalsAnyLocalRunResource, 0)
 	}
 }
 

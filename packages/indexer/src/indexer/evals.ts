@@ -1,6 +1,7 @@
 import type { AnyEval } from "@use-crux/core/eval";
 import {
-  projectEvalTimeoutPolicyForInternalUse,
+  type EvalTimeoutPolicyData,
+  type EvalTimeoutPolicyProjection,
   type ProjectDefinition,
 } from "@use-crux/core/project-index";
 import {
@@ -24,6 +25,13 @@ const REQUIRED_HOST_CAPABILITIES = new Set([
   "record-store",
   "vector-store",
 ]);
+
+interface PortableEvalDefinition {
+  readonly schemaVersion: 1;
+  readonly task: unknown;
+  readonly variants: Readonly<Record<string, unknown>>;
+  readonly timeout?: EvalTimeoutPolicyData | null;
+}
 
 /** Identify an inert Eval without reading callbacks, schemas, or tasks. */
 export function isAuthoredEval(
@@ -61,7 +69,11 @@ export async function definitionFromAuthoredEval(
         }),
   );
   const requiredHostCapabilities = runtimeCapabilityUnion(executionArms);
-  const timeout = projectEvalTimeoutPolicyForInternalUse(evalValue);
+  const authoredDefinition = evalDefinition(evalValue);
+  if (authoredDefinition === undefined) {
+    throw new TypeError("Expected a Crux Eval (missing internal definition).");
+  }
+  const timeout = projectEvalTimeoutPolicy(authoredDefinition.timeout);
   const timeoutFacts = timeout === undefined ? {} : { timeout };
   return definition(
     root,
@@ -73,6 +85,7 @@ export async function definitionFromAuthoredEval(
     {
       exportName,
       evalContract: "crux.eval",
+      runtimeDiscovered: true,
       explicitId: evalValue.id !== undefined,
       requiredHostCapabilities,
       evalExecutionArms: projectedArms,
@@ -80,6 +93,7 @@ export async function definitionFromAuthoredEval(
       facts: {
         kind: "eval",
         evalContract: "crux.eval",
+        runtimeDiscovered: true,
         requiredHostCapabilities,
         evalExecutionArms: projectedArms,
         ...timeoutFacts,
@@ -92,13 +106,8 @@ export async function definitionFromAuthoredEval(
 export function executionArmsFromAuthoredEval(
   evalValue: DiscoveredAuthoredEval,
 ): readonly AuthoredEvalExecutionArm[] {
-  const definitionSymbol = Object.getOwnPropertySymbols(evalValue).find(
-    (symbol) => symbol.description === EVAL_DEFINITION_SYMBOL_DESCRIPTION,
-  );
-  const definition = definitionSymbol
-    ? (evalValue as unknown as Record<PropertyKey, unknown>)[definitionSymbol]
-    : undefined;
-  if (!isRecord(definition) || definition.schemaVersion !== 1) {
+  const definition = evalDefinition(evalValue);
+  if (definition === undefined) {
     return Object.freeze([]);
   }
   const variants = isRecord(definition.variants) ? definition.variants : {};
@@ -120,6 +129,32 @@ export function executionArmsFromAuthoredEval(
       return Object.freeze({ name, ...execution });
     }),
   );
+}
+
+function evalDefinition(
+  evalValue: DiscoveredAuthoredEval,
+): PortableEvalDefinition | undefined {
+  const definitionSymbol = Object.getOwnPropertySymbols(evalValue).find(
+    (symbol) => symbol.description === EVAL_DEFINITION_SYMBOL_DESCRIPTION,
+  );
+  const definition = definitionSymbol
+    ? (evalValue as unknown as Record<PropertyKey, unknown>)[definitionSymbol]
+    : undefined;
+  return isRecord(definition) &&
+    definition.schemaVersion === 1 &&
+    isRecord(definition.variants)
+    ? (definition as unknown as PortableEvalDefinition)
+    : undefined;
+}
+
+function projectEvalTimeoutPolicy(
+  authored: EvalTimeoutPolicyData | null | undefined,
+): EvalTimeoutPolicyProjection | undefined {
+  if (authored === undefined) return undefined;
+  return Object.freeze({
+    authored,
+    effective: authored ?? Object.freeze({}),
+  });
 }
 
 function runtimeCapabilityUnion(

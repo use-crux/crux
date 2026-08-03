@@ -49,7 +49,8 @@ func prepareRunsLayout(size Size) runsLayout {
 	root := kit.Rect{W: size.Width, H: size.Height}
 	layout := runsLayout{size: size, mode: runsLayoutNarrow, list: root, evidence: root, detail: root}
 	const (
-		listWidth        = 26
+		mediumListWidth  = 26
+		wideListWidth    = 44
 		evidenceMinWidth = 44
 		detailMinWidth   = 34
 	)
@@ -57,14 +58,14 @@ func prepareRunsLayout(size Size) runsLayout {
 		layout.mode = runsLayoutTooSmall
 		return layout
 	}
-	if root.W >= listWidth+evidenceMinWidth+detailMinWidth+2 {
-		panes := kit.SplitH(root, kit.Fixed(listWidth), kit.Fill(), kit.Min(detailMinWidth))
+	if root.W >= wideListWidth+evidenceMinWidth+detailMinWidth+2 {
+		panes := kit.SplitH(root, kit.Fixed(wideListWidth), kit.Fill(), kit.Min(detailMinWidth))
 		layout.mode = runsLayoutWide
 		layout.list, layout.evidence, layout.detail = panes[0], panes[1], panes[2]
 		return layout
 	}
-	if root.W >= listWidth+evidenceMinWidth+1 {
-		panes := kit.SplitH(root, kit.Fixed(listWidth), kit.Fill())
+	if root.W >= mediumListWidth+evidenceMinWidth+1 {
+		panes := kit.SplitH(root, kit.Fixed(mediumListWidth), kit.Fill())
 		layout.mode = runsLayoutMedium
 		layout.list, layout.evidence, layout.detail = panes[0], panes[1], panes[1]
 	}

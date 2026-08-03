@@ -23,8 +23,15 @@ func TestWorkbenchShowsTypedStartupDiagnostic(t *testing.T) {
 	}}})
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "RUNTIME_HOST_ONLY") || !strings.Contains(view, "Generate the configured") {
-		t.Fatalf("startup diagnostic was not visible in workbench:\n%s", view)
+	if !strings.Contains(view, "⚠ 1 issue · ! details") ||
+		strings.Contains(view, "RUNTIME_HOST_ONLY") ||
+		strings.Contains(view, "Generate the configured") {
+		t.Fatalf("startup diagnostic badge was not compact:\n%s", view)
+	}
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "!", Code: '!'}))
+	details := ansi.Strip(w.View())
+	if !strings.Contains(details, "RUNTIME_HOST_ONLY") || !strings.Contains(details, "Generate the configured") {
+		t.Fatalf("startup diagnostic details were not visible in the overlay:\n%s", details)
 	}
 }
 
@@ -42,7 +49,7 @@ func TestWorkbenchSummarizesAggregateStartupDiagnostic(t *testing.T) {
 	}}})
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "3 issues") || !strings.Contains(view, "Eval answer is not ready") {
+	if !strings.Contains(view, "⚠ 3 issues · ! details") || strings.Contains(view, "Eval answer is not ready") {
 		t.Fatalf("aggregate startup diagnostic was not summarized in workbench:\n%s", view)
 	}
 
@@ -104,11 +111,32 @@ func TestWorkspaceOpenBrowserCallsInjectedCapabilityOnce(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("browser calls before command execution = %d", calls)
 	}
-	if next := w.Update(cmd()); next != nil {
-		t.Fatal("browser failure returned a terminating or follow-up command")
-	}
+	_ = w.Update(cmd())
 	if calls != 1 {
 		t.Fatalf("browser calls = %d, want 1", calls)
+	}
+}
+
+func TestExplicitBrowserFailureTemporarilyPrecedesStartupBadge(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(100, 30)
+	w.SetStartupSnapshot(startup.Snapshot{Diagnostics: []startup.Diagnostic{{
+		ID: "setup", Code: "SETUP", Severity: "warning", Message: "setup issue",
+	}}})
+
+	expiry := w.handleBrowserResult(browserResultMsg{Status: "browser launch failed: launcher unavailable"})
+	view := ansi.Strip(w.View())
+	if !strings.Contains(view, "browser launch…") || strings.Contains(view, "⚠ 1 issue") {
+		t.Fatalf("explicit browser failure did not precede startup badge:\n%s", view)
+	}
+	if expiry == nil {
+		t.Fatal("browser status did not schedule transient expiry")
+	}
+
+	w.Update(statusToastExpiredMsg{Status: w.statusToast})
+	view = ansi.Strip(w.View())
+	if !strings.Contains(view, "⚠ 1 issue") || strings.Contains(view, "browser launch…") {
+		t.Fatalf("startup badge did not return after transient expiry:\n%s", view)
 	}
 }
 
@@ -157,7 +185,7 @@ func TestWorkspaceOpenBrowserFailureIsVisibleAndNonFatal(t *testing.T) {
 	w.Update(cmd())
 
 	view := ansi.Strip(w.View())
-	if !strings.Contains(view, "browser launch failed: launcher unavailable") {
+	if !strings.Contains(view, "browser launch…") {
 		t.Fatalf("browser failure was not visible:\n%s", view)
 	}
 }
@@ -174,10 +202,10 @@ func TestWorkspaceOpenBrowserFailureIsSafeAndBoundedAtMinimumWidth(t *testing.T)
 	view := w.View()
 	plain := ansi.Strip(view)
 
-	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch failed: launcher") {
+	if strings.Contains(view, "\x1b[31mlauncher") || !strings.Contains(plain, "browser launch…") {
 		t.Fatalf("browser failure was not safely visible:\n%q", plain)
 	}
-	if width := lipgloss.Width(w.browserStatus); width > 256 {
+	if width := lipgloss.Width(w.statusToast); width > 256 {
 		t.Fatalf("stored browser status width = %d, want <= 256", width)
 	}
 	for lineNumber, line := range strings.Split(view, "\n") {

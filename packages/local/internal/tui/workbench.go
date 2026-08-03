@@ -26,7 +26,7 @@ type Workbench struct {
 	ingestTokenPath   string
 	browserURL        string
 	openBrowser       BrowserOpener
-	browserStatus     string
+	statusToast       string
 	startupStatus     string
 	startupDiagnostic *startup.Diagnostic
 
@@ -83,6 +83,7 @@ func NewWorkbench(ctx context.Context, client screens.DataClient, rawClient Data
 		"overview": screens.NewOverview(),
 		"insights": screens.NewInsights(),
 		"runs":     screens.NewRuns(),
+		"evals":    screens.NewEvals(),
 		"index":    screens.NewIndex(),
 	}
 	return w
@@ -109,19 +110,7 @@ func (w *Workbench) SetStartupSnapshot(snapshot startup.Snapshot) {
 	if len(snapshot.Diagnostics) > 0 {
 		diagnostic := snapshot.Diagnostics[0]
 		w.startupDiagnostic = &diagnostic
-		if len(diagnostic.Children) > 0 {
-			detail := diagnostic.Message
-			if detail == "" {
-				detail = diagnostic.Children[0].Message
-			}
-			w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
-			return
-		}
-		detail := diagnostic.Remediation
-		if detail == "" {
-			detail = diagnostic.Message
-		}
-		w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
+		w.startupStatus = ""
 		return
 	}
 	w.startupDiagnostic = nil
@@ -200,6 +189,11 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return cmd
 	case browserResultMsg:
 		return w.handleBrowserResult(m)
+	case statusToastExpiredMsg:
+		if w.statusToast == m.Status {
+			w.statusToast = ""
+		}
+		return nil
 	}
 	if cmd, handled := w.routeOwnedResourceResult(msg); handled {
 		return cmd
@@ -216,6 +210,24 @@ func (w *Workbench) activeScreen() screens.Screen {
 		return sc
 	}
 	return w.screens["overview"]
+}
+
+func (w *Workbench) coalescesIndexMovement() bool {
+	return w.activeNav == "index" &&
+		!w.palette.IsOpen() && !w.help.IsOpen() && !w.inspect.IsOpen() && !w.definitionChooser.IsOpen()
+}
+
+func (w *Workbench) updateMovementBurst(keys []tea.KeyPressMsg) tea.Cmd {
+	if screen, ok := w.activeScreen().(screens.MovementBurstScreen); ok {
+		return screen.UpdateMovementBurst(w.ctx, keys, w.client)
+	}
+	commands := make([]tea.Cmd, 0, len(keys))
+	for _, key := range keys {
+		if cmd := w.Update(key); cmd != nil {
+			commands = append(commands, cmd)
+		}
+	}
+	return tea.Batch(commands...)
 }
 
 func (w *Workbench) refreshCounts() {

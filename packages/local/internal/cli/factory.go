@@ -21,12 +21,20 @@ type Factory struct {
 	Port int
 	// NoColor disables colored output when true (set via --no-color flag).
 	NoColor bool
+	// JSON requests machine-readable output from commands that support it.
+	JSON bool
 
 	clientOnce sync.Once
 	client     *api.Client
 
 	ioOnce sync.Once
 	io     *output.IO
+}
+
+// JSONOutput combines the root persistent flag with a command-local
+// compatibility flag.
+func (f *Factory) JSONOutput(local bool) bool {
+	return f.JSON || local
 }
 
 // NewFactoryWithStreams builds a Factory whose command output is routed
@@ -48,6 +56,12 @@ func (f *Factory) Client() *api.Client {
 		f.client = api.NewDefault(f.Port)
 	})
 	return f.client
+}
+
+// ClientFor returns the shared API client scoped with a user-facing command
+// name for connection remediation.
+func (f *Factory) ClientFor(command string) *api.Client {
+	return f.Client().WithCommand(command)
 }
 
 // Streams returns the shared [output.IO] for terminal-capability decisions

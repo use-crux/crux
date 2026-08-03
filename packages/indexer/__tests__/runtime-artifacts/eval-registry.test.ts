@@ -366,6 +366,7 @@ describe("generated deployed Eval registry", () => {
         metadata: {
           exportName: "default",
           evalContract: "crux.eval",
+          runtimeDiscovered: true,
           evalExecutionArms: [
             {
               name: "current",
@@ -510,5 +511,35 @@ describe("generated deployed Eval registry", () => {
     expect((packageSkew as Error).message).not.toMatch(
       /descriptor|opaque|placement|eligibility/i,
     );
+  });
+
+  it("ignores static-only Evals outside runtime discovery", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-registry-"));
+    roots.push(root);
+    const source = join(root, "evals/example.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(source, "export default {}\n");
+
+    const result = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions: [
+        {
+          id: "eval:example",
+          kind: "eval",
+          name: "example",
+          source: { file: source, line: 1 },
+          fidelity: "resolved",
+          status: "active",
+          metadata: {
+            evalContract: "crux.eval",
+            exportName: "default",
+            static: true,
+          },
+        },
+      ],
+    });
+
+    expect(result.manifest.evals).toEqual([]);
   });
 });

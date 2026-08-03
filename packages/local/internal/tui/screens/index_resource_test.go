@@ -198,19 +198,57 @@ func TestIndexResourceStatesRemainDistinct(t *testing.T) {
 	}
 }
 
-func TestIndexIgnoresSupersededFetchResult(t *testing.T) {
+func TestIndexCoalescesInvalidationBehindActiveFetch(t *testing.T) {
 	client := newIndexResourceClient(api.IndexData{Definitions: []api.ProjectDefinition{{ID: "prompt:old", Kind: "prompt", Name: "old"}}})
 	index := NewIndex()
 	oldRequest := index.Init(testContext, client)
-	newRequest := index.Refresh(testContext, client, bridge.Invalidations{bridge.IndexSnapshotResource: 1})
+	if cmd := index.Refresh(testContext, client, bridge.Invalidations{bridge.IndexSnapshotResource: 1}); cmd != nil {
+		t.Fatal("active Index fetch was replaced instead of coalescing a trailing refresh")
+	}
 
+	oldResult := oldRequest()
 	client.data = api.IndexData{Definitions: []api.ProjectDefinition{{ID: "prompt:new", Kind: "prompt", Name: "new"}}}
-	applyIndexCommand(t, index, newRequest, client)
-	client.data = api.IndexData{Definitions: []api.ProjectDefinition{{ID: "prompt:old", Kind: "prompt", Name: "old"}}}
-	applyIndexCommand(t, index, oldRequest, client)
+	trailingRefresh := index.Update(testContext, oldResult, client)
+	batch, ok := trailingRefresh().(tea.BatchMsg)
+	if !ok || len(batch) != 3 {
+		t.Fatalf("completed Index fetch scheduled %#v, want activity, watch, and one trailing refresh", batch)
+	}
+	index.Update(testContext, batch[2](), client)
 
 	if got := index.SelectedDefinitionID(); got != "prompt:new" {
-		t.Fatalf("superseded result replaced current snapshot with %q", got)
+		t.Fatalf("coalesced refresh retained %q, want newest snapshot", got)
+	}
+	if client.calls != 2 {
+		t.Fatalf("ProjectIndex calls = %d, want one active plus one trailing refresh", client.calls)
+	}
+}
+
+func TestIndexLateCanceledCompletionDoesNotConsumeNewerPendingRefresh(t *testing.T) {
+	client := newIndexResourceClient(api.IndexData{Definitions: []api.ProjectDefinition{{ID: "prompt:old", Kind: "prompt", Name: "old"}}})
+	index := NewIndex()
+	oldRequest := index.Init(testContext, client)
+
+	invalidations := index.Deactivate()
+	currentRequest := index.Refresh(testContext, client, invalidations)
+	if currentRequest == nil {
+		t.Fatal("returning to Index did not start a replacement request")
+	}
+	if cmd := index.Refresh(testContext, client, bridge.Invalidations{bridge.IndexSnapshotResource: 2}); cmd != nil {
+		t.Fatal("invalidation behind replacement request was not coalesced")
+	}
+
+	if cmd := index.Update(testContext, oldRequest(), client); cmd != nil {
+		t.Fatal("late canceled completion scheduled work for the replacement request")
+	}
+	if !index.pendingSnapshotRefresh {
+		t.Fatal("late canceled completion consumed the newer pending refresh")
+	}
+
+	client.data = api.IndexData{Definitions: []api.ProjectDefinition{{ID: "prompt:current", Kind: "prompt", Name: "current"}}}
+	trailing := index.Update(testContext, currentRequest(), client)
+	batch, ok := trailing().(tea.BatchMsg)
+	if !ok || len(batch) != 3 {
+		t.Fatalf("current completion scheduled %#v, want activity, watch, and trailing refresh", batch)
 	}
 }
 

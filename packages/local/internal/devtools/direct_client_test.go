@@ -3,7 +3,9 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
@@ -25,7 +27,7 @@ func TestDirectClientInspectRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 		{"schemaVersion":5,"recordId":"span-gen","type":"span","runId":"run_filter_generation","operationId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":2,"traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai"},
 		{"schemaVersion":5,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","operationId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":3,"traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
 		{"schemaVersion":5,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":1,"traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
-		{"schemaVersion":5,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":2,"traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
+		{"schemaVersion":5,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":2,"traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"mistral-large-2","provider":"mistralai"},
 		{"schemaVersion":5,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":3,"traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
@@ -92,6 +94,139 @@ func TestDirectClientProjectIndexIncludesStorageReadModel(t *testing.T) {
 	}
 	if !apiStorageWarningsInclude(storage, "storage.workspace_asset_missing") {
 		t.Fatalf("storage = %+v, want workspace missing asset warning", storage)
+	}
+}
+
+func TestDirectClientIndexDepthMethodsStayInProcess(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":5,"recordId":"activity-start","type":"run:start","runId":"run_activity","operationId":"run_activity","segmentId":"segment_activity","segmentSeq":1,"traceId":"trace_activity","name":"activity","rootPrimitive":"generation.call","startedAt":"2026-07-31T10:00:00.000Z","status":"running","definitionRefs":[{"id":"prompt:activity","kind":"prompt","role":"resolved-prompt"}]},
+		{"schemaVersion":5,"recordId":"activity-end","type":"run:end","runId":"run_activity","operationId":"run_activity","segmentId":"segment_activity","segmentSeq":2,"traceId":"trace_activity","endedAt":"2026-07-31T10:00:01.000Z","durationMs":1000,"status":"ok"}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	service := NewService(state, nil).WithObservability(obs)
+	client := NewDirectClientFromService(service).WithObservability(obs)
+	activity, err := client.DefinitionActivity(ctx, "prompt:activity")
+	if err != nil {
+		t.Fatalf("DefinitionActivity error = %v", err)
+	}
+	if activity.RunCount != 1 || activity.LastRunID != "run_activity" || activity.LastStatus != "ok" {
+		t.Fatalf("DefinitionActivity = %+v, want observability summary", activity)
+	}
+	page, err := client.ObservabilityRunsPage(ctx, "prompt:activity")
+	if err != nil {
+		t.Fatalf("ObservabilityRunsPage definition filter error = %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != "run_activity" {
+		t.Fatalf("ObservabilityRunsPage definition filter = %+v, want run_activity", page.Rows)
+	}
+	status, err := client.ProjectIndexWatchStatus(ctx)
+	if err != nil {
+		t.Fatalf("ProjectIndexWatchStatus error = %v", err)
+	}
+	if status.State != "idle" {
+		t.Fatalf("ProjectIndexWatchStatus = %+v, want service idle state", status)
+	}
+}
+
+func TestDirectClientRunsListFiltersSessionsAndRollups(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	raw, err := os.ReadFile("../../fixtures/demo-project/observability-batch.v5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch observability.Batch
+	if err := json.Unmarshal(raw, &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	client := NewDirectClientFromService(NewService(state, nil).WithObservability(obs)).WithObservability(obs)
+	page, err := client.ObservabilityRunsPageWithOptions(ctx, api.InspectRunsOptions{
+		Session: []string{"session_demo_billing"},
+		Status:  []string{"error"},
+		Since:   time.Date(2026, 7, 30, 9, 13, 0, 0, time.UTC).UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("filtered Runs page error = %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != "run_demo_account_lookup" {
+		t.Fatalf("filtered Runs page = %+v, want billing failure", page.Rows)
+	}
+
+	full, err := client.ObservabilityRunsPage(ctx)
+	if err != nil {
+		t.Fatalf("rollup Runs page error = %v", err)
+	}
+	var flow *api.ObservabilityRunSummary
+	for index := range full.Rows {
+		if full.Rows[index].RunID == "run_demo_refund_flow" {
+			flow = &full.Rows[index]
+			break
+		}
+	}
+	if flow == nil || flow.FailedChildCount != 1 {
+		t.Fatalf("flow topology = %+v, want one failed child", flow)
+	}
+	var metrics map[string]float64
+	if err := json.Unmarshal(flow.Metrics, &metrics); err != nil {
+		t.Fatalf("flow metrics = %s: %v", flow.Metrics, err)
+	}
+	if metrics["totalTokens"] == 0 || metrics["costUsd"] == 0 {
+		t.Fatalf("flow rollups = %+v, want tokens and cost", metrics)
+	}
+
+	sessions, err := client.Sessions(ctx)
+	if err != nil {
+		t.Fatalf("Sessions error = %v", err)
+	}
+	if len(sessions) != 2 ||
+		sessions[0].SessionID != "session_demo_support" ||
+		sessions[1].SessionID != "session_demo_billing" {
+		t.Fatalf("Sessions = %+v, want support and billing", sessions)
+	}
+
+	stats, err := client.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats error = %v", err)
+	}
+	if stats.TotalExecutions == 0 || stats.TotalCost == 0 || stats.AvgDurationMs == 0 {
+		t.Fatalf("Stats = %+v, want observability-derived aggregates", stats)
+	}
+	series, err := client.StatsTimeseries(ctx, 8)
+	if err != nil {
+		t.Fatalf("StatsTimeseries error = %v", err)
+	}
+	nonEmpty := 0
+	for _, bucket := range series {
+		if bucket.Executions > 0 {
+			nonEmpty++
+		}
+	}
+	if len(series) != 8 || nonEmpty < 3 {
+		t.Fatalf("StatsTimeseries = %+v, want eight buckets with a non-trivial series", series)
 	}
 }
 

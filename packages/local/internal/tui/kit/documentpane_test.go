@@ -67,6 +67,32 @@ func TestDocumentPanePageHomeEndStayWithinBounds(t *testing.T) {
 	}
 }
 
+func TestDocumentPaneUsesSharedHalfPageAndTopBottomKeys(t *testing.T) {
+	t.Parallel()
+
+	pane := NewDocumentPane()
+	pane.SetContent("doc", strings.Repeat("line\n", 20))
+	pane.SetSize(20, 4)
+	pane.SetFocused(true)
+
+	for _, step := range []struct {
+		key  tea.KeyPressMsg
+		want int
+	}{
+		{tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}, 4},
+		{tea.KeyPressMsg{Text: "G", Code: 'G'}, 16},
+		{tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}, 12},
+		{tea.KeyPressMsg{Text: "g", Code: 'g'}, 0},
+	} {
+		if !pane.Update(step.key) {
+			t.Fatalf("pane did not handle %q", step.key.String())
+		}
+		if got := pane.Position().Offset; got != step.want {
+			t.Fatalf("after %q offset = %d, want %d", step.key.String(), got, step.want)
+		}
+	}
+}
+
 func TestDocumentPaneResizePreservesLogicalSourceAnchor(t *testing.T) {
 	t.Parallel()
 

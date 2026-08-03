@@ -1,10 +1,12 @@
 package observability
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
@@ -85,6 +87,120 @@ func BenchmarkServiceLifecycleReconcilerSkipsMarkedRuns(b *testing.B) {
 		}
 	}
 	assertBenchmarkBudget(b, time.Since(start), reconcilerTickBudget)
+}
+
+func BenchmarkScaleStoreReadPaths(b *testing.B) {
+	path := os.Getenv("CRUX_SCALE_DB")
+	if path == "" {
+		b.Skip("CRUX_SCALE_DB is not set")
+	}
+	ctx := context.Background()
+	service, err := OpenService(ctx, path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() {
+		if err := service.Close(); err != nil {
+			b.Fatal(err)
+		}
+	})
+
+	bench := func(name string, fn func() error) {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if err := fn(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+	bench("page", func() error {
+		_, err := service.RunsPage(ctx, RunListOptions{Limit: 100})
+		return err
+	})
+	bench("failures", func() error {
+		_, err := service.RunsPage(ctx, RunListOptions{Limit: 100, Status: []string{"error", "failed", "fail"}})
+		return err
+	})
+	bench("all-cheap", func() error {
+		_, err := service.RunsWithOptions(ctx, RunListOptions{Limit: -1})
+		return err
+	})
+	bench("all-enriched", func() error {
+		_, err := service.RunsWithOptions(ctx, RunListOptions{Limit: -1, IncludeExpensiveRollups: true})
+		return err
+	})
+	bench("summary-snapshot", func() error {
+		_, err := service.RunSummarySnapshot(ctx)
+		return err
+	})
+	bench("big-detail", func() error {
+		_, err := service.RunDetail(ctx, "run_scale_big_200spans")
+		return err
+	})
+}
+
+func TestRunSummarySnapshotUsesFullHistoryAndRevisionInvalidation(t *testing.T) {
+	service := newTestService(t)
+	ctx := context.Background()
+	tx, err := service.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < DefaultRunListLimit+1; i++ {
+		runID := fmt.Sprintf("snapshot-%03d", i)
+		startedAt := fmt.Sprintf("2026-05-16T18:%02d:%02d.000Z", (i/60)%60, i%60)
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO operations (operation_id, first_seen_at, root_present)
+			VALUES (?, ?, 1)
+		`, runID, startedAt); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO runs (
+				run_id, operation_id, trace_id, name, root_primitive, status,
+				started_at, ended_at, total_input_tokens, total_output_tokens,
+				total_cost_usd, last_activity_at
+			) VALUES (?, ?, ?, 'snapshot', 'agent.run', 'ok', ?, ?, 1, 1, 0.01, ?)
+		`, runID, runID, "trace-"+runID, startedAt, startedAt, startedAt); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := service.RunSummarySnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(first), DefaultRunListLimit+1; got != want {
+		t.Fatalf("snapshot rows = %d, want full history %d", got, want)
+	}
+	originalMetrics := append(json.RawMessage(nil), first[0].Metrics...)
+	if len(first[0].Metrics) == 0 {
+		t.Fatal("snapshot fixture did not project metrics")
+	}
+	first[0].Metrics[0] ^= 0xff
+	isolated, err := service.RunSummarySnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(isolated[0].Metrics, originalMetrics) {
+		t.Fatal("caller mutation leaked into the summary snapshot cache")
+	}
+
+	ingestRunStart(t, service, "snapshot-new", "snapshot-new-segment", "snapshot-new-trace", "running", "2026-05-16T20:00:00.000Z")
+	second, err := service.RunSummarySnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(second), DefaultRunListLimit+2; got != want {
+		t.Fatalf("snapshot after revision = %d, want %d", got, want)
+	}
 }
 
 func newBenchmarkService(b *testing.B) *Service {

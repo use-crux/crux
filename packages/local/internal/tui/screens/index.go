@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -11,7 +12,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 // Index is the Project Index screen: the design-plane sibling of
@@ -25,9 +25,21 @@ import (
 //   - missing Inspect renders as no signal, not as an error
 type Index struct {
 	snapshot                      *resource.Resource[api.IndexData]
+	watch                         *resource.Resource[api.ProjectIndexWatchStatus]
+	activity                      *resource.Resource[api.CatalogRuntimeActivityV1]
+	pendingSnapshotRefresh        bool
+	pendingSnapshotRevision       uint64
+	snapshotRequestActive         bool
+	groupStartIDs                 map[string]bool
+	groupCounts                   map[string]int
+	activeLintCounts              map[string]int
+	suppressedLintIDs             map[string]bool
 	definitions                   *kit.ListPane[api.ProjectDefinition]
 	detail                        *kit.DocumentPane
 	focus                         indexFocus
+	groupAxis                     indexGroupAxis
+	showSuppressed                bool
+	relationCursor                int
 	size                          Size
 	layout                        indexLayout
 	exportRoot                    func() (string, error)
@@ -35,6 +47,9 @@ type Index struct {
 	routedDefinitionID            string
 	routedDefinitionAnchorPending bool
 	unavailableDefinitionID       string
+	selectionIntent               uint64
+	selectionPending              bool
+	selectionMovedAt              time.Time
 }
 
 // NewIndex constructs an empty Index screen.
@@ -46,10 +61,21 @@ func NewIndex() *Index {
 		snapshot: resource.New(func(index api.IndexData) bool {
 			return len(index.Definitions) == 0
 		}),
-		definitions: definitions,
-		detail:      kit.NewDocumentPane(),
-		exportRoot:  defaultIndexExportRoot,
+		watch: resource.New(func(status api.ProjectIndexWatchStatus) bool {
+			return status.State == ""
+		}),
+		activity: resource.New(func(activity api.CatalogRuntimeActivityV1) bool {
+			return activity.DefinitionID == ""
+		}),
+		groupStartIDs:     map[string]bool{},
+		groupCounts:       map[string]int{},
+		activeLintCounts:  map[string]int{},
+		suppressedLintIDs: map[string]bool{},
+		definitions:       definitions,
+		detail:            kit.NewDocumentPane(),
+		exportRoot:        defaultIndexExportRoot,
 	}
+	definitions.SetRowHeight(index.definitionRowHeight)
 	index.setFocus(indexFocusDefinitions)
 	return index
 }
@@ -70,6 +96,9 @@ func (s *Index) Focus(kind, id string) {
 	if kind != "definition" || id == "" {
 		return
 	}
+	if id != s.SelectedDefinitionID() {
+		s.relationCursor = 0
+	}
 	s.routedDefinitionID = id
 	s.routedDefinitionAnchorPending = true
 	s.resolveRoutedDefinition()
@@ -84,12 +113,24 @@ func (s *Index) FocusRoot() {
 	s.syncDetail()
 }
 
-func (s *Index) Init(ctx context.Context, c DataClient) tea.Cmd { return s.fetchIndex(ctx, c) }
+func (s *Index) Init(ctx context.Context, c DataClient) tea.Cmd {
+	return s.fetchIndex(ctx, c)
+}
 
 // Deactivate cancels an in-flight snapshot and returns its exact retry name.
 func (s *Index) Deactivate() bridge.Invalidations {
+	s.selectionIntent++
+	s.selectionPending = false
 	invalidations := bridge.Invalidations{}
 	cancelPendingResource(invalidations, bridge.IndexSnapshotResource, s.snapshot)
+	if s.pendingSnapshotRefresh {
+		invalidations.Add(bridge.IndexSnapshotResource, s.pendingSnapshotRevision)
+		s.pendingSnapshotRefresh = false
+		s.pendingSnapshotRevision = 0
+	}
+	s.snapshotRequestActive = false
+	s.watch.Cancel()
+	s.activity.Cancel()
 	return invalidations
 }
 
@@ -97,10 +138,24 @@ func (s *Index) Deactivate() bridge.Invalidations {
 // has not yet been loaded.
 func (s *Index) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
 	revision, invalid := invalidations.Revision(bridge.IndexSnapshotResource)
-	if !invalid && s.snapshot.Snapshot().State != resource.ResourceIdle {
+	snapshot := s.snapshot.Snapshot()
+	if invalid && s.snapshotRequestActive {
+		// ProjectIndex reads can be expensive and their production source cannot
+		// stop cloning an already-captured snapshot when its context is canceled.
+		// Keep one active read and collapse a watch burst into one trailing read.
+		s.pendingSnapshotRefresh = true
+		s.pendingSnapshotRevision = maxRevisionFloor(s.pendingSnapshotRevision, revision)
 		return nil
 	}
-	return s.fetchIndexAtRevision(ctx, c, revision)
+	if invalid || snapshot.State == resource.ResourceIdle {
+		return s.fetchIndexAtRevision(ctx, c, revision)
+	}
+	selectedID := s.SelectedDefinitionID()
+	if s.routedDefinitionID != "" && selectedID != "" &&
+		s.activity.Snapshot().Token.Owner != indexActivityOwnerForDefinition(selectedID) {
+		return s.fetchDefinitionActivity(ctx, c)
+	}
+	return nil
 }
 
 func (s *Index) Counts() map[string]int {
@@ -110,12 +165,50 @@ func (s *Index) Counts() map[string]int {
 func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case indexLoadedMsg:
-		s.applyIndexResult(resource.ResourceResult[api.IndexData](m))
+		result := resource.ResourceResult[api.IndexData](m)
+		current := s.snapshot.Snapshot().Token
+		currentCompletion := result.Token.Request == current.Request && result.Token.Owner == current.Owner
+		if currentCompletion {
+			s.snapshotRequestActive = false
+		}
+		applied := s.applyIndexResult(result)
+		commands := make([]tea.Cmd, 0, 3)
+		if applied {
+			commands = append(commands, s.fetchDefinitionActivity(ctx, c), s.fetchWatchStatus(ctx, c))
+		}
+		if currentCompletion && s.pendingSnapshotRefresh {
+			revision := s.pendingSnapshotRevision
+			s.pendingSnapshotRefresh = false
+			s.pendingSnapshotRevision = 0
+			commands = append(commands, s.fetchIndexAtRevision(ctx, c, revision))
+		}
+		return tea.Batch(commands...)
+	case indexWatchLoadedMsg:
+		s.watch.Apply(resource.ResourceResult[api.ProjectIndexWatchStatus](m))
+		s.syncDetail()
+	case indexActivityLoadedMsg:
+		if s.activity.Apply(resource.ResourceResult[api.CatalogRuntimeActivityV1](m)) {
+			s.syncDetail()
+		}
+	case indexSelectionIntentMsg:
+		if m.intent != s.selectionIntent || !s.selectionPending {
+			return nil
+		}
+		if remaining := indexSelectionIntentDelay - indexSelectionNow().Sub(s.selectionMovedAt); remaining > 0 {
+			return indexSelectionIntentTick(remaining, m.intent)
+		}
+		s.selectionPending = false
+		s.syncDetail()
+		return s.fetchDefinitionActivity(ctx, c)
 	case tea.KeyPressMsg:
 		cmd, _ := interaction.Dispatch(s.Actions(ctx, c), m)
 		return cmd
 	case tea.MouseWheelMsg:
+		before := s.SelectedDefinitionID()
 		s.updateFocusedPane(m)
+		if before != s.SelectedDefinitionID() {
+			return s.scheduleSelectionDetail()
+		}
 	case definitionExportedMsg:
 		if m.err != nil {
 			s.exportState = indexExportState{definitionID: m.defID, message: "export failed · " + sanitizeIndexInline(m.err.Error())}
@@ -126,15 +219,32 @@ func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	return nil
 }
 
-func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) {
-	if s.snapshot.Apply(result) {
-		s.definitions.SetItems(s.indexData().Definitions)
+func (s *Index) UpdateMovementBurst(_ context.Context, keys []tea.KeyPressMsg, _ DataClient) tea.Cmd {
+	before := s.SelectedDefinitionID()
+	for _, key := range keys {
+		if s.focus == indexFocusDetail && s.moveRelation(key.String()) {
+			continue
+		}
+		s.updateFocusedPane(key)
+	}
+	if before == s.SelectedDefinitionID() {
+		return nil
+	}
+	s.relationCursor = 0
+	return s.scheduleSelectionDetail()
+}
+
+func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) bool {
+	applied := s.snapshot.Apply(result)
+	if applied {
+		s.setGroupedDefinitions()
 		if s.routedDefinitionID != "" {
 			s.resolveRoutedDefinition()
 		} else {
 			s.syncDetail()
 		}
 	}
+	return applied
 }
 
 func (s *Index) resolveRoutedDefinition() {
@@ -174,12 +284,18 @@ func (s *Index) SelectedDefinitionID() string {
 	return definition.ID
 }
 
+func (s *Index) selectedDefinition() (api.ProjectDefinition, bool) {
+	definition, _, ok := s.definitions.Selected()
+	return definition, ok
+}
+
 func (s *Index) Breadcrumb() ([]string, string) {
 	path := []string{"index"}
 	if id := firstNonEmpty(s.unavailableDefinitionID, s.SelectedDefinitionID()); id != "" {
 		path = append(path, sanitizeIndexInline(id))
 	}
-	right := fmt.Sprintf("%d definitions", len(s.indexData().Definitions))
+	count := len(s.indexData().Definitions)
+	right := fmt.Sprintf("%d %s", count, kit.Pluralize(count, "definition"))
 	return path, right
 }
 
@@ -198,7 +314,7 @@ func (s *Index) View(_ Size) string {
 		return s.centerMessage("definition " + sanitizeIndexInline(s.unavailableDefinitionID) + " not in current index")
 	}
 	if len(snapshot.Value.Definitions) == 0 {
-		message := "no project definitions yet — open a file under your crux project to seed the index."
+		message := "No definitions yet — add a Crux definition, then run `crux dev`."
 		if snapshot.State == resource.ResourceDegraded {
 			message = "degraded project index"
 			if snapshot.Err != nil {
@@ -225,59 +341,4 @@ func (s *Index) View(_ Size) string {
 
 func (s *Index) centerMessage(message string) string {
 	return kit.PadBlock(centerMsg(s.layout.size, sanitizeIndexInline(message)), s.layout.size.Width, s.layout.size.Height)
-}
-
-func (s *Index) renderList(width, height int) string {
-	snapshot := s.snapshot.Snapshot()
-	status := sanitizeIndexInline(resourceStatus(snapshot))
-	meta := appendResourceStatus(indexListPosition(s.definitions.Position()), status)
-	meta = appendResourceStatus(meta, s.currentExportState())
-	header := overviewPaneHeader(width, focusTitle("Definitions", s.focus == indexFocusDefinitions),
-		fmt.Sprintf("%d", len(snapshot.Value.Definitions)), meta)
-	hdrH := strings.Count(header, "\n") + 1
-	bodyRows := height - hdrH
-
-	var b strings.Builder
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	rows := s.definitions.Render(func(d api.ProjectDefinition, _ int, selected bool, rowWidth int) string {
-		return s.renderListRow(d, rowWidth, selected && s.focus == indexFocusDefinitions)
-	})
-	count := 0
-	for _, row := range rows {
-		if count >= bodyRows {
-			break
-		}
-		b.WriteString(row)
-		b.WriteString("\n")
-		count++
-	}
-	for ; count < bodyRows; count++ {
-		b.WriteString(strings.Repeat(" ", width))
-		b.WriteString("\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool) string {
-	bar := "  "
-	if selected {
-		bar = shell.SelectionBar(shell.ColorTeal) + " "
-	}
-	kindGlyph := indexKindGlyph(d.Kind)
-	name := shell.Text.Render(sanitizeIndexInline(d.Name))
-	if d.Name == "" {
-		name = shell.Text.Render(sanitizeIndexInline(d.ID))
-	}
-	parts := []string{bar, kindGlyph, " ", name}
-	// Fidelity chip (only when not resolved — saves chrome).
-	if d.Fidelity != "" && d.Fidelity != "resolved" {
-		parts = append(parts, " ", indexFidelityChip(d.Fidelity))
-	}
-	if count := len(s.lintFindingsForDefinition(d.ID)); count > 0 {
-		parts = append(parts, " ", kit.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
-	}
-	row := strings.Join(parts, "")
-	return padRow(row, width)
 }

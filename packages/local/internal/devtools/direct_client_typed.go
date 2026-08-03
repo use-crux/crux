@@ -2,11 +2,13 @@ package devtools
 
 import (
 	"context"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // Typed accessors over the in-process Inspect and devtools services.
@@ -44,11 +46,38 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.InspectRuns
 }
 
 // ObservabilityRunsPage loads the revisioned Runs read-model page.
-func (c *DirectClient) ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error) {
+func (c *DirectClient) ObservabilityRunsPage(ctx context.Context, definitionID ...string) (api.ObservabilityRunsPage, error) {
+	return c.ObservabilityRunsPageWithOptions(ctx, api.InspectRunsOptions{}, definitionID...)
+}
+
+// ObservabilityRunsPageWithOptions applies list filters before the bounded
+// canonical page is enriched with usage rollups.
+func (c *DirectClient) ObservabilityRunsPageWithOptions(
+	ctx context.Context,
+	filters api.InspectRunsOptions,
+	definitionID ...string,
+) (api.ObservabilityRunsPage, error) {
 	if c.observability == nil {
 		return api.ObservabilityRunsPage{}, errNoObservabilityService
 	}
-	page, err := c.observability.RunsPage(ctx, observability.RunListOptions{})
+	opts := observability.RunListOptions{
+		Limit:                   100,
+		IncludeExpensiveRollups: true,
+		Status:                  filters.Status,
+	}
+	if filters.Since > 0 {
+		opts.Since = time.UnixMilli(filters.Since).UTC().Format(time.RFC3339Nano)
+	}
+	if filters.Until > 0 {
+		opts.Until = time.UnixMilli(filters.Until).UTC().Format(time.RFC3339Nano)
+	}
+	if len(filters.Session) == 1 {
+		opts.SessionID = filters.Session[0]
+	}
+	if len(definitionID) > 0 {
+		opts.DefinitionID = definitionID[0]
+	}
+	page, err := c.observability.RunsPage(ctx, opts)
 	if err != nil {
 		return api.ObservabilityRunsPage{}, err
 	}
@@ -59,6 +88,31 @@ func (c *DirectClient) ObservabilityRunsPage(ctx context.Context) (api.Observabi
 func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
 	page, err := c.ObservabilityRunsPage(ctx)
 	return page.Rows, err
+}
+
+// Sessions returns the in-process session summaries used by Runs grouping.
+func (c *DirectClient) Sessions(ctx context.Context) ([]store.SessionInfo, error) {
+	if c.devtools == nil {
+		return nil, errNoDevtoolsService
+	}
+	return c.devtools.Sessions(ctx), nil
+}
+
+// Stats returns the same aggregate read model used by the Stats and cost
+// command surfaces.
+func (c *DirectClient) Stats(ctx context.Context) (store.StatsResult, error) {
+	if c.devtools == nil {
+		return store.StatsResult{}, errNoDevtoolsService
+	}
+	return c.devtools.Stats(ctx), nil
+}
+
+// StatsTimeseries returns bounded buckets from the same stats read model.
+func (c *DirectClient) StatsTimeseries(ctx context.Context, buckets int) ([]store.TimeseriesBucket, error) {
+	if c.devtools == nil {
+		return nil, errNoDevtoolsService
+	}
+	return c.devtools.Timeseries(ctx, buckets), nil
 }
 
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {
@@ -81,8 +135,35 @@ func (c *DirectClient) ObservabilityResourceActivity(ctx context.Context, family
 	return activity, err
 }
 
+// DefinitionActivity returns the bounded per-definition runtime join used by
+// Catalog surfaces without routing through HTTP.
+func (c *DirectClient) DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error) {
+	activity := api.CatalogRuntimeActivityV1{DefinitionID: definitionID}
+	if c.observability == nil {
+		return activity, errNoObservabilityService
+	}
+	summary, err := c.observability.DefinitionActivitySummary(ctx, definitionID)
+	if err != nil {
+		return activity, err
+	}
+	activity.RunCount = summary.RunCount
+	if summary.LastRun != nil {
+		activity.LastRunID = summary.LastRun.RunID
+		activity.LastRunAt = summary.LastRun.StartedAt
+		activity.LastStatus = summary.LastRun.Status
+	}
+	return activity, nil
+}
+
 func (c *DirectClient) ProjectIndex(ctx context.Context) (api.IndexData, error) {
 	return endpoints.ProjectIndex.Call(ctx, endpoints.Deps{Devtools: c.devtools})
+}
+
+func (c *DirectClient) ProjectIndexWatchStatus(ctx context.Context) (api.ProjectIndexWatchStatus, error) {
+	if c.devtools == nil {
+		return api.ProjectIndexWatchStatus{}, errNoDevtoolsService
+	}
+	return c.devtools.ProjectIndexWatchStatus(ctx)
 }
 
 func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.InspectActivityEvent, error) {

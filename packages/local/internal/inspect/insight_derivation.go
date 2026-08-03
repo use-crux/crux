@@ -215,8 +215,9 @@ func deriveInsights(in inspectInsightInputs) []inspectInsightRecord {
 	insights = append(insights, patternInsights...)
 
 	insights = filterSilencedInspectInsights(insights, activeInspectInsightSilences(in.Silences))
+	runsByID := indexInspectRuns(runs)
 	for index := range insights {
-		insights[index] = enrichInspectInsightFromRuns(insights[index], runs, in.Now)
+		insights[index] = enrichInspectInsightFromRunIndex(insights[index], runs, runsByID, in.Now)
 		if status, ok := statuses[insights[index].InsightID]; ok {
 			applyInspectInsightStatus(&insights[index], status, in.Now)
 		}

@@ -11,12 +11,21 @@ const paneDivider = "│"
 
 // Compose overlays pane line slices into their rectangles and draws gutters.
 func Compose(rects []Rect, contents [][]string) []string {
-	return compose(rects, contents, lipgloss.NewStyle())
+	return compose(rects, contents, adapterStyles.Border)
 }
 
-// ComposeStyled is Compose with a theme-styled pane divider.
-func ComposeStyled(rects []Rect, contents [][]string, styles theme.Styles) []string {
-	return compose(rects, contents, styles.Border)
+// ComposeStyled is Compose with a theme-styled pane divider. When a surface is
+// supplied, the divider is part of that painted surface.
+func ComposeStyled(rects []Rect, contents [][]string, styles theme.Styles, surface ...lipgloss.Style) []string {
+	return compose(rects, contents, ruleStyle(styles, surface...))
+}
+
+func ruleStyle(styles theme.Styles, surface ...lipgloss.Style) lipgloss.Style {
+	rule := styles.Border
+	if len(surface) > 0 {
+		rule = rule.Background(surface[0].GetBackground())
+	}
+	return rule
 }
 
 func compose(rects []Rect, contents [][]string, dividerStyle lipgloss.Style) []string {
@@ -53,7 +62,7 @@ func compose(rects []Rect, contents [][]string, dividerStyle lipgloss.Style) []s
 		}
 		out[y] = fitLine(line, w)
 	}
-	return out
+	return strings.Split(reconcileBorderGlyphs(strings.Join(out, "\n")), "\n")
 }
 
 func bounds(rects []Rect) (int, int) {
@@ -70,16 +79,5 @@ func bounds(rects []Rect) (int, int) {
 }
 
 func fitLine(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	got := lipgloss.Width(s)
-	switch {
-	case got == w:
-		return s
-	case got < w:
-		return s + strings.Repeat(" ", w-got)
-	default:
-		return lipgloss.NewStyle().MaxWidth(w).Render(s)
-	}
+	return Fit(s, w, "…")
 }

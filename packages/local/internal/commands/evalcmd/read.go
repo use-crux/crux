@@ -15,10 +15,12 @@ import (
 
 func newShowCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:          "show <eval-run-id>",
 		Short:        "Inspect a saved Eval run",
-		Args:         cobra.ExactArgs(1),
+		Example:      "  crux eval show eval-run-01",
+		Args:         cli.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := resolvedRoot(cwd)
@@ -29,10 +31,14 @@ func newShowCmd(f *cli.Factory) *cobra.Command {
 			if !found {
 				return fmt.Errorf("Eval run %q was not found under %s", args[0], root)
 			}
+			if f.JSONOutput(jsonOutput) {
+				return f.Streams().WriteJSON(raw)
+			}
 			return renderSavedRun(f.Streams().Out, raw)
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Project root containing the Eval run")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the saved Eval run as JSON")
 	return cmd
 }
 
@@ -41,7 +47,8 @@ func newDiffCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "diff <run-a> <run-b>",
 		Short:        "Compare two saved Eval runs",
-		Args:         cobra.ExactArgs(2),
+		Example:      "  crux eval diff eval-run-before eval-run-after",
+		Args:         cli.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store := evalfs.OpenProject(resolvedRoot(cwd))

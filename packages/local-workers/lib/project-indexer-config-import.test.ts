@@ -251,6 +251,7 @@ describe("built project-indexer TypeScript imports", () => {
             metadata: {
               exportName: "default",
               evalContract: "crux.eval",
+              runtimeDiscovered: true,
               requiredHostCapabilities: ["record-store"],
               evalExecutionArms: [
                 {
