@@ -48,6 +48,10 @@ import type {
   SignalPublishCompositeResult,
 } from "./composites/signal";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
+import type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
+} from "./composites/work-accept";
 import { runtimeCompositeBodies } from "./composites/registry";
 
 export { runtimeCompositeBodies } from "./composites/registry";
@@ -73,6 +77,7 @@ export type RuntimeCompositeKind =
   | "event.emit"
   | "timers.fire-due"
   | "task.enqueue"
+  | "work.accept"
   | "work.cancel"
   | "work.operator-retry"
   | "maintenance.reclaim-lease"
@@ -135,6 +140,8 @@ export interface RuntimeCompositeInput {
   };
   /** Create pending task work and write its wake envelope. */
   readonly "task.enqueue": EnqueueTaskInput;
+  /** Atomically accept one top-level application Flow Work occurrence. */
+  readonly "work.accept": WorkAcceptCompositeInput;
   /** Cancel non-terminal work and its owned registrations. */
   readonly "work.cancel": CancelWorkInput;
   /** Move blocked or dead-lettered work back to pending. */
@@ -191,6 +198,8 @@ export interface RuntimeCompositeResult {
   readonly "timers.fire-due": ScanTimersResult;
   /** Fresh pending task work. */
   readonly "task.enqueue": RuntimeWorkItem;
+  /** Accepted application Work records. */
+  readonly "work.accept": WorkAcceptCompositeResult;
   /** Cancellation attempt result. */
   readonly "work.cancel": CancelWorkResult;
   /** Operator retry attempt result. */

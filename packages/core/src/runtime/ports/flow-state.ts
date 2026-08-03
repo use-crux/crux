@@ -10,6 +10,7 @@ import type {
   WaiterId,
   WorkId,
 } from "./ids";
+import type { RuntimeTargetDefinitionRef } from "./target-definition";
 
 /** Flow snapshot shape persisted by runtime-backed Flow replay. */
 export interface FlowSnapshot {
@@ -21,6 +22,10 @@ export interface FlowSnapshot {
   readonly workId: WorkId;
   /** Name-based target id for the Flow definition. */
   readonly targetId: RuntimeTargetId;
+  /** Exact generated definition pinned at application Work acceptance. */
+  readonly definition?: RuntimeTargetDefinitionRef;
+  /** Write-once terminal result obligation for application-spawned Flow Work. */
+  readonly resultObligation?: { readonly kind: "required" };
   /** Runtime namespace. */
   readonly namespace: string;
   /** Flow lifecycle status. */

@@ -44,11 +44,20 @@ export function decodeRuntimeArtifactManifest(
 function isTarget(value: unknown): boolean {
   return (
     isRecord(value) &&
-    hasExactKeys(value, ["name", "kind", "module", "export"]) &&
+    hasExactKeys(value, [
+      "name",
+      "kind",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+    ]) &&
     typeof value.name === "string" &&
     ["flow", "task", "watcher", "trigger"].includes(String(value.kind)) &&
     typeof value.module === "string" &&
-    typeof value.export === "string"
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string"
   );
 }
 

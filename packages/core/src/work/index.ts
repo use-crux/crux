@@ -2,6 +2,11 @@
 
 export { getWork } from "./get-work";
 export { spawn } from "./spawn";
+export { createWorkHost } from "./internal/durable-host-context";
+export type {
+  CreateWorkHostOptions,
+  WorkHost,
+} from "./internal/durable-host-context";
 export type {
   CancelOptions,
   CancelReceipt,

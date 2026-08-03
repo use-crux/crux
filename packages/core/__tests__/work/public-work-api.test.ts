@@ -10,13 +10,13 @@ describe("public durable Work API", () => {
       spawn(target, undefined, { idempotencyKey: "request_1" }),
     ).rejects.toMatchObject({
       name: "CruxRuntimeError",
-      code: "CAPABILITY_MISSING",
+      code: "RUNTIME_REQUIRED",
     });
     await expect(
       getWork(target, "work_missing"),
     ).rejects.toMatchObject({
       name: "CruxRuntimeError",
-      code: "CAPABILITY_MISSING",
+      code: "RUNTIME_REQUIRED",
     });
     expect(run).not.toHaveBeenCalled();
   });

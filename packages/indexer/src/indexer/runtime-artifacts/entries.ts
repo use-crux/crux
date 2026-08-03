@@ -12,13 +12,13 @@ export function runtimeProgramFile(input: {
 }): string {
   return [
     GENERATED_HEADER,
-    "import { createRuntimeProgram, type RuntimeProgramTarget } from '@use-crux/core/runtime'",
+    "import { createRuntimeProgram, type RuntimeProgramTargetInput } from '@use-crux/core/runtime'",
     ...targetImports(input.manifest, input.outputFile, input.root),
     "",
     `export const runtimeArtifactManifestHash = '${input.artifactManifestHash}'`,
     "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     "",
-    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTarget[]`,
+    `const targets = [${targetProgramDeclarations(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTargetInput[]`,
     "const transports = [] as const",
     "",
     "export const runtimeProgram = createRuntimeProgram({ targets, transports })",
@@ -196,6 +196,15 @@ function targetImports(
 
 function targetLocalNames(manifest: RuntimeArtifactManifest): string[] {
   return manifest.targets.map((_, index) => targetLocalName(index));
+}
+
+function targetProgramDeclarations(
+  manifest: RuntimeArtifactManifest,
+): string[] {
+  return manifest.targets.map(
+    (target, index) =>
+      `{ target: ${targetLocalName(index)}, definition: { id: ${JSON.stringify(target.definitionId)}, fingerprint: ${JSON.stringify(target.fingerprint)} } }`,
+  );
 }
 
 function targetLocalName(index: number): string {

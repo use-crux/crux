@@ -1,7 +1,7 @@
 /** Compile the canonical public Work contract against exported Flow targets. */
 
 import { expectTypeOf } from "vitest";
-import { flow, getWork, spawn } from "@use-crux/core";
+import { createWorkHost, flow, getWork, spawn } from "@use-crux/core";
 import {
   type CancelReceipt,
   type DetachReceipt,
@@ -10,6 +10,8 @@ import {
   type WorkHandle,
   type WorkProgress,
   type WorkStatus,
+  type CreateWorkHostOptions,
+  type WorkHost,
 } from "@use-crux/core/work";
 import { z } from "zod";
 
@@ -44,6 +46,8 @@ type ReviewResult = {
 };
 
 declare const work: WorkHandle<ReviewResult>;
+declare const hostOptions: CreateWorkHostOptions;
+expectTypeOf(createWorkHost(hostOptions)).toEqualTypeOf<WorkHost>();
 expectTypeOf(work.id).toEqualTypeOf<string>();
 expectTypeOf(work.result()).toEqualTypeOf<Promise<ReviewResult>>();
 expectTypeOf(work.status()).toEqualTypeOf<Promise<WorkStatus>>();

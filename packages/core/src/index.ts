@@ -393,18 +393,20 @@ export type {
   FlowSignalSpec,
   NoPayloadSignal,
 } from "./flow";
-export { getWork, spawn } from "./work";
+export { createWorkHost, getWork, spawn } from "./work";
 export type {
   CancelOptions,
   CancelReceipt,
   DetachReceipt,
   ExecutionStats,
   SpawnWorkOptions,
+  CreateWorkHostOptions,
   WorkEvent,
   WorkHandle,
   WorkProgress,
   WorkStatus,
   WorkStreamOptions,
+  WorkHost,
 } from "./work";
 export {
   CruxEffectError,

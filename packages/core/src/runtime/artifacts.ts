@@ -3,7 +3,8 @@
  *
  * Crux tooling writes these manifests before generating host entry files. The
  * manifest is intentionally small: durable target names are the routing
- * contract, while module/export fields are build-time import instructions.
+ * contract, definition identity pins accepted application Work, and
+ * module/export fields are build-time import instructions.
  *
  * @module
  */
@@ -21,6 +22,10 @@ export interface RuntimeArtifactManifestTarget {
   readonly module: string;
   /** Exported binding that generated entry files import. */
   readonly export: string;
+  /** Exact Project Index definition identity. */
+  readonly definitionId: string;
+  /** Exact Project Index definition fingerprint. */
+  readonly fingerprint: string;
 }
 
 /** One content-addressed Case identity in a generated deployed Eval. */

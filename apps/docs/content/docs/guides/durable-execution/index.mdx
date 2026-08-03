@@ -30,6 +30,7 @@ You add the Runtime Engine when you need work to survive the process. These APIs
 | `flow.defer(target, input)`                 | Durable child work inside a flow                     |
 | `flow.untilIdle({ scope: 'current-flow' })` | Wait for the current flow's durable child-work scope |
 | `defer(target, input)`                      | Durable named background work from a request         |
+| `spawn(exportedFlow, input, options)`       | Accept reconnectable application Work                |
 | `crux.flows.signal/resume/cancel(...)`      | Operate on a flow by name without holding its handle |
 
 ## Turn it on
@@ -62,6 +63,11 @@ Durable payloads must be JSON-compatible. Pass ids, URLs, or storage keys for la
 Each environment has a focused setup guide:
 
 <Cards>
+  <Card
+    title="Application Work"
+    description="Accept an exported Flow now and reconnect it from another request."
+    href="/docs/guides/durable-execution/work"
+  />
   <Card
     title="Next.js / Vercel"
     description="Serverless runtime with an external wake for cold functions."

@@ -125,10 +125,10 @@ describe('generated Runtime worker process', () => {
       [
         "import { createRuntimeProgram, durableTask } from '@use-crux/core/runtime'",
         "const generatedTarget = durableTask('generated-target', { run: async () => 'ok' })",
-        "export const runtimeProgram = createRuntimeProgram({ targets: [generatedTarget], transports: [] })",
+        "export const runtimeProgram = createRuntimeProgram({ targets: [{ target: generatedTarget, definition: { id: 'task:generated-target', fingerprint: 'definition-generated-target' } }], transports: [] })",
       ].join('\n'),
     )
-    const manifest = `${JSON.stringify({ version: 2, evalPrivacyFingerprint: 'test', targets: [{ name: 'generated-target', kind: 'task', module: './src/task.ts', export: 'generatedTarget' }], evals: [] }, null, 2)}\n`
+    const manifest = `${JSON.stringify({ version: 2, evalPrivacyFingerprint: 'test', targets: [{ name: 'generated-target', kind: 'task', module: './src/task.ts', export: 'generatedTarget', definitionId: 'task:generated-target', fingerprint: 'definition-generated-target' }], evals: [] }, null, 2)}\n`
     const hash = createHash('sha256').update(manifest).digest('hex')
     await Promise.all([
       build({

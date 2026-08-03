@@ -324,6 +324,14 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     flowId: snapshot.flowId,
     workId: snapshot.workId,
     targetId: snapshot.targetId,
+    ...(snapshot.definition
+      ? { definition: Object.freeze({ ...snapshot.definition }) }
+      : {}),
+    ...(snapshot.resultObligation
+      ? {
+          resultObligation: Object.freeze({ ...snapshot.resultObligation }),
+        }
+      : {}),
     namespace: snapshot.namespace,
     status: snapshot.status,
     ...(snapshot.effects

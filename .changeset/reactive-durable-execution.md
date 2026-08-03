@@ -71,6 +71,11 @@ Add the canonical public, Flow-targeted Work contract with exact input/result
 inference, string Work IDs, result-generic handles, safe readonly lifecycle
 snapshots, typed terminal errors, and canonical control and observability
 types. The typed `spawn()` and `getWork()` factories accept only exported Flow
-targets; durable host acceptance follows in the next Work slice. Process-local
-Agent Work uses the shared safe lifecycle and control types privately without
-promoting its retained-owner registry to storage.
+targets. `createWorkHost({ runtime, program })` binds generated immutable target
+metadata to application requests and atomically accepts memory-backed Work,
+its initial Flow snapshot, pinned normalized input and definition, result
+obligation, and wake outbox row. Compatible idempotent retries reconnect the
+same Work, conflicting input rejects, target namespaces remain independent,
+and `getWork()` validates the exported target. Process-local Agent Work uses
+the shared safe lifecycle and control types privately without promoting its
+retained-owner registry to storage.

@@ -29,6 +29,7 @@ import {
 import type { RuntimeCompositeBody, RuntimeCompositeKind } from "../composites";
 import { publishSignalInTransaction } from "./signal";
 import { resumeFlowManuallyInTransaction } from "./flow-manual-resume";
+import { acceptWorkInTransaction } from "./work-accept";
 
 /** Transaction body selected for every known composite name. */
 export const runtimeCompositeBodies: {
@@ -45,6 +46,7 @@ export const runtimeCompositeBodies: {
   "event.emit": emitEventInTransaction,
   "timers.fire-due": fireDueTimersInTransaction,
   "task.enqueue": enqueueTaskInTransaction,
+  "work.accept": acceptWorkInTransaction,
   "work.cancel": cancelWorkInTransaction,
   "work.operator-retry": retryWorkInTransaction,
   "maintenance.reclaim-lease": reclaimLeasedWorkInTransaction,

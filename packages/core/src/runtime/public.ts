@@ -32,7 +32,12 @@ export type {
   CreateRuntimeProgramOptions,
   RuntimeProgram,
   RuntimeProgramTarget,
+  RuntimeProgramTargetDeclaration,
+  RuntimeProgramTargetDefinition,
+  RuntimeProgramTargetDefinitionInput,
+  RuntimeProgramTargetInput,
 } from "./program";
+export type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
 
 export { createRuntimeWorker } from "./worker/create-runtime-worker";
 export type {
@@ -111,6 +116,10 @@ export type {
   ScanTimersOptions,
   ScanTimersResult,
   ScheduleTimerInput,
+} from "./engine/kernel";
+export type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
 } from "./engine/kernel";
 
 export {

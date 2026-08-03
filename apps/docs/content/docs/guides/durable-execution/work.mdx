@@ -1,0 +1,98 @@
+---
+title: Application Work
+description: Durably accept an exported Flow in one request and reconnect it in another.
+---
+
+Application Work lets a request accept a finite exported Flow without running
+it inline. Acceptance writes the Work record, initial Flow snapshot, normalized
+JSON input, exact generated definition, result obligation, and wake outbox row
+atomically. `spawn()` resolves after that commit and before execution.
+
+## Generate immutable target metadata
+
+Export the Flow, then generate Runtime artifacts before building the
+application:
+
+```bash
+crux runtime generate
+```
+
+The generated `.crux/generated/runtime/program.ts` contains static target
+imports and each target's Project Index definition identity and fingerprint.
+Do not maintain a second target registry in application code.
+
+Generated files do not exist before setup or generation. Import
+`runtimeProgram` from an application or request entry that is built after that
+step; do not import it from `crux.config.ts` while setup may still be creating
+the artifacts.
+
+## Bind the application host
+
+For the current process-local slice, bind the memory Runtime and a stable
+namespace:
+
+```ts
+import { createWorkHost, spawn } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { runtimeProgram } from "./.crux/generated/runtime/program";
+import { reviewDocument } from "./src/flows/review-document";
+
+const workHost = createWorkHost({
+  runtime: node({ namespace: "local" }),
+  program: runtimeProgram,
+});
+
+export async function POST(request: Request) {
+  const input = await request.json();
+  const work = await workHost.run(() =>
+    spawn(reviewDocument, input, {
+      idempotencyKey: request.headers.get("Idempotency-Key")!,
+    }),
+  );
+  return Response.json({ workId: work.id }, { status: 202 });
+}
+```
+
+`createWorkHost()` does not send a worker request or execute a Flow. It binds
+the immutable Runtime program to `spawn()` and `getWork()` for the active
+request scope.
+
+## Idempotency and reconnection
+
+The idempotency tuple is Runtime namespace, exported target name, and caller
+key. A compatible retry returns the same Work. The same tuple with different
+normalized JSON input rejects with `WORK_IDEMPOTENCY_CONFLICT`; the same key
+for another target is independent.
+
+Reconnect in a later request with the original exported Flow:
+
+```ts
+import { getWork } from "@use-crux/core";
+
+const work = await workHost.run(() => getWork(reviewDocument, workId));
+const status = await work.status();
+```
+
+Passing another target rejects with `WORK_TARGET_MISMATCH`. A Work ID and an
+idempotency key are identifiers, not authorization; authenticate and authorize
+each application request before calling either API.
+
+## Current control boundary
+
+This release slice provides durable acceptance, `status()`, and reconnection
+for memory-backed Runtime storage. The remaining canonical handle operations,
+terminal result publication, Flow suspension/resumption proof, and durable
+provider conformance land with the following Work slices. Until then,
+`result()`, `progress()`, `cancel()`, `detach()`, and `stats()` reject with
+`CAPABILITY_MISSING`; `stream()` yields its current safe snapshot.
+
+Use `flow.run()` when the request should await foreground completion. Use
+`defer()` for resultless follow-up work. Replay-safe child Work created inside
+a Flow remains a separate lifecycle concern from top-level application
+acceptance.
+
+## Related
+
+- [Node execution worker](/docs/guides/durable-execution/node)
+- [Runtime program and worker API](/docs/reference/crux-core/runtime-worker)
+- [Background Work](/docs/guides/background-work)

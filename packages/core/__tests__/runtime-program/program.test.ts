@@ -51,20 +51,49 @@ describe("createRuntimeProgram", () => {
       first.targets.map((target) =>
         "name" in target ? target.name : target.targetId,
       ),
-    ).toEqual([
-      "orders.created",
-      "orders.updated",
-    ]);
+    ).toEqual(["orders.created", "orders.updated"]);
     expect(first.transports.map((transport) => transport.id)).toEqual([
       "created",
       "updated",
     ]);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.targets)).toBe(true);
+    expect(Object.isFrozen(first.targetDefinitions)).toBe(true);
+    expect(Object.isFrozen(first.targetDefinitions[0])).toBe(true);
     expect(Object.isFrozen(first.transports)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.adapter)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.configRef)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.target)).toBe(true);
+  });
+
+  it("includes generated definition identity in the immutable manifest", () => {
+    const first = createRuntimeProgram({
+      targets: [
+        {
+          target: { name: "orders.created" },
+          definition: { id: "flow:orders-created", fingerprint: "revision-1" },
+        },
+      ],
+      transports: [],
+    });
+    const changed = createRuntimeProgram({
+      targets: [
+        {
+          target: { name: "orders.created" },
+          definition: { id: "flow:orders-created", fingerprint: "revision-2" },
+        },
+      ],
+      transports: [],
+    });
+
+    expect(first.targetDefinitions).toEqual([
+      {
+        targetId: "orders.created",
+        definitionId: "flow:orders-created",
+        fingerprint: "revision-1",
+      },
+    ]);
+    expect(changed.manifestHash).not.toBe(first.manifestHash);
   });
 
   it("rejects duplicate target identities with the Runtime diagnostic shape", () => {

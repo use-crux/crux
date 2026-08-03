@@ -40,6 +40,10 @@ import type {
 } from "./kernel-flow-types";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
+} from "./composites/work-accept";
+import type {
   RuntimeScheduledWorkFlushRecord,
   RuntimeScheduledWorkIntent,
 } from "./kernel-scheduled-types";
@@ -242,6 +246,10 @@ export type RuntimeWakeResult =
 
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
+  /** Atomically accept one top-level application Flow Work occurrence. */
+  acceptWork(
+    input: WorkAcceptCompositeInput,
+  ): Promise<WorkAcceptCompositeResult>;
   /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
   resumeFlow(input: FlowManualResumeInput): Promise<RuntimeWorkItem | null>;
   /** Atomically accept one Signal occurrence and every required delivery. */
