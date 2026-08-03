@@ -49,11 +49,11 @@ Loaders pick a parser from the file extension, URL content type, URL extension, 
 | Text     | `.txt`, unknown                      | `text`           | Plain fallback. Override with a custom parser for unknown domain formats. |
 | Markdown | `.md`, `.markdown`                   | `text`, `table`  | Preserves heading paths and GFM tables.                                   |
 | HTML     | `.html`, `.htm`, `text/html`         | `text`, `table`  | Extracts title, headings, paragraphs, lists, code, and tables.            |
-| PDF      | `.pdf`, `application/pdf`, PDF bytes | `page`           | Extracts text per page. Image-only pages can use your OCR hook.           |
+| PDF      | `.pdf`, `application/pdf`, PDF bytes | `page`           | Retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails. |
 | CSV      | `.csv`, CSV content type             | `table`          | Produces one table part with row and column metadata.                     |
 | JSON     | `.json`, JSON content type           | `json`           | Produces path-addressed parts for nested values.                          |
 | DOCX     | `.docx`                              | `text`, `table`  | Converts with Mammoth, then parses the generated HTML.                    |
-| XLSX     | `.xlsx`                              | `sheet`, `table` | Produces sheet/table parts for non-empty worksheets.                      |
+| XLSX     | `.xlsx`                              | `sheet`, `table` | Preserves source coordinates and number-format-rendered cell values.      |
 
 If a built-in parser is too generic, override it at the source:
 

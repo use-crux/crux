@@ -1,5 +1,5 @@
 import type { Asset } from '@use-crux/core'
-import type { IngestPart, ParseContext, ParseInput, ParseResult } from './types'
+import type { IngestPagePart, IngestPart, ParseContext, ParseInput, ParseResult } from './types'
 import { observeIngestMediaCall } from './media-observation'
 
 export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn' | 'media'>): Promise<ParseResult> {
@@ -45,21 +45,30 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
           type: 'data', data: bytes.slice(), mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}),
         }
         const describe = ctx.media.describe
-        const generated = await observeIngestMediaCall(
-          'media.describe',
-          () =>
-            describe({
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'text', text: `Extract faithful plain text and visible factual content from page ${pageNumber} of this PDF for document indexing. Return only content from that one page.` },
-                  { type: 'file', source: asset, mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}) },
-                ],
-              }],
-              maxOutputTokens: 2000,
-            }),
-          { sourceId: input.sourceId, pageNumber },
-        )
+        let generated: { readonly text: string }
+        try {
+          generated = await observeIngestMediaCall(
+            'media.describe',
+            () =>
+              describe({
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: `Extract faithful plain text and visible factual content from page ${pageNumber} of this PDF for document indexing. Return only content from that one page.` },
+                    { type: 'file', source: asset, mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}) },
+                  ],
+                }],
+                maxOutputTokens: 2000,
+              }),
+            { sourceId: input.sourceId, pageNumber },
+          )
+        } catch (error) {
+          const part = emptyPagePart(pageNumber)
+          parts.push(part)
+          const reason = error instanceof Error ? error.message : String(error)
+          warnTextlessPage(ctx, input.sourceId, part, `media.describe failed: ${reason}`)
+          continue
+        }
         if (generated.text.trim()) {
           parts.push({
             id: `pdf:page:${pageNumber}:visual`,
@@ -70,10 +79,15 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
           })
           continue
         }
-        throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} returned empty text from media.describe.`)
+        const part = emptyPagePart(pageNumber)
+        parts.push(part)
+        warnTextlessPage(ctx, input.sourceId, part, 'media.describe returned empty text')
+        continue
       }
 
-      throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} has no meaningful text and requires ParserOptions.media.describe.`)
+      const part = emptyPagePart(pageNumber)
+      parts.push(part)
+      warnTextlessPage(ctx, input.sourceId, part, 'no media.describe operation was available')
     }
 
     const metadata = await document.getMetadata().catch(() => undefined)
@@ -85,6 +99,25 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
     }
   } finally {
     await loadingTask.destroy()
+  }
+}
+
+function warnTextlessPage(ctx: Pick<ParseContext, 'warn'>, sourceId: string, part: IngestPagePart, reason: string): void {
+  ctx.warn({
+    code: 'partial_extraction',
+    message: `PDF source "${sourceId}" page ${part.pageNumber} was retained without content because ${reason}.`,
+    partId: part.id,
+    metadata: { pageNumber: part.pageNumber, sourceLocation: part.sourceLocation },
+  })
+}
+
+function emptyPagePart(pageNumber: number): IngestPagePart {
+  return {
+    id: `pdf:page:${pageNumber}`,
+    kind: 'page',
+    pageNumber,
+    sourceLocation: { type: 'page', pageNumber },
+    content: '',
   }
 }
 

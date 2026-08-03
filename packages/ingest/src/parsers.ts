@@ -2,6 +2,7 @@ import { parse as parseCsv } from 'csv-parse/sync'
 import ExcelJS from 'exceljs'
 import { load as loadHtml } from 'cheerio'
 import mammoth from 'mammoth'
+import * as SSF from 'ssf'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
@@ -260,7 +261,7 @@ export const docxParser: IngestParser = {
 export const xlsxParser: IngestParser = {
   name: 'xlsx',
   formats: ['xlsx'],
-  async parse(input) {
+  async parse(input, ctx) {
     const workbook = new ExcelJS.Workbook()
     const workbookBytes = input.bytes.buffer.slice(
       input.bytes.byteOffset,
@@ -268,6 +269,8 @@ export const xlsxParser: IngestParser = {
     )
     await workbook.xlsx.load(workbookBytes as Parameters<typeof workbook.xlsx.load>[0])
     const parts: IngestPart[] = []
+
+    const date1904 = workbook.properties.date1904 === true
 
     workbook.worksheets.forEach((worksheet, sheetIndex) => {
       const dimensions = worksheet.dimensions
@@ -295,7 +298,7 @@ export const xlsxParser: IngestParser = {
             row: row.number,
             column,
             address: cell.address,
-            value: formatCell(cell.value),
+            value: formatCell(cell, date1904, worksheet.name, ctx.warn),
             ...(cell.formula ? { formula: cell.formula } : {}),
           }
         })
@@ -472,7 +475,31 @@ function formatJsonValue(value: unknown): string {
   return String(value)
 }
 
-function formatCell(value: unknown): string {
+function formatCell(cell: ExcelJS.Cell, date1904: boolean, sheetName: string, warn: (warning: IngestWarning) => void): string {
+  const value = cell.value
+  const displayValue = cell.formula ? cell.result : value
+  const fallback = formatCellValue(displayValue)
+  if (!cell.numFmt || displayValue === null || displayValue === undefined) return fallback
+  if (typeof displayValue !== 'number' && !(displayValue instanceof Date)) return fallback
+
+  try {
+    return SSF.format(cell.numFmt, displayValue, { date1904 })
+  } catch (error) {
+    warn({
+      code: 'parser_warning',
+      message: `Could not apply XLSX number format for cell ${cell.address}; emitted raw value.`,
+      metadata: {
+        sheetName,
+        address: cell.address,
+        numFmt: cell.numFmt,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    })
+    return fallback
+  }
+}
+
+function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return ''
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object' && 'text' in value) return String((value as { text: unknown }).text)
