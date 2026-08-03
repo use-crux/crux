@@ -147,6 +147,7 @@ describe('PostgreSQL Runtime worker restart recovery', () => {
       })
       const program = createRuntimeProgram({ targets: [review], transports: [] })
       let replacement: RuntimeWorker<PostgresRuntimeStore> | undefined
+      let disposed = false
       try {
         const suspended = await review.run()
         expect(steps).toEqual(['draft'])
@@ -166,6 +167,7 @@ describe('PostgreSQL Runtime worker restart recovery', () => {
           expect.objectContaining({ state: 'pending', attempts: 0 }),
         ])
         crux.dispose()
+        disposed = true
         replacement = startWorker(replacementStore, namespace, program)
 
         await expect.poll(() => steps).toEqual(['draft', 'publish'])
@@ -178,7 +180,7 @@ describe('PostgreSQL Runtime worker restart recovery', () => {
         expect(steps).toEqual(['draft', 'publish'])
       } finally {
         await replacement?.stop()
-        crux.dispose()
+        if (!disposed) crux.dispose()
       }
     })
   })

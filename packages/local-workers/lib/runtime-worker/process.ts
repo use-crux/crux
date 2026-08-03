@@ -10,23 +10,35 @@ export async function runRuntimeWorkerProcess(root: string): Promise<void> {
   const shutdown = watchShutdownSignals()
   let worker: RuntimeWorker | undefined
   try {
-    let runtime
-    let program
-    try {
-      runtime = await loadRuntimeWorkerHost({ root })
-      if (shutdown.requested()) return
-      program = await loadGeneratedRuntimeProgram(root)
-      if (shutdown.requested()) return
-    } catch (error) {
-      if (shutdown.requested()) return
-      throw error
-    }
+    const runtime = await loadUntilShutdown(loadRuntimeWorkerHost({ root }), shutdown)
+    if (!runtime) return exitAfterStartupShutdown()
+    const program = await loadUntilShutdown(loadGeneratedRuntimeProgram(root), shutdown)
+    if (!program) return exitAfterStartupShutdown()
     worker = createRuntimeWorker({ runtime, program })
     await Promise.race([worker.closed, shutdown.received])
   } finally {
     shutdown.dispose()
     await worker?.stop({ timeoutMs: RUNTIME_WORKER_SHUTDOWN_TIMEOUT_MS })
   }
+}
+
+async function loadUntilShutdown<T>(
+  loading: Promise<T>,
+  shutdown: ReturnType<typeof watchShutdownSignals>,
+): Promise<T | undefined> {
+  const loaded = await Promise.race([
+    loading.then((value) => ({ value })),
+    shutdown.received.then(() => undefined),
+  ])
+  if (!loaded) {
+    void loading.catch(() => undefined)
+    return undefined
+  }
+  return loaded.value
+}
+
+function exitAfterStartupShutdown(): never {
+  process.exit(0)
 }
 
 function watchShutdownSignals(): {

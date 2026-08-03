@@ -58,3 +58,6 @@ compatibility diagnostics for generated and hand-written hosts.
 Generate a freshness-bound Runtime program and add `crux runtime worker` for
 one configured Node/PostgreSQL execution worker with durable ownership and
 bounded signal shutdown.
+
+Ensure an interrupted Runtime worker exits cleanly even while its configured
+host is still loading.

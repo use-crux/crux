@@ -179,8 +179,11 @@ describe('@use-crux/postgres runtime', () => {
       program,
       pollIntervalMs: 100,
     })
-    await expect.poll(() => secondMaintenanceCalls).toBe(1)
-    await replacement.stop()
+    try {
+      await expect.poll(() => secondMaintenanceCalls).toBe(1)
+    } finally {
+      await replacement.stop()
+    }
   })
 
   it('allows concurrent maintenance for different namespaces', async () => {
@@ -235,9 +238,12 @@ describe('@use-crux/postgres runtime', () => {
       pollIntervalMs: 100,
     })
 
-    await expect.poll(() => firstMaintenanceCalls).toBe(1)
-    await expect.poll(() => secondMaintenanceCalls).toBe(1)
-    await Promise.all([first.stop(), second.stop()])
+    try {
+      await expect.poll(() => firstMaintenanceCalls).toBe(1)
+      await expect.poll(() => secondMaintenanceCalls).toBe(1)
+    } finally {
+      await Promise.all([first.stop(), second.stop()])
+    }
   })
 
   it('setup check reports missing resources and apply is idempotent', async () => {

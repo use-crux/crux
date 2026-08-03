@@ -110,6 +110,7 @@ embed-workers: $(EMBED_DIR)
 		echo "Embedded runtime-worker.mjs from local-workers dist"; \
 	else \
 		echo "Error: $(LOCAL_WORKERS_DIST)/runtime-worker.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
 

@@ -206,7 +206,10 @@ describe("public indexer extension surface", () => {
       "SemanticSyntaxView",
       "TypeScriptSemanticBackendOptions",
     ]);
-    expect(namedValueExports(runtime)).toEqual([]);
+    expect(namedValueExports(runtime)).toEqual([
+      "decodeRuntimeArtifactManifest",
+      "RuntimeArtifactManifestDecodeError",
+    ]);
     expect(namedTypeExports(runtime)).toEqual([]);
     expect(runtime).not.toContain("runtimeIndexPatchFromCompilerResult");
     expect(namedValueExports(staticCompat)).toEqual([

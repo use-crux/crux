@@ -102,6 +102,7 @@ describe('runSetupOperation', () => {
         contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         pendingFiles: [
           '.crux/generated/runtime/privacy.json',
+          '.crux/generated/runtime/program.ts',
           'crux.generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],
@@ -134,6 +135,7 @@ describe('runSetupOperation', () => {
         pendingFiles: [],
         changedFiles: [
           '.crux/generated/runtime/privacy.json',
+          '.crux/generated/runtime/program.ts',
           'crux.generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],
@@ -173,6 +175,7 @@ describe('runSetupOperation', () => {
         status: 'generated',
         changedFiles: [
           '.crux/generated/runtime/privacy.json',
+          '.crux/generated/runtime/program.ts',
           'crux.generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],

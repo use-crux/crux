@@ -11,12 +11,16 @@ import { startPostgresTestDatabase, type PostgresTestDatabase } from './test-dat
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workerScript = resolve(packageRoot, '../local-workers/dist/runtime-worker.mjs')
 const activeChildren = new Set<WorkerProcess>()
+let fixtureNumber = 0
 
 describe('generated Runtime worker process', () => {
   let database: PostgresTestDatabase
   const roots: string[] = []
 
   beforeAll(async () => {
+    await access(workerScript).catch(() => {
+      throw new Error(`Missing ${workerScript}. Build @use-crux/local-workers before running this suite.`)
+    })
     database = await startPostgresTestDatabase()
   }, 30_000)
 
@@ -30,12 +34,12 @@ describe('generated Runtime worker process', () => {
   })
 
   it('rejects stale artifacts and releases durable ownership on signal for restart', async () => {
-    const root = await projectFixture(database.url)
-    roots.push(root)
-    const first = startWorker(root)
-    await waitForOwnership(database.url, 'runtime_worker_process', first)
+    const fixture = await projectFixture(database.url)
+    roots.push(fixture.root)
+    const first = startWorker(fixture.root)
+    await waitForOwnership(database.url, fixture.schema, first)
 
-    const duplicate = startWorker(root)
+    const duplicate = startWorker(fixture.root)
     await expect(exitOf(duplicate)).resolves.toMatchObject({
       code: 1,
       stderr: expect.stringContaining('already held'),
@@ -44,24 +48,24 @@ describe('generated Runtime worker process', () => {
     first.child.kill('SIGTERM')
     await expect(exitOf(first)).resolves.toMatchObject({ code: 0 })
 
-    const replacement = startWorker(root)
-    await waitForOwnership(database.url, 'runtime_worker_process', replacement)
+    const replacement = startWorker(fixture.root)
+    await waitForOwnership(database.url, fixture.schema, replacement)
     replacement.child.kill('SIGINT')
     await expect(exitOf(replacement)).resolves.toMatchObject({ code: 0 })
 
-    const manifestFile = join(root, '.crux/generated/runtime/manifest.json')
+    const manifestFile = join(fixture.root, '.crux/generated/runtime/manifest.json')
     await writeFile(manifestFile, `${(await readFile(manifestFile, 'utf8')).trim()} \n`)
-    await expect(exitOf(startWorker(root))).resolves.toMatchObject({
+    await expect(exitOf(startWorker(fixture.root))).resolves.toMatchObject({
       code: 1,
       stderr: expect.stringContaining('does not match its manifest'),
     })
   })
 
   it('handles SIGTERM deterministically while the configured host is loading', async () => {
-    const root = await projectFixture(database.url, true)
-    roots.push(root)
-    const marker = join(root, 'startup.marker')
-    const worker = startWorker(root, { CRUX_RUNTIME_WORKER_STARTUP_MARKER: marker })
+    const fixture = await projectFixture(database.url, true)
+    roots.push(fixture.root)
+    const marker = join(fixture.root, 'startup.marker')
+    const worker = startWorker(fixture.root, { CRUX_RUNTIME_WORKER_STARTUP_MARKER: marker })
     await expect.poll(async () => access(marker).then(() => true, () => false)).toBe(true)
 
     worker.child.kill('SIGTERM')
@@ -69,9 +73,12 @@ describe('generated Runtime worker process', () => {
     await expect(exitOf(worker)).resolves.toEqual({ code: 0, signal: null, stderr: '' })
   })
 
-  async function projectFixture(url: string, delayStartup = false): Promise<string> {
+  async function projectFixture(
+    url: string,
+    delayStartup = false,
+  ): Promise<RuntimeWorkerProjectFixture> {
     const root = await mkdtemp(join(packageRoot, '.tmp-runtime-worker-process-'))
-    const schema = delayStartup ? 'runtime_worker_process_startup' : 'runtime_worker_process'
+    const schema = `runtime_worker_process_${process.pid}_${fixtureNumber++}`
     const setup = postgres({ url, schema })
     await setup.setup.apply()
     await setup.close()
@@ -85,7 +92,7 @@ describe('generated Runtime worker process', () => {
               "import { writeFile } from 'node:fs/promises'",
               "if (process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER) {",
               "  await writeFile(process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER, 'loading')",
-              "  await new Promise((resolve) => setTimeout(resolve, 3_000))",
+              "  await new Promise((resolve) => setTimeout(resolve, 30_000))",
               "}",
             ]
           : []),
@@ -126,9 +133,14 @@ describe('generated Runtime worker process', () => {
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
       ].join('\n'),
     )
-    return root
+    return { root, schema }
   }
 })
+
+interface RuntimeWorkerProjectFixture {
+  readonly root: string
+  readonly schema: string
+}
 
 interface WorkerProcess {
   readonly child: ChildProcess
@@ -153,18 +165,18 @@ function startWorker(root: string, env: Readonly<Record<string, string>> = {}): 
   return worker
 }
 
-async function exitOf(process: WorkerProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }> {
-  return { ...await process.exited, stderr: process.stderr() }
+async function exitOf(worker: WorkerProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }> {
+  return { ...await worker.exited, stderr: worker.stderr() }
 }
 
-async function waitForOwnership(url: string, schema: string, process: WorkerProcess): Promise<void> {
+async function waitForOwnership(url: string, schema: string, worker: WorkerProcess): Promise<void> {
   const store = postgres({ url, schema })
   const ownershipPort = store.maintenanceOwnership
   if (!ownershipPort) throw new Error('Postgres maintenance ownership is unavailable.')
   try {
     await expect.poll(async () => {
-      if (process.child.exitCode !== null) {
-        throw new Error(`worker exited ${process.child.exitCode}: ${process.stderr()}`)
+      if (worker.child.exitCode !== null) {
+        throw new Error(`worker exited ${worker.child.exitCode}: ${worker.stderr()}`)
       }
       const ownership = await ownershipPort.acquire('process-test')
       if (ownership.acquired) await ownership.release()

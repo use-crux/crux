@@ -16,15 +16,15 @@ import (
 
 func TestRuntimeWorkerCancellationStopsTheProcessGroup(t *testing.T) {
 	marker := t.TempDir() + "/child.pid"
-	cmd := exec.Command("sh", "-c", `sleep 60 & echo $! > "$1"; wait`, "runtime-worker-test", marker)
+	cmd := exec.Command("sh", "-c", `trap 'exit 0' TERM; sleep 60 & echo $! > "$1"; wait`, "runtime-worker-test", marker)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- superviseRuntimeWorkerProcess(ctx, cmd) }()
 
 	childPID := waitForChildPID(t, marker)
 	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatalf("superviseRuntimeWorkerProcess() error = %v, want context canceled", err)
+	if err := <-done; err != nil {
+		t.Fatalf("superviseRuntimeWorkerProcess() error = %v, want nil", err)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)

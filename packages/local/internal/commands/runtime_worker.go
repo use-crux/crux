@@ -68,10 +68,13 @@ func superviseRuntimeWorkerProcess(ctx context.Context, cmd *exec.Cmd) error {
 	defer timer.Stop()
 	select {
 	case err := <-done:
-		if err == nil || errors.Is(ctx.Err(), context.Canceled) {
-			return ctx.Err()
+		if err != nil {
+			return err
 		}
-		return err
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil
+		}
+		return ctx.Err()
 	case <-timer.C:
 		workerproc.KillProcessGroup(group)
 		<-done
