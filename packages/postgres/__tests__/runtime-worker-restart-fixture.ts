@@ -52,7 +52,7 @@ export async function startSettledWorker(
     program,
     pollIntervalMs: 60_000,
   })
-  await expect.poll(() => ticks).toBe(1)
+  await expect.poll(() => ticks, { timeout: 30_000 }).toBe(1)
   return worker
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"time"
@@ -14,7 +15,28 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
-const runtimeWorkerProcessExitTimeout = 11 * time.Second
+const (
+	runtimeWorkerProcessExitTimeout = 11 * time.Second
+	runtimeWorkerForceExitTimeout   = time.Second
+)
+
+var runtimeWorkerStdinShutdownImport = "data:text/javascript," + url.PathEscape(`
+const deliver = () => {
+  if (process.listenerCount('SIGTERM') > 0) {
+    process.emit('SIGTERM')
+    return
+  }
+  const onListener = (event) => {
+    if (event !== 'SIGTERM') return
+    process.off('newListener', onListener)
+    queueMicrotask(() => process.emit('SIGTERM'))
+  }
+  process.on('newListener', onListener)
+}
+process.stdin.resume()
+process.stdin.unref?.()
+process.stdin.once('end', deliver)
+`)
 
 func newRuntimeWorkerCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
 	return &cobra.Command{
@@ -40,15 +62,25 @@ func runRuntimeWorkerProcess(ctx context.Context, root string, process commandWo
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(node, script, root)
-	cmd.Stdin = os.Stdin
+	cmd := newRuntimeWorkerProcessCommand(node, script, root)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = process.stderr
 	return superviseRuntimeWorkerProcess(ctx, cmd)
 }
 
 func superviseRuntimeWorkerProcess(ctx context.Context, cmd *exec.Cmd) error {
-	group, err := workerproc.ConfigureProcessGroup(cmd)
+	gracefulShutdown, err := prepareRuntimeWorkerShutdown(cmd)
+	if err != nil {
+		return fmt.Errorf("configure Runtime worker shutdown: %w", err)
+	}
+	if gracefulShutdown != nil {
+		defer func() { _ = gracefulShutdown() }()
+	}
+	return superviseRuntimeWorkerProcessWithShutdown(ctx, cmd, gracefulShutdown)
+}
+
+func superviseRuntimeWorkerProcessWithShutdown(ctx context.Context, cmd *exec.Cmd, gracefulShutdown func() error) error {
+	group, err := workerproc.ConfigureProcessGroup(cmd, gracefulShutdown)
 	if err != nil {
 		return fmt.Errorf("configure Runtime worker process group: %w", err)
 	}
@@ -62,7 +94,12 @@ func superviseRuntimeWorkerProcess(ctx context.Context, cmd *exec.Cmd) error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		workerproc.SignalProcessGroup(group)
+		if err := workerproc.SignalProcessGroup(group); err != nil {
+			return errors.Join(
+				fmt.Errorf("request Runtime worker shutdown: %w", err),
+				forceStopRuntimeWorkerProcess(group, done),
+			)
+		}
 	}
 	timer := time.NewTimer(runtimeWorkerProcessExitTimeout)
 	defer timer.Stop()
@@ -76,8 +113,21 @@ func superviseRuntimeWorkerProcess(ctx context.Context, cmd *exec.Cmd) error {
 		}
 		return ctx.Err()
 	case <-timer.C:
-		workerproc.KillProcessGroup(group)
-		<-done
-		return fmt.Errorf("Runtime worker did not stop within %s", runtimeWorkerProcessExitTimeout)
+		return errors.Join(
+			fmt.Errorf("Runtime worker did not stop within %s", runtimeWorkerProcessExitTimeout),
+			forceStopRuntimeWorkerProcess(group, done),
+		)
+	}
+}
+
+func forceStopRuntimeWorkerProcess(group *workerproc.ProcessGroup, done <-chan error) error {
+	workerproc.KillProcessGroup(group)
+	timer := time.NewTimer(runtimeWorkerForceExitTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("Runtime worker did not exit within %s after force stop", runtimeWorkerForceExitTimeout)
 	}
 }

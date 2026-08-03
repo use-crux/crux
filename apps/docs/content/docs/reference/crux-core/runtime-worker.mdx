@@ -8,20 +8,21 @@ import {
   createRuntimeProgram,
   createRuntimeWorker,
   type RuntimeProgram,
+  type RuntimeProgramTarget,
   type RuntimeWorker,
 } from "@use-crux/core/runtime";
 ```
 
 Most applications use the generated program through `crux runtime worker`.
 The APIs on this page support generated hosts, tests, and advanced hand-written
-hosts. [View the Core source](https://github.com/use-crux/crux/tree/main/packages/core/src/runtime).
+hosts.
 
 ## `RuntimeProgram`
 
 ```ts
 interface RuntimeProgram {
   readonly manifestHash: string;
-  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly targets: readonly RuntimeProgramTarget[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 ```
@@ -42,7 +43,7 @@ registration, or configuration lookup.
 
 ```ts
 interface CreateRuntimeProgramOptions {
-  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly targets: readonly RuntimeProgramTarget[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 
@@ -134,6 +135,8 @@ across processes. Different namespaces can run concurrently.
 The worker acquires local ownership before returning and durable ownership
 before its first tick. It releases both on clean stop or fatal failure. Replace
 a worker only after `await worker.stop()` or after the prior process exits.
+An ownership adapter may expose `lease.lost`, a promise that rejects when its
+backing session is lost; the worker treats that rejection as fatal and closes.
 
 ## Generated program loading
 

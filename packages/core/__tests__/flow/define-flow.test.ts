@@ -21,10 +21,11 @@ describe('flow', () => {
   // Handle shape & basic execution
   // ─────────────────────────────────────────────────────────────────
 
-  it('returns a frozen FlowHandle with .name, .run, .signal', () => {
+  it('returns a frozen FlowHandle with its Runtime program identity', () => {
     const handle = makeFlow('my-flow', async () => 42)
 
     expect(handle.name).toBe('my-flow')
+    expect(handle.kind).toBe('flow')
     expect(typeof handle.run).toBe('function')
     expect(typeof handle.signal).toBe('function')
     expect(Object.isFrozen(handle)).toBe(true)

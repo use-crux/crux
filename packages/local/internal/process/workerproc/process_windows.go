@@ -48,7 +48,7 @@ func startProcessGroup(group *processGroupState) error {
 	}
 	if err := assignAndResume(group); err != nil {
 		_ = group.cmd.Process.Kill()
-		_, _ = group.cmd.Process.Wait()
+		_ = group.cmd.Wait()
 		closeProcessGroup(group)
 		return err
 	}
@@ -111,11 +111,11 @@ func resumeProcessThreads(pid uint32) error {
 	return nil
 }
 
-func signalConfiguredProcessGroup(group *processGroupState) {
-	if group == nil || group.cmd.Process == nil {
-		return
+func signalConfiguredProcessGroup(group *processGroupState) error {
+	if group == nil || group.cmd == nil || group.cmd.Process == nil {
+		return nil
 	}
-	_ = windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(group.cmd.Process.Pid))
+	return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(group.cmd.Process.Pid))
 }
 
 func killConfiguredProcessGroup(group *processGroupState) {

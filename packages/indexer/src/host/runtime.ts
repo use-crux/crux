@@ -48,7 +48,7 @@ export async function loadRuntimeWorkerHost(
   const result = await loadProjectConfig(resolve(options.root), options.configPath, 'runtime-rich')
   const runtime = result.loaded.crux?.config.runtime
   if (runtime?.kind === 'in-process' && runtime.store.maintenanceOwnership) return runtime
-  const importFailed = result.loaded.configFile && !result.loaded.crux
+  const importFailed = result.loaded.importFailed === true
   const ownershipMissing = runtime?.kind === 'in-process'
   throw createRuntimeError({
     code: importFailed

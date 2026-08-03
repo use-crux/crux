@@ -23,6 +23,8 @@ try {
 | ------------------------------------------------------------- | ----------------------------------------------------------------- |
 | [`RUNTIME_REQUIRED`](/docs/errors/RUNTIME_REQUIRED)           | A runtime-bound API was called without `config({ runtime })`.     |
 | [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING)       | The configured stack cannot support a used runtime feature.       |
+| [`OWNERSHIP_CONFLICT`](/docs/errors/OWNERSHIP_CONFLICT)       | Another worker already owns maintenance for this store namespace. |
+| [`SHUTDOWN_TIMEOUT`](/docs/errors/SHUTDOWN_TIMEOUT)           | A worker operation did not settle within the shutdown bound.      |
 | [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND)           | A wake named a target missing from the runtime entry.             |
 | [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE)           | Two runtime targets share one durable name.                       |
 | [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED)     | A discovered target cannot be imported as a named export.         |

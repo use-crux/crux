@@ -44,7 +44,7 @@ function duplicateOwnerError(
   namespace: string,
 ): ReturnType<typeof createRuntimeError> {
   return createRuntimeError({
-    code: 'CAPABILITY_MISSING',
+    code: 'OWNERSHIP_CONFLICT',
     whatFailed: `Runtime worker maintenance ownership is already active for namespace \`${namespace}\` on this store.`,
     why: 'Exactly one worker may maintain a store and namespace within the current process.',
     whatStillWorks:
@@ -58,7 +58,7 @@ function duplicateDurableOwnerError(
   namespace: string,
 ): ReturnType<typeof createRuntimeError> {
   return createRuntimeError({
-    code: 'CAPABILITY_MISSING',
+    code: 'OWNERSHIP_CONFLICT',
     whatFailed: `Runtime worker maintenance ownership is already held for namespace \`${namespace}\` in the durable store.`,
     why: 'Exactly one worker may maintain a durable store and namespace across processes.',
     whatStillWorks:

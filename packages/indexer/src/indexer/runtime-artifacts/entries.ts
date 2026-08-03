@@ -12,13 +12,13 @@ export function runtimeProgramFile(input: {
 }): string {
   return [
     GENERATED_HEADER,
-    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
+    "import { createRuntimeProgram, type RuntimeProgramTarget } from '@use-crux/core/runtime'",
     ...targetImports(input.manifest, input.outputFile, input.root),
     "",
     `export const runtimeArtifactManifestHash = '${input.artifactManifestHash}'`,
     "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     "",
-    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
+    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTarget[]`,
     "const transports = [] as const",
     "",
     "export const runtimeProgram = createRuntimeProgram({ targets, transports })",

@@ -1,0 +1,20 @@
+---
+title: OWNERSHIP_CONFLICT
+description: Another worker already owns Runtime maintenance for this store namespace.
+---
+
+## What failed
+
+A Runtime worker could not acquire exclusive maintenance ownership for its store and namespace.
+
+## Why
+
+Exactly one worker may run maintenance for a store namespace. Another worker owns it in this process or through the durable store.
+
+## What still works
+
+The existing owner and workers using another store or namespace continue to run.
+
+## Fix
+
+Reuse the active worker, or stop it and await `worker.stop()` before starting its replacement. For a durable store, wait for the existing process to release ownership before retrying.

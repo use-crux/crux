@@ -24,15 +24,15 @@ func startProcessGroup(group *processGroupState) error {
 	return group.cmd.Start()
 }
 
-func signalConfiguredProcessGroup(group *processGroupState) {
-	signalProcessGroup(group.cmd)
+func signalConfiguredProcessGroup(group *processGroupState) error {
+	return signalProcessGroup(group.cmd)
 }
 
-func signalProcessGroup(cmd *exec.Cmd) {
+func signalProcessGroup(cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {
-		return
+		return nil
 	}
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 }
 
 func killConfiguredProcessGroup(group *processGroupState) {

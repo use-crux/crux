@@ -93,12 +93,13 @@ export default config({
 });
 ```
 
-| Option       | Type                              | Default             | Description                                                     |
-| ------------ | --------------------------------- | ------------------- | --------------------------------------------------------------- |
-| `url`        | `string`                          | `DATABASE_URL`      | Postgres connection URL.                                        |
-| `schema`     | `string`                          | `'crux_runtime'`    | Dedicated schema for Crux-owned runtime tables and indexes.     |
-| `pool`       | `Pool`                            | created from `url`  | Caller-supplied `pg` pool.                                      |
-| `setup.mode` | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
+| Option        | Type                              | Default             | Description                                                     |
+| ------------- | --------------------------------- | ------------------- | --------------------------------------------------------------- |
+| `url`         | `string`                          | `DATABASE_URL`      | Postgres connection URL.                                        |
+| `schema`      | `string`                          | `'crux_runtime'`    | Dedicated schema for Crux-owned runtime tables and indexes.     |
+| `pool`        | `Pool`                            | created from `url`  | Caller-supplied `pg` pool.                                      |
+| `poolOptions` | `PoolConfig`                      | `pg` defaults       | Options for the Crux-created pool.                              |
+| `setup.mode`  | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
 
 The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
 
@@ -119,6 +120,7 @@ In tests, the package conformance suite can run against `CRUX_TEST_DATABASE_URL`
 
 - Use a shared Postgres database for multi-process or serverless deployments.
 - Run exactly one [`crux runtime worker`](/docs/guides/durable-execution/node) per namespace for the self-hosted Node topology; PostgreSQL advisory-lock ownership rejects an overlapping worker.
+- Configure `poolOptions.max` or a caller-owned pool's `max` to at least `2` for a Runtime worker. Its session-scoped ownership lease holds one connection while maintenance uses another.
 - Keep the runtime schema separate from application tables.
 - Pair Postgres with an external wake adapter such as `qstash()` in serverless deployments; a database row cannot wake a cold function by itself.
 - Namespace isolates environments sharing the same database. It is not an authorization boundary.

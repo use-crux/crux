@@ -114,6 +114,8 @@ export interface FlowHandle<
 > {
   /** The flow's registered name. */
   readonly name: string;
+  /** Runtime programs identify Flow handles explicitly. */
+  readonly kind: "flow";
   /**
    * Execute the Flow with typed input and runtime options.
    *

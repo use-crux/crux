@@ -121,6 +121,14 @@ describe("runtime artifacts", () => {
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain("type RuntimeProgramTarget");
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      "satisfies readonly RuntimeProgramTarget[]",
+    );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("createRuntimeProgram({ targets, transports })");
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),

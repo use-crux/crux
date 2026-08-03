@@ -4,6 +4,8 @@
 export interface RuntimeMaintenanceOwnershipLease {
   /** Whether this result owns maintenance for the requested namespace. */
   readonly acquired: true
+  /** Rejects when the backing ownership mechanism is lost unexpectedly. */
+  readonly lost?: Promise<never>
   /** Release this lease; repeated calls must be safe and have no additional effect. */
   readonly release: () => Promise<void>
 }

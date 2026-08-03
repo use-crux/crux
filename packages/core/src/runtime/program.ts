@@ -16,12 +16,17 @@ import { validateRuntimeManagedTransportBinding } from "./transport";
 
 const encoder = new TextEncoder();
 
+/** Executable Runtime target declaration with an explicit durable kind. */
+export type RuntimeProgramTarget = RuntimeHandlerTarget & {
+  readonly kind: "flow" | "task";
+};
+
 /** Immutable executable target and managed-transport truth for one project. */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
   readonly manifestHash: string;
   /** Canonically ordered executable Runtime target declarations. */
-  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly targets: readonly RuntimeProgramTarget[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -29,7 +34,7 @@ export interface RuntimeProgram {
 /** Declarations accepted by {@link createRuntimeProgram}. */
 export interface CreateRuntimeProgramOptions {
   /** Statically imported Flow handles and durable task targets. */
-  readonly targets: readonly RuntimeHandlerTarget[];
+  readonly targets: readonly RuntimeProgramTarget[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -78,7 +83,7 @@ function canonicalizeTransports(
 }
 
 function validateSignalTargets(
-  targets: readonly RuntimeHandlerTarget[],
+  targets: readonly RuntimeProgramTarget[],
   transports: readonly RuntimeManagedTransportBinding[],
 ): void {
   const targetIds = new Set(targets.map(runtimeHandlerTargetIdentity));
@@ -102,13 +107,13 @@ function validateAdapterDeclarations(
   }
 }
 
-function targetManifestEntry(target: RuntimeHandlerTarget): {
+function targetManifestEntry(target: RuntimeProgramTarget): {
   readonly id: string;
-  readonly kind: "flow" | "task" | null;
+  readonly kind: "flow" | "task";
 } {
   return {
     id: runtimeHandlerTargetIdentity(target),
-    kind: "kind" in target ? target.kind : null,
+    kind: target.kind,
   };
 }
 

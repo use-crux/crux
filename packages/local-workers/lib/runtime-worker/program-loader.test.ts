@@ -141,4 +141,27 @@ describe('loadGeneratedRuntimeProgram', () => {
       whatFailed: expect.stringContaining('targets'),
     })
   })
+
+  it('rejects a generated program target without an explicit kind', async () => {
+    const manifest = `${JSON.stringify({
+      version: 2,
+      evalPrivacyFingerprint: 'safe',
+      targets: [{ name: 'review', kind: 'flow', module: './review.ts', export: 'review' }],
+      evals: [],
+    })}\n`
+    const { createHash } = await import('node:crypto')
+    const hash = createHash('sha256').update(manifest).digest('hex')
+    const root = await fixture({
+      '.crux/generated/runtime/manifest.json': manifest,
+      '.crux/generated/runtime/program.ts': [
+        `export const runtimeArtifactManifestHash = '${hash}'`,
+        "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review' }], transports: [] }",
+      ].join('\n'),
+    })
+
+    await expect(loadGeneratedRuntimeProgram(root)).rejects.toMatchObject({
+      code: 'ARTIFACTS_STALE',
+    })
+  })
 })

@@ -175,8 +175,9 @@ describe('createRuntimeWorker', () => {
     const firstStore = inMemoryRuntimeStore()
     const duplicateStore = inMemoryRuntimeStore()
     let duplicateMaintenanceCalls = 0
-    const duplicateClaimPending =
-      duplicateStore.outbox.claimPending.bind(duplicateStore.outbox)
+    const duplicateClaimPending = duplicateStore.outbox.claimPending.bind(
+      duplicateStore.outbox,
+    )
     const first = createRuntimeWorker({
       runtime: node({
         store: { ...firstStore, maintenanceOwnership },
@@ -208,7 +209,9 @@ describe('createRuntimeWorker', () => {
       program: createRuntimeProgram({ targets: [], transports: [] }),
     })
 
-    await expect(duplicate.closed).rejects.toBeInstanceOf(CruxRuntimeError)
+    await expect(duplicate.closed).rejects.toMatchObject({
+      code: 'OWNERSHIP_CONFLICT',
+    })
     await expect(duplicate.closed).rejects.toThrow(
       /ownership.*already held.*worker-durable-duplicate-test/i,
     )
@@ -286,6 +289,49 @@ describe('createRuntimeWorker', () => {
     await expect(worker.closed).rejects.toBe(failure)
   })
 
+  it('closes when the durable ownership lease is lost', async () => {
+    const failure = new Error('ownership connection lost')
+    const lost = deferred<never>()
+    const memory = inMemoryRuntimeStore()
+    const claimPending = memory.outbox.claimPending.bind(memory.outbox)
+    let maintenanceCalls = 0
+    let releaseCalls = 0
+    const worker = createRuntimeWorker({
+      runtime: node({
+        store: {
+          ...memory,
+          maintenanceOwnership: {
+            async acquire() {
+              return {
+                acquired: true as const,
+                lost: lost.promise,
+                async release() {
+                  releaseCalls += 1
+                },
+              }
+            },
+          },
+          outbox: {
+            ...memory.outbox,
+            async claimPending(options: Parameters<typeof claimPending>[0]) {
+              maintenanceCalls += 1
+              return await claimPending(options)
+            },
+          },
+        },
+        namespace: 'worker-owner-loss-test',
+        autoStartMaintenance: false,
+      }),
+      program: createRuntimeProgram({ targets: [], transports: [] }),
+    })
+
+    await expect.poll(() => maintenanceCalls).toBe(1)
+    lost.reject(failure)
+
+    await expect(worker.closed).rejects.toBe(failure)
+    expect(releaseCalls).toBe(1)
+  })
+
   it('bounds stop while reporting that an active tick was not cancelled', async () => {
     const memory = inMemoryRuntimeStore()
     const activeTick = deferred<void>()
@@ -323,7 +369,7 @@ describe('createRuntimeWorker', () => {
     await expect.poll(() => entered).toBe(true)
 
     const stopping = worker.stop({ timeoutMs: 5 })
-    await expect(stopping).rejects.toBeInstanceOf(CruxRuntimeError)
+    await expect(stopping).rejects.toMatchObject({ code: 'SHUTDOWN_TIMEOUT' })
     await expect(stopping).rejects.toThrow(
       /active maintenance tick.*not.*cancelled/i,
     )
@@ -363,14 +409,18 @@ describe('createRuntimeWorker', () => {
     })
     await expect.poll(() => maintenanceCalls).toBe(1)
     let duplicate: ReturnType<typeof createRuntimeWorker> | undefined
+    let ownershipError: unknown
 
-    expect(() => {
+    try {
       duplicate = createRuntimeWorker({
         runtime,
         program,
         pollIntervalMs: 100,
       })
-    }).toThrow(CruxRuntimeError)
+    } catch (error) {
+      ownershipError = error
+    }
+    expect(ownershipError).toMatchObject({ code: 'OWNERSHIP_CONFLICT' })
     expect(maintenanceCalls).toBe(1)
 
     await duplicate?.stop()
@@ -432,10 +482,13 @@ describe('createRuntimeWorker', () => {
 function deferred<T>(): {
   readonly promise: Promise<T>
   readonly resolve: (value: T) => void
+  readonly reject: (reason: unknown) => void
 } {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((settle) => {
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((settle, fail) => {
     resolve = settle
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }

@@ -47,6 +47,29 @@ describe("runtime-rich host indexing", () => {
     });
   });
 
+  it("keeps an unrecognized config export on the missing Runtime path", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
+    roots.push(root);
+    await writeFile(join(root, "crux.config.ts"), "export default {}\n");
+
+    await expect(loadRuntimeWorkerHost({ root })).rejects.toMatchObject({
+      code: "RUNTIME_REQUIRED",
+    });
+  });
+
+  it("reports an unresolved config import as an import failure", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
+    roots.push(root);
+    await writeFile(
+      join(root, "crux.config.ts"),
+      "import './missing-runtime-config'\nexport default {}\n",
+    );
+
+    await expect(loadRuntimeWorkerHost({ root })).rejects.toMatchObject({
+      code: "RUNTIME_ARTIFACT_MANIFEST_INVALID",
+    });
+  });
+
   it("adds execution placement for authored Evals to the runtime patch", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-host-runtime-"));
     roots.push(root);

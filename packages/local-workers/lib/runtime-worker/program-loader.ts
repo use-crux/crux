@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { createRuntimeError, type RuntimeArtifactManifest, type RuntimeProgram } from '@use-crux/core/runtime'
+import {
+  createRuntimeError,
+  type RuntimeArtifactManifest,
+  type RuntimeProgram,
+  type RuntimeProgramTarget,
+} from '@use-crux/core/runtime'
 import {
   decodeRuntimeArtifactManifest,
   RuntimeArtifactManifestDecodeError,
@@ -114,15 +119,13 @@ function programTargetsMatchManifest(
 }
 
 function programTargetIdentity(
-  target: RuntimeProgram['targets'][number],
+  target: RuntimeProgramTarget,
 ): { readonly name: string; readonly kind: 'flow' | 'task' } | undefined {
   if ('kind' in target && (target.kind === 'flow' || target.kind === 'task')) {
     const name = 'name' in target ? target.name : target.targetId
     return typeof name === 'string' ? { name, kind: target.kind } : undefined
   }
-  return 'name' in target && typeof target.name === 'string'
-    ? { name: target.name, kind: 'flow' }
-    : undefined
+  return undefined
 }
 
 function artifactError(

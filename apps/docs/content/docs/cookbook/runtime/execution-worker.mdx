@@ -66,7 +66,8 @@ Keep the existing healthy owner running. Stop the unintended process and wait
 for it to exit before retrying the replacement. PostgreSQL holds ownership with
 a session-scoped advisory lock on a dedicated pooled connection. Shutdown
 unlocks and releases that connection; closing the database session also
-releases the lock.
+releases the lock. Configure the pool with `max >= 2` so maintenance can use a
+second connection while the ownership connection remains checked out.
 
 ## Repair missing, stale, or incompatible artifacts
 

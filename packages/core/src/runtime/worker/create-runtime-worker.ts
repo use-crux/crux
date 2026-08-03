@@ -214,6 +214,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
         return
       }
       durableLease = lease
+      if (lease?.lost) void lease.lost.catch(closeAfterFailure)
       startTick()
     } catch (error) {
       await closeAfterFailure(error)
@@ -256,7 +257,7 @@ function stopTimeoutError(
   timeoutMs: number,
 ): ReturnType<typeof createRuntimeError> {
   return createRuntimeError({
-    code: 'CAPABILITY_MISSING',
+    code: 'SHUTDOWN_TIMEOUT',
     whatFailed: `The active maintenance tick or ownership acquisition did not settle within ${timeoutMs}ms and was not cancelled.`,
     why: 'Runtime workers can bound shutdown waiting, but cannot physically cancel ownership acquisition or external work already started by a target or store adapter.',
     whatStillWorks:

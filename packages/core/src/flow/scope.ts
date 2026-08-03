@@ -1618,6 +1618,7 @@ export function flow(
 
   const handle = {
     name,
+    kind: "flow" as const,
 
     async run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput);

@@ -36,6 +36,25 @@ func TestRuntimeWorkerCancellationStopsTheProcessGroup(t *testing.T) {
 	}
 }
 
+func TestRuntimeWorkerShutdownDeliveryFailureForcesImmediateStop(t *testing.T) {
+	want := errors.New("shutdown delivery failed")
+	cmd := exec.Command("sh", "-c", `trap '' TERM; while :; do sleep 1; done`)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	started := time.Now()
+	err := superviseRuntimeWorkerProcessWithShutdown(ctx, cmd, func() error { return want })
+	if !errors.Is(err, want) {
+		t.Fatalf("superviseRuntimeWorkerProcessWithShutdown() error = %v, want %v", err, want)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("shutdown delivery failure took %s, want immediate forced stop", elapsed)
+	}
+	if cmd.ProcessState == nil {
+		t.Fatal("Runtime worker was not reaped after shutdown delivery failed")
+	}
+}
+
 func waitForChildPID(t *testing.T, marker string) int {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

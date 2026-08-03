@@ -34,10 +34,12 @@ export interface NormalizeRuntimeHandlerTargetsOptions {
 }
 
 /** Canonicalize Runtime target declarations without resolving executable targets. */
-export function canonicalizeRuntimeHandlerTargets(
-  targets: readonly RuntimeHandlerTarget[],
+export function canonicalizeRuntimeHandlerTargets<
+  TTarget extends RuntimeHandlerTarget,
+>(
+  targets: readonly TTarget[],
   entry = 'runtime entry',
-): readonly RuntimeHandlerTarget[] {
+): readonly TTarget[] {
   const seen = new Set<string>()
   const canonical = [...targets].sort((left, right) =>
     compareText(

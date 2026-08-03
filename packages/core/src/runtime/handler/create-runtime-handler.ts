@@ -88,6 +88,18 @@ export interface RuntimeFetchHandlers {
 export function createRuntimeHandler(
   options: CreateRuntimeHandlerOptions,
 ): RuntimeFetchHandlers {
+  if (!hasRuntimeProgram(options) && options.targets === undefined) {
+    throw createRuntimeError({
+      code: 'TARGET_NOT_FOUND',
+      whatFailed:
+        'createRuntimeHandler() requires a Runtime program or an explicit target list.',
+      why: 'Neither `program` nor `targets` was provided.',
+      whatStillWorks:
+        'Runtime handlers with a generated program or explicit targets still work.',
+      nextStep:
+        'Pass `program: runtimeProgram` or `targets: []` to createRuntimeHandler().',
+    })
+  }
   const runtimeDefinition =
     options.runtime ?? getHooks().runtimeEngine ?? missingRuntime()
   if (runtimeDefinition.kind === 'host-bound') {
