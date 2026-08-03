@@ -49,9 +49,13 @@ export function createPostgresEventPort(
       const afterFound =
         options.after === undefined
           ? undefined
-          : await containsCursor(options.namespace, options.after)
+          : await containsCursor(options.namespace, options.name, options.after)
       const values: unknown[] = [options.namespace]
       const filters = ['namespace = $1']
+      if (options.name !== undefined) {
+        values.push(options.name)
+        filters.push(`name = $${values.length}`)
+      }
       if (options.after !== undefined && /^\d+$/.test(options.after)) {
         values.push(options.after)
         filters.push(`event_id > $${values.length}`)
@@ -89,12 +93,21 @@ export function createPostgresEventPort(
 
   async function containsCursor(
     namespace: string,
+    name: string | undefined,
     cursor: string,
   ): Promise<boolean> {
     if (!/^\d+$/.test(cursor)) return false
+    const values: unknown[] = [namespace, cursor]
+    const nameFilter =
+      name === undefined
+        ? ''
+        : (() => {
+            values.push(name)
+            return ` AND name = $${values.length}`
+          })()
     const result = await db.query(
-      `SELECT 1 FROM ${events} WHERE namespace = $1 AND event_id = $2`,
-      [namespace, cursor],
+      `SELECT 1 FROM ${events} WHERE namespace = $1 AND event_id = $2${nameFilter}`,
+      values,
     )
     return Boolean(result.rows[0])
   }

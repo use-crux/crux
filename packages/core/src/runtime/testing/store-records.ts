@@ -68,6 +68,13 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       cursor: second.eventId,
       afterFound: true,
     })
+    await expect(
+      store.events.read({
+        namespace: 'tenant-a',
+        name: 'document.approved',
+        after: first.eventId,
+      }),
+    ).resolves.toEqual({ events: [], afterFound: true })
   })
 
   it('invariant: state records are cloned and namespace isolated', async () => {

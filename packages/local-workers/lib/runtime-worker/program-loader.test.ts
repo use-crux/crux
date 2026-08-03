@@ -153,7 +153,14 @@ describe('loadGeneratedRuntimeProgram', () => {
     const manifest = `${JSON.stringify({
       version: 2,
       evalPrivacyFingerprint: 'safe',
-      targets: [{ name: 'review', kind: 'flow', module: './review.ts', export: 'review' }],
+      targets: [{
+        name: 'review',
+        kind: 'flow',
+        module: './review.ts',
+        export: 'review',
+        definitionId: 'flow:review',
+        fingerprint: 'definition-review-v1',
+      }],
       evals: [],
     })}\n`
     const { createHash } = await import('node:crypto')
@@ -163,7 +170,7 @@ describe('loadGeneratedRuntimeProgram', () => {
       '.crux/generated/runtime/program.ts': [
         `export const runtimeArtifactManifestHash = '${hash}'`,
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review' }], transports: [] }",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review' }], targetDefinitions: [{ targetId: 'review', definitionId: 'flow:review', fingerprint: 'definition-review-v1' }], transports: [] }",
       ].join('\n'),
     })
 

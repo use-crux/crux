@@ -1,6 +1,7 @@
 /** Atomic application Flow Work acceptance. */
 
 import type { EffectScopeRef } from "../../../effect";
+import { sha256Hex } from "../../../content/sha256";
 import type { JsonValue } from "../../../storage";
 import type { FlowId, RuntimeTargetId, WorkId } from "../../ports/ids";
 import type { FlowSnapshot } from "../../ports/state";
@@ -12,6 +13,8 @@ import type { RuntimeWorkItem } from "../work";
 import { createRuntimeError } from "../errors";
 import { initialApplicationWorkState } from "../application-work-state";
 import { appendApplicationWorkStatusEvent } from "../application-work-events";
+
+const encoder = new TextEncoder();
 
 /** Immutable inputs for one top-level application Work occurrence. */
 export interface WorkAcceptCompositeInput {
@@ -88,6 +91,7 @@ export async function acceptWorkInTransaction(
     status: "running",
     effects: input.effects,
     input: input.input,
+    inputDigest: sha256Hex(encoder.encode(canonicalJson(input.input))),
     completedSteps: Object.freeze({}),
     fingerprint: Object.freeze([]),
     pendingSuspends: Object.freeze([]),

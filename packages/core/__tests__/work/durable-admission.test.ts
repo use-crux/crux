@@ -60,6 +60,7 @@ describe("durable application Work admission", () => {
       }),
     ).resolves.toMatchObject({
       input: { documentId: "doc_1" },
+      inputDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
       definition: {
         definitionId: "flow:review-document",
         fingerprint: "definition-review-v1",

@@ -9,6 +9,7 @@
  */
 
 import {
+  runtimeTargetFactoryFor,
   runtimeTargetMap,
   type RuntimeTargetRuntimeRef,
 } from '../api/target-registry'
@@ -80,9 +81,10 @@ export function normalizeRuntimeHandlerTargets(
 
   for (const target of canonicalTargets) {
     const name = runtimeHandlerTargetIdentity(target)
+    const explicitFactory = runtimeTargetFactoryFor(target)
     const runtimeTarget = isRuntimeTarget(target)
       ? target
-      : registeredTargets?.[name]
+      : explicitFactory?.(options.runtimeRef) ?? registeredTargets?.[name]
     if (!runtimeTarget) throw unresolvedTargetError(name, entry)
     entries.push([name, runtimeTarget])
   }

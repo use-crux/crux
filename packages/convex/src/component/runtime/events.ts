@@ -25,15 +25,21 @@ export const append = mutation({
 export const read = mutation({
   args: {
     namespace: v.string(),
+    name: v.optional(v.string()),
     after: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { namespace, after, limit }) => {
-    const rows = await ctx.db
-      .query('runtimeEvents')
-      .withIndex('by_namespace_event_id', (q) => q.eq('namespace', namespace))
-      .collect()
+  handler: async (ctx, { namespace, name, after, limit }) => {
+    const rows = name === undefined
+      ? await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_namespace_event_id', (q) => q.eq('namespace', namespace))
+          .collect()
+      : await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_namespace_name', (q) => q.eq('namespace', namespace).eq('name', name))
+          .collect()
     const sorted = [...rows].sort(compareEventRows)
     const afterIndex = after
       ? sorted.findIndex((row) => matchesEventCursor(row, after))
@@ -44,7 +50,7 @@ export const read = mutation({
     )
     return {
       events,
-      cursor: events.at(-1)?.eventId ?? after,
+      ...(events.at(-1)?.eventId ? { cursor: events.at(-1)?.eventId } : {}),
       ...(after ? { afterFound: afterIndex >= 0 } : {}),
     }
   },

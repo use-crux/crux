@@ -57,6 +57,7 @@ export const REQUIRED_COLUMNS: Readonly<
     'definition',
     'result_obligation',
     'input',
+    'input_digest',
     'continuation',
     'completed_steps',
     'fingerprint',
@@ -173,6 +174,7 @@ export function ddlStatements(schema: string): readonly string[] {
       definition jsonb,
       result_obligation jsonb,
       input jsonb NOT NULL,
+      input_digest text,
       continuation jsonb,
       completed_steps jsonb NOT NULL,
 	      fingerprint jsonb NOT NULL,
@@ -188,6 +190,8 @@ export function ddlStatements(schema: string): readonly string[] {
       ADD COLUMN IF NOT EXISTS definition jsonb`,
     `ALTER TABLE ${snapshots}
       ADD COLUMN IF NOT EXISTS result_obligation jsonb`,
+    `ALTER TABLE ${snapshots}
+      ADD COLUMN IF NOT EXISTS input_digest text`,
     `ALTER TABLE ${snapshots}
       ADD COLUMN IF NOT EXISTS continuation jsonb`,
     `ALTER TABLE ${snapshots}
@@ -274,6 +278,8 @@ export function ddlStatements(schema: string): readonly string[] {
     ...deferredDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_name_event_id_idx')}
+      ON ${events} (namespace, name, event_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_appended_at_idx')}
       ON ${events} (namespace, appended_at)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_duplicate_key_idx')}
@@ -372,6 +378,7 @@ export async function checkDdl(
   const existingIndexes = new Set(indexResult.rows.map((row) => row.indexname))
   const requiredIndexes = [
     'events_namespace_event_id_idx',
+    'events_namespace_name_event_id_idx',
     'events_namespace_appended_at_idx',
     'events_namespace_duplicate_key_idx',
     'waiters_armed_event_idx',

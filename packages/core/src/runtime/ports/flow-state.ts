@@ -38,6 +38,8 @@ export interface FlowSnapshot {
     | "cancelled";
   /** JSON input captured at first run. */
   readonly input: JsonValue;
+  /** SHA-256 of the canonical accepted input for safe identity inspection. */
+  readonly inputDigest?: string;
   /** Serializable observability carrier for the next execution segment. */
   readonly continuation?: JsonValue;
   /** Existing label-keyed step cache, unchanged by the Runtime Engine. */

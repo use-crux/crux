@@ -105,3 +105,8 @@ obligation with content-addressed terminal results and safe Work control
 metadata. Independent application
 hosts reconnect after worker restart, duplicate wakes preserve the first result,
 and expired payloads raise `WorkResultExpiredError` without re-executing Work.
+
+Persist a canonical accepted-input digest across Memory, PostgreSQL, and Convex
+snapshots. Runtime inspection and Devtools now show safe Work identity,
+definition and Effect scope, ownership, result lineage, statistics, progress,
+and bounded lifecycle events without exposing input or result payloads.

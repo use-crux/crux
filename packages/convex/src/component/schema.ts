@@ -103,6 +103,7 @@ export default defineSchema({
       }),
     ),
     input: v.any(),
+    inputDigest: v.optional(v.string()),
     continuation: v.optional(v.any()),
     completedSteps: v.any(),
     fingerprint: v.array(v.string()),

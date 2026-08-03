@@ -350,6 +350,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
         }
       : {}),
     input: cloneJsonValue(snapshot.input, "flow snapshot input"),
+    ...(snapshot.inputDigest ? { inputDigest: snapshot.inputDigest } : {}),
     ...(snapshot.continuation
       ? {
           continuation: cloneJsonValue(

@@ -568,7 +568,7 @@ Prompt resolution carries private, non-serializable retrieval fold provenance
 with the resolved value. In system mode the fresh resolved system is guarded
 before replacing the active system. In messages mode Core verifies and patches
 the one folded system prefix, preserving its trusted suffix and every later
-assistant/tool turn. Resolver-owned family—not a spoofable source string—marks
+assistant/tool turn. Resolver-owned family—not a forgeable source string—marks
 retrieval text. Prefix mismatch or failed writeback terminates before another
 provider call, and the carrier never enters public types, metadata, provider
 requests, audit, or observability. With no applicable policy, request bytes and
@@ -850,7 +850,7 @@ prompts expose literal `hasOutput` values for adapter branching.
 The `adapt` field on prompts supports three matching strategies, checked in order:
 
 1. **Exact provider match** — `adapt.openai` when provider is `"openai"`
-2. **Model ID prefix** — for OpenRouter-style routing where `modelId` is `"openai/gpt-4o"`, the prefix `"openai"` is extracted and matched
+2. **Model ID prefix** — for OpenRouter-style routing where `modelId` is `"openai/model-4o"`, the prefix `"openai"` is extracted and matched
 3. **Wildcard** — `adapt['*']` applies to all providers
 
 Each adaptation can `prependSystem`, `appendSystem`, `prependPrompt`, `appendPrompt`, and override `settings`.
@@ -1009,6 +1009,17 @@ Outbox dispatch is bounded and defaults to eight in-flight deliveries per pass. 
 Lease ownership is a kernel-level fencing contract. `handleWake()` claims a store lease, records the token on the leased work row, heartbeats that lease while target code runs when the host supports timers, and re-checks the same token inside every finalizing commit transaction. If maintenance has reclaimed the work or another worker has re-leased it, completion, suspension, retry, and failure commits abort with `LEASE_LOST`; the stale executor acknowledges the wake without consuming attempts or overwriting the current owner. Timerless host bindings pass `leaseExtension: false` and rely on fencing plus an appropriately sized `leaseTtlMs`; Convex does this for both isolate handlers and Node actions. Store adapters only implement `leases.claim/extend/release` and transactional state reads/writes.
 
 Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store, wake, and host-safe lease-extension settings while still delegating to `createRuntime()` and the same kernel path.
+
+Application Work is a typed projection of one parentless Runtime Flow occurrence,
+not another queue or lifecycle. `createWorkHost()` binds request-scoped
+`spawn()` and `getWork()` calls to one immutable Runtime Program. Acceptance
+derives identity from namespace, exported target, and caller key, then commits
+the Work row, Flow snapshot, canonical input digest, pinned definition, Effect
+scope, result obligation, and wake outbox row in one store composite. The
+public handle reads status, progress, cursor events, statistics, result, and
+controls from those same records. Local operator inspection projects only the
+safe digest, definition/effect/result references, ownership, bounded ledger,
+and Work events; it does not expose input or result payloads.
 
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 

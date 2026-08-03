@@ -49,7 +49,9 @@ export function createMemoryEventPort(
 
     async read(options: ReadEventsOptions): Promise<ReadEventsResult> {
       const namespaceEvents = data.events.filter(
-        (event) => event.namespace === options.namespace,
+        (event) =>
+          event.namespace === options.namespace &&
+          (options.name === undefined || event.name === options.name),
       )
       const afterIndex =
         options.after === undefined

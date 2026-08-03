@@ -26,6 +26,7 @@ import {
 import { cancelRuntimeFlow } from "../runtime/api/flows";
 import { runtimeRequiredError } from "../runtime/api/runtime-required";
 import {
+  bindRuntimeTargetFactory,
   registerRuntimeTarget,
   runtimeTargetMap,
 } from "../runtime/api/target-registry";
@@ -1631,7 +1632,7 @@ export function flow(
 
   registerRuntimeTarget(name, createRuntimeTarget);
 
-  const handle = {
+  const handle = bindRuntimeTargetFactory({
     name,
     kind: "flow" as const,
 
@@ -1718,7 +1719,7 @@ export function flow(
       }
       await cancelFlow(flowId);
     },
-  };
+  }, createRuntimeTarget);
 
   return Object.freeze(handle) as FlowHandle<
     unknown,

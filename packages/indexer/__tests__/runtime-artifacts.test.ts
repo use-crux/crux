@@ -133,6 +133,8 @@ describe("runtime artifacts", () => {
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("createRuntimeProgram({ targets, transports })");
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
       '{ target: target0, definition: { id: "flow:review", fingerprint: "definition-review-v1" } }',
     );

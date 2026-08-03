@@ -30,6 +30,7 @@ export async function* durableWorkStream(
   for (;;) {
     let page = await runtime.store.events.read({
       namespace: runtime.namespace,
+      name: `crux.work:${id}`,
       ...(cursor ? { after: cursor } : {}),
       limit: 100,
     });
@@ -59,12 +60,15 @@ export async function* durableWorkStream(
         waitAttempt = 0;
         break;
       }
-      if (!isTerminal(durableWorkStatus(await requireWork(runtime, id)).state)) {
+      if (
+        !isTerminal(durableWorkStatus(await requireWork(runtime, id)).state)
+      ) {
         waitAttempt = await waitForDurableWorkChange(waitAttempt);
         break;
       }
       page = await runtime.store.events.read({
         namespace: runtime.namespace,
+        name: `crux.work:${id}`,
         ...(cursor ? { after: cursor } : {}),
         limit: 100,
       });

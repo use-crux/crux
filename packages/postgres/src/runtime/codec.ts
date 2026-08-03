@@ -104,6 +104,9 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
         }
       : {}),
     input: row.input as FlowSnapshot['input'],
+    ...(typeof row.input_digest === 'string'
+      ? { inputDigest: row.input_digest }
+      : {}),
     ...(row.continuation !== null && row.continuation !== undefined
       ? { continuation: row.continuation as FlowSnapshot['continuation'] }
       : {}),
