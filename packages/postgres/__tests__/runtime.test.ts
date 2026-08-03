@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   runStoreAdapterTests,
   type RunStoreAdapterTestsOptions,
@@ -64,6 +64,10 @@ describe('@use-crux/postgres runtime', () => {
   beforeAll(async () => {
     testDatabase = await startPostgresTestDatabase()
   }, 30_000)
+
+  afterEach(async () => {
+    await Promise.all(stores.splice(0).map(({ close }) => close()))
+  })
 
   afterAll(async () => {
     try {
