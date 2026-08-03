@@ -2,6 +2,7 @@ import {
   createRuntimeError,
   type RuntimeSetupMode,
   type RuntimeSetupPort,
+  type RuntimeResultPayloadPort,
   type RuntimeStoreAdapter,
   type RuntimeStoreTransaction,
 } from '@use-crux/core/runtime'
@@ -22,6 +23,7 @@ import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
 import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
+import { createPostgresResultPayloadPort } from './results'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -72,6 +74,8 @@ export interface PostgresRuntimeStoreTesting {
 export interface PostgresRuntimeStore extends RuntimeStoreAdapter {
   /** Stable adapter id used in conformance output. */
   readonly id: 'postgres'
+  /** Canonical content-addressed terminal result payload storage. */
+  readonly results: RuntimeResultPayloadPort
   /** Resource verification and additive DDL setup. */
   readonly setup: RuntimeSetupPort
   /** Fault-injection controls for conformance tests. */
@@ -83,10 +87,11 @@ export interface PostgresRuntimeStore extends RuntimeStoreAdapter {
 /**
  * Create a Postgres Runtime Engine store adapter.
  *
- * The adapter persists state, events, waiters, timers, outbox rows,
- * idempotency keys, leases, and scoped-idle counters in a Crux-owned SQL
- * schema. It does not deliver wake requests by itself; compose it with a wake
- * adapter such as QStash when running in serverless environments.
+ * The adapter persists state, events, waiters, timers, outbox rows, terminal
+ * result payloads, idempotency keys, leases, and scoped-idle counters in a
+ * Crux-owned SQL schema. It does not deliver wake requests by itself; compose
+ * it with a wake adapter such as QStash when running in serverless
+ * environments.
  *
  * @param options - Connection, schema, and setup options.
  * @returns A durable store adapter accepted by runtime composers.
@@ -148,6 +153,7 @@ export function postgres(
     ...ports,
     leases: createPostgresLeasePort(pool, schema),
     maintenanceOwnership: createPostgresMaintenanceOwnership(pool, schema),
+    results: createPostgresResultPayloadPort(pool, schema),
     setup: createPostgresSetupPort(pool, schema),
     async transact<T>(
       fn: (tx: RuntimeStoreTransaction) => Promise<T>,

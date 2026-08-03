@@ -335,6 +335,7 @@ export type {
 } from "./reactive/records";
 export type * from "./store";
 
+export { canonicalRuntimeResult } from "./results/canonical";
 export {
   RUNTIME_RESULT_MAX_BYTES,
   RUNTIME_RESULT_MEDIA_TYPE,

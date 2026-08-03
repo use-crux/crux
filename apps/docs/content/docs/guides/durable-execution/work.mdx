@@ -28,17 +28,19 @@ the artifacts.
 
 ## Bind the application host
 
-For the current process-local slice, bind the memory Runtime and a stable
-namespace:
+Bind a Runtime and stable namespace. For local development, `node()` without a
+store uses process-local memory; production Work that must survive a process
+restart needs a durable Runtime store such as PostgreSQL:
 
 ```ts
 import { createWorkHost, spawn } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
 import { runtimeProgram } from "./.crux/generated/runtime/program";
 import { reviewDocument } from "./src/flows/review-document";
 
 const workHost = createWorkHost({
-  runtime: node({ namespace: "local" }),
+  runtime: node({ store: postgres(), namespace: "app" }),
   program: runtimeProgram,
 });
 
@@ -88,15 +90,28 @@ A Runtime-supported Flow barrier may move the same Work through `suspended`
 before it resumes and completes. Terminal failures expose only the safe public
 Work failure summary; thrown provider and user details are not retained there.
 
+## PostgreSQL result retention
+
+The PostgreSQL Runtime store retains the typed terminal result as canonical,
+content-addressed JSON. A restarted host reconnects with `getWork()` and reads
+the exact same value after an independent worker completes the pinned Flow.
+Duplicate wake delivery neither executes the Flow again nor replaces its
+result.
+
+Referenced result payloads are retained during PostgreSQL cleanup. If an
+operator removes a payload or its retention policy expires it, `result()` throws
+`WorkResultExpiredError`; it never re-enqueues or re-executes the Work. Store
+large application content separately and return a bounded reference from the
+Flow result.
+
 ## Current control boundary
 
 This release slice provides acceptance, generated-worker execution,
 `status()`, `result()`, reconnection, and Flow suspension/resumption for the
-memory-backed Runtime store. Durable provider conformance, result retention,
-and the remaining canonical handle controls land with later Work slices.
-Until then, `progress()`, `cancel()`, `detach()`, and `stats()` reject with
-`CAPABILITY_MISSING`; iterating `stream()` rejects with the same explicit
-diagnostic until cursor-backed Work events are implemented.
+memory and PostgreSQL Runtime stores. `progress()`, `cancel()`, `detach()`,
+and `stats()` reject with `CAPABILITY_MISSING`; iterating `stream()` rejects
+with the same explicit diagnostic until cursor-backed Work events are
+implemented.
 
 Use `flow.run()` when the request should await foreground completion. Use
 `defer()` for resultless follow-up work. Replay-safe child Work created inside

@@ -88,3 +88,9 @@ result, Runtime Flow suspension preserves the pinned definition/result
 obligation through resume, and terminal Work failures persist only safe public
 summaries. Progress, cancellation, detachment, statistics, and live event
 streaming remain explicitly unsupported for durable Work in this slice.
+
+PostgreSQL Runtime storage now persists the pinned Work result obligation and
+content-addressed terminal result. Independent application hosts can reconnect
+after worker restart and read the exact typed Flow result. Referenced payloads
+survive retention pruning; missing payloads raise `WorkResultExpiredError`
+without re-enqueuing or re-executing Work.
