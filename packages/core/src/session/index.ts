@@ -19,5 +19,6 @@ export type {
   SessionTurnHandle,
   SessionModelGuard,
   SessionOptions,
+  SessionStatus,
   SessionThreadView,
 } from "./types";

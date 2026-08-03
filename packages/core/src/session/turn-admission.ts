@@ -68,6 +68,14 @@ export async function acceptSessionTurns<TOutput>(
         ),
       });
       await tx.state.putWork(work);
+      await sessions.linkTurn({
+        namespace: runtime.namespace,
+        sessionId: record.sessionId,
+        inputId: input.inputId,
+        workId: work.workId,
+        target: target.id,
+        now: runtime.now(),
+      });
       await tx.outbox.put(wakeEnvelopeForWork(work), {
         deliverAt: runtime.now(),
       });

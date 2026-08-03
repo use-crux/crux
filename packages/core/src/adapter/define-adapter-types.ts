@@ -32,6 +32,10 @@ import type { CallHandle } from "./call-handle";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type { InputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
+import {
+  managedGenerationCheckpoint,
+  type ManagedGenerationCheckpoint,
+} from "../generation-model/execution-checkpoint";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
 export interface AdapterTransportInfo {
@@ -57,6 +61,8 @@ export interface AdapterGenerateBaseOptions<
   TParams = unknown,
   TRawResponse = unknown,
 > {
+  /** Session-owned durable completion hook. @internal */
+  readonly [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
   /** Model identifier passed to the provider's API. */
   model: string;
   /** Input for the prompt. */

@@ -69,7 +69,13 @@ describe("Session model declaration", () => {
         .run(() => session(support, { key: "customer", model: override }))
         .catch((cause: unknown) => cause);
       expect(error).toBeInstanceOf(GenerationModelNotStaticError);
-      expect(error).toMatchObject({ code: "GENERATION_MODEL_NOT_STATIC" });
+      expect(error).toMatchObject({
+        code: "GENERATION_MODEL_NOT_STATIC",
+        whatFailed: expect.any(String),
+        why: expect.any(String),
+        whatStillWorks: expect.any(String),
+        nextStep: expect.any(String),
+      });
       expect(store.testing.sessionRecords(namespace)).toEqual([]);
       expect(await store.state.listWork({ namespace, status: "pending" })).toEqual([]);
       expect(put).not.toHaveBeenCalled();

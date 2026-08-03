@@ -19,6 +19,7 @@ import { sessionInputValue } from "./input";
 import type { GenerationModel } from "../generation-model";
 import { acceptSessionTurns } from "./turn-admission";
 import type { SessionFor, SessionModelGuard, SessionOptions } from "./types";
+import { readSessionStats, readSessionStatus } from "./inspection";
 
 const encoder = new TextEncoder();
 
@@ -171,6 +172,8 @@ function createHandle<TAgent extends AnyAgent>(
     send: async (input: InferAgentInput<TAgent>) => (await accept([input]))[0]!,
     sendMany: async (inputs: readonly InferAgentInput<TAgent>[]) =>
       accept(inputs),
+    status: () => readSessionStatus(runtime, record.sessionId),
+    stats: () => readSessionStats(runtime, record.sessionId),
   });
 }
 

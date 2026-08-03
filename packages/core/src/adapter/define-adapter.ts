@@ -40,6 +40,7 @@ import {
   WORK_CONTROL_TOOL_NAME,
 } from "../agent/work-control-tool";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
+import { managedGenerationCheckpoint } from "../generation-model/execution-checkpoint";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
 import { transportDialect } from "./execution/transport-dialect";
@@ -189,6 +190,7 @@ export function adapter<
         safety: opts.safety,
         timeout: opts.timeout,
         signal: opts.signal,
+        [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
       })) as AdapterGenerateResult<TRawResponse>;
     }
 

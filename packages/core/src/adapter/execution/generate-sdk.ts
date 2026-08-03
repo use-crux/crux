@@ -94,12 +94,10 @@ import {
 import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
 import {
   alignThreadInvocationInput,
-  commitThreadInvocation,
-  isThreadReplay,
   prepareThreadInvocation,
-  validateThreadReplay,
 } from "./thread-history";
 import { attachThreadCommit } from "./thread-result";
+import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -568,9 +566,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           }
         },
         async (result) => {
-          if (result.threadCommit || result.pendingApprovals) return;
-          await validateThreadReplay(threadInvocation, isThreadReplay(result));
-          const threadCommit = await commitThreadInvocation(
+          const threadCommit = await checkpointAndCommitManagedGeneration(
+            args,
             threadInvocation,
             result,
           );

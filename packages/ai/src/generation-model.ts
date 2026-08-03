@@ -13,6 +13,7 @@ import type { AdapterBoundGenerationModel } from "@use-crux/core";
 import type { AgentExecutor } from "@use-crux/core/agent";
 import {
   defineGenerationModel,
+  managedGenerationCheckpoint,
   type GenerationRuntimePort,
 } from "@use-crux/core/adapter-authoring";
 import { liveSdkGateway } from "./gateway";
@@ -124,6 +125,7 @@ function createAiSdkRuntimePort(): GenerationRuntimePort {
           prepareStep: options.prepareStep ?? agent.prepareStep,
           activeTools: options.activeTools,
           signal: options.signal,
+          [managedGenerationCheckpoint]: options[managedGenerationCheckpoint],
           ...(Object.keys(mergedTools).length > 0
             ? { tools: mergedTools }
             : {}),

@@ -133,3 +133,8 @@ GenerationModel reference for deterministic reconnect. A bound Session override
 must be declared by the RuntimeProgram or fails before mutation with
 `GENERATION_MODEL_NOT_STATIC`; missing bindings and capability preflight retain
 their existing distinct errors.
+
+Session turns now retain restart-safe execution checkpoints, allowing safe
+recovery across owner Thread publication without rerunning generation. Session
+diagnostics expose structured, payload-safe failures alongside compact status
+and bounded lifetime turn statistics.

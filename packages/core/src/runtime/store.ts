@@ -31,6 +31,10 @@ import type { RuntimeResultPayloadPort } from "./results/types";
 import type { RuntimeSignalStorePort } from "./reactive/records";
 import type { RuntimeMaintenanceOwnershipPort } from "./ports/maintenance-ownership";
 import type { RuntimeSessionStorePort } from "./ports/sessions";
+import {
+  sessionPostPublicationSeam,
+  type SessionPostPublicationSeam,
+} from "../session/post-publication-seam";
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = "scheduled" | "fired" | "cancelled";
@@ -244,6 +248,8 @@ export interface RuntimeStoreTransaction {
 
 /** Durable record store used by Runtime Engine kernels. */
 export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
+  /** Optional deterministic Session fault boundary implemented by test stores. @internal */
+  readonly [sessionPostPublicationSeam]?: SessionPostPublicationSeam;
   /** Stable adapter id used in conformance output. */
   readonly id: string;
   /**

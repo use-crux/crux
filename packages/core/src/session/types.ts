@@ -6,7 +6,7 @@ import type {
   Supports,
 } from "../generation-model";
 import type { ThreadReadOptions, ThreadSnapshot } from "../thread";
-import type { WorkHandle } from "../work";
+import type { ExecutionStats, WorkHandle } from "../work";
 
 /** Extract the model configured on an Agent. */
 export type AgentModel<A extends AnyAgent> = A["model"];
@@ -91,6 +91,20 @@ export interface SessionTurnHandle<TOutput> extends SessionInputHandle {
   result(): Promise<TOutput>;
 }
 
+/** Detached compact lifecycle snapshot for one live Session. */
+export interface SessionStatus {
+  /** Current live execution state; lifecycle closure is outside this API. */
+  readonly state: "parked" | "running" | "blocked";
+  /** Newest durably accepted input cursor, when any input was accepted. */
+  readonly acceptedCursor?: string;
+  /** Newest successfully processed input cursor, when any turn completed. */
+  readonly processedCursor?: string;
+  /** Accepted inputs that have not reached a terminal turn boundary. */
+  readonly pendingInputs: number;
+  /** Canonical Work occurrences that have not completed successfully. */
+  readonly pendingWork: number;
+}
+
 declare const sessionOutput: unique symbol;
 
 /** Durable, keyed, Agent-specific input owner. @typeParam TInput Agent input. */
@@ -105,6 +119,10 @@ export interface Session<TInput, TOutput = unknown> {
   sendMany(
     inputs: readonly TInput[],
   ): Promise<readonly SessionTurnHandle<TOutput>[]>;
+  /** Read a detached immutable compact snapshot of canonical Session state. */
+  status(): Promise<SessionStatus>;
+  /** Read bounded statistics for the complete addressed Session lifetime. */
+  stats(): Promise<ExecutionStats>;
   /** Exact Agent output retained for later joinable Session results. @internal */
   readonly [sessionOutput]?: TOutput;
 }

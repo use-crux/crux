@@ -4,6 +4,8 @@ import { agent, type AnyAgent } from "../agent";
 import type { GenerationModel } from "../generation-model";
 import type { GenerationModelResolver } from "../generation-model/resolver";
 import { generationRuntime } from "../generation-model/runtime-port";
+import { managedGenerationCheckpoint } from "../generation-model/execution-checkpoint";
+import { assertRuntimeJsonValue } from "../runtime/engine/json-value";
 import { prompt } from "../prompt";
 import type { RuntimeTargetRuntimeRef } from "../runtime/api/target-registry";
 import type {
@@ -15,6 +17,12 @@ import type { RuntimeTargetId } from "../runtime/ports/ids";
 import { resolveRecords } from "../runtime/runtime";
 import type { JsonValue, Storage } from "../storage";
 import { createThreadHandle } from "../thread/thread";
+import {
+  encodePreparedSessionTurn,
+  parsePreparedSessionTurn,
+} from "./prepared-execution";
+import { sessionPostPublicationSeam } from "./post-publication-seam";
+import { SessionTurnResultArtifactError } from "./errors";
 
 /** Adapt one statically imported Agent into the existing Runtime worker path. */
 export function createSessionAgentRuntimeTarget(
@@ -25,13 +33,17 @@ export function createSessionAgentRuntimeTarget(
   return Object.freeze({
     targetId: target.id as RuntimeTargetId,
     kind: "agent" as const,
-    async execute(context: RuntimeTargetContext): Promise<RuntimeTargetOutcome> {
+    async execute(
+      context: RuntimeTargetContext,
+    ): Promise<RuntimeTargetOutcome> {
       const turn = context.work.work;
       if (turn.kind !== "session.turn") return blocked(target.id, turn.kind);
       const model = resolveModel(target, turn.model, resolveGenerationModel);
       const runtime = runtimeRef.current;
       if (!runtime?.store.results || !runtime.store.sessions) {
-        throw new Error("Session Agent execution requires result and Session storage.");
+        throw new Error(
+          "Session Agent execution requires result and Session storage.",
+        );
       }
       const ownerThread = createThreadHandle(
         {
@@ -40,6 +52,40 @@ export function createSessionAgentRuntimeTarget(
         },
         { id: turn.sessionId, state: "open" },
       );
+      const checkpoint = await runtime.store.sessions.getPreparedExecution(
+        context.work.namespace,
+        turn.sessionId,
+        turn.inputId,
+      );
+      if (checkpoint) {
+        const payload = await runtime.store.results.get(
+          checkpoint.preparedResultRef,
+        );
+        let prepared: ReturnType<typeof loadPreparedSessionTurn>;
+        try {
+          prepared = loadPreparedSessionTurn(payload, turn.threadId);
+        } catch (error) {
+          if (error instanceof SessionTurnResultArtifactError) {
+            return {
+              status: "blocked",
+              error: {
+                code: error.code,
+                message: error.message,
+                at: runtime.now(),
+              },
+            };
+          }
+          throw error;
+        }
+        await ownerThread.commitTurn({
+          messages: prepared.publication.messages,
+          after: prepared.publication.after,
+        });
+        const resultRef = await runtime.store.results.put(prepared.output, {
+          namespace: context.work.namespace,
+        });
+        return { status: "completed", resultRef };
+      }
       const boundPrompt = prompt({
         ...target.prompt.config,
         use: Object.freeze([...target.prompt.contexts, ownerThread]),
@@ -51,20 +97,61 @@ export function createSessionAgentRuntimeTarget(
       } as never);
       const result = await model[generationRuntime].createAgentExecutor()(
         boundAgent,
-        { input: turn.input, model },
+        {
+          input: turn.input,
+          model,
+          [managedGenerationCheckpoint]: async (prepared) => {
+            const encoded = encodePreparedSessionTurn(
+              context.work.workId,
+              prepared,
+            );
+            if (encoded.prepared.publication.threadId !== turn.threadId) {
+              throw new Error("Prepared execution targets another Thread.");
+            }
+            const preparedResultRef = await runtime.store.results!.put(
+              encoded.payload,
+              { namespace: context.work.namespace },
+            );
+            await runtime.store.sessions!.checkpointPreparedExecution({
+              namespace: context.work.namespace,
+              sessionId: turn.sessionId,
+              inputId: turn.inputId,
+              workId: context.work.workId,
+              preparedResultRef,
+              now: runtime.now(),
+            });
+            return {
+              publication: encoded.prepared.publication,
+              afterPublication: () =>
+                runtime.store[sessionPostPublicationSeam]?.({
+                  sessionId: turn.sessionId,
+                  workId: context.work.workId,
+                }),
+            };
+          },
+        },
       );
-      const resultRef = await runtime.store.results.put(
-        result.output as JsonValue,
-        { namespace: context.work.namespace },
-      );
-      await runtime.store.sessions.park(
-        context.work.namespace,
-        turn.sessionId,
-        runtime.now(),
-      );
+      assertRuntimeJsonValue(result.output, "Session Agent output");
+      const resultRef = await runtime.store.results.put(result.output, {
+        namespace: context.work.namespace,
+      });
       return { status: "completed", resultRef };
     },
   });
+}
+
+function loadPreparedSessionTurn(payload: JsonValue | null, threadId: string) {
+  if (payload === null) throw new SessionTurnResultArtifactError();
+  try {
+    const prepared = parsePreparedSessionTurn(payload);
+    if (prepared.publication.threadId !== threadId) {
+      throw new SessionTurnResultArtifactError();
+    }
+    return prepared;
+  } catch (error) {
+    if (error instanceof SessionTurnResultArtifactError) throw error;
+    throw new SessionTurnResultArtifactError();
+  }
 }
 
 function resolveModel(
@@ -73,7 +160,8 @@ function resolveModel(
   resolveGenerationModel: GenerationModelResolver,
 ): GenerationModel {
   const model = resolveGenerationModel(reference) ?? target.model;
-  if (isGenerationModel(model) &&
+  if (
+    isGenerationModel(model) &&
     model.definition.id === reference.definitionId &&
     model.definition.fingerprint === reference.fingerprint
   ) {

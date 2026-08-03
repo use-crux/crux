@@ -36,12 +36,20 @@ import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
 import type { RuntimeWorkControlPort } from "../../ports/work-control";
 import { createMemoryWorkControlPort } from "./work-control";
-import { createMemorySessionStore } from "./sessions";
+import {
+  createMemorySessionStore,
+  type MemorySessionFaults,
+} from "./sessions";
 import type { RuntimeSessionStorePort } from "../../ports/sessions";
 import type {
   RuntimeSessionInputRecord,
   RuntimeSessionRecord,
 } from "../../ports/sessions";
+import { createRuntimeError } from "../../engine/errors";
+import {
+  sessionPostPublicationSeam,
+  type SessionPostPublicationInput,
+} from "../../../session/post-publication-seam";
 
 type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
@@ -55,6 +63,12 @@ export interface InMemoryRuntimeStoreTesting {
   failAfter(writes: number): void;
   /** Throw once before confirming the next outbox item. */
   crashBeforeConfirm(): void;
+  /** Stop once after Session execution is checkpointed, before Thread publication. */
+  crashAfterSessionTurnCheckpoint(): void;
+  /** Stop once after owner-Thread publication, before Session parking. */
+  crashAfterSessionThreadPublication(): void;
+  /** Make the next recovered Session checkpoint reference an unavailable result. */
+  missingSessionPreparedResultArtifact(): void;
   /** Inspect accepted Session inputs in cursor order for adapter tests. */
   sessionInputs(
     namespace: string,
@@ -101,6 +115,11 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
 export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
   const data = createMemoryRuntimeData();
   const outboxFaults: MemoryOutboxFaults = { crashBeforeConfirm: false };
+  const sessionFaults: MemorySessionFaults = {
+    crashAfterPreparedExecution: false,
+    missingPreparedResultArtifact: false,
+  };
+  let crashAfterThreadPublication = false;
   const transactionMutex = createAsyncMutex();
   let failAfterWrites: number | undefined;
 
@@ -117,7 +136,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       deferred: createMemoryDeferredStore(target, recordWrite),
       signals: createMemorySignalStore(target, recordWrite),
       workControl: createMemoryWorkControlPort(target, recordWrite),
-      sessions: createMemorySessionStore(target, recordWrite),
+      sessions: createMemorySessionStore(target, recordWrite, sessionFaults),
     };
   }
 
@@ -125,6 +144,11 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
   return Object.freeze({
     id: "memory" as const,
     durability: "process-local" as const,
+    [sessionPostPublicationSeam]({ sessionId }: SessionPostPublicationInput) {
+      if (!crashAfterThreadPublication) return;
+      crashAfterThreadPublication = false;
+      throw publicationCrash(sessionId);
+    },
     ...ports,
     results: createMemoryResultPayloadPort(data),
     leases: createMemoryLeasePort(data),
@@ -157,6 +181,15 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       crashBeforeConfirm(): void {
         outboxFaults.crashBeforeConfirm = true;
       },
+      crashAfterSessionTurnCheckpoint(): void {
+        sessionFaults.crashAfterPreparedExecution = true;
+      },
+      crashAfterSessionThreadPublication(): void {
+        crashAfterThreadPublication = true;
+      },
+      missingSessionPreparedResultArtifact(): void {
+        sessionFaults.missingPreparedResultArtifact = true;
+      },
       sessionInputs(namespace: string, sessionId: string) {
         return Object.freeze(
           [...data.sessionInputs.values()]
@@ -179,5 +212,16 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
         );
       },
     }),
+  });
+}
+
+function publicationCrash(sessionId: string) {
+  return createRuntimeError({
+    code: "LEASE_LOST",
+    whatFailed: `Session \`${sessionId}\` stopped after owner-Thread publication.`,
+    why: "The in-memory test adapter injected process loss before Session parking.",
+    whatStillWorks:
+      "The prepared execution and idempotent Thread receipt can be replayed by the next Runtime worker attempt.",
+    nextStep: "Retry through the Runtime worker.",
   });
 }

@@ -29,6 +29,10 @@ import type { GenerateResult } from "./result-accumulator";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type { InputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
+import {
+  managedGenerationCheckpoint,
+  type ManagedGenerationCheckpoint,
+} from "../generation-model/execution-checkpoint";
 
 /**
  * Model argument accepted by a loop-owning executor.
@@ -48,6 +52,8 @@ export interface ExecutorGenerateBaseOptions<
   TModel,
   TSelectedModel = ExecutorModelArg<TModel>,
 > {
+  /** Session-owned durable completion hook. @internal */
+  readonly [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
   /** Plain model or Core routing wrapper to execute. */
   model: TSelectedModel;
   /** Input for the prompt. */

@@ -19,6 +19,10 @@ import type { PrepareStep } from '../request/prepare/step'
 import type { RequestReceipt } from '../request/receipt/receipt'
 import type { ThreadCommit } from '../thread/types'
 import type { EffectScopeRef } from '../effect'
+import {
+  managedGenerationCheckpoint,
+  type ManagedGenerationCheckpoint,
+} from '../generation-model/execution-checkpoint'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -85,6 +89,8 @@ export interface ExecuteOptions {
   activeTools?: readonly string[]
   /** Cooperative cancellation inherited by this Agent invocation. */
   signal?: AbortSignal
+  /** Durable completion carrier installed only by the Session Runtime target. @internal */
+  [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.

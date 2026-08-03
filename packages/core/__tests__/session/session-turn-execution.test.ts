@@ -42,9 +42,19 @@ describe("Session turn execution", () => {
     });
 
     try {
-      await expect(
-        host.run(() => Reflect.apply(session, undefined, [support, { key: "customer-missing-model" }])),
-      ).rejects.toMatchObject({ code: "GENERATION_MODEL_BINDING_MISSING" });
+      const error = await host
+        .run(() =>
+          Reflect.apply(session, undefined, [support, { key: "customer-missing-model" }]),
+        )
+        .catch((cause: unknown) => cause);
+      expect(error).toMatchObject({
+        code: "GENERATION_MODEL_BINDING_MISSING",
+        whatFailed: expect.any(String),
+        why: expect.any(String),
+        whatStillWorks: expect.any(String),
+        nextStep: expect.any(String),
+      });
+      expect(error).not.toMatchObject({ message: expect.stringContaining("customer-missing-model") });
       expect(store.testing.sessionRecords(namespace)).toEqual([]);
       expect(await store.state.listWork({ namespace, status: "pending" })).toEqual([]);
       expect(put).not.toHaveBeenCalled();
@@ -100,7 +110,13 @@ describe("Session turn execution", () => {
     try {
       await expect(
         host.run(() => Reflect.apply(session, undefined, [support, { key: "customer-missing-capability" }])),
-      ).rejects.toMatchObject({ code: "GENERATION_CAPABILITY_MISSING" });
+      ).rejects.toMatchObject({
+        code: "GENERATION_CAPABILITY_MISSING",
+        whatFailed: expect.any(String),
+        why: expect.any(String),
+        whatStillWorks: expect.any(String),
+        nextStep: expect.any(String),
+      });
       expect(execute).not.toHaveBeenCalled();
       expect(store.testing.sessionRecords(namespace)).toEqual([]);
       expect(await store.state.listWork({ namespace, status: "pending" })).toEqual([]);

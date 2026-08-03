@@ -414,6 +414,7 @@ export type {
   SessionTurnHandle,
   SessionModelGuard,
   SessionOptions,
+  SessionStatus,
   SessionThreadView,
 } from "./session";
 export type {

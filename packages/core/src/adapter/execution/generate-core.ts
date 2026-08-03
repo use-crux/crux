@@ -78,6 +78,7 @@ import {
   replaceResponseTranscriptText,
 } from "./response-text";
 import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
+import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
 import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
 import {
   applySystemMessagePrefixPatch,
@@ -123,10 +124,7 @@ import { appendStepSystemContext } from "./step-system-context";
 import type { StepReason } from "../../request/prepare/step-context";
 import {
   alignThreadInvocationInput,
-  commitThreadInvocation,
-  isThreadReplay,
   prepareThreadInvocation,
-  validateThreadReplay,
 } from "./thread-history";
 import { attachThreadCommit } from "./thread-result";
 
@@ -854,9 +852,8 @@ export async function generateCore<
             : result;
         },
         async (result) => {
-          if (result.threadCommit || result.pendingApprovals) return;
-          await validateThreadReplay(threadInvocation, isThreadReplay(result));
-          const threadCommit = await commitThreadInvocation(
+          const threadCommit = await checkpointAndCommitManagedGeneration(
+            args,
             threadInvocation,
             result,
           );

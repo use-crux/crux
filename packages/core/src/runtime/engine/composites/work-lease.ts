@@ -43,5 +43,15 @@ export async function leaseWorkInTransaction(
       : transitioned,
   );
   await tx.state.putWork(leased);
+  if (current.work.kind === "session.turn") {
+    if (!tx.sessions)
+      throw new Error("Runtime Session storage is unavailable.");
+    await tx.sessions.startTurn({
+      namespace: current.namespace,
+      sessionId: current.work.sessionId,
+      inputId: current.work.inputId,
+      now,
+    });
+  }
   return leased;
 }
