@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { SetupReport } from '@use-crux/core/setup'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -79,6 +80,117 @@ describe('runSetupOperation', () => {
     )
     expect(JSON.stringify(report)).not.toContain('admin')
     expect(JSON.stringify(report)).not.toContain('secret')
+  })
+
+  it('includes configured Storage setup in read-only checks', async () => {
+    const root = await mkdtemp(
+      join(dirname(fileURLToPath(import.meta.url)), '.tmp-setup-ops-'),
+    )
+    roots.push(root)
+    await writeFile(join(root, 'package.json'), '{"type":"module"}')
+    await writeFile(join(root, '.gitignore'), '.crux/\n')
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        'const storage = {',
+        '  records: {} as never,',
+        '  setup: {',
+        '    check: async () => ({ ok: false, findings: [{',
+        "      code: 'STORAGE_SCHEMA_MISSING', resource: 'records',",
+        "      message: 'Storage schema is missing.',",
+        "      remediation: 'CREATE SCHEMA crux_storage',",
+        '    }] }),',
+        '    apply: async () => ({ ok: true, findings: [] }),',
+        '  },',
+        '}',
+        'export default {',
+        '  config: { storage }, prompts: {}, contexts: {},',
+        '  get: () => undefined,',
+        '}',
+      ].join('\n'),
+    )
+
+    const report = await runSetupOperation({ root, mode: 'check' })
+
+    expect(report).toMatchObject({
+      ok: false,
+      setup: {
+        mode: 'check',
+        findings: [
+          expect.objectContaining({
+            contributorId: 'storage',
+            code: 'STORAGE_SCHEMA_MISSING',
+            remediation: 'CREATE SCHEMA crux_storage',
+          }),
+        ],
+      },
+      generation: { status: 'blocked' },
+    })
+  })
+
+  it('applies configured Storage setup and closes the CLI-loaded bundle', async () => {
+    const root = await mkdtemp(
+      join(dirname(fileURLToPath(import.meta.url)), '.tmp-setup-ops-'),
+    )
+    roots.push(root)
+    await writeFile(join(root, 'package.json'), '{"type":"module"}')
+    await writeFile(join(root, '.gitignore'), '.crux/\n')
+    const stateKey = `__cruxStorageSetup_${Date.now()}`
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        `const key = ${JSON.stringify(stateKey)}`,
+        'const states = globalThis as typeof globalThis & Record<string, { healthy: boolean, applied: number, closed: number }>',
+        'const state = states[key] ??= { healthy: false, applied: 0, closed: 0 }',
+        'const storage = {',
+        '  records: {} as never,',
+        '  setup: {',
+        '    check: async () => state.healthy',
+        '      ? { ok: true, findings: [] }',
+        '      : { ok: false, findings: [{ code: "STORAGE_SCHEMA_MISSING", resource: "records", message: "missing" }] },',
+        '    apply: async () => {',
+        '      state.applied += 1',
+        '      state.healthy = true',
+        '      return { ok: true, findings: [] }',
+        '    },',
+        '  },',
+        '  close: async () => { state.closed += 1 },',
+        '}',
+        'export default {',
+        '  config: { storage }, prompts: {}, contexts: {},',
+        '  get: () => undefined,',
+        '}',
+      ].join('\n'),
+    )
+
+    const report = await runSetupOperation({
+      root,
+      mode: 'apply',
+      definitions: [],
+    })
+    const state = (
+      globalThis as typeof globalThis &
+        Record<string, { applied: number; closed: number }>
+    )[stateKey]
+
+    expect(report).toMatchObject({
+      ok: true,
+      setup: {
+        mode: 'apply',
+        actions: [
+          expect.objectContaining({
+            id: 'storage.apply-setup',
+            classification: 'safe-additive',
+          }),
+        ],
+        applied: [{ actionId: 'storage.apply-setup', ok: true }],
+        findings: [],
+      },
+    })
+    expect(state).toMatchObject({ applied: 1, closed: 1 })
+    delete (
+      globalThis as typeof globalThis & Record<string, unknown>
+    )[stateKey]
   })
 
   it('dry-runs the canonical artifact plan, applies it, then reports current', async () => {

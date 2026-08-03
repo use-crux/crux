@@ -1,25 +1,22 @@
-import type { JsonObject, RecordStore, Storage, VectorStore } from '@use-crux/core/storage'
+import type {
+  JsonObject,
+  RecordStore,
+  Storage,
+  StorageSetupFinding,
+  StorageSetupPort,
+  StorageSetupResult,
+  VectorStore,
+} from '@use-crux/core/storage'
 import type { Pool, PoolConfig } from 'pg'
 
 /** Non-mutating or additive PostgreSQL storage setup diagnostic. */
-export interface PostgresStorageSetupFinding {
-  readonly code: string
-  readonly resource: string
-  readonly message: string
-  readonly remediation?: string
-}
+export type PostgresStorageSetupFinding = StorageSetupFinding
 
 /** Result returned by PostgreSQL storage setup checks. */
-export interface PostgresStorageSetupResult {
-  readonly ok: boolean
-  readonly findings: readonly PostgresStorageSetupFinding[]
-}
+export type PostgresStorageSetupResult = StorageSetupResult
 
 /** Explicit setup lifecycle shared by PostgreSQL storage adapters. */
-export interface PostgresStorageSetup {
-  check(): Promise<PostgresStorageSetupResult>
-  apply(): Promise<PostgresStorageSetupResult>
-}
+export type PostgresStorageSetup = StorageSetupPort
 
 /** Shared PostgreSQL connection options. */
 export interface PostgresStorageConnectionOptions {

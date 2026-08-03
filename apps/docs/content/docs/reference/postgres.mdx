@@ -66,6 +66,11 @@ Setup is explicit and idempotent. `check()` never mutates the database;
 tables, constraints, and indexes. Data operations never run DDL. Diagnostics
 never include connection strings, SQL values, or stored content.
 
+When this bundle is assigned to `config({ storage })`, `crux setup --check`
+uses its setup capability and `crux setup --apply` runs the same safe-additive
+provisioning. The command releases pools created by the adapter afterward;
+caller-owned pools remain open.
+
 ## Runtime Engine
 
 ```ts

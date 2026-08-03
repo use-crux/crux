@@ -242,9 +242,41 @@ export interface VectorStore {
   capabilities(): VectorStoreCapabilities;
 }
 
+/** One provider-neutral storage setup finding. */
+export interface StorageSetupFinding {
+  /** Stable adapter diagnostic code. */
+  readonly code: string;
+  /** Storage resource or capability that failed validation. */
+  readonly resource: string;
+  /** Human-readable explanation. */
+  readonly message: string;
+  /** Exact remediation command or SQL, when available. */
+  readonly remediation?: string;
+}
+
+/** Result of checking or safely applying storage setup. */
+export interface StorageSetupResult {
+  /** Whether every required storage resource is ready. */
+  readonly ok: boolean;
+  /** Findings safe for setup tooling to render. */
+  readonly findings: readonly StorageSetupFinding[];
+}
+
+/** Optional provider-owned storage verification and provisioning capability. */
+export interface StorageSetupPort {
+  /** Check required resources without mutating infrastructure. */
+  check(): Promise<StorageSetupResult>;
+  /** Apply idempotent, safe-additive setup only. */
+  apply(): Promise<StorageSetupResult>;
+}
+
 /** Explicit capability bundle passed to primitives that need storage. */
 export interface Storage {
   readonly records: RecordStore;
   readonly vectors?: VectorStore;
   readonly assets?: AssetStore;
+  /** Provider-neutral setup capability consumed by `crux setup`. */
+  readonly setup?: StorageSetupPort;
+  /** Release adapter-owned resources without destroying caller-owned resources. */
+  close?(): Promise<void>;
 }
