@@ -43,38 +43,25 @@ result remains an ordinary callable, while `@use-crux/core/eval` can infer its
 Case input, semantic output, call options, Variants, and captured capabilities.
 
 ```ts
-import { generate, stableModel } from "@use-crux/ai";
+import { generate, aiSdk } from "@use-crux/ai";
 
 const support = generate.task(supportPrompt, {
-  model: stableModel(openai("gpt-4o-mini")),
+  model: aiSdk(openai("your-model")),
   temperature: 0.2,
 });
 
 const result = await support({ question: "Can I get a refund?" });
 ```
 
-`stableModel()` attests that the model's hidden endpoint, middleware, and
-provider configuration are stable, so Crux can reuse exact Eval evidence. It
-returns the same model with the same inferred type. Standard AI SDK models
-derive a key from `provider:modelId`; for custom providers or middleware, pass
-a secret-free versioned key and change it whenever hidden behavior changes:
+`aiSdk()` binds a native AI SDK model to Crux's provider-neutral generation
+contract. It retains the native object for execution while freezing secret-free
+identity, definition, capabilities, adapter identity, and executor metadata.
+Standard AI SDK models derive their identity from `provider:modelId`; Crux
+never reads hidden endpoint, middleware, or credential configuration.
 
-```ts
-const customModel = stableModel(createCustomModel(), "acme:support-model:v2");
-```
-
-`stableModel()` accepts leaf AI SDK models only. For `router()`, `split()`,
-`retry()`, `fallback()`, or `cascade()`, attest each object model leaf; Crux
-fingerprints callback-free route-tree structure recursively and records the
-resolved model target after execution. Route-tree evidence remains fresh when
-that target is not covered at planning; trees with runtime callbacks also run
-fresh because source provenance cannot cover closure or ambient state.
-
-Never include API keys, bearer tokens, headers, or other credentials in that
-key because it is fingerprint material. An unattested model still runs
-normally, but executes fresh and reports `model_identity_unattested` with the
-`stableModel(model)` remedy. Crux never guesses identity from constructor
-names or function source.
+`aiSdk()` accepts leaf AI SDK models, string model IDs, and same-adapter route
+trees. The AI SDK gateway receives the original native model, not the Crux
+wrapper.
 
 Function-form `prompt`, `system`, and `messages` fields participate in automatic
 reuse when their managed task comes from a tracked literal-ESM source closure.

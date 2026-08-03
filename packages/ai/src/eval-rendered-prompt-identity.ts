@@ -8,7 +8,7 @@ import type {
 } from "@use-crux/core/eval/internal/task";
 import { applyEvalTaskExecutionContext } from "@use-crux/core/eval/internal/task";
 import { extractModelInfo } from "./provider-profile";
-import { getStableModelIdentity } from "./stable-model";
+import { isBoundGenerationModel } from "./generation-model";
 import {
   projectJson,
   unavailable,
@@ -180,10 +180,7 @@ function promptResolveOptions(
   input: unknown,
 ): JsonProjection {
   const model = options.model;
-  if (
-    typeof model !== "string" &&
-    getStableModelIdentity(model) === undefined
-  ) {
+  if (typeof model !== "string" && !isBoundGenerationModel(model)) {
     return unavailable("untracked_external_dependency");
   }
   const info = extractModelInfo(model as never);

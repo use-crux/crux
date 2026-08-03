@@ -25,6 +25,7 @@ import type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 import { materializeAiSdkToolSource } from "./mcp-materializer";
 import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
 import { runCoordinatedStream } from "./sdk-codec/coordinated-stream";
+import { resolveAiSdkNativeModel } from "./generation-model";
 import { aiSdkStructuredCapabilities } from "./provider-profile";
 import { toModelMessages } from "./messages";
 
@@ -75,7 +76,7 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
 
     async compactHistory(input) {
       const result = await gateway.generateText({
-        model: input.model as LanguageModel,
+        model: resolveAiSdkNativeModel(input.model) as LanguageModel,
         system: HISTORY_SUMMARY_SYSTEM,
         messages: toModelMessages(input.messages) as ModelMessage[],
         maxOutputTokens: 500,

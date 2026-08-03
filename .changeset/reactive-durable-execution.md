@@ -4,6 +4,7 @@
 "@use-crux/local": minor
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
+"@use-crux/ai": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -115,3 +116,11 @@ Add the provider-neutral `GenerationModel` contract and adapter-authoring
 construction seam. Agents now retain their exact model type, while Sessions
 require a bound model only when the Agent does not already carry one and reject
 statically proven capability gaps without excluding broad preflight evidence.
+
+Add `@use-crux/ai`'s `aiSdk(native)` binding: one argument produces a frozen
+adapter-bound `GenerationModel` with secret-free definition identity, complete
+capability evidence, and an opaque runtime port that constructs an
+`AgentExecutor` through the existing AI provider runtime without global config.
+Same-adapter routers may be bound once. `stableModel()` is removed with no
+alias or deprecation layer; Eval identity now projects bound GenerationModel
+values.

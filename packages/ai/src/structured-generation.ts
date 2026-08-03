@@ -32,6 +32,7 @@ import {
   aiSdkStructuredCapabilities,
   extractModelInfo,
 } from "./provider-profile";
+import { resolveAiSdkNativeModel } from "./generation-model";
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
 export type StructuredGateway = Pick<SdkGateway, "generateText">;
@@ -71,9 +72,7 @@ export async function attemptStructuredGeneration(
   const call = await createAiSdkCodec().structured(request);
 
   try {
-    return call.decode(
-      await gateway.generateText(call.args as StructuredArgs),
-    );
+    return call.decode(await gateway.generateText(call.args as StructuredArgs));
   } catch (error) {
     const invalid = await call.decodeError(error);
     if (invalid) return invalid;
@@ -114,7 +113,7 @@ export function createStructuredGenerateObjectFn(
       const attempt = await attemptStructuredGeneration(
         gateway,
         requestFromGenerateObjectOptions(
-          model,
+          resolveAiSdkNativeModel(model) as LanguageModel,
           options,
           plan.outputSchema,
           attemptOptions,
