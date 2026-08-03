@@ -129,12 +129,17 @@ type IngestPart =
       id: string;
       rows: string[][];
       columns?: string[];
+      rowStart?: number;
+      rowEnd?: number;
+      sourceRange?: IngestSpreadsheetRange;
+      sourceRows?: IngestSpreadsheetRow[];
       content: string;
     }
   | {
       kind: "sheet";
       id: string;
       sheetName: string;
+      sourceRange?: IngestSpreadsheetRange;
       tables: IngestPart[];
       content: string;
     }
@@ -164,6 +169,39 @@ interface IngestDocument {
 ```
 
 `content` is derived when omitted. If you write a custom loader, you can provide parts, content, or both. Providing parts is preferred because provenance survives into indexing metadata.
+
+XLSX sheet and table parts retain provider-neutral worksheet coordinates
+alongside the compatibility `rows: string[][]` view:
+
+```ts
+interface IngestSpreadsheetRange {
+  address: string; // A1 range, for example "B2:C4"
+  rowStart: number;
+  rowEnd: number;
+  columnStart: number;
+  columnEnd: number;
+}
+
+interface IngestSpreadsheetRow {
+  row: number; // one-based worksheet row
+  address: string; // A1 row range, for example "B4:D4"
+  sourceRange: IngestSpreadsheetRange;
+  cells: IngestSpreadsheetCell[];
+}
+
+interface IngestSpreadsheetCell {
+  row: number;
+  column: number; // one-based worksheet column
+  address: string; // A1 cell address
+  value: string; // the displayed value also emitted in `rows`
+  formula?: string; // expression without the leading `=`
+}
+```
+
+`sourceRows` aligns positionally with `rows` across the sheet/table
+`sourceRange`, including blank cells inside an emitted row, while skipped blank
+worksheet rows remain absent. `sourceRange` is the exact occupied range
+represented by the sheet, the table, or an emitted row.
 
 ### `SourceLoader`
 

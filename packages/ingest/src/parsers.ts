@@ -19,6 +19,7 @@ import type {
   IngestFormat,
   IngestParser,
   IngestPart,
+  IngestSpreadsheetRow,
   IngestTablePart,
   IngestTextPart,
   IngestWarning,
@@ -269,10 +270,42 @@ export const xlsxParser: IngestParser = {
     const parts: IngestPart[] = []
 
     workbook.worksheets.forEach((worksheet, sheetIndex) => {
+      const dimensions = worksheet.dimensions
+      const sourceRange = {
+        address: dimensions.shortRange,
+        rowStart: dimensions.top,
+        rowEnd: dimensions.bottom,
+        columnStart: dimensions.left,
+        columnEnd: dimensions.right,
+      }
       const rows: string[][] = []
+      const sourceRows: IngestSpreadsheetRow[] = []
       worksheet.eachRow({ includeEmpty: false }, (row) => {
-        const values = row.values as unknown[]
-        rows.push(values.slice(1).map((value) => formatCell(value)))
+        const rowSourceRange = {
+          address: `${row.getCell(sourceRange.columnStart).address}:${row.getCell(sourceRange.columnEnd).address}`,
+          rowStart: row.number,
+          rowEnd: row.number,
+          columnStart: sourceRange.columnStart,
+          columnEnd: sourceRange.columnEnd,
+        }
+        const cells = Array.from({ length: sourceRange.columnEnd - sourceRange.columnStart + 1 }, (_, index) => {
+          const column = sourceRange.columnStart + index
+          const cell = row.getCell(column)
+          return {
+            row: row.number,
+            column,
+            address: cell.address,
+            value: formatCell(cell.value),
+            ...(cell.formula ? { formula: cell.formula } : {}),
+          }
+        })
+        rows.push(cells.map((cell) => cell.value))
+        sourceRows.push({
+          row: row.number,
+          address: rowSourceRange.address,
+          sourceRange: rowSourceRange,
+          cells,
+        })
       })
 
       if (rows.length === 0) return
@@ -281,9 +314,11 @@ export const xlsxParser: IngestParser = {
         id: `xlsx:${worksheet.name}:table:1`,
         kind: 'table',
         sheetName: worksheet.name,
-        rowStart: 1,
-        rowEnd: rows.length,
+        rowStart: sourceRows[0].row,
+        rowEnd: sourceRows[sourceRows.length - 1].row,
         rows,
+        sourceRange,
+        sourceRows,
         columns: rows[0],
         content: renderRows(rows),
       }
@@ -293,6 +328,7 @@ export const xlsxParser: IngestParser = {
         kind: 'sheet',
         sheetName: worksheet.name,
         index: sheetIndex,
+        sourceRange,
         tables: [table],
         content: `[Sheet: ${worksheet.name}]\n${deriveContent([table])}`,
       })
