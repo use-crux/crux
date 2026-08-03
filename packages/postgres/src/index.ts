@@ -4,16 +4,17 @@
  * @module
  */
 
-export { postgresRecordStore, postgresStorage, postgresVectorStore } from './storage/index'
+export { postgresRecordStore, postgresSearchStore, postgresStorage } from './storage/index'
 export type {
+  PostgresLexicalOptions,
   PostgresRecordStore,
   PostgresRecordStoreOptions,
+  PostgresSearchStore,
+  PostgresSearchStoreOptions,
   PostgresStorage,
   PostgresStorageConnectionOptions,
   PostgresStorageOptions,
   PostgresStorageSetup,
   PostgresStorageSetupFinding,
   PostgresStorageSetupResult,
-  PostgresVectorStore,
-  PostgresVectorStoreOptions,
 } from './storage/index'
