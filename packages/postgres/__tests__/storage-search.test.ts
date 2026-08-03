@@ -191,7 +191,7 @@ if (!pgvectorUrl) {
         legs: [
           { kind: 'lexical', query: 'transaction retry', candidates: 2 },
           { kind: 'dense', vector: [1, 0], candidates: 2 },
-          { kind: 'sparse', vector: { indices: [0], values: [1] }, candidates: 1 },
+          { kind: 'sparse', vector: { indices: [0], values: [1] }, candidates: 2 },
         ],
         fusion: { strategy: 'rrf', k: 30 },
         filter: { tenant: 'acme' },
