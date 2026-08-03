@@ -582,6 +582,132 @@ describe('@use-crux/ingest structured sources', () => {
     expect(docs[0].content).toContain('Plan | Price')
   })
 
+  it('renders xlsx numeric cells with their saved percentage format', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'percentage.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Percentages')
+    sheet.getCell('A1').value = 'Rate'
+    sheet.getCell('A2').value = 0.2
+    sheet.getCell('A2').numFmt = '0%'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rows: [['Rate'], ['20%']],
+      sourceRows: [
+        { row: 1, cells: [{ row: 1, column: 1, address: 'A1', value: 'Rate' }] },
+        { row: 2, cells: [{ row: 2, column: 1, address: 'A2', value: '20%' }] },
+      ],
+    })
+    expect(table?.content).toBe('Rate\n20%')
+  })
+
+  it('renders xlsx cached formula results with number formats while retaining formulas', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'formula-percentage.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Formulas')
+    sheet.getCell('A1').value = 'Rate'
+    sheet.getCell('A2').value = { formula: '1/5', result: 0.2 }
+    sheet.getCell('A2').numFmt = '0%'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rows: [['Rate'], ['20%']],
+      sourceRows: [
+        { row: 1 },
+        { row: 2, cells: [{ row: 2, column: 1, address: 'A2', value: '20%', formula: '1/5' }] },
+      ],
+    })
+    expect(table?.content).toBe('Rate\n20%')
+  })
+
+  it('renders xlsx currency cells with their saved number format', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'currency.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Currency')
+    sheet.getCell('A1').value = 'Amount'
+    sheet.getCell('A2').value = 1234.5
+    sheet.getCell('A2').numFmt = '$#,##0.00'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({ rows: [['Amount'], ['$1,234.50']] })
+    expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('$1,234.50')
+    expect(table?.content).toBe('Amount\n$1,234.50')
+  })
+
+  it('renders xlsx date cells with their saved date format', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'dates.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Dates')
+    sheet.getCell('A1').value = 'Due'
+    sheet.getCell('A2').value = new Date(Date.UTC(2024, 0, 2))
+    sheet.getCell('A2').numFmt = 'yyyy-mm-dd'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({ rows: [['Due'], ['2024-01-02']] })
+    expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('2024-01-02')
+    expect(table?.content).toBe('Due\n2024-01-02')
+  })
+
+  it('renders xlsx dates from workbooks using the 1904 date system', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'dates-1904.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    workbook.properties.date1904 = true
+    const sheet = workbook.addWorksheet('Dates1904')
+    sheet.getCell('A1').value = 'Day'
+    sheet.getCell('A2').value = 1
+    sheet.getCell('A2').numFmt = 'yyyy-mm-dd'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({ rows: [['Day'], ['1904-01-02']] })
+    expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('1904-01-02')
+    expect(table?.content).toBe('Day\n1904-01-02')
+  })
+
+  it('falls back to raw xlsx values and warns when a number format cannot be rendered', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'bad-format.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('BadFormat')
+    sheet.getCell('A1').value = 'Amount'
+    sheet.getCell('A2').value = 12.5
+    sheet.getCell('A2').numFmt = '0n'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({ rows: [['Amount'], ['12.5']] })
+    expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('12.5')
+    expect(table?.content).toBe('Amount\n12.5')
+    expect(document.warnings).toEqual([
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell A2'),
+        metadata: expect.objectContaining({ address: 'A2', numFmt: '0n' }),
+      }),
+    ])
+  })
+
   it('retains xlsx source coordinates across skipped blank rows', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'sparse.xlsx')
