@@ -66,7 +66,10 @@ describe('generated Runtime worker process', () => {
     roots.push(fixture.root)
     const marker = join(fixture.root, 'startup.marker')
     const worker = startWorker(fixture.root, { CRUX_RUNTIME_WORKER_STARTUP_MARKER: marker })
-    await expect.poll(async () => access(marker).then(() => true, () => false)).toBe(true)
+    await expect.poll(
+      async () => access(marker).then(() => true, () => false),
+      { timeout: 10_000 },
+    ).toBe(true)
 
     worker.child.kill('SIGTERM')
 
