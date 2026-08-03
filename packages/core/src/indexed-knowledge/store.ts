@@ -10,7 +10,7 @@
 
 import { StorageError } from '../storage'
 import { EmbeddingSpaceMismatchError } from '../embedding'
-import type { ExactFilter, JsonObject, SearchQuery } from '../storage'
+import type { ExactFilter, JsonObject, SearchLegMatch, SearchQuery } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { assertSearchHitsHydrated, assertValidHydratedChunks } from './hydration'
 import type { IndexedHydrationMiss } from './hydration'
@@ -46,6 +46,7 @@ interface ScoredEntry {
   readonly key: string
   readonly value: JsonObject
   readonly score: number
+  readonly matches?: readonly SearchLegMatch[]
 }
 
 /** Create an indexed knowledge read-model store from core storage ports. */
@@ -101,7 +102,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     const filter = activeChunkFilter(config.namespace, query.filter)
     const scored = await searchScoredEntries(query, filter)
     const hits = scored.flatMap((entry) => {
-      const hit = indexedChunkToHit({ value: entry.value, score: entry.score })
+      const hit = indexedChunkToHit({ value: entry.value, score: entry.score, matches: entry.matches })
       return hit ? [hit] : []
     })
     assertValidHydratedChunks({ scoredKeys: scored.map((entry) => entry.key), hitCount: hits.length })
@@ -203,7 +204,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
           misses.push({ key: hit.key, reason: 'inactive_or_wrong_namespace' })
           continue
         }
-        entries.push({ key: hit.key, value, score: hit.score })
+        entries.push({ key: hit.key, value, score: hit.score, matches: hit.matches })
       }
       assertSearchHitsHydrated({
         searchHitCount: searchHits.length,

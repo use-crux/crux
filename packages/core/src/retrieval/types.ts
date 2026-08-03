@@ -10,7 +10,7 @@
 
 import type { z } from 'zod'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
-import type { ExactFilter, RecordStore, SearchStore, Storage } from '../storage'
+import type { ExactFilter, RecordStore, SearchLegMatch, SearchStore, Storage } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
@@ -116,6 +116,7 @@ export interface RetrieverSource extends Omit<CruxSourceFacts, 'assetRef'> {
 /** Structured scoring and transformation history for a retrieval hit. */
 export interface HitProvenance {
   rawScore?: number
+  matches?: readonly SearchLegMatch[]
   perSource?: Array<{ retrieverId: string; score: number; rank: number; weight?: number }>
   matchedQueries?: string[]
   ranks?: number[]

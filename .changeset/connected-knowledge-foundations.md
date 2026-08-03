@@ -54,6 +54,10 @@ plans with normalized RRF match details. PostgreSQL adds native full-text search
 and server-side RRF, Upstash exposes `upstashSearchStore()`, and Convex storage
 requires an explicit search store instead of advertising an unsupported one.
 
+Surface SearchStore leg match evidence on hydrated indexed-knowledge retrieval
+hits through `hit.provenance.matches`, preserving stored chunk provenance while
+retaining dense, sparse, and lexical rank/score details for audit.
+
 Align Eval host storage capabilities and Local retrieval telemetry with the
 SearchStore contract: hosted Eval tasks now declare `search-store`, and devtools
 retrieval events use `search`/`custom` modes with RRF/search-leg metadata.
