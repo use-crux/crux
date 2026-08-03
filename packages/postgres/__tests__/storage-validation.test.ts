@@ -1,5 +1,5 @@
-import { StorageError } from '@use-crux/core/storage'
-import { describe, expect, it, vi } from 'vitest'
+import { StorageError, type StorageSetupPort } from '@use-crux/core/storage'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { postgresRecordStore, postgresStorage, postgresVectorStore } from '../src/index'
 import { sparseVectorSql } from '../src/storage/validation'
@@ -51,6 +51,7 @@ describe('PostgreSQL storage validation and SQL shaping', () => {
     const storage = postgresStorage({ pool, dimensions: 2 })
     expect((storage.records as { setup?: unknown }).setup).toBe(storage.setup)
     expect((storage.vectors as { setup?: unknown }).setup).toBe(storage.setup)
+    expectTypeOf(storage.setup).toEqualTypeOf<StorageSetupPort>()
     await storage.close()
     expect(pool.end).not.toHaveBeenCalled()
   })

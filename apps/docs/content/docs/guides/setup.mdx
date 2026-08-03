@@ -40,6 +40,17 @@ reported problem.
 
 Action classification and the `--json` report details: [`crux setup` reference](/docs/reference/local#crux-setup).
 
+## Storage setup
+
+Configured Storage bundles can contribute setup checks. `crux setup --check`
+calls the bundle's provider-neutral setup port without changing infrastructure.
+`crux setup --apply` runs only that adapter's safe-additive provisioning, then
+checks again before generated Runtime files are refreshed.
+
+The first-party PostgreSQL bundle uses this path to verify and create its
+Crux-owned schema, tables, constraints, and indexes. It releases pools created
+by the adapter after setup; caller-owned pools remain open.
+
 ## Which command should I run?
 
 | Situation | Command | What happens |

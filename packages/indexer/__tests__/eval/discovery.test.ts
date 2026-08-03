@@ -2,11 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { evaluate } from "@use-crux/core/eval";
+import { getEvalDefinitionForInternalUse } from "@use-crux/core/eval/internal/runner";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverRuntimeEvalDefinitions } from "../../src/indexer/eval-discovery";
 import {
   definitionFromAuthoredEval,
   executionArmsFromAuthoredEval,
+  isAuthoredEval,
   type DiscoveredAuthoredEval,
 } from "../../src/indexer/evals";
 import { evalTimeoutDiscoveryBehavior } from "./discovery-timeout.behavior";
@@ -35,17 +37,11 @@ describe("Eval Project Index discovery", () => {
       timeout: { totalMs: 30_000 },
       cases: [{ input: "hello" }],
     });
-    const definitionSymbol = Object.getOwnPropertySymbols(authored).find(
-      (symbol) => symbol.description === "crux.eval.definition",
-    );
-    expect(definitionSymbol).toBeDefined();
-    const foreignSymbol = Symbol("crux.eval.definition");
+    const foreignSymbol = Symbol.for("@use-crux/core/eval/internal-definition");
     const foreignEval = {
       _tag: "CruxEval",
       id: authored.id,
-      [foreignSymbol]: (
-        authored as unknown as Record<PropertyKey, unknown>
-      )[definitionSymbol!],
+      [foreignSymbol]: getEvalDefinitionForInternalUse(authored),
     } as unknown as DiscoveredAuthoredEval;
     const executionArms = executionArmsFromAuthoredEval(foreignEval);
 
@@ -70,6 +66,18 @@ describe("Eval Project Index discovery", () => {
         effective: { totalMs: 30_000 },
       },
     });
+  });
+
+  it("rejects malformed Eval shells before projecting runtime facts", () => {
+    const malformed = {
+      _tag: "CruxEval" as const,
+      id: "malformed",
+    };
+
+    expect(isAuthoredEval(malformed)).toBe(false);
+    expect(() =>
+      executionArmsFromAuthoredEval(malformed as DiscoveredAuthoredEval),
+    ).toThrowError(/Expected a Crux Eval/);
   });
 
   it("emits coordinator placement for an ordinary callable Eval", async () => {

@@ -40,6 +40,10 @@ Add first-party PostgreSQL Connected Knowledge storage with JSONB records,
 explicit idempotent setup, pgvector dense/sparse/hybrid search, normalized RRF,
 shared pool ownership, and full storage conformance coverage.
 
+Let configured storage bundles expose a provider-neutral setup capability so
+`crux setup --check/--apply` verifies and safely provisions PostgreSQL storage,
+redacts adapter findings, and releases only adapter-owned resources.
+
 Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
 
 Add Project Index discovery for Connected Knowledge definitions, relation/assertion vocabularies, model bindings, communities, and knowledge-base views.

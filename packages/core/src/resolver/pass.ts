@@ -29,9 +29,11 @@ import { detectSuspiciousPatterns, escapeXml } from "../shared/sanitize";
 import { collectStaticEntryIds } from "./definition-analysis";
 import { resolveUse } from "./driver";
 import {
+  collectDeclaredEscapeFields,
   collectDeclaredRawFields,
   collectResolverPrivateInput,
   containsNestedString,
+  escapeSelectedInputField,
   mergeResolverPrivateInput,
 } from "./input-pipeline";
 import { guardInputs } from "./input-guard";
@@ -166,11 +168,17 @@ export async function runPromptPass(
       ...(config.rawFields ?? []),
       ...collectDeclaredRawFields(entries),
     ]);
+    const escapeFieldSet = new Set<string>([
+      ...(config.escapeFields ?? []),
+      ...collectDeclaredEscapeFields(entries),
+    ]);
 
     const sanitizedInput: Record<string, unknown> = { ...input };
     let warnedNestedStrings = false;
     for (const [key, value] of Object.entries(sanitizedInput)) {
-      if (typeof value === "string" && !rawFieldSet.has(key)) {
+      if (escapeFieldSet.has(key)) {
+        sanitizedInput[key] = escapeSelectedInputField(value, key);
+      } else if (typeof value === "string" && !rawFieldSet.has(key)) {
         sanitizedInput[key] = escapeXml(value);
       } else if (
         typeof value !== "string" &&

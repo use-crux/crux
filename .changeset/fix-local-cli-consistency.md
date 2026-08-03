@@ -1,11 +1,14 @@
 ---
 "@use-crux/indexer": patch
+"@use-crux/core": patch
 "@use-crux/local": minor
 ---
 
 Make Local CLI lookup and output behavior consistent: accept trace and run IDs, support bare and kind-prefixed Catalog IDs, filter Index kind aliases, align cost reports with observability stats, resolve nested package roots correctly, provide global and Eval JSON output, use Index-specific chrome, and standardize invalid lint options as usage errors.
 
 Restore runtime-discovered Eval execution and timeout facts across bundled Core boundaries, distinguish them from static-only Eval calls, and invalidate pre-fix Local Project Index snapshots.
+
+Share Eval definition identity across independently loaded `@use-crux/core` copies so discovered Evals can be recognized and inspected by the coordinator using a different Core module instance.
 
 Make `crux runtime generate` report progress and fail with a bounded timeout instead of hanging silently.
 
