@@ -271,6 +271,7 @@ describe("generated deployed Eval registry", () => {
         kind: "task",
         name: "nested",
         fidelity: "resolved",
+        fingerprint: "definition-nested-v1",
         source: { file: targetFile, line: 1 },
         metadata: { exportName: "nested" },
       },

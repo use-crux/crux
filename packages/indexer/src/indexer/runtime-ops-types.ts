@@ -1,4 +1,6 @@
 import type {
+  FlowSnapshot,
+  RuntimeEvent,
   RuntimeOutboxItem,
   RuntimeSetupPort,
   RuntimeTimerRecord,
@@ -76,6 +78,22 @@ export interface RuntimeInspectOperationResult {
     readonly fingerprint: readonly string[]
     readonly pendingSuspends: readonly unknown[]
   }
+  /** Safe application Work identity and lineage retained by the Runtime. */
+  readonly application?: RuntimeApplicationWorkInspect
+}
+
+/** Bounded Work-specific read model consumed by local operator tooling. */
+export interface RuntimeApplicationWorkInspect {
+  readonly inputDigest?: string
+  readonly definition?: FlowSnapshot['definition']
+  readonly effects?: FlowSnapshot['effects']
+  readonly ownership: NonNullable<RuntimeWorkItem['application']>['ownership']
+  readonly statistics?: NonNullable<RuntimeWorkItem['application']>['statistics']
+  readonly result: {
+    readonly available: boolean
+    readonly ref?: RuntimeWorkItem['resultRef']
+  }
+  readonly events: readonly RuntimeEvent[]
 }
 
 export interface RuntimeRetryOperationResult {

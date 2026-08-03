@@ -33,6 +33,10 @@
       "types": "./src/signal/index.ts",
       "import": "./src/signal/index.ts"
     },
+    "./work": {
+      "types": "./src/work/index.ts",
+      "import": "./src/work/index.ts"
+    },
     "./eval": {
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"

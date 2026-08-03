@@ -29,6 +29,33 @@ export type RegisteredRuntimeTargetFactory = (
 
 const runtimeTargets = new Map<string, RegisteredRuntimeTargetFactory>()
 const duplicateRuntimeTargetWarnings = new Set<string>()
+const runtimeTargetFactorySymbol = Symbol.for(
+  '@use-crux/core/runtime-target-factory',
+)
+
+/** Bind an executable factory to an exported target without exposing it publicly. @internal */
+export function bindRuntimeTargetFactory<TTarget extends object>(
+  target: TTarget,
+  factory: RegisteredRuntimeTargetFactory,
+): TTarget {
+  Object.defineProperty(target, runtimeTargetFactorySymbol, {
+    value: factory,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  })
+  return target
+}
+
+/** Read the executable factory carried by an explicitly imported target. @internal */
+export function runtimeTargetFactoryFor(
+  target: object,
+): RegisteredRuntimeTargetFactory | undefined {
+  const factory = Reflect.get(target, runtimeTargetFactorySymbol) as unknown
+  return typeof factory === 'function'
+    ? (factory as RegisteredRuntimeTargetFactory)
+    : undefined
+}
 
 /** Register or replace a process-local runtime target factory. */
 export function registerRuntimeTarget(

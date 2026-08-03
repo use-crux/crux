@@ -2,7 +2,8 @@
 "@use-crux/core": minor
 "@use-crux/indexer": minor
 "@use-crux/local": minor
-"@use-crux/postgres": patch
+"@use-crux/postgres": minor
+"@use-crux/convex": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -66,3 +67,46 @@ host is still loading.
 Give Runtime worker ownership conflicts and shutdown timeouts distinct public
 error codes. PostgreSQL workers now reject undersized pools, terminate when
 their advisory-lock connection is lost, and verify that lock release succeeds.
+
+Add the canonical public, Flow-targeted Work contract with exact input/result
+inference, string Work IDs, result-generic handles, safe readonly lifecycle
+snapshots, typed terminal errors, and canonical control and observability
+types. The typed `spawn()` and `getWork()` factories accept only exported Flow
+targets. `createWorkHost({ runtime, program })` binds generated immutable target
+metadata to application requests and atomically accepts memory-backed Work,
+its initial Flow snapshot, pinned normalized input and definition, result
+obligation, and wake outbox row. Compatible idempotent retries reconnect the
+same Work, conflicting input rejects, target namespaces remain independent,
+and `getWork()` validates the exported target. Process-local Agent Work uses
+the shared safe lifecycle and control types privately without promoting its
+retained-owner registry to storage.
+
+Execute accepted application Flow Work through the generated Runtime worker
+and publish its canonical write-once result reference with the existing fenced
+terminal commit. `WorkHandle.result()` now joins the exact inferred output from
+both original and reconnected handles, duplicate wakes retain one terminal
+result, Runtime Flow suspension preserves the pinned definition/result
+obligation through resume, and terminal Work failures persist only safe public
+summaries. Durable Work now supports bounded latest progress, cooperative
+idempotent cancellation, ownership-only detachment, safe cursor-resumable event
+streams, and restart-safe owner-scoped statistics through the existing Runtime
+state machine, cancellation composite, durable event port, and statistics
+ledger.
+
+PostgreSQL Runtime storage now persists the pinned Work result obligation and
+content-addressed terminal result, safe control metadata, and statistics ledger
+export. Independent application hosts can reconnect
+after worker restart and read the exact typed Flow result. Referenced payloads
+survive retention pruning; missing payloads raise `WorkResultExpiredError`
+without re-enqueuing or re-executing Work.
+
+Convex Runtime storage now persists the pinned Work definition and result
+obligation with content-addressed terminal results and safe Work control
+metadata. Independent application
+hosts reconnect after worker restart, duplicate wakes preserve the first result,
+and expired payloads raise `WorkResultExpiredError` without re-executing Work.
+
+Persist a canonical accepted-input digest across Memory, PostgreSQL, and Convex
+snapshots. Runtime inspection and Devtools now show safe Work identity,
+definition and Effect scope, ownership, result lineage, statistics, progress,
+and bounded lifecycle events without exposing input or result payloads.

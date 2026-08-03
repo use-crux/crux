@@ -103,6 +103,9 @@ function isRuntimeProgram(value: unknown): value is RuntimeProgram {
     typeof value.manifestHash === 'string' &&
     'targets' in value &&
     Array.isArray(value.targets) &&
+    'targetDefinitions' in value &&
+    Array.isArray(value.targetDefinitions) &&
+    value.targetDefinitions.every(isRuntimeTargetDefinition) &&
     'transports' in value &&
     Array.isArray(value.transports)
   )
@@ -115,7 +118,33 @@ function programTargetsMatchManifest(
   const actual = program.targets.map(programTargetIdentity)
   if (actual.some((target) => target === undefined)) return false
   const expected = manifest.targets.map(({ name, kind }) => ({ name, kind }))
-  return JSON.stringify(actual) === JSON.stringify(expected)
+  const actualDefinitions = program.targetDefinitions.map((definition) => ({
+    targetId: definition.targetId,
+    definitionId: definition.definitionId,
+    fingerprint: definition.fingerprint,
+  }))
+  const expectedDefinitions = manifest.targets.map((target) => ({
+    targetId: target.name,
+    definitionId: target.definitionId,
+    fingerprint: target.fingerprint,
+  }))
+  return (
+    JSON.stringify(actual) === JSON.stringify(expected) &&
+    JSON.stringify(actualDefinitions) === JSON.stringify(expectedDefinitions)
+  )
+}
+
+function isRuntimeTargetDefinition(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'targetId' in value &&
+    typeof value.targetId === 'string' &&
+    'definitionId' in value &&
+    typeof value.definitionId === 'string' &&
+    'fingerprint' in value &&
+    typeof value.fingerprint === 'string'
+  )
 }
 
 function programTargetIdentity(

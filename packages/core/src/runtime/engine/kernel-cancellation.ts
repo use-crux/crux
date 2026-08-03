@@ -12,9 +12,15 @@ import type { WorkId } from '../ports/ids'
 import type { RuntimeStoreTransaction } from '../store'
 import { putWorkWithIdleAccounting } from './kernel-idle'
 import type { CancelWorkInput, CancelWorkResult } from './kernel-types'
-import { isTerminalWork } from './kernel-shared'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 import { transition, type RuntimeWorkItem } from './work'
+import { appendApplicationWorkStatusEvent } from './application-work-events'
+import {
+  applicationWorkTimingFact,
+  applicationUpdatedAt,
+  recordApplicationWorkStatistics,
+} from './application-work-statistics'
+import { isApplicationWorkTerminal } from './application-work-state'
 
 /** Dependencies for cancellation. */
 export interface KernelCancellationDeps extends RuntimeCompositeDeps {
@@ -44,13 +50,48 @@ export async function cancelWorkInTransaction(
     await cancelFlowSnapshot(tx, current, deps.now())
     return { cancelled: false }
   }
-  if (isTerminalWork(current)) return { cancelled: false }
+  if (isApplicationWorkTerminal(current)) return { cancelled: false }
 
+  const transitioned = transition(current, { status: 'cancelled' })
+  const now = deps.now()
+  const application = current.application
+    ? recordApplicationWorkStatistics(
+        current.application,
+        current.workId,
+        current.createdAt,
+        now,
+        [
+          { kind: 'lifecycle', event: 'cancellation' },
+          applicationWorkTimingFact(
+            current.status,
+            applicationUpdatedAt(current),
+            now,
+            true,
+          ),
+        ],
+      )
+    : undefined
+  const cancelled = await appendApplicationWorkStatusEvent(
+    tx,
+    application
+      ? Object.freeze({
+          ...transitioned,
+          updatedAt: now,
+          application: Object.freeze({
+            ...application,
+            updatedAt: now.toISOString(),
+            ...(input.reason === undefined
+              ? {}
+              : { cancellationReason: input.reason }),
+          }),
+        })
+      : transitioned,
+  )
   await putWorkWithIdleAccounting(
     tx,
     { newWorkId: deps.newWorkId, now: deps.now },
     current,
-    transition(current, { status: 'cancelled' }),
+    cancelled,
   )
   await cancelFlowSnapshot(tx, current, deps.now())
 

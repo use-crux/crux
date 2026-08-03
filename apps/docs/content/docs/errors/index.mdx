@@ -35,6 +35,8 @@ try {
 | [`SETUP_REQUIRED`](/docs/errors/SETUP_REQUIRED)               | Required adapter resources are missing or mismatched.             |
 | [`PAYLOAD_NOT_JSON`](/docs/errors/PAYLOAD_NOT_JSON)           | A durable runtime payload is not JSON-compatible.                 |
 | [`WORK_DEAD_LETTERED`](/docs/errors/WORK_DEAD_LETTERED)       | Work exhausted retries and is terminal until operator retry.      |
+| [`WORK_IDEMPOTENCY_CONFLICT`](/docs/errors/WORK_IDEMPOTENCY_CONFLICT) | A Work idempotency tuple was reused with different input. |
+| [`WORK_TARGET_MISMATCH`](/docs/errors/WORK_TARGET_MISMATCH) | Work reconnection used a different exported Flow target. |
 | [`LEASE_LOST`](/docs/errors/LEASE_LOST)                       | A stale worker tried to commit after losing its lease.            |
 | [`NAMESPACE_AMBIGUOUS`](/docs/errors/NAMESPACE_AMBIGUOUS)     | The inferred runtime namespace is unsafe or ambiguous.            |
 | [`RUNTIME_HOST_ONLY`](/docs/errors/RUNTIME_HOST_ONLY)         | A host-bound runtime was used outside its host boundary.          |

@@ -52,7 +52,7 @@ void missingKindTarget;
 
 type _ProgramReturn = Expect<Equal<typeof program, RuntimeProgram>>;
 type _TargetsAreReadonly = Expect<
-  Equal<RuntimeProgram["targets"], CreateRuntimeProgramOptions["targets"]>
+  Equal<RuntimeProgram["targets"], readonly RuntimeProgramTarget[]>
 >;
 type _TransportsAreReadonly = Expect<
   Equal<RuntimeProgram["transports"], CreateRuntimeProgramOptions["transports"]>
@@ -62,5 +62,7 @@ type _TransportsAreReadonly = Expect<
 program.manifestHash = "changed";
 // @ts-expect-error Runtime program target arrays are readonly.
 program.targets.push({ name: "orders.updated", kind: "flow" });
+// @ts-expect-error Generated target definitions are readonly.
+program.targetDefinitions.pop();
 // @ts-expect-error Runtime program transport arrays are readonly.
 program.transports.pop();

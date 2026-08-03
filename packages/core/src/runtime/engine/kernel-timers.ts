@@ -24,6 +24,7 @@ import type {
 } from './kernel-types'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 import { shouldDeferPredicateTimeout } from './kernel-predicate-timeout'
+import { recordApplicationWorkResumption } from './application-work-events'
 
 /** Dependencies for timer kernel operations. */
 export interface KernelTimerDeps extends RuntimeCompositeDeps {
@@ -133,7 +134,12 @@ export async function fireTimerRecord(options: {
     if (!won) return { fired: false }
   }
 
-  const work = options.timer.workId
+  const previous = options.timer.workId
+    ? await options.tx.state.getWork(options.timer.workId, {
+        namespace: options.timer.namespace,
+      })
+    : null
+  let work = options.timer.workId
     ? await options.tx.state.setWorkPending(options.timer.workId, {
         namespace: options.timer.namespace,
         work: options.timer.work,
@@ -143,6 +149,14 @@ export async function fireTimerRecord(options: {
     : await createTimerMintedWork(options)
 
   if (!work) return { fired: false }
+  if (previous && work.application) {
+    work = await recordApplicationWorkResumption(
+      options.tx,
+      previous,
+      work,
+      options.deps.now(),
+    )
+  }
   return {
     fired: true,
     outboxItem: await options.tx.outbox.put(wakeEnvelopeForWork(work), {

@@ -95,6 +95,7 @@ describe("runtime artifacts", () => {
         kind: "flow",
         name: "review",
         fidelity: "resolved",
+        fingerprint: "definition-review-v1",
         source: { file: sourceFile, line: 1 },
         metadata: { exportName: "reviewFlow" },
       },
@@ -112,6 +113,8 @@ describe("runtime artifacts", () => {
         kind: "flow",
         module: "./src/review.ts",
         export: "reviewFlow",
+        definitionId: "flow:review",
+        fingerprint: "definition-review-v1",
       },
     ]);
     await expect(
@@ -121,15 +124,20 @@ describe("runtime artifacts", () => {
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
-    ).resolves.toContain("type RuntimeProgramTarget");
+    ).resolves.toContain("type RuntimeProgramTargetInput");
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
-      "satisfies readonly RuntimeProgramTarget[]",
+      "satisfies readonly RuntimeProgramTargetInput[]",
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("createRuntimeProgram({ targets, transports })");
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      '{ target: target0, definition: { id: "flow:review", fingerprint: "definition-review-v1" } }',
+    );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
@@ -485,6 +493,7 @@ describe("runtime artifacts", () => {
         kind: "flow",
         name: "review",
         fidelity: "resolved",
+        fingerprint: "definition-review",
         source: { file: sourceFile, line: 1 },
         metadata: { exportName: "reviewFlow" },
       },
@@ -567,6 +576,7 @@ describe("runtime artifacts", () => {
         kind: "flow",
         name: "review",
         fidelity: "resolved",
+        fingerprint: "definition-review",
         source: { file: targetSource, line: 1 },
         metadata: { exportName: "reviewFlow" },
       },
@@ -682,6 +692,7 @@ describe("runtime artifacts", () => {
         kind: "flow",
         name: "review",
         fidelity: "resolved",
+        fingerprint: "definition-first-review",
         source: { file: source, line: 1 },
         metadata: { exportName: "firstReview" },
       },
@@ -690,6 +701,7 @@ describe("runtime artifacts", () => {
         kind: "flow",
         name: "review",
         fidelity: "resolved",
+        fingerprint: "definition-second-review",
         source: { file: source, line: 2 },
         metadata: { exportName: "secondReview" },
       },
@@ -778,6 +790,8 @@ describe("runtime artifacts", () => {
             kind: "flow",
             module: "./src/review.ts",
             export: "reviewFlow",
+            definitionId: "flow:review",
+            fingerprint: "definition-review",
           },
         ],
         evals: [],

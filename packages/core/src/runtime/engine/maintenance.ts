@@ -24,6 +24,10 @@ import { transition, type RuntimeWorkItem } from './work'
 import type { RuntimeWaiter } from '../ports/waiters'
 import type { ResolvedRuntimeRetentionConfig } from './retention'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
+import {
+  recordApplicationWorkResumption,
+  recordApplicationWorkStatusTransition,
+} from './application-work-events'
 
 /** Dependencies for runtime maintenance. */
 export interface KernelMaintenanceDeps extends KernelTimerDeps {
@@ -141,8 +145,17 @@ export async function reclaimLeasedWorkInTransaction(
     namespace: input.work.namespace,
   })
   if (!current || current.status !== 'leased') return false
-  const pending = transition(current, { status: 'pending' })
-  await tx.state.putWork(pending)
+  let pending = transition(current, { status: 'pending' })
+  if (pending.application) {
+    pending = await recordApplicationWorkStatusTransition(
+      tx,
+      current,
+      pending,
+      deps.now(),
+    )
+  } else {
+    await tx.state.putWork(pending)
+  }
   await tx.outbox.put(wakeEnvelopeForWork(pending), {
     deliverAt: deps.now(),
   })
@@ -265,7 +278,12 @@ async function expireWaiterInTransaction(options: {
   const idempotencyKey = options.waiter.timerId
     ? timerKey(options.waiter.timerId)
     : waiterTimeoutKey(options.waiter.waiterId)
-  const work = options.waiter.workId
+  const previous = options.waiter.workId
+    ? await options.tx.state.getWork(options.waiter.workId, {
+        namespace: options.waiter.namespace,
+      })
+    : null
+  let work = options.waiter.workId
     ? await options.tx.state.setWorkPending(options.waiter.workId, {
         namespace: options.waiter.namespace,
         work: options.waiter.work,
@@ -282,6 +300,14 @@ async function expireWaiterInTransaction(options: {
       })
 
   if (!work) return false
+  if (previous && work.application) {
+    work = await recordApplicationWorkResumption(
+      options.tx,
+      previous,
+      work,
+      options.deps.now(),
+    )
+  }
   await options.tx.outbox.put(wakeEnvelopeForWork(work), {
     deliverAt: options.deps.now(),
   })

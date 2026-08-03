@@ -29,6 +29,11 @@ import { cancelFlowSnapshotBindings } from "./flow-binding-arbitration";
 import { preparePredicateSuspends } from "./kernel-predicate-suspension";
 import { flowEventResumeKey } from "./idempotency";
 import { wakeEnvelopeForWork } from "./kernel-shared";
+import {
+  appendApplicationWorkStatusEvent,
+  recordApplicationWorkResumption,
+} from "./application-work-events";
+import { recordApplicationWorkTransition } from "./application-work-statistics";
 
 /** Dependencies for event/suspension kernel operations. */
 export interface EmitEventInTransactionDeps extends RuntimeCompositeDeps {}
@@ -85,7 +90,17 @@ export async function recordSuspensionInTransaction(
     prepared.retainedWaiterIds,
   );
   if (current && current.status !== "suspended") {
-    await tx.state.putWork(transition(current, { status: "suspended" }));
+    const now = deps.now();
+    const suspended = await appendApplicationWorkStatusEvent(
+      tx,
+      recordApplicationWorkTransition(
+        current,
+        transition(current, { status: "suspended" }),
+        now,
+        { facts: [{ kind: "lifecycle", event: "suspension" }] },
+      ),
+    );
+    await tx.state.putWork(suspended);
   }
   const flushedWork = await flushScheduledWorkInTransaction(
     tx,
@@ -97,6 +112,12 @@ export async function recordSuspensionInTransaction(
     flowId: input.flowId,
     workId: input.workId,
     targetId: input.targetId,
+    ...(currentSnapshot?.definition
+      ? { definition: currentSnapshot.definition }
+      : {}),
+    ...(currentSnapshot?.resultObligation
+      ? { resultObligation: currentSnapshot.resultObligation }
+      : {}),
     namespace: input.namespace,
     status: "suspended",
     input: input.snapshot.input,
@@ -119,7 +140,7 @@ export async function recordSuspensionInTransaction(
       input.workId,
       prepared.nextCandidate.eventId,
     );
-    const pending = await tx.state.setWorkPending(input.workId, {
+    let pending = await tx.state.setWorkPending(input.workId, {
       namespace: input.namespace,
       work: { kind: "flow.resume", flowId: input.flowId },
       idempotencyKey,
@@ -127,6 +148,14 @@ export async function recordSuspensionInTransaction(
     });
     if (!pending)
       throw new Error("Predicate candidate wake could not resume Flow work.");
+    if (current) {
+      pending = await recordApplicationWorkResumption(
+        tx,
+        current,
+        pending,
+        deps.now(),
+      );
+    }
     await tx.outbox.put(
       { ...wakeEnvelopeForWork(pending), idempotencyKey },
       { deliverAt: deps.now() },

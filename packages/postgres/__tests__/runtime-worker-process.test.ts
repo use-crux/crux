@@ -1,18 +1,24 @@
-import { createHash } from 'node:crypto'
-import { spawn, type ChildProcess } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { build } from 'esbuild'
-import { postgres } from '../src/runtime'
+import { createRuntimeWorkerProjectFixture } from './runtime-worker-process-fixture'
+import {
+  exitOf,
+  expireWorkLease,
+  runApplication,
+  startWorker as startWorkerProcess,
+  stopWorker,
+  waitForOwnership,
+  type RuntimeWorkerProjectFixture,
+  type WorkerProcess,
+} from './runtime-worker-process-harness'
 import { startPostgresTestDatabase, type PostgresTestDatabase } from './test-database'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workerScript = resolve(packageRoot, '../local-workers/dist/runtime-worker.mjs')
 const activeChildren = new Set<WorkerProcess>()
 let fixtureNumber = 0
-let workerNumber = 0
 
 describe('generated Runtime worker process', () => {
   let database: PostgresTestDatabase | undefined
@@ -77,132 +83,83 @@ describe('generated Runtime worker process', () => {
     await expect(exitOf(worker)).resolves.toEqual({ code: 0, signal: null, stderr: '' })
   })
 
+  it('recovers public Flow Work across separate application and worker processes', async () => {
+    const fixture = await projectFixture(testDatabase().url, false, true)
+    roots.push(fixture.root)
+
+    const accepted = await runApplication(fixture, 'spawn', {
+      documentId: 'doc_1',
+      idempotencyKey: 'request_1',
+    })
+    const replay = await runApplication(fixture, 'spawn', {
+      documentId: 'doc_1',
+      idempotencyKey: 'request_1',
+    })
+    expect(replay.id).toBe(accepted.id)
+    await expect(runApplication(fixture, 'spawn', {
+      documentId: 'doc_2',
+      idempotencyKey: 'request_1',
+    })).resolves.toMatchObject({ error: 'WORK_IDEMPOTENCY_CONFLICT' })
+
+    const detached = await runApplication(fixture, 'detach', { id: accepted.id })
+    expect(detached).toMatchObject({
+      id: accepted.id,
+      status: { state: 'queued', ownership: { state: 'detached' } },
+    })
+
+    const first = startWorker(fixture.root)
+    await waitForOwnership(first)
+    await expect.poll(
+      () => access(fixture.executionMarker).then(() => true, () => false),
+      { timeout: 30_000 },
+    ).toBe(true)
+    first.child.kill('SIGKILL')
+    await expect(exitOf(first)).resolves.toMatchObject({ signal: 'SIGKILL' })
+    await expireWorkLease(fixture, accepted.id as string)
+
+    const replacement = startWorker(fixture.root)
+    await waitForOwnership(replacement)
+    const joined = await runApplication(fixture, 'result', { id: accepted.id })
+    expect(joined).toMatchObject({
+      id: accepted.id,
+      result: { documentId: 'doc_1', approved: true },
+      status: { state: 'completed', ownership: { state: 'detached' } },
+      effects: { kind: 'effect.scope' },
+      stats: {
+        lifecycle: {
+          cancellations: 0,
+          resumptions: 0,
+          steeringInputs: 0,
+          suspensions: 0,
+        },
+      },
+    })
+    replacement.child.kill('SIGTERM')
+    await expect(exitOf(replacement)).resolves.toMatchObject({ code: 0 })
+  }, 90_000)
+
   function testDatabase(): PostgresTestDatabase {
     if (!database) throw new Error('PostgreSQL test database is unavailable.')
     return database
   }
 
-  async function projectFixture(
+  function projectFixture(
     url: string,
     delayStartup = false,
+    publicWork = false,
   ): Promise<RuntimeWorkerProjectFixture> {
-    const root = await mkdtemp(join(packageRoot, '.tmp-runtime-worker-process-'))
-    const schema = `runtime_worker_process_${process.pid}_${fixtureNumber++}`
-    const setup = postgres({ url, schema })
-    await setup.setup.apply()
-    await setup.close()
-    await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
-    await mkdir(join(root, 'src'), { recursive: true })
-    await writeFile(
-      join(root, 'config-entry.ts'),
-      [
-        "import { writeFile } from 'node:fs/promises'",
-        ...(delayStartup
-          ? [
-              "if (process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER) {",
-              "  await writeFile(process.env.CRUX_RUNTIME_WORKER_STARTUP_MARKER, 'loading')",
-              "  await new Promise((resolve) => setTimeout(resolve, 30_000))",
-              "}",
-            ]
-          : []),
-        "import { config } from '@use-crux/core'",
-        "import { node } from '@use-crux/core/runtime'",
-        "import { postgres } from '@use-crux/postgres/runtime'",
-        `const store = postgres({ url: ${JSON.stringify(url)}, schema: '${schema}' })`,
-        "const maintenanceOwnership = store.maintenanceOwnership",
-        "if (!maintenanceOwnership) throw new Error('Postgres maintenance ownership is unavailable.')",
-        "const markedStore = { ...store, maintenanceOwnership: { async acquire(namespace: string) {",
-        "  const ownership = await maintenanceOwnership.acquire(namespace)",
-        "  const marker = process.env.CRUX_RUNTIME_WORKER_OWNERSHIP_MARKER",
-        "  if (ownership.acquired && marker) await writeFile(marker, 'owned')",
-        "  return ownership",
-        "} } }",
-        "export default config({ runtime: node({ store: markedStore, namespace: 'process-test' }) })",
-      ].join('\n'),
-    )
-    await writeFile(
-      join(root, 'program-entry.ts'),
-      [
-        "import { createRuntimeProgram, durableTask } from '@use-crux/core/runtime'",
-        "const generatedTarget = durableTask('generated-target', { run: async () => 'ok' })",
-        "export const runtimeProgram = createRuntimeProgram({ targets: [generatedTarget], transports: [] })",
-      ].join('\n'),
-    )
-    const manifest = `${JSON.stringify({ version: 2, evalPrivacyFingerprint: 'test', targets: [{ name: 'generated-target', kind: 'task', module: './src/task.ts', export: 'generatedTarget' }], evals: [] }, null, 2)}\n`
-    const hash = createHash('sha256').update(manifest).digest('hex')
-    await Promise.all([
-      build({
-        entryPoints: [join(root, 'config-entry.ts')],
-        outfile: join(root, 'config-bundle.mjs'),
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
-      }),
-      build({ entryPoints: [join(root, 'program-entry.ts')], outfile: join(root, 'program-bundle.mjs'), bundle: true, platform: 'node', format: 'esm' }),
-    ])
-    await writeFile(join(root, 'crux.config.ts'), "export { default } from './config-bundle.mjs'\n")
-    await writeFile(join(root, '.crux/generated/runtime/manifest.json'), manifest)
-    await writeFile(
-      join(root, '.crux/generated/runtime/program.ts'),
-      [
-        "export { runtimeProgram } from '../../../program-bundle.mjs'",
-        `export const runtimeArtifactManifestHash = '${hash}'`,
-        "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-      ].join('\n'),
-    )
-    return { root, schema }
+    return createRuntimeWorkerProjectFixture({
+      packageRoot,
+      url,
+      fixtureNumber: fixtureNumber++,
+      delayStartup,
+      publicWork,
+    })
   }
 })
-
-interface RuntimeWorkerProjectFixture {
-  readonly root: string
-  readonly schema: string
-}
-
-interface WorkerProcess {
-  readonly child: ChildProcess
-  readonly exited: Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>
-  readonly ownershipMarker: string
-  readonly stderr: () => string
-}
-
 function startWorker(root: string, env: Readonly<Record<string, string>> = {}): WorkerProcess {
-  const ownershipMarker = join(root, `.runtime-worker-ownership-${workerNumber++}`)
-  const child = spawn(process.execPath, [workerScript, root], {
-    env: {
-      ...process.env,
-      CRUX_RUNTIME_WORKER_OWNERSHIP_MARKER: ownershipMarker,
-      ...env,
-    },
-    stdio: ['ignore', 'ignore', 'pipe'],
-  })
-  let stderr = ''
-  child.stderr?.setEncoding('utf8')
-  child.stderr?.on('data', (chunk: string) => { stderr += chunk })
-  const exited = new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>(
-    (resolveExit) => child.once('exit', (code, signal) => resolveExit({ code, signal })),
-  )
-  const worker = { child, exited, ownershipMarker, stderr: () => stderr }
+  const worker = startWorkerProcess(workerScript, root, env)
   activeChildren.add(worker)
-  void exited.finally(() => activeChildren.delete(worker))
+  void worker.exited.finally(() => activeChildren.delete(worker))
   return worker
-}
-
-async function exitOf(worker: WorkerProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }> {
-  return { ...await worker.exited, stderr: worker.stderr() }
-}
-
-async function waitForOwnership(worker: WorkerProcess): Promise<void> {
-  await expect.poll(async () => {
-    if (worker.child.exitCode !== null) {
-      throw new Error(`worker exited ${worker.child.exitCode}: ${worker.stderr()}`)
-    }
-    return await access(worker.ownershipMarker).then(() => true, () => false)
-  }, { timeout: 30_000 }).toBe(true)
-}
-
-async function stopWorker(worker: WorkerProcess): Promise<void> {
-  if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL')
-  await worker.exited
 }

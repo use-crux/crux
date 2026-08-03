@@ -29,8 +29,12 @@ const appendEvent = mutation<
 >('runtime/events:append')
 
 const readEvents = mutation<
-  { namespace: string; after?: string; limit?: number },
-  { events: Array<{ eventId: string; name: string }>; cursor?: string }
+  { namespace: string; name?: string; after?: string; limit?: number },
+  {
+    events: Array<{ eventId: string; name: string }>
+    cursor?: string
+    afterFound?: boolean
+  }
 >('runtime/events:read')
 
 const registerWaiter = mutation<
@@ -181,7 +185,26 @@ describe('Crux Convex Runtime Engine component', () => {
     await expect(t.mutation(readEvents, { namespace: 'tenant-a', after: 'evt-first' })).resolves.toEqual({
       events: [expect.objectContaining({ eventId: second.eventId, name: 'second' })],
       cursor: second.eventId,
+      afterFound: true,
     })
+  })
+
+  it('preserves a retained exact-name cursor on an empty page', async () => {
+    const t = convexTest({ schema, modules })
+    const first = await t.mutation(appendEvent, {
+      event: { namespace: 'tenant-a', name: 'document.approved', payload: {} },
+    })
+    await t.mutation(appendEvent, {
+      event: { namespace: 'tenant-a', name: 'other', payload: {} },
+    })
+
+    await expect(
+      t.mutation(readEvents, {
+        namespace: 'tenant-a',
+        name: 'document.approved',
+        after: first.eventId,
+      }),
+    ).resolves.toEqual({ events: [], afterFound: true })
   })
 
   it('appends runtime events without a shared namespace counter table', async () => {

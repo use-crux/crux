@@ -36,8 +36,47 @@ export interface RuntimeWorkRow {
   readonly idempotencyKey?: string;
   readonly idleScope?: string;
   readonly lastError?: RuntimeLastError;
+  readonly resultRef?: RuntimeResultRef;
+  readonly application?: {
+    readonly progress?: { readonly message?: string };
+    readonly ownership: RuntimeWorkOwnership;
+  };
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface RuntimeResultRef {
+  readonly sha256: string;
+  readonly size?: number;
+  readonly mediaType?: string;
+  readonly location?: string;
+}
+
+export type RuntimeWorkOwnership =
+  | { readonly state: "attached" }
+  | {
+      readonly state: "detached";
+      readonly reason?: string;
+      readonly detachedAt?: string;
+    };
+
+export interface RuntimeApplicationWorkInspect {
+  readonly inputDigest?: string;
+  readonly definition?: {
+    readonly targetId: string;
+    readonly definitionId: string;
+    readonly fingerprint: string;
+    readonly manifestHash: string;
+  };
+  readonly effects?: {
+    readonly kind: "effect.scope";
+    readonly id: string;
+    readonly runId: string;
+  };
+  readonly ownership: RuntimeWorkOwnership;
+  readonly statistics?: unknown;
+  readonly result: { readonly available: boolean; readonly ref?: RuntimeResultRef };
+  readonly events: readonly { readonly eventId: string; readonly name: string }[];
 }
 
 export interface RuntimeTimerRow {
@@ -87,6 +126,7 @@ export interface RuntimeInspectResponse {
     readonly fingerprint: readonly string[];
     readonly pendingSuspends: readonly unknown[];
   };
+  readonly application?: RuntimeApplicationWorkInspect;
 }
 
 export interface RuntimeRetryResponse {

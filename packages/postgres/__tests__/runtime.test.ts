@@ -931,7 +931,7 @@ function columnsFromCreateTable(statement: string): readonly string[] {
   return statement
     .split('\n')
     .map((line) => line.trim())
-    .map((line) => line.match(/^([a-z_]+)\s/)?.[1])
+    .map((line) => line.match(/^([a-z_][a-z0-9_]*)\s/)?.[1])
     .filter(
       (column): column is string => Boolean(column) && column !== 'PRIMARY',
     )

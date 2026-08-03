@@ -19,6 +19,7 @@ import type {
 import type {
   FlowSnapshot,
   RuntimePendingSuspend,
+  RuntimeResultRef,
   RuntimeWork,
   RuntimeWorkItem,
   WorkItemError,
@@ -50,8 +51,25 @@ export function decodeWorkItem(row: JsonRecord): RuntimeWorkItem {
       ? { leaseToken: row.lease_token as LeaseToken }
       : {}),
     ...withLastError(row.last_error),
+    ...(row.result_ref ? { resultRef: decodeResultRef(row.result_ref) } : {}),
+    ...(row.application
+      ? {
+          application:
+            row.application as NonNullable<RuntimeWorkItem['application']>,
+        }
+      : {}),
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
+  })
+}
+
+function decodeResultRef(value: unknown): RuntimeResultRef {
+  const ref = value as RuntimeResultRef
+  return Object.freeze({
+    sha256: ref.sha256,
+    size: ref.size,
+    mediaType: ref.mediaType,
+    location: ref.location,
   })
 }
 
@@ -69,7 +87,26 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
           ),
         }
       : {}),
+    ...(row.definition
+      ? {
+          definition: Object.freeze(
+            row.definition as FlowSnapshot['definition'],
+          ),
+        }
+      : {}),
+    ...(row.result_obligation
+      ? {
+          resultObligation: Object.freeze(
+            row.result_obligation as NonNullable<
+              FlowSnapshot['resultObligation']
+            >,
+          ),
+        }
+      : {}),
     input: row.input as FlowSnapshot['input'],
+    ...(typeof row.input_digest === 'string'
+      ? { inputDigest: row.input_digest }
+      : {}),
     ...(row.continuation !== null && row.continuation !== undefined
       ? { continuation: row.continuation as FlowSnapshot['continuation'] }
       : {}),

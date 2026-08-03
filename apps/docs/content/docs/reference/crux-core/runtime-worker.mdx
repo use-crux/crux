@@ -23,6 +23,7 @@ hosts.
 interface RuntimeProgram {
   readonly manifestHash: string;
   readonly targets: readonly RuntimeProgramTarget[];
+  readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 ```
@@ -37,13 +38,24 @@ artifact hash that binds `program.ts` to the exact bytes of `manifest.json`.
 transport records, while target object references remain the supplied
 references.
 The object does not contain live clients, credentials, Requests, mutable
-registration, or configuration lookup.
+registration, or configuration lookup. Generated programs pair each target
+with its exact Project Index definition identity and fingerprint. Application
+Work acceptance pins that metadata together with `manifestHash`.
 
 ## `createRuntimeProgram(options)`
 
 ```ts
 interface CreateRuntimeProgramOptions {
-  readonly targets: readonly RuntimeProgramTarget[];
+  readonly targets: readonly (
+    | RuntimeProgramTarget
+    | {
+        readonly target: RuntimeProgramTarget;
+        readonly definition: {
+          readonly id: string;
+          readonly fingerprint: string;
+        };
+    }
+  )[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 

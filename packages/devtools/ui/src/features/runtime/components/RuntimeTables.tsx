@@ -3,11 +3,11 @@ import type React from "react";
 import { Icon } from "@/devtools/shell/Icon";
 import { fmtRuntimeDate, runtimeStatusTone } from "../lib/runtime-format";
 import type {
-  RuntimeInspectResponse,
   RuntimeOutboxRow,
   RuntimeTimerRow,
   RuntimeWorkRow,
 } from "../types";
+export { RuntimeWorkDetail } from "./RuntimeWorkDetail";
 
 interface RuntimeWorkTableProps {
   rows: readonly RuntimeWorkRow[];
@@ -36,7 +36,10 @@ export function RuntimeWorkTable({
     <div className="overflow-auto">
       <table className="w-full min-w-[900px] border-collapse text-left text-[12px]">
         <thead style={{ color: "var(--devtools-fg-faint)" }}>
-          <tr className="border-b" style={{ borderColor: "var(--devtools-border)" }}>
+          <tr
+            className="border-b"
+            style={{ borderColor: "var(--devtools-border)" }}
+          >
             <Th>status</Th>
             <Th>work</Th>
             <Th>target</Th>
@@ -88,6 +91,14 @@ export function RuntimeWorkTable({
                   >
                     {row.work.kind}
                   </div>
+                  {row.application?.progress?.message && (
+                    <div
+                      className="mt-0.5 max-w-64 truncate text-[10.5px]"
+                      style={{ color: "var(--devtools-fg-muted)" }}
+                    >
+                      {row.application.progress.message}
+                    </div>
+                  )}
                 </Td>
                 <Td>
                   <div className="font-mono">{row.targetId}</div>
@@ -201,40 +212,6 @@ export function RuntimeOutboxTable({
   );
 }
 
-export function RuntimeWorkDetail({
-  detail,
-}: {
-  detail?: RuntimeInspectResponse;
-}) {
-  if (!detail?.work)
-    return (
-      <EmptyRuntimeRows label="Select a work item to inspect replay and error metadata." />
-    );
-  const { work, flow } = detail;
-  return (
-    <div className="grid gap-3 p-4 text-[12px] md:grid-cols-2">
-      <Kv label="work id" value={work.workId} />
-      <Kv label="target" value={work.targetId} />
-      <Kv label="status" value={work.status} />
-      <Kv label="attempts" value={`${work.attempt}/${work.maxAttempts}`} />
-      {work.lastError && (
-        <Kv
-          label="last error"
-          value={`${work.lastError.code}: ${work.lastError.message}`}
-        />
-      )}
-      {flow && <Kv label="flow" value={`${flow.flowId} · ${flow.status}`} />}
-      {flow && (
-        <Kv
-          label="fingerprint"
-          value={flow.fingerprint.join(" → ") || "-"}
-          wide
-        />
-      )}
-    </div>
-  );
-}
-
 function SimpleTable({
   columns,
   rows,
@@ -246,7 +223,10 @@ function SimpleTable({
     <div className="overflow-auto">
       <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
         <thead style={{ color: "var(--devtools-fg-faint)" }}>
-          <tr className="border-b" style={{ borderColor: "var(--devtools-border)" }}>
+          <tr
+            className="border-b"
+            style={{ borderColor: "var(--devtools-border)" }}
+          >
             {columns.map((column) => (
               <Th key={column}>{column}</Th>
             ))}
@@ -284,33 +264,6 @@ function Td({ children }: { children?: React.ReactNode }) {
 
 function Mono({ children }: { children: React.ReactNode }) {
   return <span className="font-mono">{children}</span>;
-}
-
-function Kv({
-  label,
-  value,
-  wide,
-}: {
-  label: string;
-  value: React.ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <div className={wide ? "md:col-span-2" : undefined}>
-      <div
-        className="font-mono text-[10.5px] uppercase tracking-[0.06em]"
-        style={{ color: "var(--devtools-fg-faint)" }}
-      >
-        {label}
-      </div>
-      <div
-        className="mt-1 break-words font-mono"
-        style={{ color: "var(--devtools-fg)" }}
-      >
-        {value}
-      </div>
-    </div>
-  );
 }
 
 function EmptyRuntimeRows({ label }: { label: string }) {

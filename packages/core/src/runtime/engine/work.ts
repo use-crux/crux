@@ -12,6 +12,7 @@ import type { LeaseToken, RuntimeTargetId, WorkId } from "../ports/ids";
 import type { RuntimeWork } from "../ports/work";
 import { cloneRuntimeResultRef, type RuntimeResultRef } from "../results/types";
 import type { JsonValue } from "../../storage";
+import type { RuntimeApplicationWorkState } from "./application-work-state";
 
 /**
  * Kernel-owned lifecycle state for a {@link RuntimeWorkItem}.
@@ -96,6 +97,8 @@ export interface RuntimeWorkItem {
   readonly lastError?: WorkItemError;
   /** Internal content-addressed result reference committed on completion. */
   readonly resultRef?: RuntimeResultRef;
+  /** Safe bounded metadata for public application Work handles. */
+  readonly application?: RuntimeApplicationWorkState;
   /** Time the kernel first accepted this work occurrence. */
   readonly createdAt: Date;
   /** Time of the most recent kernel-owned lifecycle transition. */
@@ -187,6 +190,7 @@ function isLegalTransition(
     case "suspended":
       return to === "pending" || to === "cancelled";
     case "blocked":
+      return to === "pending" || to === "cancelled";
     case "dead-letter":
       return to === "pending";
     case "completed":

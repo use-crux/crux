@@ -1,0 +1,23 @@
+---
+title: WORK_TARGET_MISMATCH
+description: getWork() received a different exported Flow than the accepted Work.
+---
+
+## What failed
+
+`getWork(target, id)` found the Work ID, but its durable target name differs
+from the supplied exported Flow.
+
+## Why
+
+Reconnection validates target identity so a Work ID cannot silently acquire
+another target's result type.
+
+## What still works
+
+The Work remains unchanged and reconnectable with its original exported Flow.
+
+## Fix
+
+Pass the same exported Flow used by `spawn()`. Continue to authorize the
+application request separately; the Work ID is not ambient authority.

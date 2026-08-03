@@ -32,7 +32,12 @@ export type {
   CreateRuntimeProgramOptions,
   RuntimeProgram,
   RuntimeProgramTarget,
+  RuntimeProgramTargetDeclaration,
+  RuntimeProgramTargetDefinition,
+  RuntimeProgramTargetDefinitionInput,
+  RuntimeProgramTargetInput,
 } from "./program";
+export type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
 
 export { createRuntimeWorker } from "./worker/create-runtime-worker";
 export type {
@@ -82,6 +87,11 @@ export type {
   WorkItemError,
   WorkTransition,
 } from "./engine/work";
+export type {
+  RuntimeApplicationWorkOwnership,
+  RuntimeApplicationWorkProgress,
+  RuntimeApplicationWorkState,
+} from "./engine/application-work-state";
 
 export { createRuntimeKernel, wakeEnvelopeForWork } from "./engine/kernel";
 export type {
@@ -111,6 +121,10 @@ export type {
   ScanTimersOptions,
   ScanTimersResult,
   ScheduleTimerInput,
+} from "./engine/kernel";
+export type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
 } from "./engine/kernel";
 
 export {
@@ -326,6 +340,7 @@ export type {
 } from "./reactive/records";
 export type * from "./store";
 
+export { canonicalRuntimeResult } from "./results/canonical";
 export {
   RUNTIME_RESULT_MAX_BYTES,
   RUNTIME_RESULT_MEDIA_TYPE,

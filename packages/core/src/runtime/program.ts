@@ -13,6 +13,7 @@ import {
 } from "./handler/targets";
 import type { RuntimeManagedTransportBinding } from "./transport";
 import { validateRuntimeManagedTransportBinding } from "./transport";
+import type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
 
 const encoder = new TextEncoder();
 
@@ -21,20 +22,49 @@ export type RuntimeProgramTarget = RuntimeHandlerTarget & {
   readonly kind: "flow" | "task";
 };
 
-/** Immutable executable target and managed-transport truth for one project. */
+/** Immutable executable target, definition, and managed-transport truth for one project. */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
   readonly manifestHash: string;
   /** Canonically ordered executable Runtime target declarations. */
   readonly targets: readonly RuntimeProgramTarget[];
+  /** Generated definition identity for each executable target. */
+  readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 
+/** Generated identity supplied beside one statically imported target. */
+export interface RuntimeProgramTargetDefinitionInput {
+  /** Exact Project Index definition identity. */
+  readonly id: string;
+  /** Exact Project Index definition fingerprint. */
+  readonly fingerprint: string;
+}
+
+/** A target paired with generated definition metadata. */
+export interface RuntimeProgramTargetDeclaration {
+  /** Statically imported executable target. */
+  readonly target: RuntimeProgramTarget;
+  /** Generated identity for the imported definition. */
+  readonly definition: RuntimeProgramTargetDefinitionInput;
+}
+
+/** Canonical target metadata retained by an immutable Runtime program. */
+export type RuntimeProgramTargetDefinition = Omit<
+  RuntimeTargetDefinitionRef,
+  "manifestHash"
+>;
+
+/** Target input accepted by generated and hand-written Runtime programs. */
+export type RuntimeProgramTargetInput =
+  | RuntimeProgramTarget
+  | RuntimeProgramTargetDeclaration;
+
 /** Declarations accepted by {@link createRuntimeProgram}. */
 export interface CreateRuntimeProgramOptions {
   /** Statically imported Flow handles and durable task targets. */
-  readonly targets: readonly RuntimeProgramTarget[];
+  readonly targets: readonly RuntimeProgramTargetInput[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -48,10 +78,12 @@ export interface CreateRuntimeProgramOptions {
 export function createRuntimeProgram(
   options: CreateRuntimeProgramOptions,
 ): RuntimeProgram {
+  const declarations = options.targets.map(normalizeTargetDeclaration);
   const targets = canonicalizeRuntimeHandlerTargets(
-    options.targets,
+    declarations.map((declaration) => declaration.target),
     "createRuntimeProgram()",
   );
+  const targetDefinitions = canonicalTargetDefinitions(targets, declarations);
   const transports = canonicalizeTransports(options.transports);
   validateSignalTargets(targets, transports);
   validateAdapterDeclarations(transports);
@@ -60,12 +92,70 @@ export function createRuntimeProgram(
     encoder.encode(
       JSON.stringify({
         format: "crux-runtime-program:v1",
-        targets: targets.map(targetManifestEntry),
+        targets: targets.map((target, index) => ({
+          ...targetManifestEntry(target),
+          definition: targetDefinitions[index],
+        })),
         transports,
       }),
     ),
   );
-  return Object.freeze({ manifestHash, targets, transports });
+  return Object.freeze({
+    manifestHash,
+    targets,
+    targetDefinitions,
+    transports,
+  });
+}
+
+function normalizeTargetDeclaration(
+  input: RuntimeProgramTargetInput,
+): RuntimeProgramTargetDeclaration {
+  if ("target" in input && "definition" in input) {
+    return Object.freeze({
+      target: input.target,
+      definition: Object.freeze({ ...input.definition }),
+    });
+  }
+  const id = runtimeHandlerTargetIdentity(input);
+  return Object.freeze({
+    target: input,
+    definition: Object.freeze({
+      id,
+      fingerprint: sha256Hex(
+        encoder.encode(
+          JSON.stringify({
+            format: "crux-runtime-target:v1",
+            id,
+            kind: input.kind,
+          }),
+        ),
+      ),
+    }),
+  });
+}
+
+function canonicalTargetDefinitions(
+  targets: readonly RuntimeProgramTarget[],
+  declarations: readonly RuntimeProgramTargetDeclaration[],
+): readonly RuntimeProgramTargetDefinition[] {
+  const byTarget = new Map(
+    declarations.map((declaration) => [
+      runtimeHandlerTargetIdentity(declaration.target),
+      declaration.definition,
+    ]),
+  );
+  return Object.freeze(
+    targets.map((target) => {
+      const targetId = runtimeHandlerTargetIdentity(target);
+      const definition = byTarget.get(targetId)!;
+      return Object.freeze({
+        targetId: targetId as RuntimeTargetDefinitionRef["targetId"],
+        definitionId: definition.id,
+        fingerprint: definition.fingerprint,
+      });
+    }),
+  );
 }
 
 function canonicalizeTransports(
@@ -116,7 +206,6 @@ function targetManifestEntry(target: RuntimeProgramTarget): {
     kind: target.kind,
   };
 }
-
 function duplicateBinding(id: string): never {
   throw createRuntimeError({
     code: "TARGET_DUPLICATE",

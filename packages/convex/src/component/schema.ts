@@ -54,6 +54,7 @@ export default defineSchema({
     leaseToken: v.optional(v.string()),
     lastError: v.optional(v.any()),
     resultRef: v.optional(v.any()),
+    application: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -83,6 +84,15 @@ export default defineSchema({
     flowId: v.string(),
     workId: v.string(),
     targetId: v.string(),
+    definition: v.optional(
+      v.object({
+        targetId: v.string(),
+        definitionId: v.string(),
+        fingerprint: v.string(),
+        manifestHash: v.string(),
+      }),
+    ),
+    resultObligation: v.optional(v.object({ kind: v.literal('required') })),
     namespace: v.string(),
     status: v.string(),
     effects: v.optional(
@@ -93,6 +103,7 @@ export default defineSchema({
       }),
     ),
     input: v.any(),
+    inputDigest: v.optional(v.string()),
     continuation: v.optional(v.any()),
     completedSteps: v.any(),
     fingerprint: v.array(v.string()),

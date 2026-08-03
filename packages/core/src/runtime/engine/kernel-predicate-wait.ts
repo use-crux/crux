@@ -7,6 +7,7 @@ import type { RuntimeOutboxItem, RuntimeStoreTransaction } from "../store";
 import type { RuntimeCompositeDeps } from "./composites";
 import { flowEventResumeKey } from "./idempotency";
 import { wakeEnvelopeForWork } from "./kernel-shared";
+import { recordApplicationWorkResumption } from "./application-work-events";
 
 interface QueuePredicateCandidateOptions {
   readonly tx: RuntimeStoreTransaction;
@@ -53,13 +54,19 @@ export async function queuePredicateCandidate(
   if (current.status !== "suspended") return [];
 
   const idempotencyKey = flowEventResumeKey(workId, options.eventId);
-  const pending = await options.tx.state.setWorkPending(workId, {
+  let pending = await options.tx.state.setWorkPending(workId, {
     namespace: options.waiter.namespace,
     work: options.waiter.work,
     idempotencyKey,
     now: options.deps.now(),
   });
   if (!pending) throw new Error("Predicate Signal wake arbitration was lost.");
+  pending = await recordApplicationWorkResumption(
+    options.tx,
+    current,
+    pending,
+    options.deps.now(),
+  );
   return [
     await options.tx.outbox.put(
       { ...wakeEnvelopeForWork(pending), idempotencyKey },

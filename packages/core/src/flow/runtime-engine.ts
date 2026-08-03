@@ -163,6 +163,12 @@ export function runtimeFlowSnapshot(
     flowId: execution.snapshot.flowId,
     workId: execution.work.workId,
     targetId: execution.work.targetId,
+    ...(execution.snapshot.definition
+      ? { definition: execution.snapshot.definition }
+      : {}),
+    ...(execution.snapshot.resultObligation
+      ? { resultObligation: execution.snapshot.resultObligation }
+      : {}),
     namespace: execution.work.namespace,
     status: options.status,
     effects: options.effects,

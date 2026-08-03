@@ -364,6 +364,7 @@ function runtimeTarget(source: string): ProjectDefinition {
     kind: 'flow',
     name: 'review',
     fidelity: 'resolved',
+    fingerprint: 'definition-review-v1',
     source: { file: source, line: 1 },
     metadata: { exportName: 'reviewFlow' },
   }

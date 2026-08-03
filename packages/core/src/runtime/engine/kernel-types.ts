@@ -40,6 +40,18 @@ import type {
 } from "./kernel-flow-types";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
+} from "./composites/work-accept";
+import type {
+  WorkProgressCompositeInput,
+  WorkProgressCompositeResult,
+} from "./composites/work-progress";
+import type {
+  WorkDetachCompositeInput,
+  WorkDetachCompositeResult,
+} from "./composites/work-detach";
+import type {
   RuntimeScheduledWorkFlushRecord,
   RuntimeScheduledWorkIntent,
 } from "./kernel-scheduled-types";
@@ -195,6 +207,8 @@ export interface CancelWorkInput {
   readonly namespace: string;
   /** Work item to cancel. */
   readonly workId: WorkId;
+  /** Safe bounded reason supplied by an application Work handle. */
+  readonly reason?: string;
 }
 
 /** Result of an idempotent cancellation attempt. */
@@ -242,6 +256,18 @@ export type RuntimeWakeResult =
 
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
+  /** Atomically accept one top-level application Flow Work occurrence. */
+  acceptWork(
+    input: WorkAcceptCompositeInput,
+  ): Promise<WorkAcceptCompositeResult>;
+  /** Replace one live application Work progress snapshot. */
+  progressWork(
+    input: WorkProgressCompositeInput,
+  ): Promise<WorkProgressCompositeResult>;
+  /** Remove durable ownership without cancelling application Work. */
+  detachWork(
+    input: WorkDetachCompositeInput,
+  ): Promise<WorkDetachCompositeResult>;
   /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
   resumeFlow(input: FlowManualResumeInput): Promise<RuntimeWorkItem | null>;
   /** Atomically accept one Signal occurrence and every required delivery. */

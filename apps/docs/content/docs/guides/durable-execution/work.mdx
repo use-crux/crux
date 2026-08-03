@@ -1,0 +1,214 @@
+---
+title: Application Work
+description: Durably accept an exported Flow in one request and reconnect it in another.
+---
+
+Application Work lets a request accept a finite exported Flow without running
+it inline. Acceptance writes the Work record, initial Flow snapshot, normalized
+JSON input, exact generated definition, result obligation, and wake outbox row
+atomically. `spawn()` resolves after that commit and before execution.
+
+## Generate immutable target metadata
+
+Export the Flow, then generate Runtime artifacts before building the
+application:
+
+```bash
+crux runtime generate
+```
+
+The generated `.crux/generated/runtime/program.ts` contains static target
+imports and each target's Project Index definition identity and fingerprint.
+Do not maintain a second target registry in application code.
+
+Generated files do not exist before setup or generation. Import
+`runtimeProgram` from an application or request entry that is built after that
+step; do not import it from `crux.config.ts` while setup may still be creating
+the artifacts.
+
+## Bind the application host
+
+Bind a Runtime and stable namespace. For local development, `node()` without a
+store uses process-local memory; production Work that must survive a process
+restart needs a durable Runtime store such as PostgreSQL:
+
+```ts
+import { createWorkHost, spawn } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { runtimeProgram } from "./.crux/generated/runtime/program";
+import { reviewDocument } from "./src/flows/review-document";
+
+const workHost = createWorkHost({
+  runtime: node({ store: postgres(), namespace: "app" }),
+  program: runtimeProgram,
+});
+
+export async function POST(request: Request) {
+  const input = await request.json();
+  const work = await workHost.run(() =>
+    spawn(reviewDocument, input, {
+      idempotencyKey: request.headers.get("Idempotency-Key")!,
+    }),
+  );
+  return Response.json({ workId: work.id }, { status: 202 });
+}
+```
+
+`createWorkHost()` does not send a worker request or execute a Flow. It binds
+the immutable Runtime program to `spawn()` and `getWork()` for the active
+request scope.
+
+## Idempotency and reconnection
+
+The idempotency tuple is Runtime namespace, exported target name, and caller
+key. A compatible retry returns the same Work. The same tuple with different
+normalized JSON input rejects with `WORK_IDEMPOTENCY_CONFLICT`; the same key
+for another target is independent.
+
+Reconnect in a later request with the original exported Flow:
+
+```ts
+import { getWork } from "@use-crux/core";
+
+const work = await workHost.run(() => getWork(reviewDocument, workId));
+const status = await work.status();
+const result = await work.result();
+```
+
+Passing another target rejects with `WORK_TARGET_MISMATCH`. A Work ID and an
+idempotency key are identifiers, not authorization; authenticate and authorize
+each application request before calling either API.
+
+`result()` may be called immediately after acceptance. It waits while the
+generated Runtime worker executes the pinned Flow definition, then returns the
+Flow's exact inferred output. The terminal Work state and its immutable result
+reference commit together. Replayed wakes observe that terminal state without
+running another logical occurrence or replacing the result.
+
+A Runtime-supported Flow barrier may move the same Work through `suspended`
+before it resumes and completes. Terminal failures expose only the safe public
+Work failure summary; thrown provider and user details are not retained there.
+
+## Durable result retention
+
+The PostgreSQL and Convex Runtime stores retain the typed terminal result as
+canonical, content-addressed JSON. A restarted host reconnects with `getWork()`
+and reads the exact same value after an independent worker completes the pinned
+Flow. Duplicate wake delivery neither executes the Flow again nor replaces its
+result.
+
+Referenced result payloads are retained during provider cleanup. If an operator
+removes a payload or its retention policy expires it, `result()` throws
+`WorkResultExpiredError`; it never re-enqueues or re-executes the Work. Store
+large application content separately and return a bounded reference from the
+Flow result.
+
+## Report progress
+
+`progress()` replaces the latest safe progress snapshot. It does not enqueue a
+wake, resume suspended Work, or retain a history of every update:
+
+```ts
+await work.progress({
+  message: "Reviewing sections",
+  current: 3,
+  total: 8,
+});
+```
+
+Messages are limited to 1,024 characters. Counts must be finite,
+non-negative, and `current` cannot exceed `total`. A later update replaces the
+whole snapshot, so `progress({ current: 4 })` removes the earlier message and
+total. Completed, failed, and cancelled Work rejects updates with
+`WorkNotActiveError`.
+
+## Cancel or detach
+
+Cancellation is cooperative and idempotent:
+
+```ts
+const receipt = await work.cancel({ reason: "Request withdrawn" });
+```
+
+The optional safe reason is limited to 512 characters. The Runtime uses its
+existing cancellation transaction to terminalize the Work and cancel its
+owned Flow snapshot, waiter, and timer registrations. It does not promise
+physical preemption. If completion wins the transaction race, the receipt is
+`already-terminal` with the completed status and the result remains intact.
+Repeating cancellation returns the current terminal state.
+
+Use `detach()` when the owner no longer intends to join the Work but execution
+should continue:
+
+```ts
+const receipt = await work.detach();
+```
+
+Detachment changes only durable ownership. It is idempotent, does not cancel
+or re-enqueue execution, and does not prevent a later `getWork()` call from
+inspecting or joining the same occurrence.
+
+## Stream safe lifecycle events
+
+Without a cursor, `stream()` emits one replacement snapshot and then ordered
+status and progress events for that Work only:
+
+```ts
+let cursor: string | undefined;
+
+for await (const event of work.stream({ after: cursor })) {
+  cursor = event.cursor;
+  if (event.type === "work.progress") {
+    console.log(event.progress);
+  } else {
+    console.log(event.status.state);
+  }
+}
+```
+
+Event IDs and cursors are opaque and can be stored for reconnection. A retained
+`after` cursor resumes strictly after that event without another snapshot. If
+retention removed the cursor, the stream emits a fresh snapshot as the new
+baseline, then continues. Consumers may deduplicate by `event.id`.
+
+Streams use the Runtime durable event port. They never include the Work result,
+raw thrown failures, inputs, or provider payloads. They end after the
+`completed`, `failed`, or `cancelled` status event; a replacement snapshot that
+is already terminal ends immediately.
+
+## Read bounded statistics
+
+`stats()` returns the existing owner-scoped `ScopeStats` projection for the
+Work occurrence:
+
+```ts
+const stats = await work.stats();
+console.log(stats.timing.activeTimeMs);
+console.log(stats.lifecycle.suspensions);
+```
+
+The Runtime mechanically records active and suspended time, completion, and
+Work lifecycle facts such as suspension, resumption, and cancellation. The
+bounded ledger export is stored with the canonical Work record, so memory,
+PostgreSQL, and Convex hosts reconstruct the same projection after restart.
+It contains aggregate facts, not progress messages, results, or failures.
+
+## Runtime and adapter boundary
+
+Application Work uses the Runtime's single Work record, state machine,
+cancellation composite, durable event port, and statistics ledger. Memory,
+PostgreSQL, and Convex persist the same lifecycle and safe application metadata;
+there is no separate Work queue or control log.
+
+Use `flow.run()` when the request should await foreground completion. Use
+`defer()` for resultless follow-up work. Replay-safe child Work created inside
+a Flow remains a separate lifecycle concern from top-level application
+acceptance.
+
+## Related
+
+- [Node execution worker](/docs/guides/durable-execution/node)
+- [Runtime program and worker API](/docs/reference/crux-core/runtime-worker)
+- [Application Work API](/docs/reference/crux-core/work)
+- [Background Work](/docs/guides/background-work)

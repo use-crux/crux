@@ -98,8 +98,17 @@ function targetFromDefinition(
       kind: definition.kind,
       module: `./${relative(root, file).replace(/\\/g, "/")}`,
       export: exportName,
+      definitionId: definition.id,
+      fingerprint: requiredFingerprint(definition),
     },
   ];
+}
+
+function requiredFingerprint(definition: ProjectDefinition): string {
+  if (definition.fingerprint) return definition.fingerprint;
+  throw new TypeError(
+    `Runtime target '${definition.id}' is missing its Project Index fingerprint.`,
+  );
 }
 
 function duplicateTargetFinding(
