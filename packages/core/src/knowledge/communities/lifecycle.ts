@@ -25,7 +25,14 @@ export interface CommunityBuildDescriptor {
 export interface CommunityRefreshHost {
   /** Ensure a build for the descriptor runs to completion; joining an in-flight equivalent build satisfies the call. */
   ensure(descriptor: CommunityBuildDescriptor, options?: { readonly force?: boolean }): Promise<void>
-  /** Return whether retained work is already scheduled or running for this descriptor. @internal */
+  /**
+   * Return whether retained work is already scheduled or running for this
+   * descriptor.
+   *
+   * Optional. A host that can answer lets `status()` report `"building"` while
+   * a refresh is in flight; a host that omits it reports `"stale"` until the
+   * refresh publishes.
+   */
   hasPending?(descriptor: CommunityBuildDescriptor): boolean
 }
 

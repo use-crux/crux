@@ -166,6 +166,15 @@ interface CommunityRefreshHost {
 }
 ```
 
+`ensure()` is the required member: run a build for the descriptor to
+completion, or satisfy the call by joining an equivalent build already in
+flight.
+
+`hasPending()` is optional. A host that can report whether a refresh is
+scheduled or running lets `status()` return `"building"` while that refresh is
+in flight. A host that omits it reports `"stale"` until the refresh publishes;
+readiness and joining are unaffected either way.
+
 ### `reports(options?)`
 
 ```ts
