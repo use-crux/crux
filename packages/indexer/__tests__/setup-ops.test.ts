@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { SetupReport } from '@use-crux/core/setup'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runSetupOperation } from '../src/indexer/setup-ops'
+import {
+  runSetupOperation,
+  runSetupPlanningOperation,
+} from '../src/indexer/setup-ops'
 
 const roots: string[] = []
 
@@ -163,10 +166,9 @@ describe('runSetupOperation', () => {
       ].join('\n'),
     )
 
-    const report = await runSetupOperation({
+    const report = await runSetupPlanningOperation({
       root,
       mode: 'apply',
-      definitions: [],
     })
     const state = (
       globalThis as typeof globalThis &
@@ -175,17 +177,15 @@ describe('runSetupOperation', () => {
 
     expect(report).toMatchObject({
       ok: true,
-      setup: {
-        mode: 'apply',
-        actions: [
-          expect.objectContaining({
-            id: 'storage.apply-setup',
-            classification: 'safe-additive',
-          }),
-        ],
-        applied: [{ actionId: 'storage.apply-setup', ok: true }],
-        findings: [],
-      },
+      mode: 'apply',
+      actions: [
+        expect.objectContaining({
+          id: 'storage.apply-setup',
+          classification: 'safe-additive',
+        }),
+      ],
+      applied: [{ actionId: 'storage.apply-setup', ok: true }],
+      findings: [],
     })
     expect(state).toMatchObject({ applied: 1, closed: 1 })
     delete (
