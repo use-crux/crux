@@ -18,7 +18,9 @@ import { ThreadCommitError } from "../../thread/errors";
 import type { ThreadCommit } from "../../thread/types";
 import type { AssistantContentPart } from "../../types/content";
 import type { ManagedThreadPublication } from "../../generation-model/execution-checkpoint";
+import type { ThreadHistoryRange } from "../../request/history/source";
 import { acceptedThreadTurnMessages } from "./thread-publication";
+import { authoredMessages } from "./authored-messages";
 
 /** Observable reason a resolved Thread did not participate in one invocation. */
 export interface ThreadHistoryOverride {
@@ -35,6 +37,7 @@ export interface ManagedThreadInvocation {
   readonly head?: string;
   readonly binding?: NonNullable<ResolvedPrompt["threadBinding"]>;
   readonly source?: HistorySource;
+  readonly basis?: ThreadHistoryRange;
   readonly override?: ThreadHistoryOverride;
 }
 
@@ -74,6 +77,10 @@ export async function prepareThreadInvocation(
     current: authored,
     validate: () => binding.validateRevision(history.revision),
   });
+  const basis = source.artifactRange?.({
+    offset: 0,
+    length: history.messageIds.length,
+  });
   return {
     resolved,
     historyLength: history.messages.length,
@@ -82,6 +89,7 @@ export async function prepareThreadInvocation(
     ...(history.head ? { head: history.head } : {}),
     binding,
     source,
+    ...(basis ? { basis } : {}),
   };
 }
 
@@ -169,6 +177,7 @@ export function prepareThreadPublication(
     threadId: invocation.binding.id,
     ...(invocation.head ? { after: invocation.head } : {}),
     messages: Object.freeze(messages),
+    ...(invocation.basis ? { basis: invocation.basis } : {}),
   });
 }
 
@@ -198,13 +207,6 @@ export async function commitThreadPublication(
       error,
     );
   }
-}
-
-function authoredMessages(resolved: ResolvedPrompt): readonly Message[] {
-  if (resolved.prompt) {
-    return [{ role: "user", content: resolved.prompt }];
-  }
-  return (resolved.messages ?? []) as readonly Message[];
 }
 
 function findRenderedUserMessage(

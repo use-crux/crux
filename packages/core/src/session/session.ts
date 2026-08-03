@@ -15,11 +15,15 @@ import {
   SessionInputError,
   SessionNotFoundError,
 } from "./errors";
-import { sessionInputValue } from "./input";
+import { sessionInputRecord, sessionInputValue } from "./input";
 import type { GenerationModel } from "../generation-model";
 import { acceptSessionTurns } from "./turn-admission";
 import type { SessionFor, SessionModelGuard, SessionOptions } from "./types";
-import { readSessionStats, readSessionStatus } from "./inspection";
+import {
+  readSessionInspection,
+  readSessionStats,
+  readSessionStatus,
+} from "./inspection";
 
 const encoder = new TextEncoder();
 
@@ -157,12 +161,10 @@ function createHandle<TAgent extends AnyAgent>(
   const accept = async (inputs: readonly unknown[]) => {
     if (inputs.length === 0) return Object.freeze([]);
     const parsedInputs = validateInputs(target, inputs);
-    const model = requireCompatibleModel(target, selectedModel);
+    requireCompatibleModel(target, selectedModel);
     return acceptSessionTurns<InferAgentOutput<TAgent>>(
       runtime,
       record,
-      target,
-      model,
       parsedInputs,
     );
   };
@@ -173,6 +175,7 @@ function createHandle<TAgent extends AnyAgent>(
     sendMany: async (inputs: readonly InferAgentInput<TAgent>[]) =>
       accept(inputs),
     status: () => readSessionStatus(runtime, record.sessionId),
+    inspect: () => readSessionInspection(runtime, record.sessionId),
     stats: () => readSessionStats(runtime, record.sessionId),
   });
 }
@@ -250,7 +253,7 @@ function validateInputs(target: AnyAgent, inputs: readonly unknown[]) {
         { cause },
       );
     }
-    return sessionInputValue(parsed);
+    return sessionInputRecord(sessionInputValue(parsed));
   });
 }
 

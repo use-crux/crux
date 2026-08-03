@@ -9,20 +9,22 @@
  * @module
  */
 
-import type { AnyAgent } from './agent'
-import type { AnyModel, AnyToolSet } from '../types'
-import type { ValidationRetryOptions } from '../generation/validation-retry'
-import type { TokenUsage } from '../generation/types'
-import type { WithOperationResultMeta } from '../observability'
-import type { InputBudget } from '../request/budget/input-budget'
-import type { PrepareStep } from '../request/prepare/step'
-import type { RequestReceipt } from '../request/receipt/receipt'
-import type { ThreadCommit } from '../thread/types'
-import type { EffectScopeRef } from '../effect'
+import type { AnyAgent } from "./agent";
+import type { AnyModel, AnyToolSet } from "../types";
+import type { ValidationRetryOptions } from "../generation/validation-retry";
+import type { TokenUsage } from "../generation/types";
+import type { WithOperationResultMeta } from "../observability";
+import type { InputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
+import type { RequestReceipt } from "../request/receipt/receipt";
+import type { ThreadCommit } from "../thread/types";
+import type { EffectScopeRef } from "../effect";
 import {
   managedGenerationCheckpoint,
   type ManagedGenerationCheckpoint,
-} from '../generation-model/execution-checkpoint'
+  managedGenerationStepBoundary,
+  type ManagedGenerationStepBoundary,
+} from "../generation-model/execution-checkpoint";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -34,17 +36,17 @@ import {
  */
 export interface AgentResultPayload<TOutput = unknown> {
   /** Agent identifier. */
-  readonly agentId: string
+  readonly agentId: string;
   /** The output (typed from prompt's outputSchema, or string for text prompts). */
-  readonly output: TOutput
+  readonly output: TOutput;
   /** Duration in milliseconds. */
-  readonly durationMs: number
+  readonly durationMs: number;
   /** Token usage if available. */
-  readonly usage?: TokenUsage
+  readonly usage?: TokenUsage;
   /** Ordered provider requests executed by this managed child. */
-  readonly requests?: readonly RequestReceipt[]
+  readonly requests?: readonly RequestReceipt[];
   /** Atomic canonical Thread publication produced by this Agent invocation. */
-  readonly threadCommit?: ThreadCommit
+  readonly threadCommit?: ThreadCommit;
 }
 
 /**
@@ -61,16 +63,16 @@ export interface AgentResultPayload<TOutput = unknown> {
  */
 export type AgentResult<TOutput = unknown> = WithOperationResultMeta<
   AgentResultPayload<TOutput> & { readonly effects: EffectScopeRef }
->
+>;
 
 /** Options passed to the executor for a single agent invocation. */
 export interface ExecuteOptions {
   /** Input data for the agent's prompt. */
-  input: unknown
+  input: unknown;
   /** Model to use (composition-level default; agent model takes precedence). */
-  model?: AnyModel
+  model?: AnyModel;
   /** Additional tools to merge with agent tools. */
-  tools?: AnyToolSet
+  tools?: AnyToolSet;
   /**
    * Maximum number of tool-use steps the executor may perform per invocation.
    *
@@ -80,22 +82,24 @@ export interface ExecuteOptions {
    *
    * @default 1 — single generation, no tool loop (backward compatible).
    */
-  maxSteps?: number
+  maxSteps?: number;
   /** Invocation-level whole-request input pressure overrides. */
-  inputBudget?: InputBudget
+  inputBudget?: InputBudget;
   /** Invocation callback overriding the Agent default for this run. */
-  prepareStep?: PrepareStep<AnyModel>
+  prepareStep?: PrepareStep<AnyModel>;
   /** Tool names exposed from the prepared child baseline. */
-  activeTools?: readonly string[]
+  activeTools?: readonly string[];
   /** Cooperative cancellation inherited by this Agent invocation. */
-  signal?: AbortSignal
+  signal?: AbortSignal;
   /** Durable completion carrier installed only by the Session Runtime target. @internal */
-  [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint
+  [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
+  /** Session coordinator invoked only at semantic provider-call boundaries. @internal */
+  [managedGenerationStepBoundary]?: ManagedGenerationStepBoundary;
   /**
    * Validation-feedback retry for structured output.
    * Forwarded to the adapter's `generate()` call.
    */
-  validationRetry?: ValidationRetryOptions
+  validationRetry?: ValidationRetryOptions;
 }
 
 /**
@@ -119,5 +123,5 @@ export interface ExecuteOptions {
  * ```
  */
 export interface AgentExecutor {
-  (agent: AnyAgent, options: ExecuteOptions): Promise<AgentResultPayload>
+  (agent: AnyAgent, options: ExecuteOptions): Promise<AgentResultPayload>;
 }

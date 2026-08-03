@@ -1,4 +1,4 @@
-import type { JsonValue } from "../storage";
+import type { JsonObject, JsonValue } from "../storage";
 import { SessionInputError } from "./errors";
 
 const MAX_DEPTH = 64;
@@ -17,6 +17,18 @@ export function sessionInputValue(value: unknown): JsonValue {
     if (cause instanceof SessionInputError) throw cause;
     throw unsafe("$");
   }
+}
+
+/** Narrow a validated Agent input to the object shape consumed by Prompt resolution. */
+export function sessionInputRecord(value: JsonValue): JsonObject {
+  if (isJsonObject(value)) return value;
+  throw new SessionInputError(
+    "Session Agent input must resolve to a JSON object.",
+  );
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function cloneJson(

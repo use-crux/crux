@@ -1,12 +1,12 @@
-/** Stable identities shared by one Session turn and canonical Work. */
+/** Stable identities shared by one Session activation and canonical Work. */
 
-import { sha256Hex } from "../content/sha256";
-import type { EffectScopeRef } from "../effect";
-import type { WorkId } from "../runtime/ports/ids";
+import { sha256Hex } from "../../content/sha256";
+import type { EffectScopeRef } from "../../effect";
+import type { WorkId } from "../ports/ids";
 
 const encoder = new TextEncoder();
 
-/** Derive one Work ID and Effect scope from an accepted Session input. */
+/** Derive one Work ID and Effect scope from an activation's primary input. */
 export function sessionTurnIdentity(
   namespace: string,
   sessionId: string,

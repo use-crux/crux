@@ -1,9 +1,4 @@
-import {
-  config,
-  createWorkHost,
-  prompt,
-  session,
-} from "@use-crux/core";
+import { config, createWorkHost, prompt, session } from "@use-crux/core";
 import { agent, type AgentExecutor } from "@use-crux/core/agent";
 import {
   createRuntimeProgram,
@@ -18,32 +13,56 @@ import { adapter, type AdapterSpec } from "../../src/adapter";
 import type { AdapterResponse } from "../../src/adapter/types";
 import { defineGenerationModel } from "../../src/adapter-authoring";
 import { effect } from "../../src/effect";
-import { managedGenerationCheckpoint } from "../../src/generation-model/execution-checkpoint";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../../src/generation-model/execution-checkpoint";
 import { permissiveCapabilities } from "../adapter/structured-output/capability-fixtures";
 
 /** Build one real managed Session turn with provider, Tool, and Effect evidence. */
-export async function createSessionRecoveryFixture(id: string) {
+export async function createSessionRecoveryFixture(
+  id: string,
+  options: {
+    readonly beforeProvider?: (call: number) => Promise<void>;
+    readonly terminalFirst?: boolean;
+  } = {},
+) {
   const effectHandler = vi.fn(async () => "effect-result");
   const recordEffect = effect(`session.recovery.${id}`, effectHandler);
   const tool = vi.fn(async () => {
     await recordEffect();
     return "tool-result";
   });
-  const provider = vi.fn(async () =>
-    provider.mock.calls.length === 1
-      ? adapterResponse("Checking", [
-          { id: "recover-1", name: "recover", args: {} },
-        ])
-      : adapterResponse('{"reply":"Echo: Hello"}'),
+  const provider = vi.fn(
+    async (messages: readonly { role: string; content: unknown }[]) => {
+      const call = provider.mock.calls.length;
+      await options.beforeProvider?.(call);
+      if (options.terminalFirst) {
+        const latest = [...messages]
+          .reverse()
+          .find((message) => message.role === "user")?.content;
+        return adapterResponse(
+          JSON.stringify({ reply: `Echo: ${String(latest)}` }),
+        );
+      }
+      return call === 1
+        ? adapterResponse("Checking", [
+            { id: "recover-1", name: "recover", args: {} },
+          ])
+        : adapterResponse('{"reply":"Echo: Hello"}');
+    },
   );
   const runtime = adapter(recoverySpec(provider))({});
+  const prepareStep = vi.fn(() => ({ inputBudget: { max: 100_000 } }));
   const execute = vi.fn<AgentExecutor>(async (target, options) => {
     const result = await runtime.generate(target.prompt, {
       model: "recovery-model",
       input: options.input as Record<string, unknown>,
       tools: { ...target.tools, ...options.tools },
       maxSteps: 2,
+      prepareStep: options.prepareStep ?? target.prepareStep,
       [managedGenerationCheckpoint]: options[managedGenerationCheckpoint],
+      [managedGenerationStepBoundary]: options[managedGenerationStepBoundary],
     });
     return {
       agentId: target.id,
@@ -86,12 +105,16 @@ export async function createSessionRecoveryFixture(id: string) {
         execute: tool,
       },
     },
+    prepareStep,
   });
   const program = createRuntimeProgram({
     targets: [
       {
         target: support,
-        definition: { id: `agent:session-turn-recovery:${id}`, fingerprint: "v1" },
+        definition: {
+          id: `agent:session-turn-recovery:${id}`,
+          fingerprint: "v1",
+        },
       },
     ],
     transports: [],
@@ -116,6 +139,7 @@ export async function createSessionRecoveryFixture(id: string) {
     host,
     namespace,
     provider,
+    prepareStep,
     records,
     store,
     tool,
@@ -130,13 +154,15 @@ export async function createSessionRecoveryFixture(id: string) {
 }
 
 function recoverySpec(
-  provider: () => Promise<AdapterResponse>,
+  provider: (
+    messages: readonly { role: string; content: unknown }[],
+  ) => Promise<AdapterResponse>,
 ): AdapterSpec<object, object, never> {
   return {
     providerId: "session-recovery",
     structuredOutput: { accepts: permissiveCapabilities },
-    async call() {
-      return { raw: {}, extracted: await provider() };
+    async call(_client, args) {
+      return { raw: {}, extracted: await provider(args.messages) };
     },
     async stream() {
       throw new Error("not used");

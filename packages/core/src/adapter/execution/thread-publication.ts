@@ -3,6 +3,10 @@
 import type { Message } from "../../generation/messages";
 import type { ToolCallPart } from "../../types/content";
 import type { ManagedThreadResult } from "./thread-history";
+import {
+  canonicalStepIngressMessage,
+  isStepIngressMessage,
+} from "./step-ingress";
 
 /** Select the complete accepted user, Tool, and assistant turn. @internal */
 export function acceptedThreadTurnMessages(
@@ -14,6 +18,10 @@ export function acceptedThreadTurnMessages(
   let finalAssistant: Message | undefined;
   for (let index = 0; index < tail.length; index += 1) {
     const message = tail[index];
+    if (message && isStepIngressMessage(message)) {
+      rounds.push(canonicalStepIngressMessage(message));
+      continue;
+    }
     if (message?.role !== "assistant") continue;
     const calls = assistantToolCalls(message);
     if (calls.length === 0) {

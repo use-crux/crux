@@ -1,7 +1,12 @@
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
 import { getSession, prompt, session } from "../src";
-import type { ExecutionStats, GenerationModel, SessionStatus } from "../src";
+import type {
+  ExecutionStats,
+  GenerationModel,
+  SessionStatus,
+  WorkHandle,
+} from "../src";
 import { agent } from "../src/agent";
 import { flow } from "../src/flow";
 import type { ThreadSnapshot } from "../src/thread";
@@ -36,6 +41,9 @@ expectTypeOf(created).resolves.toMatchTypeOf<{
 void created.then(async (handle) => {
   const accepted = await handle.send({ message: "Hello" });
   expectTypeOf(accepted.id).toEqualTypeOf<string>();
+  expectTypeOf(accepted.work()).resolves.toEqualTypeOf<
+    WorkHandle<{ reply: string }>
+  >();
   expectTypeOf(accepted.result()).resolves.toEqualTypeOf<{ reply: string }>();
   expectTypeOf(handle.status()).resolves.toEqualTypeOf<SessionStatus>();
   expectTypeOf(handle.stats()).resolves.toEqualTypeOf<ExecutionStats>();

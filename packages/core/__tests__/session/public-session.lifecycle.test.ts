@@ -26,7 +26,9 @@ describe("public Agent Session lifecycle", () => {
         system: "Second.",
       }),
     });
-    const { host, records } = sessionHost("conflict-session-test", { targets: [first, second] });
+    const { host, records } = sessionHost("conflict-session-test", {
+      targets: [first, second],
+    });
     const created = await host.run(() => session(first, { key: "shared" }));
 
     await expect(
@@ -98,7 +100,9 @@ describe("public Agent Session lifecycle", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("missing-session-test", { targets: [support] });
+    const { host, store } = sessionHost("missing-session-test", {
+      targets: [support],
+    });
 
     await expect(
       host.run(() => getSession(support, "customer:missing")),
@@ -122,7 +126,9 @@ describe("public Agent Session lifecycle", () => {
         },
       }),
     });
-    const { host, records, store } = sessionHost("public-session-test", { targets: [support] });
+    const { host, records, store } = sessionHost("public-session-test", {
+      targets: [support],
+    });
 
     const created = await host.run(() =>
       session(support, { key: "customer:42" }),
@@ -155,7 +161,7 @@ describe("public Agent Session lifecycle", () => {
     });
     expect(
       await store.outbox.list({ namespace: "public-session-test", limit: 10 }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(executions).toBe(0);
     expect(await created.thread.read()).toMatchObject({ entries: [] });
     host.dispose();

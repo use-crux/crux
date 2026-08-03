@@ -4,7 +4,10 @@ import { agent, type AnyAgent } from "../agent";
 import type { GenerationModel } from "../generation-model";
 import type { GenerationModelResolver } from "../generation-model/resolver";
 import { generationRuntime } from "../generation-model/runtime-port";
-import { managedGenerationCheckpoint } from "../generation-model/execution-checkpoint";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../generation-model/execution-checkpoint";
 import { assertRuntimeJsonValue } from "../runtime/engine/json-value";
 import { prompt } from "../prompt";
 import type { RuntimeTargetRuntimeRef } from "../runtime/api/target-registry";
@@ -23,6 +26,7 @@ import {
 } from "./prepared-execution";
 import { sessionPostPublicationSeam } from "./post-publication-seam";
 import { SessionTurnResultArtifactError } from "./errors";
+import { sessionInputRecord } from "./input";
 
 /** Adapt one statically imported Agent into the existing Runtime worker path. */
 export function createSessionAgentRuntimeTarget(
@@ -100,6 +104,35 @@ export function createSessionAgentRuntimeTarget(
         {
           input: turn.input,
           model,
+          [managedGenerationStepBoundary]: async (boundary) => {
+            const claimed = await runtime.store.transact(async (tx) => {
+              if (!tx.sessions) {
+                throw new Error("Runtime Session storage is unavailable.");
+              }
+              return tx.sessions.claimStepInputs({
+                namespace: context.work.namespace,
+                sessionId: turn.sessionId,
+                inputId: turn.inputId,
+                workId: context.work.workId,
+                stepIndex: boundary.stepIndex,
+                reason: boundary.reason,
+                now: runtime.now(),
+              });
+            });
+            return Object.freeze({
+              inputs: Object.freeze(
+                claimed.inputs
+                  .filter((input) => input.inputId !== turn.inputId)
+                  .map((input) =>
+                    Object.freeze({
+                      id: input.inputId,
+                      cursor: input.cursor,
+                      input: sessionInputRecord(input.input),
+                    }),
+                  ),
+              ),
+            });
+          },
           [managedGenerationCheckpoint]: async (prepared) => {
             const encoded = encodePreparedSessionTurn(
               context.work.workId,

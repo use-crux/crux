@@ -1,44 +1,36 @@
-/** Canonical in-memory Session turn linkage and bounded accounting. */
+/** Canonical in-memory Session activation claiming and bounded accounting. */
 
 import type {
-  LinkRuntimeSessionTurnInput,
+  ClaimRuntimeSessionStepInputsInput,
+  ReserveRuntimeSessionTurnInput,
+  RuntimeSessionActivation,
+  RuntimeSessionActivationClaim,
   RuntimeSessionInputRecord,
   RuntimeSessionRecord,
+  RuntimeSessionStepInputClaim,
   RuntimeSessionTurnInput,
 } from "../../ports/sessions";
 import { recordSessionStatistics } from "../../engine/session-statistics";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 
-export function linkSessionTurn(
+export function reserveSessionTurn(
   data: MemoryRuntimeData,
-  input: LinkRuntimeSessionTurnInput,
+  input: ReserveRuntimeSessionTurnInput,
   recordWrite?: MemoryWriteRecorder,
-): RuntimeSessionInputRecord {
-  const accepted = sessionInput(data, input);
-  if (accepted.work) {
-    if (
-      accepted.work.workId !== input.workId ||
-      accepted.work.target !== input.target
-    ) {
-      throw new Error(
-        `Session input "${input.inputId}" has conflicting Work linkage.`,
-      );
-    }
-    return accepted;
-  }
-  const linked = Object.freeze({
-    ...accepted,
-    work: Object.freeze({
-      workId: input.workId,
-      target: input.target,
-      state: "queued" as const,
-    }),
+): RuntimeSessionActivation {
+  const current = currentSession(data, input);
+  if (current.activation) return current.activation;
+  sessionInput(data, input);
+  const activation = Object.freeze({
+    workId: input.workId,
+    primaryInputId: input.inputId,
+    target: input.target,
+    state: "queued" as const,
   });
-  data.sessionInputs.set(scopedKey(input.namespace, input.inputId), linked);
   updateSession(data, input, (session) => ({
     ...session,
-    pendingInputs: session.pendingInputs + 1,
+    activation,
     pendingWork: session.pendingWork + 1,
     statistics: recordSessionStatistics(
       session.statistics,
@@ -46,35 +38,57 @@ export function linkSessionTurn(
       input.now,
       [{ kind: "work-accepted", target: input.target, state: "queued" }],
     ),
+    wakePending: true,
     updatedAt: input.now.toISOString(),
   }));
   recordWrite?.();
-  return linked;
+  return activation;
 }
 
 export function startSessionTurn(
   data: MemoryRuntimeData,
   input: RuntimeSessionTurnInput,
   recordWrite?: MemoryWriteRecorder,
-): RuntimeSessionInputRecord {
-  const accepted = sessionInput(data, input);
-  const work = accepted.work;
-  if (!work || work.state !== "queued") return accepted;
-  const started = Object.freeze({
-    ...accepted,
-    work: Object.freeze({ ...work, state: "running" as const }),
-  });
-  data.sessionInputs.set(scopedKey(input.namespace, input.inputId), started);
-  updateSession(data, input, (session) => ({
-    ...session,
+): RuntimeSessionActivationClaim | null {
+  const session = currentSession(data, input);
+  const activation = session.activation;
+  if (!activation || activation.primaryInputId !== input.inputId) return null;
+  if (activation.state === "running") {
+    return Object.freeze({
+      activation,
+      inputs: turnInputs(data, input, activation.workId),
+    });
+  }
+  const inputs = consecutiveInputs(data, session);
+  if (inputs.length === 0 || inputs[0]?.inputId !== input.inputId) return null;
+  const linked = inputs.map((accepted) =>
+    Object.freeze({
+      ...accepted,
+      work: Object.freeze({
+        workId: activation.workId,
+        target: activation.target,
+        state: "running" as const,
+      }),
+    }),
+  );
+  for (const accepted of linked) {
+    data.sessionInputs.set(
+      scopedKey(input.namespace, accepted.inputId),
+      accepted,
+    );
+  }
+  const running = Object.freeze({ ...activation, state: "running" as const });
+  updateSession(data, input, (current) => ({
+    ...current,
+    activation: running,
     statistics: recordSessionStatistics(
-      session.statistics,
-      session.sessionId,
+      current.statistics,
+      current.sessionId,
       input.now,
       [
         {
           kind: "work-state",
-          target: work.target,
+          target: activation.target,
           from: "queued",
           to: "running",
         },
@@ -83,50 +97,127 @@ export function startSessionTurn(
     updatedAt: input.now.toISOString(),
   }));
   recordWrite?.();
-  return started;
+  return Object.freeze({ activation: running, inputs: Object.freeze(linked) });
 }
 
-export function settleSessionTurn(
+export function getSessionTurnInputs(
   data: MemoryRuntimeData,
-  input: RuntimeSessionTurnInput,
-  outcome: "completed" | "blocked",
+  namespace: string,
+  sessionId: string,
+  workId: string,
+): readonly RuntimeSessionInputRecord[] {
+  return Object.freeze(
+    [...data.sessionInputs.values()]
+      .filter(
+        (input) =>
+          input.namespace === namespace &&
+          input.sessionId === sessionId &&
+          input.work?.workId === workId,
+      )
+      .sort((left, right) => left.cursor - right.cursor),
+  );
+}
+
+export function claimSessionStepInputs(
+  data: MemoryRuntimeData,
+  input: ClaimRuntimeSessionStepInputsInput,
   recordWrite?: MemoryWriteRecorder,
-): RuntimeSessionRecord {
-  const accepted = sessionInput(data, input);
-  const work = accepted.work;
-  if (!work) throw new Error(`Session input "${input.inputId}" has no Work.`);
-  if (work.state === "completed" || work.state === "blocked") {
-    return currentSession(data, input);
+): RuntimeSessionStepInputClaim {
+  const session = currentSession(data, input);
+  const activation = session.activation;
+  if (
+    !activation ||
+    activation.workId !== input.workId ||
+    activation.state !== "running"
+  ) {
+    throw new Error(`Session activation "${input.workId}" is not running.`);
   }
-  const from = work.state;
-  data.sessionInputs.set(
-    scopedKey(input.namespace, input.inputId),
+  const linked = turnInputs(data, input, input.workId);
+  const lastCursor = linked.at(-1)?.cursor ?? session.processedCursor ?? 0;
+  const newlyClaimed = consecutiveInputsFrom(data, session, lastCursor + 1);
+  const candidates = [...linked, ...newlyClaimed].filter(
+    (accepted) => !accepted.delivery,
+  );
+  const deliveredAt = input.now.toISOString();
+  const delivered = candidates.map((accepted) =>
     Object.freeze({
       ...accepted,
-      work: Object.freeze({ ...work, state: outcome }),
+      work:
+        accepted.work ??
+        Object.freeze({
+          workId: activation.workId,
+          target: activation.target,
+          state: "running" as const,
+        }),
+      delivery: Object.freeze({
+        stepIndex: input.stepIndex,
+        reason: input.reason,
+        deliveredAt,
+      }),
     }),
   );
-  const updated = updateSession(data, input, (session) => ({
-    ...session,
-    ...(outcome === "completed" ? { processedCursor: accepted.cursor } : {}),
-    pendingInputs: session.pendingInputs - 1,
-    pendingWork:
-      outcome === "completed" ? session.pendingWork - 1 : session.pendingWork,
-    blockedWork:
-      outcome === "blocked" ? session.blockedWork + 1 : session.blockedWork,
-    statistics: recordSessionStatistics(
-      session.statistics,
-      session.sessionId,
-      input.now,
-      outcome === "completed"
-        ? [{ kind: "work-outcome", target: work.target, from, outcome }]
-        : [{ kind: "work-state", target: work.target, from, to: "blocked" }],
-    ),
-    wakePending: false,
-    updatedAt: input.now.toISOString(),
-  }));
-  recordWrite?.();
-  return updated;
+  for (const accepted of delivered) {
+    data.sessionInputs.set(
+      scopedKey(input.namespace, accepted.inputId),
+      accepted,
+    );
+  }
+  if (delivered.length > 0) recordWrite?.();
+  const replayable = turnInputs(data, input, input.workId).filter(
+    (accepted) =>
+      accepted.delivery?.stepIndex === input.stepIndex &&
+      accepted.delivery.reason === input.reason,
+  );
+  return Object.freeze({
+    acceptedCursor: session.acceptedCursor,
+    inputs: Object.freeze(replayable),
+  });
+}
+
+function consecutiveInputs(
+  data: MemoryRuntimeData,
+  session: RuntimeSessionRecord,
+): readonly RuntimeSessionInputRecord[] {
+  return consecutiveInputsFrom(
+    data,
+    session,
+    (session.processedCursor ?? 0) + 1,
+  );
+}
+
+function consecutiveInputsFrom(
+  data: MemoryRuntimeData,
+  session: RuntimeSessionRecord,
+  firstCursor: number,
+): readonly RuntimeSessionInputRecord[] {
+  const byCursor = new Map(
+    [...data.sessionInputs.values()]
+      .filter(
+        (input) =>
+          input.namespace === session.namespace &&
+          input.sessionId === session.sessionId,
+      )
+      .map((input) => [input.cursor, input]),
+  );
+  const claimed: RuntimeSessionInputRecord[] = [];
+  for (
+    let cursor = firstCursor;
+    cursor <= session.acceptedCursor;
+    cursor += 1
+  ) {
+    const accepted = byCursor.get(cursor);
+    if (!accepted || accepted.work) break;
+    claimed.push(accepted);
+  }
+  return claimed;
+}
+
+function turnInputs(
+  data: MemoryRuntimeData,
+  input: RuntimeSessionTurnInput,
+  workId: string,
+): readonly RuntimeSessionInputRecord[] {
+  return getSessionTurnInputs(data, input.namespace, input.sessionId, workId);
 }
 
 function sessionInput(

@@ -44,7 +44,10 @@ describe("Session turn execution", () => {
     try {
       const error = await host
         .run(() =>
-          Reflect.apply(session, undefined, [support, { key: "customer-missing-model" }]),
+          Reflect.apply(session, undefined, [
+            support,
+            { key: "customer-missing-model" },
+          ]),
         )
         .catch((cause: unknown) => cause);
       expect(error).toMatchObject({
@@ -54,9 +57,13 @@ describe("Session turn execution", () => {
         whatStillWorks: expect.any(String),
         nextStep: expect.any(String),
       });
-      expect(error).not.toMatchObject({ message: expect.stringContaining("customer-missing-model") });
+      expect(error).not.toMatchObject({
+        message: expect.stringContaining("customer-missing-model"),
+      });
       expect(store.testing.sessionRecords(namespace)).toEqual([]);
-      expect(await store.state.listWork({ namespace, status: "pending" })).toEqual([]);
+      expect(
+        await store.state.listWork({ namespace, status: "pending" }),
+      ).toEqual([]);
       expect(put).not.toHaveBeenCalled();
       expect(create).not.toHaveBeenCalled();
       expect(mutate).not.toHaveBeenCalled();
@@ -109,7 +116,12 @@ describe("Session turn execution", () => {
 
     try {
       await expect(
-        host.run(() => Reflect.apply(session, undefined, [support, { key: "customer-missing-capability" }])),
+        host.run(() =>
+          Reflect.apply(session, undefined, [
+            support,
+            { key: "customer-missing-capability" },
+          ]),
+        ),
       ).rejects.toMatchObject({
         code: "GENERATION_CAPABILITY_MISSING",
         whatFailed: expect.any(String),
@@ -119,7 +131,9 @@ describe("Session turn execution", () => {
       });
       expect(execute).not.toHaveBeenCalled();
       expect(store.testing.sessionRecords(namespace)).toEqual([]);
-      expect(await store.state.listWork({ namespace, status: "pending" })).toEqual([]);
+      expect(
+        await store.state.listWork({ namespace, status: "pending" }),
+      ).toEqual([]);
       expect(put).not.toHaveBeenCalled();
       expect(create).not.toHaveBeenCalled();
       expect(mutate).not.toHaveBeenCalled();
@@ -147,7 +161,11 @@ describe("Session turn execution", () => {
         identity: { kind: "model" as const, model: id },
         capabilities: {
           contract: "crux.generation-capabilities.v1" as const,
-          language: ["text-input", "text-output", "structured-output"], embedding: [], image: [], speech: [], transcription: [],
+          language: ["text-input", "text-output", "structured-output"],
+          embedding: [],
+          image: [],
+          speech: [],
+          transcription: [],
         },
         runtime: { createAgentExecutor: () => execute },
       });
@@ -163,21 +181,38 @@ describe("Session turn execution", () => {
       }),
     });
     const program = createRuntimeProgram({
-      targets: [{ target: support, definition: { id: "agent:session-turn-model-override", fingerprint: "v1" } }],
+      targets: [
+        {
+          target: support,
+          definition: {
+            id: "agent:session-turn-model-override",
+            fingerprint: "v1",
+          },
+        },
+      ],
       generationModels: [defaultModel, overrideModel],
       transports: [],
     });
     const store = inMemoryRuntimeStore();
     const namespace = "session-turn-model-override";
     config({ storage: { records: inMemoryRecordStore() } });
-    const host = createWorkHost({ runtime: node({ store, namespace, autoStartMaintenance: false }), program });
-    const worker = createRuntimeWorker({ runtime: node({ store, namespace, autoStartMaintenance: false }), program, pollIntervalMs: 5 });
+    const host = createWorkHost({
+      runtime: node({ store, namespace, autoStartMaintenance: false }),
+      program,
+    });
+    const worker = createRuntimeWorker({
+      runtime: node({ store, namespace, autoStartMaintenance: false }),
+      program,
+      pollIntervalMs: 5,
+    });
 
     try {
       const conversation = await host.run(() =>
         session(support, { key: "customer-override", model: overrideModel }),
       );
-      expect(await (await conversation.send({ message: "Hello" })).result()).toEqual({ reply: "session" });
+      expect(
+        await (await conversation.send({ message: "Hello" })).result(),
+      ).toEqual({ reply: "session" });
       expect(sessionExecute).toHaveBeenCalledOnce();
       expect(agentExecute).not.toHaveBeenCalled();
     } finally {
@@ -192,7 +227,9 @@ describe("Session turn execution", () => {
         (entry) => "_tag" in entry && entry._tag === "Thread",
       );
       if (!thread || thread._tag !== "Thread") {
-        throw new Error("Session owner Thread was not bound to the Agent turn.");
+        throw new Error(
+          "Session owner Thread was not bound to the Agent turn.",
+        );
       }
       const history = await thread.readHistory();
       const input = options.input as { message: string };
@@ -283,14 +320,15 @@ describe("Session turn execution", () => {
         expect.objectContaining({ model }),
       );
       expect(work).toHaveLength(1);
-      expect(turn.work.id).toBe(work[0]?.workId);
-      expect(turn.work.effects).toEqual({
+      const turnWork = await turn.work();
+      expect(turnWork.id).toBe(work[0]?.workId);
+      expect(turnWork.effects).toEqual({
         kind: "effect.scope",
         id: expect.any(String),
-        runId: turn.work.id,
+        runId: turnWork.id,
       });
-      expect(await turn.work.status()).toMatchObject({ state: "completed" });
-      expect(await turn.work.result()).toEqual(output);
+      expect(await turnWork.status()).toMatchObject({ state: "completed" });
+      expect(await turnWork.result()).toEqual(output);
       expect(await conversation.thread.read()).toMatchObject({
         entries: [
           expect.objectContaining({ role: "user", content: "Hello" }),
@@ -300,12 +338,12 @@ describe("Session turn execution", () => {
           }),
         ],
       });
-      expect(store.testing.sessionRecord(namespace, conversation.id)).toMatchObject(
-        {
-          acceptedCursor: 1,
-          wakePending: false,
-        },
-      );
+      expect(
+        store.testing.sessionRecord(namespace, conversation.id),
+      ).toMatchObject({
+        acceptedCursor: 1,
+        wakePending: false,
+      });
     } finally {
       await worker.stop();
       host.dispose();

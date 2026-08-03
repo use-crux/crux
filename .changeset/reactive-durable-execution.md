@@ -127,14 +127,20 @@ Same-adapter routers may be bound once. `stableModel()` is removed with no
 alias or deprecation layer; Eval identity now projects bound GenerationModel
 values.
 
-Sessions now execute each accepted Agent input as one canonical durable Work,
-with exact joinable results, owner Thread publication, and a pinned static
-GenerationModel reference for deterministic reconnect. A bound Session override
-must be declared by the RuntimeProgram or fails before mutation with
+Sessions now preserve every accepted Agent input and handle independently while
+claiming the longest cursor-consecutive compatible prefix into one canonical
+activation Work. `sendMany()` retains atomic cursor order, coalesced handles
+resolve their shared Work through `work()`, and all joined inputs reconnect to
+the same exact terminal result or failure. A bound Session override must be
+declared by the RuntimeProgram or fails before mutation with
 `GENERATION_MODEL_NOT_STATIC`; missing bindings and capability preflight retain
 their existing distinct errors.
 
 Session turns now retain restart-safe execution checkpoints, allowing safe
 recovery across owner Thread publication without rerunning generation. Session
 diagnostics expose structured, payload-safe failures alongside compact status
-and bounded lifetime turn statistics.
+and bounded lifetime turn statistics. Compatible input accepted during a model
+step is independently resolved and enters the next real provider boundary
+before `prepareStep`; terminal-step ingress begins a new activation through an
+atomic lost-wake fence. Inspection reports bounded per-input claim, delivery,
+shared Work, checkpoint, and exact Thread basis evidence without payloads.

@@ -13,7 +13,9 @@ describe("public Agent Session input acceptance", () => {
       model: sessionTestModel,
       prompt: prompt({ system: "Reply helpfully." }),
     });
-    const { host, store } = sessionHost("schema-session-test", { targets: [support] });
+    const { host, store } = sessionHost("schema-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "schema" }));
 
     await expect(handle.send({})).rejects.toMatchObject({
@@ -37,7 +39,9 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("empty-session-test", { targets: [support] });
+    const { host, store } = sessionHost("empty-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "empty" }));
 
     const accepted = await handle.sendMany([]);
@@ -63,7 +67,9 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("parsed-session-test", { targets: [support] });
+    const { host, store } = sessionHost("parsed-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "parsed" }));
 
     await handle.send({ message: "  Hello  " });
@@ -103,7 +109,9 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("bounded-json-session-test", { targets: [support] });
+    const { host, store } = sessionHost("bounded-json-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "bounded" }));
     let tooDeep: unknown = "leaf";
     for (let index = 0; index < 65; index += 1) tooDeep = [tooDeep];
@@ -132,7 +140,9 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("proto-json-session-test", { targets: [support] });
+    const { host, store } = sessionHost("proto-json-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "proto" }));
     const input = JSON.parse('{"__proto__":{"safe":true}}');
 
@@ -157,7 +167,9 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("atomic-session-test", { targets: [support] });
+    const { host, store } = sessionHost("atomic-session-test", {
+      targets: [support],
+    });
     const handle = await host.run(() => session(support, { key: "atomic" }));
 
     await expect(
@@ -181,6 +193,43 @@ describe("public Agent Session input acceptance", () => {
     expect(
       concurrent.map(({ cursor }) => Number(cursor)).sort((a, b) => a - b),
     ).toEqual(Array.from({ length: 12 }, (_, index) => index + 3));
+    host.dispose();
+  });
+
+  it("bounds payload-safe input inspection to 64 identities", async () => {
+    const support = agent({
+      id: "inspection-session-support",
+      model: sessionTestModel,
+      prompt: prompt({
+        input: z.object({ message: z.string() }),
+        system: "Reply helpfully.",
+      }),
+    });
+    const { host } = sessionHost("inspection-session-test", {
+      targets: [support],
+    });
+    const handle = await host.run(() =>
+      session(support, { key: "inspection" }),
+    );
+
+    await handle.sendMany(
+      Array.from({ length: 70 }, (_, index) => ({
+        message: `private:${index}`,
+      })),
+    );
+    const inspection = await handle.inspect();
+
+    expect(inspection.inputs).toHaveLength(64);
+    expect(inspection.inputs[0]).toMatchObject({
+      cursor: "7",
+      state: "accepted",
+    });
+    expect(inspection.inputs.at(-1)).toMatchObject({
+      cursor: "70",
+      state: "accepted",
+    });
+    expect(inspection.coverage).toEqual({ inputs: "truncated", limit: 64 });
+    expect(JSON.stringify(inspection)).not.toContain("private:");
     host.dispose();
   });
 });

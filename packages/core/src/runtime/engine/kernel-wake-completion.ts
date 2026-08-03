@@ -15,6 +15,7 @@ import type { RuntimeTargetOutcome } from "./kernel-types";
 import { settleCompletedSignalWork } from "./signal-delivery-settlement";
 import { transition, type RuntimeWorkItem } from "./work";
 import type { LeaseToken } from "../ports/ids";
+import { reserveNextSessionActivation } from "./composites/session-activation";
 
 /** Commit a successful target outcome inside a transaction. */
 export async function completeWorkInTransaction(
@@ -103,8 +104,15 @@ export async function completeWorkInTransaction(
       inputId: current.work.inputId,
       now: completedAt,
     };
-    if (completed.status === "completed") await tx.sessions.completeTurn(turn);
-    else if (completed.status === "blocked") await tx.sessions.blockTurn(turn);
+    if (completed.status === "completed") {
+      await tx.sessions.completeTurn(turn);
+      await reserveNextSessionActivation(tx, {
+        namespace: current.namespace,
+        sessionId: current.work.sessionId,
+        now: completedAt,
+      });
+    } else if (completed.status === "blocked")
+      await tx.sessions.blockTurn(turn);
   }
   await tx.state.putIdempotencyKey({
     namespace: current.namespace,

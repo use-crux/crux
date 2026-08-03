@@ -5,7 +5,10 @@ import { agentRoutingContext } from "../../agent/routing-context";
 import type { AgentExecutor } from "../../agent/executor";
 import { getExecutionContext } from "../../runtime/execution-context";
 import { mergeInputBudget } from "../../request/budget/input-budget";
-import { managedGenerationCheckpoint } from "../../generation-model/execution-checkpoint";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../../generation-model/execution-checkpoint";
 import type {
   ExecutorGenerateOptions,
   ExecutorGenerateResult,
@@ -32,6 +35,7 @@ export function createLoopAgentExecutor<TModel, TRawResponse>(
       prepareStep: options.prepareStep ?? agent.prepareStep,
       activeTools: options.activeTools,
       [managedGenerationCheckpoint]: options[managedGenerationCheckpoint],
+      [managedGenerationStepBoundary]: options[managedGenerationStepBoundary],
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
     } as unknown as ExecutorGenerateOptions<TModel>;
     const result = await generate(agent.prompt, generateOptions);

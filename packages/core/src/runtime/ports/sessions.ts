@@ -26,8 +26,18 @@ export interface RuntimeSessionRecord {
   /** One bounded owner ledger for the complete Session lifetime. */
   readonly statistics: StatisticsLedgerExport;
   readonly wakePending: boolean;
+  /** One canonical Work reserved for the current finite activation. */
+  readonly activation?: RuntimeSessionActivation;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/** Canonical Work reserved for one cursor-consecutive Session activation. */
+export interface RuntimeSessionActivation {
+  readonly workId: WorkId;
+  readonly primaryInputId: string;
+  readonly target: string;
+  readonly state: "queued" | "running";
 }
 
 export interface RuntimeSessionInputRecord {
@@ -40,8 +50,17 @@ export interface RuntimeSessionInputRecord {
   readonly acceptedAt: string;
   /** Write-once linkage and lifecycle of this input's canonical Work. */
   readonly work?: RuntimeSessionTurnWork;
+  /** First real provider boundary where this input became model-visible. */
+  readonly delivery?: RuntimeSessionInputDelivery;
   /** Write-once reference to pre-publication execution evidence. */
   readonly preparedExecution?: RuntimeSessionPreparedExecution;
+}
+
+/** Honest model-delivery evidence for one independently accepted input. */
+export interface RuntimeSessionInputDelivery {
+  readonly stepIndex: number;
+  readonly reason: "initial" | "tool-result" | "validation-retry";
+  readonly deliveredAt: string;
 }
 
 export interface RuntimeSessionTurnWork {
@@ -57,9 +76,29 @@ export interface RuntimeSessionTurnInput {
   readonly now: Date;
 }
 
-export interface LinkRuntimeSessionTurnInput extends RuntimeSessionTurnInput {
+/** Input for reserving one canonical Work for the next activation. */
+export interface ReserveRuntimeSessionTurnInput extends RuntimeSessionTurnInput {
   readonly workId: WorkId;
   readonly target: string;
+}
+
+/** Cursor-consecutive inputs atomically claimed by one activation Work. */
+export interface RuntimeSessionActivationClaim {
+  readonly activation: RuntimeSessionActivation;
+  readonly inputs: readonly RuntimeSessionInputRecord[];
+}
+
+/** Input for atomically claiming compatible ingress at a provider boundary. */
+export interface ClaimRuntimeSessionStepInputsInput extends RuntimeSessionTurnInput {
+  readonly workId: WorkId;
+  readonly stepIndex: number;
+  readonly reason: RuntimeSessionInputDelivery["reason"];
+}
+
+/** Newly delivered inputs and the exact acceptance cutoff considered. */
+export interface RuntimeSessionStepInputClaim {
+  readonly acceptedCursor: number;
+  readonly inputs: readonly RuntimeSessionInputRecord[];
 }
 
 /** Durable Session–Work checkpoint for one prepared Agent execution. */
@@ -103,6 +142,12 @@ export interface AcceptRuntimeSessionInputsInput {
   readonly now: Date;
 }
 
+/** Bounded accepted-input page used for payload-safe Session inspection. */
+export interface RuntimeSessionInputInspectionPage {
+  readonly inputs: readonly RuntimeSessionInputRecord[];
+  readonly truncated: boolean;
+}
+
 /** Storage operations that preserve Session identity and ingress ordering. */
 export interface RuntimeSessionStorePort {
   /** Prepare identity without claiming that its cross-store Thread owner exists. */
@@ -116,6 +161,24 @@ export interface RuntimeSessionStorePort {
     namespace: string,
     sessionId: string,
   ): Promise<RuntimeSessionRecord | null>;
+  /** Read one accepted input for handle-to-Work/result resolution. */
+  getInput(
+    namespace: string,
+    sessionId: string,
+    inputId: string,
+  ): Promise<RuntimeSessionInputRecord | null>;
+  /** Read one accepted input by its Session-local cursor. */
+  getInputAtCursor(
+    namespace: string,
+    sessionId: string,
+    cursor: number,
+  ): Promise<RuntimeSessionInputRecord | null>;
+  /** Read the newest accepted identities without exposing their payloads publicly. */
+  inspectInputs(
+    namespace: string,
+    sessionId: string,
+    limit: number,
+  ): Promise<RuntimeSessionInputInspectionPage>;
   /** Mark a prepared Session ready after durable Thread owner registration. */
   markReady(
     namespace: string,
@@ -126,12 +189,24 @@ export interface RuntimeSessionStorePort {
   acceptInputs(
     input: AcceptRuntimeSessionInputsInput,
   ): Promise<readonly RuntimeSessionInputRecord[]>;
-  /** Link one accepted input to its canonical queued Work exactly once. */
-  linkTurn(
-    input: LinkRuntimeSessionTurnInput,
-  ): Promise<RuntimeSessionInputRecord>;
-  /** Record the first canonical execution entry for a linked turn. */
-  startTurn(input: RuntimeSessionTurnInput): Promise<RuntimeSessionInputRecord>;
+  /** Reserve one queued canonical Work without claiming a moving cutoff. */
+  reserveTurn(
+    input: ReserveRuntimeSessionTurnInput,
+  ): Promise<RuntimeSessionActivation>;
+  /** Claim the longest compatible prefix through the atomic current cutoff. */
+  startTurn(
+    input: RuntimeSessionTurnInput,
+  ): Promise<RuntimeSessionActivationClaim | null>;
+  /** Read the ordered inputs currently linked to one activation Work. */
+  getTurnInputs(
+    namespace: string,
+    sessionId: string,
+    workId: WorkId,
+  ): Promise<readonly RuntimeSessionInputRecord[]>;
+  /** Claim and mark the compatible prefix visible at one real provider boundary. */
+  claimStepInputs(
+    input: ClaimRuntimeSessionStepInputsInput,
+  ): Promise<RuntimeSessionStepInputClaim>;
   /** Read one accepted turn's prepared execution checkpoint. */
   getPreparedExecution(
     namespace: string,

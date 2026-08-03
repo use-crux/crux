@@ -36,10 +36,7 @@ import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
 import type { RuntimeWorkControlPort } from "../../ports/work-control";
 import { createMemoryWorkControlPort } from "./work-control";
-import {
-  createMemorySessionStore,
-  type MemorySessionFaults,
-} from "./sessions";
+import { createMemorySessionStore, type MemorySessionFaults } from "./sessions";
 import type { RuntimeSessionStorePort } from "../../ports/sessions";
 import type {
   RuntimeSessionInputRecord,
@@ -65,6 +62,8 @@ export interface InMemoryRuntimeStoreTesting {
   crashBeforeConfirm(): void;
   /** Stop once after Session execution is checkpointed, before Thread publication. */
   crashAfterSessionTurnCheckpoint(): void;
+  /** Stop once after ingress delivery writes, before request preparation. */
+  crashAfterSessionIngressDelivery(): void;
   /** Stop once after owner-Thread publication, before Session parking. */
   crashAfterSessionThreadPublication(): void;
   /** Make the next recovered Session checkpoint reference an unavailable result. */
@@ -116,6 +115,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
   const data = createMemoryRuntimeData();
   const outboxFaults: MemoryOutboxFaults = { crashBeforeConfirm: false };
   const sessionFaults: MemorySessionFaults = {
+    crashAfterIngressDelivery: false,
     crashAfterPreparedExecution: false,
     missingPreparedResultArtifact: false,
   };
@@ -183,6 +183,9 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       },
       crashAfterSessionTurnCheckpoint(): void {
         sessionFaults.crashAfterPreparedExecution = true;
+      },
+      crashAfterSessionIngressDelivery(): void {
+        sessionFaults.crashAfterIngressDelivery = true;
       },
       crashAfterSessionThreadPublication(): void {
         crashAfterThreadPublication = true;

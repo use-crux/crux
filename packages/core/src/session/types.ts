@@ -85,8 +85,8 @@ export interface SessionInputHandle {
 
 /** One accepted Session input linked to its canonical Work occurrence. */
 export interface SessionTurnHandle<TOutput> extends SessionInputHandle {
-  /** Canonical Work handle owning lifecycle, Effect scope, and retained result. */
-  readonly work: WorkHandle<TOutput>;
+  /** Resolve the canonical Work once an activation opportunity claims this input. */
+  work(): Promise<WorkHandle<TOutput>>;
   /** Join the exact Agent output retained by the canonical Work occurrence. */
   result(): Promise<TOutput>;
 }
@@ -105,6 +105,86 @@ export interface SessionStatus {
   readonly pendingWork: number;
 }
 
+/** Payload-free lifecycle summary for one recently accepted Session input. */
+export interface SessionInputInspection {
+  /** Stable accepted input identity. */
+  readonly id: string;
+  /** Server-assigned Session-local cursor. */
+  readonly cursor: string;
+  /** Current canonical Work linkage state. */
+  readonly state: "accepted" | "queued" | "running" | "completed" | "blocked";
+  /** Canonical Work occurrence, once linked. */
+  readonly workId?: string;
+  /** Whether durable prepared execution evidence awaits or survived replay. */
+  readonly checkpointPrepared: boolean;
+  /** First real provider boundary where this input became model-visible. */
+  readonly delivery?: SessionInputDeliveryInspection;
+}
+
+/** Payload-free evidence of one input's first model-visible boundary. */
+export interface SessionInputDeliveryInspection {
+  /** Zero-based semantic provider-call index within its activation. */
+  readonly stepIndex: number;
+  /** Existing loop condition that opened the delivery boundary. */
+  readonly reason: "initial" | "tool-result" | "validation-retry";
+  /** Time the atomic delivery claim committed. */
+  readonly deliveredAt: Date;
+}
+
+/** Payload-free durable preparation checkpoint for one Session activation. */
+export interface SessionCheckpointInspection {
+  /** Accepted input whose canonical Work owns this checkpoint. */
+  readonly inputId: string;
+  /** Canonical Work occurrence executing or replaying the turn. */
+  readonly workId: string;
+  /** Time the write-once prepared checkpoint became durable. */
+  readonly checkpointedAt: Date;
+  /** Exact canonical Thread basis observed before provider dispatch. */
+  readonly thread: {
+    readonly revision: string;
+    readonly range: string;
+    readonly offset: number;
+    readonly length: number;
+    readonly start?: string;
+    readonly end?: string;
+  };
+  /** Sealed provider-request identities whose decisions were journaled. */
+  readonly requestIds: readonly string[];
+  /** Honest coverage for the bounded request identity list. */
+  readonly requestCoverage: "complete" | "truncated";
+}
+
+/** Payload-safe recovery condition found while reading Session diagnostics. */
+export interface SessionRecoveryDiagnostic {
+  /** Stable recovery failure code. */
+  readonly code: "SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE";
+  /** Smallest operator action that can restore recovery. */
+  readonly nextStep: string;
+}
+
+/** Bounded payload-safe operational view of one durable Session. */
+export interface SessionInspection {
+  /** Stable Session identity. */
+  readonly id: string;
+  /** Immutable Agent target identity. */
+  readonly targetId: string;
+  /** Session-owned canonical Thread identity. */
+  readonly threadId: string;
+  /** Whether durable accepted work still requires a wake opportunity. */
+  readonly wakePending: boolean;
+  /** Newest accepted input identities, ordered by cursor and capped at 64. */
+  readonly inputs: readonly SessionInputInspection[];
+  /** Newest durable prepared checkpoint, when its safe evidence is readable. */
+  readonly checkpoint?: SessionCheckpointInspection;
+  /** Payload-safe recovery diagnostic when prepared evidence cannot be read. */
+  readonly recovery?: SessionRecoveryDiagnostic;
+  /** Honest coverage for bounded identity projections. */
+  readonly coverage: {
+    readonly inputs: "complete" | "truncated";
+    readonly limit: 64;
+  };
+}
+
 declare const sessionOutput: unique symbol;
 
 /** Durable, keyed, Agent-specific input owner. @typeParam TInput Agent input. */
@@ -121,6 +201,8 @@ export interface Session<TInput, TOutput = unknown> {
   ): Promise<readonly SessionTurnHandle<TOutput>[]>;
   /** Read a detached immutable compact snapshot of canonical Session state. */
   status(): Promise<SessionStatus>;
+  /** Read bounded payload-safe ordering and recovery diagnostics. */
+  inspect(): Promise<SessionInspection>;
   /** Read bounded statistics for the complete addressed Session lifetime. */
   stats(): Promise<ExecutionStats>;
   /** Exact Agent output retained for later joinable Session results. @internal */

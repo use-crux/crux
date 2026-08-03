@@ -32,6 +32,8 @@ import type { PrepareStep } from "../request/prepare/step";
 import {
   managedGenerationCheckpoint,
   type ManagedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+  type ManagedGenerationStepBoundary,
 } from "../generation-model/execution-checkpoint";
 
 /**
@@ -54,6 +56,8 @@ export interface ExecutorGenerateBaseOptions<
 > {
   /** Session-owned durable completion hook. @internal */
   readonly [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
+  /** Session coordinator invoked before preparation at semantic steps. @internal */
+  readonly [managedGenerationStepBoundary]?: ManagedGenerationStepBoundary;
   /** Plain model or Core routing wrapper to execute. */
   model: TSelectedModel;
   /** Input for the prompt. */

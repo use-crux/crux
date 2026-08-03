@@ -36,7 +36,10 @@ import type {
   ExecutorStreamResult,
 } from "./executor-contracts";
 import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
-import { managedGenerationCheckpoint } from "../generation-model/execution-checkpoint";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../generation-model/execution-checkpoint";
 import { createLoopAgentExecutor } from "./execution/loop-agent-executor";
 
 export type {
@@ -152,7 +155,9 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<GenerateResult> {
-    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
+    const nativeMessages = (
+      opts as { readonly nativeMessages?: readonly unknown[] }
+    ).nativeMessages;
     return (await execution.generate({
       prompt,
       model,
@@ -179,6 +184,7 @@ export function loopRuntimeAdapter<
       extra: opts.extra,
       signal,
       [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
+      [managedGenerationStepBoundary]: opts[managedGenerationStepBoundary],
     })) as GenerateResult;
   }
 
@@ -228,7 +234,9 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<ExecutorStreamResult<TRawStream>> {
-    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
+    const nativeMessages = (
+      opts as { readonly nativeMessages?: readonly unknown[] }
+    ).nativeMessages;
     return (await execution.stream({
       prompt,
       model,

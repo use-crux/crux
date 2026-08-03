@@ -1,98 +1,73 @@
 /** Atomic Session-input to canonical-Work admission. */
 
-import type { AnyAgent } from "../agent";
-import type { GenerationModel } from "../generation-model";
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
-import { initialApplicationWorkState } from "../runtime/engine/application-work-state";
-import { wakeEnvelopeForWork } from "../runtime/engine/kernel-shared";
-import type { RuntimeWorkItem } from "../runtime/engine/work";
+import { reserveNextSessionActivation } from "../runtime/engine/composites/session-activation";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
-import type { RuntimeTargetId } from "../runtime/ports/ids";
 import type { JsonValue } from "../storage";
 import type { SessionTurnHandle } from "./types";
 import { durableWorkHandle } from "../work/internal/durable-handle";
-import { sessionTurnIdentity } from "./turn-identity";
+import { waitForDurableWorkChange } from "../work/internal/durable-wait";
 
-/** Accept validated inputs and their runnable Work occurrences atomically. */
+/** Accept validated inputs and reserve at most one runnable activation Work. */
 export async function acceptSessionTurns<TOutput>(
   runtime: ResolvedRuntimeEngine,
   record: RuntimeSessionRecord,
-  target: AnyAgent,
-  model: GenerationModel,
   inputs: readonly JsonValue[],
 ): Promise<readonly SessionTurnHandle<TOutput>[]> {
-  const admitted = await runtime.store.transact(async (tx) => {
+  const accepted = await runtime.store.transact(async (tx) => {
     const sessions = tx.sessions;
     if (!sessions) throw new Error("Runtime Session storage is unavailable.");
-    const accepted = await sessions.acceptInputs({
+    const appended = await sessions.acceptInputs({
       namespace: runtime.namespace,
       sessionId: record.sessionId,
       inputs,
       now: runtime.now(),
     });
-    const turns: Array<{
-      readonly accepted: (typeof accepted)[number];
-      readonly work: RuntimeWorkItem;
-    }> = [];
-    for (const input of accepted) {
-      const identity = sessionTurnIdentity(
-        runtime.namespace,
-        record.sessionId,
-        input.inputId,
-      );
-      const created = await tx.state.createWork({
-        workId: identity.workId,
-        namespace: runtime.namespace,
-        work: {
-          kind: "session.turn",
-          sessionId: record.sessionId,
-          inputId: input.inputId,
-          cursor: input.cursor,
-          threadId: record.threadId,
-          input: input.input,
-          model: {
-            definitionId: model.definition.id,
-            fingerprint: model.definition.fingerprint,
-          },
-        },
-        targetId: target.id as RuntimeTargetId,
-        idempotencyKey: `session.turn:${identity.workId}`,
-        now: runtime.now(),
-      });
-      const work = Object.freeze({
-        ...created,
-        application: initialApplicationWorkState(
-          created.workId,
-          created.createdAt,
-          identity.effects,
-        ),
-      });
-      await tx.state.putWork(work);
-      await sessions.linkTurn({
-        namespace: runtime.namespace,
-        sessionId: record.sessionId,
-        inputId: input.inputId,
-        workId: work.workId,
-        target: target.id,
-        now: runtime.now(),
-      });
-      await tx.outbox.put(wakeEnvelopeForWork(work), {
-        deliverAt: runtime.now(),
-      });
-      turns.push({ accepted: input, work });
-    }
-    return turns;
+    await reserveNextSessionActivation(tx, {
+      namespace: runtime.namespace,
+      sessionId: record.sessionId,
+      now: runtime.now(),
+    });
+    return appended;
   });
   return Object.freeze(
-    admitted.map(({ accepted, work }) => {
-      const canonical = durableWorkHandle<TOutput>(runtime, work);
+    accepted.map((input) => {
+      const work = () =>
+        resolveInputWork<TOutput>(runtime, record.sessionId, input.inputId);
       return Object.freeze({
-        id: accepted.inputId,
-        cursor: String(accepted.cursor),
-        acceptedAt: new Date(accepted.acceptedAt),
-        work: canonical,
-        result: canonical.result,
+        id: input.inputId,
+        cursor: String(input.cursor),
+        acceptedAt: new Date(input.acceptedAt),
+        work,
+        result: async () => (await work()).result(),
       });
     }),
   );
+}
+
+async function resolveInputWork<TOutput>(
+  runtime: ResolvedRuntimeEngine,
+  sessionId: string,
+  inputId: string,
+) {
+  let waitAttempt = 0;
+  for (;;) {
+    const accepted = await runtime.store.sessions?.getInput(
+      runtime.namespace,
+      sessionId,
+      inputId,
+    );
+    if (!accepted) throw new Error(`Session input "${inputId}" was not found.`);
+    if (accepted.work) {
+      const work = await runtime.store.state.getWork(accepted.work.workId, {
+        namespace: runtime.namespace,
+      });
+      if (!work)
+        throw new Error(
+          `Session Work "${accepted.work.workId}" was not found.`,
+        );
+      return durableWorkHandle<TOutput>(runtime, work);
+    }
+    waitAttempt = await waitForDurableWorkChange(waitAttempt);
+  }
 }

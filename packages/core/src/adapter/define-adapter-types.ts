@@ -19,10 +19,7 @@ import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
 import type { ToolMiddleware } from "../tools/types";
-import type {
-  KnownToolsFor,
-  ToolsContextOption,
-} from "../tools/context-types";
+import type { KnownToolsFor, ToolsContextOption } from "../tools/context-types";
 import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { AnyToolSet } from "../types";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
@@ -35,6 +32,8 @@ import type { PrepareStep } from "../request/prepare/step";
 import {
   managedGenerationCheckpoint,
   type ManagedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+  type ManagedGenerationStepBoundary,
 } from "../generation-model/execution-checkpoint";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
@@ -63,6 +62,8 @@ export interface AdapterGenerateBaseOptions<
 > {
   /** Session-owned durable completion hook. @internal */
   readonly [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
+  /** Session coordinator invoked before preparation at semantic steps. @internal */
+  readonly [managedGenerationStepBoundary]?: ManagedGenerationStepBoundary;
   /** Model identifier passed to the provider's API. */
   model: string;
   /** Input for the prompt. */
@@ -150,7 +151,16 @@ export type AdapterGenerateOptions<
   TRuntimeContext = unknown,
   TParams = unknown,
   TRawResponse = unknown,
-> = Omit<AdapterGenerateBaseOptions<TExtra, TCallTools, TRuntimeContext, TParams, TRawResponse>, "toolsContext"> &
+> = Omit<
+  AdapterGenerateBaseOptions<
+    TExtra,
+    TCallTools,
+    TRuntimeContext,
+    TParams,
+    TRawResponse
+  >,
+  "toolsContext"
+> &
   ToolsContextOption<KnownToolsFor<TPrompt, TCallTools>>;
 
 /** Options for adapter `stream()` calls. */
@@ -161,7 +171,14 @@ export type AdapterStreamOptions<
   TRuntimeContext = unknown,
   TParams = unknown,
   TRawResponse = unknown,
-> = AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>;
+> = AdapterGenerateOptions<
+  TExtra,
+  TCallTools,
+  TPrompt,
+  TRuntimeContext,
+  TParams,
+  TRawResponse
+>;
 
 /** Result of an adapter `generate()` call. */
 export type AdapterGenerateResult<
@@ -183,7 +200,12 @@ export type AdapterStreamResult<TPrompt extends AnyPrompt> =
 
 /** The authored output schema a prompt declares, or `undefined`. */
 type PromptOutputSchema<TPrompt> =
-  TPrompt extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[], AnyToolSet | undefined>
+  TPrompt extends Prompt<
+    z.ZodType,
+    infer TOutput,
+    readonly ContextEntry[],
+    AnyToolSet | undefined
+  >
     ? TOutput
     : undefined;
 
@@ -225,7 +247,14 @@ export interface CruxAdapter<
     TRuntimeContext = unknown,
   >(
     prompt: TPrompt,
-    opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+    opts: AdapterGenerateOptions<
+      TExtra,
+      TCallTools,
+      TPrompt,
+      TRuntimeContext,
+      TParams,
+      TRawResponse
+    >,
   ): Promise<AdapterGenerateResult<TRawResponse>>;
 
   /** Execute a prompt (streaming). */
@@ -235,7 +264,14 @@ export interface CruxAdapter<
     TRuntimeContext = unknown,
   >(
     prompt: TPrompt,
-    opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+    opts: AdapterStreamOptions<
+      TExtra,
+      TCallTools,
+      TPrompt,
+      TRuntimeContext,
+      TParams,
+      TRawResponse
+    >,
   ): Promise<AdapterStreamResult<TPrompt>>;
 
   /** Prepare a sans-I/O provider call handle when the adapter exposes public codecs. */
@@ -245,8 +281,21 @@ export interface CruxAdapter<
     TRuntimeContext = unknown,
   >(
     prompt: TPrompt,
-    opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
-  ): Promise<CallHandle<TParams, TRawResponse, AdapterGenerateResult<TRawResponse | undefined>>>;
+    opts: AdapterGenerateOptions<
+      TExtra,
+      TCallTools,
+      TPrompt,
+      TRuntimeContext,
+      TParams,
+      TRawResponse
+    >,
+  ): Promise<
+    CallHandle<
+      TParams,
+      TRawResponse,
+      AdapterGenerateResult<TRawResponse | undefined>
+    >
+  >;
 
   /** Run multiple agents concurrently and merge results. */
   parallel: ReturnType<typeof createCompositions>["parallel"];

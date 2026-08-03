@@ -36,11 +36,11 @@ export async function checkpointAndCommitManagedGeneration(
     ? await checkpoint({
         output: result.object ?? result.text,
         publication,
-        preparationDecisionIds: result.steps.flatMap((step) => {
+        preparationDecisions: result.steps.flatMap((step) => {
           const decision = step.request
             ? preparationDecision(step.request)
             : undefined;
-          return decision ? [decision.sealedRequestId] : [];
+          return decision ? [decision] : [];
         }),
       })
     : undefined;

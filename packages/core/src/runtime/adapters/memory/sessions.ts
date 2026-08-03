@@ -12,15 +12,19 @@ import { createRuntimeError } from "../../engine/errors";
 import { cloneRuntimeResultRef } from "../../results/types";
 import { initialSessionStatistics } from "../../engine/session-statistics";
 import {
-  linkSessionTurn,
-  settleSessionTurn,
+  claimSessionStepInputs,
+  getSessionTurnInputs,
+  reserveSessionTurn,
   startSessionTurn,
 } from "./session-lifecycle";
+import { settleSessionTurn } from "./session-settlement";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 
 /** One-shot process-loss fault at the prepared execution boundary. */
 export interface MemorySessionFaults {
+  /** Stop after ingress delivery writes and before boundary preparation. */
+  crashAfterIngressDelivery: boolean;
   /** Stop after the checkpoint write and before owner-Thread publication. */
   crashAfterPreparedExecution: boolean;
   /** Delete a prepared result artifact immediately after its checkpoint write. */
@@ -76,6 +80,33 @@ export function createMemorySessionStore(
     async get(namespace, sessionId) {
       return data.sessionsById.get(scopedKey(namespace, sessionId)) ?? null;
     },
+    async getInput(namespace, sessionId, inputId) {
+      const accepted = data.sessionInputs.get(scopedKey(namespace, inputId));
+      return accepted?.sessionId === sessionId ? accepted : null;
+    },
+    async getInputAtCursor(namespace, sessionId, cursor) {
+      return (
+        [...data.sessionInputs.values()].find(
+          (accepted) =>
+            accepted.namespace === namespace &&
+            accepted.sessionId === sessionId &&
+            accepted.cursor === cursor,
+        ) ?? null
+      );
+    },
+    async inspectInputs(namespace, sessionId, limit) {
+      const all = [...data.sessionInputs.values()]
+        .filter(
+          (accepted) =>
+            accepted.namespace === namespace &&
+            accepted.sessionId === sessionId,
+        )
+        .sort((left, right) => left.cursor - right.cursor);
+      return Object.freeze({
+        inputs: Object.freeze(all.slice(-limit)),
+        truncated: all.length > limit,
+      });
+    },
     async markReady(namespace, sessionId, now) {
       const sessionKey = scopedKey(namespace, sessionId);
       const session = data.sessionsById.get(sessionKey);
@@ -114,6 +145,7 @@ export function createMemorySessionStore(
       const updated = Object.freeze({
         ...session,
         acceptedCursor: session.acceptedCursor + inputs.length,
+        pendingInputs: session.pendingInputs + inputs.length,
         wakePending: true,
         updatedAt: acceptedAt,
       });
@@ -131,11 +163,22 @@ export function createMemorySessionStore(
       recordWrite?.();
       return inputs as readonly RuntimeSessionInputRecord[];
     },
-    async linkTurn(input) {
-      return linkSessionTurn(data, input, recordWrite);
+    async reserveTurn(input) {
+      return reserveSessionTurn(data, input, recordWrite);
     },
     async startTurn(input) {
       return startSessionTurn(data, input, recordWrite);
+    },
+    async getTurnInputs(namespace, sessionId, workId) {
+      return getSessionTurnInputs(data, namespace, sessionId, workId);
+    },
+    async claimStepInputs(input) {
+      const claimed = claimSessionStepInputs(data, input, recordWrite);
+      if (faults?.crashAfterIngressDelivery && claimed.inputs.length > 0) {
+        faults.crashAfterIngressDelivery = false;
+        throw ingressDeliveryCrash(input.workId);
+      }
+      return claimed;
     },
     async getPreparedExecution(namespace, sessionId, inputId) {
       const accepted = data.sessionInputs.get(scopedKey(namespace, inputId));
@@ -146,25 +189,34 @@ export function createMemorySessionStore(
     async checkpointPreparedExecution(
       input: CheckpointRuntimeSessionExecutionInput,
     ) {
-      const key = scopedKey(input.namespace, input.inputId);
-      const accepted = data.sessionInputs.get(key);
+      const accepted = data.sessionInputs.get(
+        scopedKey(input.namespace, input.inputId),
+      );
       if (!accepted || accepted.sessionId !== input.sessionId) {
         throw new Error(`Session input "${input.inputId}" was not found.`);
-      }
-      if (accepted.preparedExecution) {
-        assertSameCheckpoint(accepted.preparedExecution, input);
-        return accepted.preparedExecution;
       }
       const preparedExecution: RuntimeSessionPreparedExecution = Object.freeze({
         workId: input.workId,
         preparedResultRef: cloneRuntimeResultRef(input.preparedResultRef),
         checkpointedAt: input.now.toISOString(),
       });
-      data.sessionInputs.set(
-        key,
-        Object.freeze({ ...accepted, preparedExecution }),
+      const joined = getSessionTurnInputs(
+        data,
+        input.namespace,
+        input.sessionId,
+        input.workId,
       );
-      recordWrite?.();
+      for (const member of joined) {
+        if (member.preparedExecution) {
+          assertSameCheckpoint(member.preparedExecution, input);
+          continue;
+        }
+        data.sessionInputs.set(
+          scopedKey(input.namespace, member.inputId),
+          Object.freeze({ ...member, preparedExecution }),
+        );
+      }
+      if (joined.some((member) => !member.preparedExecution)) recordWrite?.();
       if (faults?.missingPreparedResultArtifact) {
         data.results.delete(preparedExecution.preparedResultRef.location);
       }
@@ -205,6 +257,17 @@ function checkpointCrash(workId: string) {
     why: "The in-memory test adapter injected process loss before owner-Thread publication.",
     whatStillWorks:
       "The write-once checkpoint can be finalized by the next Runtime worker attempt.",
+    nextStep: "Retry through the Runtime worker.",
+  });
+}
+
+function ingressDeliveryCrash(workId: string) {
+  return createRuntimeError({
+    code: "LEASE_LOST",
+    whatFailed: `Runtime work \`${workId}\` stopped at its Session ingress boundary.`,
+    why: "The in-memory test adapter injected process loss before request preparation.",
+    whatStillWorks:
+      "The rolled-back boundary can be claimed exactly once by the next Runtime worker attempt.",
     nextStep: "Retry through the Runtime worker.",
   });
 }
