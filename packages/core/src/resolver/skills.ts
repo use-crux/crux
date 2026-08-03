@@ -41,6 +41,7 @@ function staticSkillContext(options: {
     priority: options.priority,
     toolsFn: undefined,
     rawFields: Object.freeze([]) as readonly string[],
+    escapeFields: Object.freeze([]) as readonly string[],
     constraints: Object.freeze([]),
     guardrails: Object.freeze([]),
     when: undefined,

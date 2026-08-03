@@ -144,6 +144,12 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    */
   rawFields?: readonly Extract<keyof z.infer<TInput>, string>[];
   /**
+   * Input fields whose nested arrays/plain records should be copied and
+   * XML-escaped recursively before this context's callbacks run. Only relevant
+   * when auto-escape is enabled.
+   */
+  escapeFields?: readonly Extract<keyof z.infer<TInput>, string>[];
+  /**
    * Predicate evaluated at resolve time against this context's own input.
    * When it returns `false`, the context is excluded entirely — no `systemFn`
    * call, no tool contribution, no token counting.
@@ -220,6 +226,8 @@ export interface Context<TInput extends z.ZodType = z.ZodType> {
   readonly toolApproval?: ToolApprovalMap;
   /** Input fields that should skip auto-escaping (trusted content). */
   readonly rawFields: readonly string[];
+  /** Input fields that should be recursively auto-escaped. */
+  readonly escapeFields: readonly string[];
   /**
    * Predicate evaluated at resolve time. When it returns `false`,
    * the context is excluded entirely (no systemFn, no tools, no tokens).
