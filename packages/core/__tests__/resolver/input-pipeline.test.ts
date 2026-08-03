@@ -198,4 +198,160 @@ describe('resolver input pipeline', () => {
       'auto-escape: input field "profile" contains nested string values; auto-escape covers top-level strings only. Escape nested content explicitly or restructure the input.',
     ])
   })
+
+  it('recursively escapes selected structured fields without changing their shape', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    let callbackInput: unknown
+    const config = {
+      input: z.object({
+        profile: z.object({
+          bio: z.string(),
+          links: z.array(z.object({ label: z.string() })),
+        }),
+      }),
+      escapeFields: ['profile'],
+      system: ({ input }: { input: { profile: unknown } }) => {
+        callbackInput = input.profile
+        return JSON.stringify(input.profile)
+      },
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: {
+        profile: { bio: '<nested>', links: [{ label: 'A & B' }] },
+      },
+    })
+
+    expect(callbackInput).toEqual({
+      bio: '&lt;nested&gt;',
+      links: [{ label: 'A &amp; B' }],
+    })
+    expect(result.args.system).toBe(
+      '{"bio":"&lt;nested&gt;","links":[{"label":"A &amp; B"}]}',
+    )
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
+
+  it('composes context escape fields into prompt auto-escape', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    let contextInput: unknown
+    const profileContext = context({
+      id: 'profile',
+      input: z.object({
+        profile: z.object({
+          bio: z.string(),
+          links: z.array(z.object({ label: z.string() })),
+        }),
+      }),
+      escapeFields: ['profile'],
+      system: ({ input }) => {
+        contextInput = input.profile
+        return JSON.stringify(input.profile)
+      },
+    })
+    const config = {
+      system: 'base',
+      use: [profileContext],
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: {
+        profile: { bio: '<context>', links: [{ label: 'A & B' }] },
+      },
+    })
+
+    expect(contextInput).toEqual({
+      bio: '&lt;context&gt;',
+      links: [{ label: 'A &amp; B' }],
+    })
+    expect(result.args.system).toBe(
+      'base\n\n{"bio":"&lt;context&gt;","links":[{"label":"A &amp; B"}]}',
+    )
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
+
+  it('recursively escapes selected cyclic fields without overflowing', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    const profile: Record<string, unknown> = { bio: '<cycle>' }
+    profile.self = profile
+    const config = {
+      input: z.object({ profile: z.any() }),
+      escapeFields: ['profile'],
+      system: ({ input }: { input: { profile: Record<string, unknown> } }) => {
+        const nested = input.profile.self as Record<string, unknown>
+        const twice = nested.self as Record<string, unknown>
+        return `${input.profile.bio}:${nested.bio}:${twice.bio}`
+      },
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: { profile },
+    })
+
+    expect(result.args.system).toBe(
+      '&lt;cycle&gt;:&lt;cycle&gt;:&lt;cycle&gt;',
+    )
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
+
+  it('rejects non-plain object instances inside selected escape fields', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    class Profile {
+      bio = '<instance>'
+    }
+    const config = {
+      input: z.object({ profile: z.any() }),
+      escapeFields: ['profile'],
+      system: ({ input }: { input: { profile: unknown } }) =>
+        JSON.stringify(input.profile),
+    } satisfies AnyPromptConfig
+
+    await expect(
+      compilePrompt(config, { ports: fakes.ports }).resolve({
+        input: { profile: new Profile() },
+      }),
+    ).rejects.toThrow(
+      'auto-escape: input field "profile" is listed in escapeFields but contains a non-plain object.',
+    )
+  })
+
+  it('lets escape fields take precedence over raw fields', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    const config = {
+      input: z.object({
+        profile: z.object({ bio: z.string() }),
+      }),
+      rawFields: ['profile'],
+      escapeFields: ['profile'],
+      system: ({ input }: { input: { profile: { bio: string } } }) =>
+        input.profile.bio,
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: { profile: { bio: '<raw-but-selected>' } },
+    })
+
+    expect(result.args.system).toBe('&lt;raw-but-selected&gt;')
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
+
+  it('does not shallow or recursively escape when auto-escape is disabled', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: false } })
+    const config = {
+      input: z.object({
+        title: z.string(),
+        profile: z.object({ bio: z.string() }),
+      }),
+      escapeFields: ['profile'],
+      system: ({ input }: { input: { title: string; profile: { bio: string } } }) =>
+        `${input.title}:${input.profile.bio}`,
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: { title: '<top>', profile: { bio: '<nested>' } },
+    })
+
+    expect(result.args.system).toBe('<top>:<nested>')
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
 })

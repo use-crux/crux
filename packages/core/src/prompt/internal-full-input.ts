@@ -9,7 +9,7 @@ export type InternalFullPromptInputDef = ContextDef<z.ZodType<Record<string, unk
 
 /** @internal Mark an SDK-owned context adapter as consuming full prompt input. */
 export function withFullPromptInput(
-  def: Omit<ContextDef<z.ZodType<Record<string, unknown>>>, 'input' | 'rawFields' | 'memo'>,
+  def: Omit<ContextDef<z.ZodType<Record<string, unknown>>>, 'input' | 'rawFields' | 'escapeFields' | 'memo'>,
 ): ContextDef<z.ZodType<Record<string, unknown>>> {
   return {
     ...def,

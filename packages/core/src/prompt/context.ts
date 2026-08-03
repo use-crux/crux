@@ -203,6 +203,10 @@ export function context(
     "rawFields" in def && Array.isArray(def.rawFields)
       ? [...def.rawFields]
       : [];
+  const escapeFields: string[] =
+    "escapeFields" in def && Array.isArray(def.escapeFields)
+      ? [...def.escapeFields]
+      : [];
 
   // Process context-level `when` predicate
   const whenDef =
@@ -257,6 +261,7 @@ export function context(
     toolsFn,
     toolApproval,
     rawFields: Object.freeze(rawFields),
+    escapeFields: Object.freeze(escapeFields),
     when: whenFn,
     memoTtl,
     providerCache,
@@ -289,7 +294,7 @@ export function context(
 export function contextWithFullPromptInput(
   def: Omit<
     ContextDef<z.ZodType<Record<string, unknown>>>,
-    "input" | "rawFields" | "memo"
+    "input" | "rawFields" | "escapeFields" | "memo"
   >,
   family?: CruxContextInjectableKind,
 ): Context<z.ZodType<{}>> {

@@ -31,11 +31,29 @@ prompt({
 });
 ```
 
+For validated JSON-like objects or arrays, declare `escapeFields`. Crux keeps
+the structured shape and recursively escapes every string leaf before prompt
+and context callbacks run:
+
+```ts
+prompt({
+  input: z.object({
+    dossier: z.object({ title: z.string(), notes: z.array(z.string()) }),
+  }),
+  escapeFields: ["dossier"],
+  system: ({ input }) => md`Dossier: ${md.json(input.dossier)}`,
+});
+```
+
+Selected fields accept strings, arrays, and plain records. Cycles are handled
+without recursion failure; class instances fail closed. If a field appears in
+both `rawFields` and `escapeFields`, recursive escaping wins.
+
 <Callout type="warn">
-  Auto-escape only rewrites top-level string fields in the parsed `input`
-  object. Nested strings inside objects or arrays emit a diagnostic and must be
-  escaped explicitly. If you inject untrusted content via `rawFields` or
-  `raw()`, you are responsible for sanitizing it.
+  Auto-escape rewrites top-level string fields and fields explicitly selected
+  with `escapeFields`. Nested strings in other objects or arrays emit a
+  diagnostic. If you inject untrusted content via `rawFields` or `raw()`, you
+  are responsible for sanitizing it.
 </Callout>
 
 ## `safe` tag (explicit control)
