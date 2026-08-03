@@ -110,3 +110,8 @@ Persist a canonical accepted-input digest across Memory, PostgreSQL, and Convex
 snapshots. Runtime inspection and Devtools now show safe Work identity,
 definition and Effect scope, ownership, result lineage, statistics, progress,
 and bounded lifecycle events without exposing input or result payloads.
+
+Add the provider-neutral `GenerationModel` contract and adapter-authoring
+construction seam. Agents now retain their exact model type, while Sessions
+require a bound model only when the Agent does not already carry one and reject
+statically proven capability gaps without excluding broad preflight evidence.

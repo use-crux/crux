@@ -8,9 +8,12 @@ export {
   SessionNotFoundError,
 } from "./errors";
 export type {
+  AgentModel,
+  AgentRequiredCapabilities,
   Session,
   SessionFor,
   SessionInputHandle,
+  SessionModelGuard,
   SessionOptions,
   SessionThreadView,
 } from "./types";

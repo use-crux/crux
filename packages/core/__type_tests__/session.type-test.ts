@@ -1,9 +1,12 @@
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
 import { getSession, prompt, session } from "../src";
+import type { GenerationModel } from "../src";
 import { agent } from "../src/agent";
 import { flow } from "../src/flow";
 import type { ThreadSnapshot } from "../src/thread";
+
+declare const sessionModel: GenerationModel;
 
 const support = agent({
   id: "session-support",
@@ -13,6 +16,7 @@ const support = agent({
     output: z.object({ reply: z.string() }),
     system: "Reply helpfully.",
   }),
+  model: sessionModel,
 });
 
 const created = session(support, { key: "customer:42" });

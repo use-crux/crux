@@ -13,7 +13,8 @@ import {
   SessionNotFoundError,
 } from "./errors";
 import { sessionInputValue } from "./input";
-import type { Session, SessionFor, SessionOptions } from "./types";
+import type { GenerationModel } from "../generation-model";
+import type { SessionFor, SessionModelGuard, SessionOptions } from "./types";
 
 const encoder = new TextEncoder();
 
@@ -26,9 +27,12 @@ const encoder = new TextEncoder();
  * @throws {SessionIdentityConflictError} If the key belongs to another Agent.
  * @throws {SessionCapabilityError} If the configured stores cannot persist it.
  */
-export async function session<const TAgent extends AnyAgent>(
+export async function session<
+  const TAgent extends AnyAgent,
+  const TModel extends GenerationModel | undefined = undefined,
+>(
   target: TAgent,
-  options: SessionOptions,
+  options: SessionOptions<TAgent, TModel> & SessionModelGuard<TAgent, TModel>,
 ): Promise<SessionFor<TAgent>> {
   return createSession(target, options.key);
 }
@@ -158,7 +162,7 @@ function createHandle<TAgent extends AnyAgent>(
     send: async (input: InferAgentInput<TAgent>) => (await accept([input]))[0]!,
     sendMany: async (inputs: readonly InferAgentInput<TAgent>[]) =>
       accept(inputs),
-  }) as Session<InferAgentInput<TAgent>>;
+  });
 }
 
 function resolveStorage(): Storage {

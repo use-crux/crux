@@ -230,6 +230,10 @@
       "types": "./src/adapter/index.ts",
       "import": "./src/adapter/index.ts"
     },
+    "./adapter-authoring": {
+      "types": "./src/adapter-authoring.ts",
+      "import": "./src/adapter-authoring.ts"
+    },
     "./adapter/testing": {
       "types": "./src/adapter/testing.ts",
       "import": "./src/adapter/testing.ts"
@@ -407,6 +411,9 @@
       ],
       "adapter": [
         "src/adapter/index.ts"
+      ],
+      "adapter-authoring": [
+        "src/adapter-authoring.ts"
       ],
       "adapter/testing": [
         "src/adapter/testing.ts"

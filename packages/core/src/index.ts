@@ -403,12 +403,32 @@ export {
   SessionNotFoundError,
 } from "./session";
 export type {
+  AgentModel,
+  AgentRequiredCapabilities,
   Session,
   SessionFor,
   SessionInputHandle,
+  SessionModelGuard,
   SessionOptions,
   SessionThreadView,
 } from "./session";
+export type {
+  AdapterBoundGenerationModel,
+  CapabilitiesOf,
+  EmbeddingCapability,
+  GenerationAdapterIdentity,
+  GenerationCapabilities,
+  GenerationModel,
+  GenerationModelDefinition,
+  GenerationOperation,
+  ImageCapability,
+  LanguageCapability,
+  NormalizedGenerationIdentity,
+  RequiredLanguageCapabilities,
+  SpeechCapability,
+  Supports,
+  TranscriptionCapability,
+} from "./generation-model";
 export type {
   CancelOptions,
   CancelReceipt,
