@@ -116,10 +116,10 @@ export interface RuntimeTargetContext {
 
 /** Runtime target entry supplied by hand-written or generated handlers. */
 export interface RuntimeTarget {
-  /** Durable target id from `flow("name")` or `durableTask("name")`. */
+  /** Durable target id from a Flow, task, or Agent declaration. */
   readonly targetId: RuntimeTargetId;
-  /** Target kind used for diagnostics and future flow replay routing. */
-  readonly kind: "flow" | "task";
+  /** Target kind used for diagnostics and execution routing. */
+  readonly kind: "flow" | "task" | "agent";
   /** Execute the target and return the durable outcome to commit. */
   execute(context: RuntimeTargetContext): Promise<RuntimeTargetOutcome>;
 }

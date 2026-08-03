@@ -19,7 +19,7 @@ const encoder = new TextEncoder();
 
 /** Executable Runtime target declaration with an explicit durable kind. */
 export type RuntimeProgramTarget = RuntimeHandlerTarget & {
-  readonly kind: "flow" | "task";
+  readonly kind: "flow" | "task" | "agent";
 };
 
 /** Immutable executable target, definition, and managed-transport truth for one project. */
@@ -63,7 +63,7 @@ export type RuntimeProgramTargetInput =
 
 /** Declarations accepted by {@link createRuntimeProgram}. */
 export interface CreateRuntimeProgramOptions {
-  /** Statically imported Flow handles and durable task targets. */
+  /** Statically imported Flow, durable task, and Agent targets. */
   readonly targets: readonly RuntimeProgramTargetInput[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
@@ -112,6 +112,7 @@ function normalizeTargetDeclaration(
   input: RuntimeProgramTargetInput,
 ): RuntimeProgramTargetDeclaration {
   if ("target" in input && "definition" in input) {
+    validateTargetDefinition(input.definition);
     return Object.freeze({
       target: input.target,
       definition: Object.freeze({ ...input.definition }),
@@ -132,6 +133,24 @@ function normalizeTargetDeclaration(
         ),
       ),
     }),
+  });
+}
+
+function validateTargetDefinition(
+  definition: RuntimeProgramTargetDefinitionInput,
+): void {
+  if (
+    typeof definition.fingerprint === "string" &&
+    definition.fingerprint.trim().length > 0
+  ) {
+    return;
+  }
+  throw createRuntimeError({
+    code: "RUNTIME_ARTIFACT_MANIFEST_INVALID",
+    whatFailed: "Runtime target definition fingerprint is missing.",
+    why: "Durable target selection requires an exact definition fingerprint.",
+    whatStillWorks: "Targets with complete definition metadata remain valid.",
+    nextStep: "Provide the generated definition fingerprint for this target.",
   });
 }
 
@@ -199,7 +218,7 @@ function validateAdapterDeclarations(
 
 function targetManifestEntry(target: RuntimeProgramTarget): {
   readonly id: string;
-  readonly kind: "flow" | "task";
+  readonly kind: "flow" | "task" | "agent";
 } {
   return {
     id: runtimeHandlerTargetIdentity(target),

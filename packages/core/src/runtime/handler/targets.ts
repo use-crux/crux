@@ -26,7 +26,7 @@ export type RuntimeHandlerTarget =
 
 /** Options for resolving handler targets into a kernel map. */
 export interface NormalizeRuntimeHandlerTargetsOptions {
-  /** Exported `flow()` handles and `durableTask()` targets. */
+  /** Exported Flow, task, and Agent targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
   /** Mutable runtime reference used by process-local target factories. */
   readonly runtimeRef: RuntimeTargetRuntimeRef

@@ -56,7 +56,9 @@ provider-neutral bindings and accepted envelopes.
 
 Add immutable `RuntimeProgram` construction with canonical manifest hashes,
 shared Runtime target normalization, and managed-binding resolution and
-compatibility diagnostics for generated and hand-written hosts.
+compatibility diagnostics for generated and hand-written hosts. Agent
+definitions are first-class immutable program targets resolved by the same
+worker target path as Flows and tasks.
 
 Generate a freshness-bound Runtime program and add `crux runtime worker` for
 one configured Node/PostgreSQL execution worker with durable ownership and
