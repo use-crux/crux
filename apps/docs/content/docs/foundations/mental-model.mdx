@@ -84,7 +84,7 @@ resolved.settings; // merged settings (config < adapt < call-site)
 What happens during resolution:
 
 1. **Validate input** against the prompt's merged Zod schema (prompt input + context inputs), adopting defaults and transforms
-2. **Sanitize input** with the optional prompt `sanitize` hook, then auto-escape top-level string fields (configurable)
+2. **Sanitize input** with the optional prompt `sanitize` hook, then auto-escape top-level string fields and selected `escapeFields` (configurable)
 3. **Filter contexts**: drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
 4. **Resolve contexts**: call each context's `system` function in `use` order, with resolver memoization when `memo.ttl` is configured
 5. **Build system blocks**: compose provider-cached contexts as a stable cached prefix before the uncached tail, attaching provider-cache markers per block

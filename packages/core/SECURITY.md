@@ -37,7 +37,7 @@ The library provides **defense in depth** — multiple layers that each reduce r
 
 ### 1. Auto-Escape (secure by default)
 
-Enabled by default. All string values in the input object are XML-escaped before reaching system/prompt functions. Normal code "just works":
+Enabled by default. Top-level string fields in the input object are XML-escaped before reaching system/prompt functions. Normal code "just works":
 
 ```ts
 prompt({
@@ -56,6 +56,23 @@ prompt({
   // instruction: auto-escaped, indexedHtml: passed through as-is
 })
 ```
+
+**Select structured fields** with `escapeFields` when validated arrays or plain
+objects should keep their shape while every nested string is escaped:
+
+```ts
+prompt({
+  input: z.object({
+    dossier: z.object({ title: z.string(), notes: z.array(z.string()) }),
+  }),
+  escapeFields: ['dossier'],
+  system: ({ input }) => JSON.stringify(input.dossier),
+})
+```
+
+Fields listed in `escapeFields` accept strings, arrays, and plain records.
+Class instances fail closed instead of being traversed as trusted objects. If a
+field is also listed in `rawFields`, recursive escaping wins.
 
 Disable globally if needed:
 
@@ -86,6 +103,7 @@ safe`
 | Scenario                               | Recommendation                                                          |
 | -------------------------------------- | ----------------------------------------------------------------------- |
 | Most prompts                           | Auto-escape (default) — use regular templates                           |
+| Validated nested objects/arrays        | Auto-escape + `escapeFields`                                            |
 | Trusted HTML/Markdown fields           | Auto-escape + `rawFields`                                               |
 | Per-value control in templates         | `safe` tag with helpers                                                 |
 | Builder functions (e.g., `builder.ts`) | `safe` tag (useful even with auto-escape for code outside the pipeline) |

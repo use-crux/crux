@@ -40,6 +40,9 @@ const summarize = prompt({
 | `hooks`          | `PromptHooks?`                                             | Per-Prompt lifecycle hooks.                                                                                  |
 | `tools`          | `ToolSet?`                                                 | Prompt-local tools. Prompt-time names must be unique across composed sources.                                |
 | `toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`             | Server-side Prompt tool wrappers, including audit and [approval](/docs/reference/crux-core/tool-middleware). |
+| `rawFields`      | `readonly string[]?`                                       | Schema-typed top-level fields skipped by auto-escape for trusted pre-formatted content.                      |
+| `escapeFields`   | `readonly string[]?`                                       | Schema-typed top-level fields recursively XML-escaped across strings, arrays, and plain records.             |
+| `sanitize`       | `(input) => input`                                         | Optional parsed-input transform that runs before auto-escape and context resolution.                         |
 | `tests`          | `EvalCase[]?`                                              | Inline Eval cases discovered by the Eval runner.                                                             |
 | `constraints`    | `ConstraintDef[]?`                                         | Semantic constraints evaluated around generation.                                                            |
 | `guardrails`     | `GuardrailDef[]?`                                          | Pre- and post-generation guardrails.                                                                         |

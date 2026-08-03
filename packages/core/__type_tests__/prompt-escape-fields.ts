@@ -1,23 +1,28 @@
 import { z } from 'zod'
 import { context } from '../src/prompt/context'
+import type { ContextDef } from '../src/prompt/context-types'
 import { prompt } from '../src/prompt/prompt'
 
-const profileContext = context({
-  input: z.object({
-    profile: z.object({
-      bio: z.string(),
-    }),
+const profileContextInput = z.object({
+  profile: z.object({
+    bio: z.string(),
   }),
+})
+
+const profileContext = context({
+  input: profileContextInput,
   escapeFields: ['profile'],
   system: ({ input }) => input.profile.bio,
 })
 
-context({
-  input: z.object({ profile: z.object({ bio: z.string() }) }),
+const invalidContextEscapeFields = {
+  input: profileContextInput,
   // @ts-expect-error escapeFields is typed to this context's schema keys.
   escapeFields: ['missing'],
-  system: ({ input }) => input.profile.bio,
-})
+  system: 'profile',
+} satisfies ContextDef<typeof profileContextInput>
+
+void invalidContextEscapeFields
 
 prompt({
   use: [profileContext],

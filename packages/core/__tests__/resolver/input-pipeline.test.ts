@@ -201,6 +201,7 @@ describe('resolver input pipeline', () => {
 
   it('recursively escapes selected structured fields without changing their shape', async () => {
     const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    const profile = { bio: '<nested>', links: [{ label: 'A & B' }] }
     let callbackInput: unknown
     const config = {
       input: z.object({
@@ -217,18 +218,45 @@ describe('resolver input pipeline', () => {
     } satisfies AnyPromptConfig
 
     const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
-      input: {
-        profile: { bio: '<nested>', links: [{ label: 'A & B' }] },
-      },
+      input: { profile },
     })
 
     expect(callbackInput).toEqual({
       bio: '&lt;nested&gt;',
       links: [{ label: 'A &amp; B' }],
     })
+    expect(callbackInput).not.toBe(profile)
+    expect(profile).toEqual({
+      bio: '<nested>',
+      links: [{ label: 'A & B' }],
+    })
     expect(result.args.system).toBe(
       '{"bio":"&lt;nested&gt;","links":[{"label":"A &amp; B"}]}',
     )
+    expect(fakes.diagnostics.warnings).toEqual([])
+  })
+
+  it('passes recursively escaped fields to context when gates', async () => {
+    const fakes = createResolverFakes({ policy: { autoEscape: true } })
+    const gated = context({
+      id: 'escaped-structured-gate',
+      input: z.object({
+        profile: z.object({ bio: z.string() }),
+      }),
+      escapeFields: ['profile'],
+      when: ({ input }) => input.profile.bio === '&lt;go&gt;',
+      system: 'escaped structured gate',
+    })
+    const config = {
+      system: 'base',
+      use: [gated],
+    } satisfies AnyPromptConfig
+
+    const result = await compilePrompt(config, { ports: fakes.ports }).resolve({
+      input: { profile: { bio: '<go>' } },
+    })
+
+    expect(result.args.system).toBe('base\n\nescaped structured gate')
     expect(fakes.diagnostics.warnings).toEqual([])
   })
 
