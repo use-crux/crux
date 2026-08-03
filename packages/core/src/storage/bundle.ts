@@ -51,6 +51,8 @@ function scope(base: Storage, prefix: string): Storage {
     ...(base.assets
       ? { assets: scopeAssets(base.assets, normalizedPrefix) }
       : {}),
+    ...(base.setup ? { setup: base.setup } : {}),
+    ...(base.close ? { close: () => base.close!() } : {}),
   });
 }
 

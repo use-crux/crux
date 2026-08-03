@@ -22,6 +22,8 @@ import type {
   RecordStore,
   Storage,
   StorageErrorCode,
+  StorageSetupPort,
+  StorageSetupResult,
   VectorRecord,
   VectorSearchQuery,
 } from "../src/storage";
@@ -140,12 +142,18 @@ const badVectorRecord: VectorRecord = {
 void badVectorRecord;
 
 declare const assets: AssetStore;
-const bundle = storage({ records, assets });
+declare const setup: StorageSetupPort;
+const bundle = storage({ records, assets, setup, close: async () => undefined });
 
 expectTypeOf(bundle).toEqualTypeOf<Storage>();
 expectTypeOf(bundle.records).toEqualTypeOf<RecordStore>();
 expectTypeOf(bundle.assets).toEqualTypeOf<AssetStore | undefined>();
+expectTypeOf(bundle.setup).toEqualTypeOf<StorageSetupPort | undefined>();
+expectTypeOf(bundle.close).toEqualTypeOf<(() => Promise<void>) | undefined>();
 expectTypeOf(Object.isFrozen(bundle)).toEqualTypeOf<boolean>();
+
+expectTypeOf(setup.check()).resolves.toEqualTypeOf<StorageSetupResult>();
+expectTypeOf(setup.apply()).resolves.toEqualTypeOf<StorageSetupResult>();
 
 // @ts-expect-error — canonical storage bundles require `records`.
 storage({});

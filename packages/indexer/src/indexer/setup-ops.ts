@@ -8,6 +8,7 @@ import {
 } from '@use-crux/core/setup'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { RuntimeEngineDefinition } from '@use-crux/core/runtime'
+import type { Storage, StorageSetupPort } from '@use-crux/core/storage'
 import {
   prepareRuntimeArtifacts,
   type PreparedRuntimeArtifacts,
@@ -23,6 +24,7 @@ import {
 import type { RuntimeArtifactFinding } from './runtime-artifacts/types'
 import { loadProjectConfig } from './config'
 import { createRuntimeSetupContributor } from './setup/runtime-contributor'
+import { createStorageSetupContributor } from './setup/storage-contributor'
 import { createDeferSetupContributor } from './setup/defer-contributor'
 import { createLocalStateSetupContributor } from './setup/local-state-contributor'
 
@@ -135,9 +137,11 @@ export async function runSetupPlanningOperation(
   const runtime = loaded.crux?.config.runtime as
     | RuntimeEngineDefinition
     | undefined
+  const storage = loaded.crux?.config.storage
   const planner = createSetupPlanner([
     createLocalStateSetupContributor(),
     ...(loaded.importFailed ? [configFailureContributor()] : []),
+    ...(hasSetup(storage) ? [createStorageSetupContributor(storage)] : []),
     ...(runtime ? [createRuntimeSetupContributor(runtime)] : []),
     createDeferSetupContributor({
       runtime,
@@ -145,9 +149,45 @@ export async function runSetupPlanningOperation(
     }),
   ])
   const context = { root: options.root, mode: options.mode }
-  return options.mode === 'apply'
-    ? planner.apply(context)
-    : planner.check(context)
+  let report!: SetupReport
+  let closeFailed = false
+  try {
+    report =
+      options.mode === 'apply'
+        ? await planner.apply(context)
+        : await planner.check(context)
+  } finally {
+    closeFailed = !(await closeStorage(storage))
+  }
+  return closeFailed
+    ? appendSetupFinding(report, storageCloseFailureFinding())
+    : report
+}
+
+function hasSetup(
+  storage: Storage | undefined,
+): storage is Storage & { readonly setup: StorageSetupPort } {
+  return storage?.setup !== undefined
+}
+
+async function closeStorage(storage: Storage | undefined): Promise<boolean> {
+  if (!storage?.close) return true
+  try {
+    await storage.close()
+    return true
+  } catch {
+    return false
+  }
+}
+
+function storageCloseFailureFinding(): SetupFinding {
+  return {
+    contributorId: 'storage',
+    code: 'STORAGE_CLOSE_FAILED',
+    resource: 'configured-storage',
+    severity: 'error',
+    message: 'Configured Storage resources could not be released safely.',
+  }
 }
 
 function setupResult(
