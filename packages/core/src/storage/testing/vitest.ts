@@ -2,7 +2,7 @@
  * Vitest conformance helpers for Storage Beta adapters.
  *
  * Adapter packages can use these suites to prove their claimed
- * `RecordStore`, `VectorStore`, and `AssetStore` capabilities through the
+ * `RecordStore`, `SearchStore`, and `AssetStore` capabilities through the
  * public storage interfaces.
  *
  * @module
@@ -13,16 +13,15 @@ import { StorageError } from "../errors";
 import { mutateRecord } from "../mutate";
 import type { JsonObject, RecordEntry, RecordStore } from "../types";
 
-export { vectorStoreConformanceSuite } from "./vector";
+export { searchStoreConformanceSuite } from "./search";
 export type {
-  VectorStoreConformanceCapabilities,
-  VectorStoreConformanceHarness,
-  VectorStoreConformanceSuiteOptions,
-} from "./vector";
+  SearchStoreConformanceHarness,
+  SearchStoreConformanceSuiteOptions,
+} from "./search";
 export {
-  describeVectorStoreConformance,
-  type DescribeVectorStoreConformanceOptions,
-} from "./vector-conformance";
+  describeSearchStoreConformance,
+  type DescribeSearchStoreConformanceOptions,
+} from "./search-conformance";
 export {
   describeAssetStoreConformance,
   type DescribeAssetStoreConformanceOptions,

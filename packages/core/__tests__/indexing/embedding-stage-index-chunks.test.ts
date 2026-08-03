@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer, type CruxChunk } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 const chunks: CruxChunk[] = [
@@ -22,7 +22,7 @@ describe('indexChunks embedding-stage cache', () => {
       id: 'docs',
       namespace: 'kb',
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',

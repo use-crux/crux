@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding, type NormalizedEmbeddingInput } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage cache concurrency', () => {
@@ -18,13 +18,13 @@ describe('indexer embedding-stage cache concurrency', () => {
       return inputs.map((input) => denseVector(textOf(input)))
     })
     const records = inMemoryRecordStore()
-    const storedVectors = inMemoryVectorStore()
+    const storedSearch = inMemorySearchStore()
     const upserted: number[][] = []
     const vectors = {
-      ...storedVectors,
-      upsert: async (next: Parameters<typeof storedVectors.upsert>[0]) => {
+      ...storedSearch,
+      upsert: async (next: Parameters<typeof storedSearch.upsert>[0]) => {
         upserted.push(...next.flatMap((record) => (record.dense ? [[...record.dense]] : [])))
-        await storedVectors.upsert(next)
+        await storedSearch.upsert(next)
       },
     }
     const docs = cachedDenseIndexer(records, embed, vectors)
@@ -43,6 +43,8 @@ describe('indexer embedding-stage cache concurrency', () => {
     expect(upserted.sort(compareVectors)).toEqual([
       [1, 122],
       [1, 122],
+      [1, 122],
+      [5, 97],
       [5, 97],
       [5, 97],
     ])
@@ -111,13 +113,13 @@ describe('indexer embedding-stage cache concurrency', () => {
 function cachedDenseIndexer(
   records: ReturnType<typeof inMemoryRecordStore>,
   embed: (inputs: readonly NormalizedEmbeddingInput[]) => Promise<number[][]>,
-  vectors = inMemoryVectorStore(),
+  search = inMemorySearchStore(),
 ) {
   return indexer({
     id: 'docs',
     namespace: 'kb',
     records,
-    vectors,
+    search,
     dense: embedding({
       kind: 'dense',
       name: 'dense-test',

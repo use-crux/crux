@@ -148,7 +148,7 @@ Workspace records use explicit storage capabilities:
 - `RecordStore` stores metadata, paths, MIME type, size, timestamps, previews, and small inline text/JSON.
 - `AssetStore` stores binary and oversized payloads.
 
-`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `VectorStore`, and `AssetStore` implementations for tests and demos. Durable asset stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `AssetStore` instead of overloading records with raw bytes.
+`SearchStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `SearchStore`, and `AssetStore` implementations for tests and demos. Durable asset stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `AssetStore` instead of overloading records with raw bytes.
 
 Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; the artifacts facet is a typed view over those same file records (`status`, artifact `kind`, provenance, and download references), not a second store or keyspace.
 
@@ -361,7 +361,7 @@ packages/core/src/       Published as @use-crux/core
 │   ├── communities/    Deterministic bounded clustering, report generations with member-hash reuse, leased single-flight builds, readiness lifecycle
 │   └── conformance.ts  Runner-agnostic storage conformance suite for adapter packages
 ├── storage/
-│   └── index.ts        RecordStore, VectorStore, AssetStore, storage(), and in-memory implementations
+│   └── index.ts        RecordStore, SearchStore, AssetStore, storage(), and in-memory implementations
 ├── workspace/
 │   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped assets, maxVersions GC), TTL/quota guards, asset-backed payloads, canonical operation spans
 ├── indexing/
@@ -909,9 +909,9 @@ Embedding cache access emits nested `cache.lookup` spans with cache namespace, h
 
 Hybrid search lives above this layer:
 
-- dense-only vector stores handle `VectorStore.search({ dense })`
-- sparse-only and hybrid-capable vector stores handle `VectorStore.search({ sparse })` and `VectorStore.search({ dense, sparse, fusion? })`
-- Upstash is the reference `VectorStore` for dense + sparse + hybrid query composition
+- dense-capable search stores handle `SearchStore.search({ legs: [{ kind: 'dense', vector }] })`
+- sparse-capable search stores handle sparse legs and multi-leg stores compose dense/sparse/lexical queries with RRF fusion
+- SearchStore is the reference contract for dense, sparse, and lexical query composition
 
 ## Retrieval and Indexing Pipeline
 
@@ -932,7 +932,7 @@ Those boundaries are deliberate:
 - retrieval turns text or media queries into scored hits, context, and tools
 - reranking, when used, happens after raw retrieval and before context/tool rendering
 
-This keeps hybrid support in the correct layer. Dense and sparse are embedding kinds. Hybrid is a retrieval strategy composed through `VectorStore.search({ dense, sparse, fusion })`, not a third embedding kind.
+This keeps multi-leg support in the correct layer. Dense and sparse are embedding kinds. Retrieval composition is expressed through `SearchStore.search({ legs, fusion })`, not as a third embedding kind.
 
 Media documents preserve one-input-one-vector semantics: each media part becomes
 one chunk, and page/time/region splitting stays upstream. The indexer stores
@@ -1474,11 +1474,11 @@ Built-in block reads and writes emit the canonical observability graph from the 
 Crux public storage is split by capability:
 
 1. **`RecordStore`** — JSON records with `get`, `put`, `create`, `delete`, `list`, optional TTL, filters, and optional watches.
-2. **`VectorStore`** — Dense, sparse, and hybrid vector records with `upsert`, `delete`, and `search`.
+2. **`SearchStore`** — Dense, sparse, and lexical search records with `upsert`, `delete`, and `search`.
 3. **`AssetStore`** — Binary and oversized payload storage for workspaces.
-4. **`Storage`** — A convenience bundle: `{ records, vectors?, assets? }`.
+4. **`Storage`** — A convenience bundle: `{ records, search?, assets? }`.
 
-The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
+The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemorySearchStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
 
 ### Working Memory Internals
 
@@ -1492,7 +1492,7 @@ Keys use the standard block prefix plus an auto-generated episode ID. The `recor
 
 `recall()` has two paths:
 
-- **With embeddings**: Embeds the query, calls `VectorStore.search({ mode: 'dense', dense })`, takes top-N results
+- **With embeddings**: Embeds the query, calls `SearchStore.search({ legs: [{ kind: 'dense', vector }] })`, takes top-N results
 - **Without embeddings**: Falls back to `RecordStore.list()` by prefix (recency order)
 
 Both paths respect `filter` for metadata matching.
@@ -1741,7 +1741,7 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 
 - No manual schema or function references needed
 - Works with memory blocks, blackboards, plans, workspace metadata, and other `RecordStore` consumers
-- Convex storage is records-only; dense recall needs an explicit `VectorStore` such as `upstashVectorStore()`
+- Convex storage is records-only; dense recall needs an explicit `SearchStore`.
 - `createConvexTransport({ api, useQuery })` uses the same document contract for React reads
 - Component `memory.list` owns only `by_key` prefix pagination and returns `{ docs, cursor }`
 - Store-document policy owns `_cruxDoc` decoding, TTL cleanup, top-level value filters, vector hit shaping, and filtered-page filling
@@ -1899,17 +1899,17 @@ result = {
 
 ### Convex (`convex/`)
 
-`convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared vector index, while dense search requires an explicit `VectorStore` (`convexVectorStore()` throws `unsupported_capability` with migration guidance). `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
+`convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared search index, while dense search requires an explicit `SearchStore`. `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
 `createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, versioned compare-and-set, and capability reporting.
 
 ### Upstash (`upstash/`)
 
-`upstashVectorStore(config)` — `VectorStore` backed by Upstash Vector for dense, sparse, and hybrid retrieval.
+`upstashSearchStore(config)` — `SearchStore` backed by Upstash for dense and sparse retrieval.
 
 `upstashRedisRecordStore(config)` — `RecordStore` backed by Upstash Redis for JSON records with native TTL.
 
-Use `upstashVectorStore()` for retrieval/indexing code and pair it with an explicit `RecordStore` when a primitive needs hydration.
+Use `upstashSearchStore()` for retrieval/indexing code and pair it with an explicit `RecordStore` when a primitive needs hydration.
 
 ## Canonical Observability Runtime
 

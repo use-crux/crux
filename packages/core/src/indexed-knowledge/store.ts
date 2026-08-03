@@ -10,9 +10,9 @@
 
 import { StorageError } from '../storage'
 import { EmbeddingSpaceMismatchError } from '../embedding'
-import type { ExactFilter, JsonObject, VectorSearchQuery } from '../storage'
+import type { ExactFilter, JsonObject, SearchQuery } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
-import { assertValidHydratedChunks, assertVectorHitsHydrated } from './hydration'
+import { assertSearchHitsHydrated, assertValidHydratedChunks } from './hydration'
 import type { IndexedHydrationMiss } from './hydration'
 import {
   activeChunkFilter,
@@ -20,7 +20,7 @@ import {
   createIndexedChunkRecord,
   createIndexedParentRecord,
   indexedChunkToHit,
-  indexedVectorMetadata,
+  indexedSearchMetadata,
 } from './records'
 import {
   indexedChunkKey,
@@ -70,13 +70,14 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
       })
       const key = indexedChunkKey(config.indexerId, chunk.namespace, chunk.sourceId, chunk.chunkId)
       await config.records.put(key, record as unknown as JsonObject)
-      if (config.vectors && (input.dense?.[index] || input.sparse?.[index])) {
-        await config.vectors.upsert([
+      if (config.search) {
+        await config.search.upsert([
           {
             key,
+            content: chunk.content,
             ...(input.dense?.[index] ? { dense: [...input.dense[index]] } : {}),
             ...(input.sparse?.[index] ? { sparse: input.sparse[index] } : {}),
-            metadata: indexedVectorMetadata(record, input.dense?.[index] ? input.embeddingSpace : undefined),
+            metadata: indexedSearchMetadata(record, input.dense?.[index] ? input.embeddingSpace : undefined),
           },
         ])
       }
@@ -156,7 +157,9 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
       const entries = await listIndexedEntries(config.records, indexedSourcePrefix(config.indexerId, config.namespace, sourceId))
       for (const entry of entries) {
         if (entry.value.generationId !== activeGenerationId && entry.value.active === true) {
-          await config.records.put(entry.key, { ...entry.value, active: false, updatedAt: Date.now() })
+          const updated = { ...entry.value, active: false, updatedAt: Date.now() }
+          await config.records.put(entry.key, updated)
+          await upsertSearchRecord(entry.key, updated)
         }
       }
     }
@@ -174,7 +177,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     const entries = await listIndexedEntries(config.records, prefix)
     for (const entry of entries) {
       await config.records.delete(entry.key)
-      await config.vectors?.delete([entry.key])
+      await config.search?.delete([entry.key])
     }
     return entries.length
   }
@@ -183,14 +186,14 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     query: IndexedChunkSearchQuery,
     filter: ExactFilter,
   ): Promise<ScoredEntry[]> {
-    if (config.vectors) {
-      assertPreFilteredVectors(config.vectors.capabilities().filter)
-      const vectorHits = await config.vectors.search(vectorSearchQuery(query, filter))
-      assertMatchingVectorSpaces(vectorHits, query.embeddingSpace, config.namespace)
+    if (config.search) {
+      assertPreFilteredSearch(config.search.capabilities().filter)
+      const searchHits = await config.search.search(searchQuery(query, filter))
+      assertMatchingVectorSpaces(searchHits, query.embeddingSpace, config.namespace)
       const entries: ScoredEntry[] = []
       const hydrationFilter = activeChunkFilter(config.namespace)
       const misses: IndexedHydrationMiss[] = []
-      for (const hit of vectorHits) {
+      for (const hit of searchHits) {
         const value = await config.records.get(hit.key)
         if (!value) {
           misses.push({ key: hit.key, reason: 'missing_record' })
@@ -202,15 +205,33 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
         }
         entries.push({ key: hit.key, value, score: hit.score })
       }
-      assertVectorHitsHydrated({
-        vectorHitCount: vectorHits.length,
+      assertSearchHitsHydrated({
+        searchHitCount: searchHits.length,
         hydratedCount: entries.length,
         misses,
       })
       return entries
     }
 
-    throw new Error('Indexed knowledge search requires vectors.')
+    throw new Error('Indexed knowledge search requires search.')
+  }
+
+  async function upsertSearchRecord(key: string, value: JsonObject): Promise<void> {
+    if (!config.search) return
+    if (value._cruxRecordType !== 'chunk') return
+    const content = typeof value.content === 'string' ? value.content : undefined
+    const dense = Array.isArray(value.embedding) ? value.embedding.filter((item): item is number => typeof item === 'number') : undefined
+    const sparse = isSparseVector(value.sparseEmbedding) ? value.sparseEmbedding : undefined
+    if (content === undefined && dense === undefined && sparse === undefined) return
+    await config.search.upsert([
+      {
+        key,
+        ...(content !== undefined ? { content } : {}),
+        ...(dense !== undefined ? { dense } : {}),
+        ...(sparse !== undefined ? { sparse } : {}),
+        metadata: exactMetadataFromJson(value),
+      },
+    ])
   }
 
   return Object.freeze({
@@ -242,46 +263,63 @@ function assertMatchingVectorSpaces(
   }
 }
 
-function vectorSearchQuery(query: IndexedChunkSearchQuery, filter: ExactFilter): VectorSearchQuery {
-  if (query.mode === 'dense') {
-    if (!query.dense) throw new Error('Dense indexed knowledge search requires a dense query vector.')
-    return {
-      mode: 'dense',
-      dense: [...query.dense],
-      limit: query.limit,
-      threshold: query.threshold,
-      filter,
-    }
+function searchQuery(query: IndexedChunkSearchQuery, filter: ExactFilter): SearchQuery {
+  const legs: SearchQuery['legs'][number][] = []
+  if (query.legs.dense) {
+    legs.push({
+      kind: 'dense',
+      vector: [...query.legs.dense.vector],
+      ...(query.legs.dense.candidates !== undefined ? { candidates: query.legs.dense.candidates } : {}),
+    })
   }
-  if (query.mode === 'sparse') {
-    if (!query.sparse) throw new Error('Sparse indexed knowledge search requires a sparse query vector.')
-    return {
-      mode: 'sparse',
-      sparse: query.sparse,
-      limit: query.limit,
-      threshold: query.threshold,
-      filter,
-    }
+  if (query.legs.sparse) {
+    legs.push({
+      kind: 'sparse',
+      vector: query.legs.sparse.vector,
+      ...(query.legs.sparse.candidates !== undefined ? { candidates: query.legs.sparse.candidates } : {}),
+    })
   }
-  if (!query.dense || !query.sparse) throw new Error('Hybrid indexed knowledge search requires dense and sparse vectors.')
+  if (query.legs.lexical) {
+    legs.push({
+      kind: 'lexical',
+      query: query.legs.lexical.query,
+      ...(query.legs.lexical.candidates !== undefined ? { candidates: query.legs.lexical.candidates } : {}),
+    })
+  }
+  if (legs.length === 0) throw new Error('Indexed knowledge search requires at least one search leg.')
   return {
-    mode: 'hybrid',
-    dense: [...query.dense],
-    sparse: query.sparse,
+    legs: legs as unknown as SearchQuery['legs'],
     limit: query.limit,
     threshold: query.threshold,
     filter,
-    fusion: query.fusion,
+    ...(query.fusion ? { fusion: query.fusion } : {}),
   }
 }
 
-function assertPreFilteredVectors(filterCapability: 'pre' | 'post' | false): void {
+function assertPreFilteredSearch(filterCapability: 'pre' | 'post' | false): void {
   if (filterCapability !== 'pre') {
     throw new StorageError(
       'unsupported_capability',
-      'Indexed knowledge search requires a vector store with pre-filter support.',
+      'Indexed knowledge search requires a search store with pre-filter support.',
     )
   }
+}
+
+function exactMetadataFromJson(value: JsonObject): ExactFilter {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => (
+      item === null ||
+      typeof item === 'string' ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item))
+    )),
+  ) as ExactFilter
+}
+
+function isSparseVector(value: unknown): value is { readonly indices: readonly number[]; readonly values: readonly number[] } {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as { readonly indices?: unknown; readonly values?: unknown }
+  return Array.isArray(candidate.indices) && Array.isArray(candidate.values)
 }
 
 function matchesExactFilter(value: JsonObject, filter: ExactFilter): boolean {

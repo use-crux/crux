@@ -972,19 +972,19 @@ export interface IndexedStorageCapabilities {
     /** Whether native batch record operations are available. */
     batch?: boolean | "unknown";
   };
-  /** Vector-index capabilities when the definition is a vector store or bundle. */
-  vector?: {
-    /** Whether dense-vector similarity search is available. */
-    dense?: boolean | "unknown";
-    /** Whether sparse-vector search is available. */
-    sparse?: boolean | "unknown";
-    /** Whether dense and sparse queries can be combined by the same store. */
-    hybrid?: boolean | "unknown";
-    /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
-    fusion?: readonly ("rrf" | "dbsf")[] | "unknown";
-    /** Whether metadata filters run before vector search, after vector search, or not at all. */
+  /** Search-index capabilities when the definition is a search store or bundle. */
+  search?: {
+    /** Whether each search leg is available. */
+    legs?: {
+      dense?: boolean | "unknown";
+      sparse?: boolean | "unknown";
+      lexical?: boolean | "unknown";
+    };
+    /** Supported result fusion algorithms, or `unknown` when the adapter cannot report them. */
+    fusion?: readonly "rrf"[] | "unknown";
+    /** Whether metadata filters run before search, after search, or not at all. */
     filter?: "pre" | "post" | false | "unknown";
-    /** Read-after-write visibility expected from the vector backend. */
+    /** Read-after-write visibility expected from the search backend. */
     consistency?: "strong" | "eventual" | "unknown";
   };
 }
@@ -993,7 +993,7 @@ export interface IndexedStorageCapabilities {
 export interface StorageFacts {
   kind:
     | "storage.recordStore"
-    | "storage.vectorStore"
+    | "storage.searchStore"
     | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
@@ -1005,8 +1005,8 @@ export interface StorageFacts {
   capabilities?: IndexedStorageCapabilities;
   /** Record store variable or definition id used by a bundle. */
   records?: string;
-  /** Vector store variable or definition id used by a bundle. */
-  vectors?: string;
+  /** Search store variable or definition id used by a bundle. */
+  search?: string;
   /** Asset store variable or definition id used by a bundle. */
   assets?: string;
   /** Base storage variable or definition id wrapped by a scope. */

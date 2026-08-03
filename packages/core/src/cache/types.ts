@@ -11,7 +11,7 @@
  */
 
 import type { DenseEmbedding, EmbeddingModality } from "../embedding";
-import type { JsonObject, RecordStore, Storage, VectorStore } from "../storage";
+import type { JsonObject, RecordStore, SearchStore, Storage } from "../storage";
 import type { PromptMiddleware, PromptMiddlewareArgs } from "../runtime/types";
 import type {
   SemanticCacheMode,
@@ -50,7 +50,7 @@ export interface SemanticCacheConfig<
 > {
   storage?: Storage;
   records?: RecordStore;
-  vectors?: VectorStore;
+  search?: SearchStore;
   embedding: DenseEmbedding<TModality>;
   ttl: number;
   threshold?: number;

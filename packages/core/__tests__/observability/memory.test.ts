@@ -9,7 +9,7 @@ import {
 import type { DefinitionRef } from '../../src/observability'
 import { blackboard } from '../../src/agent/blackboard'
 import { facts, memory, workingState } from '../../src/memory'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 describe('canonical memory observability', () => {
   afterEach(() => {
@@ -130,7 +130,7 @@ describe('canonical memory observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const factBlock = facts({
       id: 'facts',
       embed: async (text) => (text.includes('refund') ? [1, 0] : [0, 1]),
@@ -139,9 +139,9 @@ describe('canonical memory observability', () => {
 
     await factBlock.add(
       { content: 'User wants help with a refund.', confidence: 0.8 },
-      { records: store, vectors, namespace: 'user:1', memoryId: 'profile' },
+      { records: store, search, namespace: 'user:1', memoryId: 'profile' },
     )
-    await factBlock.find('refund policy', { records: store, vectors, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await factBlock.find('refund policy', { records: store, search, namespace: 'user:1', memoryId: 'profile', limit: 3 })
     await observe.flush()
 
     expect(transport.records).toContainEqual(

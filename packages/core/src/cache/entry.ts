@@ -1,14 +1,14 @@
 /**
  * Semantic cache entry I/O, serialization, and hydration.
  *
- * Vector lookup of a stored entry, building the cache key, serializing a
+ * Search lookup of a stored entry, building the cache key, serializing a
  * generate result into a stored entry, and hydrating a stored entry back into a
  * middleware result (with semantic-cache hit metadata). Internal helpers.
  *
  * @module
  */
 
-import type { ExactFilter, RecordStore, VectorStore } from "../storage";
+import type { ExactFilter, RecordStore, SearchStore } from "../storage";
 import type { MiddlewareResult, PromptMiddlewareArgs } from "../runtime/types";
 import type { CacheableResult, SemanticCacheEntry } from "./types";
 import {
@@ -16,17 +16,17 @@ import {
   readCachedStructuredCandidate,
 } from "../runtime/internal/cached-structured-candidate";
 
-/** Hydrated semantic cache vector hit. */
+/** Hydrated semantic cache search hit. */
 export interface SemanticCacheHit {
   readonly key: string;
   readonly value: SemanticCacheEntry;
   readonly score: number;
 }
 
-/** Vector-search the store for the closest matching cache entry above threshold. */
+/** Search the store for the closest matching cache entry above threshold. */
 export async function lookupEntry(
   records: RecordStore,
-  vectors: VectorStore,
+  search: SearchStore,
   query: {
     namespace: string;
     promptId?: string;
@@ -45,9 +45,8 @@ export async function lookupEntry(
     version: query.version,
     resultKind: query.resultKind,
   };
-  const results = await vectors.search({
-    mode: "dense",
-    dense: query.dense,
+  const results = await search.search({
+    legs: [{ kind: "dense", vector: query.dense }],
     threshold: query.threshold,
     limit: 1,
     filter,

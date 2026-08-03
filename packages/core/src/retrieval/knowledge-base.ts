@@ -12,7 +12,7 @@
 import type { z } from 'zod'
 import type { ChunkingOptions, Corpus, IndexingPipeline, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
-import type { RecordStore, Storage, VectorStore } from '../storage'
+import type { RecordStore, SearchStore, Storage } from '../storage'
 import { grounding } from '../citations'
 import type { Grounding, GroundingConfig } from '../citations'
 import type { MetadataFilter } from './request'
@@ -64,13 +64,16 @@ export interface KnowledgeBaseInspection {
   /** Configured storage ports available to indexing and retrieval. */
   storage: {
     records: boolean
-    vectors: boolean
+    search: boolean
   }
   /** Retrieval and lifecycle capabilities inferred from configured primitives. */
   capabilities: {
-    dense: boolean
-    sparse: boolean
-    hybrid: boolean
+    legs: {
+      dense: boolean
+      sparse: boolean
+      lexical: boolean
+    }
+    fusion: readonly 'rrf'[]
     delete: boolean
     filter: 'pre' | 'post' | false
   }
@@ -91,7 +94,7 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
   limit?: number
   threshold?: number
   filter?: TFilter
-  mode?: 'dense' | 'sparse' | 'hybrid'
+  search?: import('./request').RetrievalSearchPlan
 }
 
 /** Recipe options for {@link KnowledgeBase.recipe}. */
@@ -123,11 +126,11 @@ export interface KnowledgeBaseConfig<
   storage?: Storage
   /** Explicit record store override. */
   records?: RecordStore
-  /** Explicit vector store override. */
-  vectors?: VectorStore
-  /** Dense embedding model used for dense or hybrid search. */
+  /** Explicit search store override. */
+  search?: SearchStore
+  /** Dense embedding model used for dense search legs. */
   embeddings?: DenseEmbedding<TModality>
-  /** Sparse embedding model used for sparse or hybrid search. */
+  /** Sparse embedding model used for sparse search legs. */
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions

@@ -10,7 +10,7 @@ import { z } from 'zod'
 import type { Citation } from '../src/citations'
 import type { DenseEmbedding, EmbeddingModality } from '../src/embedding'
 import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore, type ExactFilter } from '../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore, type ExactFilter } from '../src/storage'
 import * as retrieval from '../src/retrieval'
 import {
   compressToBudget,
@@ -75,7 +75,7 @@ const configuredDocs = knowledgeBase({
   id: 'configured-docs',
   corpus,
   records: inMemoryRecordStore(),
-  vectors: inMemoryVectorStore(),
+  search: inMemorySearchStore(),
   embeddings,
   metadataSchema,
 })
@@ -114,8 +114,11 @@ configuredRetriever.retrieve({
   limit: 5,
   threshold: 0.2,
   filter: { section: 'reference' },
-  mode: 'hybrid',
-  fusion: { strategy: 'rrf', k: 60 },
+  search: {
+    dense: true,
+    sparse: true,
+    fusion: { strategy: 'rrf', k: 60 },
+  },
   caller: { promptId: 'answer-docs' },
 })
 
@@ -124,7 +127,7 @@ configuredDocs.retriever({ filter: { tenant: 'acme' } })
 // @ts-expect-error enum metadata filters preserve literal values.
 configuredRetriever.retrieve({ query: 'x', filter: { section: 'blog' } })
 // @ts-expect-error only implemented fusion strategies are exposed.
-configuredRetriever.retrieve({ query: 'x', fusion: { strategy: 'dbsf' } })
+configuredRetriever.retrieve({ query: 'x', search: { dense: true, sparse: true, fusion: { strategy: 'weighted' } } })
 
 const custom = retrieval.retriever({
   id: 'custom-docs',

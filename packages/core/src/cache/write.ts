@@ -102,7 +102,7 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
 
       const key = cacheKey(namespace, promptId, scopeHash, version, entry.queryHash)
       await stores.records.put(key, entry as unknown as JsonObject, { ttlMs: ttl })
-      await stores.vectors.upsert([
+      await stores.search.upsert([
         {
           key,
           dense,

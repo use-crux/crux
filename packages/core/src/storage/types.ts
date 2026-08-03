@@ -1,7 +1,7 @@
 /**
  * Public Storage Beta type surface.
  *
- * Storage is split into JSON records, vector indexes, and media assets so
+ * Storage is split into JSON records, search indexes, and media assets so
  * primitives can ask for the smallest capability they require.
  *
  * @module
@@ -163,83 +163,98 @@ export interface RecordStore<T extends JsonObject = JsonObject> {
   capabilities(): RecordStoreCapabilities;
 }
 
-/** Sparse vector representation used by sparse and hybrid vector search. */
+/** Sparse vector representation used by sparse search legs. */
 export interface SparseVector {
   readonly indices: readonly number[];
   readonly values: readonly number[];
 }
 
-/** Dense vector search query. */
-export interface DenseVectorSearchQuery {
-  readonly mode: "dense";
-  readonly dense: readonly number[];
-  readonly sparse?: never;
-  readonly fusion?: never;
+/** Search leg kinds supported by retrieval indexes. */
+export type SearchLegKind = "dense" | "sparse" | "lexical";
+
+/** Dense vector search leg. */
+export interface DenseSearchLeg {
+  readonly kind: "dense";
+  readonly vector: readonly number[];
+  readonly candidates?: number;
+}
+
+/** Sparse vector search leg. */
+export interface SparseSearchLeg {
+  readonly kind: "sparse";
+  readonly vector: SparseVector;
+  readonly candidates?: number;
+}
+
+/** Lexical full-text search leg. */
+export interface LexicalSearchLeg {
+  readonly kind: "lexical";
+  readonly query: string;
+  readonly candidates?: number;
+}
+
+/** One independently ranked retrieval leg. */
+export type SearchLeg = DenseSearchLeg | SparseSearchLeg | LexicalSearchLeg;
+
+/** Search result fusion configuration. */
+export type SearchFusion = { readonly strategy: "rrf"; readonly k?: number };
+
+/** Search query over one to three composable legs. */
+export interface SearchQuery {
+  readonly legs: readonly [SearchLeg, ...SearchLeg[]];
+  readonly fusion?: SearchFusion;
   readonly limit?: number;
   readonly threshold?: number;
   readonly filter?: ExactFilter;
 }
 
-/** Sparse vector search query. */
-export interface SparseVectorSearchQuery {
-  readonly mode: "sparse";
-  readonly sparse: SparseVector;
-  readonly dense?: never;
-  readonly fusion?: never;
-  readonly limit?: number;
-  readonly threshold?: number;
-  readonly filter?: ExactFilter;
-}
-
-/** Hybrid vector search query. */
-export interface HybridVectorSearchQuery {
-  readonly mode: "hybrid";
-  readonly dense: readonly number[];
-  readonly sparse: SparseVector;
-  readonly fusion?: "rrf" | "dbsf";
-  readonly limit?: number;
-  readonly threshold?: number;
-  readonly filter?: ExactFilter;
-}
-
-/** Discriminated query shape for dense, sparse, and hybrid vector search. */
-export type VectorSearchQuery =
-  | DenseVectorSearchQuery
-  | SparseVectorSearchQuery
-  | HybridVectorSearchQuery;
-
-/** Vector record stored in a vector index. */
-export interface VectorRecord {
+/** Search record stored in a retrieval index. */
+export interface SearchRecord {
   readonly key: string;
+  readonly content?: string;
   readonly dense?: readonly number[];
   readonly sparse?: SparseVector;
   readonly metadata?: ExactFilter;
 }
 
-/** Search result from a vector index. */
-export interface VectorHit {
+/** Per-leg match details returned with a search hit. */
+export interface SearchLegMatch {
+  readonly kind: SearchLegKind;
+  readonly rank: number;
+  readonly score: number;
+}
+
+/** Search result from a retrieval index. */
+export interface SearchHit {
   readonly key: string;
   readonly score: number;
   readonly metadata?: ExactFilter;
+  readonly matches: readonly SearchLegMatch[];
 }
 
-/** Vector store capability levels. */
-export interface VectorStoreCapabilities {
-  readonly dense: boolean;
-  readonly sparse: boolean;
-  readonly hybrid: boolean;
-  readonly fusion: readonly ("rrf" | "dbsf")[];
+/** Search store capability levels. */
+export interface SearchStoreCapabilities {
+  readonly legs: Readonly<Record<SearchLegKind, boolean>>;
+  readonly fusion: readonly "rrf"[];
   readonly filter: "pre" | "post" | false;
   readonly consistency: "strong" | "eventual";
 }
 
-/** Vector index capability. */
-export interface VectorStore {
-  readonly _tag?: "VectorStore";
-  upsert(records: readonly VectorRecord[]): Promise<void>;
+/** Capability config accepted by {@link searchStoreCapabilities}. */
+export interface SearchStoreCapabilityConfig {
+  readonly legs: Partial<Readonly<Record<SearchLegKind, boolean>>>;
+  readonly fusion?: readonly "rrf"[];
+  readonly filter?: "pre" | "post" | false;
+  readonly consistency?: "strong" | "eventual";
+}
+
+/** Retrieval index capability. */
+export interface SearchStore {
+  readonly _tag?: "SearchStore";
+  upsert(records: readonly SearchRecord[]): Promise<void>;
   delete(keys: readonly string[]): Promise<void>;
-  search(query: VectorSearchQuery): Promise<readonly VectorHit[]>;
-  capabilities(): VectorStoreCapabilities;
+  search(query: SearchQuery): Promise<readonly SearchHit[]>;
+  capabilities(): SearchStoreCapabilities;
 }
 
 /** One provider-neutral storage setup finding. */
@@ -273,7 +288,7 @@ export interface StorageSetupPort {
 /** Explicit capability bundle passed to primitives that need storage. */
 export interface Storage {
   readonly records: RecordStore;
-  readonly vectors?: VectorStore;
+  readonly search?: SearchStore;
   readonly assets?: AssetStore;
   /** Provider-neutral setup capability consumed by `crux setup`. */
   readonly setup?: StorageSetupPort;

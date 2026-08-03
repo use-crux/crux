@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { defaultTokenizer, setTokenizer } from '../../src/shared/tokenizer'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import {
   episodes,
   facts,
@@ -276,13 +276,13 @@ describe('memory block system', () => {
 
   it('supports standalone episodes with dense recall', async () => {
     const store = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const ep = episodes({ id: 'episodes', embed: mockEmbed })
 
-    await ep.record({ content: 'User asked about pricing' }, { records: store, vectors, namespace: 'user:1' })
-    await ep.record({ content: 'We discussed React hooks' }, { records: store, vectors, namespace: 'user:1' })
+    await ep.record({ content: 'User asked about pricing' }, { records: store, search, namespace: 'user:1' })
+    await ep.record({ content: 'We discussed React hooks' }, { records: store, search, namespace: 'user:1' })
 
-    const results = await ep.recall('pricing', { records: store, vectors, namespace: 'user:1', limit: 1 })
+    const results = await ep.recall('pricing', { records: store, search, namespace: 'user:1', limit: 1 })
     expect(results).toHaveLength(1)
     expect(results[0].score).toBeDefined()
   })
@@ -383,7 +383,7 @@ describe('memory block system', () => {
 
   it('renders extractive blocks with an explicit semantic strategy scoped to namespace and block id', async () => {
     const store = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const semanticEmbed = async (text: string) => (text.toLowerCase().includes('billing') ? [1, 0] : [0, 1])
     const factBlock = facts({
       id: 'facts',
@@ -403,26 +403,26 @@ describe('memory block system', () => {
     const mem = memory({
       id: 'semantic-render',
       records: store,
-      vectors,
+      search,
       namespace: 'user:1',
       blocks: [factBlock],
     })
 
     await factBlock.add(
       { content: 'Billing contact is finance@example.com.' },
-      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
+      { records: store, search, namespace: 'user:1', memoryId: mem.id },
     )
     await factBlock.add(
       { content: 'Billing contact is someone else.' },
-      { records: store, vectors, namespace: 'user:2', memoryId: mem.id },
+      { records: store, search, namespace: 'user:2', memoryId: mem.id },
     )
     await otherBlock.add(
       { content: 'Billing contact in another block.' },
-      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
+      { records: store, search, namespace: 'user:1', memoryId: mem.id },
     )
     await factBlock.add(
       { content: 'Shipping address is Amsterdam.' },
-      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
+      { records: store, search, namespace: 'user:1', memoryId: mem.id },
     )
 
     const rendered = await mem.asContext().systemFn({ query: 'billing' })

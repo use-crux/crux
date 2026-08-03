@@ -9,7 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk } from '../indexing/types'
-import type { ExactFilter, RecordStore, SparseVector, VectorStore } from '../storage'
+import type { ExactFilter, RecordStore, SearchFusion, SearchStore, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 
 /** Storage ports required by the indexed knowledge read model. */
@@ -20,8 +20,8 @@ export interface IndexedKnowledgeStoreConfig {
   readonly namespace: string
   /** Durable JSON records containing chunk and parent records. */
   readonly records: RecordStore
-  /** Optional split vector store for dense, sparse, or hybrid search. */
-  readonly vectors?: VectorStore
+  /** Optional retrieval index for dense, sparse, or lexical search. */
+  readonly search?: SearchStore
 }
 
 /** Internal read-model API for indexed chunks and parent records. */
@@ -36,9 +36,9 @@ export interface IndexedKnowledgeStore {
   expandParent(hit: RetrieverHit, options?: ParentExpansionOptions): Promise<RetrieverHit>
   /** Mark older active records for the given sources inactive. */
   deactivatePreviousGenerations(sourceIds: readonly string[], activeGenerationId: string): Promise<void>
-  /** Delete every record and vector for one source. */
+  /** Delete every record and search entry for one source. */
   deleteSource(sourceId: string): Promise<number>
-  /** Delete every record and vector in this index namespace. */
+  /** Delete every record and search entry in this index namespace. */
   clearNamespace(): Promise<number>
 }
 
@@ -72,11 +72,15 @@ export interface PersistIndexedGenerationResult {
 
 /** Search query over active indexed chunks. */
 export interface IndexedChunkSearchQuery {
-  /** Vector search mode. */
-  readonly mode: 'dense' | 'sparse' | 'hybrid'
-  /** Dense query vector for dense or hybrid search. */
+  /** Generated dense/sparse/lexical search legs. */
+  readonly legs: {
+    readonly dense?: { readonly vector: readonly number[]; readonly candidates?: number }
+    readonly sparse?: { readonly vector: SparseVector; readonly candidates?: number }
+    readonly lexical?: { readonly query: string; readonly candidates?: number }
+  }
+  /** Dense query vector for dense search. */
   readonly dense?: readonly number[]
-  /** Sparse query vector for sparse or hybrid search. */
+  /** Sparse query vector for sparse search. */
   readonly sparse?: SparseVector
   /** Maximum number of hits to return. */
   readonly limit?: number
@@ -84,8 +88,8 @@ export interface IndexedChunkSearchQuery {
   readonly threshold?: number
   /** User filter merged with namespace, record type, and active-generation filters. */
   readonly filter?: ExactFilter
-  /** Optional fusion algorithm for hybrid-capable vector stores. */
-  readonly fusion?: 'rrf' | 'dbsf'
+  /** Optional fusion algorithm for multi-leg search stores. */
+  readonly fusion?: SearchFusion
   /** Configured dense space checked against every returned vector hit. */
   readonly embeddingSpace?: {
     readonly digest: string
