@@ -61,7 +61,9 @@ describe("runtime artifacts", () => {
     ).resolves.toBe(`${JSON.stringify(result.manifest, null, 2)}\n`);
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
-    ).resolves.toContain("createRuntimeHandler({ targets, manifestHash:");
+    ).resolves.toContain(
+      "createRuntimeHandler({ targets: runtimeProgram.targets, manifestHash: runtimeProgram.manifestHash })",
+    );
     const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
     expect(entry).toContain("export const evalRegistry");
     expect(entry).toContain("entries:[]");
@@ -113,9 +115,17 @@ describe("runtime artifacts", () => {
       },
     ]);
     await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      "import { reviewFlow as target0 } from '../../../src/review'",
+    );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain("createRuntimeProgram({ targets, transports })");
+    await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
     ).resolves.toContain(
-      "import { reviewFlow as target0 } from '../src/review'",
+      "import { runtimeProgram } from '../.crux/generated/runtime/program'",
     );
   });
 
@@ -234,6 +244,9 @@ describe("runtime artifacts", () => {
 
     expect(first.writtenFiles).toContain(
       join(root, ".crux/generated/runtime/manifest.json"),
+    );
+    expect(first.writtenFiles).toContain(
+      join(root, ".crux/generated/runtime/program.ts"),
     );
     expect(first.writtenFiles).toContain(join(root, "crux.generated/next.ts"));
     expect(second.writtenFiles).toEqual([]);

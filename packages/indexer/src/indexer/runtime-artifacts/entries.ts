@@ -3,12 +3,30 @@ import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
 import type { GeneratedEvalArtifacts } from "./eval-registry";
 import { GENERATED_HEADER } from "./generated-files";
 
+/** Render the canonical Runtime program shared by generated host entries. */
+export function runtimeProgramFile(input: {
+  readonly manifest: RuntimeArtifactManifest;
+  readonly outputFile: string;
+  readonly root: string;
+}): string {
+  return [
+    GENERATED_HEADER,
+    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
+    ...targetImports(input.manifest, input.outputFile, input.root),
+    "",
+    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
+    "const transports = [] as const",
+    "",
+    "export const runtimeProgram = createRuntimeProgram({ targets, transports })",
+    "",
+  ].join("\n");
+}
+
 /** Render the generated Next runtime entry. */
 export function nextEntryFile(input: {
   readonly manifest: RuntimeArtifactManifest;
   readonly outputFile: string;
   readonly root: string;
-  readonly manifestHash: string;
   readonly evalArtifacts: GeneratedEvalArtifacts;
 }): string {
   const hasEvals = input.evalArtifacts.manifestEntries.length > 0;
@@ -16,6 +34,7 @@ export function nextEntryFile(input: {
     GENERATED_HEADER,
     "import { createRuntimeHandler } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
+    `import { runtimeProgram } from '${importSpecifier(dirname(input.outputFile), join(input.root, ".crux/generated/runtime/program.ts"))}'`,
     ...(hasEvals
       ? [
           "import type { InProcessRuntimeEngineDefinition } from '@use-crux/core/runtime'",
@@ -23,17 +42,15 @@ export function nextEntryFile(input: {
           "import projectConfig from '../crux.config'",
         ]
       : []),
-    ...targetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
-    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
     registryDeclaration("evalRegistry", input.evalArtifacts),
     ...(hasEvals ? evalHostCapabilityLines([]) : []),
     "",
     ...(hasEvals
-      ? nextEvalHostLines(input.manifestHash)
+      ? nextEvalHostLines()
       : [
-          `export const { GET, POST } = createRuntimeHandler({ targets, manifestHash: '${input.manifestHash}' })`,
+          "export const { GET, POST } = createRuntimeHandler({ targets: runtimeProgram.targets, manifestHash: runtimeProgram.manifestHash })",
         ]),
     "",
   ].join("\n");
@@ -188,10 +205,10 @@ function registryDeclaration(
   return `export const ${name} = createDeployedEvalRegistry({persistencePolicy:{redactPaths:${JSON.stringify(evalArtifacts.redactPaths)}},entries:${evalArtifacts.registrySource}})`;
 }
 
-function nextEvalHostLines(manifestHash: string): string[] {
+function nextEvalHostLines(): string[] {
   return [
     "const runtime = projectConfig.config.runtime",
-    `const runtimeHandlers = createRuntimeHandler({ targets, runtime, manifestHash: '${manifestHash}' })`,
+    "const runtimeHandlers = createRuntimeHandler({ targets: runtimeProgram.targets, runtime, manifestHash: runtimeProgram.manifestHash })",
     "let evalHost: ServerlessEvalHost<EvalHostStore> | undefined",
     "",
     "async function dispatch(request: Request): Promise<Response> {",
@@ -229,7 +246,7 @@ function nextEvalHostLines(manifestHash: string): string[] {
     "    deploymentId,",
     "    token,",
     "    hostCapabilities: evalHostCapabilities,",
-    "    targets,",
+    "    targets: runtimeProgram.targets,",
     "  })",
     "  return evalHost",
     "}",

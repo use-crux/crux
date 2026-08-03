@@ -10,6 +10,7 @@ import {
   convexTargetEntryFile,
   importSpecifier,
   nextEntryFile,
+  runtimeProgramFile,
 } from "./runtime-artifacts/entries";
 import { generateEvalArtifacts } from "./runtime-artifacts/eval-registry";
 import {
@@ -99,6 +100,10 @@ async function prepareRuntimeArtifactsUnchecked(
     );
   }
   const nextFile = join(options.root, "crux.generated/next.ts");
+  const runtimeProgramOutputFile = join(
+    options.root,
+    ".crux/generated/runtime/program.ts",
+  );
   const convexTargetsFile = join(options.root, "convex/_crux/targets.ts");
   const cloudflareGeneratedFile = join(
     options.root,
@@ -197,6 +202,16 @@ async function prepareRuntimeArtifactsUnchecked(
       ownership: "crux-owned",
       activationOrder: 0,
     },
+    {
+      destination: ".crux/generated/runtime/program.ts",
+      contents: runtimeProgramFile({
+        manifest,
+        outputFile: runtimeProgramOutputFile,
+        root: options.root,
+      }),
+      ownership: "crux-owned",
+      activationOrder: 1,
+    },
   ];
   if (host === "next") {
     files.push({
@@ -205,7 +220,6 @@ async function prepareRuntimeArtifactsUnchecked(
         manifest,
         outputFile: nextFile,
         root: options.root,
-        manifestHash: contentHash,
         evalArtifacts,
       }),
       ownership: "generated-marker",
