@@ -151,6 +151,9 @@ describe('retriever', () => {
         metadata: { topic: 'launch' },
         score: 0.92,
         parent: { title: 'Launch Plan' },
+        provenance: {
+          matches: [{ kind: 'dense', rank: 1, score: 0.92 }],
+        },
       },
     ])
   })
