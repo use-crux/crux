@@ -4,7 +4,10 @@ import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnyEval } from "../evaluate";
-import { getEvalDefinitionForInternalUse } from "../internal/definition";
+import {
+  getEvalDefinitionForInternalUse,
+  isEvalForInternalUse,
+} from "../internal/definition";
 
 export interface EvalModule {
   readonly relativeFile: string;
@@ -212,7 +215,8 @@ async function walk(
     if (
       ["node_modules", "dist", ".crux", ".git", ".next", ".turbo"].includes(
         entry.name,
-      ) || isTestFixtureDirectory(directory, entry.name)
+      ) ||
+      isTestFixtureDirectory(directory, entry.name)
     )
       continue;
     const relativeFile = normalizePath(join(directory, entry.name));
@@ -297,12 +301,7 @@ function duplicateIdErrors(
 }
 
 export function isEval(value: unknown): value is AnyEval {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "_tag" in value &&
-    value._tag === "CruxEval"
-  );
+  return isEvalForInternalUse(value);
 }
 
 function wildcardPattern(value: string): RegExp {

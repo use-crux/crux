@@ -1,5 +1,5 @@
 /**
- * Private immutable definition carried by every inert Eval.
+ * Global internal immutable definition carried by every inert Eval.
  *
  * @internal
  * @module
@@ -11,8 +11,12 @@ import type { EvalCoverageTargetId } from "../evaluate";
 import type { AnyEval } from "../evaluate";
 import type { NormalizedEvalTimeoutPolicy } from "../timeout-policy";
 
-/** Private storage key for an Eval's normalized definition. */
-export const EVAL_INTERNAL: unique symbol = Symbol("crux.eval.definition");
+const LEGACY_EVAL_INTERNAL_DESCRIPTION = "crux.eval.definition";
+
+/** Global internal storage key for an Eval's normalized definition. */
+export const EVAL_INTERNAL: unique symbol = Symbol.for(
+  "@use-crux/core/eval/internal-definition",
+);
 
 /** Frozen callback declaration consumed by planning without invocation. */
 export interface NormalizedEvalCheck {
@@ -87,14 +91,76 @@ export interface EvalDefinitionV1 {
 export function getEvalDefinitionForInternalUse(
   evalValue: AnyEval,
 ): EvalDefinitionV1 {
-  const definition = (
-    evalValue as unknown as Record<
-      typeof EVAL_INTERNAL,
-      EvalDefinitionV1 | undefined
-    >
-  )[EVAL_INTERNAL];
-  if (definition === undefined) {
+  if (!isEvalShell(evalValue)) {
+    throw new TypeError("Expected a Crux Eval (missing internal definition).");
+  }
+  const definition =
+    (
+      evalValue as unknown as Record<
+        typeof EVAL_INTERNAL,
+        EvalDefinitionV1 | undefined
+      >
+    )[EVAL_INTERNAL] ?? getLegacyEvalDefinitionForInternalUse(evalValue);
+  if (!isEvalDefinitionV1(definition)) {
     throw new TypeError("Expected a Crux Eval (missing internal definition).");
   }
   return definition;
+}
+
+/** Return whether a value is an Eval authored by a compatible Core contract. */
+export function isEvalForInternalUse(value: unknown): value is AnyEval {
+  try {
+    getEvalDefinitionForInternalUse(value as AnyEval);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getLegacyEvalDefinitionForInternalUse(
+  evalValue: AnyEval,
+): EvalDefinitionV1 | undefined {
+  for (const key of Object.getOwnPropertySymbols(evalValue)) {
+    if (key.description !== LEGACY_EVAL_INTERNAL_DESCRIPTION) {
+      continue;
+    }
+    const candidate = (evalValue as unknown as Record<symbol, unknown>)[key];
+    if (isEvalDefinitionV1(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function isEvalShell(
+  value: unknown,
+): value is object & { readonly _tag: "CruxEval" } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "_tag" in value &&
+    value._tag === "CruxEval"
+  );
+}
+
+function isEvalDefinitionV1(value: unknown): value is EvalDefinitionV1 {
+  if (value === null || typeof value !== "object") return false;
+  const candidate = value as Readonly<Record<string, unknown>>;
+  return (
+    candidate.schemaVersion === 1 &&
+    "task" in candidate &&
+    Array.isArray(candidate.cases) &&
+    Array.isArray(candidate.caseFiles) &&
+    Array.isArray(candidate.caseSourceOrder) &&
+    isObjectRecord(candidate.variants) &&
+    Array.isArray(candidate.arms) &&
+    "scorers" in candidate &&
+    typeof candidate.trials === "number" &&
+    Array.isArray(candidate.tags) &&
+    Array.isArray(candidate.covers)
+  );
+}
+
+function isObjectRecord(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
