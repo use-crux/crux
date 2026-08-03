@@ -208,7 +208,11 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'text', text: expect.stringContaining('page 1') },
       { type: 'file', mediaType: 'application/pdf' },
     ])
+    expect(visual[0].parts).toMatchObject([
+      { id: 'pdf:page:1:visual', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: 'Diagram page.' },
+    ])
     expect(visual[0].content).toContain('Diagram page.')
+    expect(visual[0].warnings).toBeUndefined()
   })
 
   it('retrieves visual PDF pages and audio segments with structured AssetRef attribution', async () => {
@@ -444,6 +448,63 @@ describe('@use-crux/ingest structured sources', () => {
     expect(docs[0].parts[0]).toMatchObject({ kind: 'page', pageNumber: 1 })
     expect(docs[0].content).toContain('[Page 1]')
     expect(docs[0].content).toContain('Hello PDF')
+  })
+
+  it('retains textless physical PDF pages without media description', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'mixed.pdf')
+    await writeFile(path, makePdf(['First page', '', 'Third page']))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+
+    expect(document.parts).toMatchObject([
+      { kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: 'First page' },
+      { kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
+      { kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: 'Third page' },
+    ])
+    expect(document.content).toContain('[Page 2]')
+    expect(document.warnings).toMatchObject([
+      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
+    ])
+  })
+
+  it('retains textless PDF pages when media description is empty', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'visual-empty.pdf')
+    await writeFile(path, makePdf(''))
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: '  \n' }))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
+
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(document.parts).toMatchObject([
+      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '' },
+    ])
+    expect(document.warnings).toMatchObject([
+      { code: 'partial_extraction', partId: 'pdf:page:1', metadata: { pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 } } },
+    ])
+  })
+
+  it('retains textless PDF pages when media description throws', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'visual-throws.pdf')
+    await writeFile(path, makePdf(['First page', '', 'Third page']))
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => {
+      throw new Error('vision unavailable')
+    })
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
+
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(document.parts).toMatchObject([
+      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: 'First page' },
+      { id: 'pdf:page:2', kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
+      { id: 'pdf:page:3', kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: 'Third page' },
+    ])
+    expect(document.warnings).toMatchObject([
+      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
+    ])
+    expect(document.warnings?.[0]?.message).toContain('media.describe failed')
   })
 
   it('urlSource extracts page parts from pdf responses', async () => {
@@ -816,14 +877,22 @@ async function makeTempDir(): Promise<string> {
   return dir
 }
 
-function makePdf(text: string): Buffer {
-  const stream = text ? `BT\n/F1 24 Tf\n72 100 Td\n(${escapePdfText(text)}) Tj\nET` : 'q\nQ'
+function makePdf(text: string | string[]): Buffer {
+  const pages = Array.isArray(text) ? text : [text]
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Type /Pages /Kids [${pages.map((_, index) => `${3 + index * 3} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    ...pages.flatMap((pageText, index) => {
+      const pageObject = 3 + index * 3
+      const contentsObject = pageObject + 1
+      const fontObject = pageObject + 2
+      const stream = pageText ? `BT\n/F1 24 Tf\n72 100 Td\n(${escapePdfText(pageText)}) Tj\nET` : 'q\nQ'
+      return [
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents ${contentsObject} 0 R /Resources << /Font << /F1 ${fontObject} 0 R >> >> >>`,
+        `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      ]
+    }),
   ]
 
   let pdf = '%PDF-1.4\n'
