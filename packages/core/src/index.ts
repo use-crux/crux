@@ -397,6 +397,9 @@ export { createWorkHost, getWork, spawn } from "./work";
 export {
   getSession,
   session,
+  GenerationModelBindingError,
+  GenerationModelCapabilityError,
+  GenerationModelNotStaticError,
   SessionCapabilityError,
   SessionIdentityConflictError,
   SessionInputError,
@@ -408,6 +411,7 @@ export type {
   Session,
   SessionFor,
   SessionInputHandle,
+  SessionTurnHandle,
   SessionModelGuard,
   SessionOptions,
   SessionThreadView,

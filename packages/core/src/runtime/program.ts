@@ -14,13 +14,22 @@ import {
 import type { RuntimeManagedTransportBinding } from "./transport";
 import { validateRuntimeManagedTransportBinding } from "./transport";
 import type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
+import { isAgent, type AnyAgent } from "../agent";
+import type { GenerationModel } from "../generation-model";
+import {
+  canonicalizeProgramGenerationModels,
+  generationModelManifestEntry,
+  targetGenerationModelReference,
+} from "./program-generation-models";
 
 const encoder = new TextEncoder();
 
 /** Executable Runtime target declaration with an explicit durable kind. */
-export type RuntimeProgramTarget = RuntimeHandlerTarget & {
-  readonly kind: "flow" | "task" | "agent";
-};
+export type RuntimeProgramTarget =
+  | AnyAgent
+  | (Exclude<RuntimeHandlerTarget, AnyAgent> & {
+      readonly kind: "flow" | "task" | "agent";
+    });
 
 /** Immutable executable target, definition, and managed-transport truth for one project. */
 export interface RuntimeProgram {
@@ -30,6 +39,8 @@ export interface RuntimeProgram {
   readonly targets: readonly RuntimeProgramTarget[];
   /** Generated definition identity for each executable target. */
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
+  /** Canonically ordered, statically declared generation models. */
+  readonly generationModels: readonly GenerationModel[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -65,6 +76,8 @@ export type RuntimeProgramTargetInput =
 export interface CreateRuntimeProgramOptions {
   /** Statically imported Flow, durable task, and Agent targets. */
   readonly targets: readonly RuntimeProgramTargetInput[];
+  /** Statically imported generation models available to Session selection. */
+  readonly generationModels?: readonly GenerationModel[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -84,6 +97,10 @@ export function createRuntimeProgram(
     "createRuntimeProgram()",
   );
   const targetDefinitions = canonicalTargetDefinitions(targets, declarations);
+  const generationModels = canonicalizeProgramGenerationModels(
+    options.generationModels ?? [],
+    targets,
+  );
   const transports = canonicalizeTransports(options.transports);
   validateSignalTargets(targets, transports);
   validateAdapterDeclarations(transports);
@@ -95,7 +112,9 @@ export function createRuntimeProgram(
         targets: targets.map((target, index) => ({
           ...targetManifestEntry(target),
           definition: targetDefinitions[index],
+          generationModel: targetGenerationModelReference(target),
         })),
+        generationModels: generationModels.map(generationModelManifestEntry),
         transports,
       }),
     ),
@@ -104,6 +123,7 @@ export function createRuntimeProgram(
     manifestHash,
     targets,
     targetDefinitions,
+    generationModels,
     transports,
   });
 }
@@ -128,7 +148,7 @@ function normalizeTargetDeclaration(
           JSON.stringify({
             format: "crux-runtime-target:v1",
             id,
-            kind: input.kind,
+            kind: targetManifestEntry(input).kind,
           }),
         ),
       ),
@@ -222,7 +242,7 @@ function targetManifestEntry(target: RuntimeProgramTarget): {
 } {
   return {
     id: runtimeHandlerTargetIdentity(target),
-    kind: target.kind,
+    kind: isAgent(target) ? "agent" : target.kind,
   };
 }
 function duplicateBinding(id: string): never {

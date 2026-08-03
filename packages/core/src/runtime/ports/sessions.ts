@@ -9,6 +9,11 @@ export interface RuntimeSessionRecord {
   readonly keyHash: string;
   readonly targetId: string;
   readonly threadId: string;
+  /** Immutable statically declared GenerationModel selected when created. */
+  readonly model: {
+    readonly definitionId: string;
+    readonly fingerprint: string;
+  };
   readonly state: "prepared" | "ready";
   readonly acceptedCursor: number;
   readonly wakePending: boolean;
@@ -32,6 +37,7 @@ export interface CreateRuntimeSessionInput {
   readonly keyHash: string;
   readonly targetId: string;
   readonly threadId: string;
+  readonly model: RuntimeSessionRecord["model"];
   readonly now: Date;
 }
 
@@ -67,4 +73,10 @@ export interface RuntimeSessionStorePort {
   acceptInputs(
     input: AcceptRuntimeSessionInputsInput,
   ): Promise<readonly RuntimeSessionInputRecord[]>;
+  /** Park a Session after one accepted turn has published successfully. */
+  park(
+    namespace: string,
+    sessionId: string,
+    now: Date,
+  ): Promise<RuntimeSessionRecord>;
 }

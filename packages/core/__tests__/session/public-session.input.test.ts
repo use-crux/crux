@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { prompt, resetHooks, session } from "@use-crux/core";
 import { agent } from "@use-crux/core/agent";
 import { z } from "zod";
-import { sessionHost } from "./public-session.test-support";
+import { sessionHost, sessionTestModel } from "./public-session.test-support";
 
 afterEach(() => resetHooks());
 
@@ -10,9 +10,10 @@ describe("public Agent Session input acceptance", () => {
   it("requires a Prompt input schema before accepting durably", async () => {
     const support = agent({
       id: "schema-session-support",
+      model: sessionTestModel,
       prompt: prompt({ system: "Reply helpfully." }),
     });
-    const { host, store } = sessionHost("schema-session-test");
+    const { host, store } = sessionHost("schema-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "schema" }));
 
     await expect(handle.send({})).rejects.toMatchObject({
@@ -30,12 +31,13 @@ describe("public Agent Session input acceptance", () => {
   it("returns a frozen empty batch without cursor or wake advancement", async () => {
     const support = agent({
       id: "empty-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ message: z.string() }),
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("empty-session-test");
+    const { host, store } = sessionHost("empty-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "empty" }));
 
     const accepted = await handle.sendMany([]);
@@ -53,6 +55,7 @@ describe("public Agent Session input acceptance", () => {
   it("stores the Prompt schema's parsed value", async () => {
     const support = agent({
       id: "parsed-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({
           message: z.string().transform((value) => value.trim()),
@@ -60,7 +63,7 @@ describe("public Agent Session input acceptance", () => {
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("parsed-session-test");
+    const { host, store } = sessionHost("parsed-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "parsed" }));
 
     await handle.send({ message: "  Hello  " });
@@ -73,12 +76,13 @@ describe("public Agent Session input acceptance", () => {
   it("rejects JSON-unsafe parsed input without consuming a cursor", async () => {
     const support = agent({
       id: "json-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ value: z.any() }),
         system: "Reply helpfully.",
       }),
     });
-    const { host } = sessionHost("json-session-test");
+    const { host } = sessionHost("json-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "json" }));
 
     await expect(handle.send({ value: new Date() })).rejects.toMatchObject({
@@ -93,12 +97,13 @@ describe("public Agent Session input acceptance", () => {
   it("rejects bounded JSON input without consuming a cursor", async () => {
     const support = agent({
       id: "bounded-json-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ value: z.any() }),
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("bounded-json-session-test");
+    const { host, store } = sessionHost("bounded-json-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "bounded" }));
     let tooDeep: unknown = "leaf";
     for (let index = 0; index < 65; index += 1) tooDeep = [tooDeep];
@@ -121,12 +126,13 @@ describe("public Agent Session input acceptance", () => {
   it("round-trips an own __proto__ input key as frozen data", async () => {
     const support = agent({
       id: "proto-json-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.any(),
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("proto-json-session-test");
+    const { host, store } = sessionHost("proto-json-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "proto" }));
     const input = JSON.parse('{"__proto__":{"safe":true}}');
 
@@ -145,12 +151,13 @@ describe("public Agent Session input acceptance", () => {
   it("validates sendMany atomically and serializes concurrent sends", async () => {
     const support = agent({
       id: "atomic-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ message: z.string() }),
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("atomic-session-test");
+    const { host, store } = sessionHost("atomic-session-test", { targets: [support] });
     const handle = await host.run(() => session(support, { key: "atomic" }));
 
     await expect(

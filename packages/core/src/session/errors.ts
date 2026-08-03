@@ -43,3 +43,36 @@ export class SessionCapabilityError extends Error {
     this.name = "SessionCapabilityError";
   }
 }
+
+/** Raised before persistence when an Agent Session has no executable model. */
+export class GenerationModelBindingError extends Error {
+  /** Stable machine-readable error code. */
+  readonly code = "GENERATION_MODEL_BINDING_MISSING";
+
+  constructor() {
+    super("Session requires a bound GenerationModel.");
+    this.name = "GenerationModelBindingError";
+  }
+}
+
+/** Raised before persistence when a bound model is absent from the RuntimeProgram. */
+export class GenerationModelNotStaticError extends Error {
+  /** Stable machine-readable error code. */
+  readonly code = "GENERATION_MODEL_NOT_STATIC";
+
+  constructor() {
+    super("Session requires a GenerationModel declared by the RuntimeProgram.");
+    this.name = "GenerationModelNotStaticError";
+  }
+}
+
+/** Raised before persistence when a model cannot execute an Agent contract. */
+export class GenerationModelCapabilityError extends Error {
+  /** Stable machine-readable error code. */
+  readonly code = "GENERATION_CAPABILITY_MISSING";
+
+  constructor(readonly missing: readonly string[]) {
+    super(`GenerationModel is missing required capabilities: ${missing.join(", ")}.`);
+    this.name = "GenerationModelCapabilityError";
+  }
+}

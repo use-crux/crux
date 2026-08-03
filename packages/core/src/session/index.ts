@@ -2,6 +2,9 @@
 
 export { getSession, session } from "./session";
 export {
+  GenerationModelBindingError,
+  GenerationModelCapabilityError,
+  GenerationModelNotStaticError,
   SessionCapabilityError,
   SessionIdentityConflictError,
   SessionInputError,
@@ -13,6 +16,7 @@ export type {
   Session,
   SessionFor,
   SessionInputHandle,
+  SessionTurnHandle,
   SessionModelGuard,
   SessionOptions,
   SessionThreadView,

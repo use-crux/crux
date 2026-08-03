@@ -4,7 +4,7 @@ import { agent } from "@use-crux/core/agent";
 import { inMemoryRuntimeStore } from "@use-crux/core/runtime";
 import { inMemoryRecordStore } from "@use-crux/core/storage";
 import { z } from "zod";
-import { sessionHost } from "./public-session.test-support";
+import { sessionHost, sessionTestModel } from "./public-session.test-support";
 
 afterEach(() => resetHooks());
 
@@ -12,6 +12,7 @@ describe("public Agent Session lifecycle", () => {
   it("rejects a different target without registering another Thread owner", async () => {
     const first = agent({
       id: "conflict-first",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ value: z.string() }),
         system: "First.",
@@ -19,12 +20,13 @@ describe("public Agent Session lifecycle", () => {
     });
     const second = agent({
       id: "conflict-second",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ value: z.string() }),
         system: "Second.",
       }),
     });
-    const { host, records } = sessionHost("conflict-session-test");
+    const { host, records } = sessionHost("conflict-session-test", { targets: [first, second] });
     const created = await host.run(() => session(first, { key: "shared" }));
 
     await expect(
@@ -42,6 +44,7 @@ describe("public Agent Session lifecycle", () => {
     const records = inMemoryRecordStore();
     const support = agent({
       id: "repair-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         input: z.object({ value: z.string() }),
         system: "Repair.",
@@ -59,17 +62,21 @@ describe("public Agent Session lifecycle", () => {
         return store.transact(run);
       },
     };
-    const interrupted = sessionHost(
-      "repair-session-test",
-      interruptedStore,
+    const interrupted = sessionHost("repair-session-test", {
+      store: interruptedStore,
       records,
-    ).host;
+      targets: [support],
+    }).host;
     await expect(
       interrupted.run(() => session(support, { key: "repair" })),
     ).rejects.toThrow("restart before ready");
     interrupted.dispose();
 
-    const { host } = sessionHost("repair-session-test", store, records);
+    const { host } = sessionHost("repair-session-test", {
+      store,
+      records,
+      targets: [support],
+    });
     const repaired = await host.run(() => session(support, { key: "repair" }));
     expect(
       store.testing.sessionRecord("repair-session-test", repaired.id),
@@ -84,13 +91,14 @@ describe("public Agent Session lifecycle", () => {
   it("does not create a missing Session during retrieval", async () => {
     const support = agent({
       id: "missing-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         id: "missing-session-support-prompt",
         input: z.object({ message: z.string() }),
         system: "Reply helpfully.",
       }),
     });
-    const { host, store } = sessionHost("missing-session-test");
+    const { host, store } = sessionHost("missing-session-test", { targets: [support] });
 
     await expect(
       host.run(() => getSession(support, "customer:missing")),
@@ -103,6 +111,7 @@ describe("public Agent Session lifecycle", () => {
     let executions = 0;
     const support = agent({
       id: "public-session-support",
+      model: sessionTestModel,
       prompt: prompt({
         id: "public-session-support-prompt",
         input: z.object({ message: z.string() }),
@@ -113,7 +122,7 @@ describe("public Agent Session lifecycle", () => {
         },
       }),
     });
-    const { host, records, store } = sessionHost("public-session-test");
+    const { host, records, store } = sessionHost("public-session-test", { targets: [support] });
 
     const created = await host.run(() =>
       session(support, { key: "customer:42" }),
@@ -146,7 +155,7 @@ describe("public Agent Session lifecycle", () => {
     });
     expect(
       await store.outbox.list({ namespace: "public-session-test", limit: 10 }),
-    ).toEqual([]);
+    ).toHaveLength(2);
     expect(executions).toBe(0);
     expect(await created.thread.read()).toMatchObject({ entries: [] });
     host.dispose();

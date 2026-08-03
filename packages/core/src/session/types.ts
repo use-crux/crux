@@ -6,6 +6,7 @@ import type {
   Supports,
 } from "../generation-model";
 import type { ThreadReadOptions, ThreadSnapshot } from "../thread";
+import type { WorkHandle } from "../work";
 
 /** Extract the model configured on an Agent. */
 export type AgentModel<A extends AnyAgent> = A["model"];
@@ -82,6 +83,14 @@ export interface SessionInputHandle {
   readonly acceptedAt: Date;
 }
 
+/** One accepted Session input linked to its canonical Work occurrence. */
+export interface SessionTurnHandle<TOutput> extends SessionInputHandle {
+  /** Canonical Work handle owning lifecycle, Effect scope, and retained result. */
+  readonly work: WorkHandle<TOutput>;
+  /** Join the exact Agent output retained by the canonical Work occurrence. */
+  result(): Promise<TOutput>;
+}
+
 declare const sessionOutput: unique symbol;
 
 /** Durable, keyed, Agent-specific input owner. @typeParam TInput Agent input. */
@@ -91,9 +100,11 @@ export interface Session<TInput, TOutput = unknown> {
   /** Read-only view of the Session-owned canonical Thread. */
   readonly thread: SessionThreadView;
   /** Accept one typed input and retained wake intent; never waits for execution. */
-  send(input: TInput): Promise<SessionInputHandle>;
+  send(input: TInput): Promise<SessionTurnHandle<TOutput>>;
   /** Validate and accept every input atomically in array order. */
-  sendMany(inputs: readonly TInput[]): Promise<readonly SessionInputHandle[]>;
+  sendMany(
+    inputs: readonly TInput[],
+  ): Promise<readonly SessionTurnHandle<TOutput>[]>;
   /** Exact Agent output retained for later joinable Session results. @internal */
   readonly [sessionOutput]?: TOutput;
 }

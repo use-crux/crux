@@ -32,6 +32,7 @@ export function createMemorySessionStore(
         keyHash: input.keyHash,
         targetId: input.targetId,
         threadId: input.threadId,
+        model: Object.freeze({ ...input.model }),
         state: "prepared",
         acceptedCursor: 0,
         wakePending: false,
@@ -103,6 +104,20 @@ export function createMemorySessionStore(
       }
       recordWrite?.();
       return inputs as readonly RuntimeSessionInputRecord[];
+    },
+    async park(namespace, sessionId, now) {
+      const sessionKey = scopedKey(namespace, sessionId);
+      const session = data.sessionsById.get(sessionKey);
+      if (!session) throw new Error(`Session "${sessionId}" was not found.`);
+      const updated = Object.freeze({
+        ...session,
+        wakePending: false,
+        updatedAt: now.toISOString(),
+      });
+      data.sessionsById.set(sessionKey, updated);
+      data.sessionsByKey.set(scopedKey(namespace, session.keyHash), updated);
+      recordWrite?.();
+      return updated;
     },
   };
 }

@@ -23,14 +23,15 @@ import { retainedWorkMissing } from "./durable-errors";
 export function durableWorkHandle<TResult>(
   runtime: ResolvedRuntimeEngine,
   work: RuntimeWorkItem,
-  snapshot: FlowSnapshot,
+  snapshot?: FlowSnapshot,
 ): WorkHandle<TResult> {
   const id = work.workId;
-  if (!snapshot.effects) throw retainedWorkMissing(id);
+  const retainedEffects = work.application?.effects ?? snapshot?.effects;
+  if (!retainedEffects) throw retainedWorkMissing(id);
   const effects: EffectScopeRef = Object.freeze({
-    kind: snapshot.effects.kind,
-    id: snapshot.effects.id,
-    runId: snapshot.effects.runId,
+    kind: retainedEffects.kind,
+    id: retainedEffects.id,
+    runId: retainedEffects.runId,
   });
   const status = async () => {
     const current = await runtime.store.state.getWork(id, {

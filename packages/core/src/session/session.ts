@@ -1,4 +1,4 @@
-import type { AnyAgent, InferAgentInput } from "../agent";
+import type { AnyAgent, InferAgentInput, InferAgentOutput } from "../agent";
 import { sha256Hex } from "../content/sha256";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
 import { resolveRecords } from "../runtime/runtime";
@@ -7,6 +7,9 @@ import { registerThreadOwner } from "../thread/owner";
 import { createThreadHandle } from "../thread/thread";
 import { activeSessionHost } from "../work/internal/durable-host-context";
 import {
+  GenerationModelBindingError,
+  GenerationModelCapabilityError,
+  GenerationModelNotStaticError,
   SessionCapabilityError,
   SessionIdentityConflictError,
   SessionInputError,
@@ -14,6 +17,7 @@ import {
 } from "./errors";
 import { sessionInputValue } from "./input";
 import type { GenerationModel } from "../generation-model";
+import { acceptSessionTurns } from "./turn-admission";
 import type { SessionFor, SessionModelGuard, SessionOptions } from "./types";
 
 const encoder = new TextEncoder();
@@ -34,7 +38,8 @@ export async function session<
   target: TAgent,
   options: SessionOptions<TAgent, TModel> & SessionModelGuard<TAgent, TModel>,
 ): Promise<SessionFor<TAgent>> {
-  return createSession(target, options.key);
+  const model = requireCompatibleModel(target, options.model ?? target.model);
+  return createSession(target, options.key, model);
 }
 
 /**
@@ -61,15 +66,18 @@ export async function getSession<const TAgent extends AnyAgent>(
   if (!record) throw new SessionNotFoundError(key);
   if (record.targetId !== target.id)
     throw new SessionIdentityConflictError(key);
-  return readyHandle(host.runtime, record, target, resolveStorage());
+  const model = resolveProgramModel(host, target, record.model);
+  return readyHandle(host.runtime, record, target, resolveStorage(), model);
 }
 
 async function createSession<TAgent extends AnyAgent>(
   target: TAgent,
   key: string,
+  model: GenerationModel,
 ): Promise<SessionFor<TAgent>> {
   assertSessionKey(key);
   const host = activeSessionHost("session()");
+  assertProgramModel(host, model);
   const sessions = host.runtime.store.sessions;
   if (!sessions) throw sessionCapabilityError();
   const storage = resolveStorage();
@@ -85,11 +93,21 @@ async function createSession<TAgent extends AnyAgent>(
       keyHash,
       targetId,
       threadId: `thread_${targetKeyHash}`,
+      model: Object.freeze({
+        definitionId: model.definition.id,
+        fingerprint: model.definition.fingerprint,
+      }),
       now: host.runtime.now(),
     });
   });
   if (created.kind === "conflict") throw new SessionIdentityConflictError(key);
-  return readyHandle(host.runtime, created.session, target, storage);
+  return readyHandle(
+    host.runtime,
+    created.session,
+    target,
+    storage,
+    resolveProgramModel(host, target, created.session.model),
+  );
 }
 
 async function readyHandle<TAgent extends AnyAgent>(
@@ -97,6 +115,7 @@ async function readyHandle<TAgent extends AnyAgent>(
   record: RuntimeSessionRecord,
   target: TAgent,
   storage: Storage,
+  model: unknown = target.model,
 ): Promise<SessionFor<TAgent>> {
   let ready = record;
   if (ready.state === "prepared") {
@@ -114,7 +133,7 @@ async function readyHandle<TAgent extends AnyAgent>(
       );
     });
   }
-  return createHandle(runtime, ready, target, storage);
+  return createHandle(runtime, ready, target, storage, model);
 }
 
 function assertSessionKey(key: string): void {
@@ -128,6 +147,7 @@ function createHandle<TAgent extends AnyAgent>(
   record: RuntimeSessionRecord,
   target: TAgent,
   storage: Storage,
+  selectedModel: unknown,
 ): SessionFor<TAgent> {
   const thread = createThreadHandle(
     { id: record.threadId, storage },
@@ -136,24 +156,13 @@ function createHandle<TAgent extends AnyAgent>(
   const accept = async (inputs: readonly unknown[]) => {
     if (inputs.length === 0) return Object.freeze([]);
     const parsedInputs = validateInputs(target, inputs);
-    const accepted = await runtime.store.transact(async (tx) => {
-      const sessions = tx.sessions;
-      if (!sessions) throw sessionCapabilityError();
-      return sessions.acceptInputs({
-        namespace: runtime.namespace,
-        sessionId: record.sessionId,
-        inputs: parsedInputs,
-        now: runtime.now(),
-      });
-    });
-    return Object.freeze(
-      accepted.map(({ acceptedAt, cursor, inputId }) =>
-        Object.freeze({
-          id: inputId,
-          cursor: String(cursor),
-          acceptedAt: new Date(acceptedAt),
-        }),
-      ),
+    const model = requireCompatibleModel(target, selectedModel);
+    return acceptSessionTurns<InferAgentOutput<TAgent>>(
+      runtime,
+      record,
+      target,
+      model,
+      parsedInputs,
     );
   };
   return Object.freeze({
@@ -163,6 +172,58 @@ function createHandle<TAgent extends AnyAgent>(
     sendMany: async (inputs: readonly InferAgentInput<TAgent>[]) =>
       accept(inputs),
   });
+}
+
+/** Validate the executable model before Session-owned state can change. */
+function requireCompatibleModel(
+  target: AnyAgent,
+  value: unknown,
+): GenerationModel {
+  if (!isGenerationModel(value)) throw new GenerationModelBindingError();
+  const required = ["text-input", "text-output"];
+  if (target.prompt.outputSchema) required.push("structured-output");
+  if (target.tools && Object.keys(target.tools).length > 0) {
+    required.push("tool-calls");
+  }
+  const missing = required.filter(
+    (capability) => !value.capabilities.language.includes(capability as never),
+  );
+  if (missing.length > 0) throw new GenerationModelCapabilityError(missing);
+  return value;
+}
+
+function isGenerationModel(value: unknown): value is GenerationModel {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "_tag" in value &&
+    value._tag === "crux.generation-model"
+  );
+}
+
+function assertProgramModel(
+  host: ReturnType<typeof activeSessionHost>,
+  model: GenerationModel,
+): void {
+  const declared = host.generationModels.some(
+    (candidate) =>
+      candidate.definition.id === model.definition.id &&
+      candidate.definition.fingerprint === model.definition.fingerprint,
+  );
+  if (!declared) throw new GenerationModelNotStaticError();
+}
+
+function resolveProgramModel(
+  host: ReturnType<typeof activeSessionHost>,
+  target: AnyAgent,
+  reference: { readonly definitionId: string; readonly fingerprint: string },
+): GenerationModel {
+  const model = host.generationModels.find(
+    (candidate) =>
+      candidate.definition.id === reference.definitionId &&
+      candidate.definition.fingerprint === reference.fingerprint,
+  );
+  return requireCompatibleModel(target, model);
 }
 
 function resolveStorage(): Storage {

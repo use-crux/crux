@@ -126,3 +126,10 @@ capability evidence, and an opaque runtime port that constructs an
 Same-adapter routers may be bound once. `stableModel()` is removed with no
 alias or deprecation layer; Eval identity now projects bound GenerationModel
 values.
+
+Sessions now execute each accepted Agent input as one canonical durable Work,
+with exact joinable results, owner Thread publication, and a pinned static
+GenerationModel reference for deterministic reconnect. A bound Session override
+must be declared by the RuntimeProgram or fails before mutation with
+`GENERATION_MODEL_NOT_STATIC`; missing bindings and capability preflight retain
+their existing distinct errors.

@@ -15,10 +15,15 @@ import {
 } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
 import type { RuntimeTarget, RuntimeTargetMap } from '../engine/kernel'
+import { isAgent, type AnyAgent } from '../../agent'
+import { createSessionAgentRuntimeTarget } from '../../session/runtime-target'
+import type { GenerationModel } from '../../generation-model'
+import { createGenerationModelResolver } from '../../generation-model/resolver'
 
 /** Runtime target accepted by generated, hand-written, or adapter entry files. */
 export type RuntimeHandlerTarget =
   | RuntimeTarget
+  | AnyAgent
   | {
       /** Stable target name returned by `flow()` handles and `durableTask()`. */
       readonly name: string
@@ -28,6 +33,8 @@ export type RuntimeHandlerTarget =
 export interface NormalizeRuntimeHandlerTargetsOptions {
   /** Exported Flow, task, and Agent targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
+  /** Statically declared generation models available to Session selection. */
+  readonly generationModels?: readonly GenerationModel[]
   /** Mutable runtime reference used by process-local target factories. */
   readonly runtimeRef: RuntimeTargetRuntimeRef
   /** User-facing entry label included in diagnostics. */
@@ -60,6 +67,7 @@ export function canonicalizeRuntimeHandlerTargets<
 export function runtimeHandlerTargetIdentity(
   target: RuntimeHandlerTarget,
 ): string {
+  if (isAgent(target)) return target.id
   return 'name' in target ? target.name : target.targetId
 }
 
@@ -73,6 +81,9 @@ export function normalizeRuntimeHandlerTargets(
     options.targets,
     entry,
   )
+  const resolveGenerationModel = createGenerationModelResolver(
+    options.generationModels ?? [],
+  )
   const registeredTargets = canonicalTargets.some(
     (target) => !isRuntimeTarget(target),
   )
@@ -82,7 +93,13 @@ export function normalizeRuntimeHandlerTargets(
   for (const target of canonicalTargets) {
     const name = runtimeHandlerTargetIdentity(target)
     const explicitFactory = runtimeTargetFactoryFor(target)
-    const runtimeTarget = isRuntimeTarget(target)
+    const runtimeTarget = isAgent(target)
+      ? createSessionAgentRuntimeTarget(
+          target,
+          options.runtimeRef,
+          resolveGenerationModel,
+        )
+      : isRuntimeTarget(target)
       ? target
       : explicitFactory?.(options.runtimeRef) ?? registeredTargets?.[name]
     if (!runtimeTarget) throw unresolvedTargetError(name, entry)

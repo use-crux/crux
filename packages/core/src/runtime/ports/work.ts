@@ -32,6 +32,18 @@ export type RuntimeWork =
       readonly defer?: JsonValue
     }
   | {
+      readonly kind: 'session.turn'
+      readonly sessionId: string
+      readonly inputId: string
+      readonly cursor: number
+      readonly threadId: string
+      readonly input: JsonValue
+      readonly model: {
+        readonly definitionId: string
+        readonly fingerprint: string
+      }
+    }
+  | {
       readonly kind: 'watch.deliver'
       readonly subscriptionId: string
       readonly cursor: EventCursor

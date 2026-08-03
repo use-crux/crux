@@ -116,12 +116,14 @@ export function createRuntimeHandler(
   const declaration = hasRuntimeProgram(options)
     ? {
         targets: options.program.targets,
+        generationModels: options.program.generationModels,
         manifestHash: options.program.manifestHash,
       }
     : { targets: options.targets, manifestHash: options.manifestHash }
   const runtimeRef: RuntimeTargetRuntimeRef = {}
   const targets = normalizeRuntimeHandlerTargets({
     targets: declaration.targets,
+    generationModels: declaration.generationModels,
     runtimeRef,
     entry: 'createRuntimeHandler()',
   })

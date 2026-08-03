@@ -77,6 +77,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   const runtimeRef: RuntimeTargetRuntimeRef = {}
   const targets = normalizeRuntimeHandlerTargets({
     targets: options.program.targets,
+    generationModels: options.program.generationModels,
     runtimeRef,
     entry: 'createRuntimeWorker()',
   })
