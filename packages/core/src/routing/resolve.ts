@@ -14,6 +14,7 @@ import { isRetry } from "./retry";
 import type { RetryModel } from "./retry";
 import { isCascade } from "./cascade";
 import type {
+  CascadeEscalationCategory,
   CascadeModel,
   CascadeTier,
   CascadeTierDetail,
@@ -847,10 +848,7 @@ async function resolveCascade<M, R>(
             );
           }
           const errorCategory = classifyError(error);
-          if (
-            errorCategory === "invalid_response" &&
-            tier.escalateOn?.includes("invalid_response")
-          ) {
+          if (shouldEscalateCascadeError(errorCategory, tier.escalateOn)) {
             const durationMs = Date.now() - tierStart;
             observe.event({
               name: "cascade.tier_evaluated",
@@ -1094,6 +1092,16 @@ function concreteModelFromCascadeStep(step: CascadeRoutingStep): string {
     .reverse()
     .find((tier) => tier.status !== "skipped");
   return lastAttempted?.model ?? "unknown";
+}
+
+function shouldEscalateCascadeError(
+  category: ReturnType<typeof classifyError>,
+  escalateOn: readonly CascadeEscalationCategory[] | undefined,
+): category is CascadeEscalationCategory {
+  return (
+    (category === "invalid_response" || category === "input_limit") &&
+    escalateOn?.includes(category) === true
+  );
 }
 
 function markSkippedTiers<M>(

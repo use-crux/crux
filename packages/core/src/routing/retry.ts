@@ -19,6 +19,9 @@ import type { ErrorCategory } from "../generation/fallback";
 /** Backoff policy between retry attempts. */
 export type RetryBackoff = "none" | "linear" | "exponential";
 
+/** Error categories that may be retried on the same model. */
+export type RetryErrorCategory = Exclude<ErrorCategory, "input_limit">;
+
 /** Options for a retry wrapper. */
 export interface RetryOptions {
   /** Stable id used to join authored index definitions with routing spans. */
@@ -30,7 +33,7 @@ export interface RetryOptions {
   /** Delay policy between failed attempts. @defaultValue "none" */
   readonly backoff?: RetryBackoff;
   /** Error categories that should be retried. Defaults to retryable categories. */
-  readonly on?: readonly ErrorCategory[];
+  readonly on?: readonly RetryErrorCategory[];
   /** Base delay for linear/exponential backoff. @defaultValue 250 */
   readonly delayMs?: number;
 }

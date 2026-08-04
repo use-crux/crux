@@ -17,7 +17,7 @@ export { split, isSplit } from './split'
 export type { SplitConfig, SplitModel, SplitRoute } from './split'
 
 export { retry, isRetry } from './retry'
-export type { RetryBackoff, RetryModel, RetryOptions } from './retry'
+export type { RetryBackoff, RetryErrorCategory, RetryModel, RetryOptions } from './retry'
 
 export type {
   AnyRoutable,
@@ -50,6 +50,7 @@ export type {
   CascadeTier,
   CascadeTierContext,
   CascadeBudget,
+  CascadeEscalationCategory,
   CascadeTierDetail,
 } from './cascade'
 
