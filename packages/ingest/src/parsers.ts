@@ -528,40 +528,50 @@ function projectXlsxStructuredDisplayValue(
   value: Record<string, unknown>,
   ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void },
 ): string {
-  if (Array.isArray(value.richText)) {
-    return value.richText.map((run) => {
-      if (run && typeof run === 'object' && 'text' in run) return projectXlsxDisplayValue((run as { text: unknown }).text, ctx)
-      warnUnknownXlsxCellValue(ctx)
-      return ''
-    }).join('')
+  if ('richText' in value) {
+    if (!Array.isArray(value.richText)) return rejectXlsxStructuredValue(ctx, 'richText')
+    const runs = value.richText
+    if (!runs.every((run) => run && typeof run === 'object' && typeof (run as { text?: unknown }).text === 'string')) {
+      return rejectXlsxStructuredValue(ctx, 'richText')
+    }
+    return runs.map((run) => (run as { text: string }).text).join('')
   }
 
-  if ('hyperlink' in value && 'text' in value) {
-    return projectXlsxDisplayValue(value.text, ctx)
+  if ('hyperlink' in value || 'text' in value) {
+    if (typeof value.hyperlink === 'string' && typeof value.text === 'string') return value.text
+    return rejectXlsxStructuredValue(ctx, 'hyperlink' in value ? 'hyperlink' : 'textOnly')
   }
 
-  if ('error' in value && typeof value.error === 'string') {
-    return value.error
+  if ('formula' in value) {
+    if (typeof value.formula !== 'string') return rejectXlsxStructuredValue(ctx, 'formula')
+    return 'result' in value ? projectXlsxDisplayValue(value.result, ctx) : ''
   }
 
-  if ('result' in value) {
-    return projectXlsxDisplayValue(value.result, ctx)
+  if ('sharedFormula' in value) {
+    if (typeof value.sharedFormula !== 'string') return rejectXlsxStructuredValue(ctx, 'sharedFormula')
+    return 'result' in value ? projectXlsxDisplayValue(value.result, ctx) : ''
   }
 
-  if ('text' in value) {
-    return projectXlsxDisplayValue(value.text, ctx)
+  if ('error' in value) {
+    if (typeof value.error === 'string') return value.error
+    return rejectXlsxStructuredValue(ctx, 'error')
   }
 
-  warnUnknownXlsxCellValue(ctx)
-  return ''
+  if ('result' in value) return rejectXlsxStructuredValue(ctx, 'resultOnly')
+
+  return rejectXlsxStructuredValue(ctx, 'unknown')
 }
 
-function warnUnknownXlsxCellValue(ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void }): void {
+function rejectXlsxStructuredValue(
+  ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void },
+  valueShape: 'richText' | 'hyperlink' | 'formula' | 'sharedFormula' | 'error' | 'textOnly' | 'resultOnly' | 'unknown',
+): string {
   ctx.warn({
     code: 'parser_warning',
     message: `Could not project XLSX structured value for cell ${ctx.address}; emitted empty value.`,
-    metadata: { sheetName: ctx.sheetName, address: ctx.address },
+    metadata: { sheetName: ctx.sheetName, address: ctx.address, valueShape },
   })
+  return ''
 }
 
 function xlsxMergeMap(worksheet: ExcelJS.Worksheet): Map<string, IngestSpreadsheetMerge> {

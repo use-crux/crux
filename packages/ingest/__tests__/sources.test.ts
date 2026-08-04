@@ -1154,16 +1154,39 @@ describe('@use-crux/ingest structured sources', () => {
       { unexpected: 'shape', toString: () => '[object Object]' },
       { sheetName: 'Mystery', address: 'C9', warn: (warning) => warnings.push(warning) },
     )
+    const textOnlyValue = projectXlsxDisplayValue(
+      { text: 'loose text', toString: () => 'leaked text object' },
+      { sheetName: 'Mystery', address: 'D9', warn: (warning) => warnings.push(warning) },
+    )
+    const resultOnlyValue = projectXlsxDisplayValue(
+      { result: 'cached value', toString: () => 'leaked result object' },
+      { sheetName: 'Mystery', address: 'E9', warn: (warning) => warnings.push(warning) },
+    )
 
     expect(value).toBe('')
+    expect(textOnlyValue).toBe('')
+    expect(resultOnlyValue).toBe('')
     expect(warnings).toEqual([
       expect.objectContaining({
         code: 'parser_warning',
         message: expect.stringContaining('cell C9'),
-        metadata: expect.objectContaining({ sheetName: 'Mystery', address: 'C9' }),
+        metadata: { sheetName: 'Mystery', address: 'C9', valueShape: 'unknown' },
+      }),
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell D9'),
+        metadata: { sheetName: 'Mystery', address: 'D9', valueShape: 'textOnly' },
+      }),
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell E9'),
+        metadata: { sheetName: 'Mystery', address: 'E9', valueShape: 'resultOnly' },
       }),
     ])
     expect(JSON.stringify(warnings)).not.toContain('[object Object]')
+    expect(JSON.stringify(warnings)).not.toContain('loose text')
+    expect(JSON.stringify(warnings)).not.toContain('cached value')
+    expect(JSON.stringify(warnings)).not.toContain('leaked')
   })
 
   it('fileSource extracts docx text and table content', async () => {
