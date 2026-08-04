@@ -31,3 +31,8 @@ export type {
   SessionConformanceExecutionCounts,
   SessionConformanceFaultBoundary,
 } from "../../session/testing/conformance";
+export { runTransportStoreConformanceTests } from "../transport/testing/conformance";
+export type {
+  RunTransportStoreConformanceTestsOptions,
+  TransportStoreConformanceHarness,
+} from "../transport/testing/conformance";

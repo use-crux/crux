@@ -6,6 +6,7 @@
 
 import { sha256Hex } from "../../content/sha256";
 import { canonicalSignalJson } from "../../signal/canonical-json";
+import type { JsonValue } from "../../storage/types";
 import type { RuntimeAcceptedTransportEnvelope } from "./contracts";
 
 const encoder = new TextEncoder();
@@ -19,20 +20,23 @@ const encoder = new TextEncoder();
 export function transportEnvelopeDigest(
   envelope: RuntimeAcceptedTransportEnvelope,
 ): string {
-  return sha256Hex(
-    encoder.encode(
-      canonicalSignalJson({
-        schemaVersion: envelope.schemaVersion,
-        bindingId: envelope.bindingId,
-        adapterId: envelope.adapterId,
-        provider: envelope.provider,
-        accountId: envelope.accountId,
-        eventId: envelope.eventId,
-        authenticatedRouting: envelope.authenticatedRouting,
-        payload: envelope.payload,
-        configRef: envelope.configRef,
-        target: envelope.target,
-      }),
-    ),
-  );
+  const material: JsonValue = {
+    schemaVersion: envelope.schemaVersion,
+    bindingId: envelope.bindingId,
+    adapterId: envelope.adapterId,
+    provider: envelope.provider,
+    accountId: envelope.accountId,
+    eventId: envelope.eventId,
+    authenticatedRouting: envelope.authenticatedRouting as JsonValue,
+    payload: envelope.payload as JsonValue,
+    configRef: {
+      id: envelope.configRef.id,
+      revision: envelope.configRef.revision,
+    },
+    target: {
+      kind: envelope.target.kind,
+      signalId: envelope.target.signalId,
+    },
+  };
+  return sha256Hex(encoder.encode(canonicalSignalJson(material)));
 }

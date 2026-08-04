@@ -92,8 +92,16 @@ export interface SignalProvider<
   readonly transport: WebhookTransport;
   /** Exact declared Signal map. */
   readonly signals: TSignals;
-  /** Normalization callback retained for restart-safe claim handlers. */
-  readonly onEvent: SignalProviderOnEvent<TSignals>;
+  /**
+   * Normalization callback retained for restart-safe claim handlers.
+   *
+   * @remarks Declared as a method so host registries may accept exact provider
+   * instances without losing Signal-map inference at the authoring site.
+   */
+  onEvent(
+    envelope: RuntimeAcceptedTransportEnvelope,
+    context: SignalProviderEventContext<TSignals>,
+  ): void | Promise<void>;
 }
 
 /**
