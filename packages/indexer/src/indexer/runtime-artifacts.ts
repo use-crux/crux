@@ -99,7 +99,7 @@ async function prepareRuntimeArtifactsUnchecked(
       `Crux runtime artifacts could not load '${projectConfig.loaded.configFile}' to project the Eval privacy policy. Fix crux.config.ts, then run crux runtime generate again.`,
     );
   }
-  const nextFile = join(options.root, "crux.generated/next.ts");
+  const nextFile = join(options.root, "crux/generated/next.ts");
   const runtimeProgramOutputFile = join(
     options.root,
     ".crux/generated/runtime/program.ts",
@@ -216,7 +216,7 @@ async function prepareRuntimeArtifactsUnchecked(
   ];
   if (host === "next") {
     files.push({
-      destination: "crux.generated/next.ts",
+      destination: "crux/generated/next.ts",
       contents: nextEntryFile({
         manifest,
         outputFile: nextFile,
