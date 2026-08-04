@@ -54,7 +54,7 @@ The resulting string remains identical across `rows`, `sourceRows[].cells`,
 Add a provider-neutral optional merge descriptor to spreadsheet cells:
 
 ```ts
-interface IngestSpreadsheetMerge {
+export interface IngestSpreadsheetMerge {
   master: string;
   sourceRange: IngestSpreadsheetRange;
 }
@@ -94,10 +94,13 @@ parse failures retain existing behavior.
 Round-trip XLSX tests must cover:
 
 - rich text in `rows`, `sourceRows`, table content, and sheet content;
+- a structured header value rendered identically in `columns`;
 - hyperlink display text;
 - literal Excel errors and cached formula errors;
 - cached formula results `0` and `false`;
-- formulas retained alongside their displayed result;
+- ordinary formulas retained alongside their displayed result;
+- an ExcelJS shared-formula value whose cached result is displayed while its
+  translated `formula` expression is retained;
 - horizontally and vertically merged rich-text cells, including one master
   value, empty followers, and exact merge descriptors;
 - unknown structured values through a focused unit seam, asserting a located
@@ -108,7 +111,7 @@ The package test suite, package typecheck, and `git diff --check` must pass.
 
 ## Documentation and Release Queue
 
-Update the Ingest public type/reference documentation with the structured-value
-and merge semantics. Update the existing
+Export `IngestSpreadsheetMerge` from the canonical `@use-crux/ingest` type
+barrel and update the Ingest public type/reference documentation with the
+structured-value and merge semantics. Update the existing
 `.changeset/xlsx-source-coordinates.md`; do not add a second XLSX changeset.
-
