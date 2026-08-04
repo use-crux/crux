@@ -11,6 +11,8 @@
       "entrypoints": {
         ".": "portable-web",
         "./signal": "portable-web",
+        "./signal/transport": "portable-web",
+        "./signal/provider": "portable-web",
         "./work": "portable-web",
         "./session": "portable-web",
         "./eval": "portable-web",

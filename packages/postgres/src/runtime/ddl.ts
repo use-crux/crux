@@ -13,6 +13,12 @@ import {
   SESSION_REQUIRED_INDEXES,
   sessionDdlStatements,
 } from './ddl-sessions'
+import {
+  TRANSPORT_POSTGRES_TABLES,
+  TRANSPORT_REQUIRED_COLUMNS,
+  TRANSPORT_REQUIRED_INDEXES,
+  transportDdlStatements,
+} from './ddl-transport'
 
 export const DEFAULT_POSTGRES_SCHEMA = 'crux_runtime'
 
@@ -29,6 +35,7 @@ const TABLES = [
   'results',
   ...DEFERRED_POSTGRES_TABLES,
   ...SESSION_POSTGRES_TABLES,
+  ...TRANSPORT_POSTGRES_TABLES,
 ] as const
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
@@ -129,6 +136,7 @@ export const REQUIRED_COLUMNS: Readonly<
   ],
   ...DEFERRED_REQUIRED_COLUMNS,
   ...SESSION_REQUIRED_COLUMNS,
+  ...TRANSPORT_REQUIRED_COLUMNS,
 }
 
 export function createSchemaSql(schema: string): string {
@@ -285,6 +293,7 @@ export function ddlStatements(schema: string): readonly string[] {
     )`,
     ...deferredDdlStatements(schema),
     ...sessionDdlStatements(schema),
+    ...transportDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_name_event_id_idx')}
@@ -409,6 +418,7 @@ export async function checkDdl(
     'results_namespace_created_at_idx',
     ...DEFERRED_REQUIRED_INDEXES,
     ...SESSION_REQUIRED_INDEXES,
+    ...TRANSPORT_REQUIRED_INDEXES,
   ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),
