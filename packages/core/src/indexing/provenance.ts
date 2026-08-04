@@ -46,25 +46,28 @@ export function provenanceForPart(
   document: CruxDocument,
   part: CruxIngestPart,
   content: string = part.kind === 'media' ? (part.caption ?? '') : part.content,
+  contentRange?: { readonly start: number; readonly end: number },
 ): ChunkProvenance {
   const base = coarseProvenance([part])
-  const sourceSpans = sourceSpanForContent(document, content, part.id)
+  const sourceSpans = contentRange
+    ? sourceSpanForPartSlice(document, part, contentRange)
+    : sourceSpanForContent(document, content, part.id)
   return {
     ...base,
     ...(part.kind === 'json' ? { jsonPaths: [part.path] } : {}),
     ...(sourceSpans.length ? { sourceSpans } : {}),
-    confidence: sourceSpans.length || !document.content ? 'exact' : 'derived',
+    confidence: sourceSpans.length ? 'exact' : 'derived',
   }
 }
 
-/** Locate the source span of `content` within the document. */
+/** Locate the source span of `content` within the document when it is unambiguous. */
 export function sourceSpanForContent(
   document: CruxDocument,
   content: string,
   partId?: string,
 ): Array<{ start: number; end: number; partId?: string }> {
   if (!content) return []
-  const start = document.content?.indexOf(content) ?? -1
+  const start = uniqueContentStart(document.content, content)
   if (start < 0) return []
   return [
     {
@@ -73,6 +76,30 @@ export function sourceSpanForContent(
       ...(partId ? { partId } : {}),
     },
   ]
+}
+
+/** Resolve a part-relative range through the part's unique aggregate-content occurrence. */
+export function sourceSpanForPartSlice(
+  document: CruxDocument,
+  part: CruxIngestPart,
+  range: { readonly start: number; readonly end: number },
+): Array<{ start: number; end: number; partId?: string }> {
+  const partContent = part.kind === 'media' ? (part.caption ?? '') : part.content
+  if (!partContent || range.start < 0 || range.end > partContent.length || range.end <= range.start) return []
+  const partStart = uniqueContentStart(document.content, partContent)
+  if (partStart < 0) return []
+  return [{
+    start: partStart + range.start,
+    end: partStart + range.end,
+    partId: part.id,
+  }]
+}
+
+function uniqueContentStart(documentContent: string | undefined, content: string): number {
+  if (!documentContent || !content) return -1
+  const start = documentContent.indexOf(content)
+  if (start < 0) return -1
+  return documentContent.indexOf(content, start + 1) < 0 ? start : -1
 }
 
 /** Merge provenance from multiple chunks into one. */

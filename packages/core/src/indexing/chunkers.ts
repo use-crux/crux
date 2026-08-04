@@ -15,10 +15,9 @@ import {
   coarseProvenance,
   mergeProvenance,
   provenanceForPart,
-  sourceSpanForContent,
 } from './provenance'
 import { sourceFactsWithLocations } from './source-facts'
-import { embeddingBoundaries, normalizeBoundaries, sentenceSegments, splitDocument } from './text-split'
+import { embeddingBoundaries, normalizeBoundaries, sentenceSegments, splitDocumentSlices } from './text-split'
 import type {
   ChunkerContext,
   ChunkingResult,
@@ -68,9 +67,16 @@ export function chunkDocumentStructured(
       continue
     }
 
-    const rawChunks = splitDocument(part.content, normalized)
-    rawChunks.forEach((content) => {
-      chunks.push(createPartChunk(document, content, chunks.length, provenanceForPart(document, part, content)))
+    const rawChunks = splitDocumentSlices(part.content, normalized)
+    rawChunks.forEach((slice) => {
+      chunks.push(
+        createPartChunk(
+          document,
+          slice.content,
+          chunks.length,
+          provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+        ),
+      )
     })
   }
 
@@ -94,8 +100,8 @@ function chunkTablePart(
     const renderedRows = [header, ...windowRows].map((row) => row.join(' | ')).join('\n')
     chunks.push(
       createPartChunk(document, renderedRows, chunks.length, {
-        ...provenanceForPart(document, part),
-        sourceSpans: sourceSpanForContent(document, part.content, part.id),
+        ...coarseProvenance([part]),
+        confidence: 'derived',
       }),
     )
   }
@@ -124,6 +130,33 @@ function createPartChunk(
     ...(source ? { source } : {}),
     ...(document.title ? { parent: { title: document.title } } : {}),
     ...(provenance ? { provenance } : {}),
+  }
+}
+
+function provenanceForChildSlice(
+  document: CruxDocument,
+  parentContent: string,
+  parentProvenance: ChunkProvenance | undefined,
+  slice: { readonly start: number; readonly end: number },
+): ChunkProvenance | undefined {
+  if (!parentProvenance) return undefined
+  const { sourceSpans: _sourceSpans, ...coarse } = parentProvenance
+  const parentSpan = parentProvenance.sourceSpans?.length === 1 ? parentProvenance.sourceSpans[0] : undefined
+  const canTranslate =
+    parentProvenance.confidence === 'exact' &&
+    parentSpan !== undefined &&
+    document.content?.slice(parentSpan.start, parentSpan.end) === parentContent
+  if (!canTranslate || parentSpan === undefined) {
+    return { ...coarse, confidence: 'derived' }
+  }
+  return {
+    ...coarse,
+    sourceSpans: [{
+      start: parentSpan.start + slice.start,
+      end: parentSpan.start + slice.end,
+      ...(parentSpan.partId ? { partId: parentSpan.partId } : {}),
+    }],
+    confidence: 'exact',
   }
 }
 
@@ -184,11 +217,13 @@ export function chunkDocumentParentChild(
       ...(source ? { source } : {}),
       ...(provenance ? { provenance } : {}),
     })
-    const rawChildren = splitDocument(currentParentContent, {
+    const rawChildren = splitDocumentSlices(currentParentContent, {
       maxChars: options.childMaxChars,
       overlapChars: options.childOverlapChars,
     })
-    rawChildren.forEach((content) => {
+    rawChildren.forEach((slice) => {
+      const childProvenance = provenanceForChildSlice(document, currentParentContent, provenance, slice)
+      const childSource = sourceFactsWithLocations(document.source, childProvenance?.sourceLocations ?? [])
       children.push({
         namespace: document.namespace,
         sourceId: document.sourceId,
@@ -196,17 +231,17 @@ export function chunkDocumentParentChild(
           sourceId: document.sourceId,
           parentId,
           ordinal: children.length,
-          content,
+          content: slice.content,
         }),
         ordinal: children.length,
-        content,
+        content: slice.content,
         metadata: document.metadata ?? {},
-        ...(source ? { source } : {}),
+        ...(childSource ? { source: childSource } : {}),
         parent: {
           parentId,
           ...(document.title ? { title: document.title } : {}),
         },
-        ...(provenance ? { provenance } : {}),
+        ...(childProvenance ? { provenance: childProvenance } : {}),
       })
     })
     currentParentContent = ''
@@ -256,7 +291,10 @@ export async function chunkDocumentSemantic(
 
   const normalized = content ? normalizeBoundaries(boundaries, content.length) : []
   const chunks: CruxChunk[] = normalized.map((boundary, ordinal) => {
-    const chunkContent = content.slice(boundary.start, boundary.end).trim()
+    const chunkContent = content.slice(boundary.start, boundary.end)
+    const sourceSpans = document.content === content
+      ? [{ start: boundary.start, end: boundary.end }]
+      : []
     return {
       namespace: document.namespace,
       sourceId: document.sourceId,
@@ -271,8 +309,8 @@ export async function chunkDocumentSemantic(
       ...(document.source ? { source: document.source } : {}),
       ...(document.title ? { parent: { title: document.title } } : {}),
       provenance: {
-        sourceSpans: [{ start: boundary.start, end: boundary.end }],
-        confidence: 'exact' as const,
+        ...(sourceSpans.length ? { sourceSpans } : {}),
+        confidence: sourceSpans.length ? 'exact' as const : 'derived' as const,
       },
     }
   })
