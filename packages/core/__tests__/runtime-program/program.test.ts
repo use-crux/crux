@@ -129,13 +129,14 @@ describe("createRuntimeProgram", () => {
     ).toThrow(/Code: TARGET_DUPLICATE/);
   });
 
-  it("rejects a managed binding whose Signal target is not declared", () => {
-    expect(() =>
-      createRuntimeProgram({
-        targets: [{ name: "orders.created", kind: "flow" }],
-        transports: [binding("updated", "orders.updated")],
-      }),
-    ).toThrow(/Code: TARGET_NOT_FOUND/);
+  it("allows a managed binding whose Signal id is not an executable target", () => {
+    const program = createRuntimeProgram({
+      targets: [{ name: "orders.created", kind: "flow" }],
+      transports: [binding("updated", "orders.updated")],
+    });
+    expect(program.transports.map((entry) => entry.target.signalId)).toEqual([
+      "orders.updated",
+    ]);
   });
 
   it("reuses the managed-transport validator for malformed or live declarations", () => {

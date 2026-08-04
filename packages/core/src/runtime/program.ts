@@ -113,7 +113,9 @@ export function createRuntimeProgram(
     targets,
   );
   const transports = canonicalizeTransports(options.transports);
-  validateSignalTargets(targets, transports);
+  // Signal transport targets name Signal definition ids, not Agent/Flow/task
+  // Runtime targets. Binding well-formedness is enforced by the managed
+  // transport validator above; do not require a matching executable target.
   validateAdapterDeclarations(transports);
 
   const manifestHash = sha256Hex(
@@ -222,18 +224,6 @@ function canonicalizeTransports(
   return Object.freeze(canonical);
 }
 
-function validateSignalTargets(
-  targets: readonly RuntimeProgramTarget[],
-  transports: readonly RuntimeManagedTransportBinding[],
-): void {
-  const targetIds = new Set(targets.map(runtimeHandlerTargetIdentity));
-  for (const transport of transports) {
-    if (!targetIds.has(transport.target.signalId)) {
-      unresolvedSignalTarget(transport);
-    }
-  }
-}
-
 function validateAdapterDeclarations(
   transports: readonly RuntimeManagedTransportBinding[],
 ): void {
@@ -264,18 +254,6 @@ function duplicateBinding(id: string): never {
     whatStillWorks:
       "Other uniquely identified targets and bindings remain valid.",
     nextStep: `Remove or rename the duplicate binding \`${id}\`.`,
-  });
-}
-
-function unresolvedSignalTarget(
-  transport: RuntimeManagedTransportBinding,
-): never {
-  throw createRuntimeError({
-    code: "TARGET_NOT_FOUND",
-    whatFailed: `Runtime transport binding \`${transport.id}\` targets undeclared Signal \`${transport.target.signalId}\`.`,
-    why: "Every managed transport destination must resolve within the same Runtime program.",
-    whatStillWorks: "Bindings whose Signal targets are declared remain valid.",
-    nextStep: `Add the static target \`${transport.target.signalId}\` or correct binding \`${transport.id}\`.`,
   });
 }
 
