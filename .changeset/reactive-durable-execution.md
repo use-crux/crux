@@ -155,3 +155,6 @@ Export a provider-neutral Session conformance factory from
 `@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
 identity, ordered Work linkage, checkpoint replay, exact terminal result,
 bounded inspection, and structured capability laws.
+
+Expose the internal Session-store statistics ledger helpers for durable Runtime
+adapters.
