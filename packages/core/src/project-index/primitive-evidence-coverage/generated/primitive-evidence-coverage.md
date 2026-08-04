@@ -46,6 +46,7 @@
 | constraint.retry | constraint | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | guardrail.run | guardrail | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | thread.operation | thread | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
+| session.turn | session | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | routing.router | routing | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | routing.split | routing | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |
 | routing.retry | routing | subject | none | custom-only | local-durable | closed-allowlist | Advanced custom authoring is supported; no automatic native producer is promised. |

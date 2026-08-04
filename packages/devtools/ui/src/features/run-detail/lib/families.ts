@@ -88,6 +88,7 @@ export function primitiveFamily(
       "memory.",
       "effect.",
       "thread.",
+      "session.",
       "plan.",
       "blackboard.",
       "operation.",

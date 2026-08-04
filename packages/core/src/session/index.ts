@@ -1,6 +1,12 @@
 /** Public durable Agent Session contracts. */
 
 export { getSession, session } from "./session";
+export type {
+  SessionRuntimeCheckpoint,
+  SessionRuntimeIdentity,
+  SessionRuntimeInput,
+  SessionRuntimeReadModel,
+} from "./runtime-read-model";
 export {
   GenerationModelBindingError,
   GenerationModelCapabilityError,

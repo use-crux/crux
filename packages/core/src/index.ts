@@ -428,6 +428,10 @@ export type {
   SessionOptions,
   SessionStatus,
   SessionThreadView,
+  SessionRuntimeCheckpoint,
+  SessionRuntimeIdentity,
+  SessionRuntimeInput,
+  SessionRuntimeReadModel,
 } from "./session";
 export type {
   AdapterBoundGenerationModel,

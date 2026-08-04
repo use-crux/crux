@@ -38,6 +38,10 @@ export const stateEvidenceCoverage = {
     name: "thread.operation",
     participation: "subject",
   }),
+  "session.turn": row({
+    name: "session.turn",
+    participation: "subject",
+  }),
   "routing.router": row({
     name: "routing.router",
     participation: "subject",

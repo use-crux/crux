@@ -12,7 +12,7 @@ const INSPECTION_INPUT_LIMIT = 64;
 
 /** Read a detached compact status without scanning child Work rows. */
 export async function readSessionStatus(
-  runtime: ResolvedRuntimeEngine,
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
   sessionId: string,
 ): Promise<SessionStatus> {
   const record = await readSession(runtime, sessionId);
@@ -36,7 +36,7 @@ export async function readSessionStatus(
 
 /** Read the existing detached bounded statistics aggregate for this Session. */
 export async function readSessionStats(
-  runtime: ResolvedRuntimeEngine,
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
   sessionId: string,
 ): Promise<ExecutionStats> {
   const record = await readSession(runtime, sessionId);
@@ -45,7 +45,7 @@ export async function readSessionStats(
 
 /** Read the newest payload-free input identities with explicit bounded coverage. */
 export async function readSessionInspection(
-  runtime: ResolvedRuntimeEngine,
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
   sessionId: string,
 ): Promise<SessionInspection> {
   const record = await readSession(runtime, sessionId);
@@ -97,7 +97,7 @@ export async function readSessionInspection(
 }
 
 async function readPreparedInspection(
-  runtime: ResolvedRuntimeEngine,
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
   input: RuntimeSessionInputRecord,
 ): Promise<Pick<SessionInspection, "checkpoint" | "recovery">> {
   const checkpoint = input.preparedExecution;
@@ -145,7 +145,10 @@ function recoveryDiagnostic(): Pick<SessionInspection, "recovery"> {
   });
 }
 
-async function readSession(runtime: ResolvedRuntimeEngine, sessionId: string) {
+async function readSession(
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
+  sessionId: string,
+) {
   const record = await runtime.store.sessions?.get(
     runtime.namespace,
     sessionId,

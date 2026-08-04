@@ -670,7 +670,8 @@ export function reportPreparedObservabilityFailure(
   );
 }
 
-function hasActiveObservabilitySinks(): boolean {
+/** Whether any configured sink can receive observability records. @internal */
+export function hasActiveObservabilitySinks(): boolean {
   syncDeliveryEngineWithProcessRegistry();
   return (
     deliveryEngine.currentTransport() !== undefined ||

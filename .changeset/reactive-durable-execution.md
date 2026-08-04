@@ -5,6 +5,7 @@
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
 "@use-crux/ai": minor
+"@use-crux/otel": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -158,6 +159,12 @@ bounded inspection, and structured capability laws.
 
 Expose the internal Session-store statistics ledger helpers for durable Runtime
 adapters.
+
+Expose payload-safe Session identity, state, bounded turn-to-Work lineage,
+Thread revision, checkpoint/recovery evidence, and lifetime statistics through
+the existing Runtime Bridge and `session.turn` observability records. The
+embedded Devtools Catalog shows authored Session target/key evidence, while Run
+details render the same operational projection without execution payloads.
 
 PostgreSQL Runtime storage now persists normalized Session identity, ordered
 ingress, activation linkage, delivery evidence, prepared execution checkpoints,

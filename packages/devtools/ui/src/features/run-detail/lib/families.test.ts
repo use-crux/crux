@@ -20,6 +20,14 @@ describe("Thread primitive presentation", () => {
   });
 });
 
+describe("Session primitive presentation", () => {
+  it("renders Session turns as State primitives", () => {
+    expect(primitiveFamily("session.turn")).toBe("state");
+    expect(primitiveTone("session.turn")).toBe("plum");
+    expect(primitiveTagLabel("session.turn")).toBe("session");
+  });
+});
+
 describe("Connected Knowledge primitive presentation", () => {
   it("renders Knowledge retrieval steps as Capabilities primitives", () => {
     expect(primitiveFamily("knowledge.expand-relations")).toBe("capabilities");

@@ -386,7 +386,11 @@ export const DEFINITION_KIND_COVERAGE = {
   "knowledge.model": { primary: "static-only" },
   "storage.bundle": { primary: "static-only" },
   "storage.scope": { primary: "static-only" },
-  session: { primary: "static-only" },
+  session: {
+    primary: "runtime-observed-unjoined",
+    runtimePrimitiveNames: ["session.turn"],
+    runtimeIdentity: "none",
+  },
   // Refuted category-A claim: no first-party emitter, compiled-definition
   // builder (JS-TypeScript semantic or native Rust/Oxc), or public pipeline
   // execution API exists for `rag.pipeline` anywhere in the repo — only dead

@@ -579,6 +579,8 @@ export function semanticKindFor(node: SpanNode): SemanticKind {
     case "thread.operation":
     case "thread":
       return "thread";
+    case "session.turn":
+      return "session";
     case "embedding.call":
     case "embed":
       return "embed";

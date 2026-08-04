@@ -48,7 +48,7 @@ import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 import { PromptTextSection } from "./prompt-text/section";
 import { IndexEvidence } from "./evidence-section";
 import { IndexKnowledge } from "./knowledge-section";
-import { ThreadInspector } from "@/features/thread/components/ThreadInspector";
+import { IndexSessionDetail, IndexThreadInspector } from "./session-catalog";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 export function CatRelations({ def }: { def: ViewDef }) {
@@ -175,20 +175,6 @@ export function CatRelations({ def }: { def: ViewDef }) {
   );
 }
 
-function IndexThreadInspector({ def }: { def: ViewDef }) {
-  if (def.kind !== "thread") return null;
-  const threadId =
-    typeof def.runtimeJoin?.threadId === "string"
-      ? def.runtimeJoin.threadId
-      : def.id.replace(/^thread:/, "");
-  return (
-    <>
-      <SectionHead eyebrow="Thread inspector" />
-      <ThreadInspector threadId={threadId} />
-    </>
-  );
-}
-
 // ── per-kind section order (importance → prominence) ─────────────────────────
 const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   hero: IndexHero,
@@ -206,6 +192,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   evidence: IndexEvidence,
   knowledge: IndexKnowledge,
   threadInspector: IndexThreadInspector,
+  session: IndexSessionDetail,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -378,6 +365,15 @@ export function indexSectionOrder(def: ViewDef): string[] {
     return [
       "hero",
       "threadInspector",
+      "relations",
+      "source",
+      "observability",
+      "health",
+    ];
+  if (k === "session")
+    return [
+      "hero",
+      "session",
       "relations",
       "source",
       "observability",

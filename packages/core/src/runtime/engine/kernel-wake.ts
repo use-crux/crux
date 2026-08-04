@@ -26,6 +26,7 @@ import {
   flushNamedDeferEvidenceAfterCommit,
 } from './named-defer-evidence'
 import { transition } from './work'
+import { openSessionTurnObservability } from '../../session/turn-observability'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -142,10 +143,15 @@ export async function handleWake(
         activeLease = extended
       },
     )
+    const sessionEvidence = openSessionTurnObservability(leased, deps.store)
     try {
-      const outcome = await executeWithNamedDeferEvidence(leased, () =>
-        target.execute({ work: leased, lease }),
-      )
+      const execute = () =>
+        executeWithNamedDeferEvidence(leased, () =>
+          target.execute({ work: leased, lease }),
+        )
+      const outcome = sessionEvidence
+        ? await sessionEvidence.withContext(execute)
+        : await execute()
       await completeWork({
         runComposite: deps.runComposite,
         work: leased,
@@ -155,10 +161,14 @@ export async function handleWake(
         now: deps.now,
         newWorkId: deps.newWorkId,
       })
+      await sessionEvidence?.settle(
+        outcome.status === 'suspended' ? 'blocked' : outcome.status,
+      )
       await flushNamedDeferEvidenceAfterCommit(leased)
       return { status: 200, outcome: 'processed' }
     } catch (error) {
       if (isLeaseLostError(error)) {
+        await sessionEvidence?.settle('lease-lost')
         return { status: 200, outcome: 'lease-lost' }
       }
       const result = await failWork({
@@ -173,6 +183,13 @@ export async function handleWake(
       if (result.outcome !== 'lease-lost') {
         await flushNamedDeferEvidenceAfterCommit(leased)
       }
+      await sessionEvidence?.settle(
+        result.outcome === 'retry-scheduled' ||
+          result.outcome === 'dead-lettered' ||
+          result.outcome === 'blocked'
+          ? result.outcome
+          : 'lease-lost',
+      )
       return result
     } finally {
       heartbeat.stop()

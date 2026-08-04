@@ -73,6 +73,7 @@
     "skill.load": "skill",
     "task.operation": "task",
     "thread.operation": "thread",
+    "session.turn": "session",
     "tool.approval": "tool",
     "tool.call": "tool",
     "workspace.operation": "workspace"

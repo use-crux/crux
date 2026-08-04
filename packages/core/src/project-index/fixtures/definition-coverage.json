@@ -767,10 +767,12 @@
     },
     {
       "kind": "session",
-      "primary": "static-only",
+      "primary": "runtime-observed-unjoined",
       "secondary": [],
-      "runtimePrimitiveNames": [],
-      "expectedTreatment": "none",
+      "runtimePrimitiveNames": [
+        "session.turn"
+      ],
+      "expectedTreatment": "runtime-unjoined",
       "definitionRef": null
     },
     {

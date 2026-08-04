@@ -24,6 +24,7 @@ import {
   readSessionStats,
   readSessionStatus,
 } from "./inspection";
+import { registerSessionInspectableResource } from "./runtime-read-model";
 
 const encoder = new TextEncoder();
 
@@ -138,6 +139,7 @@ async function readyHandle<TAgent extends AnyAgent>(
       );
     });
   }
+  registerSessionInspectableResource(runtime, ready.sessionId, storage);
   return createHandle(runtime, ready, target, storage, model);
 }
 
