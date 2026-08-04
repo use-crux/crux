@@ -158,3 +158,10 @@ bounded inspection, and structured capability laws.
 
 Expose the internal Session-store statistics ledger helpers for durable Runtime
 adapters.
+
+PostgreSQL Runtime storage now persists normalized Session identity, ordered
+ingress, activation linkage, delivery evidence, prepared execution checkpoints,
+and bounded lifetime statistics through the same atomic Runtime composites as
+memory. Independent hosts and workers can reconnect through one database
+namespace, replay owner-Thread publication without duplicate receipts, and
+retain prepared Session evidence during unreferenced-result pruning.
