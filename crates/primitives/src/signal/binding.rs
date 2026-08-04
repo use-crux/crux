@@ -7,8 +7,8 @@ use crate::{
     record_values::{direct_string_property, property_value},
     routing::output::extracted_facts,
     signal::values::{
-        PROVIDER_MODULES, config_ref_fact, config_source_refs, live_fields,
-        provider_definition_id, provider_id_from_resolved, reference_name,
+        PROVIDER_MODULES, config_ref_fact, config_source_refs, live_fields, provider_definition_id,
+        provider_id_from_resolved, reference_name,
     },
 };
 
@@ -34,24 +34,16 @@ pub(crate) fn managed_transport_binding_facts(
         })
     });
     let provider_variable = reference_name(Some(provider_arg));
-    let provider_resolved = context
-        .resolve_record_source(Some(provider_arg))
-        .flatten();
-    let provider_definition_id = provider_definition_id(provider_resolved.as_ref());
+    let provider_resolved = context.resolve_record_source(Some(provider_arg)).flatten();
+    let provider_definition_id = provider_definition_id(context, provider_resolved.as_ref());
     let binding_id = options.and_then(|value| direct_string_property(value, "id"));
     let signal_id = options.and_then(|value| direct_string_property(value, "signalId"));
     let adapter_id = options.and_then(|value| direct_string_property(value, "adapterId"));
     let provider_name = options.and_then(|value| direct_string_property(value, "provider"));
     let config_ref = options.and_then(config_ref_fact);
     let live_fields = options.map(live_fields).unwrap_or_default();
-    let provider_id = provider_name
-        .or_else(|| provider_id_from_resolved(provider_resolved.as_ref()))
-        .or_else(|| {
-            provider_definition_id
-                .as_deref()
-                .and_then(|id| id.strip_prefix("signal.provider:"))
-                .map(str::to_string)
-        });
+    let provider_id =
+        provider_name.or_else(|| provider_id_from_resolved(context, provider_resolved.as_ref()));
     let stable = binding_id.is_some()
         && provider_id.is_some()
         && signal_id.is_some()
@@ -68,10 +60,7 @@ pub(crate) fn managed_transport_binding_facts(
             context.fingerprint_file, parts.source.line, parts.source.column
         )
     };
-    let id = format!(
-        "signal.transportBinding:{}",
-        safe_id(&authored_identity)
-    );
+    let id = format!("signal.transportBinding:{}", safe_id(&authored_identity));
 
     let mut facts = Map::new();
     facts.insert(
@@ -98,10 +87,7 @@ pub(crate) fn managed_transport_binding_facts(
         );
     }
     if let Some(provider_id) = &provider_id {
-        facts.insert(
-            "providerId".to_string(),
-            Value::String(provider_id.clone()),
-        );
+        facts.insert("providerId".to_string(), Value::String(provider_id.clone()));
     }
     if let Some(adapter_id) = adapter_id {
         facts.insert("adapterId".to_string(), Value::String(adapter_id));
@@ -158,14 +144,7 @@ pub(crate) fn managed_transport_binding_facts(
     let mut names = vec!["id", "configRef", "signalId", "provider", "adapterId"];
     names.extend(live_fields.iter().copied());
     let mut source_refs = options
-        .map(|value| {
-            config_source_refs(
-                &id,
-                value,
-                &names,
-                "managed transport binding",
-            )
-        })
+        .map(|value| config_source_refs(&id, value, &names, "managed transport binding"))
         .unwrap_or_default();
     if let Some(resolved) = provider_resolved {
         source_refs.push(source_ref(

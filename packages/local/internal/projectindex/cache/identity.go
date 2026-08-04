@@ -58,4 +58,4 @@ package cache
 // snapshots made before Signal transport tooling cannot mask the new catalogue.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 69
+const ProjectIndexSnapshotCacheEpoch = 70

@@ -838,6 +838,7 @@ export type {
   SignalTransportBindingLiveField,
   SignalTransportFacts,
 } from "./signal-facts";
+export { SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS } from "./signal-facts";
 
 export interface FlowFacts {
   kind: "flow";

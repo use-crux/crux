@@ -3,10 +3,10 @@ use serde_json::{Map, Value};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
-    record_values::{direct_string_property, has_property},
+    record_values::has_property,
     routing::output::extracted_facts,
     schema::schema_property,
-    signal::values::TRANSPORT_MODULES,
+    signal::values::{TRANSPORT_MODULES, string_property},
 };
 
 /// Projects canonical exported Signal definitions and their authored schema.
@@ -15,13 +15,27 @@ pub(crate) fn signal_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
         return None;
     }
     let config = parts.object_arg?;
-    let signal_id = direct_string_property(config, "id")?;
-    let id = format!("signal:{}", safe_id(&signal_id));
+    let signal_id = string_property(config, "id", &context.initializers);
+    let identity = if signal_id.is_some() {
+        "static"
+    } else {
+        "partial"
+    };
+    let authored_identity = signal_id.clone().unwrap_or_else(|| {
+        format!(
+            "{}:{}:{}",
+            context.fingerprint_file, parts.source.line, parts.source.column
+        )
+    });
+    let id = format!("signal:{}", safe_id(&authored_identity));
     let schema = schema_property(context, &id, config, "schema")?;
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("signal".to_string()));
-    facts.insert("signalId".to_string(), Value::String(signal_id.clone()));
+    if let Some(signal_id) = &signal_id {
+        facts.insert("signalId".to_string(), Value::String(signal_id.clone()));
+    }
+    facts.insert("identity".to_string(), Value::String(identity.to_string()));
 
     let mut metadata = Map::new();
     metadata.insert(
@@ -39,7 +53,7 @@ pub(crate) fn signal_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
         static_index_definition(NativeDefinitionInput {
             id,
             kind: "signal",
-            name: signal_id,
+            name: signal_id.unwrap_or_else(|| parts.variable_name.to_string()),
             file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,

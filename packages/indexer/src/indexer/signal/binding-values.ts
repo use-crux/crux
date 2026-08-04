@@ -1,6 +1,7 @@
-import type {
+import {
+  SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS,
+  type SignalTransportBindingLiveField,
   SignalTransportBindingFacts,
-  SignalTransportBindingLiveField,
 } from "@use-crux/core/project-index";
 import type { ResolvedStaticRecordSource } from "../static-index/compatibility/syntax-record-bridge/source-resolver";
 import type { StaticSyntaxValue } from "../static-index/syntax/record/types";
@@ -12,20 +13,7 @@ import {
 } from "../static-index/syntax/record/value";
 import { providerModules, signalModules, transportModules } from "./modules";
 
-const liveBindingFields = new Set<SignalTransportBindingLiveField>([
-  "request",
-  "client",
-  "credential",
-  "credentials",
-  "socket",
-  "callback",
-  "handle",
-  "onEvent",
-  "secret",
-  "token",
-  "password",
-  "apiKey",
-]);
+const liveBindingFields = new Set<string>(SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS);
 
 /** Resolve whether a transport expression is an authored webhook. */
 export function webhookTransportKind(
@@ -38,7 +26,7 @@ export function webhookTransportKind(
   if (name !== "webhook") return undefined;
   const moduleSpecifier = call.callee.moduleSpecifier;
   if (
-    moduleSpecifier &&
+    !moduleSpecifier ||
     !(transportModules as readonly string[]).includes(moduleSpecifier)
   ) {
     return undefined;
@@ -73,7 +61,7 @@ export function signalMapEntries(
     if (callee !== "signal") continue;
     const moduleSpecifier = call.callee.moduleSpecifier;
     if (
-      moduleSpecifier &&
+      !moduleSpecifier ||
       !(signalModules as readonly string[]).includes(moduleSpecifier)
     ) {
       continue;
@@ -92,17 +80,10 @@ export function signalMapEntries(
   };
 }
 
-/** Resolve a signalProvider() call into a definition id. */
-export function providerDefinitionIdFromResolved(
-  resolved: ResolvedStaticRecordSource | undefined,
-): string | undefined {
-  const providerId = providerIdFromResolved(resolved);
-  return providerId ? `signal.provider:${providerId}` : undefined;
-}
-
 /** Resolve a signalProvider() call into its stable provider id. */
 export function providerIdFromResolved(
   resolved: ResolvedStaticRecordSource | undefined,
+  initializers: Parameters<typeof staticStringValue>[1],
 ): string | undefined {
   if (resolved?.value.kind !== "call") return undefined;
   const callee =
@@ -110,17 +91,16 @@ export function providerIdFromResolved(
   if (callee !== "signalProvider") return undefined;
   const moduleSpecifier = resolved.value.callee.moduleSpecifier;
   if (
-    moduleSpecifier &&
+    !moduleSpecifier ||
     !(providerModules as readonly string[]).includes(moduleSpecifier)
   ) {
     return undefined;
   }
-  const emptyInitializers = new Map() as Parameters<typeof staticStringValue>[1];
-  const config = staticObjectValue(resolved.value.args[0], emptyInitializers);
+  const config = staticObjectValue(resolved.value.args[0], initializers);
   if (!config) return undefined;
   return staticStringValue(
     staticObjectPropertyValue(config, "id"),
-    emptyInitializers,
+    initializers,
   );
 }
 
@@ -158,8 +138,15 @@ export function liveFieldsFromOptions(
       (property): property is typeof property & { name: string } =>
         !property.spread &&
         typeof property.name === "string" &&
-        liveBindingFields.has(property.name as SignalTransportBindingLiveField),
+        liveBindingFields.has(property.name),
     )
-    .map((property) => property.name as SignalTransportBindingLiveField)
+    .map((property) => property.name)
+    .filter(isLiveBindingField)
     .sort();
+}
+
+function isLiveBindingField(
+  value: string,
+): value is SignalTransportBindingLiveField {
+  return liveBindingFields.has(value);
 }

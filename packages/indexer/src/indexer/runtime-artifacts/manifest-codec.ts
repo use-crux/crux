@@ -12,11 +12,11 @@ export class RuntimeArtifactManifestDecodeError extends Error {
   }
 }
 
-/** Exact decoder for the local Runtime artifact manifest v2 contract. */
+/** Exact decoder for the local Runtime artifact manifest v3 contract. */
 export function decodeRuntimeArtifactManifest(
   value: unknown,
 ): RuntimeArtifactManifest {
-  if (!isRecord(value) || value.version !== 2) {
+  if (!isRecord(value) || value.version !== 3) {
     throw new RuntimeArtifactManifestDecodeError(
       "version_incompatible",
       "Runtime artifact manifest version is not supported.",
@@ -183,7 +183,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function invalid(): never {
   throw new RuntimeArtifactManifestDecodeError(
     "manifest_invalid",
-    "Runtime artifact manifest does not match schema version 2.",
+    "Runtime artifact manifest does not match schema version 3.",
   );
 }
 

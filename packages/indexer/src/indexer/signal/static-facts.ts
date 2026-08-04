@@ -12,10 +12,7 @@ import {
   staticReferenceName,
   staticStringValue,
 } from "../static-index/syntax/record/value";
-import {
-  signalMapEntries,
-  webhookTransportKind,
-} from "./binding-values";
+import { signalMapEntries, webhookTransportKind } from "./binding-values";
 import { providerModules, transportModules } from "./modules";
 
 export { extractManagedTransportBindingStaticFacts } from "./binding-static-facts";
@@ -23,9 +20,14 @@ export { extractManagedTransportBindingStaticFacts } from "./binding-static-fact
 /** Projects canonical exported Signal definitions and their authored schema. */
 export function extractSignalStaticFacts(ctx: ExtractContext) {
   if (ctx.match.name !== "signal" || !ctx.config) return none();
+  const native = internalStaticRecordContext(ctx);
+  if (!native || native.match.kind !== "call") return none();
   const signalId = ctx.config.string("id");
-  if (!signalId) return none();
-  const definitionId = `signal:${ctx.source.safeId(signalId)}`;
+  const identity = signalId ? ("static" as const) : ("partial" as const);
+  const authoredIdentity =
+    signalId ??
+    `${native.record.relativePath}:${native.match.source.line}:${native.match.source.column}`;
+  const definitionId = `signal:${ctx.source.safeId(authoredIdentity)}`;
   const schema = ctx.sourceRef.schemaProperty({
     property: "schema",
     definitionId,
@@ -37,12 +39,16 @@ export function extractSignalStaticFacts(ctx: ExtractContext) {
         variableName: ctx.source.variableName,
         id: definitionId,
         kind: "signal",
-        name: signalId,
+        name: signalId ?? ctx.source.variableName,
         metadata: {
           exportName: ctx.source.variableName,
           ...(ctx.source.exported ? { exported: true } : {}),
           ...(schema.schema ? { schema: schema.schema } : {}),
-          facts: { kind: "signal", signalId } satisfies SignalFacts,
+          facts: {
+            kind: "signal",
+            ...(signalId ? { signalId } : {}),
+            identity,
+          } satisfies SignalFacts,
         },
       }),
     ],
@@ -141,6 +147,10 @@ export function extractSignalProviderStaticFacts(ctx: ExtractContext) {
       ? staticReferenceName(transportValue)
       : undefined;
   const transportKind = webhookTransportKind(transportResolved, transportValue);
+  const inlineTransportDefinitionId =
+    transportKind && transportValue?.kind === "call"
+      ? `signal.transport:${ctx.source.safeId(`${native.record.relativePath}:${transportValue.source.line}:${transportValue.source.column}`)}`
+      : undefined;
   const signalsValue = options
     ? staticObjectPropertyValue(options, "signals")
     : undefined;
@@ -169,7 +179,14 @@ export function extractSignalProviderStaticFacts(ctx: ExtractContext) {
   const references = [
     ...(transportVariable
       ? [ctx.ref.variable("signal.provider.uses_transport", transportVariable)]
-      : []),
+      : inlineTransportDefinitionId
+        ? [
+            ctx.ref.id(
+              "signal.provider.uses_transport",
+              inlineTransportDefinitionId,
+            ),
+          ]
+        : []),
     ...signalMap.signalVariables.map((variable) =>
       ctx.ref.variable("signal.provider.publishes_signal", variable),
     ),
@@ -214,4 +231,3 @@ export function extractSignalProviderStaticFacts(ctx: ExtractContext) {
     ...(sourceRefs.length ? { sourceRefs } : {}),
   });
 }
-

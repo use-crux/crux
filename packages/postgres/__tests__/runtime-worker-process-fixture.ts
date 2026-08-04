@@ -188,7 +188,7 @@ function runtimeManifest(publicWork: boolean): string {
         definitionId: "task:generated-target",
         fingerprint: "definition-generated-target",
       };
-  return `${JSON.stringify({ version: 2, evalPrivacyFingerprint: "test", targets: [target], providers: [], transports: [], evals: [] }, null, 2)}\n`;
+  return `${JSON.stringify({ version: 3, evalPrivacyFingerprint: "test", targets: [target], providers: [], transports: [], evals: [] }, null, 2)}\n`;
 }
 
 function buildBundle(

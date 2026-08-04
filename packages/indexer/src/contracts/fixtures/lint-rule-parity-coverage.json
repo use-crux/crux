@@ -332,12 +332,18 @@
       "ruleId": "context-planning.invalid-wrapper-order"
     },
     {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
       "ruleId": "signal.provider.unstable_identity"
     },
     {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
       "ruleId": "signal.transportBinding.unstable_identity"
     },
     {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
       "ruleId": "signal.transportBinding.live_value"
     }
   ]

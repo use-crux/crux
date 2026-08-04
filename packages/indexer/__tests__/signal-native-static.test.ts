@@ -44,12 +44,12 @@ describe("signal transport native static projection", () => {
           `  id: 'order.submitted',`,
           `  schema: z.object({ orderId: z.string() }),`,
           `})`,
-          `const ingress = webhook({ async handle() { throw new Error('unused') } })`,
+          `const ingress = webhook({ async handle() { throw new Error('PRIVATE_SIGNAL_HANDLE') } })`,
           `export const ordersProvider = signalProvider({`,
           `  id: 'orders.webhook',`,
           `  transport: ingress,`,
           `  signals: { orderSubmitted },`,
-          `  async onEvent() {},`,
+          `  async onEvent() { throw new Error('PRIVATE_SIGNAL_EVENT') },`,
           `})`,
           `export const ordersBinding = managedTransportBinding(ordersProvider, {`,
           `  id: 'binding.orders',`,
@@ -107,13 +107,31 @@ describe("signal transport native static projection", () => {
         },
       });
 
+      expect(
+        result.nativeOut.relations.map((relation) => relation.type).sort(),
+      ).toEqual([
+        "signal.provider.publishes_signal",
+        "signal.provider.uses_transport",
+        "signal.transportBinding.binds_provider",
+        "signal.transportBinding.targets_signal",
+      ]);
+
       // Structured facts must not retain live credentials or handler bodies.
       // Call sourceSnippet text may still quote the authored call span.
       expect(
         JSON.stringify(
-          result.nativeOut.definitions.map((definition) => definition.metadata?.facts),
+          result.nativeOut.definitions.map(
+            (definition) => definition.metadata?.facts,
+          ),
         ),
       ).not.toMatch(/credential|password|apiKey|secret|token/);
+      expect(
+        JSON.stringify(
+          result.nativeOut.definitions.map(
+            (definition) => definition.metadata?.facts,
+          ),
+        ),
+      ).not.toContain("PRIVATE_SIGNAL");
       expect(jsonStable(result.nativeOut)).toEqual(
         jsonStable(result.typescriptOut),
       );
@@ -173,7 +191,7 @@ describe("signal transport native static projection", () => {
       expect(binding?.metadata?.facts).toMatchObject({
         kind: "signal.transportBinding",
         identity: "partial",
-        liveFields: expect.arrayContaining(["client", "request"]),
+        liveFields: ["client", "request"],
       });
       expect(jsonStable(result.nativeOut)).toEqual(
         jsonStable(result.typescriptOut),

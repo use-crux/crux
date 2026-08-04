@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { IndexRuleDescriptor } from "@use-crux/core/project-index";
+import {
+  SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS,
+  type IndexRuleDescriptor,
+} from "@use-crux/core/project-index";
 import { builtInIndexRuleDescriptors } from "../src/indexer/lints/rules";
 
 const signalRules = [
@@ -11,6 +14,23 @@ const signalRules = [
 ] as const;
 
 describe("Signal transport lint descriptor contract", () => {
+  it("exports the exact live binding field contract", () => {
+    expect(SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS).toEqual([
+      "request",
+      "client",
+      "credential",
+      "credentials",
+      "socket",
+      "callback",
+      "handle",
+      "onEvent",
+      "secret",
+      "token",
+      "password",
+      "apiKey",
+    ]);
+  });
+
   it("keeps exact built-in descriptor codes and severities in both mirrors", async () => {
     const native = JSON.parse(
       await readFile(

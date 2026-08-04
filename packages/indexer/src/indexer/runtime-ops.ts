@@ -286,7 +286,7 @@ async function readRuntimeArtifactManifest(
         : 'The generated Runtime artifact manifest is incomplete or malformed.',
       why: incompatible
         ? 'This Crux version requires the current generated Runtime file format.'
-        : 'Its fields do not match the Runtime artifact manifest v2 contract.',
+        : 'Its fields do not match the Runtime artifact manifest v3 contract.',
       whatStillWorks:
         'Authored Runtime targets and Eval definitions are unchanged.',
       nextStep:

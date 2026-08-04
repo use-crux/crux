@@ -104,7 +104,7 @@ export interface RuntimeArtifactManifestTransport {
 /** Versioned runtime artifact manifest written to `.crux/generated/runtime/manifest.json`. */
 export interface RuntimeArtifactManifest {
   /** Manifest schema version. */
-  readonly version: 2;
+  readonly version: 3;
   /** Secret-free identity of the generated Eval persistence policy. */
   readonly evalPrivacyFingerprint: string;
   /** Deterministically sorted runtime targets. */

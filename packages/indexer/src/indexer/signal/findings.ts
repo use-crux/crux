@@ -83,7 +83,10 @@ function finding(
     evidence: [
       {
         kind: "definition",
-        label: "Authored Signal transport declaration",
+        label:
+          definition.kind === "signal.provider"
+            ? "Authored Signal provider declaration"
+            : "Authored managed transport binding declaration",
         definitionId: definition.id,
         ...(source ? { source } : {}),
         data: { fidelity: definition.fidelity },

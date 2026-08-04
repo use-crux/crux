@@ -161,7 +161,7 @@ pub(crate) fn run_identity_json() -> Value {
     json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
         "compiler": version_identity_json("crux-static-index", "0.1.0"),
-        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.12"),
+        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.13"),
         "primitiveManifest": digest_identity_json("crux-first-party-primitives"),
         "relationPolicy": digest_identity_json("crux-relation-policy"),
         "extensionManifests": [digest_identity_json("@acme/crux-extra")],

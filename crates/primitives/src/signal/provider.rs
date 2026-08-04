@@ -3,10 +3,11 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
-    record_values::{direct_string_property, has_property, property_value},
+    record_values::{has_property, property_value},
     routing::output::extracted_facts,
     signal::values::{
-        PROVIDER_MODULES, config_source_refs, reference_name, signal_map, webhook_kind,
+        PROVIDER_MODULES, config_source_refs, reference_name, signal_map, string_property,
+        webhook_kind,
     },
 };
 
@@ -25,7 +26,7 @@ pub(crate) fn signal_provider_facts(
         return None;
     }
     let options = parts.object_arg?;
-    let provider_id = direct_string_property(options, "id");
+    let provider_id = string_property(options, "id", &context.initializers);
     let identity = if provider_id.is_some() {
         "static"
     } else {
@@ -45,8 +46,17 @@ pub(crate) fn signal_provider_facts(
         transport_resolved.as_ref().map(|resolved| resolved.value),
         transport_value,
     );
-    let (signal_ids, signal_variables) =
-        signal_map(context, property_value(options, "signals"));
+    let inline_transport_definition_id = match (transport_kind, transport_value) {
+        (Some(_), Some(crate::protocol::StaticSyntaxValue::Call { source, .. })) => Some(format!(
+            "signal.transport:{}",
+            safe_id(&format!(
+                "{}:{}:{}",
+                context.fingerprint_file, source.line, source.column
+            ))
+        )),
+        _ => None,
+    };
+    let (signal_ids, signal_variables) = signal_map(context, property_value(options, "signals"));
     let has_on_event = has_property(options, "onEvent");
 
     let mut facts = Map::new();
@@ -55,10 +65,7 @@ pub(crate) fn signal_provider_facts(
         Value::String("signal.provider".to_string()),
     );
     if let Some(provider_id) = &provider_id {
-        facts.insert(
-            "providerId".to_string(),
-            Value::String(provider_id.clone()),
-        );
+        facts.insert("providerId".to_string(), Value::String(provider_id.clone()));
     }
     facts.insert("identity".to_string(), Value::String(identity.to_string()));
     if let Some(transport_kind) = transport_kind {
@@ -94,6 +101,11 @@ pub(crate) fn signal_provider_facts(
         references.push(json!({
             "type": "signal.provider.uses_transport",
             "toVariable": transport_variable,
+        }));
+    } else if let Some(transport_definition_id) = inline_transport_definition_id {
+        references.push(json!({
+            "type": "signal.provider.uses_transport",
+            "toId": transport_definition_id,
         }));
     }
     for variable in signal_variables {

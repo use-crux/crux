@@ -404,7 +404,7 @@ async function runtimeOpsFixtureRoot(options: {
     join(root, ".crux/generated/runtime/manifest.json"),
     `${JSON.stringify(
       {
-        version: 2,
+        version: 3,
         evalPrivacyFingerprint:
           "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [

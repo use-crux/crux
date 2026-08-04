@@ -179,24 +179,57 @@ function programProviderAuthorityMatches(
   const expectedProviders = manifestProviders.map((provider) => provider.id).sort(compareCodepoint)
 
   const actualTransports = programTransports
-    .map((transport) =>
-      typeof transport === 'object' &&
-      transport !== null &&
-      'id' in transport &&
-      typeof transport.id === 'string'
-        ? transport.id
-        : undefined,
-    )
-    .filter((id): id is string => id !== undefined)
-    .sort(compareCodepoint)
+    .map(transportAuthority)
+    .filter((transport): transport is TransportAuthority => transport !== undefined)
+    .sort(compareTransportAuthority)
   if (actualTransports.length !== programTransports.length) return false
   const expectedTransports = manifestTransports
-    .map((transport) => transport.id)
-    .sort(compareCodepoint)
+    .map(({ id, providerId, signalId }) => ({ id, providerId, signalId }))
+    .sort(compareTransportAuthority)
 
   return (
     JSON.stringify(actualProviders) === JSON.stringify(expectedProviders) &&
     JSON.stringify(actualTransports) === JSON.stringify(expectedTransports)
+  )
+}
+
+interface TransportAuthority {
+  readonly id: string
+  readonly providerId: string
+  readonly signalId: string
+}
+
+function transportAuthority(value: unknown): TransportAuthority | undefined {
+  const transport = objectRecord(value)
+  const adapter = objectRecord(transport?.adapter)
+  const target = objectRecord(transport?.target)
+  if (
+    typeof transport?.id !== 'string' ||
+    typeof adapter?.provider !== 'string' ||
+    typeof target?.signalId !== 'string'
+  ) {
+    return undefined
+  }
+  return {
+    id: transport.id,
+    providerId: adapter.provider,
+    signalId: target.signalId,
+  }
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function compareTransportAuthority(left: TransportAuthority, right: TransportAuthority): number {
+  return (
+    compareCodepoint(left.id, right.id) ||
+    compareCodepoint(left.providerId, right.providerId) ||
+    compareCodepoint(left.signalId, right.signalId)
   )
 }
 
@@ -228,7 +261,11 @@ function programTargetIdentity(
 }
 
 function artifactError(
-  code: 'SETUP_REQUIRED' | 'ARTIFACTS_STALE' | 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE' | 'RUNTIME_ARTIFACT_MANIFEST_INVALID',
+  code:
+    | 'SETUP_REQUIRED'
+    | 'ARTIFACTS_STALE'
+    | 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE'
+    | 'RUNTIME_ARTIFACT_MANIFEST_INVALID',
   whatFailed: string,
   cause?: unknown,
 ) {

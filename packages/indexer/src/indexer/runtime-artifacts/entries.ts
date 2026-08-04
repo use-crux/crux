@@ -195,7 +195,7 @@ function targetImports(
   return manifest.targets.map((target, index) => {
     const sourceFile = join(root, target.module.replace(/^\.\//, ""));
     const specifier = importSpecifier(dirname(outputFile), sourceFile);
-    return `import { ${target.export} as ${targetLocalName(index)} } from '${specifier}'`;
+    return `import { ${target.export} as ${targetLocalName(index)} } from ${JSON.stringify(specifier)}`;
   });
 }
 

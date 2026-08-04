@@ -9,6 +9,8 @@ export interface SignalFacts {
   readonly kind: "signal";
   /** Literal Signal identity when statically proven. */
   readonly signalId?: string;
+  /** Whether the authored identity is statically proven or only source-local. */
+  readonly identity: "static" | "partial";
 }
 
 /** Authored facts for one `signalProvider()` definition. */
@@ -39,6 +41,22 @@ export interface SignalTransportFacts {
   readonly hasHandle?: boolean;
 }
 
+/** Forbidden live-value property names for inert managed transport bindings. */
+export const SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS = [
+  "request",
+  "client",
+  "credential",
+  "credentials",
+  "socket",
+  "callback",
+  "handle",
+  "onEvent",
+  "secret",
+  "token",
+  "password",
+  "apiKey",
+] as const;
+
 /**
  * Forbidden live-value property names proven on an inert binding options object.
  *
@@ -46,18 +64,7 @@ export interface SignalTransportFacts {
  * Credentials and raw payloads are never retained in the finding data.
  */
 export type SignalTransportBindingLiveField =
-  | "request"
-  | "client"
-  | "credential"
-  | "credentials"
-  | "socket"
-  | "callback"
-  | "handle"
-  | "onEvent"
-  | "secret"
-  | "token"
-  | "password"
-  | "apiKey";
+  (typeof SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS)[number];
 
 /** Authored facts for one `managedTransportBinding()` declaration. */
 export interface SignalTransportBindingFacts {
@@ -76,7 +83,11 @@ export interface SignalTransportBindingFacts {
   readonly adapterId?: string;
   /** Canonical config reference when statically proven. */
   readonly configRef?:
-    | { readonly kind: "literal"; readonly id: string; readonly revision: string }
+    | {
+        readonly kind: "literal";
+        readonly id: string;
+        readonly revision: string;
+      }
     | { readonly kind: "partial" }
     | { readonly kind: "dynamic" };
   /** Signal target id when statically proven. */

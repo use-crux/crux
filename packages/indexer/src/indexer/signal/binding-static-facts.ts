@@ -11,7 +11,6 @@ import {
 import {
   configRefFact,
   liveFieldsFromOptions,
-  providerDefinitionIdFromResolved,
   providerIdFromResolved,
 } from "./binding-values";
 import { providerModules } from "./modules";
@@ -44,7 +43,13 @@ export function extractManagedTransportBindingStaticFacts(ctx: ExtractContext) {
     ...(native.recordsByFile ? { recordsByFile: native.recordsByFile } : {}),
   });
   const providerResolved = resolver.resolveValue(providerArg);
-  const providerDefinitionId = providerDefinitionIdFromResolved(providerResolved);
+  const resolvedProviderId = providerIdFromResolved(
+    providerResolved,
+    native.initializers,
+  );
+  const providerDefinitionId = resolvedProviderId
+    ? `signal.provider:${ctx.source.safeId(resolvedProviderId)}`
+    : undefined;
   const options = staticObjectValue(optionsArg, native.initializers);
   const bindingId = staticStringValue(
     options ? staticObjectPropertyValue(options, "id") : undefined,
@@ -67,12 +72,7 @@ export function extractManagedTransportBindingStaticFacts(ctx: ExtractContext) {
     native.initializers,
   );
   const liveFields = liveFieldsFromOptions(options);
-  const providerId =
-    providerName ??
-    providerIdFromResolved(providerResolved) ??
-    (providerDefinitionId?.startsWith("signal.provider:")
-      ? providerDefinitionId.slice("signal.provider:".length)
-      : undefined);
+  const providerId = providerName ?? resolvedProviderId;
   const stable =
     Boolean(bindingId) &&
     Boolean(providerId) &&

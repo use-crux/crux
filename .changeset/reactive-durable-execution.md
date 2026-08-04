@@ -241,6 +241,13 @@ provider or binding identities and explicit live Request/client/credential/
 socket/callback fields on inert bindings. Devtools Catalog surfaces provider
 and transport-binding evidence without credentials or raw payloads.
 
+Complete the Signal tooling contract with canonical provider, transport, and
+Signal lineage across both static frontends, partial Signal identity evidence,
+executable lint parity fixtures, and selectable Devtools lineage. Runtime
+artifact manifests now use schema version 3 so older generated manifests fail
+with an explicit incompatibility diagnostic, while generated imports and worker
+transport authority remain exact under path escaping and source drift.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program

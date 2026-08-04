@@ -49,7 +49,7 @@ describe("runtime artifacts", () => {
     const second = await generateRuntimeArtifacts({ root, host: "next" });
 
     expect(result.manifest).toEqual({
-      version: 2,
+      version: 3,
       evalPrivacyFingerprint:
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
       targets: [],
@@ -63,9 +63,7 @@ describe("runtime artifacts", () => {
     ).resolves.toBe(`${JSON.stringify(result.manifest, null, 2)}\n`);
     await expect(
       readFile(join(root, "crux/generated/next.ts"), "utf8"),
-    ).resolves.toContain(
-      "createRuntimeHandler({ program: runtimeProgram })",
-    );
+    ).resolves.toContain("createRuntimeHandler({ program: runtimeProgram })");
     const entry = await readFile(join(root, "crux/generated/next.ts"), "utf8");
     expect(entry).toContain("export const evalRegistry");
     expect(entry).toContain("entries:[]");
@@ -122,16 +120,14 @@ describe("runtime artifacts", () => {
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
-      "import { reviewFlow as target0 } from '../../../src/review'",
+      'import { reviewFlow as target0 } from "../../../src/review"',
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("type RuntimeProgramTargetInput");
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
-    ).resolves.toContain(
-      "satisfies readonly RuntimeProgramTargetInput[]",
-    );
+    ).resolves.toContain("satisfies readonly RuntimeProgramTargetInput[]");
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
@@ -213,12 +209,14 @@ describe("runtime artifacts", () => {
       },
     ]);
     expect(program).toContain(
-      "import { supportAgent as target0 } from '../../../src/support'",
+      'import { supportAgent as target0 } from "../../../src/support"',
     );
     expect(program).toContain(
       '{ target: target0, definition: { id: "agent:support", fingerprint: "definition-support-v1" } }',
     );
-    expect(entry).toContain("createRuntimeHandler({ program: runtimeProgram })");
+    expect(entry).toContain(
+      "createRuntimeHandler({ program: runtimeProgram })",
+    );
     expect(entry).not.toContain("supportAgent");
   });
 
@@ -841,14 +839,14 @@ describe("runtime artifacts", () => {
     await expect(
       generateRuntimeArtifacts({ root, host: "next" }),
     ).resolves.toMatchObject({
-      manifest: { version: 2, targets: [] },
+      manifest: { version: 3, targets: [] },
     });
   });
 
   it("reports non-terminal runtime work whose target disappeared from the manifest", () => {
     const drift = diffRuntimeArtifactDrift({
       manifest: {
-        version: 2,
+        version: 3,
         evalPrivacyFingerprint:
           "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [
@@ -982,10 +980,10 @@ describe("runtime artifacts", () => {
       },
     ]);
     expect(program).toContain(
-      "import { ordersProvider as provider0 } from '../../../src/orders'",
+      'import { ordersProvider as provider0 } from "../../../src/orders"',
     );
     expect(program).toContain(
-      "import { ordersBinding as transport0 } from '../../../src/orders'",
+      'import { ordersBinding as transport0 } from "../../../src/orders"',
     );
     expect(program).toContain("const generationModels = [] as const");
     expect(program).toContain("const providers = [provider0] as const");
@@ -997,4 +995,5 @@ describe("runtime artifacts", () => {
     expect(program).not.toContain("handle");
     expect(program).not.toContain("Request");
   });
+
 });

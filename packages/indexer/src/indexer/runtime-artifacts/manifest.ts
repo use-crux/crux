@@ -10,7 +10,7 @@ import { RuntimeArtifactGenerationError } from "./findings";
 import type { RuntimeArtifactDriftReport } from "./types";
 import type { RuntimeArtifactFinding } from "./types";
 
-/** Project runtime definitions into the v2 runtime artifact manifest. */
+/** Project runtime definitions into the v3 runtime artifact manifest. */
 export function manifestFromDefinitions(input: {
   readonly root: string;
   readonly definitions: readonly ProjectDefinition[];
@@ -69,7 +69,7 @@ export function manifestPlanFromDefinitions(input: {
   ];
   return Object.freeze({
     manifest: Object.freeze({
-      version: 2,
+      version: 3,
       evalPrivacyFingerprint:
         input.evalPrivacyFingerprint ??
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
@@ -233,7 +233,10 @@ function duplicateIdentityFindings(
   kind: "provider" | "transport",
   entries: readonly { readonly id: string; readonly module: string }[],
 ): readonly RuntimeArtifactFinding[] {
-  const byId = new Map<string, { readonly id: string; readonly module: string }[]>();
+  const byId = new Map<
+    string,
+    { readonly id: string; readonly module: string }[]
+  >();
   for (const entry of entries) {
     const matching = byId.get(entry.id) ?? [];
     matching.push(entry);

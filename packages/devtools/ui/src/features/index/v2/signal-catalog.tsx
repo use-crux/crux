@@ -25,13 +25,7 @@ function Row({ label, children }: { label: string; children?: ReactNode }) {
   );
 }
 
-function LinkableId({
-  id,
-  label,
-}: {
-  id?: string;
-  label?: string;
-}) {
+function LinkableId({ id, label }: { id?: string; label?: string }) {
   const select = useIndexSelect();
   if (!id && !label) return null;
   if (!id) return <>{label}</>;
@@ -39,12 +33,7 @@ function LinkableId({
     <button
       type="button"
       onClick={() => select(id)}
-      style={{
-        all: "unset",
-        cursor: "pointer",
-        textDecoration: "underline",
-        textUnderlineOffset: 2,
-      }}
+      className="m-0 cursor-pointer border-0 bg-transparent p-0 [font:inherit] text-inherit underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-devtools-crux"
     >
       {label ?? id}
     </button>
@@ -82,7 +71,14 @@ export function IndexSignalProviderDetail({ def }: { def: ViewDef }) {
         <Row label="transport">{facts.transportKind}</Row>
         <Row label="transport binding">{facts.transportVariable}</Row>
         <Row label="signals">
-          {facts.signalIds?.length ? facts.signalIds.join(", ") : undefined}
+          {facts.signalIds?.length
+            ? facts.signalIds.map((signalId, index) => (
+                <span key={signalId}>
+                  {index > 0 ? ", " : null}
+                  <LinkableId id={`signal:${signalId}`} label={signalId} />
+                </span>
+              ))
+            : undefined}
         </Row>
         <Row label="signal bindings">
           {facts.signalVariables?.length

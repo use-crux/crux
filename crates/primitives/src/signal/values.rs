@@ -1,14 +1,17 @@
+use std::collections::{HashMap, HashSet};
+
 use serde_json::{Value, json};
 
 use crate::{
     context::{PrimitiveContext, ResolvedSource},
-    protocol::{StaticCalleeRecord, StaticSyntaxValue},
-    record_values::{direct_string_property, object_property, property_value},
+    protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
+    record_values::{
+        direct_string_property, object_property, property_value, resolve_static_value,
+    },
 };
 
 pub(crate) const SIGNAL_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/signal"];
-pub(crate) const PROVIDER_MODULES: &[&str] =
-    &["@use-crux/core", "@use-crux/core/signal/provider"];
+pub(crate) const PROVIDER_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/signal/provider"];
 pub(crate) const TRANSPORT_MODULES: &[&str] =
     &["@use-crux/core", "@use-crux/core/signal/transport"];
 const LIVE_FIELDS: &[&str] = &[
@@ -26,6 +29,22 @@ const LIVE_FIELDS: &[&str] = &[
     "apiKey",
 ];
 
+/// Resolves one string property through the initializer evidence visible at the call site.
+pub(crate) fn string_property(
+    object: &StaticSyntaxValue,
+    name: &str,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<String> {
+    match property_value(object, name)
+        .map(|value| resolve_static_value(value, initializers, &mut HashSet::new()))
+    {
+        Some(StaticSyntaxValue::Literal {
+            value: LiteralValue::String(value),
+        }) => Some(value.clone()),
+        _ => None,
+    }
+}
+
 pub(crate) fn webhook_kind(
     resolved: Option<&StaticSyntaxValue>,
     value: Option<&StaticSyntaxValue>,
@@ -37,10 +56,12 @@ pub(crate) fn webhook_kind(
     if callee_name(call) != "webhook" {
         return None;
     }
-    if let Some(module) = call.module_specifier.as_deref() {
-        if !TRANSPORT_MODULES.contains(&module) {
-            return None;
-        }
+    if !call
+        .module_specifier
+        .as_deref()
+        .is_some_and(|module| TRANSPORT_MODULES.contains(&module))
+    {
+        return None;
     }
     Some("webhook")
 }
@@ -75,10 +96,13 @@ pub(crate) fn signal_map(
         if callee_name(call.0) != "signal" {
             continue;
         }
-        if let Some(module) = call.0.module_specifier.as_deref() {
-            if !SIGNAL_MODULES.contains(&module) {
-                continue;
-            }
+        if !call
+            .0
+            .module_specifier
+            .as_deref()
+            .is_some_and(|module| SIGNAL_MODULES.contains(&module))
+        {
+            continue;
         }
         if let Some(config) = call.1.first() {
             if let Some(signal_id) = direct_string_property(config, "id") {
@@ -93,24 +117,33 @@ pub(crate) fn signal_map(
     (signal_ids, signal_variables)
 }
 
-pub(crate) fn provider_definition_id(resolved: Option<&ResolvedSource<'_>>) -> Option<String> {
-    provider_id_from_resolved(resolved).map(|id| format!("signal.provider:{id}"))
+pub(crate) fn provider_definition_id(
+    context: &PrimitiveContext<'_>,
+    resolved: Option<&ResolvedSource<'_>>,
+) -> Option<String> {
+    provider_id_from_resolved(context, resolved)
+        .map(|id| format!("signal.provider:{}", crate::definition::safe_id(&id)))
 }
 
-pub(crate) fn provider_id_from_resolved(resolved: Option<&ResolvedSource<'_>>) -> Option<String> {
+pub(crate) fn provider_id_from_resolved(
+    context: &PrimitiveContext<'_>,
+    resolved: Option<&ResolvedSource<'_>>,
+) -> Option<String> {
     let StaticSyntaxValue::Call { callee, args, .. } = resolved?.value else {
         return None;
     };
     if callee_name(callee) != "signalProvider" {
         return None;
     }
-    if let Some(module) = callee.module_specifier.as_deref() {
-        if !PROVIDER_MODULES.contains(&module) {
-            return None;
-        }
+    if !callee
+        .module_specifier
+        .as_deref()
+        .is_some_and(|module| PROVIDER_MODULES.contains(&module))
+    {
+        return None;
     }
     args.first()
-        .and_then(|config| direct_string_property(config, "id"))
+        .and_then(|config| string_property(config, "id", &context.initializers))
 }
 
 pub(crate) fn config_ref_fact(options: &StaticSyntaxValue) -> Option<Value> {
@@ -195,4 +228,3 @@ pub(crate) fn config_source_refs(
         })
         .collect()
 }
-
