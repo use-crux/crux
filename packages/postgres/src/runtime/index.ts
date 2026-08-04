@@ -25,6 +25,7 @@ import { createPostgresDeferredStore } from './deferred'
 import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
 import { createPostgresResultPayloadPort } from './results'
 import { createPostgresSessionStore } from './sessions'
+import { createPostgresTransportStore } from './transport'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -146,6 +147,7 @@ export function postgres(
       outbox: createPostgresOutboxPort(client, schema, txFaults),
       deferred: createPostgresDeferredStore(client, schema, txFaults),
       sessions: createPostgresSessionStore(client, schema, txFaults),
+      transports: createPostgresTransportStore(client, schema, txFaults),
     }
   }
 

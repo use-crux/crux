@@ -192,6 +192,30 @@ and accidental concrete-Agent Thread tenancy with structured evidence.
 Generated Runtime Programs now import exported Agent definitions and pin their
 Project Index fingerprints through the existing Runtime target authority.
 
+Add provider-neutral Signal provider webhook authoring through
+`webhook({ handle })` and `signalProvider({ id, transport, signals, onEvent })`
+on `@use-crux/core/signal/transport` and `@use-crux/core/signal/provider`. Live
+definitions stay frozen process code; inert
+`RuntimeManagedTransportBinding` projections never capture credentials, live
+clients, Requests, or callbacks. Durable transport envelope acceptance is
+idempotent by Runtime namespace plus provider/account/event identity, conflicts
+on digest mismatch, and is safe to acknowledge only after commit. Restart-safe
+normalization claims accepted envelopes, scopes provider `signals.publish` to
+the accepted provider/account/event identity when an explicit idempotency key is
+omitted so crash recovery after publication cannot create a second logical
+delivery, runs provider `onEvent` through the existing Signal publication path,
+completes idempotently, dead-letters after bounded retry, and returns
+dead-lettered envelopes to accepted state on explicit replay. Memory and
+PostgreSQL Runtime stores implement the transport port with shared conformance.
+RuntimeProgram validation treats Signal transport targets as Signal ids rather
+than Agent/Flow/task targets. Normalization is host-invoked through a
+restart-safe runner in this release; autonomous Runtime worker supervision of
+transport claim/normalize remains a later boundary. Provider Signal maps use a
+structural member bound plus a self-constraint so concrete
+`Signal<literal, schema>` values keep exact per-key payload inference across
+TypeScript 5.5+, 6.0, and TypeScript-Go preview without accepting non-Signal
+map values.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program

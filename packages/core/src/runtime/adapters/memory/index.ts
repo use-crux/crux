@@ -42,6 +42,8 @@ import type {
   RuntimeSessionInputRecord,
   RuntimeSessionRecord,
 } from "../../ports/sessions";
+import { createMemoryTransportStore } from "./transport";
+import type { RuntimeTransportStorePort } from "../../transport/store";
 import { createRuntimeError } from "../../engine/errors";
 import {
   sessionPostPublicationSeam,
@@ -52,6 +54,7 @@ type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
   readonly workControl: RuntimeWorkControlPort;
   readonly sessions: RuntimeSessionStorePort;
+  readonly transports: RuntimeTransportStorePort;
 };
 
 /** Fault-injection controls used by adapter conformance tests. */
@@ -137,6 +140,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       signals: createMemorySignalStore(target, recordWrite),
       workControl: createMemoryWorkControlPort(target, recordWrite),
       sessions: createMemorySessionStore(target, recordWrite, sessionFaults),
+      transports: createMemoryTransportStore(target, recordWrite),
     };
   }
 
