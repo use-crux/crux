@@ -801,12 +801,24 @@ export interface SessionFacts {
   readonly targetVariable?: string;
   /** Semantically resolved Agent definition when the target is statically known. */
   readonly targetDefinitionId?: string;
+  /** Compiler classification used to reject unresolved or runtime-selected targets. */
+  readonly target:
+    | { readonly kind: "agent" }
+    | { readonly kind: "unresolved" }
+    | { readonly kind: "dynamic" };
   /** Evidence for whether the stable caller key is a direct string literal. */
   readonly key:
     | { readonly kind: "literal"; readonly value: string }
     | { readonly kind: "dynamic" };
   /** Whether both target and caller key establish a static Session identity. */
   readonly identity: "static" | "partial";
+  /** Whether the call uses one canonical public Session argument shape. */
+  readonly call:
+    | { readonly kind: "supported" }
+    | {
+        readonly kind: "ambiguous";
+        readonly reason: "arity" | "options";
+      };
 }
 
 export interface FlowFacts {

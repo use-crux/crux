@@ -222,6 +222,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
       ...embeddings.lintFindings,
       ...evidenceRecords.lintFindings,
       ...contextPlanning.lintFindings,
+      ...sessions.lintFindings,
       ...mediaArchitectureLintFindings(definitions, relations),
     ],
   });

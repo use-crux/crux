@@ -175,5 +175,9 @@ Project Index now records authored Session identity, literal key, source, and
 resolved Agent target evidence with matching static and semantic backend
 output.
 
+Project Index and Local editor diagnostics now reject unproven Session
+identity and Agent targets, ambiguous construction, non-owner Thread mutation,
+and accidental concrete-Agent Thread tenancy with structured evidence.
+
 Generated Runtime Programs now import exported Agent definitions and pin their
 Project Index fingerprints through the existing Runtime target authority.

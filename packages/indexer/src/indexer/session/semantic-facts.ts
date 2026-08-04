@@ -1,5 +1,6 @@
 import { relative } from "node:path";
 import type {
+  IndexLintFinding,
   ProjectDefinition,
   ProjectRelation,
   ProjectSourceRef,
@@ -19,6 +20,7 @@ import {
 } from "../semantic/model";
 import { semanticResolvedSourceRef } from "../semantic/model/source-refs";
 import {
+  semanticIsResolvableSourceExpression,
   semanticPropertyInitializer,
   semanticSourceForNode,
   semanticVariableNameForNode,
@@ -36,6 +38,7 @@ export interface SemanticSessionFactsResult {
     readonly ref: ProjectSourceRef;
   }[];
   readonly relations: readonly ProjectRelation[];
+  readonly lintFindings: readonly IndexLintFinding[];
 }
 
 /** Projects Session identity and Agent target evidence through the shared analyzer. */
@@ -47,6 +50,7 @@ export function semanticSessionFacts(
   const definitions: ProjectDefinition[] = [];
   const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = [];
   const relations: ProjectRelation[] = [];
+  const sessionBindings = new Map<string, string>();
 
   for (const call of semanticDescendants(sourceFiles, view)) {
     if (!view.syntax.isKind(call, "callExpression")) continue;
@@ -57,6 +61,12 @@ export function semanticSessionFacts(
     if (!targetExpression) continue;
     const target = semanticTargetForExpression(targetExpression, view);
     const key = sessionKey(operation, args[1], view);
+    const targetForm: SessionFacts["target"] =
+      target?.kind === "agent"
+        ? { kind: "agent" }
+        : semanticIsResolvableSourceExpression(targetExpression, view.syntax)
+          ? { kind: "unresolved" }
+          : { kind: "dynamic" };
     const source = semanticSourceForNode(call, view.syntax);
     const stable = target?.kind === "agent" && key !== undefined;
     const targetName =
@@ -70,11 +80,13 @@ export function semanticSessionFacts(
       operation,
       targetVariable: view.syntax.text(targetExpression),
       ...(target?.kind === "agent" ? { targetDefinitionId: target.id } : {}),
+      target: targetForm,
       key:
         key !== undefined
           ? { kind: "literal", value: key }
           : { kind: "dynamic" },
       identity: stable ? "static" : "partial",
+      call: sessionCall(operation, args, view),
     };
     definitions.push({
       id: definitionId,
@@ -87,6 +99,8 @@ export function semanticSessionFacts(
       status: "active",
       metadata: { facts },
     });
+    const binding = semanticVariableNameForNode(call, view.syntax);
+    if (binding) sessionBindings.set(binding, definitionId);
     if (target?.kind === "agent") {
       relations.push(
         projectRelation({
@@ -108,6 +122,14 @@ export function semanticSessionFacts(
     if (ref) sourceRefs.push({ definitionId, ref });
   }
 
+  const lintFindings = semanticDescendants(sourceFiles, view).flatMap(
+    (node) => {
+      if (!view.syntax.isKind(node, "callExpression")) return [];
+      const mutation = sessionThreadMutation(node, sessionBindings, view);
+      return mutation ? [mutation] : [];
+    },
+  );
+
   return {
     definitions: definitions.sort((left, right) =>
       left.id.localeCompare(right.id),
@@ -116,7 +138,97 @@ export function semanticSessionFacts(
       left.ref.id.localeCompare(right.ref.id),
     ),
     relations: relations.sort((left, right) => left.id.localeCompare(right.id)),
+    lintFindings: lintFindings.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
   };
+}
+
+const sessionThreadMutationMethods = new Set([
+  "append",
+  "commitTurn",
+  "delete",
+  "edit",
+  "redact",
+  "select",
+]);
+
+function sessionThreadMutation(
+  call: Node,
+  sessionBindings: ReadonlyMap<string, string>,
+  view: SemanticAnalyzerView,
+): IndexLintFinding | undefined {
+  const methodAccess = view.syntax.callExpressionTarget(call);
+  if (
+    !methodAccess ||
+    !view.syntax.isKind(methodAccess, "propertyAccessExpression")
+  )
+    return undefined;
+  const method = view.syntax.propertyAccessName(methodAccess);
+  if (!method || !sessionThreadMutationMethods.has(method)) return undefined;
+  const threadAccess = view.syntax.propertyAccessExpression(methodAccess);
+  if (
+    !threadAccess ||
+    !view.syntax.isKind(threadAccess, "propertyAccessExpression") ||
+    view.syntax.propertyAccessName(threadAccess) !== "thread"
+  )
+    return undefined;
+  const sessionExpression = view.syntax.propertyAccessExpression(threadAccess);
+  if (!sessionExpression) return undefined;
+  const binding = view.syntax.identifierText(
+    view.syntax.unwrapExpression(sessionExpression),
+  );
+  const definitionId = binding ? sessionBindings.get(binding) : undefined;
+  if (!definitionId) return undefined;
+  const source = semanticSourceForNode(call, view.syntax);
+  return {
+    id: `lint:session.non_owner_thread_mutation:${safeId(`${definitionId}:${source.file}:${source.line}:${source.column}:${method}`)}`,
+    ruleId: "session.non_owner_thread_mutation",
+    severity: "error",
+    category: "runtime",
+    maturity: "stable",
+    confidence: "high",
+    profiles: ["recommended", "strict"],
+    title: "Session Thread view is mutated outside its owner",
+    message: `Session Thread view calls mutating method \"${method}\" outside the Session owner.`,
+    rationale:
+      "A Session Thread view is read-only because only the owning Session may publish its canonical head.",
+    impact:
+      "Non-owner mutation is rejected by the linearizable Thread owner fence and cannot safely publish Session history.",
+    source,
+    primaryDefinitionId: definitionId,
+    relatedDefinitionIds: [definitionId],
+    evidence: [
+      {
+        kind: "source",
+        label: "Non-owner Session Thread mutation",
+        source,
+        data: { method, sessionDefinitionId: definitionId },
+      },
+    ],
+    fixes: [
+      {
+        title: "Send input through the Session",
+        description:
+          "Use session.send() or session.sendMany(); keep session.thread for read-only inspection.",
+        kind: "manual",
+      },
+    ],
+    docsUrl:
+      "/docs/reference/crux-core/index-lints/session-non-owner-thread-mutation",
+  };
+}
+
+function sessionCall(
+  operation: "create" | "get",
+  args: readonly Node[],
+  view: SemanticAnalyzerView,
+): SessionFacts["call"] {
+  if (args.length !== 2) return { kind: "ambiguous", reason: "arity" };
+  if (operation === "get") return { kind: "supported" };
+  return semanticObjectExpression(args[1], view, new Set())
+    ? { kind: "supported" }
+    : { kind: "ambiguous", reason: "options" };
 }
 
 function sessionOperation(

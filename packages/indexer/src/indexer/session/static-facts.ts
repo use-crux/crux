@@ -36,6 +36,13 @@ export function extractSessionStaticFacts(ctx: ExtractContext) {
   const target = resolver.resolveValue(targetValue);
   const targetDefinitionId = targetAgentDefinitionId(target, ctx);
   const key = sessionKey(operation, native.match.args, native.initializers);
+  const targetForm = targetDefinitionId
+    ? ({ kind: "agent" } as const)
+    : targetValue?.kind === "identifier" ||
+        targetValue?.kind === "property-access"
+      ? ({ kind: "unresolved" } as const)
+      : ({ kind: "dynamic" } as const);
+  const call = sessionCall(operation, native.match.args, resolver);
   const targetName =
     targetDefinitionId?.slice("agent:".length) ?? targetVariable;
   const stableIdentity = Boolean(targetDefinitionId && key);
@@ -48,9 +55,11 @@ export function extractSessionStaticFacts(ctx: ExtractContext) {
     operation,
     ...(targetVariable ? { targetVariable } : {}),
     ...(targetDefinitionId ? { targetDefinitionId } : {}),
+    target: targetForm,
     key:
       key !== undefined ? { kind: "literal", value: key } : { kind: "dynamic" },
     identity: stableIdentity ? "static" : "partial",
+    call,
   };
   const references = targetDefinitionId
     ? [ctx.ref.id("session.targets_agent", targetDefinitionId)]
@@ -89,6 +98,20 @@ export function extractSessionStaticFacts(ctx: ExtractContext) {
         }
       : {}),
   });
+}
+
+function sessionCall(
+  operation: "create" | "get",
+  args: readonly StaticSyntaxValue[],
+  resolver: ReturnType<typeof createStaticRecordSourceResolver>,
+): SessionFacts["call"] {
+  if (args.length !== 2) return { kind: "ambiguous", reason: "arity" };
+  if (operation === "get") return { kind: "supported" };
+  const options = args[1];
+  const resolved = resolver.resolveValue(options)?.value ?? options;
+  return resolved?.kind === "object"
+    ? { kind: "supported" }
+    : { kind: "ambiguous", reason: "options" };
 }
 
 function sessionOperation(

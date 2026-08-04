@@ -344,6 +344,11 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "tool.missing_input_schema",
             "tool.output_not_inspectable",
             "flow.suspension_without_coverage",
+            "session.ambiguous_construction",
+            "session.invalid_target",
+            "session.non_owner_thread_mutation",
+            "session.shared_agent_thread",
+            "session.unstable_identity",
             "flow.duplicate_step_label",
             "flow.duplicate_suspend_name",
             "flow.undeclared_suspend_signal",
@@ -400,7 +405,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 29);
+    assert_eq!(coverage.identities.len(), 30);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -448,6 +453,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
                 "mcp.server" => "mcp-native-static.test.ts",
                 "media.operation" | "ingest.source" => "media-native-static.test.ts",
                 "evidence.record" => "evidence-record-native-static.test.ts",
+                "session" => "session-native-static.test.ts",
                 "thread" => "thread-native-static.test.ts",
                 _ => "first-party-native-negative-fixtures.test.ts",
             }

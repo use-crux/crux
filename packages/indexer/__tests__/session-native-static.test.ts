@@ -156,6 +156,51 @@ describe("Session native static projection", () => {
       expectSessionProjectionParity(result);
     },
   );
+
+  itWithRustOxc(
+    "classifies dynamic targets and ambiguous construction for diagnostics",
+    async () => {
+      const result = await extractNativeAndFallback({
+        callNames: ["agent", "session"],
+        callInterests: [
+          { name: "agent", importFrom: ["@use-crux/core/agent"] },
+          {
+            name: "session",
+            importFrom: ["@use-crux/core", "@use-crux/core/session"],
+            configArg: 1,
+          },
+        ],
+        source: [
+          `import { agent } from '@use-crux/core/agent'`,
+          `import { session } from '@use-crux/core/session'`,
+          `const supportAgent = agent({ id: 'support' })`,
+          `declare const customerKey: string`,
+          `declare function selectAgent(): typeof supportAgent`,
+          `declare function sessionOptions(): { key: string }`,
+          `export const selected = session(selectAgent(), { key: customerKey })`,
+          `export const indirect = session(supportAgent, sessionOptions())`,
+        ].join("\n"),
+      });
+
+      expectSessionProjectionParity(result);
+      const definitions = sessionProjection(result.nativeOut).definitions;
+      expect(definitions).toHaveLength(2);
+      expect(
+        definitions.map((definition) => definition.metadata?.facts),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target: { kind: "dynamic" },
+            call: { kind: "supported" },
+          }),
+          expect.objectContaining({
+            target: { kind: "agent" },
+            call: { kind: "ambiguous", reason: "options" },
+          }),
+        ]),
+      );
+    },
+  );
 });
 
 function expectSessionProjectionParity(result: {

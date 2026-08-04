@@ -116,6 +116,25 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "non-owner-session-thread-mutation-shared-analyzer",
+      workspacePackages: ["core"],
+      files: {
+        "src/session-mutation.ts": `
+          import { agent } from '@use-crux/core/agent'
+          import { session } from '@use-crux/core/session'
+
+          const supportAgent = agent({ id: 'support-agent' })
+          export const support = session(supportAgent, { key: 'customer-a' })
+          support.thread.append({ role: 'user', content: 'unsafe' })
+          support.thread.read()
+        `,
+      },
+      expect: {
+        definitionIds: ["session:support-agent:customer-a"],
+        lintRuleIds: ["session.non_owner_thread_mutation"],
+      },
+    },
+    {
       name: "authored-context-planning-shared-analyzer",
       workspacePackages: ["core"],
       files: {

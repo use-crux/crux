@@ -120,7 +120,7 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "22");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "23");
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:6468ef2db59a6e6a03f42196a8079ffe95c2e79a2877cc6c77554fa4c817d117"
+        "sha256:6f2d95954f770c702f77958bfd35e51547c5ff31012f7ae682c0e6c92c45aac1"
     );
 }
 
@@ -186,10 +186,10 @@ fn completion_manifest_covers_all_admitted_shapes() {
             && site.exclude_self
     }));
 
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "22");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "23");
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:6468ef2db59a6e6a03f42196a8079ffe95c2e79a2877cc6c77554fa4c817d117"
+        "sha256:6f2d95954f770c702f77958bfd35e51547c5ff31012f7ae682c0e6c92c45aac1"
     );
 }
 

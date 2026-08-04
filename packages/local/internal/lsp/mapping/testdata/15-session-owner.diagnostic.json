@@ -1,0 +1,22 @@
+{
+  "range": {
+    "start": {"line": 1, "character": 1},
+    "end": {"line": 3, "character": 4}
+  },
+  "severity": 1,
+  "code": "session.non_owner_thread_mutation",
+  "codeDescription": {"href": "https://usecrux.dev/docs/reference/crux-core/index-lints/session-non-owner-thread-mutation"},
+  "source": "crux",
+  "message": "Session Thread view is mutated outside its owner: Session Thread view calls mutating method \"append\" outside the Session owner.",
+  "relatedInformation": [{
+    "location": {
+      "uri": "file:///workspace/src/file.ts",
+      "range": {
+        "start": {"line": 2, "character": 2},
+        "end": {"line": 2, "character": 2}
+      }
+    },
+    "message": "Non-owner Session Thread mutation"
+  }],
+  "data": {"id":"lint:session.non_owner_thread_mutation:session-support","ruleId":"session.non_owner_thread_mutation","category":"runtime","fixes":[{"title":"Send input through the Session","description":"Use session.send() or session.sendMany(); keep session.thread for read-only inspection.","kind":"manual"}],"suppression":null}
+}

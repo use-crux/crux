@@ -51,6 +51,8 @@ package cache
 // other's Project Index contract.
 // Epoch 67 renames Storage Beta retrieval-index Project Index read-model
 // metadata from vector-store/vectors to search-store/search.
+// Epoch 68 retains Session diagnostic evidence and findings so snapshots made
+// before durable Session linting cannot mask editor or CLI diagnostics.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 67
+const ProjectIndexSnapshotCacheEpoch = 68

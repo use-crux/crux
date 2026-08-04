@@ -68,6 +68,18 @@ pub(crate) fn session_facts(
         );
     }
     session_metadata.insert(
+        "target".to_string(),
+        json!({
+            "kind": if target_definition_id.is_some() {
+                "agent"
+            } else if matches!(target_value, StaticSyntaxValue::Identifier { .. } | StaticSyntaxValue::PropertyAccess { .. }) {
+                "unresolved"
+            } else {
+                "dynamic"
+            }
+        }),
+    );
+    session_metadata.insert(
         "key".to_string(),
         key.as_ref().map_or_else(
             || json!({ "kind": "dynamic" }),
@@ -77,6 +89,10 @@ pub(crate) fn session_facts(
     session_metadata.insert(
         "identity".to_string(),
         Value::String(if stable { "static" } else { "partial" }.to_string()),
+    );
+    session_metadata.insert(
+        "call".to_string(),
+        session_call(context, operation, parts.args),
     );
 
     let mut metadata = Map::new();
@@ -147,7 +163,38 @@ fn target_reference_name(value: &StaticSyntaxValue) -> Option<String> {
         StaticSyntaxValue::Identifier { name } | StaticSyntaxValue::PropertyAccess { name, .. } => {
             Some(name.clone())
         }
+        StaticSyntaxValue::Call { callee, .. } => Some(
+            callee
+                .local_name
+                .as_deref()
+                .unwrap_or(&callee.name)
+                .to_string(),
+        ),
         _ => None,
+    }
+}
+
+fn session_call(
+    context: &PrimitiveContext<'_>,
+    operation: &str,
+    args: &[StaticSyntaxValue],
+) -> Value {
+    if args.len() != 2 {
+        return json!({ "kind": "ambiguous", "reason": "arity" });
+    }
+    if operation == "get" {
+        return json!({ "kind": "supported" });
+    }
+    let options = args.get(1);
+    let resolved = context
+        .resolve_record_source(options)
+        .flatten()
+        .map(|source| source.value)
+        .or(options);
+    if resolved.is_some_and(|value| matches!(value, StaticSyntaxValue::Object { .. })) {
+        json!({ "kind": "supported" })
+    } else {
+        json!({ "kind": "ambiguous", "reason": "options" })
     }
 }
 
