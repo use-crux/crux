@@ -14,6 +14,9 @@ describe("AI SDK portable entrypoint", () => {
     });
 
     expect(result.errors).toEqual([]);
+    expect(Object.keys(result.metafile.inputs).join("\n")).not.toContain(
+      "vitest/",
+    );
     expect(result.outputFiles[0]?.text).not.toMatch(
       /(?:from\s+|import\s+)["']node:/,
     );

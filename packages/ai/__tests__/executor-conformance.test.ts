@@ -7,8 +7,8 @@
 
 import { describe, it, expect } from 'vitest'
 import type { LanguageModel } from 'ai'
-import { loopRuntimePortConformance } from '@use-crux/core/adapter'
-import type { LoopRuntimeConformanceHarness } from '@use-crux/core/adapter'
+import { loopRuntimePortConformance } from '@use-crux/core/adapter/testing'
+import type { LoopRuntimeConformanceHarness } from '@use-crux/core/adapter/testing'
 import { createAiSdkLoopRuntime } from '../src/executor'
 import { liveSdkGateway } from '../src/gateway'
 import { emissionModel, structuredModel } from './mock-model'

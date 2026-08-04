@@ -8,10 +8,8 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from "@use-crux/core";
-import {
-  fakeLoopRuntime,
-  loopRuntimeAdapter,
-} from "@use-crux/core/adapter";
+import { loopRuntimeAdapter } from "@use-crux/core/adapter";
+import { fakeLoopRuntime } from "@use-crux/core/adapter/testing";
 import { __setAlsForTesting } from "../../src/observability/observe";
 import {
   createFakeAdapter,
