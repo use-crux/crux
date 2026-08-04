@@ -27,6 +27,9 @@ import {
   type ReconciliationAudit,
   type ReconciliationLedgerState,
 } from "./reconcile";
+import type { DurableEffectScopeSnapshot } from "./durable-records";
+import { restoreDurableLedgerSnapshot } from "./ledger-restore";
+import { assertLedgerReceiptTransition } from "./durable-state-machine";
 
 /** Fields required to allocate a preparing receipt. */
 export interface EffectReceiptInit {
@@ -90,6 +93,7 @@ export interface EffectLedger {
   reconciliationsFor(receiptId: string): readonly ReconciliationAudit[];
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
   stackFor(boundaryId: string): readonly RecoveryStackEntry[];
+  restoreDurableSnapshot(snapshot: DurableEffectScopeSnapshot): void;
 }
 
 const receipts = new Map<string, EffectReceipt>();
@@ -120,13 +124,6 @@ const reconciliationState: ReconciliationLedgerState = {
     );
   },
 };
-
-const terminalOutcomes = new Set<EffectOutcome>([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "unknown",
-]);
 
 /** Default in-memory ledger used by in-process effects. */
 export const effectLedger: EffectLedger = {
@@ -164,7 +161,7 @@ export const effectLedger: EffectLedger = {
     if (!current) {
       throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
     }
-    assertTransition(current.outcome, patch.outcome);
+    assertLedgerReceiptTransition(current.outcome, patch.outcome);
     const next: EffectReceipt = Object.freeze({
       ...current,
       outcome: patch.outcome,
@@ -201,7 +198,10 @@ export const effectLedger: EffectLedger = {
   registerUnit(boundaryId, unit) {
     units.set(unit.id, unit);
     const ids = unitIdsByBoundary.get(boundaryId) ?? [];
-    unitIdsByBoundary.set(boundaryId, [...ids, unit.id]);
+    unitIdsByBoundary.set(
+      boundaryId,
+      ids.includes(unit.id) ? ids : [...ids, unit.id],
+    );
   },
 
   appendStackEntry(boundaryId, entry) {
@@ -267,6 +267,16 @@ export const effectLedger: EffectLedger = {
   stackFor(boundaryId) {
     return stacksByBoundary.get(boundaryId) ?? [];
   },
+  restoreDurableSnapshot(snapshot) {
+    restoreDurableLedgerSnapshot(snapshot, {
+      receipts,
+      envelopes,
+      scopes,
+      units,
+      unitIdsByBoundary,
+      stacksByBoundary,
+    });
+  },
 };
 
 function discardPreparedUnit(unit: RegisteredRecoveryUnit): void {
@@ -286,20 +296,5 @@ function discardPreparedUnit(unit: RegisteredRecoveryUnit): void {
       ...scope,
       unitIds: scope.unitIds.filter((id) => id !== unit.id),
     }));
-  }
-}
-
-function assertTransition(
-  from: EffectOutcome,
-  to: Exclude<EffectOutcome, "preparing">,
-): void {
-  const legal =
-    (from === "preparing" && to === "running") ||
-    (from === "preparing" && to === "failed") ||
-    (from === "running" && terminalOutcomes.has(to));
-  if (!legal) {
-    throw new TypeError(
-      `Illegal effect receipt transition from \`${from}\` to \`${to}\`.`,
-    );
   }
 }

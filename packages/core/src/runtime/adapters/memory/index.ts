@@ -36,10 +36,14 @@ import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
 import type { RuntimeWorkControlPort } from "../../ports/work-control";
 import { createMemoryWorkControlPort } from "./work-control";
+import type { RuntimeEffectStorePort } from "../../ports/effects";
+import { createMemoryEffectStore } from "./effects";
+import type { MemoryRuntimeData } from "./data";
 
 type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
   readonly workControl: RuntimeWorkControlPort;
+  readonly effects: RuntimeEffectStorePort;
 };
 
 /** Fault-injection controls used by adapter conformance tests. */
@@ -48,6 +52,8 @@ export interface InMemoryRuntimeStoreTesting {
   failAfter(writes: number): void;
   /** Throw once before confirming the next outbox item. */
   crashBeforeConfirm(): void;
+  /** Recreate the adapter while retaining its process-local durable records. */
+  restart(): InMemoryRuntimeStore;
 }
 
 /** Process-local runtime store reference implementation. */
@@ -76,11 +82,18 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
   readonly signals: RuntimeSignalStorePort;
   /** Process-local Work-control command records. */
   readonly workControl: RuntimeWorkControlPort;
+  /** Process-local durable Effect records. */
+  readonly effects: RuntimeEffectStorePort;
 }
 
 /** Create a fresh, isolated in-memory runtime store. */
 export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
-  const data = createMemoryRuntimeData();
+  return createInMemoryRuntimeStore(createMemoryRuntimeData());
+}
+
+function createInMemoryRuntimeStore(
+  data: MemoryRuntimeData,
+): InMemoryRuntimeStore {
   const outboxFaults: MemoryOutboxFaults = { crashBeforeConfirm: false };
   const transactionMutex = createAsyncMutex();
   let failAfterWrites: number | undefined;
@@ -98,6 +111,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       deferred: createMemoryDeferredStore(target, recordWrite),
       signals: createMemorySignalStore(target, recordWrite),
       workControl: createMemoryWorkControlPort(target, recordWrite),
+      effects: createMemoryEffectStore(target, recordWrite),
     };
   }
 
@@ -136,6 +150,9 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       },
       crashBeforeConfirm(): void {
         outboxFaults.crashBeforeConfirm = true;
+      },
+      restart(): InMemoryRuntimeStore {
+        return createInMemoryRuntimeStore(data);
       },
     }),
   });

@@ -275,6 +275,25 @@ export type {
   LeaseResource,
 } from "./ports/leases";
 export type {
+  DurableEffectEnvelopeRecord,
+  DurableEffectExecutionSettlement,
+  DurableEffectPlanStep,
+  DurableEffectPreparation,
+  DurableEffectReceiptRecord,
+  DurableEffectReconciliationRecord,
+  DurableEffectRecoveryAttemptRecord,
+  DurableEffectRecoveryPreparation,
+  DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnitRecord,
+  DurableEffectScopeRecord,
+  DurableEffectScopeSnapshot,
+  RuntimeEffectReadOptions,
+  RuntimeEffectReceiptTransition,
+  RuntimeEffectScopeTransition,
+  RuntimeEffectStorePort,
+  RuntimeEffectUnitTransition,
+} from "./ports/effects";
+export type {
   RuntimeSetupApplyOptions,
   RuntimeSetupFinding,
   RuntimeSetupMode,

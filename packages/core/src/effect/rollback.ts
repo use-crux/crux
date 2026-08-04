@@ -11,6 +11,10 @@ import {
   startEffectBoundaryRollback,
 } from "./internal/boundary";
 import { effectLedger } from "./internal/ledger";
+import {
+  persistDurableEffectScopeTransition,
+  restoreDurableEffectScope,
+} from "./internal/ledger-durable";
 import { runRollback } from "./internal/run-rollback";
 import type {
   EffectScopeRef,
@@ -41,6 +45,7 @@ export async function rollback(
   options?: RollbackOptions,
 ): Promise<RollbackResult> {
   assertEffectScopeRef(scope);
+  await restoreDurableEffectScope(scope);
   const storedScope = effectLedger.getScope(scope.id);
   if (!storedScope || storedScope.ref.runId !== scope.runId) {
     throw new CruxEffectError({
@@ -55,15 +60,19 @@ export async function rollback(
       await startEffectBoundaryRollback(liveBoundary, options)
     ).result;
   }
-  effectLedger.registerScope({
-    ...storedScope,
-    status: "rolling_back",
-  });
+  const alreadyCompleted = storedScope.status === "completed";
+  if (!alreadyCompleted) {
+    effectLedger.registerScope({
+      ...storedScope,
+      status: "rolling_back",
+    });
+    await persistDurableEffectScopeTransition(storedScope.ref.id);
+  }
   try {
     return (await runRollback(storedScope.ref, options)).result;
   } finally {
     const current = effectLedger.getScope(storedScope.ref.id);
-    if (current) {
+    if (current && !alreadyCompleted) {
       effectLedger.registerScope({
         ...current,
         status: "completed",
@@ -71,6 +80,7 @@ export async function rollback(
           .unitsFor(storedScope.ref.id)
           .map((unit) => unit.id),
       });
+      await persistDurableEffectScopeTransition(storedScope.ref.id);
     }
   }
 }

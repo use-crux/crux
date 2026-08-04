@@ -17,6 +17,10 @@ import {
   type RecoveryOperationResult,
 } from "./internal/recovery-stack";
 import { effectLedger } from "./internal/ledger";
+import {
+  prepareDurableEffectRecovery,
+  settleDurableEffectRecovery,
+} from "./internal/ledger-durable";
 import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
 import { reconcileEffectReceipt } from "./internal/reconcile";
 import { recordEffectRecoveryAttempt } from "./internal/evidence";
@@ -191,6 +195,11 @@ export async function recoverEffectReceiptAttempt(
           ? {}
           : { resource: storedReceipt.resource }),
       });
+      await prepareDurableEffectRecovery({
+        attemptReceiptId: attempt.id,
+        originalReceiptId: storedReceipt.id,
+        unitId: unit.id,
+      });
       try {
         await unit.execute({
           envelope,
@@ -212,6 +221,11 @@ export async function recoverEffectReceiptAttempt(
           storedReceipt.id,
           "recovered",
         );
+        await settleDurableEffectRecovery({
+          attemptReceiptId: attempt.id,
+          originalReceiptId: storedReceipt.id,
+          unitId: unit.id,
+        });
         recordEffectRecoveryAttempt(original, settledAttempt);
         observation.settle(settledAttempt);
         return Object.freeze({

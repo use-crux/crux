@@ -24,6 +24,7 @@ import {
   runRollback,
   type RollbackExecution,
 } from "./run-rollback";
+import { persistDurableEffectScopeTransition } from "./ledger-durable";
 
 const effectBoundaryStates = new Map<string, EffectBoundaryState>();
 
@@ -139,6 +140,7 @@ export function runPassiveEffectBoundary<T>(
           : undefined;
         if (!boundary.rollbackOperation && boundary.lifecycle === "open") {
           closeEffectBoundary(boundary);
+          await persistDurableEffectScopeTransition(boundary.ref.id);
         }
         if (parent) {
           registerNestedBoundaryUnit(
@@ -242,11 +244,13 @@ export function startEffectBoundaryRollback(
   updateBoundaryRecord(boundary, "rolling_back");
   const operation = (async () => {
     try {
+      await persistDurableEffectScopeTransition(boundary.ref.id);
       await waitForEffectBoundaryOperations(boundary);
       return await runRollback(boundary.ref, options);
     } finally {
       boundary.lifecycle = "completed";
       updateBoundaryRecord(boundary, "completed");
+      await persistDurableEffectScopeTransition(boundary.ref.id);
     }
   })();
   boundary.rollbackOperation = operation;

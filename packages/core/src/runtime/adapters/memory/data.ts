@@ -13,6 +13,14 @@ import type {
 } from "../../reactive/records";
 import type { RuntimeOutboxItem, RuntimeTimerRecord } from "../../store";
 import type { WorkControlRecord } from "../../ports/work-control";
+import type {
+  DurableEffectEnvelopeRecord,
+  DurableEffectReceiptRecord,
+  DurableEffectReconciliationRecord,
+  DurableEffectRecoveryAttemptRecord,
+  DurableEffectRecoveryUnitRecord,
+  DurableEffectScopeRecord,
+} from "../../../effect/internal/durable-records";
 
 export type MemoryWriteRecorder = () => void;
 
@@ -53,6 +61,12 @@ export interface MemoryRuntimeData {
   signalIdempotency: Map<string, string>;
   signalDeliveries: Map<string, SignalDeliveryRecord>;
   workControl: Map<string, WorkControlRecord>;
+  effectReceipts: Map<string, DurableEffectReceiptRecord>;
+  effectScopes: Map<string, DurableEffectScopeRecord>;
+  effectUnits: Map<string, DurableEffectRecoveryUnitRecord>;
+  effectEnvelopes: Map<string, DurableEffectEnvelopeRecord>;
+  effectAttempts: Map<string, DurableEffectRecoveryAttemptRecord>;
+  effectReconciliations: Map<string, DurableEffectReconciliationRecord[]>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -80,6 +94,12 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     signalIdempotency: new Map(),
     signalDeliveries: new Map(),
     workControl: new Map(),
+    effectReceipts: new Map(),
+    effectScopes: new Map(),
+    effectUnits: new Map(),
+    effectEnvelopes: new Map(),
+    effectAttempts: new Map(),
+    effectReconciliations: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -115,6 +135,17 @@ export function cloneMemoryRuntimeData(
     signalIdempotency: new Map(data.signalIdempotency),
     signalDeliveries: new Map(data.signalDeliveries),
     workControl: new Map(data.workControl),
+    effectReceipts: new Map(data.effectReceipts),
+    effectScopes: new Map(data.effectScopes),
+    effectUnits: new Map(data.effectUnits),
+    effectEnvelopes: new Map(data.effectEnvelopes),
+    effectAttempts: new Map(data.effectAttempts),
+    effectReconciliations: new Map(
+      [...data.effectReconciliations].map(([key, records]) => [
+        key,
+        [...records],
+      ]),
+    ),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -145,6 +176,12 @@ export function replaceMemoryRuntimeData(
   target.signalIdempotency = source.signalIdempotency;
   target.signalDeliveries = source.signalDeliveries;
   target.workControl = source.workControl;
+  target.effectReceipts = source.effectReceipts;
+  target.effectScopes = source.effectScopes;
+  target.effectUnits = source.effectUnits;
+  target.effectEnvelopes = source.effectEnvelopes;
+  target.effectAttempts = source.effectAttempts;
+  target.effectReconciliations = source.effectReconciliations;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
   target.nextTimerId = source.nextTimerId;

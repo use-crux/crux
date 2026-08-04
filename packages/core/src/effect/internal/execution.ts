@@ -28,7 +28,10 @@ import {
   closeImplicitRootBoundary,
   createImplicitRootBoundary,
 } from "./boundary-identity";
-import { isEffectJsonSafe } from "./json-safety";
+import {
+  persistDurableReceiptTransition,
+  settleDurableEffectExecution,
+} from "./ledger-durable";
 import { effectLedger } from "./ledger";
 import { recordEffectReceiptSettlement } from "./evidence";
 import { observeEffectRun } from "./observability";
@@ -40,6 +43,11 @@ import {
   registerEffectStackEntry,
   registerCustomRecoveryUnit,
 } from "./recovery-stack";
+import { prepareDurableCustomEffect } from "./execution-durable";
+import {
+  effectPreparationError,
+  isOptionalEffectJsonSafe,
+} from "./execution-helpers";
 
 type CapturedRecovery<TInput, TOutput> = {
   readonly capture: (context: EffectCaptureContext<TInput>) => Awaitable<unknown>;
@@ -141,7 +149,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   try {
     resource = options?.resource?.(input);
   } catch (error) {
-    const failure = preparationError(
+    const failure = effectPreparationError(
       "EFFECT_RESOURCE_FAILED",
       `Resource projection failed for effect \`${definition.id}\`.`,
       error,
@@ -166,7 +174,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         signal: undefined,
       });
     } catch (error) {
-      const failure = preparationError(
+      const failure = effectPreparationError(
         "EFFECT_CAPTURE_FAILED",
         `Recovery capture failed for effect \`${definition.id}\`.`,
         error,
@@ -185,17 +193,30 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     }
   }
 
+  await prepareDurableCustomEffect<TInput, TOutput>({
+    boundaryId: boundary.id,
+    occurrence,
+    receipt: ref,
+    effectVersion: definition.version,
+    value: input,
+    captured,
+    ...(resource === undefined ? {} : { resource }),
+    ...(options?.recover ? { recover: options.recover } : {}),
+  });
+
   effectLedger.transition(receipt.id, {
     outcome: "running",
     ...(resource === undefined ? {} : { resource }),
   });
 
   try {
-    const output = await executor(input, {
+    const execution = Promise.resolve(executor(input, {
       idempotencyKey: occurrence.idempotencyKey,
       receiptId: receipt.id,
       scope: boundary,
-    });
+    }));
+    await persistDurableReceiptTransition(receipt.id);
+    const output = await execution;
     if (options?.recover) {
       registerCustomRecoveryUnit({
         boundaryId: boundary.id,
@@ -208,9 +229,9 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         captured,
         ...(resource === undefined ? {} : { resource }),
         durable:
-          isOptionalJsonSafe(input) &&
-          isOptionalJsonSafe(output) &&
-          isOptionalJsonSafe(captured),
+          isOptionalEffectJsonSafe(input) &&
+          isOptionalEffectJsonSafe(output) &&
+          isOptionalEffectJsonSafe(captured),
         recover: options.recover,
       });
     }
@@ -227,6 +248,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     recordEffectReceiptSettlement(settledReceipt);
     observation.settle(settledReceipt);
     registerEffectStackEntry(boundary.id, receipt.id);
+    await settleDurableEffectExecution(receipt.id);
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     return Object.freeze({
       output,
@@ -246,8 +268,8 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           captured,
           ...(resource === undefined ? {} : { resource }),
           durable:
-            isOptionalJsonSafe(input) &&
-            isOptionalJsonSafe(captured),
+            isOptionalEffectJsonSafe(input) &&
+            isOptionalEffectJsonSafe(captured),
           status: "prepared",
           recover: options.recover,
         });
@@ -278,16 +300,4 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     throw error;
   }
   });
-}
-
-function isOptionalJsonSafe(value: unknown): boolean {
-  return value === undefined || isEffectJsonSafe(value);
-}
-
-function preparationError(
-  code: "EFFECT_RESOURCE_FAILED" | "EFFECT_CAPTURE_FAILED",
-  message: string,
-  cause: unknown,
-): CruxEffectError {
-  return new CruxEffectError({ code, message, cause });
 }

@@ -36,6 +36,25 @@ export type {
   RuntimeDeferInvocationOutcome,
 } from './deferred'
 export type { ClaimOptions, Lease, LeasePort, LeaseResource } from './leases'
+export type {
+  DurableEffectEnvelopeRecord,
+  DurableEffectExecutionSettlement,
+  DurableEffectPlanStep,
+  DurableEffectPreparation,
+  DurableEffectReceiptRecord,
+  DurableEffectReconciliationRecord,
+  DurableEffectRecoveryAttemptRecord,
+  DurableEffectRecoveryPreparation,
+  DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnitRecord,
+  DurableEffectScopeRecord,
+  DurableEffectScopeSnapshot,
+  RuntimeEffectReadOptions,
+  RuntimeEffectReceiptTransition,
+  RuntimeEffectScopeTransition,
+  RuntimeEffectStorePort,
+  RuntimeEffectUnitTransition,
+} from './effects'
 export type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 export type {
   RuntimeSetupApplyOptions,

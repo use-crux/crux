@@ -26,6 +26,7 @@ import {
   flushNamedDeferEvidenceAfterCommit,
 } from './named-defer-evidence'
 import { transition } from './work'
+import { runWithDurableEffectLedger } from '../../effect/internal/durable-binding'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -142,8 +143,14 @@ export async function handleWake(
       },
     )
     try {
+      const executeTarget = () => target.execute({ work: leased, lease })
       const outcome = await executeWithNamedDeferEvidence(leased, () =>
-        target.execute({ work: leased, lease }),
+        deps.store.effects
+          ? runWithDurableEffectLedger(
+              { namespace: leased.namespace, store: deps.store },
+              executeTarget,
+            )
+          : executeTarget(),
       )
       await completeWork({
         runComposite: deps.runComposite,
