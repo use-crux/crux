@@ -165,3 +165,8 @@ and bounded lifetime statistics through the same atomic Runtime composites as
 memory. Independent hosts and workers can reconnect through one database
 namespace, replay owner-Thread publication without duplicate receipts, and
 retain prepared Session evidence during unreferenced-result pruning.
+
+Convex Runtime storage now persists the same normalized Session contract in its
+atomic component transactions. Reconstructed hosts and workers retain exact
+results, replay checkpointed owner-Thread publication without duplicate
+receipts, and preserve Session evidence during result pruning.
