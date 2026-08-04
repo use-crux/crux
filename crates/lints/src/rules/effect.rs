@@ -41,12 +41,85 @@ pub(crate) fn irreversible_required_boundary_findings(
         .collect()
 }
 
+pub(crate) fn recovery_not_runtime_addressable_findings(
+    builder: &StaticIndexLintBuilder,
+    facts: &StaticIndexPatchFacts,
+    runtime_configured: Option<bool>,
+) -> Vec<StaticIndexLintFinding> {
+    if runtime_configured != Some(true) {
+        return Vec::new();
+    }
+    facts
+        .definitions
+        .iter()
+        .filter(|definition| {
+            recoverable_but_not_exported(definition)
+                && has_statically_visible_durable_usage(facts, definition)
+        })
+        .filter_map(|definition| {
+            let facts = effect_facts(definition)?;
+            let effect_id = facts.get("effectId")?.as_str()?;
+            let version = facts.get("version")?.as_f64()?;
+            if !version.is_finite() {
+                return None;
+            }
+            builder.finding(StaticIndexLintFindingInput {
+                rule_id: "effect.recovery_not_runtime_addressable",
+                key: definition.id.as_str(),
+                message: format!(
+                    "Recoverable Effect \"{effect_id}\" version {version} is not exported. Export the definition so the Runtime program can address recovery after restart."
+                ),
+                source: definition.source.as_ref(),
+                primary_definition_id: Some(definition.id.as_str()),
+                related_definition_ids: vec![definition.id.clone()],
+                evidence: vec![definition_evidence(
+                    definition,
+                    "Recoverable Effect is not a Runtime-addressable export",
+                )],
+                fixes: Vec::new(),
+            })
+        })
+        .collect()
+}
+
+fn has_statically_visible_durable_usage(
+    facts: &StaticIndexPatchFacts,
+    definition: &StaticIndexDefinition,
+) -> bool {
+    definition
+        .source_refs
+        .iter()
+        .chain(
+            facts
+                .source_refs
+                .iter()
+                .filter(|source_ref| source_ref.definition_id == definition.id)
+                .map(|source_ref| &source_ref.ref_),
+        )
+        .any(required_boundary_evidence)
+}
+
 fn explicitly_irreversible(definition: &StaticIndexDefinition) -> bool {
     definition.kind == "effect"
         && effect_facts(definition)
             .and_then(|facts| facts.get("recoverable"))
             .and_then(Value::as_bool)
             == Some(false)
+}
+
+fn recoverable_but_not_exported(definition: &StaticIndexDefinition) -> bool {
+    definition.kind == "effect"
+        && effect_facts(definition)
+            .and_then(|facts| facts.get("recoverable"))
+            .and_then(Value::as_bool)
+            == Some(true)
+        && definition
+            .metadata
+            .as_ref()
+            .and_then(Value::as_object)
+            .and_then(|metadata| metadata.get("exported"))
+            .and_then(Value::as_bool)
+            != Some(true)
 }
 
 fn required_boundary_evidence(source_ref: &StaticIndexProjectSourceRef) -> bool {

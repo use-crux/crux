@@ -20,7 +20,7 @@
   },
   "ruleDescriptors": {
     "name": "crux-indexer-rule-descriptors",
-    "version": "2",
+    "version": "3",
     "digest": "sha256:rule-descriptors"
   },
   "compilerProjection": {

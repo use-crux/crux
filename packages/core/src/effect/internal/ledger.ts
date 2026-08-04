@@ -109,6 +109,17 @@ const unitIdsByBoundary = new Map<string, string[]>();
 const stacksByBoundary = new Map<string, RecoveryStackEntry[]>();
 const reconciliationAudits = new Map<string, ReconciliationAudit[]>();
 
+/** Clear process-local state to simulate a fresh process in tests. */
+export function resetEffectLedgerForTesting(): void {
+  receipts.clear();
+  envelopes.clear();
+  scopes.clear();
+  units.clear();
+  unitIdsByBoundary.clear();
+  stacksByBoundary.clear();
+  reconciliationAudits.clear();
+}
+
 const reconciliationState: ReconciliationLedgerState = {
   getReceipt: (id) => receipts.get(id),
   getEnvelope: (receiptId) => envelopes.get(receiptId),

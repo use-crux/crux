@@ -29,6 +29,7 @@ import {
   createImplicitRootBoundary,
 } from "./boundary-identity";
 import {
+  hasDurableEffectLedger,
   persistDurableReceiptTransition,
   settleDurableEffectExecution,
 } from "./ledger-durable";
@@ -48,6 +49,8 @@ import {
   effectPreparationError,
   isOptionalEffectJsonSafe,
 } from "./execution-helpers";
+import { currentDurableEffectLedgerBinding } from "./durable-binding";
+import { assertRuntimeEffectTarget } from "../../runtime/effect-targets";
 
 type CapturedRecovery<TInput, TOutput> = {
   readonly capture: (context: EffectCaptureContext<TInput>) => Awaitable<unknown>;
@@ -72,7 +75,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
   definition: {
     readonly id: string;
     readonly version: number;
-  },
+  } & object,
   executor: EffectExecutor<TInput, TOutput>,
   args: readonly [] | readonly [input: TInput],
   options?: EffectRuntimeOptions<TInput, TOutput>,
@@ -93,6 +96,12 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         "the effect out of this boundary, or use " +
         "`{ recovery: 'best-effort' }`.",
     });
+  }
+  if (options?.recover) {
+    const durableBinding = currentDurableEffectLedgerBinding();
+    if (durableBinding) {
+      assertRuntimeEffectTarget(durableBinding.program, definition);
+    }
   }
   const boundary =
     explicitBoundary?.ref ?? createImplicitRootBoundary();
@@ -232,6 +241,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           isOptionalEffectJsonSafe(input) &&
           isOptionalEffectJsonSafe(output) &&
           isOptionalEffectJsonSafe(captured),
+        resolveFromProgram: hasDurableEffectLedger(),
         recover: options.recover,
       });
     }
@@ -270,6 +280,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           durable:
             isOptionalEffectJsonSafe(input) &&
             isOptionalEffectJsonSafe(captured),
+          resolveFromProgram: hasDurableEffectLedger(),
           status: "prepared",
           recover: options.recover,
         });

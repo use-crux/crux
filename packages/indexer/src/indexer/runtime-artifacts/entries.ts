@@ -14,7 +14,7 @@ export function nextEntryFile(input: {
   const hasEvals = input.evalArtifacts.manifestEntries.length > 0;
   return [
     GENERATED_HEADER,
-    "import { createRuntimeHandler } from '@use-crux/core/runtime'",
+    "import { createRuntimeHandler, createRuntimeProgram } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
     ...(hasEvals
       ? [
@@ -24,16 +24,19 @@ export function nextEntryFile(input: {
         ]
       : []),
     ...targetImports(input.manifest, input.outputFile, input.root),
+    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
+    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
+    "const program = createRuntimeProgram({ targets, effectTargets, transports: [] })",
     registryDeclaration("evalRegistry", input.evalArtifacts),
     ...(hasEvals ? evalHostCapabilityLines([]) : []),
     "",
     ...(hasEvals
       ? nextEvalHostLines(input.manifestHash)
       : [
-          `export const { GET, POST } = createRuntimeHandler({ targets, manifestHash: '${input.manifestHash}' })`,
+          `export const { GET, POST } = createRuntimeHandler({ targets, program, manifestHash: '${input.manifestHash}' })`,
         ]),
     "",
   ].join("\n");
@@ -48,11 +51,15 @@ export function cloudflareGeneratedEntryFile(input: {
 }): string {
   return [
     GENERATED_HEADER,
+    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
     ...targetImports(input.manifest, input.outputFile, input.root),
+    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
     `export const runtimeTargets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
+    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
+    "export const runtimeProgram = createRuntimeProgram({ targets: runtimeTargets, effectTargets, transports: [] })",
     registryDeclaration("deployedEvals", input.evalArtifacts),
     "",
   ].join("\n");
@@ -124,12 +131,16 @@ export function convexTargetEntryFile(input: {
     "'use node'",
     "",
     "import { createConvexEvalHost, createConvexRuntimeTargetExecutor } from '@use-crux/convex/runtime/node'",
+    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
     "import { components } from '../_generated/api'",
     ...targetImports(input.manifest, input.outputFile, input.root),
+    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
+    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
+    "const program = createRuntimeProgram({ targets, effectTargets, transports: [] })",
     registryDeclaration("evalRegistry", input.evalArtifacts),
     ...evalHostCapabilityLines(["record-store", "vector-store"]),
     "",
@@ -137,7 +148,7 @@ export function convexTargetEntryFile(input: {
     "if (!deploymentId) throw new Error('Generated Crux Eval host requires Convex to provide CONVEX_CLOUD_URL.')",
     "const evalHostToken = process.env.CRUX_EVAL_HOST_TOKEN",
     "",
-    "const runtime = createConvexRuntimeTargetExecutor({ component: components.crux, targets })",
+    "const runtime = createConvexRuntimeTargetExecutor({ component: components.crux, targets, program })",
     "const evalHost = createConvexEvalHost({",
     "  component: components.crux,",
     "  registry: evalRegistry,",
@@ -173,12 +184,36 @@ function targetImports(
   });
 }
 
+function effectTargetImports(
+  manifest: RuntimeArtifactManifest,
+  outputFile: string,
+  root: string,
+): string[] {
+  return (manifest.effectTargets ?? []).map((target, index) => {
+    const sourceFile = join(root, target.module.replace(/^\.\//, ""));
+    const specifier = importSpecifier(dirname(outputFile), sourceFile);
+    return `import { ${target.export} as ${effectTargetLocalName(index)} } from '${specifier}'`;
+  });
+}
+
 function targetLocalNames(manifest: RuntimeArtifactManifest): string[] {
   return manifest.targets.map((_, index) => targetLocalName(index));
 }
 
 function targetLocalName(index: number): string {
   return `target${index}`;
+}
+
+function effectTargetLocalNames(
+  manifest: RuntimeArtifactManifest,
+): string[] {
+  return (manifest.effectTargets ?? []).map((_, index) =>
+    effectTargetLocalName(index),
+  );
+}
+
+function effectTargetLocalName(index: number): string {
+  return `effectTarget${index}`;
 }
 
 function registryDeclaration(
@@ -191,7 +226,7 @@ function registryDeclaration(
 function nextEvalHostLines(manifestHash: string): string[] {
   return [
     "const runtime = projectConfig.config.runtime",
-    `const runtimeHandlers = createRuntimeHandler({ targets, runtime, manifestHash: '${manifestHash}' })`,
+    `const runtimeHandlers = createRuntimeHandler({ targets, program, runtime, manifestHash: '${manifestHash}' })`,
     "let evalHost: ServerlessEvalHost<EvalHostStore> | undefined",
     "",
     "async function dispatch(request: Request): Promise<Response> {",
@@ -230,6 +265,7 @@ function nextEvalHostLines(manifestHash: string): string[] {
     "    token,",
     "    hostCapabilities: evalHostCapabilities,",
     "    targets,",
+    "    program,",
     "  })",
     "  return evalHost",
     "}",

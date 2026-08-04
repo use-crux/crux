@@ -9,22 +9,23 @@ import {
 } from '@use-crux/core/runtime'
 import { preflightRuntime } from '../src/indexer/runtime-ops'
 
-const EMPTY_MANIFEST_V2 = {
-  version: 2,
+const EMPTY_MANIFEST_V3 = {
+  version: 3,
   evalPrivacyFingerprint:
     'd2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29',
   targets: [],
+  effectTargets: [],
   evals: [],
 } as const
 
 describe('runtime namespace preflight', () => {
-  it('rejects an obsolete local Runtime artifact manifest with a regeneration remedy', async () => {
+  it.each([1, 2])('rejects obsolete local Runtime artifact manifest v%s with a regeneration remedy', async (version) => {
     const root = await mkdtemp(join(tmpdir(), 'crux-runtime-ops-'))
     try {
       await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
       await writeFile(
         join(root, '.crux/generated/runtime/manifest.json'),
-        `${JSON.stringify({ version: 1, targets: [] })}\n`,
+        `${JSON.stringify({ version, targets: [] })}\n`,
       )
       const runtime = serverless({
         store: {
@@ -42,7 +43,7 @@ describe('runtime namespace preflight', () => {
       await expect(preflightRuntime(root, runtime)).rejects.toMatchObject({
         code: 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE',
         message: expect.stringMatching(
-          /schema version 1[\s\S]*crux runtime generate/i,
+          new RegExp(`schema version ${version}[\\s\\S]*crux runtime generate`, 'i'),
         ),
       })
     } finally {
@@ -54,7 +55,7 @@ describe('runtime namespace preflight', () => {
     [
       'malformed Eval arm',
       {
-        ...EMPTY_MANIFEST_V2,
+        ...EMPTY_MANIFEST_V3,
         evals: [
           {
             id: 'support',
@@ -68,8 +69,8 @@ describe('runtime namespace preflight', () => {
         ],
       },
     ],
-    ['unknown key', { ...EMPTY_MANIFEST_V2, unexpected: true }],
-  ])('rejects a v2 manifest with %s', async (_name, manifest) => {
+    ['unknown key', { ...EMPTY_MANIFEST_V3, unexpected: true }],
+  ])('rejects a v3 manifest with %s', async (_name, manifest) => {
     const root = await mkdtemp(join(tmpdir(), 'crux-runtime-ops-'))
     try {
       await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
@@ -92,7 +93,7 @@ describe('runtime namespace preflight', () => {
 
       await expect(preflightRuntime(root, runtime)).rejects.toMatchObject({
         code: 'RUNTIME_ARTIFACT_MANIFEST_INVALID',
-        message: expect.stringMatching(/manifest v2[\s\S]*runtime generate/i),
+        message: expect.stringMatching(/manifest v3[\s\S]*runtime generate/i),
       })
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -105,7 +106,7 @@ describe('runtime namespace preflight', () => {
       await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
       await writeFile(
         join(root, '.crux/generated/runtime/manifest.json'),
-        `${JSON.stringify(EMPTY_MANIFEST_V2)}\n`,
+        `${JSON.stringify(EMPTY_MANIFEST_V3)}\n`,
       )
       const runtime = serverless({
         store: {

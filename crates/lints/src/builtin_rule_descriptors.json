@@ -735,6 +735,36 @@
     "fidelity": "safe"
   },
   {
+    "id": "effect.recovery_not_runtime_addressable",
+    "source": "builtin",
+    "severity": "error",
+    "category": "runtime",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": ["recommended", "strict"],
+    "title": "Effect recovery is not Runtime-addressable",
+    "description": "A recoverable Effect used in a statically known required-recovery boundary is not exported while Runtime is configured.",
+    "rationale": "Durable recovery resolves exact Effect definitions from immutable Runtime program targets, and generated entries can only import named exports.",
+    "impact": "Recovery after restart returns handler_unavailable because the authored definition cannot be included in the Runtime program.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/effect-recovery-not-runtime-addressable",
+    "fixes": [
+      {
+        "title": "Export the Effect definition",
+        "description": "Move the Effect to a top-level exported const and regenerate Runtime artifacts.",
+        "kind": "manual",
+        "command": "crux runtime generate"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line effect.recovery_not_runtime_addressable -- reason"
+    },
+    "phase": "index",
+    "requires": ["definitions", "sources"],
+    "fidelity": "safe"
+  },
+  {
     "id": "safety.duplicate_policy_id",
     "source": "builtin",
     "severity": "warning",

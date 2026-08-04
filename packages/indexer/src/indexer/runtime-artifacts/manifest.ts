@@ -2,6 +2,7 @@ import { relative } from "node:path";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 import type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestEffectTarget,
   RuntimeArtifactManifestTarget,
 } from "@use-crux/core/runtime";
 import { RuntimeArtifactGenerationError } from "./findings";
@@ -33,6 +34,9 @@ export function manifestPlanFromDefinitions(input: {
   const targets = input.definitions.flatMap((definition) =>
     targetFromDefinition(input.root, definition),
   );
+  const effectTargets = input.definitions.flatMap((definition) =>
+    effectTargetFromDefinition(input.root, definition),
+  );
   const byName = new Map<string, RuntimeArtifactManifestTarget[]>();
   for (const target of targets) {
     const matching = byName.get(target.name) ?? [];
@@ -44,7 +48,7 @@ export function manifestPlanFromDefinitions(input: {
     .map(([name, matching]) => duplicateTargetFinding(name, matching));
   return Object.freeze({
     manifest: Object.freeze({
-      version: 2,
+      version: 3,
       evalPrivacyFingerprint:
         input.evalPrivacyFingerprint ??
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
@@ -55,10 +59,58 @@ export function manifestPlanFromDefinitions(input: {
             compareCodepoint(a.kind, b.kind),
         ),
       ),
+      effectTargets: Object.freeze(
+        [...effectTargets].sort(
+          (a, b) =>
+            compareCodepoint(a.id, b.id) ||
+            a.version - b.version ||
+            compareCodepoint(a.module, b.module) ||
+            compareCodepoint(a.export, b.export),
+        ),
+      ),
       evals: Object.freeze([]),
     }),
     findings: Object.freeze(duplicateFindings),
   });
+}
+
+function effectTargetFromDefinition(
+  root: string,
+  definition: ProjectDefinition,
+): readonly RuntimeArtifactManifestEffectTarget[] {
+  if (definition.kind !== "effect") return [];
+  const metadata = definition.metadata;
+  const facts = isRecord(metadata?.facts) ? metadata.facts : undefined;
+  const id = typeof facts?.effectId === "string" ? facts.effectId : undefined;
+  const version =
+    typeof facts?.version === "number" && Number.isFinite(facts.version)
+      ? facts.version
+      : undefined;
+  const recoverable = facts?.recoverable === true;
+  const exported = metadata?.exported === true;
+  const exportName =
+    typeof metadata?.exportName === "string"
+      ? metadata.exportName
+      : undefined;
+  const file = definition.source?.file;
+  if (
+    !recoverable ||
+    !exported ||
+    !id ||
+    version === undefined ||
+    !exportName ||
+    !file
+  ) {
+    return [];
+  }
+  return [
+    {
+      id,
+      version,
+      module: `./${relative(root, file).replace(/\\/g, "/")}`,
+      export: exportName,
+    },
+  ];
 }
 
 /** Compare manifest target names with target ids found in non-terminal runtime store rows. */
@@ -118,6 +170,10 @@ function duplicateTargetFinding(
       "Other uniquely named runtime targets can still be discovered.",
     remediation: "Rename one target or remove the duplicate definition.",
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function compareCodepoint(left: string, right: string): number {

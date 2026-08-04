@@ -23,6 +23,18 @@ export interface RuntimeArtifactManifestTarget {
   readonly export: string;
 }
 
+/** One statically importable Effect recovery target. */
+export interface RuntimeArtifactManifestEffectTarget {
+  /** Stable authored Effect identifier. */
+  readonly id: string;
+  /** Exact recovery contract version. */
+  readonly version: number;
+  /** Project-root-relative module path. */
+  readonly module: string;
+  /** Exported binding that generated entry files import. */
+  readonly export: string;
+}
+
 /** One content-addressed Case identity in a generated deployed Eval. */
 export interface RuntimeArtifactManifestEvalCase {
   readonly id: string;
@@ -51,11 +63,13 @@ export interface RuntimeArtifactManifestEval {
 /** Versioned runtime artifact manifest written to `.crux/generated/runtime/manifest.json`. */
 export interface RuntimeArtifactManifest {
   /** Manifest schema version. */
-  readonly version: 2;
+  readonly version: 3;
   /** Secret-free identity of the generated Eval persistence policy. */
   readonly evalPrivacyFingerprint: string;
   /** Deterministically sorted runtime targets. */
   readonly targets: readonly RuntimeArtifactManifestTarget[];
+  /** Deterministically sorted recoverable Effect targets. */
+  readonly effectTargets: readonly RuntimeArtifactManifestEffectTarget[];
   /** Deterministically sorted deployed Eval identities. */
   readonly evals: readonly RuntimeArtifactManifestEval[];
 }

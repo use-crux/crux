@@ -54,7 +54,7 @@ export interface RegisteredEffectRecoveryUnit
   extends RecoveryUnitRecord {
   readonly kind: "effect";
   /** Invoke the exact definition version registered for this unit. */
-  readonly execute: (
+  readonly execute?: (
     invocation: RecoveryHandlerInvocation,
   ) => Promise<void>;
   readonly recoveryOperation?: Promise<RecoveryOperationResult>;
@@ -94,7 +94,7 @@ export interface RecoveryUnitRegistration {
   /** Retained recovery data. */
   readonly envelope: StoredRecoveryEnvelope;
   /** Bound recovery handler. */
-  readonly execute: RegisteredEffectRecoveryUnit["execute"];
+  readonly execute?: NonNullable<RegisteredEffectRecoveryUnit["execute"]>;
   /** Initial lifecycle for a known or ambiguous execution outcome. */
   readonly status?: "prepared" | "active";
 }
@@ -114,7 +114,7 @@ export function registerRecoveryUnit(
       effectIds: [registration.receipt.effectId],
       status: registration.status ?? "active",
       idempotencyKey: registration.idempotencyKey,
-      execute: registration.execute,
+      ...(registration.execute ? { execute: registration.execute } : {}),
     }),
   );
 }
@@ -145,6 +145,7 @@ export function registerCustomRecoveryUnit<TInput, TOutput>(
     readonly resource?: EffectResource | readonly EffectResource[];
     readonly durable: boolean;
     readonly status?: "prepared" | "active";
+    readonly resolveFromProgram?: boolean;
     readonly recover: CustomRecovery<TInput, TOutput>;
   },
 ): void {
@@ -171,31 +172,35 @@ export function registerCustomRecoveryUnit<TInput, TOutput>(
       durable: registration.durable,
     }),
     status: registration.status,
-    execute: async ({
-      envelope,
-      receipt,
-      resource,
-      idempotencyKey,
-      options,
-    }) => {
-      const context = {
-        input: envelope.input as TInput,
-        output: envelope.output as TOutput,
-        receipt,
-        resource,
-        idempotencyKey,
-        conflict: options?.conflict ?? "fail",
-        signal: options?.signal,
-      };
-      if (typeof recovery === "function") {
-        await recovery(context);
-        return;
-      }
-      await recovery.execute({
-        ...context,
-        captured: envelope.captured,
-      });
-    },
+    ...(registration.resolveFromProgram
+      ? {}
+      : {
+          execute: async ({
+            envelope,
+            receipt,
+            resource,
+            idempotencyKey,
+            options,
+          }: RecoveryHandlerInvocation) => {
+            const context = {
+              input: envelope.input as TInput,
+              output: envelope.output as TOutput,
+              receipt,
+              resource,
+              idempotencyKey,
+              conflict: options?.conflict ?? "fail",
+              signal: options?.signal,
+            };
+            if (typeof recovery === "function") {
+              await recovery(context);
+              return;
+            }
+            await recovery.execute({
+              ...context,
+              captured: envelope.captured,
+            });
+          },
+        }),
   });
 }
 

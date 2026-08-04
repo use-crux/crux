@@ -3,6 +3,7 @@ import { config, effect, flow } from "@use-crux/core";
 import { reconcileEffect, rollback } from "@use-crux/core/effect";
 import type { EffectReceiptRef } from "@use-crux/core/effect";
 import {
+  createRuntimeProgram,
   inMemoryRuntimeStore,
   node,
 } from "@use-crux/core/runtime";
@@ -54,13 +55,6 @@ describe("durable effects", () => {
 
   it("reconstructs and recovers a memory-backed scope after restart", async () => {
     const store = inMemoryRuntimeStore();
-    const firstRuntime = config({
-      runtime: node({
-        namespace: "tenant-a",
-        store,
-        autoStartMaintenance: false,
-      }),
-    });
     const executions: string[] = [];
     const recoveries: string[] = [];
     const recoveryKeys: string[] = [];
@@ -91,6 +85,19 @@ describe("durable effects", () => {
       await update({ revision: 2 });
       return "updated";
     });
+    const program = createRuntimeProgram({
+      targets: [],
+      transports: [],
+      effectTargets: [update],
+    });
+    const firstRuntime = config({
+      runtime: node({
+        namespace: "tenant-a",
+        store,
+        program,
+        autoStartMaintenance: false,
+      }),
+    });
 
     const completed = await updateFlow.run();
     expect(completed.status).toBe("completed");
@@ -114,6 +121,7 @@ describe("durable effects", () => {
       runtime: node({
         namespace: "tenant-a",
         store: restartedStore,
+        program,
         autoStartMaintenance: false,
       }),
     });
@@ -161,13 +169,6 @@ describe("durable effects", () => {
 
   it("reconciles recovery success after settlement is interrupted", async () => {
     const store = inMemoryRuntimeStore();
-    const firstRuntime = config({
-      runtime: node({
-        namespace: "tenant-a",
-        store,
-        autoStartMaintenance: false,
-      }),
-    });
     const receiptIds: string[] = [];
     const recover = vi.fn(async () => {
       store.testing.failAfter(0);
@@ -182,6 +183,19 @@ describe("durable effects", () => {
     );
     const updateFlow = flow("interrupted-recovery-flow", async () => {
       await update();
+    });
+    const program = createRuntimeProgram({
+      targets: [],
+      transports: [],
+      effectTargets: [update],
+    });
+    const firstRuntime = config({
+      runtime: node({
+        namespace: "tenant-a",
+        store,
+        program,
+        autoStartMaintenance: false,
+      }),
     });
 
     const completed = await updateFlow.run();
@@ -198,6 +212,7 @@ describe("durable effects", () => {
       runtime: node({
         namespace: "tenant-a",
         store: restartedStore,
+        program,
         autoStartMaintenance: false,
       }),
     });

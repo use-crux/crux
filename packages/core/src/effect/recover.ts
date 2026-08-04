@@ -32,6 +32,9 @@ import type {
   RecoverOptions,
   RecoveryUnitResult,
 } from "./types";
+import { currentDurableEffectLedgerBinding } from "./internal/durable-binding";
+import { invokeEffectRecoveryDefinition } from "./internal/recovery-definition";
+import { resolveRuntimeEffectTarget } from "../runtime/effect-targets";
 
 /**
  * Internal recovery settlement retaining the raw handler error.
@@ -95,6 +98,7 @@ export async function recoverEffectReceiptAttempt(
   options?: RecoverOptions,
 ): Promise<EffectRecoveryAttempt> {
   assertEffectReceiptRef(receipt);
+  await restoreDurableEffectReceiptScope(receipt.id);
   const storedReceipt = effectLedger.getReceipt(receipt.id);
   if (
     !storedReceipt ||
@@ -170,6 +174,32 @@ export async function recoverEffectReceiptAttempt(
       ),
     });
   }
+  const durableBinding = currentDurableEffectLedgerBinding();
+  const runtimeDefinition = unit.execute
+    ? undefined
+    : resolveRuntimeEffectTarget(
+        durableBinding?.program,
+        storedReceipt.effectId,
+        storedReceipt.effectVersion,
+      );
+  if (!unit.execute && !runtimeDefinition) {
+    const unavailable = new CruxEffectError({
+      code: "EFFECT_RECOVERY_HANDLER_UNAVAILABLE",
+      message:
+        `Recovery handler for Effect \`${storedReceipt.effectId}\` version ` +
+        `${storedReceipt.effectVersion} is unavailable in the active Runtime program.`,
+    });
+    return Object.freeze({
+      result: Object.freeze({
+        ...createRecoveryUnitResult(
+          unit,
+          storedReceipt.resource,
+          "handler_unavailable",
+        ),
+        error: summarizeEffectError(unavailable),
+      }),
+    });
+  }
 
   const operation = Promise.resolve().then(
     async (): Promise<EffectRecoveryAttempt> => {
@@ -203,7 +233,7 @@ export async function recoverEffectReceiptAttempt(
         unitId: unit.id,
       });
       try {
-        await unit.execute({
+        const invocation = {
           envelope,
           receipt: Object.freeze({
             kind: "effect.receipt",
@@ -213,7 +243,15 @@ export async function recoverEffectReceiptAttempt(
           resource: storedReceipt.resource,
           idempotencyKey: unit.idempotencyKey,
           options,
-        });
+        };
+        if (unit.execute) {
+          await unit.execute(invocation);
+        } else {
+          await invokeEffectRecoveryDefinition(
+            runtimeDefinition!,
+            invocation,
+          );
+        }
         const settledAttempt = effectLedger.transition(attempt.id, {
           outcome: "succeeded",
           completedAt: Date.now(),

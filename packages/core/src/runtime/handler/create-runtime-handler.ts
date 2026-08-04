@@ -21,6 +21,7 @@ import {
 import type { RuntimeTargetRuntimeRef } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
 import type { WorkId } from '../ports'
+import type { RuntimeProgram } from '../program'
 import { handleWakeRequest } from './core'
 import {
   normalizeRuntimeHandlerTargets,
@@ -50,6 +51,8 @@ export interface CreateRuntimeHandlerOptions {
   readonly newWorkId?: () => WorkId
   /** Hash of the generated runtime manifest, when codegen has produced one. */
   readonly manifestHash?: string
+  /** Immutable authored target program available during handler execution. */
+  readonly program?: RuntimeProgram
 }
 
 /** Fetch-compatible runtime handler pair suitable for Next route exports. */
@@ -83,9 +86,11 @@ export function createRuntimeHandler(
     runtimeRef,
     entry: 'createRuntimeHandler()',
   })
+  const program = options.program ?? runtimeDefinition.program
   const runtime = createRuntime({
     runtime: runtimeDefinition,
     targets,
+    program,
     ...(options.newWorkId ? { newWorkId: options.newWorkId } : {}),
     startMaintenance: false,
   } satisfies CreateRuntimeOptions)
@@ -96,7 +101,7 @@ export function createRuntimeHandler(
       return jsonResponse({
         ok: true,
         namespace: runtime.namespace,
-        manifestHash: options.manifestHash ?? null,
+        manifestHash: options.manifestHash ?? program?.manifestHash ?? null,
         targets: Object.keys(targets).sort(),
       })
     },

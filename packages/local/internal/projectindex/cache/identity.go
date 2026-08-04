@@ -42,6 +42,8 @@ package cache
 // Epoch 65 combines that contract with dynamic nested PromptText identity across
 // restart boundaries so neither independently assigned epoch 64 can mask the
 // other.
+// Epoch 66 adds recoverable Effect Runtime-addressability findings and their
+// rule descriptor across restart boundaries.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 65
+const ProjectIndexSnapshotCacheEpoch = 66

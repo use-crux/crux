@@ -131,7 +131,10 @@ async function prepareRuntimeArtifactsUnchecked(
       const findings = [...targetPlan.findings];
       const causes: unknown[] = [];
       try {
-        await validateTargetExports(options.root, targetPlan.manifest.targets);
+        await validateTargetExports(options.root, [
+          ...targetPlan.manifest.targets,
+          ...(targetPlan.manifest.effectTargets ?? []),
+        ]);
       } catch (error) {
         findings.push(...runtimeArtifactGenerationError(error).findings);
         causes.push(...runtimeArtifactInternalCauses([error]));

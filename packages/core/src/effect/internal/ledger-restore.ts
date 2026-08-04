@@ -30,8 +30,29 @@ export function restoreDurableLedgerSnapshot(
   const restoredUnitIds: string[] = [];
   for (const record of snapshot.units) {
     const cached = state.units.get(record.unit.id);
-    if (!cached) continue;
-    state.units.set(record.unit.id, Object.freeze({ ...cached, ...record.unit }));
+    const restored: RegisteredRecoveryUnit | undefined =
+      record.kind === "boundary" && record.scope
+        ? Object.freeze({
+            kind: "boundary" as const,
+            ...record.unit,
+            scope: record.scope,
+          })
+        : record.kind === "effect"
+          ? Object.freeze({
+              kind: "effect" as const,
+              ...record.unit,
+              ...(cached?.recoveryOperation
+                ? { recoveryOperation: cached.recoveryOperation }
+                : {}),
+            })
+          : undefined;
+    if (!restored) continue;
+    state.units.set(
+      record.unit.id,
+      cached?.kind === "boundary" && restored.kind === "boundary"
+        ? Object.freeze({ ...cached, ...restored })
+        : restored,
+    );
     restoredUnitIds.push(record.unit.id);
   }
   state.unitIdsByBoundary.set(snapshot.scope.id, restoredUnitIds);

@@ -12,11 +12,11 @@ export class RuntimeArtifactManifestDecodeError extends Error {
   }
 }
 
-/** Exact decoder for the local Runtime artifact manifest v2 contract. */
+/** Exact decoder for the local Runtime artifact manifest v3 contract. */
 export function decodeRuntimeArtifactManifest(
   value: unknown,
 ): RuntimeArtifactManifest {
-  if (!isRecord(value) || value.version !== 2) {
+  if (!isRecord(value) || value.version !== 3) {
     throw new RuntimeArtifactManifestDecodeError(
       "version_incompatible",
       "Runtime artifact manifest version is not supported.",
@@ -28,17 +28,32 @@ export function decodeRuntimeArtifactManifest(
       "version",
       "evalPrivacyFingerprint",
       "targets",
+      "effectTargets",
       "evals",
     ]) ||
     typeof value.evalPrivacyFingerprint !== "string" ||
     !Array.isArray(value.targets) ||
     !value.targets.every(isTarget) ||
+    !Array.isArray(value.effectTargets) ||
+    !value.effectTargets.every(isEffectTarget) ||
     !Array.isArray(value.evals) ||
     !value.evals.every(isEval)
   ) {
     invalid();
   }
   return value as unknown as RuntimeArtifactManifest;
+}
+
+function isEffectTarget(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["id", "version", "module", "export"]) &&
+    typeof value.id === "string" &&
+    typeof value.version === "number" &&
+    Number.isFinite(value.version) &&
+    typeof value.module === "string" &&
+    typeof value.export === "string"
+  );
 }
 
 function isTarget(value: unknown): boolean {
@@ -126,7 +141,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function invalid(): never {
   throw new RuntimeArtifactManifestDecodeError(
     "manifest_invalid",
-    "Runtime artifact manifest does not match schema version 2.",
+    "Runtime artifact manifest does not match schema version 3.",
   );
 }
 

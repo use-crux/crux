@@ -27,6 +27,7 @@ import {
 } from './named-defer-evidence'
 import { transition } from './work'
 import { runWithDurableEffectLedger } from '../../effect/internal/durable-binding'
+import type { RuntimeProgram } from '../program'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -36,6 +37,8 @@ export interface HandleWakeDeps {
   readonly runComposite: RuntimeCompositeRunner
   /** Runtime target registry. */
   readonly targets: RuntimeTargetMap
+  /** Immutable authored target program available to durable handlers. */
+  readonly program?: RuntimeProgram
   /** Wake verifier. */
   readonly verifyWake: NonNullable<RuntimeKernelOptions['verifyWake']>
   /** Current time source. */
@@ -147,7 +150,11 @@ export async function handleWake(
       const outcome = await executeWithNamedDeferEvidence(leased, () =>
         deps.store.effects
           ? runWithDurableEffectLedger(
-              { namespace: leased.namespace, store: deps.store },
+              {
+                namespace: leased.namespace,
+                store: deps.store,
+                ...(deps.program ? { program: deps.program } : {}),
+              },
               executeTarget,
             )
           : executeTarget(),

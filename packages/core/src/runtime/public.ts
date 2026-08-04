@@ -29,9 +29,14 @@ export {
 
 export { createRuntimeProgram } from "./program";
 export type { CreateRuntimeProgramOptions, RuntimeProgram } from "./program";
+export type {
+  RuntimeEffectTarget,
+  RuntimeEffectTargetDefinition,
+} from "./effect-targets";
 
 export type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestEffectTarget,
   RuntimeArtifactManifestEval,
   RuntimeArtifactManifestEvalCase,
   RuntimeArtifactManifestEvalVariant,

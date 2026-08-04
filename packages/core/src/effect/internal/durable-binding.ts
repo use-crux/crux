@@ -6,6 +6,7 @@
  */
 
 import type { RuntimeStoreAdapter } from "../../runtime/store";
+import type { RuntimeProgram } from "../../runtime/program";
 import { getHooks } from "../../runtime/runtime";
 import {
   createScopeFacetSlot,
@@ -17,6 +18,7 @@ import {
 export interface DurableEffectLedgerBinding {
   readonly namespace: string;
   readonly store: RuntimeStoreAdapter;
+  readonly program?: RuntimeProgram;
 }
 
 const durableEffectLedgerSlot =
@@ -44,5 +46,6 @@ export function currentDurableEffectLedgerBinding():
   return Object.freeze({
     namespace: runtime.namespace ?? "local",
     store: runtime.store,
+    ...(runtime.program ? { program: runtime.program } : {}),
   });
 }

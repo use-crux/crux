@@ -19,6 +19,7 @@ import {
 } from "./internal/execution";
 import { trackEffectBoundaryOperation } from "./internal/boundary";
 import { recoverEffectReceiptForDefinition } from "./recover";
+import { effectRecoveryDefinition } from "./internal/recovery-definition";
 
 interface RegistryDefinition {
   readonly id: string;
@@ -95,6 +96,7 @@ export function effect(
   const version = typedOptions?.version ?? 1;
   const recoverable = isRecoverableOptions(options);
 
+  let definition: EffectDefinition<unknown, unknown>;
   const run = (
     ...args: [input: unknown] | []
   ): Promise<{
@@ -107,15 +109,15 @@ export function effect(
   }> =>
     trackEffectBoundaryOperation(
       executeEffectOccurrence(
-        { id, version },
+        definition,
         typedExecutor,
         args,
         typedOptions,
       ),
     );
 
-  const definition = async (...args: [input: unknown] | []) =>
-    (await run(...args)).output;
+  definition = (async (...args: [input: unknown] | []) =>
+    (await run(...args)).output) as EffectDefinition<unknown, unknown>;
   Object.defineProperties(definition, {
     id: { value: id, enumerable: true },
     version: { value: version, enumerable: true },
@@ -123,6 +125,9 @@ export function effect(
     run: { value: run, enumerable: true },
     ...(recoverable
       ? {
+          [effectRecoveryDefinition]: {
+            value: typedOptions?.recover,
+          },
           recover: {
             value: (
               receipt: Parameters<

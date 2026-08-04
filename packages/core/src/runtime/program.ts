@@ -7,6 +7,12 @@
 import { sha256Hex } from "../content/sha256";
 import { createRuntimeError } from "./engine/errors";
 import {
+  bindRuntimeEffectTargets,
+  runtimeEffectTargetTable,
+  type RuntimeEffectTarget,
+  type RuntimeEffectTargetDefinition,
+} from "./effect-targets";
+import {
   canonicalizeRuntimeHandlerTargets,
   runtimeHandlerTargetIdentity,
   type RuntimeHandlerTarget,
@@ -22,6 +28,8 @@ export interface RuntimeProgram {
   readonly manifestHash: string;
   /** Canonically ordered executable Runtime target declarations. */
   readonly targets: readonly RuntimeHandlerTarget[];
+  /** Canonically ordered Effect recovery-target identities. */
+  readonly effectTargets: readonly RuntimeEffectTarget[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -30,6 +38,8 @@ export interface RuntimeProgram {
 export interface CreateRuntimeProgramOptions {
   /** Statically imported Flow handles and durable task targets. */
   readonly targets: readonly RuntimeHandlerTarget[];
+  /** Statically imported recoverable Effect definitions. */
+  readonly effectTargets?: readonly RuntimeEffectTargetDefinition[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -47,6 +57,10 @@ export function createRuntimeProgram(
     options.targets,
     "createRuntimeProgram()",
   );
+  const effectBinding = bindRuntimeEffectTargets(
+    options.effectTargets ?? [],
+  );
+  const effectTargets = effectBinding.targets;
   const transports = canonicalizeTransports(options.transports);
   validateSignalTargets(targets, transports);
   validateAdapterDeclarations(transports);
@@ -54,13 +68,18 @@ export function createRuntimeProgram(
   const manifestHash = sha256Hex(
     encoder.encode(
       JSON.stringify({
-        format: "crux-runtime-program:v1",
+        format: "crux-runtime-program:v2",
         targets: targets.map(targetManifestEntry),
+        effectTargets,
         transports,
       }),
     ),
   );
-  return Object.freeze({ manifestHash, targets, transports });
+  const program = { manifestHash, targets, effectTargets, transports };
+  Object.defineProperty(program, runtimeEffectTargetTable, {
+    value: effectBinding.table,
+  });
+  return Object.freeze(program);
 }
 
 function canonicalizeTransports(

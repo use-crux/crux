@@ -114,7 +114,7 @@ describe("generated deployed Eval registry", () => {
         requiredHostCapabilities: ["asset-store"],
       }),
     ]);
-    expect(result.manifest.version).toBe(2);
+    expect(result.manifest.version).toBe(3);
     expect(result.manifest.evalPrivacyFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(privacy).toEqual({
       schemaVersion: 1,
@@ -127,6 +127,7 @@ describe("generated deployed Eval registry", () => {
     expect(entry).toContain("createServerlessEvalHost");
     expect(entry).toContain("const supportedEvalHostCapabilities = []");
     expect(entry).toContain("hostCapabilities: evalHostCapabilities");
+    expect(entry).toContain("    targets,\n    program,");
     expect(entry).toContain("CRUX_EVAL_HOST_DEPLOYMENT_ID");
     expect(entry).toContain("CRUX_EVAL_HOST_TOKEN");
     expect(entry).toContain("export const DELETE");

@@ -49,10 +49,11 @@ describe("runtime artifacts", () => {
     const second = await generateRuntimeArtifacts({ root, host: "next" });
 
     expect(result.manifest).toEqual({
-      version: 2,
+      version: 3,
       evalPrivacyFingerprint:
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
       targets: [],
+      effectTargets: [],
       evals: [],
     });
     expect(second.contentHash).toBe(result.contentHash);
@@ -61,7 +62,7 @@ describe("runtime artifacts", () => {
     ).resolves.toBe(`${JSON.stringify(result.manifest, null, 2)}\n`);
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
-    ).resolves.toContain("createRuntimeHandler({ targets, manifestHash:");
+    ).resolves.toContain("createRuntimeHandler({ targets, program, manifestHash:");
     const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
     expect(entry).toContain("export const evalRegistry");
     expect(entry).toContain("entries:[]");
@@ -82,8 +83,11 @@ describe("runtime artifacts", () => {
       sourceFile,
       [
         "import { flow } from '@use-crux/core/flow'",
+        "import { effect } from '@use-crux/core/effect'",
         "",
         "export const reviewFlow = flow('review', async () => undefined)",
+        "export const recordReview = effect('review.record', async () => undefined, { version: 2, recover: async () => undefined })",
+        "const localReview = effect('review.local', async () => undefined, { recover: async () => undefined })",
       ].join("\n"),
     );
 
@@ -95,6 +99,44 @@ describe("runtime artifacts", () => {
         fidelity: "resolved",
         source: { file: sourceFile, line: 1 },
         metadata: { exportName: "reviewFlow" },
+      },
+      {
+        id: "effect:review.record:v2",
+        kind: "effect",
+        name: "review.record",
+        fidelity: "resolved",
+        source: { file: sourceFile, line: 4 },
+        metadata: {
+          exportName: "recordReview",
+          exported: true,
+          facts: {
+            kind: "effect",
+            effectId: "review.record",
+            version: 2,
+            recoverable: true,
+            capture: false,
+            resource: false,
+          },
+        },
+      },
+      {
+        id: "effect:review.local:v1",
+        kind: "effect",
+        name: "review.local",
+        fidelity: "resolved",
+        source: { file: sourceFile, line: 5 },
+        metadata: {
+          exportName: "localReview",
+          exported: false,
+          facts: {
+            kind: "effect",
+            effectId: "review.local",
+            version: 1,
+            recoverable: true,
+            capture: false,
+            resource: false,
+          },
+        },
       },
     ] satisfies readonly ProjectDefinition[];
 
@@ -112,11 +154,34 @@ describe("runtime artifacts", () => {
         export: "reviewFlow",
       },
     ]);
+    expect(result.manifest.effectTargets).toEqual([
+      {
+        id: "review.record",
+        version: 2,
+        module: "./src/review.ts",
+        export: "recordReview",
+      },
+    ]);
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
-    ).resolves.toContain(
-      "import { reviewFlow as target0 } from '../src/review'",
+    ).resolves.toEqual(
+      expect.stringContaining(
+        "import { reviewFlow as target0 } from '../src/review'",
+      ),
     );
+    await expect(
+      readFile(join(root, "crux.generated/next.ts"), "utf8"),
+    ).resolves.toEqual(
+      expect.stringContaining(
+        "import { recordReview as effectTarget0 } from '../src/review'",
+      ),
+    );
+    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+    expect(entry).not.toContain("localReview");
+    expect(entry).toContain(
+      "const program = createRuntimeProgram({ targets, effectTargets, transports: [] })",
+    );
+    expect(entry).toContain("createRuntimeHandler({ targets, program,");
   });
 
   it("writes split Convex entry files without a top-level shim", async () => {
@@ -178,6 +243,8 @@ describe("runtime artifacts", () => {
     expect(control).toContain("makeFunctionReference<'action'");
     expect(control).toContain("_crux/targets:executeTarget");
     expect(control).toContain("targetExecutor");
+    expect(targets).toContain("createRuntimeProgram");
+    expect(targets).toContain("targets, program");
     expect(control).not.toContain("from '../../src/review'");
     expect(targets).toContain("'use node'");
     expect(targets).toContain("createConvexRuntimeTargetExecutor");
@@ -727,14 +794,14 @@ describe("runtime artifacts", () => {
     await expect(
       generateRuntimeArtifacts({ root, host: "next" }),
     ).resolves.toMatchObject({
-      manifest: { version: 2, targets: [] },
+      manifest: { version: 3, targets: [], effectTargets: [] },
     });
   });
 
   it("reports non-terminal runtime work whose target disappeared from the manifest", () => {
     const drift = diffRuntimeArtifactDrift({
       manifest: {
-        version: 2,
+        version: 3,
         evalPrivacyFingerprint:
           "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [
@@ -745,6 +812,7 @@ describe("runtime artifacts", () => {
             export: "reviewFlow",
           },
         ],
+        effectTargets: [],
         evals: [],
       },
       nonTerminalTargetIds: [
