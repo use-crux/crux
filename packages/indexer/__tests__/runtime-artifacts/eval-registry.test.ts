@@ -87,7 +87,7 @@ describe("generated deployed Eval registry", () => {
       host: "next",
       definitions,
     });
-    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+    const entry = await readFile(join(root, "crux/generated/next.ts"), "utf8");
     const privacy = JSON.parse(
       await readFile(
         join(root, ".crux/generated/runtime/privacy.json"),
@@ -123,6 +123,7 @@ describe("generated deployed Eval registry", () => {
     });
     expect(result.manifest.evals[0]!.evalFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(entry).toContain("createDeployedEvalRegistry");
+    expect(entry).toContain("import projectConfig from '../../crux.config'");
     expect(entry).toContain('redactPaths:["customer.email"]');
     expect(entry).toContain("createServerlessEvalHost");
     expect(entry).toContain("const supportedEvalHostCapabilities = []");
@@ -130,7 +131,7 @@ describe("generated deployed Eval registry", () => {
     expect(entry).toContain("CRUX_EVAL_HOST_DEPLOYMENT_ID");
     expect(entry).toContain("CRUX_EVAL_HOST_TOKEN");
     expect(entry).toContain("export const DELETE");
-    expect(entry).toContain("import eval0 from '../evals/support.eval'");
+    expect(entry).toContain("import eval0 from '../../evals/support.eval'");
     expect(entry).toContain('"a-sidecar"');
     expect(entry).toContain('"z-inline"');
     expect(entry).not.toMatch(
@@ -144,7 +145,7 @@ describe("generated deployed Eval registry", () => {
       "capability-readiness-token-at-least-32-bytes";
     try {
       const generated = (await importUserModule(
-        join(root, "crux.generated/next.ts"),
+        join(root, "crux/generated/next.ts"),
         4_000,
       )) as {
         readonly GET: (request: Request) => Promise<Response>;
@@ -281,7 +282,7 @@ describe("generated deployed Eval registry", () => {
       host: "next",
       definitions,
     });
-    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+    const entry = await readFile(join(root, "crux/generated/next.ts"), "utf8");
 
     expect(result.manifest.evals).toEqual([]);
     expect(entry).not.toContain("createServerlessEvalHost");

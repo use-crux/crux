@@ -65,6 +65,9 @@ Generate a freshness-bound Runtime program and add `crux runtime worker` for
 one configured Node/PostgreSQL execution worker with durable ownership and
 bounded signal shutdown.
 
+Write the generated Next.js Runtime entry to `crux/generated/next.ts` so
+framework-facing generated source uses a conventional directory hierarchy.
+
 Ensure an interrupted Runtime worker exits cleanly even while its configured
 host is still loading.
 

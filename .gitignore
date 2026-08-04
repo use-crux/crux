@@ -32,7 +32,7 @@ packages/local/tapes/out/
 .tmp/
 
 .crux
-crux.generated/
+crux/generated/
 
 # Local implementation workplans
 docs/plans/config-discovery-workplan/

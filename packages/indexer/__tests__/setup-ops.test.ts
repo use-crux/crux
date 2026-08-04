@@ -215,7 +215,7 @@ describe('runSetupOperation', () => {
         pendingFiles: [
           '.crux/generated/runtime/privacy.json',
           '.crux/generated/runtime/program.ts',
-          'crux.generated/next.ts',
+          'crux/generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],
         changedFiles: [],
@@ -248,7 +248,7 @@ describe('runSetupOperation', () => {
         changedFiles: [
           '.crux/generated/runtime/privacy.json',
           '.crux/generated/runtime/program.ts',
-          'crux.generated/next.ts',
+          'crux/generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],
         findings: [],
@@ -288,7 +288,7 @@ describe('runSetupOperation', () => {
         changedFiles: [
           '.crux/generated/runtime/privacy.json',
           '.crux/generated/runtime/program.ts',
-          'crux.generated/next.ts',
+          'crux/generated/next.ts',
           '.crux/generated/runtime/manifest.json',
         ],
       },

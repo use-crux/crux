@@ -43,7 +43,7 @@ export function nextEntryFile(input: {
       ? [
           "import type { InProcessRuntimeEngineDefinition } from '@use-crux/core/runtime'",
           "import { createServerlessEvalHost, type EvalHostStore, type ServerlessEvalHost } from '@use-crux/core/runtime/internal/eval-host'",
-          "import projectConfig from '../crux.config'",
+          `import projectConfig from '${importSpecifier(dirname(input.outputFile), join(input.root, "crux.config"))}'`,
         ]
       : []),
     ...input.evalArtifacts.entryImports,
