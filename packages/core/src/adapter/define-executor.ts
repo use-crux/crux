@@ -82,7 +82,8 @@ interface AttemptSignalOptions {
  *
  * @example
  * ```ts
- * import { loopRuntimeAdapter, fakeLoopRuntime } from '@use-crux/core/adapter'
+ * import { loopRuntimeAdapter } from '@use-crux/core/adapter'
+ * import { fakeLoopRuntime } from '@use-crux/core/adapter/testing'
  *
  * const fake = fakeLoopRuntime({ loops: [[{ text: 'hello' }]] })
  * const executor = loopRuntimeAdapter(fake.runtime)

@@ -165,7 +165,8 @@ interface FakeToolLike {
  *
  * @example
  * ```ts
- * import { loopRuntimeAdapter, fakeLoopRuntime } from '@use-crux/core/adapter'
+ * import { loopRuntimeAdapter } from '@use-crux/core/adapter'
+ * import { fakeLoopRuntime } from '@use-crux/core/adapter/testing'
  *
  * const fake = fakeLoopRuntime({ structured: ['not json', '{"title":"ok","count":1}'] })
  * const executor = loopRuntimeAdapter(fake.runtime)
