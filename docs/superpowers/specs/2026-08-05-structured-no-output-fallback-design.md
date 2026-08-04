@@ -7,10 +7,10 @@ Treat AI SDK `NoOutputGeneratedError` as a failed structured-output attempt so C
 ## Design
 
 - Recognize the AI SDK's stable `AI_NoOutputGeneratedError` identity in the AI adapter without importing AI SDK error classes into Core.
-- Convert it to the existing `StructuredAttempt` invalid result with a content-free validation issue. Normal Prompt execution then uses Core's existing validation-exhaustion behavior.
-- In the standalone `generateObjectFn()` bridge used by Connected Knowledge, convert an invalid attempt into a provider-neutral `ValidationExhaustedError`. Core already classifies that error as `invalid_response`.
+- Normalize it at the AI adapter boundary to a provider-neutral `CruxAdapterError` with kind `invalid-response` and a content-free machine code.
+- Map `invalid-response` to Core's existing `invalid_response` routing category. This remains distinct from `ValidationExhaustedError`, which is deliberately policy-terminal after repair is exhausted.
 - Preserve policy-terminal behavior and do not retain provider output, raw structured text, or sensitive error payloads.
-- Do not add a new public error category or make Core depend on the AI SDK.
+- Keep Core independent of the AI SDK; Core only owns the provider-neutral adapter error kind.
 
 ## Verification
 

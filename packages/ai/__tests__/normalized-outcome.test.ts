@@ -145,6 +145,15 @@ describe('mapAiSdkError', () => {
     })
   })
 
+  it('classifies AI_NoOutputGeneratedError as an invalid response', () => {
+    const error = Object.assign(new Error('No output generated.'), { name: 'AI_NoOutputGeneratedError' })
+    expect(mapAiSdkError(error)).toMatchObject({
+      kind: 'invalid-response',
+      code: 'ai-sdk.no_output_generated',
+      retryable: true,
+    })
+  })
+
   it('defers a fully unrecognized error to core generic classification', () => {
     const error = new Error('mystery failure')
     expect(mapAiSdkError(error)).toBeUndefined()

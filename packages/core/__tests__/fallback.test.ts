@@ -166,6 +166,18 @@ describe("classifyError()", () => {
         ),
       ),
     ).toBe("rate_limit");
+
+    expect(
+      classifyError(
+        new CruxAdapterError(
+          cruxProviderError({
+            kind: "invalid-response",
+            code: "ai-sdk.no_output_generated",
+            retryable: true,
+          }),
+        ),
+      ),
+    ).toBe("invalid_response");
   });
 
   it("classifies HTTP 429 as rate_limit", () => {
