@@ -5,12 +5,12 @@
  */
 
 import { z } from 'zod'
+import { ValidationExhaustedError } from '../../generation/validation-retry'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { AssetStore } from '../../storage'
 import type { AssertionStage } from '../assertions/assertions'
 import { createAssertionIdentity, toAssertionJsonData } from '../assertions/identity'
 import type { AssertionRef } from '../assertions/relations'
-import type { KnowledgeRef } from '../refs'
 import {
   toAssertionClaimRecords,
   validateAssertionClaims,
@@ -25,13 +25,6 @@ import {
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
 import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
-
-const refSchema: z.ZodType<KnowledgeRef> = z.union([
-  z.object({ kind: z.literal('document'), sourceId: z.string() }).strict(),
-  z.object({ kind: z.literal('parent'), sourceId: z.string(), parentId: z.string() }).strict(),
-  z.object({ kind: z.literal('chunk'), sourceId: z.string(), chunkId: z.string() }).strict(),
-  z.object({ kind: z.literal('entity'), entityId: z.string() }).strict(),
-])
 
 /** Run one assertion stage and return cached claim records. Internal. */
 export async function runAssertionStage(input: {
@@ -142,9 +135,7 @@ async function runGeneratedBatch(
   warnings.push(...repairedPrompt.warnings)
   const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
   if (repaired.errors.length > 0) {
-    throw new Error(
-      repaired.errors.join('\n') || `Derive ${input.stage.id} batch ${batch.ordinal} failed after repair.`,
-    )
+    throw assertionValidationExhausted(input.stage.id, repaired.errors.length)
   }
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }
@@ -162,7 +153,7 @@ async function readGeneratedAssertionClaims(
   const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
-  const schema = payloadSchema(stage)
+  const schema = payloadSchema(stage, batch.chunks)
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only assertions that match the requested schema.',
@@ -180,16 +171,44 @@ async function readGeneratedAssertionClaims(
   return validateAssertionClaims(stage, parsed.data.assertions, batch.chunks)
 }
 
-function payloadSchema(stage: AssertionStage<Record<string, z.ZodType<unknown>>>) {
-  const typeNames = Object.keys(stage.types) as unknown as readonly [string, ...string[]]
+function payloadSchema(
+  stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
+  chunks: readonly CruxChunk[],
+) {
+  const evidence = z.array(unionSchema(chunks.map((chunk) => z.object({
+    kind: z.literal('chunk'),
+    sourceId: z.literal(chunk.sourceId),
+    chunkId: z.literal(chunk.chunkId),
+  }).strict()))).min(1)
+  const assertion = unionSchema(Object.entries(stage.types).map(([type, data]) => z.object({
+    type: z.literal(type),
+    data,
+    evidence,
+    provenance: z.enum(['exact', 'derived']).optional(),
+  }).strict()))
   return z.object({
-    assertions: z.array(z.object({
-      type: z.enum(typeNames),
-      data: z.unknown(),
-      evidence: z.array(refSchema).optional(),
-      provenance: z.enum(['exact', 'derived']).optional(),
-    }).strict()),
+    assertions: z.array(assertion),
   }).strict()
+}
+
+function unionSchema<T>(schemas: readonly z.ZodType<T>[]): z.ZodType<T> {
+  const [first, second, ...rest] = schemas
+  if (!first) throw new Error('Structured assertion schema requires at least one option.')
+  return second ? z.union([first, second, ...rest]) : first
+}
+
+function assertionValidationExhausted(stageId: string, issueCount: number): ValidationExhaustedError {
+  const issues = Array.from({ length: Math.max(1, issueCount) }, (_, index) => ({
+    code: 'custom' as const,
+    path: ['assertions', index],
+    message: 'invalid assertion',
+  }))
+  return new ValidationExhaustedError({
+    zodErrors: new z.ZodError(issues),
+    attempts: 1,
+    maxAttempts: 1,
+    promptId: stageId,
+  })
 }
 
 function addRecords(target: Map<string, AssertionClaimRecord>, records: readonly AssertionClaimRecord[]): void {

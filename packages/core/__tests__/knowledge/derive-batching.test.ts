@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { ValidationExhaustedError } from '../../src/generation/validation-retry'
 import type { CruxChunk, CruxDocument } from '../../src/indexing/types'
 import { assertions, knowledgeModel, relate, type KnowledgeContentPart, type KnowledgeModel } from '../../src/knowledge'
 import { MAX_DERIVE_BATCH_CHARS, EXTRACTION_CONTRACT_VERSION } from '../../src/knowledge/derive/bounds'
@@ -149,7 +150,7 @@ describe('connected knowledge derive batching', () => {
     })).rejects.toThrow(/Derive refs type missing-one: unknown type\nDerive refs type missing-two: unknown type/)
   })
 
-  it('reports every assertion validation error when repair fails', async () => {
+  it('reports typed assertion validation exhaustion with every failed output item', async () => {
     const types = {
       first: z.object({ value: z.string() }),
       second: z.object({ value: z.string() }),
@@ -163,14 +164,18 @@ describe('connected knowledge derive batching', () => {
     const model = fixedAssertionModel([invalid, invalid])
     const stage = assertions({ id: 'facts', version: 1, types, model })
 
-    await expect(runDeriveStages({
+    const error = await runDeriveStages({
       records: inMemoryRecordStore(),
       indexerId: 'kb',
       namespace,
       stages: [stage],
       document: document(),
       chunks: [chunk('c1', 0, 'alpha')],
-    })).rejects.toThrow(/Derive facts type first: invalid data\nDerive facts type second: invalid data/)
+    }).catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(ValidationExhaustedError)
+    expect(error).toMatchObject({ attempts: 1, maxAttempts: 1, promptId: 'facts' })
+    expect((error as ValidationExhaustedError).issues).toHaveLength(2)
   })
 
   it('truncates only an oversized single chunk and leaves surrounding batches intact', async () => {

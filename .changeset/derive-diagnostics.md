@@ -10,3 +10,8 @@ Replace single-call generated relation and assertion extraction with
 deterministic whole-chunk batching under the 12000-character derive batch
 budget, invalidating pre-batching claim manifests with extraction contract
 version 2.
+
+Constrain model-backed assertion output to each authored type's data schema and
+the exact evidence chunks offered in its batch. Failed assertion repair now
+surfaces as typed validation exhaustion, and extraction contract version 3
+invalidates claims produced through the weaker model schema.
