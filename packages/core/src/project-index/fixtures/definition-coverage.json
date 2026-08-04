@@ -766,6 +766,38 @@
       "definitionRef": null
     },
     {
+      "kind": "signal",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "signal.provider",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "signal.transport",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "signal.transportBinding",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
       "kind": "session",
       "primary": "runtime-observed-unjoined",
       "secondary": [],
