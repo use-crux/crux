@@ -24,24 +24,26 @@ const invoicePaid = signal({
   schema: z.object({ invoiceId: z.string() }),
 });
 
+const transport = webhook({
+  async handle() {
+    return {
+      accountId: "acct_1",
+      eventId: "evt_1",
+      authenticatedRouting: { source: "webhook" },
+      payload: {
+        kind: "inline-base64url",
+        value: "YQ",
+        byteLength: 1,
+        sha256:
+          "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+      },
+    };
+  },
+});
+
 const provider = signalProvider({
   id: "orders.webhook",
-  transport: webhook({
-    async handle() {
-      return {
-        accountId: "acct_1",
-        eventId: "evt_1",
-        authenticatedRouting: { source: "webhook" },
-        payload: {
-          kind: "inline-base64url",
-          value: "YQ",
-          byteLength: 1,
-          sha256:
-            "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
-        },
-      };
-    },
-  }),
+  transport,
   signals: {
     orderSubmitted,
     invoicePaid,
@@ -68,6 +70,37 @@ type _SignalsExact = Expect<
     "orderSubmitted" | "invoicePaid"
   >
 >;
+type _OrderSignalExact = Expect<
+  Equal<(typeof provider.signals.orderSubmitted)["id"], "order.submitted">
+>;
+type _InvoiceSignalExact = Expect<
+  Equal<(typeof provider.signals.invoicePaid)["id"], "invoice.paid">
+>;
+
+signalProvider({
+  id: "orders.invalid",
+  transport,
+  signals: {
+    orderSubmitted,
+    // @ts-expect-error Non-Signal map values are rejected at the authoring site.
+    notASignal: { orderId: "ord_1" },
+  },
+  async onEvent() {},
+});
+
+signalProvider({
+  id: "orders.lookalike",
+  transport,
+  signals: {
+    // @ts-expect-error Structural lookalikes without Signal methods are rejected.
+    orderSubmitted: {
+      _tag: "Signal" as const,
+      id: "order.submitted",
+      schema: z.object({ orderId: z.string() }),
+    },
+  },
+  async onEvent() {},
+});
 
 const binding = managedTransportBinding(provider, {
   id: "binding.orders",

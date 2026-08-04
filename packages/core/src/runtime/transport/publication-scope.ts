@@ -4,13 +4,20 @@
  * @module
  */
 
-import type { Signal } from "../../signal/definition";
-import type { SignalSchema } from "../../signal/schema-types";
 import type {
+  SignalProviderSignalMember,
   SignalProviderSignals,
 } from "../../signal/provider/signal-provider";
 import type { SignalPublishOptions } from "../../signal/publication";
 import type { RuntimeAcceptedTransportEnvelope } from "./contracts";
+
+/** Runtime publish surface retained on every authored Signal map member. */
+type ProviderSignalRuntime = SignalProviderSignalMember & {
+  publish(
+    payload: unknown,
+    options?: SignalPublishOptions,
+  ): Promise<unknown>;
+};
 
 /**
  * Default publication idempotency key for one accepted provider event.
@@ -28,7 +35,7 @@ export function transportPublicationIdempotencyKey(
  * Wrap a provider Signal map so omitted publish keys default to the accepted
  * event identity.
  *
- * @remarks Keeps the ordinary {@link Signal.publish} surface. An explicit
+ * @remarks Keeps the ordinary Signal publish surface. An explicit
  * `idempotencyKey` still wins. Crash recovery after successful publication but
  * before envelope completion therefore cannot create a second logical
  * delivery for the same accepted provider event.
@@ -40,20 +47,18 @@ export function scopeProviderSignalsForEnvelope<
   envelope: RuntimeAcceptedTransportEnvelope,
 ): TSignals {
   const defaultKey = transportPublicationIdempotencyKey(envelope);
-  const scoped: Record<string, Signal<string, SignalSchema>> = {};
+  const scoped: Record<string, ProviderSignalRuntime> = {};
   for (const [name, definition] of Object.entries(signals)) {
+    const entry = definition as ProviderSignalRuntime;
     scoped[name] = Object.freeze({
-      ...definition,
-      publish(
-        payload: Parameters<typeof definition.publish>[0],
-        options?: SignalPublishOptions,
-      ) {
-        return definition.publish(payload, {
+      ...entry,
+      publish(payload: unknown, options?: SignalPublishOptions) {
+        return entry.publish(payload, {
           ...options,
           idempotencyKey: options?.idempotencyKey ?? defaultKey,
         });
       },
     });
   }
-  return Object.freeze(scoped) as TSignals;
+  return Object.freeze(scoped) as unknown as TSignals;
 }

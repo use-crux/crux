@@ -10,12 +10,46 @@ import type { WebhookTransport } from "../transport";
 import type { RuntimeAcceptedTransportEnvelope } from "../../runtime/transport/contracts";
 
 /**
+ * Minimal structural bound for one provider Signal map member.
+ *
+ * @remarks Full `Signal<string, SignalSchema>` is invariant through `when()`,
+ * so concrete `Signal<literal, ZodObject>` values are not assignable to that
+ * broad form under some compilers (including TypeScript-Go preview). This
+ * bound checks Signal identity without collapsing per-key payload inference.
+ */
+export type SignalProviderSignalMember = {
+  readonly _tag: "Signal";
+  readonly id: string;
+  readonly schema: SignalSchema;
+};
+
+/**
  * Declared Signal map retained by one provider for exact publication typing.
  *
- * @typeParam TSignals - Named Signal definitions this provider may publish.
+ * @remarks Prefer {@link SignalProviderSignalsConstraint} at authoring bounds so
+ * each inferred member retains its concrete Signal type while non-Signal
+ * values are rejected. This index type is the wide public form for defaults.
  */
 export type SignalProviderSignals = {
-  readonly [Name in string]: Signal<string, SignalSchema>;
+  readonly [Name in string]: SignalProviderSignalMember;
+};
+
+/**
+ * Self-constraint that validates each map member is a Signal.
+ *
+ * @remarks Uses conditional inference rather than assignability to the
+ * invariant `Signal<string, SignalSchema>` form, so concrete Signal values
+ * remain exact across TypeScript 5.5+, 6.0, and TypeScript-Go preview.
+ *
+ * @typeParam TSignals - Candidate Signal map to validate.
+ */
+export type SignalProviderSignalsConstraint<TSignals> = {
+  readonly [K in keyof TSignals]: TSignals[K] extends Signal<
+    infer _Id extends string,
+    infer _Schema extends SignalSchema
+  >
+    ? TSignals[K]
+    : never;
 };
 
 /**
@@ -141,7 +175,8 @@ export interface SignalProvider<
  */
 export function signalProvider<
   const TId extends string,
-  const TSignals extends SignalProviderSignals,
+  const TSignals extends SignalProviderSignalsConstraint<TSignals> &
+    SignalProviderSignals,
 >(
   options: SignalProviderOptions<TId, TSignals>,
 ): SignalProvider<TId, TSignals> {

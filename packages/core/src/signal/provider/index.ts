@@ -10,7 +10,9 @@ export type {
   SignalProviderEventContext,
   SignalProviderOnEvent,
   SignalProviderOptions,
+  SignalProviderSignalMember,
   SignalProviderSignals,
+  SignalProviderSignalsConstraint,
 } from "./signal-provider";
 export { managedTransportBinding } from "./binding";
 export type { ManagedTransportBindingOptions } from "./binding";

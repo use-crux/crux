@@ -207,7 +207,11 @@ PostgreSQL Runtime stores implement the transport port with shared conformance.
 RuntimeProgram validation treats Signal transport targets as Signal ids rather
 than Agent/Flow/task targets. Normalization is host-invoked through a
 restart-safe runner in this release; autonomous Runtime worker supervision of
-transport claim/normalize remains a later boundary.
+transport claim/normalize remains a later boundary. Provider Signal maps use a
+structural member bound plus a self-constraint so concrete
+`Signal<literal, schema>` values keep exact per-key payload inference across
+TypeScript 5.5+, 6.0, and TypeScript-Go preview without accepting non-Signal
+map values.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
