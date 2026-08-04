@@ -15,9 +15,9 @@
  * from `@use-crux/core/adapter/tool` (middleware, approvals, instrumentation,
  * skill loads, memory capture) and the `Safety` session from
  * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
- * Test public provider runtimes with {@link providerRuntimeConformance}. Use
- * {@link fakeLoopRuntime}, {@link adapterSpecConformance}, and
- * {@link loopRuntimePortConformance} for lower-level execution IR tests.
+ * Test public provider runtimes with the helpers from
+ * `@use-crux/core/adapter/testing`; test-only values are intentionally kept
+ * out of this production entrypoint.
  *
  * @module
  */
@@ -356,47 +356,6 @@ export type {
   ToolProtocolEvent,
 } from "./tool";
 export type { ApprovalRequestInfo } from "./tool/approval";
-
-// Testing utilities for public provider runtimes and lower-level execution IR.
-export {
-  assertCanonicalResult,
-  adapterSpecConformance,
-  fakeLoopRuntime,
-  loopRuntimePortConformance,
-  providerRuntimeConformance,
-  transcriptCodecConformance,
-} from "./testing";
-export type {
-  AdapterConformanceCapabilities,
-  AdapterConformanceEmission,
-  AdapterConformanceHarness,
-  AdapterConformanceInspector,
-  AdapterConformancePrepared,
-  AdapterConformanceScript,
-  CanonicalFinalStepInfo,
-  CanonicalGenerateResultLike,
-  CanonicalResultExpectation,
-  CanonicalResultStepExpectation,
-  CanonicalTokenUsage,
-  FakeLoopRuntime,
-  FakeLoopRuntimeConfig,
-  FakeLoopEmission,
-  FakeRawResponse,
-  FakeRawStream,
-  LoopRuntimeConformanceHarness,
-  ConformanceViolation,
-  ProviderConformanceEmission,
-  ProviderConformancePrepared,
-  ProviderConformanceScript,
-  ProviderRuntimeConformanceCapabilities,
-  ProviderRuntimeConformanceGenerateOptions,
-  ProviderRuntimeConformanceGenerateResult,
-  ProviderRuntimeConformanceHarness,
-  ProviderRuntimeConformanceRuntime,
-  ProviderRuntimeConformanceStreamHandle,
-  TranscriptConformanceScenario,
-  TranscriptWrapperExpectation,
-} from "./testing";
 
 /**
  * The managed logical stream contract (RFC #173): one provider-neutral `stream()` result
