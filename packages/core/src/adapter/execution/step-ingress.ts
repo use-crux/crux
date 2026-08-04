@@ -58,5 +58,9 @@ export function canonicalStepIngressMessage(
 }
 
 function markStepIngressMessage(message: Message): StepIngressMessage {
-  return Object.freeze({ ...message, [stepIngressMessage]: true });
+  const marked: StepIngressMessage = {
+    ...message,
+    [stepIngressMessage]: true,
+  };
+  return Object.freeze(marked);
 }
