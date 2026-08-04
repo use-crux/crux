@@ -38,6 +38,7 @@ mod rules {
     pub(crate) mod session;
     #[cfg(test)]
     mod session_tests;
+    pub(crate) mod signal;
     pub(crate) mod thread;
     #[cfg(test)]
     mod thread_tests;
