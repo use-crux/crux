@@ -24,6 +24,7 @@ import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
 import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
 import { createPostgresResultPayloadPort } from './results'
+import { createPostgresSessionStore } from './sessions'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -144,12 +145,14 @@ export function postgres(
       timers: createPostgresTimerStore(client, schema, txFaults),
       outbox: createPostgresOutboxPort(client, schema, txFaults),
       deferred: createPostgresDeferredStore(client, schema, txFaults),
+      sessions: createPostgresSessionStore(client, schema, txFaults),
     }
   }
 
   const ports = portsFor()
   const store: PostgresRuntimeStore = Object.freeze({
     id: 'postgres',
+    durability: 'durable',
     ...ports,
     leases: createPostgresLeasePort(pool, schema),
     maintenanceOwnership: createPostgresMaintenanceOwnership(pool, schema),
