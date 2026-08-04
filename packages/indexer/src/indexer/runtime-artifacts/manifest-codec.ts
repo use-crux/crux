@@ -28,11 +28,17 @@ export function decodeRuntimeArtifactManifest(
       "version",
       "evalPrivacyFingerprint",
       "targets",
+      "providers",
+      "transports",
       "evals",
     ]) ||
     typeof value.evalPrivacyFingerprint !== "string" ||
     !Array.isArray(value.targets) ||
     !value.targets.every(isTarget) ||
+    !Array.isArray(value.providers) ||
+    !value.providers.every(isProvider) ||
+    !Array.isArray(value.transports) ||
+    !value.transports.every(isTransport) ||
     !Array.isArray(value.evals) ||
     !value.evals.every(isEval)
   ) {
@@ -60,6 +66,46 @@ function isTarget(value: unknown): boolean {
     typeof value.export === "string" &&
     typeof value.definitionId === "string" &&
     typeof value.fingerprint === "string"
+  );
+}
+
+function isProvider(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      "id",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+    ]) &&
+    typeof value.id === "string" &&
+    typeof value.module === "string" &&
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string"
+  );
+}
+
+function isTransport(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      "id",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+      "providerId",
+      "signalId",
+    ]) &&
+    typeof value.id === "string" &&
+    typeof value.module === "string" &&
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string" &&
+    typeof value.providerId === "string" &&
+    typeof value.signalId === "string"
   );
 }
 

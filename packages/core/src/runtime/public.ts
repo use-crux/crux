@@ -83,7 +83,9 @@ export type {
   RuntimeArtifactManifestEval,
   RuntimeArtifactManifestEvalCase,
   RuntimeArtifactManifestEvalVariant,
+  RuntimeArtifactManifestProvider,
   RuntimeArtifactManifestTarget,
+  RuntimeArtifactManifestTransport,
   RuntimeArtifactTargetKind,
 } from "./artifacts";
 
