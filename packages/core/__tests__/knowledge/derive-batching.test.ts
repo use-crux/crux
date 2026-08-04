@@ -175,7 +175,10 @@ describe('connected knowledge derive batching', () => {
 
     expect(error).toBeInstanceOf(ValidationExhaustedError)
     expect(error).toMatchObject({ attempts: 1, maxAttempts: 1, promptId: 'facts' })
-    expect((error as ValidationExhaustedError).issues).toHaveLength(2)
+    expect((error as ValidationExhaustedError).issues).toEqual([
+      { path: 'assertions.[0].data.value', depth: 4, code: 'invalid_type' },
+      { path: 'assertions.[1].data.value', depth: 4, code: 'invalid_type' },
+    ])
   })
 
   it('truncates only an oversized single chunk and leaves surrounding batches intact', async () => {

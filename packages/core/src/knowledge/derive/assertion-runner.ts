@@ -135,7 +135,7 @@ async function runGeneratedBatch(
   warnings.push(...repairedPrompt.warnings)
   const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
   if (repaired.errors.length > 0) {
-    throw assertionValidationExhausted(input.stage.id, repaired.errors.length)
+    throw assertionValidationExhausted(input.stage.id, repaired.validationError)
   }
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, repaired.claims))
   return { claims: [...valid.values()], warnings }
@@ -166,9 +166,20 @@ async function readGeneratedAssertionClaims(
   })
   const parsed = schema.safeParse(result.object)
   if (!parsed.success) {
-    return { claims: [], errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message) }
+    return {
+      claims: [],
+      errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message),
+      validationError: parsed.error,
+    }
   }
-  return validateAssertionClaims(stage, parsed.data.assertions, batch.chunks)
+  const validated = validateAssertionClaims(stage, parsed.data.assertions, batch.chunks)
+  return {
+    ...validated,
+    validationError: new z.ZodError(validated.issues.map((issue) => ({
+      ...issue,
+      path: ['assertions', ...issue.path],
+    }))),
+  }
 }
 
 function payloadSchema(
@@ -180,12 +191,15 @@ function payloadSchema(
     sourceId: z.literal(chunk.sourceId),
     chunkId: z.literal(chunk.chunkId),
   }).strict()))).min(1)
-  const assertion = unionSchema(Object.entries(stage.types).map(([type, data]) => z.object({
+  const assertionOptions = Object.entries(stage.types).map(([type, data]) => z.object({
     type: z.literal(type),
     data,
     evidence,
     provenance: z.enum(['exact', 'derived']).optional(),
-  }).strict()))
+  }).strict())
+  const [firstAssertion, ...otherAssertions] = assertionOptions
+  if (!firstAssertion) throw new Error('Structured assertion schema requires at least one type.')
+  const assertion = z.discriminatedUnion('type', [firstAssertion, ...otherAssertions])
   return z.object({
     assertions: z.array(assertion),
   }).strict()
@@ -197,14 +211,9 @@ function unionSchema<T>(schemas: readonly z.ZodType<T>[]): z.ZodType<T> {
   return second ? z.union([first, second, ...rest]) : first
 }
 
-function assertionValidationExhausted(stageId: string, issueCount: number): ValidationExhaustedError {
-  const issues = Array.from({ length: Math.max(1, issueCount) }, (_, index) => ({
-    code: 'custom' as const,
-    path: ['assertions', index],
-    message: 'invalid assertion',
-  }))
+function assertionValidationExhausted(stageId: string, zodErrors: z.ZodError): ValidationExhaustedError {
   return new ValidationExhaustedError({
-    zodErrors: new z.ZodError(issues),
+    zodErrors,
     attempts: 1,
     maxAttempts: 1,
     promptId: stageId,
