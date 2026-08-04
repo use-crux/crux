@@ -45,10 +45,11 @@ function exampleProvider(id = "example") {
 }
 
 function providersFor(...bindings: readonly RuntimeManagedTransportBinding[]) {
+  // adapter.id is the application-owned executable provider identity.
+  // adapter.provider is the external system string (e.g. "example"), not a second provider.
   const ids = new Set<string>();
   for (const entry of bindings) {
     ids.add(entry.adapter.id);
-    ids.add(entry.adapter.provider);
   }
   return [...ids].map((id) => exampleProvider(id));
 }
@@ -167,6 +168,10 @@ describe("createRuntimeProgram", () => {
       providers: providersFor(transport),
       transports: [transport],
     });
+    expect(program.providers.map((entry) => entry.id)).toEqual([
+      transport.adapter.id,
+    ]);
+    expect(program.transports[0]?.adapter.provider).toBe("example");
     expect(program.transports.map((entry) => entry.target.signalId)).toEqual([
       "orders.updated",
     ]);
