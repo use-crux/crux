@@ -96,8 +96,8 @@ Structured tasks expose non-optional schema-parsed semantic output. Text tasks
 expose `string`. Callbacks additionally receive a normalized terminal
 `response`. Managed tasks also enable automatic exact evidence reuse,
 file-backed Case validation, typed Variants, and generated Runtime deployment.
-For an AI SDK object model, bind `stableModel(model)` from `@use-crux/ai`;
-custom endpoints or middleware use a secret-free versioned key.
+For an AI SDK object model, bind `aiSdk(native)` from `@use-crux/ai` so Eval
+identity projects the portable `GenerationModel` definition.
 
 Function-form prompt, system, and message renderers remain reusable. The Node
 coordinator builds their initial identity without invoking them: it fingerprints the declaring

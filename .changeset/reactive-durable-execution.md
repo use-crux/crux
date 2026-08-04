@@ -188,3 +188,11 @@ and accidental concrete-Agent Thread tenancy with structured evidence.
 
 Generated Runtime Programs now import exported Agent definitions and pin their
 Project Index fingerprints through the existing Runtime target authority.
+
+Document durable Agent Sessions with a progressive guide, copy-pasteable
+recipes, exact Session and GenerationModel API reference pages, Session
+structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
+`generationModels` reference, and Core architecture internals. Docs distinguish
+durable Agent Sessions from overloaded "session" vocabulary elsewhere and
+require PostgreSQL Runtime storage plus the Session-owned Thread RecordStore on
+the same database.

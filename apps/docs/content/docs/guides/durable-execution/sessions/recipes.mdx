@@ -1,0 +1,262 @@
+---
+title: Durable Agent Session recipes
+description: Process-local start, PostgreSQL and Convex durability, reconnect, recovery, testing, and Devtools.
+---
+
+These recipes use the current public API only. Replace `nativeModel(...)` with
+your adapter's language-model constructor.
+
+## Process-local start
+
+Use memory Runtime storage for local demos and unit tests. Still configure a
+Thread `RecordStore`; Sessions register a real Thread owner.
+
+```ts
+import {
+  config,
+  createWorkHost,
+  prompt,
+  session,
+} from "@use-crux/core";
+import { agent } from "@use-crux/core/agent";
+import {
+  createRuntimeProgram,
+  createRuntimeWorker,
+  inMemoryRuntimeStore,
+  node,
+} from "@use-crux/core/runtime";
+import { inMemoryRecordStore } from "@use-crux/core/storage";
+import { aiSdk } from "@use-crux/ai";
+import { z } from "zod";
+
+const model = aiSdk(nativeModel("nebula-text-v2"));
+export const support = agent({
+  id: "support",
+  model,
+  prompt: prompt({
+    input: z.object({ message: z.string() }),
+    output: z.object({ reply: z.string() }),
+    prompt: ({ input }) => input.message,
+  }),
+});
+
+const store = inMemoryRuntimeStore();
+const records = inMemoryRecordStore();
+config({ storage: { records } });
+
+const program = createRuntimeProgram({
+  targets: [support],
+  generationModels: [model],
+  transports: [],
+});
+
+const host = createWorkHost({
+  runtime: node({ store, namespace: "local", autoStartMaintenance: false }),
+  program,
+});
+const worker = createRuntimeWorker({
+  runtime: node({ store, namespace: "local", autoStartMaintenance: false }),
+  program,
+  pollIntervalMs: 5,
+});
+
+const conversation = await host.run(() =>
+  session(support, { key: "demo-1" }),
+);
+const turn = await conversation.send({ message: "Hello" });
+const reply = await turn.result();
+```
+
+Stop the worker and dispose the host in `finally` blocks during tests.
+
+## PostgreSQL durable deployment
+
+Durable Agent Sessions need **both** stores against the same database:
+
+1. Runtime storage (`postgres()` from `@use-crux/postgres/runtime`) for Session
+   control, ingress, activation, checkpoints, Work, and wakes.
+2. Thread `RecordStore` (`postgresRecordStore()` from `@use-crux/postgres`) for
+   the Session-owned Thread head and linearizable owner registration.
+
+Configuring only the Node durable Runtime guide is not enough: without the
+RecordStore, owner registration and Thread publication cannot commit.
+
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { postgresRecordStore } from "@use-crux/postgres";
+
+const records = postgresRecordStore(); // DATABASE_URL by default
+
+export default config({
+  storage: { records },
+  runtime: node({
+    store: postgres(),
+    namespace: "production",
+  }),
+});
+```
+
+Apply both setups, generate the program, then run the worker:
+
+```bash
+crux setup --apply
+crux runtime generate
+crux runtime worker
+```
+
+Application process:
+
+```ts
+import { createWorkHost, getSession, session } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { postgresRecordStore } from "@use-crux/postgres";
+import { config } from "@use-crux/core";
+import { runtimeProgram } from "./.crux/generated/runtime/program";
+import { support } from "./src/agents/support";
+
+config({ storage: { records: postgresRecordStore() } });
+
+const host = createWorkHost({
+  runtime: node({ store: postgres(), namespace: "production" }),
+  program: runtimeProgram,
+});
+
+export async function openSupport(customerId: string) {
+  return host.run(() => session(support, { key: `customer:${customerId}` }));
+}
+
+export async function reconnectSupport(customerId: string) {
+  return host.run(() => getSession(support, `customer:${customerId}`));
+}
+```
+
+Rules:
+
+- Run **one** execution worker per PostgreSQL store + Runtime namespace.
+- Package the same generated program with app and worker images.
+- Authenticate before using customer keys; the key is not an auth token.
+- Call `records.setup.apply()` and Runtime `store.setup.apply()` (or
+  `crux setup --apply`) before accepting traffic.
+
+## Convex durable deployment
+
+Convex owns Runtime state, component records, and the scheduler. Sessions use
+the Convex Runtime store and Convex RecordStore through the same component.
+
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+import { convex } from "@use-crux/convex/runtime";
+
+export default config({
+  runtime: convex(),
+});
+```
+
+Generate Convex runtime targets so exported Agents appear in the program and
+target executor. App code opens Sessions inside a Convex-bound host boundary
+(`createCruxConvex(...).run(ctx, target, fn)` or the equivalent Work host for
+your deployment), not from an unbound Next.js process configured with
+`runtime: convex()`.
+
+```ts
+// Inside a Convex action / host-bound boundary
+const conversation = await host.run(() =>
+  session(support, { key: `customer:${customerId}` }),
+);
+const turn = await conversation.send({ message });
+return { sessionId: conversation.id, inputId: turn.id, cursor: turn.cursor };
+```
+
+Use Convex setup/deploy for component tables. Keep target work under the lease
+TTL or raise `leaseTtlMs`. See the
+[Convex Runtime guide](/docs/guides/durable-execution/convex).
+
+## Reconnect and join a result
+
+Persist the business key (and optionally Session / input ids for support
+tools). Reopen later without creating a second Session:
+
+```ts
+const conversation = await host.run(() =>
+  getSession(support, "customer-42"),
+);
+const status = await conversation.status();
+const history = await conversation.thread.read();
+
+// If you retained a turn handle from the accepting request:
+const output = await previousTurn.result();
+```
+
+`result()` may be called immediately after acceptance. It waits while the
+worker runs, then returns the exact retained Agent output. After restart,
+reconstruct the host against the same store/namespace and call `getSession`
+again; completed turns remain joinable through retained Work identity.
+
+## Recovery and inspection
+
+```ts
+const inspection = await conversation.inspect();
+
+if (inspection.recovery) {
+  // code: SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE
+  console.error(inspection.recovery.nextStep);
+}
+
+for (const input of inspection.inputs) {
+  // id, cursor, state, workId?, checkpointPrepared, delivery?
+}
+```
+
+Recovery replays journaled preparation and Thread basis. It does not re-run
+provider callbacks or republish owner-Thread messages. Use inspection and
+Devtools when:
+
+- pending inputs or work do not drain;
+- a turn is blocked after a worker crash;
+- you need Thread revision / checkpoint coverage without reading payloads.
+
+## Testing and faults
+
+Drive the worker yourself. Prefer the shared conformance factory for adapter
+work:
+
+```ts
+import { runSessionConformanceTests } from "@use-crux/core/runtime/testing";
+
+runSessionConformanceTests({
+  name: "memory",
+  createHarness: async (law) => createMemorySessionHarness(law),
+});
+```
+
+Harness seams may inject only:
+
+- isolated store / records setup;
+- independent host and worker reconstruction;
+- deterministic pending-Work attempt control;
+- real `after-checkpoint` / `after-thread-publication` fault boundaries;
+- owner / receipt observations.
+
+Do not use sleeps, synthetic success labels, or a second Session worker.
+
+## Devtools and observability
+
+| Surface | What you see | What you never see |
+| --- | --- | --- |
+| Index Catalog | Authored `session` / `getSession` calls, target, literal/dynamic key, identity | Runtime key hashes as private lookup material |
+| Runs / `session.turn` | State, cursors, Work lineage, Thread revision, checkpoint/recovery, stats | Prompts, inputs, outputs, reasoning, Tool args, credentials |
+| Runtime Bridge `SessionRuntimeReadModel` | Closed JSON-safe projection for operators | Sealed request ids, provider-native objects |
+
+Evidence opens only when an observability sink is active. Production OTel and
+Devtools reuse the same privacy boundary; there is no alternate Session
+telemetry endpoint or payload viewer.
+
+## Related
+
+- [Progressive guide](/docs/guides/durable-execution/sessions)
+- [Session API reference](/docs/reference/crux-core/session)
+- [Node execution worker](/docs/guides/durable-execution/node)
+- [PostgreSQL package reference](/docs/reference/postgres)

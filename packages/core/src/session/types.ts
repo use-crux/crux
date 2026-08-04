@@ -8,10 +8,18 @@ import type {
 import type { ThreadReadOptions, ThreadSnapshot } from "../thread";
 import type { ExecutionStats, WorkHandle } from "../work";
 
-/** Extract the model configured on an Agent. */
+/**
+ * Extract the model configured on an Agent definition.
+ *
+ * @typeParam A - Agent whose `model` field is retained exactly.
+ */
 export type AgentModel<A extends AnyAgent> = A["model"];
 
-/** Compute the language capabilities required by an Agent. */
+/**
+ * Language capability facets statically required by an Agent Prompt and tools.
+ *
+ * @typeParam A - Agent whose Prompt output schema and tools drive the facets.
+ */
 export type AgentRequiredCapabilities<A extends AnyAgent> =
   RequiredLanguageCapabilities<A["prompt"], A["tools"]>;
 
@@ -22,7 +30,14 @@ type SessionModelField<
   ? { readonly model?: M }
   : { readonly model: M };
 
-/** Immutable identity and model selection for one Agent Session. */
+/**
+ * Immutable identity and optional model selection for one durable Agent Session.
+ *
+ * @remarks `key` is required. `model` is required only when the Agent does not
+ * already carry a {@link GenerationModel}; otherwise it is an immutable override.
+ * @typeParam A - Agent target that owns the Session key.
+ * @typeParam M - Optional Session-level generation model override.
+ */
 export type SessionOptions<
   A extends AnyAgent,
   M extends GenerationModel | undefined,
@@ -47,7 +62,12 @@ type IncompatibleGenerationModelError<
   };
 };
 
-/** Validate that a Session resolves a compatible GenerationModel. */
+/**
+ * Compile-time guard that a Session can resolve a compatible GenerationModel.
+ *
+ * @remarks Exact missing language facets become a false type. Broad capability
+ * evidence remains accepted for runtime preflight.
+ */
 export type SessionModelGuard<
   A extends AnyAgent,
   M extends GenerationModel | undefined,
@@ -65,15 +85,28 @@ export type SessionModelGuard<
       >
     : unknown;
 
-/** Read-only canonical Thread owner view for one Session. */
+/**
+ * Read-only canonical Thread owner view for one durable Agent Session.
+ *
+ * @remarks Exposes only finalized Session-owned heads. There is no public
+ * mutation surface on this view.
+ */
 export interface SessionThreadView {
   /** Stable id of the Thread owned by this Session. */
   readonly id: string;
-  /** Read the owner Thread's canonical snapshot with optional pagination. */
+  /**
+   * Read the owner Thread's canonical snapshot with optional pagination.
+   *
+   * @returns A detached snapshot of finalized owner-head messages.
+   */
   read(options?: ThreadReadOptions): Promise<ThreadSnapshot>;
 }
 
-/** Accepted input that is waiting for a later Agent turn. */
+/**
+ * One durably accepted input before or after activation linkage.
+ *
+ * @remarks Acceptance never waits for model execution.
+ */
 export interface SessionInputHandle {
   /** Stable accepted input id. */
   readonly id: string;
@@ -83,15 +116,34 @@ export interface SessionInputHandle {
   readonly acceptedAt: Date;
 }
 
-/** One accepted Session input linked to its canonical Work occurrence. */
+/**
+ * One accepted Session input that can join its canonical Work occurrence.
+ *
+ * @typeParam TOutput - Exact Agent output retained by the shared Work.
+ */
 export interface SessionTurnHandle<TOutput> extends SessionInputHandle {
-  /** Resolve the canonical Work once an activation opportunity claims this input. */
+  /**
+   * Resolve the canonical Work once an activation opportunity claims this input.
+   *
+   * @remarks Compatible inputs share one Work occurrence. The Promise observes
+   * durable linkage; it does not start a second execution.
+   */
   work(): Promise<WorkHandle<TOutput>>;
-  /** Join the exact Agent output retained by the canonical Work occurrence. */
+  /**
+   * Join the exact Agent output retained by the canonical Work occurrence.
+   *
+   * @remarks May be called immediately after acceptance; it waits for terminal
+   * completion of the linked Work.
+   * @returns The Agent's exact inferred output.
+   */
   result(): Promise<TOutput>;
 }
 
-/** Detached compact lifecycle snapshot for one live Session. */
+/**
+ * Detached compact lifecycle snapshot for one live durable Agent Session.
+ *
+ * @remarks Lifecycle close/kill/delete APIs are outside this surface.
+ */
 export interface SessionStatus {
   /** Current live execution state; lifecycle closure is outside this API. */
   readonly state: "parked" | "running" | "blocked";
@@ -105,7 +157,11 @@ export interface SessionStatus {
   readonly pendingWork: number;
 }
 
-/** Payload-free lifecycle summary for one recently accepted Session input. */
+/**
+ * Payload-free lifecycle summary for one recently accepted Session input.
+ *
+ * @remarks Never includes prompt text, input values, tool arguments, or outputs.
+ */
 export interface SessionInputInspection {
   /** Stable accepted input identity. */
   readonly id: string;
@@ -162,7 +218,12 @@ export interface SessionRecoveryDiagnostic {
   readonly nextStep: string;
 }
 
-/** Bounded payload-safe operational view of one durable Session. */
+/**
+ * Bounded payload-safe operational view of one durable Agent Session.
+ *
+ * @remarks Input identities are capped at 64 with explicit coverage. Private
+ * prompts, inputs, outputs, reasoning, and credentials are never included.
+ */
 export interface SessionInspection {
   /** Stable Session identity. */
   readonly id: string;
@@ -187,15 +248,31 @@ export interface SessionInspection {
 
 declare const sessionOutput: unique symbol;
 
-/** Durable, keyed, Agent-specific input owner. @typeParam TInput Agent input. */
+/**
+ * Durable, keyed, Agent-specific input owner.
+ *
+ * @typeParam TInput - Agent Prompt input accepted by {@link Session.send}.
+ * @typeParam TOutput - Exact Agent output joined through turn handles.
+ * @remarks Creating a Session does not run the Agent. Each `send` accepts
+ * ordered ingress; one canonical Runtime Work occurrence owns each activation.
+ */
 export interface Session<TInput, TOutput = unknown> {
   /** Stable deterministic Session identity. */
   readonly id: string;
   /** Read-only view of the Session-owned canonical Thread. */
   readonly thread: SessionThreadView;
-  /** Accept one typed input and retained wake intent; never waits for execution. */
+  /**
+   * Accept one typed input and retained wake intent.
+   *
+   * @remarks Resolves after durable acceptance only; never waits for execution.
+   */
   send(input: TInput): Promise<SessionTurnHandle<TOutput>>;
-  /** Validate and accept every input atomically in array order. */
+  /**
+   * Validate and accept every input atomically in array order.
+   *
+   * @remarks On any invalid member the entire batch fails before cursors advance.
+   * An empty array resolves to a frozen empty list without allocation.
+   */
   sendMany(
     inputs: readonly TInput[],
   ): Promise<readonly SessionTurnHandle<TOutput>[]>;
@@ -209,7 +286,11 @@ export interface Session<TInput, TOutput = unknown> {
   readonly [sessionOutput]?: TOutput;
 }
 
-/** Infer the target-specific Session handle owned by one Agent definition. */
+/**
+ * Infer the target-specific Session handle owned by one Agent definition.
+ *
+ * @typeParam TAgent - Agent whose Prompt input/output types are retained.
+ */
 export type SessionFor<TAgent extends AnyAgent> = Session<
   InferAgentInput<TAgent>,
   InferAgentOutput<TAgent>

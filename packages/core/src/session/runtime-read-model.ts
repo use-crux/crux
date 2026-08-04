@@ -15,7 +15,11 @@ import type {
   SessionStatus,
 } from "./types";
 
-/** Immutable Session identity exposed to operational tooling. */
+/**
+ * Immutable Session identity exposed to operational tooling.
+ *
+ * @remarks Includes the key hash, never the raw caller key.
+ */
 export interface SessionRuntimeIdentity {
   readonly sessionId: string;
   readonly keyHash: string;
@@ -23,7 +27,11 @@ export interface SessionRuntimeIdentity {
   readonly threadId: string;
 }
 
-/** Payload-free accepted-input and canonical Work lineage. */
+/**
+ * Payload-free accepted-input and canonical Work lineage for operators.
+ *
+ * @remarks Dates serialize as ISO strings for JSON transport.
+ */
 export interface SessionRuntimeInput {
   readonly inputId: string;
   readonly cursor: string;
@@ -35,7 +43,11 @@ export interface SessionRuntimeInput {
   };
 }
 
-/** Bounded durable checkpoint evidence without provider request identities. */
+/**
+ * Bounded durable checkpoint evidence without provider request identities.
+ *
+ * @remarks Exposes `requestCount` only; sealed request ids never appear here.
+ */
 export interface SessionRuntimeCheckpoint {
   readonly inputId: string;
   readonly workId: string;
@@ -52,7 +64,13 @@ export interface SessionRuntimeCheckpoint {
   readonly requestCoverage: "complete" | "truncated";
 }
 
-/** Closed, JSON-safe Session read model for existing inspection transports. */
+/**
+ * Closed, JSON-safe Session read model for existing inspection transports.
+ *
+ * @remarks Used by the Runtime Bridge and `session.turn` observability.
+ * Never includes prompts, inputs, outputs, reasoning, Tool arguments,
+ * credentials, sealed request ids, or provider-native objects.
+ */
 export interface SessionRuntimeReadModel {
   readonly schema: 1;
   readonly identity: SessionRuntimeIdentity;

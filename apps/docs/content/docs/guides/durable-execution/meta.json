@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "work",
+    "sessions",
     "signals",
     "next-vercel",
     "node",

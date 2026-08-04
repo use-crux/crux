@@ -31,7 +31,13 @@ export type RuntimeProgramTarget =
       readonly kind: "flow" | "task" | "agent";
     });
 
-/** Immutable executable target, definition, and managed-transport truth for one project. */
+/**
+ * Immutable executable target, definition, generation-model, and transport truth
+ * for one project.
+ *
+ * @remarks Shallow-frozen and free of live clients, credentials, or registration.
+ * Durable Agent Sessions may select models only from `generationModels`.
+ */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
   readonly manifestHash: string;
@@ -87,6 +93,11 @@ export interface CreateRuntimeProgramOptions {
  *
  * Generated artifacts and hand-written hosts use this same pure construction
  * path. It performs no registration, discovery, configuration lookup, or I/O.
+ *
+ * @param options.targets - Statically imported Flow, task, and Agent targets.
+ * @param options.generationModels - Models durable Agent Sessions may select.
+ * @param options.transports - Inert managed-transport bindings.
+ * @returns A frozen program whose `manifestHash` covers targets, models, and transports.
  */
 export function createRuntimeProgram(
   options: CreateRuntimeProgramOptions,

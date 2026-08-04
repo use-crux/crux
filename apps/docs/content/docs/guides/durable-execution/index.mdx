@@ -31,6 +31,7 @@ You add the Runtime Engine when you need work to survive the process. These APIs
 | `flow.untilIdle({ scope: 'current-flow' })` | Wait for the current flow's durable child-work scope |
 | `defer(target, input)`                      | Durable named background work from a request         |
 | `spawn(exportedFlow, input, options)`       | Accept reconnectable application Work                |
+| `session(agent, { key })` / `getSession`    | Own a durable keyed Agent conversation across turns  |
 | `crux.flows.signal/resume/cancel(...)`      | Operate on a flow by name without holding its handle |
 
 ## Turn it on
@@ -67,6 +68,11 @@ Each environment has a focused setup guide:
     title="Application Work"
     description="Accept an exported Flow now and reconnect it from another request."
     href="/docs/guides/durable-execution/work"
+  />
+  <Card
+    title="Durable Agent Sessions"
+    description="Keyed Agent ownership, ordered durable turns, reconnection, and recovery."
+    href="/docs/guides/durable-execution/sessions"
   />
   <Card
     title="Next.js / Vercel"

@@ -29,13 +29,18 @@ import { registerSessionInspectableResource } from "./runtime-read-model";
 const encoder = new TextEncoder();
 
 /**
- * Create or reopen one inert keyed Session for an Agent.
+ * Create or reopen one inert keyed durable Agent Session.
  *
  * @param target - Agent that exclusively owns the key and validates inputs.
- * @param options - Required stable key bound to one Agent within a Runtime namespace.
+ * @param options - Required stable key and optional immutable GenerationModel override.
  * @returns A frozen handle after its durable Thread owner is ready.
+ * @remarks Resolves after durable preparation only; it does not execute the Agent.
+ * Selected models must be declared on the active Runtime program.
  * @throws {SessionIdentityConflictError} If the key belongs to another Agent.
  * @throws {SessionCapabilityError} If the configured stores cannot persist it.
+ * @throws {GenerationModelBindingError} If neither Session nor Agent binds a model.
+ * @throws {GenerationModelNotStaticError} If the model is absent from the program.
+ * @throws {GenerationModelCapabilityError} If the model cannot execute the Agent.
  */
 export async function session<
   const TAgent extends AnyAgent,
@@ -49,13 +54,15 @@ export async function session<
 }
 
 /**
- * Retrieve an existing inert keyed Session without creating one.
+ * Retrieve an existing inert keyed durable Agent Session without creating one.
  *
  * @param target - Original Agent target bound when the Session was created.
  * @param key - Stable key bound to one Agent within the active Runtime namespace.
  * @returns A frozen handle after any interrupted owner preparation is repaired.
+ * @remarks Reuses the model pinned at creation; it never substitutes another model.
  * @throws {SessionNotFoundError} If no Session exists for the key.
  * @throws {SessionIdentityConflictError} If the key belongs to another Agent.
+ * @throws {SessionCapabilityError} If the configured stores cannot persist it.
  */
 export async function getSession<const TAgent extends AnyAgent>(
   target: TAgent,
