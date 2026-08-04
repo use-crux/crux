@@ -33,6 +33,14 @@
       "types": "./src/signal/index.ts",
       "import": "./src/signal/index.ts"
     },
+    "./signal/transport": {
+      "types": "./src/signal/transport/index.ts",
+      "import": "./src/signal/transport/index.ts"
+    },
+    "./signal/provider": {
+      "types": "./src/signal/provider/index.ts",
+      "import": "./src/signal/provider/index.ts"
+    },
     "./work": {
       "types": "./src/work/index.ts",
       "import": "./src/work/index.ts"
@@ -283,6 +291,12 @@
     "*": {
       "signal": [
         "src/signal/index.ts"
+      ],
+      "signal/transport": [
+        "src/signal/transport/index.ts"
+      ],
+      "signal/provider": [
+        "src/signal/provider/index.ts"
       ],
       "session": [
         "src/session/index.ts"

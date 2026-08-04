@@ -31,6 +31,7 @@ import type { RuntimeResultPayloadPort } from "./results/types";
 import type { RuntimeSignalStorePort } from "./reactive/records";
 import type { RuntimeMaintenanceOwnershipPort } from "./ports/maintenance-ownership";
 import type { RuntimeSessionStorePort } from "./ports/sessions";
+import type { RuntimeTransportStorePort } from "./transport/store";
 import {
   sessionPostPublicationSeam,
   type SessionPostPublicationSeam,
@@ -244,6 +245,13 @@ export interface RuntimeStoreTransaction {
    * then fail capability preflight before allocating Flow work.
    */
   readonly signals?: RuntimeSignalStorePort;
+  /**
+   * Optional durable managed-transport envelope storage.
+   *
+   * @remarks Existing adapters may omit this port. Transport acceptance then
+   * fails with `TRANSPORT_STORE_MISSING` before host acknowledgment.
+   */
+  readonly transports?: RuntimeTransportStorePort;
 }
 
 /** Durable record store used by Runtime Engine kernels. */
