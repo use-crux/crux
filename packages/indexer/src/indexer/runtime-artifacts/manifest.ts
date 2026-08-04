@@ -85,12 +85,19 @@ function targetFromDefinition(
   root: string,
   definition: ProjectDefinition,
 ): readonly RuntimeArtifactManifestTarget[] {
-  if (definition.kind !== "flow" && definition.kind !== "task") return [];
+  if (
+    definition.kind !== "flow" &&
+    definition.kind !== "task" &&
+    definition.kind !== "agent"
+  )
+    return [];
   const exportName =
     typeof definition.metadata?.exportName === "string"
       ? definition.metadata.exportName
       : undefined;
   const file = definition.source?.file;
+  if (definition.kind === "agent" && definition.metadata?.exported !== true)
+    return [];
   if (!exportName || !file) return [];
   return [
     {

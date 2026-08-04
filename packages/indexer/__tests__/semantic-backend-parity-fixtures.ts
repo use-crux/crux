@@ -75,6 +75,47 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "authored-session-targets-shared-analyzer",
+      workspacePackages: ["core"],
+      files: {
+        "src/agents.ts": `
+          import { agent } from '@use-crux/core/agent'
+          export const importedAgent = agent({ id: 'imported-agent' })
+        `,
+        "src/sessions.ts": `
+          import { agent } from '@use-crux/core/agent'
+          import { getSession, session } from '@use-crux/core/session'
+          import { importedAgent } from './agents'
+
+          const localAgent = agent({ id: 'local-agent' })
+          export const created = session(localAgent, { key: 'customer-a' })
+          export const restored = getSession(importedAgent, 'customer-b')
+        `,
+      },
+      expect: {
+        definitionIds: [
+          "session:local-agent:customer-a",
+          "session:imported-agent:customer-b",
+        ],
+        definitionFacts: {
+          "session:local-agent:customer-a": {
+            operation: "create",
+            targetDefinitionId: "agent:local-agent",
+            key: { kind: "literal", value: "customer-a" },
+            identity: "static",
+          },
+          "session:imported-agent:customer-b": {
+            operation: "get",
+            targetDefinitionId: "agent:imported-agent",
+            key: { kind: "literal", value: "customer-b" },
+            identity: "static",
+          },
+        },
+        relationTypes: ["session.targets_agent"],
+        sourceRefRoles: ["config"],
+      },
+    },
+    {
       name: "authored-context-planning-shared-analyzer",
       workspacePackages: ["core"],
       files: {

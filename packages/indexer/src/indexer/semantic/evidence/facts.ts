@@ -51,6 +51,7 @@ import {
 import { semanticPromptTextSourceRefs } from "../model/prompt-text-source-refs";
 import { semanticContextPlanningFacts } from "../context-planning/facts";
 import { projectPromptTextDiagnosticConclusions } from "./prompt-text-diagnostics";
+import { semanticSessionFacts } from "../../session/semantic-facts";
 
 interface SemanticSchemaIndexFacts {
   readonly definitions: readonly ProjectDefinition[];
@@ -175,6 +176,11 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     input.sourceFiles,
     input.view,
   );
+  const sessions = semanticSessionFacts(
+    input.root,
+    input.sourceFiles,
+    input.view,
+  );
   const authored = mergeSemanticAnalyzerResults([
     result,
     {
@@ -187,12 +193,14 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     ...media.definitions,
     ...embeddings.definitions,
     ...evidenceRecords.definitions,
+    ...sessions.definitions,
   ];
   const relations = [
     ...authored.relations,
     ...media.relations,
     ...embeddings.relations,
     ...evidenceRecords.relations,
+    ...sessions.relations,
   ];
   const promptTextDiagnostics = projectPromptTextDiagnosticConclusions(
     input.promptTextDiagnosticConclusions?.(result.sourceRefs) ?? [],
@@ -205,6 +213,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
       ...media.sourceRefs,
       ...embeddings.sourceRefs,
       ...evidenceRecords.sourceRefs,
+      ...sessions.sourceRefs,
     ],
     relations,
     diagnostics: promptTextDiagnostics,

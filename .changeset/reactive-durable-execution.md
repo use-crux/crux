@@ -170,3 +170,10 @@ Convex Runtime storage now persists the same normalized Session contract in its
 atomic component transactions. Reconstructed hosts and workers retain exact
 results, replay checkpointed owner-Thread publication without duplicate
 receipts, and preserve Session evidence during result pruning.
+
+Project Index now records authored Session identity, literal key, source, and
+resolved Agent target evidence with matching static and semantic backend
+output.
+
+Generated Runtime Programs now import exported Agent definitions and pin their
+Project Index fingerprints through the existing Runtime target authority.

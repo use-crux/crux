@@ -53,7 +53,9 @@ function isTarget(value: unknown): boolean {
       "fingerprint",
     ]) &&
     typeof value.name === "string" &&
-    ["flow", "task", "watcher", "trigger"].includes(String(value.kind)) &&
+    ["flow", "task", "agent", "watcher", "trigger"].includes(
+      String(value.kind),
+    ) &&
     typeof value.module === "string" &&
     typeof value.export === "string" &&
     typeof value.definitionId === "string" &&

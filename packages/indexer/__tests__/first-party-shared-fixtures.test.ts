@@ -488,7 +488,9 @@ describe("first-party shared static index fixtures", () => {
               ? "evidence-record-native-static.test.ts"
               : identity.extractor === "thread"
                 ? "thread-native-static.test.ts"
-                : "first-party-native-negative-fixtures.test.ts",
+                : identity.extractor === "session"
+                  ? "session-native-static.test.ts"
+                  : "first-party-native-negative-fixtures.test.ts",
       );
       for (const fixtureClass of coverage.requiredFixtureClasses) {
         expect(

@@ -50,6 +50,14 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'session.targets_agent',
+    fromKinds: ['session'],
+    toKinds: ['agent'],
+    presentation: 'both',
+    partial: false,
+    runtimeJoin: true,
+  },
+  {
     type: 'agent.uses_tool',
     fromKinds: ['agent'],
     toKinds: ['tool'],

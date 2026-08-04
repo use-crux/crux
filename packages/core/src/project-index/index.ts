@@ -494,6 +494,7 @@ export type ProjectDefinitionKind =
   | "tool"
   | "mcp.server"
   | "agent"
+  | "session"
   | "flow"
   | "flow.step"
   | "task"
@@ -791,6 +792,23 @@ export interface AgentFacts {
   prepareHandler?: SourceRefSummary;
 }
 
+/** Stable authored evidence for one durable Agent Session call site. */
+export interface SessionFacts {
+  readonly kind: "session";
+  /** Public operation represented by this call site. */
+  readonly operation: "create" | "get";
+  /** Authored local or imported Agent binding supplied as the target. */
+  readonly targetVariable?: string;
+  /** Semantically resolved Agent definition when the target is statically known. */
+  readonly targetDefinitionId?: string;
+  /** Evidence for whether the stable caller key is a direct string literal. */
+  readonly key:
+    | { readonly kind: "literal"; readonly value: string }
+    | { readonly kind: "dynamic" };
+  /** Whether both target and caller key establish a static Session identity. */
+  readonly identity: "static" | "partial";
+}
+
 export interface FlowFacts {
   kind: "flow";
   stepNames?: string[];
@@ -1064,6 +1082,7 @@ export type PrimitiveSpecificFacts =
   | RegistryFacts
   | SkillFacts
   | AgentFacts
+  | SessionFacts
   | FlowFacts
   | FlowStepFacts
   | CompositionFacts
@@ -1316,6 +1335,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "tool",
   "mcp.server",
   "agent",
+  "session",
   "flow",
   "flow.step",
   "task",
