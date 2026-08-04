@@ -1,7 +1,6 @@
 /** Atomic Session-input to canonical-Work admission. */
 
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
-import { reserveNextSessionActivation } from "../runtime/engine/composites/session-activation";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
 import type { JsonValue } from "../storage";
 import type { SessionTurnHandle } from "./types";
@@ -14,21 +13,15 @@ export async function acceptSessionTurns<TOutput>(
   record: RuntimeSessionRecord,
   inputs: readonly JsonValue[],
 ): Promise<readonly SessionTurnHandle<TOutput>[]> {
-  const accepted = await runtime.store.transact(async (tx) => {
-    const sessions = tx.sessions;
-    if (!sessions) throw new Error("Runtime Session storage is unavailable.");
-    const appended = await sessions.acceptInputs({
-      namespace: runtime.namespace,
+  const accepted = await runtime.kernel.acceptSessionInputs({
+    namespace: runtime.namespace,
+    session: {
       sessionId: record.sessionId,
-      inputs,
-      now: runtime.now(),
-    });
-    await reserveNextSessionActivation(tx, {
-      namespace: runtime.namespace,
-      sessionId: record.sessionId,
-      now: runtime.now(),
-    });
-    return appended;
+      keyHash: record.keyHash,
+      targetId: record.targetId,
+      threadId: record.threadId,
+    },
+    inputs,
   });
   return Object.freeze(
     accepted.map((input) => {

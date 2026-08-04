@@ -42,6 +42,7 @@ import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
 import type { WorkAcceptCompositeInput } from "./composites/work-accept";
 import type { WorkProgressCompositeInput } from "./composites/work-progress";
 import type { WorkDetachCompositeInput } from "./composites/work-detach";
+import type { SessionInputsAcceptCompositeInput } from "./composites/session-inputs-accept";
 
 const DEFAULT_LEASE_TTL_MS = 60_000;
 
@@ -118,6 +119,8 @@ export function createRuntimeKernel(
   return Object.freeze({
     acceptWork: (input: WorkAcceptCompositeInput) =>
       runComposite("work.accept", input),
+    acceptSessionInputs: (input: SessionInputsAcceptCompositeInput) =>
+      runComposite("session.inputs.accept", input),
     progressWork: (input: WorkProgressCompositeInput) =>
       runComposite("work.progress", input),
     detachWork: (input: WorkDetachCompositeInput) =>

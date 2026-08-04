@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { prompt, resetHooks, session } from "@use-crux/core";
 import { agent } from "@use-crux/core/agent";
+import {
+  inMemoryRuntimeStore,
+  runDefaultRuntimeComposite,
+  type RuntimeCompositeInput,
+  type RuntimeCompositeKind,
+  type RuntimeCompositeResult,
+  type RuntimeStoreAdapter,
+} from "@use-crux/core/runtime";
 import { z } from "zod";
 import { sessionHost, sessionTestModel } from "./public-session.test-support";
 
@@ -193,6 +201,70 @@ describe("public Agent Session input acceptance", () => {
     expect(
       concurrent.map(({ cursor }) => Number(cursor)).sort((a, b) => a - b),
     ).toEqual(Array.from({ length: 12 }, (_, index) => index + 3));
+    host.dispose();
+  });
+
+  it("accepts concurrent duplicate inputs through one named composite and Work", async () => {
+    const support = agent({
+      id: "composite-session-support",
+      model: sessionTestModel,
+      prompt: prompt({
+        input: z.object({ message: z.string() }),
+        system: "Reply helpfully.",
+      }),
+    });
+    const base = inMemoryRuntimeStore();
+    const seen: RuntimeCompositeKind[] = [];
+    const now = () => new Date("2026-08-05T00:00:00.000Z");
+    const newWorkId = (): never => {
+      throw new Error(
+        "Session admission must reuse its canonical Work identity.",
+      );
+    };
+    const runComposite: NonNullable<
+      RuntimeStoreAdapter["runComposite"]
+    > = async <K extends RuntimeCompositeKind>(
+      kind: K,
+      input: RuntimeCompositeInput[K],
+    ): Promise<RuntimeCompositeResult[K]> => {
+      seen.push(kind);
+      return await runDefaultRuntimeComposite(
+        base,
+        { now, newWorkId },
+        kind,
+        input,
+      );
+    };
+    const store = Object.freeze({ ...base, runComposite });
+    const { host } = sessionHost("composite-session-test", {
+      store,
+      targets: [support],
+    });
+    const handle = await host.run(() => session(support, { key: "composite" }));
+
+    const accepted = await Promise.all([
+      handle.send({ message: "same" }),
+      handle.send({ message: "same" }),
+    ]);
+
+    expect(seen).toEqual(["session.inputs.accept", "session.inputs.accept"]);
+    expect(
+      accepted.map(({ cursor }) => Number(cursor)).sort((a, b) => a - b),
+    ).toEqual([1, 2]);
+    expect(new Set(accepted.map(({ id }) => id)).size).toBe(2);
+    await expect(
+      store.state.listWork({
+        namespace: "composite-session-test",
+        status: "pending",
+      }),
+    ).resolves.toHaveLength(1);
+    expect(
+      store.testing.sessionRecord("composite-session-test", handle.id),
+    ).toMatchObject({
+      acceptedCursor: 2,
+      pendingInputs: 2,
+      pendingWork: 1,
+    });
     host.dispose();
   });
 

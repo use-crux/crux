@@ -144,6 +144,10 @@ step is independently resolved and enters the next real provider boundary
 before `prepareStep`; terminal-step ingress begins a new activation through an
 atomic lost-wake fence. Inspection reports bounded per-input claim, delivery,
 shared Work, checkpoint, and exact Thread basis evidence without payloads.
+Session input admission dispatches through the provider-neutral
+`session.inputs.accept` composite so adapters can validate keyed identity,
+append ordered ingress, reserve one canonical Work, and persist its wake in one
+transaction.
 
 Export a provider-neutral Session conformance factory from
 `@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
