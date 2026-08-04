@@ -197,14 +197,17 @@ definitions stay frozen process code; inert
 clients, Requests, or callbacks. Durable transport envelope acceptance is
 idempotent by Runtime namespace plus provider/account/event identity, conflicts
 on digest mismatch, and is safe to acknowledge only after commit. Restart-safe
-normalization claims accepted envelopes, runs provider `onEvent` through the
-existing Signal publication path, completes idempotently, dead-letters after
-bounded retry, and returns dead-lettered envelopes to accepted state on explicit
-replay. Memory and PostgreSQL Runtime stores implement the transport port with
-shared conformance. RuntimeProgram validation treats Signal transport targets as
-Signal ids rather than Agent/Flow/task targets. Normalization is host-invoked
-through a restart-safe runner in this release; autonomous Runtime worker
-supervision of transport claim/normalize remains a later boundary.
+normalization claims accepted envelopes, scopes provider `signals.publish` to
+the accepted provider/account/event identity when an explicit idempotency key is
+omitted so crash recovery after publication cannot create a second logical
+delivery, runs provider `onEvent` through the existing Signal publication path,
+completes idempotently, dead-letters after bounded retry, and returns
+dead-lettered envelopes to accepted state on explicit replay. Memory and
+PostgreSQL Runtime stores implement the transport port with shared conformance.
+RuntimeProgram validation treats Signal transport targets as Signal ids rather
+than Agent/Flow/task targets. Normalization is host-invoked through a
+restart-safe runner in this release; autonomous Runtime worker supervision of
+transport claim/normalize remains a later boundary.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session

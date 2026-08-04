@@ -164,10 +164,8 @@ export function runTransportStoreConformanceTests(
                   )
                 : "";
             const body = JSON.parse(raw) as { orderId: string };
-            await signals.orderSubmitted.publish(
-              { orderId: body.orderId },
-              { idempotencyKey: envelope.eventId },
-            );
+            // Omit explicit keys: runner-scoped defaults must prevent redelivery.
+            await signals.orderSubmitted.publish({ orderId: body.orderId });
           },
         });
 
@@ -260,10 +258,8 @@ function createProvider(): {
           ? Buffer.from(envelope.payload.value, "base64url").toString("utf8")
           : "";
       const body = JSON.parse(raw) as { orderId: string };
-      await signals.orderSubmitted.publish(
-        { orderId: body.orderId },
-        { idempotencyKey: envelope.eventId },
-      );
+      // Omit explicit keys so crash-safe default scoping is exercised.
+      await signals.orderSubmitted.publish({ orderId: body.orderId });
     },
   });
   return { provider, published };

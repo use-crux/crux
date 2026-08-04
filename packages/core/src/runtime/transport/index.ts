@@ -36,6 +36,10 @@ export type {
 } from "./store";
 export { transportEnvelopeDigest } from "./digest";
 export {
+  scopeProviderSignalsForEnvelope,
+  transportPublicationIdempotencyKey,
+} from "./publication-scope";
+export {
   TransportEnvelopeConflictError,
   TransportEnvelopeNotFoundError,
   TransportEnvelopeNotReplayableError,

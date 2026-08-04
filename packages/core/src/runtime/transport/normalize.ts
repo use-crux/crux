@@ -14,6 +14,7 @@ import {
 } from "./lifecycle-errors";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
 import { retryDelayMs } from "../engine/retry";
+import { scopeProviderSignalsForEnvelope } from "./publication-scope";
 
 /** Options for claiming accepted envelopes for normalization. */
 export interface ClaimTransportEnvelopesOptions {
@@ -88,7 +89,10 @@ export async function claimTransportEnvelopes(
  * Run provider `onEvent` for one claimed envelope and settle its lifecycle.
  *
  * @remarks Successful publication marks the envelope `normalized` idempotently.
- * Failures schedule bounded retry or transition to `dead-letter`.
+ * Failures schedule bounded retry or transition to `dead-letter`. Provider
+ * `signals` are scoped so omitted publish idempotency keys default to the
+ * accepted provider/account/event identity; crash recovery after publication
+ * but before envelope completion cannot create a second logical delivery.
  */
 export async function normalizeClaimedTransportEnvelope(
   options: NormalizeClaimedTransportEnvelopeOptions,
@@ -107,7 +111,10 @@ export async function normalizeClaimedTransportEnvelope(
 
   try {
     await options.provider.onEvent(options.record.envelope, {
-      signals: options.provider.signals,
+      signals: scopeProviderSignalsForEnvelope(
+        options.provider.signals,
+        options.record.envelope,
+      ),
     });
   } catch (error) {
     const message =

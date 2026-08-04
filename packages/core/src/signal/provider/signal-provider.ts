@@ -26,7 +26,14 @@ export type SignalProviderSignals = {
 export interface SignalProviderEventContext<
   TSignals extends SignalProviderSignals,
 > {
-  /** Exact declared Signal map; only these Signals may be published. */
+  /**
+   * Exact declared Signal map; only these Signals may be published.
+   *
+   * @remarks Normalization scopes each `publish()` to the accepted provider
+   * event. When `idempotencyKey` is omitted, publication defaults to the
+   * accepted provider/account/event identity so crash recovery cannot create a
+   * second logical delivery for the same envelope.
+   */
   readonly signals: TSignals;
 }
 
@@ -35,6 +42,8 @@ export interface SignalProviderEventContext<
  *
  * @remarks Invoked after durable acceptance and claim. Publications use the
  * ordinary Signal API and inherit its process-local or durable guarantee.
+ * Hosts must invoke normalization only through the transport runner/helpers so
+ * provider Signals remain scoped to the accepted event identity.
  */
 export type SignalProviderOnEvent<TSignals extends SignalProviderSignals> = (
   envelope: RuntimeAcceptedTransportEnvelope,
