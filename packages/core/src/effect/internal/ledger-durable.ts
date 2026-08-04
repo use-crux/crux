@@ -7,6 +7,7 @@ import {
   persistDurableUnitTransition as persistUnit,
   prepareDurableEffectExecution as prepareExecution,
   restoreDurableEffectScope as restoreScope,
+  restoreDurableEffectReceiptScope as restoreReceiptScope,
   settleDurableEffectExecution as settleExecution,
   type DurableLedgerCache,
 } from "./durable-ledger";
@@ -88,4 +89,11 @@ export function restoreDurableEffectScope(
   scope: EffectScopeRef,
 ): Promise<boolean> {
   return restoreScope(cache, scope);
+}
+
+/** Refresh the durable scope containing one receipt. */
+export function restoreDurableEffectReceiptScope(
+  receiptId: string,
+): Promise<boolean> {
+  return restoreReceiptScope(cache, receiptId);
 }

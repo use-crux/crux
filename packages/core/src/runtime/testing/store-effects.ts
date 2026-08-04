@@ -7,6 +7,8 @@ import type {
 } from "../ports/effects";
 import type { RuntimeStoreAdapter } from "../store";
 import { requireFaultHook } from "./store-composite-case-utils";
+import { runStoreEffectCrashTests } from "./store-effects-crash";
+import { runStoreEffectReconstructionTests } from "./store-effects-reconstruction";
 import type { RunStoreAdapterTestsOptions } from "./store-types";
 
 type EffectsStore = RuntimeStoreAdapter & {
@@ -130,35 +132,6 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       ).resolves.toBeNull();
     });
 
-    it("guards Effect transitions with their persisted fence", async () => {
-      const store = await options.createStore();
-      const prepared = preparation();
-      const fenced = {
-        ...prepared,
-        receipt: { ...prepared.receipt, fenceToken: "lease-1" },
-      };
-      await store.transact((tx) =>
-        requireEffects(tx.effects).prepare(fenced),
-      );
-
-      const running = {
-        ...fenced.receipt,
-        receipt: { ...fenced.receipt.receipt, outcome: "running" as const },
-        revision: 2,
-      };
-      await expect(
-        store.effects.transitionReceipt({
-          next: { ...running, fenceToken: "lease-2" },
-        }),
-      ).resolves.toBeNull();
-      await expect(
-        store.effects.transitionReceipt({ next: running }),
-      ).resolves.toMatchObject({
-        receipt: { outcome: "running" },
-        fenceToken: "lease-1",
-      });
-    });
-
     it.skipIf(options.substrateAtomicTransact)(
       "rolls back partial Effect preparation",
       async () => {
@@ -174,6 +147,9 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
         ).resolves.toBeNull();
       },
     );
+
+    runStoreEffectCrashTests(options, preparation);
+    runStoreEffectReconstructionTests(options);
   });
 }
 

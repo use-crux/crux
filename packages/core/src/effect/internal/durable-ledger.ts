@@ -156,6 +156,7 @@ export async function settleDurableEffectExecution(
         receipt,
         currentReceipt.executionIdempotencyKey,
         currentReceipt.revision + 1,
+        appendOrder < 0 ? undefined : appendOrder + 1,
       ),
       ...(unit && currentUnit
         ? {
@@ -231,6 +232,25 @@ export async function restoreDurableEffectScope(
   if (!snapshot) return false;
   cache.restore(snapshot);
   return true;
+}
+
+/** Refresh the scope that owns one receipt before operator reconciliation. */
+export async function restoreDurableEffectReceiptScope(
+  cache: DurableLedgerCache,
+  receiptId: string,
+): Promise<boolean> {
+  const binding = currentDurableEffectLedgerBinding();
+  if (!binding) return false;
+  const record = await binding.store.effects?.getReceipt(receiptId, {
+    namespace: binding.namespace,
+  });
+  if (!record) return false;
+  const runId = record.receipt.runId ?? record.receipt.boundaryId;
+  return restoreDurableEffectScope(cache, {
+    kind: "effect.scope",
+    id: record.receipt.boundaryId,
+    runId,
+  });
 }
 
 function requireValue<T>(value: T | null | undefined, name: string): T {

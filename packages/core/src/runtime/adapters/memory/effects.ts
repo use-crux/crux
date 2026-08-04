@@ -15,6 +15,8 @@ import {
   cloneRecord,
   preparationForExisting,
   put,
+  reconcileMemoryEffects,
+  synchronizeMemoryEffectScope,
   valuesForNamespace,
 } from "./effect-records";
 
@@ -166,6 +168,10 @@ export function createMemoryEffectStore(
       return cloneRecord(stored);
     },
 
+    async synchronizeScope(synchronization) {
+      return synchronizeMemoryEffectScope(data, synchronization, recordWrite);
+    },
+
     async transitionUnit({ next }) {
       const key = scopedKey(next.namespace, next.unit.id);
       const current = data.effectUnits.get(key);
@@ -250,6 +256,10 @@ export function createMemoryEffectStore(
       put(data.effectReceipts, originalKey, stored.originalReceipt, recordWrite);
       put(data.effectUnits, unitKey, stored.unit, recordWrite);
       return cloneRecord(stored);
+    },
+
+    async reconcile(settlement) {
+      return reconcileMemoryEffects(data, settlement, recordWrite);
     },
 
     async reconstructScope(scope, options) {

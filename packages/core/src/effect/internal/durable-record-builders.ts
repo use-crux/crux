@@ -17,8 +17,15 @@ export function durableReceiptRecord(
   receipt: EffectReceipt,
   executionIdempotencyKey: string,
   revision: number,
+  appendOrder?: number,
 ): DurableEffectReceiptRecord {
-  return { namespace, receipt, executionIdempotencyKey, revision };
+  return {
+    namespace,
+    receipt,
+    executionIdempotencyKey,
+    ...(appendOrder === undefined ? {} : { appendOrder }),
+    revision,
+  };
 }
 
 /** Project one in-process recovery unit without its executable handler. */
@@ -32,6 +39,7 @@ export function durableUnitRecord(
   return {
     namespace,
     kind: unit.kind,
+    ...(unit.kind === "boundary" ? { scope: unit.scope } : {}),
     unit: Object.freeze({
       id: unit.id,
       boundaryId: unit.boundaryId,

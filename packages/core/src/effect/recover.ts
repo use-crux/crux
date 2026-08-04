@@ -19,6 +19,7 @@ import {
 import { effectLedger } from "./internal/ledger";
 import {
   prepareDurableEffectRecovery,
+  restoreDurableEffectReceiptScope,
   settleDurableEffectRecovery,
 } from "./internal/ledger-durable";
 import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
@@ -80,6 +81,7 @@ export async function reconcileEffect(
   receipt: EffectReceiptRef,
   resolution: EffectReconciliation,
 ): Promise<EffectReceipt> {
+  await restoreDurableEffectReceiptScope(receipt.id);
   return reconcileEffectReceipt(receipt, resolution);
 }
 

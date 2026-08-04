@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config, effect, flow } from "@use-crux/core";
-import { rollback } from "@use-crux/core/effect";
+import { reconcileEffect, rollback } from "@use-crux/core/effect";
+import type { EffectReceiptRef } from "@use-crux/core/effect";
 import {
   inMemoryRuntimeStore,
   node,
@@ -122,7 +123,8 @@ describe("durable effects", () => {
     );
 
     expect(reconstructed).toEqual(beforeRestart);
-    expect(reconstructed?.plan.map((step) => step.effectId)).toEqual([
+    expect(reconstructed?.plan.flatMap((step) =>
+      step.kind === "effect" ? [step.effectId] : [])).toEqual([
       "customer.durable-update",
       "customer.durable-update",
     ]);
@@ -156,4 +158,108 @@ describe("durable effects", () => {
 
     restartedRuntime.dispose();
   });
+
+  it("reconciles recovery success after settlement is interrupted", async () => {
+    const store = inMemoryRuntimeStore();
+    const firstRuntime = config({
+      runtime: node({
+        namespace: "tenant-a",
+        store,
+        autoStartMaintenance: false,
+      }),
+    });
+    const receiptIds: string[] = [];
+    const recover = vi.fn(async () => {
+      store.testing.failAfter(0);
+    });
+    const update = effect(
+      "customer.interrupted-recovery",
+      async (_input: undefined, context) => {
+        receiptIds.push(context.receiptId);
+        return "done";
+      },
+      { recover },
+    );
+    const updateFlow = flow("interrupted-recovery-flow", async () => {
+      await update();
+    });
+
+    const completed = await updateFlow.run();
+    const receipt: EffectReceiptRef = {
+      kind: "effect.receipt",
+      id: requireValue(receiptIds[0]),
+      effectId: "customer.interrupted-recovery",
+    };
+    await expect(rollback(completed.effects)).rejects.toThrow();
+    firstRuntime.dispose();
+
+    const restartedStore = store.testing.restart();
+    const restartedRuntime = config({
+      runtime: node({
+        namespace: "tenant-a",
+        store: restartedStore,
+        autoStartMaintenance: false,
+      }),
+    });
+    const interrupted = await restartedStore.effects.reconstructScope(
+      completed.effects,
+      { namespace: "tenant-a" },
+    );
+    const attempt = interrupted?.receipts.find(
+      (record) => record.receipt.parentReceiptId === receipt.id,
+    );
+
+    expect(attempt?.receipt.outcome).toBe("unknown");
+    expect(
+      interrupted?.receipts.find(
+        (record) => record.receipt.id === receipt.id,
+      )?.receipt.recovery,
+    ).toBe("ambiguous");
+    expect(interrupted?.reconciliationRequired).toEqual([
+      expect.objectContaining({
+        kind: "recovery",
+        receiptId: attempt?.receipt.id,
+        originalReceiptId: receipt.id,
+        state: "unknown",
+      }),
+    ]);
+    await expect(rollback(completed.effects)).resolves.toMatchObject({
+      status: "not_possible",
+      units: [{ status: "ambiguous" }],
+    });
+    expect(recover).toHaveBeenCalledOnce();
+
+    await expect(
+      reconcileEffect(receipt, {
+        outcome: "succeeded",
+        output: null,
+        reason: "The provider confirms compensation completed",
+      }),
+    ).resolves.toMatchObject({ recovery: "recovered" });
+
+    const reconciled = await restartedStore.effects.reconstructScope(
+      completed.effects,
+      { namespace: "tenant-a" },
+    );
+    expect(reconciled).toMatchObject({
+      attempts: [expect.objectContaining({ attemptReceiptId: attempt?.receipt.id })],
+      reconciliations: [
+        expect.objectContaining({
+          receiptId: attempt?.receipt.id,
+          outcome: "succeeded",
+        }),
+      ],
+    });
+    expect(reconciled?.units[0]?.unit.status).toBe("recovered");
+    await expect(rollback(completed.effects)).resolves.toMatchObject({
+      units: [{ status: "already_recovered" }],
+    });
+    expect(recover).toHaveBeenCalledOnce();
+    restartedRuntime.dispose();
+  });
 });
+
+function requireValue<T>(value: T | undefined): T {
+  if (value === undefined) throw new TypeError("Expected value is unavailable.");
+  return value;
+}

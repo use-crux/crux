@@ -25,11 +25,14 @@ import {
   commitLedgerReconciliation,
   type LedgerReconciliation,
   type ReconciliationAudit,
+  type ReconciliationCommit,
   type ReconciliationLedgerState,
+  prepareLedgerReconciliation,
 } from "./reconcile";
 import type { DurableEffectScopeSnapshot } from "./durable-records";
 import { restoreDurableLedgerSnapshot } from "./ledger-restore";
 import { assertLedgerReceiptTransition } from "./durable-state-machine";
+import { persistDurableEffectReconciliation } from "./durable-recovery";
 
 /** Fields required to allocate a preparing receipt. */
 export interface EffectReceiptInit {
@@ -74,7 +77,9 @@ export interface ReceiptTransition {
 export interface EffectLedger {
   createReceipt(init: EffectReceiptInit): EffectReceipt;
   transition(receiptId: string, patch: ReceiptTransition): EffectReceipt;
-  reconcile(command: LedgerReconciliation): EffectReceipt;
+  prepareReconciliation(command: LedgerReconciliation): ReconciliationCommit;
+  persistReconciliation(change: ReconciliationCommit): Promise<void>;
+  commitReconciliation(change: ReconciliationCommit): EffectReceipt;
   putEnvelope(envelope: StoredRecoveryEnvelope): void;
   registerScope(scope: EffectScopeRecord): void;
   registerUnit(boundaryId: string, unit: RegisteredRecoveryUnit): void;
@@ -183,8 +188,23 @@ export const effectLedger: EffectLedger = {
     return next;
   },
 
-  reconcile(command) {
-    return commitLedgerReconciliation(command, reconciliationState);
+  prepareReconciliation(command) {
+    return prepareLedgerReconciliation(command, reconciliationState);
+  },
+
+  persistReconciliation(change) {
+    return persistDurableEffectReconciliation({
+      getReceipt: effectLedger.getReceipt,
+      getEnvelope: effectLedger.getEnvelope,
+      getUnit: effectLedger.getUnit,
+      getScope: effectLedger.getScope,
+      stackFor: effectLedger.stackFor,
+      restore: effectLedger.restoreDurableSnapshot,
+    }, change);
+  },
+
+  commitReconciliation(change) {
+    return commitLedgerReconciliation(change, reconciliationState);
   },
 
   putEnvelope(envelope) {

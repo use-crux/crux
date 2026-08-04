@@ -32,6 +32,7 @@ export type RollbackPlanStep =
   | {
       readonly kind: "settle";
       readonly result: RecoveryUnitResult;
+      readonly receipt?: EffectReceiptRef;
     };
 
 /** Callback settlement considered by rollback-boundary precedence. */
@@ -149,6 +150,19 @@ export function planRollback(
           receipt.recoveryUnitId ?? `effect-unit:${receipt.id}`,
           "ambiguous",
         ),
+        receipt: receiptRef(receipt),
+      });
+      continue;
+    }
+    if (receipt.recovery === "ambiguous") {
+      steps.push({
+        kind: "settle",
+        result: unitResult(
+          receipt,
+          receipt.recoveryUnitId ?? `effect-unit:${receipt.id}`,
+          "ambiguous",
+        ),
+        receipt: receiptRef(receipt),
       });
       continue;
     }
@@ -164,6 +178,7 @@ export function planRollback(
           unit.id,
           "already_recovered",
         ),
+        receipt: receiptRef(receipt),
       });
       continue;
     }
@@ -184,6 +199,7 @@ export function planRollback(
         unitId,
         expectedStatus(receipt),
       ),
+      receipt: receiptRef(receipt),
     });
   }
 

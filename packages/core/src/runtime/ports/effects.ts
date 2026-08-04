@@ -12,11 +12,13 @@ import type {
   DurableEffectExecutionSettlement,
   DurableEffectPreparation,
   DurableEffectReceiptRecord,
+  DurableEffectReconciliationSettlement,
   DurableEffectRecoveryPreparation,
   DurableEffectRecoverySettlement,
   DurableEffectRecoveryUnitRecord,
   DurableEffectScopeRecord,
   DurableEffectScopeSnapshot,
+  DurableEffectScopeSynchronization,
 } from "../../effect/internal/durable-records";
 import type { EffectScopeRef } from "../../effect/types";
 
@@ -26,13 +28,16 @@ export type {
   DurableEffectPlanStep,
   DurableEffectPreparation,
   DurableEffectReceiptRecord,
+  DurableEffectReconciliationRequirement,
   DurableEffectReconciliationRecord,
+  DurableEffectReconciliationSettlement,
   DurableEffectRecoveryAttemptRecord,
   DurableEffectRecoveryPreparation,
   DurableEffectRecoverySettlement,
   DurableEffectRecoveryUnitRecord,
   DurableEffectScopeRecord,
   DurableEffectScopeSnapshot,
+  DurableEffectScopeSynchronization,
 } from "../../effect/internal/durable-records";
 
 /** Runtime partition used for one durable Effect read. */
@@ -82,6 +87,10 @@ export interface RuntimeEffectStorePort {
   transitionScope(
     transition: RuntimeEffectScopeTransition,
   ): Promise<DurableEffectScopeRecord | null>;
+  /** Transition a scope and insert newly completed child units atomically. */
+  synchronizeScope(
+    synchronization: DurableEffectScopeSynchronization,
+  ): Promise<DurableEffectScopeSynchronization | null>;
   /** Apply one legal optimistic recovery-unit transition. */
   transitionUnit(
     transition: RuntimeEffectUnitTransition,
@@ -94,6 +103,10 @@ export interface RuntimeEffectStorePort {
   settleRecovery(
     settlement: DurableEffectRecoverySettlement,
   ): Promise<DurableEffectRecoverySettlement | null>;
+  /** Atomically settle ambiguous work and append its reconciliation audit. */
+  reconcile(
+    settlement: DurableEffectReconciliationSettlement,
+  ): Promise<DurableEffectReconciliationSettlement | null>;
   /** Purely read and reconstruct one scope for the existing rollback planner. */
   reconstructScope(
     scope: EffectScopeRef,
