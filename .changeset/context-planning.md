@@ -142,3 +142,8 @@ privacy-safe child Agent beneath its ordinary Tool call in the parent trace.
 Wrap a child Agent with `backgroundable()` to let the model start process-local
 joinable Work. Background-enabled runs receive one owner-scoped `work` control
 Tool and capped, result-free status context only at safe provider boundaries.
+
+Classify request composition `REQUEST_TOO_LARGE` failures as `input_limit` for
+routing. Fallback moves to the next candidate by default, cascade tiers can opt
+into `escalateOn: ["input_limit"]`, and retry never repeats the same model for
+capacity failures.

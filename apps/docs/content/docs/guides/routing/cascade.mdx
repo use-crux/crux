@@ -63,7 +63,7 @@ Return `true`, `false`, or `{ accepted, confidence?, note? }`.
 
 `budget.maxCost` uses measured provider cost plus cost reported through `report()`. `budget.maxLatencyMs` aborts in-flight tier work. If latency expires after at least one tier returned, Crux returns the best result and marks the cascade receipt with `budgetExceeded: true`; otherwise it throws `CascadeExhaustedError`.
 
-## Invalid Responses
+## Escalating Errors
 
 Use `escalateOn: ['invalid_response']` when structured validation exhaustion should reject a tier and continue.
 
@@ -76,6 +76,8 @@ const extraction = cascade({
   ],
 });
 ```
+
+Use `escalateOn: ['input_limit']` when a tier contains a fallback chain whose candidates all fail with `REQUEST_TOO_LARGE`, and the next cascade tier has a larger context window.
 
 ## Receipts
 

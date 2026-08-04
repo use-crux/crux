@@ -13,6 +13,9 @@ import {
 import { ValidationExhaustedError } from "../src/generation/validation-retry";
 import { createGeneratedImageResult } from "../src/generation/image-result";
 import { createNoTranscriptError } from "../src/transcription/errors";
+import { RequestCompositionError } from "../src/request/errors";
+import { FallbackExhaustedError } from "../src/routing/errors";
+import { createRoutingReceipt } from "../src/routing/receipt";
 
 describe("fallback()", () => {
   it("returns a FallbackModel with correct _tag and models", () => {
@@ -98,6 +101,59 @@ describe("isFallback()", () => {
 });
 
 describe("classifyError()", () => {
+  it("classifies REQUEST_TOO_LARGE through bounded cycle-safe causes", () => {
+    const requestError = new RequestCompositionError(
+      "REQUEST_TOO_LARGE",
+      "request does not fit",
+      [],
+      "req_1",
+    );
+    const wrapper = new Error("adapter wrapped", { cause: requestError });
+    (requestError as { cause?: unknown }).cause = wrapper;
+
+    expect(classifyError(wrapper)).toBe("input_limit");
+  });
+
+  it("does not classify unrelated request composition errors", () => {
+    const requestError = new RequestCompositionError(
+      "INVALID_COMPOSITION",
+      "composition failed",
+      [],
+      "req_1",
+    );
+
+    expect(classifyError(requestError)).toBeNull();
+  });
+
+  it("classifies nonempty unanimous exhausted error collections only", () => {
+    const inputLimit = new RequestCompositionError(
+      "REQUEST_TOO_LARGE",
+      "request does not fit",
+      [],
+      "req_1",
+    );
+    const timeout = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    const emptyRouting = createRoutingReceipt("fallback", undefined, []);
+
+    expect(
+      classifyError(
+        new FallbackExhaustedError([], emptyRouting, [inputLimit, inputLimit]),
+      ),
+    ).toBe("input_limit");
+    expect(
+      classifyError(
+        new FallbackExhaustedError([], emptyRouting, [inputLimit, timeout]),
+      ),
+    ).toBeNull();
+    expect(
+      classifyError(new FallbackExhaustedError([], emptyRouting, [])),
+    ).toBeNull();
+    expect(classifyError(new AggregateError([inputLimit]))).toBe(
+      "input_limit",
+    );
+    expect(classifyError(new AggregateError([]))).toBeNull();
+  });
+
   it("classifies normalized adapter failures without provider-specific status fields", () => {
     expect(
       classifyError(

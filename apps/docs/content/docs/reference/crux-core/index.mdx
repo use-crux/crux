@@ -459,7 +459,7 @@ const model = fallback([gpt4o, claudeSonnet], {
 | `timeout`        | `{ attempt?, firstToken? }?`              | Per-attempt and stream first-token budgets in ms                                             |
 | `onFallback`     | `(info) => void \| Promise<void>`         | Called before moving from a failed model to the next one                                     |
 
-`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'invalid_response'`
+`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'invalid_response' | 'input_limit'`
 
 ### `classifyError(error)`
 
@@ -473,7 +473,10 @@ Classifies an error into an `ErrorCategory` or `null`.
 | `TimeoutError`, `ETIMEDOUT`, `AbortError` | `timeout`            |
 | `ECONNREFUSED`, `ENOTFOUND`               | `connection_error`   |
 | invalid response predicate                | `invalid_response`   |
+| `REQUEST_TOO_LARGE` request composition   | `input_limit`        |
 | HTTP 400, unknown                         | `null` (no fallback) |
+
+`fallback()` tries the next candidate on `input_limit` by default. `cascade()` only escalates a tier for that category when the tier sets `escalateOn: ["input_limit"]`. `retry()` does not accept or retry `input_limit`, because repeating the same model cannot change its context capacity.
 
 ## Validation retry
 

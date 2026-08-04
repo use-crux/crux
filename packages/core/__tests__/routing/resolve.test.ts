@@ -6,6 +6,7 @@ import type { ResolveTryOptions } from "../../src/routing/resolve";
 import { fallback } from "../../src/generation/fallback";
 import type { FallbackModel } from "../../src/generation/fallback";
 import { ValidationExhaustedError } from "../../src/generation/validation-retry";
+import { RequestCompositionError } from "../../src/request/errors";
 import { CascadeExhaustedError } from "../../src/routing/errors";
 import type {
   CascadeRoutingStep,
@@ -341,6 +342,26 @@ describe("resolveModel() — retry", () => {
       ],
     });
   });
+
+  it("does not retry input limit failures even when untyped options request it", async () => {
+    const model = retry("model-a", {
+      attempts: 2,
+      on: ["input_limit"],
+    } as unknown as Parameters<typeof retry>[1]);
+    const error = new RequestCompositionError(
+      "REQUEST_TOO_LARGE",
+      "request does not fit",
+      [],
+      "req_1",
+    );
+    const tryModel = vi.fn().mockRejectedValue(error);
+
+    await expect(resolveModel(model, {}, tryModel, extractModelId)).rejects.toBe(
+      error,
+    );
+
+    expect(tryModel).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -451,6 +472,50 @@ describe("resolveModel() — cascade", () => {
     await expect(resolveModel(c, {}, tryModel, extractModelId)).rejects.toThrow(
       CascadeExhaustedError,
     );
+  });
+
+  it("falls back on input limit by default and cascades on explicit input limit escalation", async () => {
+    const tooLarge = new RequestCompositionError(
+      "REQUEST_TOO_LARGE",
+      "request does not fit",
+      [],
+      "req_1",
+    );
+    const smallFallback = fallback(["small-a", "small-b"]);
+    const c = cascade({
+      tiers: [
+        { model: smallFallback, escalateOn: ["input_limit"] },
+        { model: "large" },
+      ],
+    });
+    type Model = string | typeof smallFallback;
+    const calls: string[] = [];
+    const tryModel = vi.fn(async (model: Model) => {
+      if (typeof model !== "string") {
+        throw new Error("routing wrapper reached concrete model attempt");
+      }
+      calls.push(model);
+      if (model !== "large") throw tooLarge;
+      return fakeGenerate(model);
+    });
+    const extract = (model: Model) =>
+      typeof model === "string" ? model : "fallback";
+
+    const result = await resolveModel(c, {}, tryModel, extract);
+
+    expect(calls).toEqual(["small-a", "small-b", "large"]);
+    expect(result.text).toBe("response from large");
+    expect(cascadeStep(result)).toMatchObject({
+      acceptedAtTier: 1,
+      tiers: [
+        expect.objectContaining({
+          model: "fallback",
+          status: "rejected",
+          note: "input_limit",
+        }),
+        expect.objectContaining({ model: "large", status: "accepted" }),
+      ],
+    });
   });
 
   it("escalates invalid structured output and then resolves provider outage through nested fallback", async () => {
