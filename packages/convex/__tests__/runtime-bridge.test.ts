@@ -116,7 +116,7 @@ describe('Convex runtime bridge', () => {
       }
     }
     const bridge = createConvexRuntimeBridge<TenantCtx>({
-      component: { marker: 'crux' } as never,
+      component: minimalRuntimeComponentRefs(),
       storage: {
         create: () => records,
       },
@@ -262,4 +262,19 @@ function isHttpAction(handler: unknown): boolean {
     typeof (handler as { invokeHttpAction?: unknown }).invokeHttpAction ===
       'function'
   )
+}
+
+/** Minimal structural Convex runtime refs for host-bound Runtime Engine tests. */
+function minimalRuntimeComponentRefs() {
+  return {
+    runtime: {
+      state: {},
+      events: {},
+      waiters: {},
+      timers: {},
+      outbox: {},
+      leases: {},
+      deferred: {},
+    },
+  } as never
 }
