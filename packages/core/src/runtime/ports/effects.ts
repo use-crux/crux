@@ -9,6 +9,10 @@
  */
 
 import type {
+  RuntimePruneOptions,
+  RuntimePruneResult,
+} from "./retention";
+import type {
   DurableEffectExecutionSettlement,
   DurableEffectPreparation,
   DurableEffectReceiptRecord,
@@ -21,6 +25,7 @@ import type {
   DurableEffectScopeSynchronization,
 } from "../../effect/internal/durable-records";
 import type { EffectScopeRef } from "../../effect/types";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 
 export type {
   DurableEffectEnvelopeRecord,
@@ -52,6 +57,26 @@ export interface RuntimeEffectReceiptTransition {
   readonly next: DurableEffectReceiptRecord;
 }
 
+/** Monotonic journal evidence linkage for a settled durable receipt. */
+export interface RuntimeEffectReceiptEvidenceLink {
+  /** Runtime namespace that owns the receipt. */
+  readonly namespace: string;
+  /** Receipt to link. */
+  readonly receiptId: string;
+  /** Expected current revision. */
+  readonly revision: number;
+  /** Canonical raw tool-outcome artifact. */
+  readonly toolOutcomeRef?: EvidenceArtifactRef;
+  /** Monotonic retry count inspected from the linked request receipt. */
+  readonly requestRetryCount?: number;
+}
+
+/** Bounded recovery-envelope retention sweep. */
+export interface RuntimeEffectPruneOptions extends RuntimePruneOptions {
+  /** Wall-clock time used for explicit envelope expiry. */
+  readonly now: Date;
+}
+
 /** Atomic scope lifecycle update guarded by revision and fence. */
 export interface RuntimeEffectScopeTransition {
   /** Complete replacement row with revision incremented by one. */
@@ -78,6 +103,10 @@ export interface RuntimeEffectStorePort {
   /** Apply one legal optimistic receipt transition. */
   transitionReceipt(
     transition: RuntimeEffectReceiptTransition,
+  ): Promise<DurableEffectReceiptRecord | null>;
+  /** Link canonical journal evidence without changing settlement. */
+  linkReceiptEvidence(
+    link: RuntimeEffectReceiptEvidenceLink,
   ): Promise<DurableEffectReceiptRecord | null>;
   /** Settle receipt, envelope, and unit activation in one transaction. */
   settleExecution(
@@ -112,4 +141,6 @@ export interface RuntimeEffectStorePort {
     scope: EffectScopeRef,
     options: RuntimeEffectReadOptions,
   ): Promise<DurableEffectScopeSnapshot | null>;
+  /** Delete a bounded batch of expired recovery envelopes while retaining receipts. */
+  prune(options: RuntimeEffectPruneOptions): Promise<RuntimePruneResult>;
 }

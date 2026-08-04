@@ -69,6 +69,14 @@ export function restoreDurableLedgerSnapshot(
       return receiptId ? [{ kind: "effect", receiptId }] : [];
     }),
   );
+  const retainedEnvelopeIds = new Set(
+    snapshot.envelopes.map((record) => record.receiptId),
+  );
+  for (const record of snapshot.receipts) {
+    if (!retainedEnvelopeIds.has(record.receipt.id)) {
+      state.envelopes.delete(record.receipt.id);
+    }
+  }
   for (const record of snapshot.envelopes) {
     if (!record.durable || !record.envelope) continue;
     state.envelopes.set(record.receiptId, Object.freeze({

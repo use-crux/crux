@@ -190,6 +190,9 @@ export async function streamCore<
   });
   resolved = sourceSession.resolved;
   selectRepresentationMiddleware(resolved, resolved.representations ?? []);
+  let lastStreamReceipt:
+    | import("../../request/receipt/receipt").RequestReceipt
+    | undefined;
 
   try {
     const lifecycle = createToolLifecycle({
@@ -203,6 +206,7 @@ export async function streamCore<
         toolApproval: args.toolApproval,
       },
       promptId: prompt.id,
+      requestReceipt: () => lastStreamReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
@@ -289,9 +293,6 @@ export async function streamCore<
           signal: args.signal,
         }),
     );
-    let lastStreamReceipt:
-      | import("../../request/receipt/receipt").RequestReceipt
-      | undefined;
     const sealStreamRequest = async (
       request: CallArgs<TExtra>,
       previousRequestId?: string,

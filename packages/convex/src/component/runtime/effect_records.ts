@@ -84,6 +84,7 @@ export async function insertEffectRecord(
     ...('fenceToken' in value && value.fenceToken
       ? { fenceToken: value.fenceToken }
       : {}),
+    ...effectRetentionFields(kind, value),
   })
   return true
 }
@@ -105,6 +106,19 @@ export async function replaceEffectRecord(
     ...('fenceToken' in value && value.fenceToken
       ? { fenceToken: value.fenceToken }
       : {}),
+    ...effectRetentionFields(current.kind, value),
   })
   return true
+}
+
+function effectRetentionFields(
+  kind: string,
+  value: ComponentEffectRecord,
+): { readonly retentionMode?: string; readonly retentionAt?: number } {
+  if (kind !== 'envelope') return {}
+  const envelope = (value as DurableEffectEnvelopeRecord).envelope
+  if (!envelope) return {}
+  return envelope.expiresAt === undefined
+    ? { retentionMode: 'created', retentionAt: envelope.createdAt }
+    : { retentionMode: 'expiry', retentionAt: envelope.expiresAt }
 }

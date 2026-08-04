@@ -5,6 +5,7 @@ import type {
   EffectScopeRecord,
 } from "../receipt-types";
 import type { EffectScopeRef } from "../types";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 import type { DurableEffectScopeSnapshot } from "./durable-records";
 import type {
   RecoveryStackEntry,
@@ -100,18 +101,80 @@ export async function persistDurableReceiptTransition(
   const receipt = requireValue(cache.getReceipt(receiptId), "receipt");
   await binding.store.transact(async (tx) => {
     const effects = requireValue(tx.effects, "Effects store port");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const current = requireValue(
+        await effects.getReceipt(receiptId, { namespace: binding.namespace }),
+        "durable receipt",
+      );
+      const expired = current.receipt.recovery === "expired";
+      const next = durableReceiptRecord(
+        binding.namespace,
+        expired
+          ? Object.freeze({ ...receipt, recovery: "expired" })
+          : receipt,
+        current.executionIdempotencyKey,
+        current.revision + 1,
+      );
+      if (await effects.transitionReceipt({ next })) {
+        return;
+      }
+      const latest = await effects.getReceipt(receiptId, {
+        namespace: binding.namespace,
+      });
+      if (latest?.receipt.recovery !== "expired") break;
+    }
+    throw new TypeError(`Durable Effect receipt \`${receiptId}\` rejected its transition.`);
+  });
+}
+
+/** Append canonical tool-outcome evidence to a settled durable receipt. */
+export async function linkDurableEffectReceiptEvidence(
+  receiptId: string,
+  ref: EvidenceArtifactRef,
+): Promise<void> {
+  const binding = currentDurableEffectLedgerBinding();
+  if (!binding) return;
+  await binding.store.transact(async (tx) => {
+    const effects = requireValue(tx.effects, "Effects store port");
     const current = requireValue(
       await effects.getReceipt(receiptId, { namespace: binding.namespace }),
       "durable receipt",
     );
-    const next = durableReceiptRecord(
-      binding.namespace,
-      receipt,
-      current.executionIdempotencyKey,
-      current.revision + 1,
+    if (!(await effects.linkReceiptEvidence({
+      namespace: binding.namespace,
+      receiptId,
+      revision: current.revision,
+      toolOutcomeRef: ref,
+    }))) {
+      throw new TypeError(
+        `Durable Effect receipt \`${receiptId}\` rejected evidence linkage.`,
+      );
+    }
+  });
+}
+
+/** Update a receipt from the final retry count inspected after SDK settlement. */
+export async function linkDurableEffectReceiptRetryCount(
+  receiptId: string,
+  requestRetryCount: number,
+): Promise<void> {
+  const binding = currentDurableEffectLedgerBinding();
+  if (!binding) return;
+  await binding.store.transact(async (tx) => {
+    const effects = requireValue(tx.effects, "Effects store port");
+    const current = requireValue(
+      await effects.getReceipt(receiptId, { namespace: binding.namespace }),
+      "durable receipt",
     );
-    if (!(await effects.transitionReceipt({ next }))) {
-      throw new TypeError(`Durable Effect receipt \`${receiptId}\` rejected its transition.`);
+    if (!(await effects.linkReceiptEvidence({
+      namespace: binding.namespace,
+      receiptId,
+      revision: current.revision,
+      requestRetryCount,
+    }))) {
+      throw new TypeError(
+        `Durable Effect receipt \`${receiptId}\` rejected retry linkage.`,
+      );
     }
   });
 }
@@ -127,61 +190,75 @@ export async function settleDurableEffectExecution(
   const scope = requireValue(cache.getScope(receipt.boundaryId), "scope");
   await binding.store.transact(async (tx) => {
     const effects = requireValue(tx.effects, "Effects store port");
-    const currentReceipt = requireValue(
-      await effects.getReceipt(receiptId, { namespace: binding.namespace }),
-      "durable receipt",
-    );
-    const currentScope = requireValue(
-      await effects.reconstructScope(scope.ref, {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const currentReceipt = requireValue(
+        await effects.getReceipt(receiptId, { namespace: binding.namespace }),
+        "durable receipt",
+      );
+      const currentScope = requireValue(
+        await effects.reconstructScope(scope.ref, {
+          namespace: binding.namespace,
+        }),
+        "durable Effect scope",
+      );
+      const unit = receipt.recoveryUnitId
+        ? cache.getUnit(receipt.recoveryUnitId)
+        : undefined;
+      const currentUnit = unit
+        ? currentScope.units.find((record) => record.unit.id === unit.id)
+        : undefined;
+      const envelope = cache.getEnvelope(receiptId);
+      const currentEnvelope = currentScope.envelopes.find(
+        (record) => record.receiptId === receiptId,
+      );
+      const expired =
+        envelope !== undefined &&
+        currentEnvelope === undefined &&
+        currentReceipt.receipt.recovery === "expired";
+      const appendOrder = cache.stackFor(scope.ref.id).findIndex(
+        (entry) => entry.kind === "effect" && entry.receiptId === receiptId,
+      );
+      const settlement = {
+        receipt: durableReceiptRecord(
+          binding.namespace,
+          expired ? Object.freeze({ ...receipt, recovery: "expired" }) : receipt,
+          currentReceipt.executionIdempotencyKey,
+          currentReceipt.revision + 1,
+          appendOrder < 0 ? undefined : appendOrder + 1,
+        ),
+        ...(unit && currentUnit
+          ? {
+              unit: durableUnitRecord(
+                binding.namespace,
+                expired ? Object.freeze({ ...unit, status: "failed" }) : unit,
+                receipt.effectVersion,
+                currentUnit.revision + 1,
+                appendOrder < 0 ? undefined : appendOrder + 1,
+              ),
+            }
+          : {}),
+        ...(envelope && currentEnvelope
+          ? {
+              envelope: durableEnvelopeRecord(
+                binding.namespace,
+                envelope,
+                currentEnvelope.revision + 1,
+              ),
+            }
+          : {}),
+      };
+      if (await effects.settleExecution(settlement)) {
+        if (expired) {
+          await restoreCache(effects, cache, scope.ref, binding.namespace);
+        }
+        return;
+      }
+      const latest = await effects.getReceipt(receiptId, {
         namespace: binding.namespace,
-      }),
-      "durable Effect scope",
-    );
-    const unit = receipt.recoveryUnitId
-      ? cache.getUnit(receipt.recoveryUnitId)
-      : undefined;
-    const currentUnit = unit
-      ? currentScope.units.find((record) => record.unit.id === unit.id)
-      : undefined;
-    const envelope = cache.getEnvelope(receiptId);
-    const currentEnvelope = currentScope.envelopes.find(
-      (record) => record.receiptId === receiptId,
-    );
-    const appendOrder = cache.stackFor(scope.ref.id).findIndex(
-      (entry) => entry.kind === "effect" && entry.receiptId === receiptId,
-    );
-    const settlement = {
-      receipt: durableReceiptRecord(
-        binding.namespace,
-        receipt,
-        currentReceipt.executionIdempotencyKey,
-        currentReceipt.revision + 1,
-        appendOrder < 0 ? undefined : appendOrder + 1,
-      ),
-      ...(unit && currentUnit
-        ? {
-            unit: durableUnitRecord(
-              binding.namespace,
-              unit,
-              receipt.effectVersion,
-              currentUnit.revision + 1,
-              appendOrder < 0 ? undefined : appendOrder + 1,
-            ),
-          }
-        : {}),
-      ...(envelope
-        ? {
-            envelope: durableEnvelopeRecord(
-              binding.namespace,
-              envelope,
-              (currentEnvelope?.revision ?? 0) + 1,
-            ),
-          }
-        : {}),
-    };
-    if (!(await effects.settleExecution(settlement))) {
-      throw new TypeError(`Durable Effect receipt \`${receiptId}\` rejected settlement.`);
+      });
+      if (latest?.receipt.recovery !== "expired") break;
     }
+    throw new TypeError(`Durable Effect receipt \`${receiptId}\` rejected settlement.`);
   });
 }
 
@@ -258,4 +335,16 @@ function requireValue<T>(value: T | null | undefined, name: string): T {
     throw new TypeError(`${name} is unavailable.`);
   }
   return value;
+}
+
+async function restoreCache(
+  effects: import("../../runtime/ports/effects").RuntimeEffectStorePort,
+  cache: DurableLedgerCache,
+  scope: EffectScopeRef,
+  namespace: string,
+): Promise<void> {
+  cache.restore(requireValue(
+    await effects.reconstructScope(scope, { namespace }),
+    "durable Effect scope",
+  ));
 }

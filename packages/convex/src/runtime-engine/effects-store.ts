@@ -31,6 +31,7 @@ export function createConvexEffectStore(
   return {
     getReceipt: (receiptId, read) =>
       run('getReceipt', { receiptId, options: read }),
+    linkReceiptEvidence: (value) => run('linkReceiptEvidence', { value }),
     prepare: (value) => run('prepare', { value }),
     transitionReceipt: (value) => run('transitionReceipt', { value }),
     settleExecution: (value) => run('settleExecution', { value }),
@@ -42,6 +43,14 @@ export function createConvexEffectStore(
     reconcile: (value) => run('reconcile', { value }),
     reconstructScope: (scope, read) =>
       run('reconstructScope', { scope, options: read }),
+    prune: (value) =>
+      run('prune', {
+        value: {
+          ...value,
+          before: value.before.getTime(),
+          now: value.now.getTime(),
+        },
+      }),
   }
 }
 

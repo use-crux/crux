@@ -14,6 +14,7 @@ import type {
   RecoveryUnitRecord,
 } from "../receipt-types";
 import type { EffectResource } from "../types";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 import type {
   RecoveryHandlerInvocation,
   RecoveryOperationResult,
@@ -51,6 +52,14 @@ export interface EffectReceiptInit {
   readonly runId?: string;
   /** Canonical observability span identifier. */
   readonly spanId?: string;
+  /** Containing tool-call identifier. */
+  readonly toolCallId?: string;
+  /** Sealed provider-request identifier. */
+  readonly requestId?: string;
+  /** Evidence reference for the sealed request plan. */
+  readonly requestPlanRef?: EvidenceArtifactRef;
+  /** Retry count inspected from the sealed request receipt. */
+  readonly requestRetryCount?: number;
   /** Initial recovery availability. */
   readonly recovery: RecoveryAvailability;
   readonly startedAt: number;
@@ -77,6 +86,8 @@ export interface ReceiptTransition {
 export interface EffectLedger {
   createReceipt(init: EffectReceiptInit): EffectReceipt;
   transition(receiptId: string, patch: ReceiptTransition): EffectReceipt;
+  linkToolOutcome(receiptId: string, ref: EvidenceArtifactRef): EffectReceipt;
+  linkRequestRetryCount(receiptId: string, count: number): EffectReceipt;
   prepareReconciliation(command: LedgerReconciliation): ReconciliationCommit;
   persistReconciliation(change: ReconciliationCommit): Promise<void>;
   commitReconciliation(change: ReconciliationCommit): EffectReceipt;
@@ -162,6 +173,14 @@ export const effectLedger: EffectLedger = {
       ...(init.parentReceiptId === undefined ? {} : { parentReceiptId: init.parentReceiptId }),
       ...(init.runId === undefined ? {} : { runId: init.runId }),
       ...(init.spanId === undefined ? {} : { spanId: init.spanId }),
+      ...(init.toolCallId === undefined ? {} : { toolCallId: init.toolCallId }),
+      ...(init.requestId === undefined ? {} : { requestId: init.requestId }),
+      ...(init.requestPlanRef === undefined
+        ? {}
+        : { requestPlanRef: init.requestPlanRef }),
+      ...(init.requestRetryCount === undefined
+        ? {}
+        : { requestRetryCount: init.requestRetryCount }),
       attemptCount: 1,
       outcome: "preparing",
       recovery: init.recovery,
@@ -195,6 +214,35 @@ export const effectLedger: EffectLedger = {
         : { completedAt: patch.completedAt }),
       ...(patch.error === undefined ? {} : { error: patch.error }),
     });
+    receipts.set(receiptId, next);
+    return next;
+  },
+
+  linkToolOutcome(receiptId, ref) {
+    const current = receipts.get(receiptId);
+    if (!current) {
+      throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
+    }
+    if (current.toolOutcomeRef) {
+      if (current.toolOutcomeRef.id !== ref.id) {
+        throw new TypeError(
+          `Effect receipt \`${receiptId}\` already links another tool outcome.`,
+        );
+      }
+      return current;
+    }
+    const next = Object.freeze({ ...current, toolOutcomeRef: ref });
+    receipts.set(receiptId, next);
+    return next;
+  },
+
+  linkRequestRetryCount(receiptId, count) {
+    const current = receipts.get(receiptId);
+    if (!current) {
+      throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
+    }
+    if ((current.requestRetryCount ?? 0) >= count) return current;
+    const next = Object.freeze({ ...current, requestRetryCount: count });
     receipts.set(receiptId, next);
     return next;
   },

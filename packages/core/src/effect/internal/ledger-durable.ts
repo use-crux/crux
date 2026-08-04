@@ -3,6 +3,8 @@
 import type { EffectScopeRef } from "../types";
 import {
   hasDurableEffectStore,
+  linkDurableEffectReceiptEvidence as linkReceiptEvidence,
+  linkDurableEffectReceiptRetryCount as linkReceiptRetryCount,
   persistDurableReceiptTransition as persistReceipt,
   persistDurableUnitTransition as persistUnit,
   prepareDurableEffectExecution as prepareExecution,
@@ -43,6 +45,22 @@ export function persistDurableReceiptTransition(
   receiptId: string,
 ): Promise<void> {
   return persistReceipt(cache, receiptId);
+}
+
+/** Append canonical tool-outcome evidence to a settled durable receipt. */
+export function linkDurableEffectReceiptEvidence(
+  receiptId: string,
+  ref: import("../../evidence/subjects").EvidenceArtifactRef,
+): Promise<void> {
+  return linkReceiptEvidence(receiptId, ref);
+}
+
+/** Update a receipt from the final retry count inspected after SDK settlement. */
+export function linkDurableEffectReceiptRetryCount(
+  receiptId: string,
+  requestRetryCount: number,
+): Promise<void> {
+  return linkReceiptRetryCount(receiptId, requestRetryCount);
 }
 
 /** Atomically settle one successful durable occurrence. */

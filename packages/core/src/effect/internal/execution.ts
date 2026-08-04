@@ -30,6 +30,8 @@ import {
 } from "./boundary-identity";
 import {
   hasDurableEffectLedger,
+  linkDurableEffectReceiptEvidence,
+  linkDurableEffectReceiptRetryCount,
   persistDurableReceiptTransition,
   settleDurableEffectExecution,
 } from "./ledger-durable";
@@ -51,6 +53,11 @@ import {
 } from "./execution-helpers";
 import { currentDurableEffectLedgerBinding } from "./durable-binding";
 import { assertRuntimeEffectTarget } from "../../runtime/effect-targets";
+import {
+  currentEffectJournalContext,
+  registerEffectJournalLinker,
+  registerEffectJournalRetryLinker,
+} from "./journal-context";
 
 type CapturedRecovery<TInput, TOutput> = {
   readonly capture: (context: EffectCaptureContext<TInput>) => Awaitable<unknown>;
@@ -126,6 +133,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     recovery: options?.recover ? "unavailable" : "irreversible",
   });
   return observation.run(async () => {
+  const journal = currentEffectJournalContext();
   if (ownsBoundary) {
     effectLedger.registerScope({
       ref: boundary,
@@ -143,6 +151,7 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     ...(observation.spanId === undefined
       ? {}
       : { spanId: observation.spanId }),
+    ...(journal ?? {}),
     recovery: options?.recover
       ? "unavailable"
       : "irreversible",
@@ -212,6 +221,13 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     ...(resource === undefined ? {} : { resource }),
     ...(options?.recover ? { recover: options.recover } : {}),
   });
+  registerEffectJournalRetryLinker(async (requestRetryCount) => {
+    await linkDurableEffectReceiptRetryCount(
+      receipt.id,
+      requestRetryCount,
+    );
+    effectLedger.linkRequestRetryCount(receipt.id, requestRetryCount);
+  });
 
   effectLedger.transition(receipt.id, {
     outcome: "running",
@@ -259,6 +275,10 @@ export async function executeEffectOccurrence<TInput, TOutput>(
     observation.settle(settledReceipt);
     registerEffectStackEntry(boundary.id, receipt.id);
     await settleDurableEffectExecution(receipt.id);
+    registerEffectJournalLinker(async (toolOutcomeRef) => {
+      await linkDurableEffectReceiptEvidence(receipt.id, toolOutcomeRef);
+      effectLedger.linkToolOutcome(receipt.id, toolOutcomeRef);
+    });
     if (ownsBoundary) closeImplicitRootBoundary(boundary);
     return Object.freeze({
       output,

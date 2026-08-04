@@ -19,6 +19,7 @@ import {
   synchronizeMemoryEffectScope,
   valuesForNamespace,
 } from "./effect-records";
+import { pruneMemoryEffectEnvelopes } from "./effect-retention";
 
 /** Construct the transaction-bound Effects port over one memory data view. */
 export function createMemoryEffectStore(
@@ -100,6 +101,45 @@ export function createMemoryEffectStore(
         return null;
       }
       const stored = cloneRecord(next);
+      put(data.effectReceipts, key, stored, recordWrite);
+      return cloneRecord(stored);
+    },
+
+    async linkReceiptEvidence(link) {
+      const key = scopedKey(link.namespace, link.receiptId);
+      const current = data.effectReceipts.get(key);
+      if (!current) return null;
+      if (
+        current.receipt.toolOutcomeRef &&
+        link.toolOutcomeRef &&
+        current.receipt.toolOutcomeRef.id !== link.toolOutcomeRef.id
+      ) {
+        return null;
+      }
+      const requestRetryCount = Math.max(
+        current.receipt.requestRetryCount ?? 0,
+        link.requestRetryCount ?? 0,
+      );
+      const changed =
+        (!current.receipt.toolOutcomeRef && link.toolOutcomeRef !== undefined) ||
+        requestRetryCount !== (current.receipt.requestRetryCount ?? 0);
+      if (!changed) {
+        return cloneRecord(current);
+      }
+      if (current.revision !== link.revision) return null;
+      const stored = cloneRecord({
+        ...current,
+        receipt: {
+          ...current.receipt,
+          ...(link.toolOutcomeRef
+            ? { toolOutcomeRef: link.toolOutcomeRef }
+            : {}),
+          ...(link.requestRetryCount === undefined
+            ? {}
+            : { requestRetryCount }),
+        },
+        revision: current.revision + 1,
+      });
       put(data.effectReceipts, key, stored, recordWrite);
       return cloneRecord(stored);
     },
@@ -301,6 +341,10 @@ export function createMemoryEffectStore(
           ) ?? []).map(cloneRecord),
         ),
       });
+    },
+
+    async prune(options) {
+      return pruneMemoryEffectEnvelopes(data, options, recordWrite);
     },
   };
 }

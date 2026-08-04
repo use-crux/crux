@@ -5,10 +5,12 @@ import type {
   DurableEffectPreparation,
   RuntimeEffectStorePort,
 } from "../ports/effects";
+import type { CruxArtifactId } from "../../observability/contract";
 import type { RuntimeStoreAdapter } from "../store";
 import { requireFaultHook } from "./store-composite-case-utils";
 import { runStoreEffectCrashTests } from "./store-effects-crash";
 import { runStoreEffectReconstructionTests } from "./store-effects-reconstruction";
+import { runStoreEffectRetentionTests } from "./store-effects-retention";
 import { runStoreEffectSettlementTests } from "./store-effects-settlement";
 import { runStoreEffectTransitionTests } from "./store-effects-transitions";
 import type {
@@ -154,6 +156,37 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       await expect(
         store.effects.transitionReceipt({ next: succeeded.receipt }),
       ).resolves.toBeNull();
+      const toolOutcomeRef = {
+        kind: "artifact" as const,
+        id: "artifact_1111111111111111" as CruxArtifactId,
+      };
+      await expect(store.effects.linkReceiptEvidence({
+        namespace: "tenant-a",
+        receiptId: "receipt-1",
+        revision: 3,
+        toolOutcomeRef,
+      })).resolves.toMatchObject({
+        receipt: { toolOutcomeRef },
+        revision: 4,
+      });
+      await expect(store.effects.linkReceiptEvidence({
+        namespace: "tenant-a",
+        receiptId: "receipt-1",
+        revision: 3,
+        toolOutcomeRef,
+      })).resolves.toMatchObject({
+        receipt: { toolOutcomeRef },
+        revision: 4,
+      });
+      await expect(store.effects.linkReceiptEvidence({
+        namespace: "tenant-a",
+        receiptId: "receipt-1",
+        revision: 4,
+        toolOutcomeRef: {
+          kind: "artifact",
+          id: "artifact_2222222222222222" as CruxArtifactId,
+        },
+      })).resolves.toBeNull();
       },
     );
 
@@ -181,6 +214,7 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
     if (isSupported(options.effectCapabilities.atomicOperations)) {
       runStoreEffectSettlementTests(options, preparation);
       runStoreEffectTransitionTests(options, preparation);
+      runStoreEffectRetentionTests(options);
     }
     if (isSupported(options.effectCapabilities.reconstruction)) {
       runStoreEffectReconstructionTests(options);

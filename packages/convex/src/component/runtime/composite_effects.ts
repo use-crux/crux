@@ -1,5 +1,6 @@
 import type {
   RuntimeEffectReadOptions,
+  RuntimeEffectReceiptEvidenceLink,
   RuntimeEffectReceiptTransition,
   RuntimeEffectScopeTransition,
   RuntimeEffectUnitTransition,
@@ -10,6 +11,7 @@ import type {
   DurableEffectRecoveryPreparation,
   DurableEffectRecoverySettlement,
   DurableEffectScopeSynchronization,
+  RuntimeEffectPruneOptions,
 } from '@use-crux/core/runtime'
 import type { EffectScopeRef } from '@use-crux/core/effect'
 import { v } from 'convex/values'
@@ -19,8 +21,10 @@ import { createComponentEffectStore } from './effects'
 
 type EffectOperation =
   | 'getReceipt'
+  | 'linkReceiptEvidence'
   | 'prepare'
   | 'prepareRecovery'
+  | 'prune'
   | 'reconcile'
   | 'reconstructScope'
   | 'settleExecution'
@@ -55,6 +59,10 @@ async function runOperation(
       )
     case 'prepare':
       return await store.prepare(input.value as DurableEffectPreparation)
+    case 'linkReceiptEvidence':
+      return await store.linkReceiptEvidence(
+        input.value as RuntimeEffectReceiptEvidenceLink,
+      )
     case 'transitionReceipt':
       return await store.transitionReceipt(
         input.value as RuntimeEffectReceiptTransition,
@@ -83,6 +91,8 @@ async function runOperation(
       return await store.reconcile(
         input.value as DurableEffectReconciliationSettlement,
       )
+    case 'prune':
+      return await store.prune(decodePruneOptions(input.value))
     case 'reconstructScope':
       return await store.reconstructScope(
         input.scope as EffectScopeRef,
@@ -100,8 +110,10 @@ function assertOperation(value: string): EffectOperation {
 
 const EFFECT_OPERATIONS: readonly EffectOperation[] = [
   'getReceipt',
+  'linkReceiptEvidence',
   'prepare',
   'prepareRecovery',
+  'prune',
   'reconcile',
   'reconstructScope',
   'settleExecution',
@@ -111,3 +123,15 @@ const EFFECT_OPERATIONS: readonly EffectOperation[] = [
   'transitionScope',
   'transitionUnit',
 ]
+
+function decodePruneOptions(value: unknown): RuntimeEffectPruneOptions {
+  const options = value as Omit<RuntimeEffectPruneOptions, 'before' | 'now'> & {
+    readonly before: number
+    readonly now: number
+  }
+  return {
+    ...options,
+    before: new Date(options.before),
+    now: new Date(options.now),
+  }
+}

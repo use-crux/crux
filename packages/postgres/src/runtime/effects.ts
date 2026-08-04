@@ -32,6 +32,7 @@ import {
   reconcilePostgresEffects,
   settlePostgresEffectRecovery,
 } from './effect-recovery'
+import { prunePostgresEffectEnvelopes } from './effect-retention'
 
 /** Create the PostgreSQL durable Effects record port. */
 export function createPostgresEffectStore(
@@ -149,6 +150,48 @@ export function createPostgresEffectStore(
       ) ? next : null
     },
 
+    async linkReceiptEvidence(link) {
+      const current = await getEffectRecord<DurableEffectReceiptRecord>(
+        db, records, 'receipt', link.namespace, link.receiptId, true,
+      )
+      if (!current) return null
+      if (
+        current.receipt.toolOutcomeRef &&
+        link.toolOutcomeRef &&
+        current.receipt.toolOutcomeRef.id !== link.toolOutcomeRef.id
+      ) {
+        return null
+      }
+      const requestRetryCount = Math.max(
+        current.receipt.requestRetryCount ?? 0,
+        link.requestRetryCount ?? 0,
+      )
+      const changed =
+        (!current.receipt.toolOutcomeRef && link.toolOutcomeRef !== undefined) ||
+        requestRetryCount !== (current.receipt.requestRetryCount ?? 0)
+      if (!changed) return current
+      if (current.revision !== link.revision) return null
+      const next = {
+        ...current,
+        receipt: {
+          ...current.receipt,
+          ...(link.toolOutcomeRef ? { toolOutcomeRef: link.toolOutcomeRef } : {}),
+          ...(link.requestRetryCount === undefined ? {} : { requestRetryCount }),
+        },
+        revision: current.revision + 1,
+      }
+      return await replaceEffectRecord(
+        db,
+        records,
+        'receipt',
+        current.receipt.id,
+        current.receipt.boundaryId,
+        current.revision,
+        next,
+        faults,
+      ) ? next : null
+    },
+
     async settleExecution(settlement) {
       const currentReceipt = await getEffectRecord<DurableEffectReceiptRecord>(
         db, records, 'receipt', settlement.receipt.namespace,
@@ -250,6 +293,10 @@ export function createPostgresEffectStore(
         attempts,
         reconciliations,
       })
+    },
+
+    async prune(options) {
+      return prunePostgresEffectEnvelopes(db, records, faults, options)
     },
   }
 }

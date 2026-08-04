@@ -5,6 +5,7 @@
  */
 
 import type { JsonObject, JsonValue } from "../storage/types";
+import type { EvidenceArtifactRef } from "../evidence/subjects";
 import type {
   EffectReceiptRef,
   EffectResource,
@@ -55,6 +56,14 @@ export interface EffectReceipt extends EffectReceiptRef {
   readonly spanId?: string;
   /** Containing tool-call identifier. */
   readonly toolCallId?: string;
+  /** Sealed provider-request identifier when execution occurred in a journaled tool call. */
+  readonly requestId?: string;
+  /** Evidence reference for the sealed request plan. */
+  readonly requestPlanRef?: EvidenceArtifactRef;
+  /** Transport retry count inspected from the sealed request receipt. */
+  readonly requestRetryCount?: number;
+  /** Evidence reference for the tool's canonical raw output. */
+  readonly toolOutcomeRef?: EvidenceArtifactRef;
   /** Containing flow identifier. */
   readonly flowId?: string;
   /** Containing flow-step identifier. */

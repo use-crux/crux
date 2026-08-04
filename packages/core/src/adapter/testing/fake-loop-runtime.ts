@@ -47,6 +47,8 @@ import {
 export interface FakeLoopEmission {
   /** Assistant text for this step. */
   readonly text?: string;
+  /** Transport retries attributed to this provider call. */
+  readonly transportRetries?: number;
   /**
    * Tool calls the "model" requests this step. The fake executes them
    * against the request's (instrumented) tool map, exactly like a real
@@ -274,6 +276,9 @@ export function fakeLoopRuntime(
           finishReason: toolCalls.length > 0 ? "tool-calls" : "stop",
           responseId: `fake_${index}`,
           actualModelId: request.modelInfo.modelId,
+          ...(emission.transportRetries === undefined
+            ? {}
+            : { transportRetries: emission.transportRetries }),
         };
         const canonicalContent = responseContent(lastResponse);
         if (request.stepTransformer !== undefined) {
@@ -295,6 +300,9 @@ export function fakeLoopRuntime(
             finishReason: lastResponse.finishReason,
             responseId: lastResponse.responseId,
             modelId: lastResponse.actualModelId,
+            ...(lastResponse.transportRetries === undefined
+              ? {}
+              : { transportRetries: lastResponse.transportRetries }),
           });
         }
 
@@ -312,6 +320,7 @@ export function fakeLoopRuntime(
             toolResults: [],
             finishReason: "stop",
             usage: lastResponse.usage,
+            transportRetries: lastResponse.transportRetries,
           });
           break;
         }
@@ -400,6 +409,7 @@ export function fakeLoopRuntime(
           toolResults,
           finishReason: "tool_calls",
           usage: lastResponse.usage,
+          transportRetries: lastResponse.transportRetries,
         })) ?? { kind: "continue" };
 
         if (directive.kind === "stop") break;

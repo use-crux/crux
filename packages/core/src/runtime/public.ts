@@ -296,6 +296,8 @@ export type {
   DurableEffectScopeSnapshot,
   DurableEffectScopeSynchronization,
   RuntimeEffectReadOptions,
+  RuntimeEffectReceiptEvidenceLink,
+  RuntimeEffectPruneOptions,
   RuntimeEffectReceiptTransition,
   RuntimeEffectScopeTransition,
   RuntimeEffectStorePort,

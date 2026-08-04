@@ -246,7 +246,16 @@ export default defineSchema({
     record: v.any(),
     revision: v.number(),
     fenceToken: v.optional(v.string()),
+    retentionMode: v.optional(v.string()),
+    retentionAt: v.optional(v.number()),
   })
     .index('by_identity', ['namespace', 'kind', 'recordId'])
-    .index('by_boundary_kind', ['namespace', 'boundaryId', 'kind']),
+    .index('by_boundary_kind', ['namespace', 'boundaryId', 'kind'])
+    .index('by_retention', [
+      'namespace',
+      'kind',
+      'retentionMode',
+      'retentionAt',
+    ])
+    .index('by_retention_global', ['kind', 'retentionMode', 'retentionAt']),
 })

@@ -324,6 +324,7 @@ export async function generateCore<
         toolApproval: args.toolApproval,
       },
       promptId: prompt.id,
+      requestReceipt: () => lastRequestReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,

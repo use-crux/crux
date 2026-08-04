@@ -31,6 +31,7 @@ import {
   reconcileEffects,
   settleEffectRecovery,
 } from './effect_recovery'
+import { pruneEffectEnvelopes } from './effect_retention'
 
 /** Construct the durable Effects port inside one Convex component mutation. */
 export function createComponentEffectStore(
@@ -101,6 +102,48 @@ export function createComponentEffectStore(
         )) return null
       return await replaceEffectRecord(
         ctx, document, next.receipt.boundaryId, next,
+      ) ? next : null
+    },
+
+    async linkReceiptEvidence(link) {
+      const document = await getEffectDocument(
+        ctx,
+        'receipt',
+        link.namespace,
+        link.receiptId,
+      )
+      const current = document?.record as DurableEffectReceiptRecord | undefined
+      if (!document || !current) return null
+      if (
+        current.receipt.toolOutcomeRef &&
+        link.toolOutcomeRef &&
+        current.receipt.toolOutcomeRef.id !== link.toolOutcomeRef.id
+      ) {
+        return null
+      }
+      const requestRetryCount = Math.max(
+        current.receipt.requestRetryCount ?? 0,
+        link.requestRetryCount ?? 0,
+      )
+      const changed =
+        (!current.receipt.toolOutcomeRef && link.toolOutcomeRef !== undefined) ||
+        requestRetryCount !== (current.receipt.requestRetryCount ?? 0)
+      if (!changed) return current
+      if (current.revision !== link.revision) return null
+      const next = {
+        ...current,
+        receipt: {
+          ...current.receipt,
+          ...(link.toolOutcomeRef ? { toolOutcomeRef: link.toolOutcomeRef } : {}),
+          ...(link.requestRetryCount === undefined ? {} : { requestRetryCount }),
+        },
+        revision: current.revision + 1,
+      }
+      return await replaceEffectRecord(
+        ctx,
+        document,
+        current.receipt.boundaryId,
+        next,
       ) ? next : null
     },
 
@@ -191,6 +234,10 @@ export function createComponentEffectStore(
         attempts,
         reconciliations,
       })
+    },
+
+    async prune(options) {
+      return pruneEffectEnvelopes(ctx, options)
     },
   }
 }

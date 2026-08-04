@@ -61,12 +61,21 @@ export function recordEffectRecoveryReconciliation(
 function projectReceiptSettlement(receipt: EffectReceipt): void {
   const collector = activeEvidenceCollector(true);
   if (!collector || receipt.completedAt === undefined) return;
-  const subject = receiptRef(receipt);
-  const recordedAt = new Date().toISOString();
-  const observedAt = new Date(receipt.completedAt).toISOString();
+  for (const record of effectSettlementEvidenceRecords(receipt)) {
+    appendOnce(collector, record);
+  }
+}
 
-  appendOnce(
-    collector,
+/** Build the deterministic read model for one settled receipt. @internal */
+export function effectSettlementEvidenceRecords(
+  receipt: EffectReceipt,
+  recordedAt = new Date().toISOString(),
+  changeSupersedes: readonly EvidenceRef[] = [],
+): readonly EvidenceRecord[] {
+  if (receipt.completedAt === undefined) return [];
+  const subject = receiptRef(receipt);
+  const observedAt = new Date(receipt.completedAt).toISOString();
+  return Object.freeze([
     evidenceRecord({
       subject,
       role: "intent",
@@ -80,8 +89,19 @@ function projectReceiptSettlement(receipt: EffectReceipt): void {
           : { resource: resourceSummary(receipt.resource) }),
       },
     }),
-  );
-  projectReceiptChange(receipt, observedAt, false);
+    evidenceRecord({
+      subject,
+      role: "change",
+      conclusion: changeConclusion(receipt),
+      recordedAt,
+      observedAt,
+      supersedes: changeSupersedes,
+      data: {
+        outcome: receipt.outcome,
+        recovery: receipt.recovery,
+      },
+    }),
+  ]);
 }
 
 function projectReceiptChange(
@@ -118,26 +138,37 @@ function projectRecoverySettlement(
   const collector = activeEvidenceCollector(true);
   if (!collector || attempt.completedAt === undefined) return;
   const subject = receiptRef(original);
-  const source = receiptRef(attempt);
+  const record = effectRecoveryEvidenceRecord(original, attempt, {
+    supersedes: activeRefs(
+      collector.snapshot(subject)?.records.recovery,
+    ),
+  });
+  if (record) appendOnce(collector, record);
+}
 
-  appendOnce(
-    collector,
-    evidenceRecord({
-      subject,
-      source,
-      role: "recovery",
-      conclusion: recoveryConclusion(attempt),
-      recordedAt: new Date().toISOString(),
-      observedAt: new Date(attempt.completedAt).toISOString(),
-      supersedes: activeRefs(
-        collector.snapshot(subject)?.records.recovery,
-      ),
-      data: {
-        outcome: attempt.outcome,
-        recovery: original.recovery,
-      },
-    }),
-  );
+/** Build recovery evidence linking one attempt to its original receipt. @internal */
+export function effectRecoveryEvidenceRecord(
+  original: EffectReceipt,
+  attempt: EffectReceipt,
+  options: {
+    readonly recordedAt?: string;
+    readonly supersedes?: readonly EvidenceRef[];
+  } = {},
+): EvidenceRecord | undefined {
+  if (attempt.completedAt === undefined) return undefined;
+  return evidenceRecord({
+    subject: receiptRef(original),
+    source: receiptRef(attempt),
+    role: "recovery",
+    conclusion: recoveryConclusion(attempt),
+    recordedAt: options.recordedAt ?? new Date().toISOString(),
+    observedAt: new Date(attempt.completedAt).toISOString(),
+    supersedes: options.supersedes,
+    data: {
+      outcome: attempt.outcome,
+      recovery: original.recovery,
+    },
+  });
 }
 
 function evidenceRecord(

@@ -46,6 +46,7 @@ import {
 } from "../../generation/timeout";
 import { isWorkControlTool } from "../../agent/work-control-tool";
 import type { Message } from "../../generation/messages";
+import type { RequestReceipt } from "../../request/receipt/receipt";
 import type { JsonValue, ToolModelOutput } from "../../types/tool";
 import type { SystemBlock } from "../../resolver/types";
 import type { AdapterResponse, CallArgs, ToolResultEntry } from "../types";
@@ -157,6 +158,10 @@ import {
   type ToolLifecycleExecutionOptions,
 } from "./execution-options";
 import { runToolScope } from "./scope";
+import {
+  linkEffectJournalOutcome,
+  type EffectJournalLinker,
+} from "../../effect/internal/journal-context";
 import type { ModelIngressGuard } from "../../safety/input/model-ingress";
 import { isPolicyTerminal } from "../../safety/errors";
 import { guardToolModelOutput } from "./model-ingress";
@@ -238,6 +243,8 @@ export interface ToolLifecycleOptions {
   /** Identity threaded into spans, hooks, and memory capture. */
   readonly promptId: string | undefined;
   readonly input?: Record<string, unknown>;
+  /** @internal Latest sealed request whose accepted tool call is executing. */
+  readonly requestReceipt?: () => RequestReceipt | undefined;
   /** Structured timeout budgets for tool execution in this session. */
   readonly timeout?: TimeoutOptions;
   /** @internal Caller cancellation propagated through execution and ingress. */
@@ -615,6 +622,7 @@ export function createToolLifecycle(
     ToolApprovalRequirement
   >();
   const sdkAttempts = new Map<string, SdkAttemptedToolCall>();
+  const sdkEffectLinks = new Map<string, readonly EffectJournalLinker[]>();
   let currentResolved = options.resolved;
   let forcedOffloadSupport = false;
 
@@ -798,6 +806,11 @@ export function createToolLifecycle(
     let executable = withToolLifecycleExecutionOptions(
       exposedTools,
       executionOptionsForSdkTool,
+      {
+        request: () => options.requestReceipt?.(),
+        retain: (toolCallId, linkers) =>
+          sdkEffectLinks.set(toolCallId, linkers),
+      },
     );
     if (options.modelIngress) {
       if (!options.sdkModelIngress) {
@@ -818,6 +831,11 @@ export function createToolLifecycle(
     }
     const nextArmedTools = instrumentToolSet(executable, {
       takeAttemptedSpan: consumeSdkAttempt,
+      linkEffectOutcome: async (toolCallId, ref) => {
+        const linkers = sdkEffectLinks.get(toolCallId) ?? [];
+        sdkEffectLinks.delete(toolCallId);
+        for (const linker of linkers) await linker(ref);
+      },
     });
     if (armedTools) {
       for (const name of Object.keys(armedTools)) delete armedTools[name];
@@ -1220,8 +1238,8 @@ export function createToolLifecycle(
         const offloadReceipt =
           toolOutputOffloadReceipt(convertedModelOutput);
         const content = renderToolModelOutput(modelOutput);
-        span.withContext(() => {
-          emitToolResultArtifact(
+        const canonicalArtifactId = await span.withContext(() => {
+          const id = emitToolResultArtifact(
             span.spanId,
             toolCall.name,
             toolCall.id,
@@ -1247,7 +1265,14 @@ export function createToolLifecycle(
             },
             sourceResultPreview(provenance, modelOutput),
           );
+          return id;
         });
+        if (canonicalArtifactId) {
+          await linkEffectJournalOutcome({
+            kind: "artifact",
+            id: canonicalArtifactId,
+          });
+        }
         span.end({
           attributes: {
             isError: false,
@@ -1351,6 +1376,9 @@ export function createToolLifecycle(
           isError: true,
         };
       }
+    }, {
+      toolCallId: toolCall.id,
+      request: options.requestReceipt?.(),
     });
   }
 
