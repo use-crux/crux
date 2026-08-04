@@ -62,6 +62,49 @@ export default defineSchema({
     .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
     .index('by_status_updated', ['status', 'updatedAt']),
 
+  runtimeSessions: defineTable({
+    schemaVersion: v.literal(1),
+    namespace: v.string(),
+    sessionId: v.string(),
+    keyHash: v.string(),
+    targetId: v.string(),
+    threadId: v.string(),
+    model: v.any(),
+    state: v.union(v.literal('prepared'), v.literal('ready')),
+    acceptedCursor: v.number(),
+    processedCursor: v.optional(v.number()),
+    pendingInputs: v.number(),
+    pendingWork: v.number(),
+    blockedWork: v.number(),
+    statistics: v.any(),
+    wakePending: v.boolean(),
+    activation: v.optional(v.any()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index('by_namespace_key', ['namespace', 'keyHash'])
+    .index('by_namespace_session', ['namespace', 'sessionId'])
+    .index('by_namespace_updated', ['namespace', 'updatedAt']),
+
+  runtimeSessionInputs: defineTable({
+    schemaVersion: v.literal(1),
+    namespace: v.string(),
+    sessionId: v.string(),
+    inputId: v.string(),
+    cursor: v.number(),
+    input: v.any(),
+    acceptedAt: v.string(),
+    work: v.optional(v.any()),
+    workId: v.optional(v.string()),
+    delivery: v.optional(v.any()),
+    preparedExecution: v.optional(v.any()),
+    preparedResultLocation: v.optional(v.string()),
+  })
+    .index('by_namespace_input', ['namespace', 'inputId'])
+    .index('by_session_cursor', ['namespace', 'sessionId', 'cursor'])
+    .index('by_session_work_cursor', ['namespace', 'sessionId', 'workId', 'cursor'])
+    .index('by_prepared_result', ['namespace', 'preparedResultLocation']),
+
   runtimeResults: defineTable({
     namespace: v.string(),
     sha256: v.string(),
