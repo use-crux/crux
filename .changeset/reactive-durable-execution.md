@@ -230,6 +230,24 @@ self-constraint so concrete `Signal<literal, schema>` values keep exact per-key
 payload inference across TypeScript 5.5+, 6.0, and TypeScript-Go preview without
 accepting non-Signal map values.
 
+Project Index now discovers authored `signal()`, `webhook()`,
+`signalProvider()`, and `managedTransportBinding()` declarations with
+config-ref and Signal-target lineage, and generates one Runtime program that
+statically imports executable providers plus inert bindings into
+`createRuntimeProgram({ targets, generationModels, providers, transports })`.
+Local worker loading rejects non-empty transports without matching generated
+provider authority before worker start. Built-in diagnostics reject unstable
+provider or binding identities and explicit live Request/client/credential/
+socket/callback fields on inert bindings. Devtools Catalog surfaces provider
+and transport-binding evidence without credentials or raw payloads.
+
+Complete the Signal tooling contract with canonical provider, transport, and
+Signal lineage across both static frontends, partial Signal identity evidence,
+executable lint parity fixtures, and selectable Devtools lineage. Runtime
+artifact manifests now use schema version 3 so older generated manifests fail
+with an explicit incompatibility diagnostic, while generated imports and worker
+transport authority remain exact under path escaping and source drift.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program

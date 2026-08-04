@@ -17,6 +17,12 @@ import type {
 import type { EvalFacts } from "./eval-facts";
 import type { EffectFacts } from "./effect-facts";
 import type { EvidenceRecordFacts } from "./evidence-record-facts";
+import type {
+  SignalFacts,
+  SignalProviderFacts,
+  SignalTransportBindingFacts,
+  SignalTransportFacts,
+} from "./signal-facts";
 import {
   PromptTextDiagnosticEvidenceSchema,
   type PromptTextDiagnosticEvidence,
@@ -495,6 +501,10 @@ export type ProjectDefinitionKind =
   | "mcp.server"
   | "agent"
   | "session"
+  | "signal"
+  | "signal.provider"
+  | "signal.transport"
+  | "signal.transportBinding"
   | "flow"
   | "flow.step"
   | "task"
@@ -821,6 +831,15 @@ export interface SessionFacts {
       };
 }
 
+export type {
+  SignalFacts,
+  SignalProviderFacts,
+  SignalTransportBindingFacts,
+  SignalTransportBindingLiveField,
+  SignalTransportFacts,
+} from "./signal-facts";
+export { SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS } from "./signal-facts";
+
 export interface FlowFacts {
   kind: "flow";
   stepNames?: string[];
@@ -1095,6 +1114,10 @@ export type PrimitiveSpecificFacts =
   | SkillFacts
   | AgentFacts
   | SessionFacts
+  | SignalFacts
+  | SignalProviderFacts
+  | SignalTransportFacts
+  | SignalTransportBindingFacts
   | FlowFacts
   | FlowStepFacts
   | CompositionFacts
@@ -1348,6 +1371,10 @@ export const ProjectDefinitionKindSchema = z.enum([
   "mcp.server",
   "agent",
   "session",
+  "signal",
+  "signal.provider",
+  "signal.transport",
+  "signal.transportBinding",
   "flow",
   "flow.step",
   "task",

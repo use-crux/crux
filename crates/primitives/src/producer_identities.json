@@ -6,13 +6,17 @@
   {"matchKind":"call","name":"createTool","importFrom":["@use-crux/convex/agent"]},
   {"matchKind":"call","name":"fallback","importFrom":["@use-crux/core","@use-crux/core/routing"]},
   {"matchKind":"call","name":"getSession","importFrom":["@use-crux/core","@use-crux/core/session"]},
+  {"matchKind":"call","name":"managedTransportBinding","importFrom":["@use-crux/core","@use-crux/core/signal/provider"]},
   {"matchKind":"call","name":"mcp","importFrom":["@use-crux/mcp"]},
   {"matchKind":"call","name":"prompt","importFrom":["@use-crux/core"]},
   {"matchKind":"call","name":"retry","importFrom":["@use-crux/core/routing"]},
   {"matchKind":"call","name":"router","importFrom":["@use-crux/core/routing"]},
   {"matchKind":"call","name":"session","importFrom":["@use-crux/core","@use-crux/core/session"]},
+  {"matchKind":"call","name":"signal","importFrom":["@use-crux/core","@use-crux/core/signal"]},
+  {"matchKind":"call","name":"signalProvider","importFrom":["@use-crux/core","@use-crux/core/signal/provider"]},
   {"matchKind":"call","name":"split","importFrom":["@use-crux/core/routing"]},
   {"matchKind":"call","name":"thread","importFrom":["@use-crux/core/thread"]},
   {"matchKind":"call","name":"tool","importFrom":["@use-crux/core","@use-crux/core/tools"]},
+  {"matchKind":"call","name":"webhook","importFrom":["@use-crux/core","@use-crux/core/signal/transport"]},
   {"matchKind":"new","name":"Agent","importFrom":["@use-crux/convex/agent"]}
 ]

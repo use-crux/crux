@@ -9,7 +9,7 @@ func StaticIndexIdentityManifest() IdentityManifest {
 		},
 		OxcFrontend: VersionIdentity{
 			Name:    "oxc-rust",
-			Version: "oxc_parser@0.139.0+crux_native_group3.12",
+			Version: "oxc_parser@0.139.0+crux_native_group3.13",
 		},
 		PrimitiveManifest: DigestIdentity{
 			Name:    "crux-first-party-primitives",

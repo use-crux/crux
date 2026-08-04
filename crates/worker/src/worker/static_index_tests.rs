@@ -93,10 +93,21 @@ fn finalize_request_is_accepted_through_worker_path() {
         parsed.events[2]["patch"]["project"]["root"],
         "/workspace/acme"
     );
-    assert_eq!(parsed.events[2]["summary"]["factCount"], 70);
+    // Builtin rule-descriptor catalog includes the three Signal provider/transport rules.
+    const BUILTIN_RULE_DESCRIPTOR_FACTS: u64 = 71;
+    let batch_facts = parsed.events[1]["facts"]
+        .as_array()
+        .expect("worker finalize emits one fact batch");
+    let fact_count = batch_facts.len() as u64;
+    assert_eq!(parsed.events[2]["summary"]["factCount"], fact_count);
+    // One authored definition + full builtin rule catalog + remaining baseline envelopes.
+    assert_eq!(fact_count, BUILTIN_RULE_DESCRIPTOR_FACTS + 2);
     assert_eq!(stage["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(stage["telemetry"]["facts"]["definitions"], 1);
-    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 68);
+    assert_eq!(
+        stage["telemetry"]["facts"]["ruleDescriptors"],
+        BUILTIN_RULE_DESCRIPTOR_FACTS
+    );
     assert_eq!(stage["telemetry"]["cache"]["writes"], 1);
 }
 
@@ -150,7 +161,7 @@ pub(crate) fn run_identity_json() -> Value {
     json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
         "compiler": version_identity_json("crux-static-index", "0.1.0"),
-        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.12"),
+        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.13"),
         "primitiveManifest": digest_identity_json("crux-first-party-primitives"),
         "relationPolicy": digest_identity_json("crux-relation-policy"),
         "extensionManifests": [digest_identity_json("@acme/crux-extra")],
