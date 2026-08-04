@@ -330,6 +330,15 @@
       "negativeFixture": "request-context-planning-semantic.test.ts",
       "positiveFixture": "request-context-planning-semantic.test.ts",
       "ruleId": "context-planning.invalid-wrapper-order"
+    },
+    {
+      "ruleId": "signal.provider.unstable_identity"
+    },
+    {
+      "ruleId": "signal.transportBinding.unstable_identity"
+    },
+    {
+      "ruleId": "signal.transportBinding.live_value"
     }
   ]
 }

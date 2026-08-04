@@ -92,6 +92,12 @@ export async function loadGeneratedRuntimeProgram(root: string): Promise<Runtime
       'The generated Runtime program targets do not match the Runtime manifest.',
     )
   }
+  if (!programProviderAuthorityMatches(imported.runtimeProgram, decodedManifest)) {
+    throw artifactError(
+      'ARTIFACTS_STALE',
+      'The generated Runtime program providers or transports do not match the Runtime manifest.',
+    )
+  }
   return imported.runtimeProgram
 }
 
@@ -106,6 +112,8 @@ function isRuntimeProgram(value: unknown): value is RuntimeProgram {
     'targetDefinitions' in value &&
     Array.isArray(value.targetDefinitions) &&
     value.targetDefinitions.every(isRuntimeTargetDefinition) &&
+    'providers' in value &&
+    Array.isArray(value.providers) &&
     'transports' in value &&
     Array.isArray(value.transports)
   )
@@ -132,6 +140,68 @@ function programTargetsMatchManifest(
     JSON.stringify(actual) === JSON.stringify(expected) &&
     JSON.stringify(actualDefinitions) === JSON.stringify(expectedDefinitions)
   )
+}
+
+/**
+ * Require generated provider authority to match the manifest when transports exist.
+ *
+ * @remarks Non-empty transports fail before worker start when providers are missing
+ * or identity sets diverge from the generated artifact coordinates.
+ */
+function programProviderAuthorityMatches(
+  program: RuntimeProgram,
+  manifest: RuntimeArtifactManifest,
+): boolean {
+  const programProviders = program.providers ?? []
+  const programTransports = program.transports ?? []
+  const manifestProviders = manifest.providers ?? []
+  const manifestTransports = manifest.transports ?? []
+
+  if (manifestTransports.length > 0 && programProviders.length === 0) {
+    return false
+  }
+  if (programTransports.length > 0 && programProviders.length === 0) {
+    return false
+  }
+
+  const actualProviders = programProviders
+    .map((provider) =>
+      typeof provider === 'object' &&
+      provider !== null &&
+      'id' in provider &&
+      typeof provider.id === 'string'
+        ? provider.id
+        : undefined,
+    )
+    .filter((id): id is string => id !== undefined)
+    .sort(compareCodepoint)
+  if (actualProviders.length !== programProviders.length) return false
+  const expectedProviders = manifestProviders.map((provider) => provider.id).sort(compareCodepoint)
+
+  const actualTransports = programTransports
+    .map((transport) =>
+      typeof transport === 'object' &&
+      transport !== null &&
+      'id' in transport &&
+      typeof transport.id === 'string'
+        ? transport.id
+        : undefined,
+    )
+    .filter((id): id is string => id !== undefined)
+    .sort(compareCodepoint)
+  if (actualTransports.length !== programTransports.length) return false
+  const expectedTransports = manifestTransports
+    .map((transport) => transport.id)
+    .sort(compareCodepoint)
+
+  return (
+    JSON.stringify(actualProviders) === JSON.stringify(expectedProviders) &&
+    JSON.stringify(actualTransports) === JSON.stringify(expectedTransports)
+  )
+}
+
+function compareCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function isRuntimeTargetDefinition(value: unknown): boolean {

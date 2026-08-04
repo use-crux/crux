@@ -14,6 +14,8 @@ const EMPTY_MANIFEST_V2 = {
   evalPrivacyFingerprint:
     'd2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29',
   targets: [],
+  providers: [],
+  transports: [],
   evals: [],
 } as const
 

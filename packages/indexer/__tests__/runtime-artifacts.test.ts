@@ -53,6 +53,8 @@ describe("runtime artifacts", () => {
       evalPrivacyFingerprint:
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
       targets: [],
+      providers: [],
+      transports: [],
       evals: [],
     });
     expect(second.contentHash).toBe(result.contentHash);
@@ -132,7 +134,9 @@ describe("runtime artifacts", () => {
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
-    ).resolves.toContain("createRuntimeProgram({ targets, transports })");
+    ).resolves.toContain(
+      "createRuntimeProgram({ targets, generationModels, providers, transports })",
+    );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
@@ -857,6 +861,8 @@ describe("runtime artifacts", () => {
             fingerprint: "definition-review",
           },
         ],
+        providers: [],
+        transports: [],
         evals: [],
       },
       nonTerminalTargetIds: [
@@ -871,5 +877,124 @@ describe("runtime artifacts", () => {
       { targetId: "embed-document", count: 1 },
       { targetId: "old-review", count: 2 },
     ]);
+  });
+
+  it("projects exported Signal providers and inert bindings into one Runtime program", async () => {
+    const root = await fixtureRoot();
+    const sourceFile = join(root, "src/orders.ts");
+    await mkdir(dirname(sourceFile), { recursive: true });
+    await writeFile(
+      sourceFile,
+      [
+        "import { signal } from '@use-crux/core/signal'",
+        "import { webhook } from '@use-crux/core/signal/transport'",
+        "import { managedTransportBinding, signalProvider } from '@use-crux/core/signal/provider'",
+        "import { z } from 'zod'",
+        "",
+        "export const orderSubmitted = signal({",
+        "  id: 'order.submitted',",
+        "  schema: z.object({ orderId: z.string() }),",
+        "})",
+        "",
+        "export const ordersProvider = signalProvider({",
+        "  id: 'orders.webhook',",
+        "  transport: webhook({ async handle() { throw new Error('unused') } }),",
+        "  signals: { orderSubmitted },",
+        "  async onEvent() {},",
+        "})",
+        "",
+        "export const ordersBinding = managedTransportBinding(ordersProvider, {",
+        "  id: 'binding.orders',",
+        "  configRef: { id: 'config.orders', revision: 'rev.1' },",
+        "  signalId: 'order.submitted',",
+        "})",
+      ].join("\n"),
+    );
+
+    const definitions = [
+      {
+        id: "signal.provider:orders.webhook",
+        kind: "signal.provider",
+        name: "orders.webhook",
+        fidelity: "resolved",
+        fingerprint: "provider-orders-v1",
+        source: { file: sourceFile, line: 11 },
+        metadata: {
+          exportName: "ordersProvider",
+          exported: true,
+          facts: {
+            kind: "signal.provider",
+            providerId: "orders.webhook",
+            transportKind: "webhook",
+            identity: "static",
+          },
+        },
+      },
+      {
+        id: "signal.transportBinding:binding.orders",
+        kind: "signal.transportBinding",
+        name: "binding.orders",
+        fidelity: "resolved",
+        fingerprint: "binding-orders-v1",
+        source: { file: sourceFile, line: 18 },
+        metadata: {
+          exportName: "ordersBinding",
+          exported: true,
+          facts: {
+            kind: "signal.transportBinding",
+            bindingId: "binding.orders",
+            providerId: "orders.webhook",
+            signalId: "order.submitted",
+            identity: "static",
+          },
+        },
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    const result = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions,
+    });
+    const program = await readFile(
+      join(root, ".crux/generated/runtime/program.ts"),
+      "utf8",
+    );
+
+    expect(result.manifest.providers).toEqual([
+      {
+        id: "orders.webhook",
+        module: "./src/orders.ts",
+        export: "ordersProvider",
+        definitionId: "signal.provider:orders.webhook",
+        fingerprint: "provider-orders-v1",
+      },
+    ]);
+    expect(result.manifest.transports).toEqual([
+      {
+        id: "binding.orders",
+        module: "./src/orders.ts",
+        export: "ordersBinding",
+        definitionId: "signal.transportBinding:binding.orders",
+        fingerprint: "binding-orders-v1",
+        providerId: "orders.webhook",
+        signalId: "order.submitted",
+      },
+    ]);
+    expect(program).toContain(
+      "import { ordersProvider as provider0 } from '../../../src/orders'",
+    );
+    expect(program).toContain(
+      "import { ordersBinding as transport0 } from '../../../src/orders'",
+    );
+    expect(program).toContain("const generationModels = [] as const");
+    expect(program).toContain("const providers = [provider0] as const");
+    expect(program).toContain("const transports = [transport0] as const");
+    expect(program).toContain(
+      "createRuntimeProgram({ targets, generationModels, providers, transports })",
+    );
+    expect(program).not.toContain("onEvent");
+    expect(program).not.toContain("handle");
+    expect(program).not.toContain("Request");
   });
 });

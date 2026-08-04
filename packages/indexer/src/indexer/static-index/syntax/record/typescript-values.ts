@@ -219,6 +219,22 @@ export function staticObjectValueFromExpression(
             },
           ];
         }
+        if (ts.isMethodDeclaration(item)) {
+          const name = propertyName(item.name);
+          if (!name) return [];
+          return [
+            {
+              name,
+              value: staticFunctionValueFromNode(
+                sourceFile,
+                item,
+                importsByLocalName,
+              ),
+              shorthand: false,
+              source: sourceForNode(sourceFile, item),
+            },
+          ];
+        }
         if (!ts.isPropertyAssignment(item)) return [];
         const name = propertyName(item.name);
         if (!name) return [];

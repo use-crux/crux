@@ -48,9 +48,9 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v91");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v92");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v91");
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v86");
   });
 
   it("takes the Session diagnostic evidence contract epoch", () => {
