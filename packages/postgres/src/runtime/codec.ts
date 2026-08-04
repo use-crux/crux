@@ -17,6 +17,14 @@ import type {
   WorkId,
 } from '@use-crux/core/runtime'
 import type {
+  DurableEffectEnvelopeRecord,
+  DurableEffectReceiptRecord,
+  DurableEffectReconciliationRecord,
+  DurableEffectRecoveryAttemptRecord,
+  DurableEffectRecoveryUnitRecord,
+  DurableEffectScopeRecord,
+} from '@use-crux/core/runtime'
+import type {
   FlowSnapshot,
   RuntimePendingSuspend,
   RuntimeWork,
@@ -26,8 +34,22 @@ import type {
 
 type JsonRecord = Record<string, unknown>
 
+export type PostgresEffectRecord =
+  | DurableEffectEnvelopeRecord
+  | DurableEffectReceiptRecord
+  | DurableEffectReconciliationRecord
+  | DurableEffectRecoveryAttemptRecord
+  | DurableEffectRecoveryUnitRecord
+  | DurableEffectScopeRecord
+
 export function encodeJson(value: unknown): string {
   return JSON.stringify(value)
+}
+
+export function decodeEffectRecord<T extends PostgresEffectRecord>(
+  row: JsonRecord,
+): T {
+  return Object.freeze(row.record as T)
 }
 
 export function decodeWorkItem(row: JsonRecord): RuntimeWorkItem {

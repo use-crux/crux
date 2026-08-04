@@ -4,6 +4,7 @@ import {
   type RuntimeSetupPort,
   type RuntimeStoreAdapter,
   type RuntimeStoreTransaction,
+  type RuntimeEffectStorePort,
 } from '@use-crux/core/runtime'
 import { Pool, type PoolConfig } from 'pg'
 import { createPostgresEventPort } from './events'
@@ -21,6 +22,7 @@ import { createPostgresTimerStore } from './timers'
 import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
+import { createPostgresEffectStore } from './effects'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -69,12 +71,18 @@ export interface PostgresRuntimeStoreTesting {
 export interface PostgresRuntimeStore extends RuntimeStoreAdapter {
   /** Stable adapter id used in conformance output. */
   readonly id: 'postgres'
+  /** Durable Effect records stored in PostgreSQL transactions. */
+  readonly effects: RuntimeEffectStorePort
   /** Resource verification and additive DDL setup. */
   readonly setup: RuntimeSetupPort
   /** Fault-injection controls for conformance tests. */
   readonly testing: PostgresRuntimeStoreTesting
   /** Close the Crux-owned pool. Caller-owned pools are left open. */
   close(): Promise<void>
+}
+
+type PostgresRuntimePorts = RuntimeStoreTransaction & {
+  readonly effects: RuntimeEffectStorePort
 }
 
 /**
@@ -128,7 +136,7 @@ export function postgres(
   function portsFor(
     client: PgExecutor = pool,
     txFaults = faults,
-  ): RuntimeStoreTransaction {
+  ): PostgresRuntimePorts {
     return {
       state: createPostgresStatePort(client, schema, txFaults),
       events: createPostgresEventPort(client, schema, txFaults),
@@ -136,6 +144,7 @@ export function postgres(
       timers: createPostgresTimerStore(client, schema, txFaults),
       outbox: createPostgresOutboxPort(client, schema, txFaults),
       deferred: createPostgresDeferredStore(client, schema, txFaults),
+      effects: createPostgresEffectStore(client, schema, txFaults),
     }
   }
 

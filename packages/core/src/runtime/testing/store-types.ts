@@ -1,5 +1,22 @@
 import type { RuntimeStoreAdapter } from '../store'
 
+/** One durable Effects capability reported to the shared conformance suite. */
+export type StoreEffectCapability =
+  | { readonly support: 'supported' }
+  | { readonly support: 'unsupported'; readonly reason: string }
+
+/** Durable Effects guarantees provided by one Runtime store adapter. */
+export interface StoreEffectConformanceCapabilities {
+  /** One logical Effect store operation commits atomically. */
+  readonly atomicOperations: StoreEffectCapability
+  /** Multiple Effect operations in one `transact()` callback commit atomically. */
+  readonly multiOperationTransactions: StoreEffectCapability
+  /** Persisted fences and concurrent terminal transitions are enforced. */
+  readonly crashFencing: StoreEffectCapability
+  /** Scope records reconstruct exact rollback and reconciliation state. */
+  readonly reconstruction: StoreEffectCapability
+}
+
 /** Options for {@link runStoreAdapterTests}. */
 export interface RunStoreAdapterTestsOptions<
   TStore extends RuntimeStoreAdapter = RuntimeStoreAdapter,
@@ -23,4 +40,12 @@ export interface RunStoreAdapterTestsOptions<
   readonly crashBeforeOutboxConfirm?: (store: TStore) => void
   /** Assert that the adapter intentionally serializes all transactions. */
   readonly assertSerializedTransactions?: boolean
+}
+
+/** Options for the durable Effects adapter conformance matrix. */
+export interface RunStoreEffectAdapterTestsOptions<
+  TStore extends RuntimeStoreAdapter = RuntimeStoreAdapter,
+> extends RunStoreAdapterTestsOptions<TStore> {
+  /** Explicit guarantees that determine which matrix sections must pass. */
+  readonly effectCapabilities: StoreEffectConformanceCapabilities
 }

@@ -109,6 +109,10 @@
       "types": "./src/runtime/eval-host/index.ts",
       "import": "./src/runtime/eval-host/index.ts"
     },
+    "./runtime/internal/effects-store": {
+      "types": "./src/runtime/effects-store-internal.ts",
+      "import": "./src/runtime/effects-store-internal.ts"
+    },
     "./setup": {
       "types": "./src/setup/index.ts",
       "import": "./src/setup/index.ts"
@@ -324,6 +328,9 @@
       ],
       "runtime/internal/eval-host": [
         "src/runtime/eval-host/index.ts"
+      ],
+      "runtime/internal/effects-store": [
+        "src/runtime/effects-store-internal.ts"
       ],
       "setup": [
         "src/setup/index.ts"

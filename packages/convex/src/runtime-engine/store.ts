@@ -44,6 +44,7 @@ import {
 import { assertConvexDeferredComponent, createConvexDeferredStore } from './deferred-store'
 import { createConvexEvalHostAdmission } from './eval-host/admission'
 import { createConvexRuntimeResultStore, type ConvexRuntimeResultComponent } from './results'
+import { createConvexEffectStore } from './effects-store'
 
 /** Component refs needed by the Runtime Engine store adapter. */
 export interface ConvexRuntimeComponent {
@@ -55,6 +56,7 @@ export interface ConvexRuntimeComponent {
     readonly outbox: Record<string, unknown>
     readonly leases: Record<string, unknown>
     readonly deferred?: Record<string, unknown>
+    readonly composite_effects?: { readonly run?: unknown }
     readonly results?: ConvexRuntimeResultComponent
     readonly evalHost?: {
       readonly admit?: unknown
@@ -296,6 +298,10 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     ...(refs.deferred ? { refs: refs.deferred } : {}),
   })
 
+  const effects = refs.composite_effects
+    ? createConvexEffectStore({ refs: refs.composite_effects, run })
+    : undefined
+
   const transaction: RuntimeStoreTransaction = {
     state,
     events,
@@ -303,6 +309,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     timers,
     outbox,
     deferred,
+    ...(effects ? { effects } : {}),
   }
   return Object.freeze({
     id: 'convex',

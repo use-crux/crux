@@ -115,6 +115,12 @@ export function createMemoryEffectStore(
             scopedKey(settlement.unit.namespace, settlement.unit.unit.id),
           )
         : undefined;
+      const currentEnvelope = settlement.envelope
+        ? data.effectEnvelopes.get(scopedKey(
+            settlement.envelope.namespace,
+            settlement.envelope.receiptId,
+          ))
+        : undefined;
       if (
         !currentReceipt ||
         !durableTransitionMatches(currentReceipt, settlement.receipt) ||
@@ -128,7 +134,10 @@ export function createMemoryEffectStore(
             !isDurableUnitTransition(
               currentUnit.unit.status,
               settlement.unit.unit.status,
-            )))
+            ))) ||
+        (settlement.envelope &&
+          (!currentEnvelope ||
+            !durableTransitionMatches(currentEnvelope, settlement.envelope)))
       ) {
         return null;
       }

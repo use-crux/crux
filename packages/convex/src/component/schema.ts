@@ -237,4 +237,16 @@ export default defineSchema({
   })
     .index('by_intent', ['namespace', 'intentId'])
     .index('by_scope_state', ['namespace', 'scopeId', 'state']),
+
+  runtimeEffectRecords: defineTable({
+    namespace: v.string(),
+    kind: v.string(),
+    recordId: v.string(),
+    boundaryId: v.string(),
+    record: v.any(),
+    revision: v.number(),
+    fenceToken: v.optional(v.string()),
+  })
+    .index('by_identity', ['namespace', 'kind', 'recordId'])
+    .index('by_boundary_kind', ['namespace', 'boundaryId', 'kind']),
 })

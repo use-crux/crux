@@ -7,6 +7,12 @@ import {
   DEFERRED_REQUIRED_INDEXES,
   deferredDdlStatements,
 } from './ddl-deferred'
+import {
+  EFFECTS_POSTGRES_TABLES,
+  EFFECTS_REQUIRED_COLUMNS,
+  EFFECTS_REQUIRED_INDEXES,
+  effectsDdlStatements,
+} from './ddl-effects'
 
 export const DEFAULT_POSTGRES_SCHEMA = 'crux_runtime'
 
@@ -21,6 +27,7 @@ const TABLES = [
   'leases',
   'idle_counters',
   ...DEFERRED_POSTGRES_TABLES,
+  ...EFFECTS_POSTGRES_TABLES,
 ] as const
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
@@ -106,6 +113,7 @@ export const REQUIRED_COLUMNS: Readonly<
   leases: ['resource', 'token', 'expires_at', 'owner_id'],
   idle_counters: ['namespace', 'scope', 'count'],
   ...DEFERRED_REQUIRED_COLUMNS,
+  ...EFFECTS_REQUIRED_COLUMNS,
 }
 
 export function createSchemaSql(schema: string): string {
@@ -236,6 +244,7 @@ export function ddlStatements(schema: string): readonly string[] {
       PRIMARY KEY (namespace, scope)
     )`,
     ...deferredDdlStatements(schema),
+    ...effectsDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_appended_at_idx')}
@@ -353,6 +362,7 @@ export async function checkDdl(
     'outbox_confirmed_at_idx',
     'idempotency_completed_at_idx',
     ...DEFERRED_REQUIRED_INDEXES,
+    ...EFFECTS_REQUIRED_INDEXES,
   ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),

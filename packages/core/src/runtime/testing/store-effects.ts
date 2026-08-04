@@ -9,7 +9,12 @@ import type { RuntimeStoreAdapter } from "../store";
 import { requireFaultHook } from "./store-composite-case-utils";
 import { runStoreEffectCrashTests } from "./store-effects-crash";
 import { runStoreEffectReconstructionTests } from "./store-effects-reconstruction";
-import type { RunStoreAdapterTestsOptions } from "./store-types";
+import { runStoreEffectSettlementTests } from "./store-effects-settlement";
+import { runStoreEffectTransitionTests } from "./store-effects-transitions";
+import type {
+  RunStoreEffectAdapterTestsOptions,
+  StoreEffectCapability,
+} from "./store-types";
 
 type EffectsStore = RuntimeStoreAdapter & {
   readonly effects: RuntimeEffectStorePort;
@@ -22,10 +27,29 @@ type EffectsStore = RuntimeStoreAdapter & {
  * @returns Nothing; tests are registered with the active Vitest suite.
  */
 export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
-  options: RunStoreAdapterTestsOptions<TStore>,
+  options: RunStoreEffectAdapterTestsOptions<TStore>,
 ): void {
   describe(`${options.name} durable Effects conformance`, () => {
-    it("persists atomic preparation and guarded settlement", async () => {
+    registerCapabilityDeclaration(
+      "atomic Effect operations",
+      options.effectCapabilities.atomicOperations,
+    );
+    registerCapabilityDeclaration(
+      "multi-operation Effect transactions",
+      options.effectCapabilities.multiOperationTransactions,
+    );
+    registerCapabilityDeclaration(
+      "Effect crash fencing",
+      options.effectCapabilities.crashFencing,
+    );
+    registerCapabilityDeclaration(
+      "Effect reconstruction",
+      options.effectCapabilities.reconstruction,
+    );
+
+    it.runIf(isSupported(options.effectCapabilities.atomicOperations))(
+      "persists atomic preparation and guarded settlement",
+      async () => {
       const store = await options.createStore();
       const prepared = preparation();
       await store.transact(async (tx) => {
@@ -130,9 +154,12 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       await expect(
         store.effects.transitionReceipt({ next: succeeded.receipt }),
       ).resolves.toBeNull();
-    });
+      },
+    );
 
-    it.skipIf(options.substrateAtomicTransact)(
+    it.runIf(
+      isSupported(options.effectCapabilities.multiOperationTransactions),
+    )(
       "rolls back partial Effect preparation",
       async () => {
         const store = await options.createStore();
@@ -148,9 +175,33 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       },
     );
 
-    runStoreEffectCrashTests(options, preparation);
-    runStoreEffectReconstructionTests(options);
+    if (isSupported(options.effectCapabilities.crashFencing)) {
+      runStoreEffectCrashTests(options, preparation);
+    }
+    if (isSupported(options.effectCapabilities.atomicOperations)) {
+      runStoreEffectSettlementTests(options, preparation);
+      runStoreEffectTransitionTests(options, preparation);
+    }
+    if (isSupported(options.effectCapabilities.reconstruction)) {
+      runStoreEffectReconstructionTests(options);
+    }
   });
+}
+
+function registerCapabilityDeclaration(
+  name: string,
+  capability: StoreEffectCapability,
+): void {
+  it(`declares ${name} ${capability.support}`, () => {
+    expect(capability.support).toMatch(/^(supported|unsupported)$/);
+    if (capability.support === "unsupported") {
+      expect(capability.reason.trim().length).toBeGreaterThan(0);
+    }
+  });
+}
+
+function isSupported(capability: StoreEffectCapability): boolean {
+  return capability.support === "supported";
 }
 
 function preparation(): DurableEffectPreparation {
