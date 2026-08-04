@@ -10,7 +10,7 @@
 
 import type { SignalProvider } from "../signal/provider";
 import { createRuntimeError } from "./engine/errors";
-import type { RuntimeManagedTransportBinding } from "./transport";
+import type { RuntimeManagedTransportBinding } from "./transport/contracts";
 
 /** Secret-free provider identity retained in the program manifest hash. */
 export interface RuntimeProgramProviderManifestEntry {
@@ -82,11 +82,18 @@ export function validateProgramProviderBindings(
 }
 
 /**
- * Resolve the executable provider for one inert binding.
+ * Resolve the executable provider for one inert binding or accepted envelope.
+ *
+ * @remarks Uses one deterministic identity rule shared by program validation and
+ * the normalization runner: `adapterId` / adapter id, `provider`, and
+ * `bindingId` / binding id are treated as a set of stable keys. When those keys
+ * match more than one executable provider, resolution fails instead of silently
+ * choosing lexicographic provider order or a different precedence chain.
  *
  * @param providers - Canonical program providers.
  * @param binding - Inert managed-transport binding or envelope identity fields.
- * @returns The matching provider, or `undefined` when absent.
+ * @returns The unique matching provider, or `undefined` when absent.
+ * @throws When stable identity keys resolve to different executable providers.
  */
 export function resolveProgramProvider(
   providers: readonly SignalProvider[],
@@ -98,9 +105,33 @@ export function resolveProgramProvider(
     readonly bindingId?: string;
   },
 ): SignalProvider | undefined {
-  const keys = providerResolutionKeys(binding);
+  const byId = new Map<string, SignalProvider>();
   for (const provider of providers) {
-    if (keys.has(provider.id)) return provider;
+    byId.set(provider.id, provider);
+  }
+
+  const matches = new Map<string, SignalProvider>();
+  for (const key of providerResolutionKeys(binding)) {
+    const provider = byId.get(key);
+    if (provider) matches.set(provider.id, provider);
+  }
+
+  if (matches.size > 1) {
+    const ids = [...matches.keys()].sort(compareText).join("`, `");
+    throw createRuntimeError({
+      code: "CAPABILITY_MISSING",
+      whatFailed:
+        "Runtime transport identity keys resolve to different executable Signal providers.",
+      why: `Stable adapterId, provider, and bindingId keys must name one provider; they currently match \`${ids}\`.`,
+      whatStillWorks:
+        "Bindings whose identity keys all point at one program provider remain valid.",
+      nextStep:
+        "Align adapterId, provider, and bindingId so they resolve to one signalProvider() id, or remove the conflicting provider from createRuntimeProgram({ providers }).",
+    });
+  }
+
+  for (const provider of matches.values()) {
+    return provider;
   }
   return undefined;
 }
@@ -118,16 +149,22 @@ function providerResolutionKeys(binding: {
   readonly adapterId?: string;
   readonly provider?: string;
   readonly bindingId?: string;
-}): ReadonlySet<string> {
-  const keys = new Set<string>();
+}): readonly string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string | undefined): void => {
+    if (typeof value !== "string" || seen.has(value)) return;
+    seen.add(value);
+    keys.push(value);
+  };
   if (binding.adapter) {
-    keys.add(binding.adapter.id);
-    keys.add(binding.adapter.provider);
+    add(binding.adapter.id);
+    add(binding.adapter.provider);
   }
-  if (typeof binding.adapterId === "string") keys.add(binding.adapterId);
-  if (typeof binding.provider === "string") keys.add(binding.provider);
-  if (typeof binding.id === "string") keys.add(binding.id);
-  if (typeof binding.bindingId === "string") keys.add(binding.bindingId);
+  add(binding.adapterId);
+  add(typeof binding.provider === "string" ? binding.provider : undefined);
+  add(binding.id);
+  add(binding.bindingId);
   return keys;
 }
 

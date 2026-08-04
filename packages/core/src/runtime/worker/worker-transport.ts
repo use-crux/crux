@@ -40,6 +40,19 @@ export function createWorkerTransportDrain(
 ): TransportNormalizationRunner | undefined {
   if (options.program.transports.length === 0) return undefined;
 
+  if (!options.store.transports) {
+    throw createRuntimeError({
+      code: "CAPABILITY_MISSING",
+      whatFailed:
+        "Runtime worker cannot drain managed transports without a store transports capability.",
+      why: "Programs that declare managed-transport bindings require the optional Runtime store transports port before the worker starts.",
+      whatStillWorks:
+        "Queued Work maintenance still runs for executable targets when transports are omitted from the program.",
+      nextStep:
+        "Use a Runtime store that implements the transports port, or remove managed-transport bindings from createRuntimeProgram({ transports }).",
+    });
+  }
+
   for (const binding of options.program.transports) {
     if (!resolveProgramProvider(options.program.providers, binding)) {
       throw createRuntimeError({

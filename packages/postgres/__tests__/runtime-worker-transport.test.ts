@@ -70,49 +70,7 @@ describe('PostgreSQL Runtime worker transport drain', () => {
   it('normalizes an accepted envelope and does not redeliver after restart', async () => {
     await withStores(async ({ firstStore, replacementStore }) => {
       const namespace = 'worker-transport'
-      const orderSubmitted = signal({
-        id: 'order.submitted',
-        schema: z.object({ orderId: z.string() }),
-      })
-      const published: Array<{ orderId: string; occurrenceId: string }> = []
-      orderSubmitted.subscribe((occurrence) => {
-        published.push({
-          orderId: occurrence.payload.orderId,
-          occurrenceId: occurrence.id,
-        })
-      })
-
-      let failAfterPublish = false
-      const provider = signalProvider({
-        id: 'orders.webhook',
-        transport: webhook({
-          async handle() {
-            throw new Error('edge not used')
-          },
-        }),
-        signals: { orderSubmitted },
-        async onEvent(envelope, { signals }) {
-          const raw =
-            envelope.payload.kind === 'inline-base64url'
-              ? Buffer.from(envelope.payload.value, 'base64url').toString('utf8')
-              : ''
-          const body = JSON.parse(raw) as { orderId: string }
-          await signals.orderSubmitted.publish({ orderId: body.orderId })
-          if (failAfterPublish) {
-            throw new Error('crash after publish')
-          }
-        },
-      })
-      const binding = managedTransportBinding(provider, {
-        id: 'binding.orders',
-        configRef: { id: 'config.orders', revision: 'rev.1' },
-        signalId: 'order.submitted',
-      })
-      const program = createRuntimeProgram({
-        targets: [],
-        providers: [provider],
-        transports: [binding],
-      })
+      const { binding, program, published } = createOrdersFixture()
 
       const first = startWorker(firstStore, namespace, program)
       let replacement: RuntimeWorker<PostgresRuntimeStore> | undefined
@@ -153,21 +111,51 @@ describe('PostgreSQL Runtime worker transport drain', () => {
         expect(again.kind).toBe('duplicate')
 
         replacement = startWorker(replacementStore, namespace, program)
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        expect(published).toHaveLength(1)
+        await expect
+          .poll(() => published.length, { timeout: 5_000, interval: 20 })
+          .toBe(1)
         expect(published[0]!.occurrenceId).toBe(occurrenceId)
+      } finally {
+        await replacement?.stop()
+        await first.stop().catch(() => undefined)
+      }
+    })
+  }, 60_000)
 
-        // Crash after publish, then recover without a second logical delivery.
-        failAfterPublish = true
+  it('recovers crash-after-publish through a stopped replacement worker', async () => {
+    await withStores(async ({ firstStore, replacementStore }) => {
+      const namespace = 'worker-transport-crash'
+      let failAfterPublish = true
+      const { binding, program, published } = createOrdersFixture({
+        failAfterPublish: () => failAfterPublish,
+      })
+
+      const first = startWorker(firstStore, namespace, program)
+      let replacement: RuntimeWorker<PostgresRuntimeStore> | undefined
+      try {
         await acceptTransportEnvelope({
-          store: replacementStore,
+          store: firstStore,
           namespace,
           envelope: makeEnvelope(binding, 'evt_pg_crash'),
           maxAttempts: 4,
+          now: new Date('2026-08-04T12:00:00.000Z'),
         })
-        await expect.poll(() => published.length, { timeout: 30_000 }).toBe(2)
-        const crashOccurrence = published[1]!.occurrenceId
+
+        await expect.poll(() => published.length, { timeout: 30_000 }).toBe(1)
+        const crashOccurrence = published[0]!.occurrenceId
+        await first.stop()
+
+        const afterCrash = await firstStore.transports!.get({
+          namespace,
+          provider: 'orders.webhook',
+          accountId: 'acct_1',
+          eventId: 'evt_pg_crash',
+        })
+        expect(afterCrash?.state).toBe('accepted')
+        expect(afterCrash?.attempts).toBeGreaterThanOrEqual(1)
+
         failAfterPublish = false
+        replacement = startWorker(replacementStore, namespace, program)
         await expect
           .poll(
             async () => {
@@ -182,14 +170,61 @@ describe('PostgreSQL Runtime worker transport drain', () => {
             { timeout: 30_000, interval: 50 },
           )
           .toBe('normalized')
-        expect(published).toHaveLength(2)
-        expect(published[1]!.occurrenceId).toBe(crashOccurrence)
+        expect(published).toHaveLength(1)
+        expect(published[0]!.occurrenceId).toBe(crashOccurrence)
       } finally {
         await replacement?.stop()
         await first.stop().catch(() => undefined)
       }
     })
   }, 60_000)
+
+  function createOrdersFixture(options?: {
+    readonly failAfterPublish?: () => boolean
+  }) {
+    const orderSubmitted = signal({
+      id: 'order.submitted',
+      schema: z.object({ orderId: z.string() }),
+    })
+    const published: Array<{ orderId: string; occurrenceId: string }> = []
+    orderSubmitted.subscribe((occurrence) => {
+      published.push({
+        orderId: occurrence.payload.orderId,
+        occurrenceId: occurrence.id,
+      })
+    })
+    const provider = signalProvider({
+      id: 'orders.webhook',
+      transport: webhook({
+        async handle() {
+          throw new Error('edge not used')
+        },
+      }),
+      signals: { orderSubmitted },
+      async onEvent(envelope, { signals }) {
+        const raw =
+          envelope.payload.kind === 'inline-base64url'
+            ? Buffer.from(envelope.payload.value, 'base64url').toString('utf8')
+            : ''
+        const body = JSON.parse(raw) as { orderId: string }
+        await signals.orderSubmitted.publish({ orderId: body.orderId })
+        if (options?.failAfterPublish?.()) {
+          throw new Error('crash after publish')
+        }
+      },
+    })
+    const binding = managedTransportBinding(provider, {
+      id: 'binding.orders',
+      configRef: { id: 'config.orders', revision: 'rev.1' },
+      signalId: 'order.submitted',
+    })
+    const program = createRuntimeProgram({
+      targets: [],
+      providers: [provider],
+      transports: [binding],
+    })
+    return { binding, program, published }
+  }
 
   async function withStores(
     run: (stores: {

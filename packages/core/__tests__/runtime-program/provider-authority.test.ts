@@ -159,6 +159,56 @@ describe("RuntimeProgram provider authority", () => {
     expect(program.transports[0]?.adapter.provider).toBe("github");
   });
 
+  it("rejects when adapterId and provider resolve to different executable providers", () => {
+    // Two live providers; binding keys point at different ones → ambiguity.
+    expect(() =>
+      createRuntimeProgram({
+        targets: [],
+        providers: [
+          ordersProvider("orders.adapter"),
+          ordersProvider("github"),
+        ],
+        transports: [inertBinding("binding.orders", "orders.adapter", "github")],
+      }),
+    ).toThrow(CruxRuntimeError);
+    expect(() =>
+      createRuntimeProgram({
+        targets: [],
+        providers: [
+          ordersProvider("orders.adapter"),
+          ordersProvider("github"),
+        ],
+        transports: [inertBinding("binding.orders", "orders.adapter", "github")],
+      }),
+    ).toThrow(/CAPABILITY_MISSING/);
+    expect(() =>
+      createRuntimeProgram({
+        targets: [],
+        providers: [
+          ordersProvider("orders.adapter"),
+          ordersProvider("github"),
+        ],
+        transports: [inertBinding("binding.orders", "orders.adapter", "github")],
+      }),
+    ).toThrow(/ambiguous|different executable/i);
+  });
+
+  it("does not choose lexicographic provider order when multiple keys match one provider", () => {
+    const provider = ordersProvider("orders.webhook");
+    const program = createRuntimeProgram({
+      targets: [],
+      providers: [provider, ordersProvider("zzz.unused")],
+      transports: [
+        inertBinding("binding.orders", "orders.webhook", "orders.webhook"),
+      ],
+    });
+    expect(program.providers.map((entry) => entry.id)).toEqual([
+      "orders.webhook",
+      "zzz.unused",
+    ]);
+    expect(program.transports[0]?.adapter.id).toBe("orders.webhook");
+  });
+
   it("rejects worker start when transport authority is incomplete", () => {
     // Simulate a program object that bypassed createRuntimeProgram validation.
     const incomplete = createRuntimeProgram({
@@ -187,5 +237,55 @@ describe("RuntimeProgram provider authority", () => {
         program: stripped,
       }),
     ).toThrow(/CAPABILITY_MISSING/);
+  });
+
+  it("rejects worker start when the store lacks the transports capability", () => {
+    const provider = ordersProvider();
+    const program = createRuntimeProgram({
+      targets: [],
+      providers: [provider],
+      transports: [
+        managedTransportBinding(provider, {
+          id: "binding.orders",
+          configRef: { id: "config.orders", revision: "rev.1" },
+          signalId: "order.submitted",
+        }),
+      ],
+    });
+    const store = Object.freeze({
+      ...inMemoryRuntimeStore(),
+      transports: undefined,
+    });
+
+    expect(() =>
+      createRuntimeWorker({
+        runtime: node({
+          store,
+          namespace: "missing-transports",
+          autoStartMaintenance: false,
+        }),
+        program,
+      }),
+    ).toThrow(CruxRuntimeError);
+    expect(() =>
+      createRuntimeWorker({
+        runtime: node({
+          store,
+          namespace: "missing-transports",
+          autoStartMaintenance: false,
+        }),
+        program,
+      }),
+    ).toThrow(/CAPABILITY_MISSING/);
+    expect(() =>
+      createRuntimeWorker({
+        runtime: node({
+          store,
+          namespace: "missing-transports",
+          autoStartMaintenance: false,
+        }),
+        program,
+      }),
+    ).toThrow(/transport/i);
   });
 });

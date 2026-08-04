@@ -212,11 +212,16 @@ than Agent/Flow/task targets. Normalization is restart-safe through the shared t
 Runtime worker now claims a bounded batch of accepted envelopes on each
 maintenance tick and invokes provider `onEvent` through that kernel using
 explicitly imported executable providers on `RuntimeProgram` (`providers`),
-resolved by stable provider/adapter/binding identity. Inert
+resolved by one deterministic stable provider/adapter/binding identity rule
+shared with program validation. When those identity keys resolve to different
+executable providers, construction and worker start reject the ambiguity rather
+than silently choosing an order. Inert
 `RuntimeManagedTransportBinding` declarations and the program manifest hash
 remain secret-free: no Request, credential, client, socket, callback, or live
 provider object is stored in bindings. Missing or mismatched provider
-identities fail before worker start. Provider-event-scoped publication
+identities, and programs that declare managed transports against a store without
+the optional transports capability, fail before worker start with Runtime
+diagnostics. Provider-event-scoped publication
 idempotency is preserved so crash recovery after publish cannot create a second
 logical delivery. Hosts may still call the normalization runner directly; no
 second worker, queue, daemon, scheduler, effect scope, or transport lifecycle is

@@ -10,6 +10,7 @@
  */
 
 import type { SignalProvider } from "../../signal/provider";
+import { resolveProgramProvider } from "../program-providers";
 import type { RuntimeStoreAdapter } from "../store";
 import {
   claimTransportEnvelopes,
@@ -23,10 +24,11 @@ export interface CreateTransportNormalizationRunnerOptions {
   /** Runtime namespace scanned for accepted envelopes. */
   readonly namespace: string;
   /**
-   * Live provider definitions keyed by adapter/provider identity.
+   * Live provider definitions resolved by stable identity keys.
    *
-   * @remarks Providers are matched by `envelope.adapterId` first, then
-   * `envelope.provider`, then provider definition id.
+   * @remarks Matching uses the same deterministic rule as program validation:
+   * `adapterId`, `provider`, and `bindingId` form one identity set. Ambiguous
+   * multi-provider matches are rejected rather than ordered by precedence.
    */
   readonly providers: readonly SignalProvider[];
 }
@@ -75,11 +77,6 @@ export interface TransportNormalizationRunner {
 export function createTransportNormalizationRunner(
   options: CreateTransportNormalizationRunnerOptions,
 ): TransportNormalizationRunner {
-  const providersById = new Map<string, SignalProvider>();
-  for (const provider of options.providers) {
-    providersById.set(provider.id, provider);
-  }
-
   return Object.freeze({
     async runOnce(
       runOptions: TransportNormalizationRunOnceOptions = {},
@@ -97,10 +94,11 @@ export function createTransportNormalizationRunner(
       let deadLettered = 0;
 
       for (const record of claimed) {
-        const provider =
-          providersById.get(record.envelope.adapterId) ??
-          providersById.get(record.provider) ??
-          providersById.get(record.bindingId);
+        const provider = resolveProgramProvider(options.providers, {
+          adapterId: record.envelope.adapterId,
+          provider: record.provider,
+          bindingId: record.bindingId,
+        });
         if (!provider) {
           const failed = await normalizeClaimedTransportEnvelope({
             store: options.store,
