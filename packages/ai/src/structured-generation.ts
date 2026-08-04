@@ -21,6 +21,7 @@ import type {
 } from "@use-crux/core/adapter";
 import {
   compileStructuredOutput,
+  CruxAdapterError,
   CruxUnsupportedStructuredOutputError,
   decodeStructuredValue,
 } from "@use-crux/core/adapter";
@@ -33,6 +34,7 @@ import {
   extractModelInfo,
 } from "./provider-profile";
 import { resolveAiSdkNativeModel } from "./generation-model";
+import { mapAiSdkError } from "./normalized-outcome";
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
 export type StructuredGateway = Pick<SdkGateway, "generateText">;
@@ -76,6 +78,10 @@ export async function attemptStructuredGeneration(
   } catch (error) {
     const invalid = await call.decodeError(error);
     if (invalid) return invalid;
+    const normalized = mapAiSdkError(error);
+    if (normalized?.kind === "invalid-response") {
+      throw new CruxAdapterError(normalized, { cause: error });
+    }
     throw error;
   }
 }

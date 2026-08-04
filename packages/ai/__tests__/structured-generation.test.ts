@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { LanguageModel } from 'ai'
+import { NoOutputGeneratedError, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import type { ModelInfo } from '@use-crux/core'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
 import { compileStructuredOutput } from '@use-crux/core/adapter'
-import { cascade, fallback, router } from '@use-crux/core/routing'
+import { cascade, fallback, FallbackExhaustedError, router } from '@use-crux/core/routing'
 import type { SdkLoopResultLike } from '../src/executor'
 import { attemptStructuredGeneration, createStructuredGenerateObjectFn } from '../src/structured-generation'
 import { aiSdkStructuredCapabilities } from '../src/provider-profile'
@@ -117,6 +117,21 @@ describe('attemptStructuredGeneration', () => {
     expectInvalid(attempt)
     expect(attempt.rawText).toBe('{"title":1}')
     expect(attempt.error.issues[0]?.message).toContain('response did not match the expected schema')
+  })
+
+  it('normalizes AI SDK no-output failures as invalid adapter responses', async () => {
+    const scripted = scriptedGateway({ generateText: [new NoOutputGeneratedError()] })
+
+    await expect(
+      attemptStructuredGeneration(scripted.gateway, structuredRequest(z.object({ title: z.string() }))),
+    ).rejects.toMatchObject({
+      name: 'CruxAdapterError',
+      providerError: {
+        kind: 'invalid-response',
+        code: 'ai-sdk.no_output_generated',
+        retryable: true,
+      },
+    })
   })
 
   it('throws non-validation provider errors unchanged', async () => {
@@ -292,5 +307,55 @@ describe('createStructuredGenerateObjectFn', () => {
         ],
       },
     ])
+  })
+
+  it('falls back on AI SDK no-output structured responses', async () => {
+    const scripted = scriptedGateway({
+      generateText: [
+        new NoOutputGeneratedError(),
+        { output: { accepted: true } },
+      ],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const result = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema: z.object({ accepted: z.boolean() }),
+    })
+
+    expect(result.object).toEqual({ accepted: true })
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
+  })
+
+  it('retains every no-output attempt when fallback is exhausted', async () => {
+    const scripted = scriptedGateway({
+      generateText: [new NoOutputGeneratedError(), new NoOutputGeneratedError()],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const error = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema: z.object({ accepted: z.boolean() }),
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(FallbackExhaustedError)
+    expect(error).toMatchObject({
+      attempts: [
+        { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
+        { model: 'backup', status: 'error', errorCategory: 'invalid_response' },
+      ],
+      errors: [{ name: 'CruxAdapterError' }, { name: 'CruxAdapterError' }],
+    })
   })
 })

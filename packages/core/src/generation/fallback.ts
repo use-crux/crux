@@ -196,6 +196,7 @@ function classifyErrorBounded(
     if (kind === "timeout") return "timeout";
     if (kind === "invalid-request" && code.endsWith(".authentication"))
       return "auth_error";
+    if (kind === "invalid-response") return "invalid_response";
     if (kind === "provider-error" && code.includes("connection"))
       return "connection_error";
     if (kind === "provider-error" && error.providerError.retryable)
