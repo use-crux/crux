@@ -1,15 +1,16 @@
 /**
- * Host-invoked, restart-safe transport normalization runner.
+ * Restart-safe transport normalization runner.
  *
  * @remarks This runner claims accepted envelopes and invokes provider
- * `onEvent` handlers. It is intentionally not an autonomous Runtime worker,
- * daemon, or second queue. Hosts and a later worker integration (PR2) must
- * call {@link TransportNormalizationRunner.runOnce} on a schedule they own.
+ * `onEvent` handlers. It is not a second queue, daemon, or transport lifecycle.
+ * Hosts may call {@link TransportNormalizationRunner.runOnce} directly; the
+ * existing Runtime worker invokes the same kernel once per maintenance tick.
  *
  * @module
  */
 
 import type { SignalProvider } from "../../signal/provider";
+import { resolveProgramProvider } from "../program-providers";
 import type { RuntimeStoreAdapter } from "../store";
 import {
   claimTransportEnvelopes,
@@ -23,10 +24,11 @@ export interface CreateTransportNormalizationRunnerOptions {
   /** Runtime namespace scanned for accepted envelopes. */
   readonly namespace: string;
   /**
-   * Live provider definitions keyed by adapter/provider identity.
+   * Live provider definitions resolved by stable identity keys.
    *
-   * @remarks Providers are matched by `envelope.adapterId` first, then
-   * `envelope.provider`, then provider definition id.
+   * @remarks Matching uses the same deterministic rule as program validation:
+   * `adapterId`, `provider`, and `bindingId` form one identity set. Ambiguous
+   * multi-provider matches are rejected rather than ordered by precedence.
    */
   readonly providers: readonly SignalProvider[];
 }
@@ -50,8 +52,9 @@ export interface TransportNormalizationRunOnceOptions {
 /**
  * Restart-safe normalization loop for accepted transport envelopes.
  *
- * @remarks Does not claim autonomous supervision, multi-worker ownership, or
- * Runtime maintenance integration. Those seams belong to a later PR.
+ * @remarks Ownership, polling cadence, abort/shutdown, namespace, and storage
+ * remain with the host or the existing Runtime worker that invokes
+ * {@link TransportNormalizationRunner.runOnce}.
  */
 export interface TransportNormalizationRunner {
   /**
@@ -74,11 +77,6 @@ export interface TransportNormalizationRunner {
 export function createTransportNormalizationRunner(
   options: CreateTransportNormalizationRunnerOptions,
 ): TransportNormalizationRunner {
-  const providersById = new Map<string, SignalProvider>();
-  for (const provider of options.providers) {
-    providersById.set(provider.id, provider);
-  }
-
   return Object.freeze({
     async runOnce(
       runOptions: TransportNormalizationRunOnceOptions = {},
@@ -96,10 +94,11 @@ export function createTransportNormalizationRunner(
       let deadLettered = 0;
 
       for (const record of claimed) {
-        const provider =
-          providersById.get(record.envelope.adapterId) ??
-          providersById.get(record.provider) ??
-          providersById.get(record.bindingId);
+        const provider = resolveProgramProvider(options.providers, {
+          adapterId: record.envelope.adapterId,
+          provider: record.provider,
+          bindingId: record.bindingId,
+        });
         if (!provider) {
           const failed = await normalizeClaimedTransportEnvelope({
             store: options.store,

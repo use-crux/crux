@@ -208,13 +208,27 @@ completes idempotently, dead-letters after bounded retry, and returns
 dead-lettered envelopes to accepted state on explicit replay. Memory and
 PostgreSQL Runtime stores implement the transport port with shared conformance.
 RuntimeProgram validation treats Signal transport targets as Signal ids rather
-than Agent/Flow/task targets. Normalization is host-invoked through a
-restart-safe runner in this release; autonomous Runtime worker supervision of
-transport claim/normalize remains a later boundary. Provider Signal maps use a
-structural member bound plus a self-constraint so concrete
-`Signal<literal, schema>` values keep exact per-key payload inference across
-TypeScript 5.5+, 6.0, and TypeScript-Go preview without accepting non-Signal
-map values.
+than Agent/Flow/task targets. Normalization is restart-safe through the shared transport kernel. The existing
+Runtime worker now claims a bounded batch of accepted envelopes on each
+maintenance tick and invokes provider `onEvent` through that kernel using
+explicitly imported executable providers on `RuntimeProgram` (`providers`),
+resolved by one deterministic stable provider/adapter/binding identity rule
+shared with program validation. When those identity keys resolve to different
+executable providers, construction and worker start reject the ambiguity rather
+than silently choosing an order. Inert
+`RuntimeManagedTransportBinding` declarations and the program manifest hash
+remain secret-free: no Request, credential, client, socket, callback, or live
+provider object is stored in bindings. Missing or mismatched provider
+identities, and programs that declare managed transports against a store without
+the optional transports capability, fail before worker start with Runtime
+diagnostics. Provider-event-scoped publication
+idempotency is preserved so crash recovery after publish cannot create a second
+logical delivery. Hosts may still call the normalization runner directly; no
+second worker, queue, daemon, scheduler, effect scope, or transport lifecycle is
+introduced. Provider Signal maps use a structural member bound plus a
+self-constraint so concrete `Signal<literal, schema>` values keep exact per-key
+payload inference across TypeScript 5.5+, 6.0, and TypeScript-Go preview without
+accepting non-Signal map values.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session

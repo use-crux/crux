@@ -6,6 +6,7 @@ import {
   type RuntimeProgramTarget,
 } from "@use-crux/core/runtime";
 import { flow } from "@use-crux/core/flow";
+import type { SignalProvider } from "@use-crux/core/signal/provider";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -33,8 +34,11 @@ const transports = [
   },
 ] as const satisfies readonly RuntimeManagedTransportBinding[];
 
+declare const providers: readonly SignalProvider[];
+
 const options = {
   targets,
+  providers,
   transports,
 } satisfies CreateRuntimeProgramOptions;
 const program = createRuntimeProgram(options);
@@ -50,12 +54,32 @@ const missingKindTarget: RuntimeProgramTarget = {
 };
 void missingKindTarget;
 
+createRuntimeProgram({
+  targets: [],
+  // @ts-expect-error Live providers are SignalProvider definitions, not strings.
+  providers: ["orders.webhook"],
+  transports: [],
+});
+
+const liveBinding: RuntimeManagedTransportBinding = {
+  ...transports[0],
+  // @ts-expect-error Inert bindings cannot carry live Request handles.
+  client: new Request("https://example.test"),
+};
+void liveBinding;
+
 type _ProgramReturn = Expect<Equal<typeof program, RuntimeProgram>>;
 type _TargetsAreReadonly = Expect<
   Equal<RuntimeProgram["targets"], readonly RuntimeProgramTarget[]>
 >;
+type _ProvidersAreReadonly = Expect<
+  Equal<RuntimeProgram["providers"], readonly SignalProvider[]>
+>;
 type _TransportsAreReadonly = Expect<
-  Equal<RuntimeProgram["transports"], CreateRuntimeProgramOptions["transports"]>
+  Equal<
+    RuntimeProgram["transports"],
+    readonly RuntimeManagedTransportBinding[]
+  >
 >;
 
 // @ts-expect-error Runtime program metadata is readonly.
@@ -64,5 +88,7 @@ program.manifestHash = "changed";
 program.targets.push({ name: "orders.updated", kind: "flow" });
 // @ts-expect-error Generated target definitions are readonly.
 program.targetDefinitions.pop();
+// @ts-expect-error Executable provider arrays are readonly.
+program.providers.pop();
 // @ts-expect-error Runtime program transport arrays are readonly.
 program.transports.pop();
