@@ -51,6 +51,9 @@ func TestPathInsideIgnoredDir(t *testing.T) {
 	if !pathInsideIgnoredDir(root, filepath.Join(root, "crux", "generated", "next.ts")) {
 		t.Fatal("crux/generated path not ignored")
 	}
+	if pathInsideIgnoredDir(root, filepath.Join(root, "crux.generated", "next.ts")) {
+		t.Fatal("old generated path ignored unexpectedly")
+	}
 	if pathInsideIgnoredDir(root, filepath.Join(root, "crux", "custom.ts")) {
 		t.Fatal("crux source path ignored unexpectedly")
 	}
