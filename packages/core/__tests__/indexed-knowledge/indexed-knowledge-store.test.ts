@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
 import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
+import type { SearchHit, SearchStore } from '../../src/storage'
 
 describe('indexed knowledge store', () => {
   it('persists only validated allowlisted source facts outside search metadata', async () => {
@@ -111,6 +112,147 @@ describe('indexed knowledge store', () => {
         metadata: { section: 'pricing' },
       },
     })
+  })
+
+  it('retains dense SearchStore match evidence on hydrated hits', async () => {
+    const data = inMemoryRecordStore()
+    const search = inMemorySearchStore()
+    const records = createIndexedKnowledgeStore({
+      indexerId: 'docs',
+      namespace: 'kb',
+      records: data,
+      search,
+    })
+
+    await records.persistGeneration({
+      chunks: [
+        {
+          namespace: 'kb',
+          sourceId: 'guide',
+          chunkId: 'dense',
+          ordinal: 0,
+          content: 'dense match',
+          metadata: {},
+        },
+      ],
+      parents: [],
+      dense: [[1, 0]],
+      replaceSources: true,
+    })
+
+    const [hit] = await records.searchChunks({ legs: { dense: { vector: [1, 0] } }, limit: 1 })
+
+    expect(hit).toMatchObject({ provenance: { matches: [{ kind: 'dense', rank: 1, score: 1 }] } })
+  })
+
+  it('retains fused SearchStore matches while preserving stored provenance', async () => {
+    const data = inMemoryRecordStore()
+    const backingSearch = inMemorySearchStore()
+    let capturedSearchHit: SearchHit | undefined
+    const search: SearchStore = {
+      _tag: 'SearchStore',
+      upsert: (records) => backingSearch.upsert(records),
+      delete: (keys) => backingSearch.delete(keys),
+      capabilities: () => backingSearch.capabilities(),
+      search: async (query) => {
+        const hits = await backingSearch.search(query)
+        capturedSearchHit = hits[0]
+        return hits
+      },
+    }
+    const records = createIndexedKnowledgeStore({
+      indexerId: 'docs',
+      namespace: 'kb',
+      records: data,
+      search,
+    })
+
+    await records.persistGeneration({
+      chunks: [
+        {
+          namespace: 'kb',
+          sourceId: 'guide',
+          chunkId: 'hybrid',
+          ordinal: 0,
+          content: 'alpha beta',
+          metadata: {},
+          provenance: { confidence: 'exact', sourceLocations: [{ type: 'page', pageNumber: 3 }] },
+        },
+      ],
+      parents: [],
+      dense: [[1, 0]],
+      sparse: [{ indices: [4], values: [2] }],
+      replaceSources: true,
+    })
+
+    const [hit] = await records.searchChunks({
+      legs: {
+        dense: { vector: [1, 0] },
+        sparse: { vector: { indices: [4], values: [2] } },
+      },
+      fusion: { strategy: 'rrf' },
+      limit: 1,
+    })
+
+    expect(hit).toMatchObject({
+      provenance: {
+        confidence: 'exact',
+        sourceLocations: [{ type: 'page', pageNumber: 3 }],
+        matches: [
+          { kind: 'dense', rank: 1, score: 1 },
+          { kind: 'sparse', rank: 1, score: 1 },
+        ],
+      },
+    })
+
+    const provenance = (hit as { readonly provenance?: { readonly matches?: readonly unknown[] } } | undefined)?.provenance
+    expect(provenance?.matches).not.toBe(capturedSearchHit?.matches)
+    expect(provenance?.matches?.[0]).not.toBe(capturedSearchHit?.matches[0])
+  })
+
+  it('clears stored provenance matches when SearchStore returns empty matches', async () => {
+    const data = inMemoryRecordStore()
+    const backingSearch = inMemorySearchStore()
+    const emptyMatches: SearchHit['matches'] = []
+    const search: SearchStore = {
+      _tag: 'SearchStore',
+      upsert: (records) => backingSearch.upsert(records),
+      delete: (keys) => backingSearch.delete(keys),
+      capabilities: () => backingSearch.capabilities(),
+      search: async (query) => {
+        const hits = await backingSearch.search(query)
+        return hits.map((hit) => ({ ...hit, matches: emptyMatches }))
+      },
+    }
+    const records = createIndexedKnowledgeStore({
+      indexerId: 'docs',
+      namespace: 'kb',
+      records: data,
+      search,
+    })
+
+    await records.persistGeneration({
+      chunks: [
+        {
+          namespace: 'kb',
+          sourceId: 'guide',
+          chunkId: 'hybrid',
+          ordinal: 0,
+          content: 'alpha beta',
+          metadata: {},
+          provenance: { matches: [{ kind: 'dense', rank: 9, score: 0.1 }] },
+        },
+      ],
+      parents: [],
+      dense: [[1, 0]],
+      replaceSources: true,
+    })
+
+    const [hit] = await records.searchChunks({ legs: { dense: { vector: [1, 0] } }, limit: 1 })
+    const provenance = (hit as { readonly provenance?: { readonly matches?: readonly unknown[] } } | undefined)?.provenance
+
+    expect(provenance?.matches).toEqual([])
+    expect(provenance?.matches).not.toBe(emptyMatches)
   })
 
   it('deletes source and namespace records from record and search stores consistently', async () => {
