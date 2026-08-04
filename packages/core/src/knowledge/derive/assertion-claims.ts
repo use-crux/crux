@@ -52,16 +52,22 @@ export function validateAssertionClaims(
   stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
   rawClaims: readonly RawAssertionClaim[],
   chunks: readonly CruxChunk[],
-): { readonly claims: readonly NormalizedAssertionClaim[]; readonly errors: readonly string[] } {
+): {
+  readonly claims: readonly NormalizedAssertionClaim[]
+  readonly errors: readonly string[]
+  readonly issues: readonly z.core.$ZodIssue[]
+} {
   const claims: NormalizedAssertionClaim[] = []
   const errors: string[] = []
-  rawClaims.forEach((raw) => {
+  const issues: z.core.$ZodIssue[] = []
+  rawClaims.forEach((raw, index) => {
     const type = typeof raw.type === 'string' ? raw.type : '<missing>'
     const schema = stage.types[type]
     const evidence = normalizeEvidence(raw.evidence)
     const validated = validateClaim(stage.id, type, schema, raw, evidence, chunks)
     if (validated.error !== undefined) {
       errors.push(validated.error)
+      issues.push(...validated.issues.map((issue) => ({ ...issue, path: [index, ...issue.path] })))
       return
     }
     claims.push({
@@ -71,7 +77,7 @@ export function validateAssertionClaims(
       provenance: raw.provenance === 'exact' ? 'exact' : 'derived',
     })
   })
-  return { claims, errors }
+  return { claims, errors, issues }
 }
 
 /** Convert normalized assertion claims into cached claim records. */
@@ -177,20 +183,37 @@ function validateClaim(
   raw: RawAssertionClaim,
   evidence: readonly KnowledgeRef[],
   chunks: readonly CruxChunk[],
-): { readonly data: JsonValue; readonly error?: never } | { readonly data?: never; readonly error: string } {
-  if (!schema) return { error: `Derive ${stageId} type ${type}: unknown type` }
+):
+  | { readonly data: JsonValue; readonly error?: never; readonly issues?: never }
+  | { readonly data?: never; readonly error: string; readonly issues: readonly z.core.$ZodIssue[] } {
+  if (!schema) {
+    return { error: `Derive ${stageId} type ${type}: unknown type`, issues: [validationIssue(['type'])] }
+  }
   const parsed = schema.safeParse(raw.data)
-  if (!parsed.success) return { error: `Derive ${stageId} type ${type}: invalid data` }
+  if (!parsed.success) {
+    return {
+      error: `Derive ${stageId} type ${type}: invalid data`,
+      issues: parsed.error.issues.map((issue) => ({ ...issue, path: ['data', ...issue.path] })),
+    }
+  }
   const data = toAssertionJsonData(parsed.data)
-  if (data === undefined) return { error: `Derive ${stageId} type ${type}: data must be JSON` }
-  if (evidence.length === 0) return { error: `Derive ${stageId} type ${type}: missing evidence` }
+  if (data === undefined) {
+    return { error: `Derive ${stageId} type ${type}: data must be JSON`, issues: [validationIssue(['data'])] }
+  }
+  if (evidence.length === 0) {
+    return { error: `Derive ${stageId} type ${type}: missing evidence`, issues: [validationIssue(['evidence'])] }
+  }
   if (!evidence.every((ref) => isEvidenceChunk(ref, chunks))) {
-    return { error: `Derive ${stageId} type ${type}: invalid evidence` }
+    return { error: `Derive ${stageId} type ${type}: invalid evidence`, issues: [validationIssue(['evidence'])] }
   }
   if (raw.provenance !== undefined && raw.provenance !== 'exact' && raw.provenance !== 'derived') {
-    return { error: `Derive ${stageId} type ${type}: invalid provenance` }
+    return { error: `Derive ${stageId} type ${type}: invalid provenance`, issues: [validationIssue(['provenance'])] }
   }
   return { data }
+}
+
+function validationIssue(path: readonly PropertyKey[]): z.core.$ZodIssue {
+  return { code: 'custom', path: [...path], message: 'invalid value' }
 }
 
 function normalizeEvidence(value: unknown): readonly KnowledgeRef[] {

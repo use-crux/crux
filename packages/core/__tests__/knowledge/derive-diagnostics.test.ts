@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { evidence, flow } from '../../src'
+import { evidence, flow, ValidationExhaustedError } from '../../src'
 import type { EffectReceipt } from '../../src/effect'
 import { effectLedger } from '../../src/effect/internal/ledger'
 import { indexingPipeline, type CruxChunk, type CruxDocument } from '../../src/indexing'
@@ -56,7 +56,10 @@ describe('connected knowledge derive diagnostics', () => {
     })
     const input = [chunk('doc-1', 'c1', 'Fact', 'kb-assertions')]
 
-    await expect(docs.index(input)).rejects.toThrow(/Derive facts type fact: invalid data/)
+    const error = await docs.index(input).catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(ValidationExhaustedError)
+    expect(error).toMatchObject({ attempts: 1, maxAttempts: 1, promptId: 'facts' })
     expect(source.generateObject).toHaveBeenCalledTimes(2)
   })
 
