@@ -49,6 +49,11 @@ import { PromptTextSection } from "./prompt-text/section";
 import { IndexEvidence } from "./evidence-section";
 import { IndexKnowledge } from "./knowledge-section";
 import { IndexSessionDetail, IndexThreadInspector } from "./session-catalog";
+import {
+  IndexSignalDetail,
+  IndexSignalProviderDetail,
+  IndexSignalTransportBindingDetail,
+} from "./signal-catalog";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 export function CatRelations({ def }: { def: ViewDef }) {
@@ -193,6 +198,9 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   knowledge: IndexKnowledge,
   threadInspector: IndexThreadInspector,
   session: IndexSessionDetail,
+  signal: IndexSignalDetail,
+  signalProvider: IndexSignalProviderDetail,
+  signalTransportBinding: IndexSignalTransportBindingDetail,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -379,6 +387,20 @@ export function indexSectionOrder(def: ViewDef): string[] {
       "observability",
       "health",
     ];
+  if (k === "signal")
+    return ["hero", "signal", "relations", "source", "health"];
+  if (k === "signal.provider")
+    return ["hero", "signalProvider", "relations", "source", "health"];
+  if (k === "signal.transportBinding")
+    return [
+      "hero",
+      "signalTransportBinding",
+      "relations",
+      "source",
+      "health",
+    ];
+  if (k === "signal.transport")
+    return ["hero", "config", "relations", "source", "health"];
   if (k === "workspace")
     return [
       "hero",
