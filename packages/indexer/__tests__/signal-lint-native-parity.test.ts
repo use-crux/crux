@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { signalProviderFindings } from "../src/indexer/signal/findings";
+import { canonicalIndexPatchFactsJson } from "../src/contracts/parity";
 import { finalizeStaticIndexFactsWithWorker } from "../src/testing/static-index-worker";
 import {
   extractNativeAndFallback,
@@ -8,8 +8,8 @@ import {
 
 const signalRuleIds = [
   "signal.provider.unstable_identity",
-  "signal.transportBinding.unstable_identity",
   "signal.transportBinding.live_value",
+  "signal.transportBinding.unstable_identity",
 ] as const;
 
 describe("Signal lint native parity", () => {
@@ -45,34 +45,68 @@ describe("Signal lint native parity", () => {
         `})`,
       ]);
 
-      const invalidNative = await nativeFindings(invalid.nativeOut);
-      const invalidTypescript = invalid.typescriptOut.definitions.flatMap(
-        signalProviderFindings,
+      const invalidNative = await signalFindings(invalid.nativeOut);
+      const invalidTypescript = await signalFindings(invalid.typescriptOut);
+      expect(canonicalFindings(invalidNative)).toBe(
+        canonicalFindings(invalidTypescript),
       );
-      expect(ruleIds(invalidNative)).toEqual(signalRuleIds);
-      expect(ruleIds(invalidTypescript)).toEqual(signalRuleIds);
-      expect(
-        Object.fromEntries(
-          invalidTypescript.map((finding) => [
-            finding.ruleId,
-            finding.evidence[0]?.label,
-          ]),
-        ),
-      ).toEqual({
-        "signal.provider.unstable_identity":
-          "Authored Signal provider declaration",
-        "signal.transportBinding.unstable_identity":
-          "Authored managed transport binding declaration",
-        "signal.transportBinding.live_value":
-          "Authored managed transport binding declaration",
-      });
+      expect(findingEvidence(invalidTypescript)).toEqual([
+        {
+          ruleId: "signal.provider.unstable_identity",
+          primaryDefinitionId: "signal.provider:src-fixture.ts:4:18",
+          evidence: [
+            {
+              kind: "definition",
+              label: "Authored Signal provider declaration",
+              definitionId: "signal.provider:src-fixture.ts:4:18",
+              data: {
+                fidelity: "resolved",
+                kind: "signal.provider",
+                name: "provider",
+              },
+            },
+          ],
+        },
+        {
+          ruleId: "signal.transportBinding.live_value",
+          primaryDefinitionId:
+            "signal.transportBinding:src-fixture.ts:10:24",
+          evidence: [
+            {
+              kind: "definition",
+              label: "Authored managed transport binding declaration",
+              definitionId: "signal.transportBinding:src-fixture.ts:10:24",
+              data: {
+                fidelity: "resolved",
+                kind: "signal.transportBinding",
+                name: "binding.orders",
+              },
+            },
+          ],
+        },
+        {
+          ruleId: "signal.transportBinding.unstable_identity",
+          primaryDefinitionId:
+            "signal.transportBinding:src-fixture.ts:10:24",
+          evidence: [
+            {
+              kind: "definition",
+              label: "Authored managed transport binding declaration",
+              definitionId: "signal.transportBinding:src-fixture.ts:10:24",
+              data: {
+                fidelity: "resolved",
+                kind: "signal.transportBinding",
+                name: "binding.orders",
+              },
+            },
+          ],
+        },
+      ]);
 
-      const validNative = await nativeFindings(valid.nativeOut);
-      const validTypescript = valid.typescriptOut.definitions.flatMap(
-        signalProviderFindings,
-      );
-      expect(ruleIds(validNative)).toEqual([]);
-      expect(ruleIds(validTypescript)).toEqual([]);
+      const validNative = await signalFindings(valid.nativeOut);
+      const validTypescript = await signalFindings(valid.typescriptOut);
+      expect(validNative).toEqual([]);
+      expect(validTypescript).toEqual([]);
     },
     120_000,
   );
@@ -103,7 +137,7 @@ async function extractSignalFixture(lines: readonly string[]) {
   });
 }
 
-async function nativeFindings(
+async function signalFindings(
   output: Awaited<ReturnType<typeof extractSignalFixture>>["nativeOut"],
 ) {
   const facts = await finalizeStaticIndexFactsWithWorker({
@@ -117,10 +151,29 @@ async function nativeFindings(
   );
 }
 
-function ruleIds(
-  findings: readonly { readonly ruleId: string }[],
-): readonly string[] {
-  return signalRuleIds.filter((ruleId) =>
-    findings.some((finding) => finding.ruleId === ruleId),
-  );
+function canonicalFindings(findings: Awaited<ReturnType<typeof signalFindings>>) {
+  return canonicalIndexPatchFactsJson({ lintFindings: findings });
+}
+
+function findingEvidence(
+  findings: Awaited<ReturnType<typeof signalFindings>>,
+) {
+  return [...findings]
+    .sort((left, right) => compareCodepoint(left.ruleId, right.ruleId))
+    .map((finding) => ({
+      ruleId: finding.ruleId,
+      primaryDefinitionId: finding.primaryDefinitionId,
+      evidence: finding.evidence.map(
+        ({ kind, label, definitionId, data }) => ({
+          kind,
+          label,
+          definitionId,
+          data,
+        }),
+      ),
+    }));
+}
+
+function compareCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

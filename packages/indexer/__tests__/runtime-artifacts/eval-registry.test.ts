@@ -114,7 +114,7 @@ describe("generated deployed Eval registry", () => {
         requiredHostCapabilities: ["asset-store"],
       }),
     ]);
-    expect(result.manifest.version).toBe(2);
+    expect(result.manifest.version).toBe(3);
     expect(result.manifest.evalPrivacyFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(privacy).toEqual({
       schemaVersion: 1,
@@ -131,7 +131,9 @@ describe("generated deployed Eval registry", () => {
     expect(entry).toContain("CRUX_EVAL_HOST_DEPLOYMENT_ID");
     expect(entry).toContain("CRUX_EVAL_HOST_TOKEN");
     expect(entry).toContain("export const DELETE");
-    expect(entry).toContain("import eval0 from '../../evals/support.eval'");
+    expect(entry.match(/^import eval\d+ from .*$/gm)).toEqual([
+      "import eval0 from '../../evals/support.eval'",
+    ]);
     expect(entry).toContain('"a-sidecar"');
     expect(entry).toContain('"z-inline"');
     expect(entry).not.toMatch(

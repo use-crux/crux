@@ -1,7 +1,7 @@
 ---
-"@use-crux/core": minor
-"@use-crux/indexer": minor
-"@use-crux/local": minor
+"@use-crux/core": major
+"@use-crux/indexer": major
+"@use-crux/local": major
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
 "@use-crux/ai": minor

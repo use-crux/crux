@@ -186,7 +186,7 @@ was or was not changed.
 
 Three contracts remain deliberately separate:
 
-1. the local `.crux` Runtime artifact manifest moves to schema version 2;
+1. the local `.crux` Runtime artifact manifest moves to schema version 3;
 2. the generated deployed registry gains arm-level requirements; and
 3. the authenticated host wire remains byte-compatible
    `crux.eval-host.v1`.
