@@ -78,6 +78,8 @@ export interface IngestSpreadsheetCell {
   value: string
   /** Formula expression without the leading `=`, when present. */
   formula?: string
+  /** Merge range this physical cell belongs to, when present. */
+  merge?: IngestSpreadsheetMerge
 }
 
 /** Provider-neutral source facts for one emitted spreadsheet row. */
@@ -99,6 +101,12 @@ export interface IngestSpreadsheetRange {
   rowEnd: number
   columnStart: number
   columnEnd: number
+}
+
+export interface IngestSpreadsheetMerge {
+  /** Master cell address that owns the merge's display value and formula. */
+  master: string
+  sourceRange: IngestSpreadsheetRange
 }
 
 export interface IngestTablePart extends IngestPartBase {

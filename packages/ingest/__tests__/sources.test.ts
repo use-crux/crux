@@ -15,6 +15,7 @@ import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow }
 import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fileSource, filesSource, textSource, urlSource, urlsSource } from '../src'
+import { projectXlsxDisplayValue } from '../src/parsers'
 import type { Asset } from '@use-crux/core'
 import type { IngestMediaOperations, IngestParser, ParserOptions } from '../src'
 
@@ -628,6 +629,112 @@ describe('@use-crux/ingest structured sources', () => {
     expect(table?.content).toBe('Rate\n20%')
   })
 
+  it('renders xlsx rich text through rows, coordinates, columns, table content, and sheet content', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'rich-text.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('RichText')
+    sheet.getCell('A1').value = { richText: [{ text: 'Plan' }, { text: ' Name' }] }
+    sheet.getCell('B1').value = { richText: [{ text: 'Launch' }, { text: ' Notes' }] }
+    sheet.getCell('A2').value = { richText: [{ text: 'Pro' }] }
+    sheet.getCell('B2').value = { richText: [{ text: 'Ships ' }, { text: 'now' }] }
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+    const sheetPart = document.parts.find((part) => part.kind === 'sheet')
+
+    expect(table).toMatchObject({
+      columns: ['Plan Name', 'Launch Notes'],
+      rows: [
+        ['Plan Name', 'Launch Notes'],
+        ['Pro', 'Ships now'],
+      ],
+      sourceRows: [
+        {
+          row: 1,
+          cells: [
+            { row: 1, column: 1, address: 'A1', value: 'Plan Name' },
+            { row: 1, column: 2, address: 'B1', value: 'Launch Notes' },
+          ],
+        },
+        {
+          row: 2,
+          cells: [
+            { row: 2, column: 1, address: 'A2', value: 'Pro' },
+            { row: 2, column: 2, address: 'B2', value: 'Ships now' },
+          ],
+        },
+      ],
+    })
+    expect(table?.content).toBe('Plan Name | Launch Notes\nPro | Ships now')
+    expect(sheetPart?.content).toContain('Plan Name | Launch Notes')
+    expect(sheetPart?.content).toContain('Pro | Ships now')
+  })
+
+  it('renders xlsx structured display values and translated shared formulas', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'structured-values.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Structured')
+    sheet.addRow(['Link', 'Literal Error', 'Formula Error', 'Zero', 'False', 'Shared'])
+    sheet.getCell('A2').value = { text: 'Crux docs', hyperlink: 'https://cruxjs.dev/docs' }
+    sheet.getCell('B2').value = { error: '#DIV/0!' }
+    sheet.getCell('C2').value = { formula: '1/0', result: { error: '#VALUE!' } }
+    sheet.getCell('D2').value = { formula: '1-1', result: 0 }
+    sheet.getCell('E2').value = { formula: 'D2=1', result: false }
+    sheet.getCell('D3').value = 1
+    sheet.fillFormula('F2:F3', 'D2+1', [1, 2])
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    expect(table).toMatchObject({
+      rows: [
+        ['Link', 'Literal Error', 'Formula Error', 'Zero', 'False', 'Shared'],
+        ['Crux docs', '#DIV/0!', '#VALUE!', '0', 'false', '1'],
+        ['', '', '', '1', '', '2'],
+      ],
+      sourceRows: [
+        {
+          row: 1,
+          cells: [
+            { row: 1, column: 1, address: 'A1', value: 'Link' },
+            { row: 1, column: 2, address: 'B1', value: 'Literal Error' },
+            { row: 1, column: 3, address: 'C1', value: 'Formula Error' },
+            { row: 1, column: 4, address: 'D1', value: 'Zero' },
+            { row: 1, column: 5, address: 'E1', value: 'False' },
+            { row: 1, column: 6, address: 'F1', value: 'Shared' },
+          ],
+        },
+        {
+          row: 2,
+          cells: [
+            { row: 2, column: 1, address: 'A2', value: 'Crux docs' },
+            { row: 2, column: 2, address: 'B2', value: '#DIV/0!' },
+            { row: 2, column: 3, address: 'C2', value: '#VALUE!', formula: '1/0' },
+            { row: 2, column: 4, address: 'D2', value: '0', formula: '1-1' },
+            { row: 2, column: 5, address: 'E2', value: 'false', formula: 'D2=1' },
+            { row: 2, column: 6, address: 'F2', value: '1', formula: 'D2+1' },
+          ],
+        },
+        {
+          row: 3,
+          cells: [
+            { row: 3, column: 1, address: 'A3', value: '' },
+            { row: 3, column: 2, address: 'B3', value: '' },
+            { row: 3, column: 3, address: 'C3', value: '' },
+            { row: 3, column: 4, address: 'D3', value: '1' },
+            { row: 3, column: 5, address: 'E3', value: '' },
+            { row: 3, column: 6, address: 'F3', value: '2', formula: 'D3+1' },
+          ],
+        },
+      ],
+    })
+    expect(table?.content).toBe('Link | Literal Error | Formula Error | Zero | False | Shared\nCrux docs | #DIV/0! | #VALUE! | 0 | false | 1\n |  |  | 1 |  | 2')
+  })
+
   it('renders xlsx plain numeric cells without explicit number formats as raw values', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'plain-numeric.xlsx')
@@ -945,6 +1052,141 @@ describe('@use-crux/ingest structured sources', () => {
       ],
     })
     expect(table?.content).toBe('Item | Price | Total\nPro | 20 | 40')
+  })
+
+  it('retains xlsx merged-cell descriptors while only masters own values and formulas', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'merged.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Merges')
+    sheet.mergeCells('A1:C1')
+    sheet.getCell('A1').value = { richText: [{ text: 'Wide' }, { text: ' Header' }] }
+    sheet.mergeCells('E2:E4')
+    sheet.getCell('E2').value = { richText: [{ text: 'Tall' }, { text: ' Header' }] }
+    sheet.mergeCells('G2:G4')
+    sheet.getCell('G2').value = { formula: '10*2', result: 20 }
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+
+    const horizontalMerge = {
+      master: 'A1',
+      sourceRange: { address: 'A1:C1', rowStart: 1, rowEnd: 1, columnStart: 1, columnEnd: 3 },
+    }
+    const verticalRichTextMerge = {
+      master: 'E2',
+      sourceRange: { address: 'E2:E4', rowStart: 2, rowEnd: 4, columnStart: 5, columnEnd: 5 },
+    }
+    const verticalFormulaMerge = {
+      master: 'G2',
+      sourceRange: { address: 'G2:G4', rowStart: 2, rowEnd: 4, columnStart: 7, columnEnd: 7 },
+    }
+
+    expect(table).toMatchObject({
+      rows: [
+        ['Wide Header', '', '', '', '', '', ''],
+        ['', '', '', '', 'Tall Header', '', '20'],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+      ],
+      sourceRange: { address: 'A1:G4', rowStart: 1, rowEnd: 4, columnStart: 1, columnEnd: 7 },
+      sourceRows: [
+        {
+          row: 1,
+          cells: [
+            { row: 1, column: 1, address: 'A1', value: 'Wide Header', merge: horizontalMerge },
+            { row: 1, column: 2, address: 'B1', value: '', merge: horizontalMerge },
+            { row: 1, column: 3, address: 'C1', value: '', merge: horizontalMerge },
+            { row: 1, column: 4, address: 'D1', value: '' },
+            { row: 1, column: 5, address: 'E1', value: '' },
+            { row: 1, column: 6, address: 'F1', value: '' },
+            { row: 1, column: 7, address: 'G1', value: '' },
+          ],
+        },
+        {
+          row: 2,
+          cells: [
+            { row: 2, column: 1, address: 'A2', value: '' },
+            { row: 2, column: 2, address: 'B2', value: '' },
+            { row: 2, column: 3, address: 'C2', value: '' },
+            { row: 2, column: 4, address: 'D2', value: '' },
+            { row: 2, column: 5, address: 'E2', value: 'Tall Header', merge: verticalRichTextMerge },
+            { row: 2, column: 6, address: 'F2', value: '' },
+            { row: 2, column: 7, address: 'G2', value: '20', formula: '10*2', merge: verticalFormulaMerge },
+          ],
+        },
+        {
+          row: 3,
+          cells: [
+            { row: 3, column: 1, address: 'A3', value: '' },
+            { row: 3, column: 2, address: 'B3', value: '' },
+            { row: 3, column: 3, address: 'C3', value: '' },
+            { row: 3, column: 4, address: 'D3', value: '' },
+            { row: 3, column: 5, address: 'E3', value: '', merge: verticalRichTextMerge },
+            { row: 3, column: 6, address: 'F3', value: '' },
+            { row: 3, column: 7, address: 'G3', value: '', merge: verticalFormulaMerge },
+          ],
+        },
+        {
+          row: 4,
+          cells: [
+            { row: 4, column: 1, address: 'A4', value: '' },
+            { row: 4, column: 2, address: 'B4', value: '' },
+            { row: 4, column: 3, address: 'C4', value: '' },
+            { row: 4, column: 4, address: 'D4', value: '' },
+            { row: 4, column: 5, address: 'E4', value: '', merge: verticalRichTextMerge },
+            { row: 4, column: 6, address: 'F4', value: '' },
+            { row: 4, column: 7, address: 'G4', value: '', merge: verticalFormulaMerge },
+          ],
+        },
+      ],
+    })
+    expect(table?.sourceRows?.[0]?.cells[1]).not.toHaveProperty('formula')
+    expect(table?.sourceRows?.[2]?.cells[6]).not.toHaveProperty('formula')
+    expect(table?.content).toBe('Wide Header |  |  |  |  |  | \n |  |  |  | Tall Header |  | 20\n |  |  |  |  |  | \n |  |  |  |  |  | ')
+  })
+
+  it('warns safely for unknown xlsx structured values without emitting object strings', () => {
+    const warnings: unknown[] = []
+
+    const value = projectXlsxDisplayValue(
+      { unexpected: 'shape', toString: () => '[object Object]' },
+      { sheetName: 'Mystery', address: 'C9', warn: (warning) => warnings.push(warning) },
+    )
+    const textOnlyValue = projectXlsxDisplayValue(
+      { text: 'loose text', toString: () => 'leaked text object' },
+      { sheetName: 'Mystery', address: 'D9', warn: (warning) => warnings.push(warning) },
+    )
+    const resultOnlyValue = projectXlsxDisplayValue(
+      { result: 'cached value', toString: () => 'leaked result object' },
+      { sheetName: 'Mystery', address: 'E9', warn: (warning) => warnings.push(warning) },
+    )
+
+    expect(value).toBe('')
+    expect(textOnlyValue).toBe('')
+    expect(resultOnlyValue).toBe('')
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell C9'),
+        metadata: { sheetName: 'Mystery', address: 'C9', valueShape: 'unknown' },
+      }),
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell D9'),
+        metadata: { sheetName: 'Mystery', address: 'D9', valueShape: 'textOnly' },
+      }),
+      expect.objectContaining({
+        code: 'parser_warning',
+        message: expect.stringContaining('cell E9'),
+        metadata: { sheetName: 'Mystery', address: 'E9', valueShape: 'resultOnly' },
+      }),
+    ])
+    expect(JSON.stringify(warnings)).not.toContain('[object Object]')
+    expect(JSON.stringify(warnings)).not.toContain('loose text')
+    expect(JSON.stringify(warnings)).not.toContain('cached value')
+    expect(JSON.stringify(warnings)).not.toContain('leaked')
   })
 
   it('fileSource extracts docx text and table content', async () => {
