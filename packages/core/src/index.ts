@@ -57,6 +57,11 @@
 // Core definition API (prompt authoring domain)
 export { signal } from "./signal";
 export {
+  managedTransportBinding,
+  signalProvider,
+} from "./signal/provider";
+export { webhook } from "./signal/transport";
+export {
   prompt,
   context,
   createContexts,

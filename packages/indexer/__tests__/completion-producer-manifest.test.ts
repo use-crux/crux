@@ -40,14 +40,27 @@ describe("completion producer identity manifest", () => {
         "@use-crux/core",
         "@use-crux/core/session",
       ]),
+      producer("call", "managedTransportBinding", [
+        "@use-crux/core",
+        "@use-crux/core/signal/provider",
+      ]),
       producer("call", "mcp", ["@use-crux/mcp"]),
       producer("call", "prompt", ["@use-crux/core"]),
       producer("call", "retry", ["@use-crux/core/routing"]),
       producer("call", "router", ["@use-crux/core/routing"]),
       producer("call", "session", ["@use-crux/core", "@use-crux/core/session"]),
+      producer("call", "signal", ["@use-crux/core", "@use-crux/core/signal"]),
+      producer("call", "signalProvider", [
+        "@use-crux/core",
+        "@use-crux/core/signal/provider",
+      ]),
       producer("call", "split", ["@use-crux/core/routing"]),
       producer("call", "thread", ["@use-crux/core/thread"]),
       producer("call", "tool", ["@use-crux/core", "@use-crux/core/tools"]),
+      producer("call", "webhook", [
+        "@use-crux/core",
+        "@use-crux/core/signal/transport",
+      ]),
       producer("new", "Agent", ["@use-crux/convex/agent"]),
     ]);
   });
@@ -112,6 +125,21 @@ const publicModules: Readonly<
     "core",
     "./session",
     "src/session/index.ts",
+  ),
+  "@use-crux/core/signal": moduleEntry(
+    "core",
+    "./signal",
+    "src/signal/index.ts",
+  ),
+  "@use-crux/core/signal/provider": moduleEntry(
+    "core",
+    "./signal/provider",
+    "src/signal/provider/index.ts",
+  ),
+  "@use-crux/core/signal/transport": moduleEntry(
+    "core",
+    "./signal/transport",
+    "src/signal/transport/index.ts",
   ),
   "@use-crux/core/thread": moduleEntry(
     "core",
