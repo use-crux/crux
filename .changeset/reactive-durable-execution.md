@@ -4,6 +4,8 @@
 "@use-crux/local": minor
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
+"@use-crux/ai": minor
+"@use-crux/otel": minor
 ---
 
 Add typed process-local Signals with Standard Schema normalization, predicate
@@ -55,7 +57,9 @@ provider-neutral bindings and accepted envelopes.
 
 Add immutable `RuntimeProgram` construction with canonical manifest hashes,
 shared Runtime target normalization, and managed-binding resolution and
-compatibility diagnostics for generated and hand-written hosts.
+compatibility diagnostics for generated and hand-written hosts. Agent
+definitions are first-class immutable program targets resolved by the same
+worker target path as Flows and tasks.
 
 Generate a freshness-bound Runtime program and add `crux runtime worker` for
 one configured Node/PostgreSQL execution worker with durable ownership and
@@ -110,3 +114,85 @@ Persist a canonical accepted-input digest across Memory, PostgreSQL, and Convex
 snapshots. Runtime inspection and Devtools now show safe Work identity,
 definition and Effect scope, ownership, result lineage, statistics, progress,
 and bounded lifecycle events without exposing input or result payloads.
+
+Add the provider-neutral `GenerationModel` contract and adapter-authoring
+construction seam. Agents now retain their exact model type, while Sessions
+require a bound model only when the Agent does not already carry one and reject
+statically proven capability gaps without excluding broad preflight evidence.
+
+Add `@use-crux/ai`'s `aiSdk(native)` binding: one argument produces a frozen
+adapter-bound `GenerationModel` with secret-free definition identity, complete
+capability evidence, and an opaque runtime port that constructs an
+`AgentExecutor` through the existing AI provider runtime without global config.
+Same-adapter routers may be bound once. `stableModel()` is removed with no
+alias or deprecation layer; Eval identity now projects bound GenerationModel
+values.
+
+Sessions now preserve every accepted Agent input and handle independently while
+claiming the longest cursor-consecutive compatible prefix into one canonical
+activation Work. `sendMany()` retains atomic cursor order, coalesced handles
+resolve their shared Work through `work()`, and all joined inputs reconnect to
+the same exact terminal result or failure. A bound Session override must be
+declared by the RuntimeProgram or fails before mutation with
+`GENERATION_MODEL_NOT_STATIC`; missing bindings and capability preflight retain
+their existing distinct errors.
+
+Session turns now retain restart-safe execution checkpoints, allowing safe
+recovery across owner Thread publication without rerunning generation. Session
+diagnostics expose structured, payload-safe failures alongside compact status
+and bounded lifetime turn statistics. Compatible input accepted during a model
+step is independently resolved and enters the next real provider boundary
+before `prepareStep`; terminal-step ingress begins a new activation through an
+atomic lost-wake fence. Inspection reports bounded per-input claim, delivery,
+shared Work, checkpoint, and exact Thread basis evidence without payloads.
+Session input admission dispatches through the provider-neutral
+`session.inputs.accept` composite so adapters can validate keyed identity,
+append ordered ingress, reserve one canonical Work, and persist its wake in one
+transaction.
+
+Expose the provider-neutral Session step-boundary hook through adapter authoring.
+
+Export a provider-neutral Session conformance factory from
+`@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
+identity, ordered Work linkage, checkpoint replay, exact terminal result,
+bounded inspection, and structured capability laws.
+
+Expose the internal Session-store statistics ledger helpers for durable Runtime
+adapters.
+
+Expose payload-safe Session identity, state, bounded turn-to-Work lineage,
+Thread revision, checkpoint/recovery evidence, and lifetime statistics through
+the existing Runtime Bridge and `session.turn` observability records. The
+embedded Devtools Catalog shows authored Session target/key evidence, while Run
+details render the same operational projection without execution payloads.
+
+PostgreSQL Runtime storage now persists normalized Session identity, ordered
+ingress, activation linkage, delivery evidence, prepared execution checkpoints,
+and bounded lifetime statistics through the same atomic Runtime composites as
+memory. Independent hosts and workers can reconnect through one database
+namespace, replay owner-Thread publication without duplicate receipts, and
+retain prepared Session evidence during unreferenced-result pruning.
+
+Convex Runtime storage now persists the same normalized Session contract in its
+atomic component transactions. Reconstructed hosts and workers retain exact
+results, replay checkpointed owner-Thread publication without duplicate
+receipts, and preserve Session evidence during result pruning.
+
+Project Index now records authored Session identity, literal key, source, and
+resolved Agent target evidence with matching static and semantic backend
+output.
+
+Project Index and Local editor diagnostics now reject unproven Session
+identity and Agent targets, ambiguous construction, non-owner Thread mutation,
+and accidental concrete-Agent Thread tenancy with structured evidence.
+
+Generated Runtime Programs now import exported Agent definitions and pin their
+Project Index fingerprints through the existing Runtime target authority.
+
+Document durable Agent Sessions with a progressive guide, copy-pasteable
+recipes, exact Session and GenerationModel API reference pages, Session
+structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
+`generationModels` reference, and Core architecture internals. Docs distinguish
+durable Agent Sessions from overloaded "session" vocabulary elsewhere and
+require PostgreSQL Runtime storage plus the Session-owned Thread RecordStore on
+the same database.

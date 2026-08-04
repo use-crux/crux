@@ -10,6 +10,7 @@ import { createRuntimeError } from "../../runtime/engine/errors";
 import type { RuntimeProgram } from "../../runtime/program";
 import type { RuntimeTargetDefinitionRef } from "../../runtime/ports/target-definition";
 import type { FlowId, RuntimeTargetId, WorkId } from "../../runtime/ports/ids";
+import type { GenerationModel } from "../../generation-model";
 import type { WorkHandle } from "../handle";
 import { durableWorkHandle } from "./durable-handle";
 
@@ -18,6 +19,7 @@ const encoder = new TextEncoder();
 interface DurableWorkHostContext {
   readonly runtime: ResolvedRuntimeEngine;
   readonly definitions: ReadonlyMap<string, RuntimeTargetDefinitionRef>;
+  readonly generationModels: readonly GenerationModel[];
 }
 
 const durableWorkHostScope = createAsyncScopeFacet<DurableWorkHostContext>(
@@ -74,7 +76,11 @@ export function createWorkHost(options: CreateWorkHostOptions): WorkHost {
       }),
     );
   }
-  const context = Object.freeze({ runtime, definitions });
+  const context = Object.freeze({
+    runtime,
+    definitions,
+    generationModels: options.program.generationModels,
+  });
   return Object.freeze({
     run: <TResult>(fn: () => TResult) => durableWorkHostScope.run(context, fn),
     dispose: () => runtime.dispose(),
@@ -154,6 +160,11 @@ function activeHost(api: string): DurableWorkHostContext {
     whatStillWorks: "Foreground flow.run() remains available.",
     nextStep: "Create a Work host and call this API inside workHost.run().",
   });
+}
+
+/** Read the active application Runtime host for Session admission. @internal */
+export function activeSessionHost(api: string): DurableWorkHostContext {
+  return activeHost(api);
 }
 
 function targetDefinition(

@@ -37,6 +37,8 @@
     "cache",
     "agent",
     "backgroundable-agent-work",
+    "session",
+    "generation-model",
     "flow",
     "signal",
     "effect",

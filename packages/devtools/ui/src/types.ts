@@ -1559,6 +1559,7 @@ export type SpanPrimitive =
   | "workspace.operation"
   | "plan.operation"
   | "task.operation"
+  | "session.turn"
   | "indexing.pipeline"
   | "ingest.parse"
   | "corpus.sync"

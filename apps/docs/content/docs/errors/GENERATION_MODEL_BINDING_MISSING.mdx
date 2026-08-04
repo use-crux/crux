@@ -1,0 +1,31 @@
+---
+title: GENERATION_MODEL_BINDING_MISSING
+description: A durable Agent Session could not select an executable generation model.
+---
+
+## What failed
+
+`session()` could not resolve an adapter-bound `GenerationModel` from the
+Session options or the Agent definition.
+
+## Why
+
+Durable turns require frozen execution authority. Unbound native model objects
+are not enough for Session creation.
+
+## What still works
+
+Other Runtime targets and Sessions that already bind models remain available.
+No Session, Work, or Thread mutation occurs for the failed call.
+
+## Fix
+
+Bind a model with the adapter helper and attach it to the Agent or Session:
+
+```ts
+import { aiSdk } from "@use-crux/ai";
+
+const model = aiSdk(nativeModel("nebula-text-v2"));
+const support = agent({ id: "support", model, prompt: supportPrompt });
+await host.run(() => session(support, { key: "customer-42" }));
+```

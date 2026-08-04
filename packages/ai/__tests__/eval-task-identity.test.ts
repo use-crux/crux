@@ -10,7 +10,7 @@ import {
   getEvalTaskDescriptorForInternalUse,
 } from "@use-crux/core/eval/internal/task";
 import { projectDeployedEvalVariants } from "@use-crux/core/runtime/internal/eval-registry";
-import { createCruxAi, stableModel } from "../src";
+import { createCruxAi, aiSdk } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
 
 const model = {
@@ -72,13 +72,13 @@ describe("managed AI task identity", () => {
     expect(fingerprint("Be concise.")).not.toBe(fingerprint("Be detailed."));
   });
 
-  it("reuses a frozen model only after explicit stable attestation", () => {
+  it("reuses a frozen model only after aiSdk binding", () => {
     const frozenModel = Object.freeze({
       provider: "test.provider",
       modelId: "stable-model",
       specificationVersion: "v3",
     }) as unknown as LanguageModel;
-    const attested = stableModel(frozenModel);
+    const attested = aiSdk(frozenModel);
     const task = createCruxAi().generate.task(
       prompt({
         input: z.object({ topic: z.string() }),
@@ -87,7 +87,8 @@ describe("managed AI task identity", () => {
       { model: attested },
     );
 
-    expect(attested).toBe(frozenModel);
+    expect(attested.native).toBe(frozenModel);
+    expect(attested._tag).toBe("crux.generation-model");
     expect(
       getEvalTaskDescriptorForInternalUse(task).projectIdentity({
         phase: "plan",
@@ -101,109 +102,62 @@ describe("managed AI task identity", () => {
         operation: "generate",
         prompt: expect.any(Object),
         model: {
-          contract: "crux.ai.stable-model.v1",
-          key: "test.provider:stable-model",
-          provider: "test.provider",
-          modelId: "stable-model",
+          contract: "crux.generation-model.v1",
+          adapter: { id: "ai-sdk", version: "1" },
+          definition: {
+            id: "ai-sdk:test.provider:stable-model",
+            fingerprint: expect.any(String),
+          },
+          identity: { kind: "model", model: "test.provider:stable-model" },
         },
         options: expect.any(Object),
       },
     });
   });
 
-  it("accepts an explicit versioned key when model metadata is unavailable", () => {
-    const custom = Object.freeze({
-      specificationVersion: "v3",
-    }) as unknown as LanguageModel;
-    const task = createCruxAi().generate.task(
-      prompt({
-        input: z.object({ topic: z.string() }),
-        prompt: "Summarize.",
-      }),
-      { model: stableModel(custom, "acme:gateway-model:v2") },
-    );
-    const descriptor = getEvalTaskDescriptorForInternalUse(task);
-    const planned = descriptor.projectIdentity({
-      phase: "plan",
-      input: { topic: "refunds" },
-      overrides: {},
-    });
-    const observed = descriptor.projectIdentity({
-      phase: "observed",
-      input: { topic: "refunds" },
-      overrides: {},
-      result: { finalStep: { modelId: "provider-owned-id" } },
-    });
-
-    expect(planned).toMatchObject({ reusable: true });
-    expect(observed).toEqual(planned);
-  });
-
-  it("explains how to attest a model whose identity cannot be derived", () => {
+  it("explains when a model identity cannot be derived", () => {
     const custom = Object.freeze({
       specificationVersion: "v3",
     }) as unknown as LanguageModel;
 
-    expect(() => stableModel(custom)).toThrow(
-      /Pass a secret-free versioned key.*stableModel\(model, "my-provider:my-model:v1"\)/,
+    expect(() => aiSdk(custom)).toThrow(
+      /could not derive a secret-free identity.*provider and model\.modelId/i,
     );
   });
 
-  it("requires a new model object when an attested key changes", () => {
-    const custom = {
-      provider: "test",
-      modelId: "model",
-      specificationVersion: "v3",
-    } as unknown as LanguageModel;
-
-    expect(stableModel(custom, "test:model:v1")).toBe(custom);
-    expect(() => stableModel(custom, "test:model:v2")).toThrow(
-      /Create a new provider model object/,
-    );
-  });
-
-  it("rejects ambiguous keys and custom keys for already-stable string IDs", () => {
-    const custom = {
-      provider: "test",
-      modelId: "model",
-      specificationVersion: "v3",
-    } as unknown as LanguageModel;
-
-    expect(() => stableModel(custom, " secret:v1 ")).toThrow(
-      /non-empty secret-free versioned string/,
-    );
-    expect(() =>
-      stableModel("test:model" as LanguageModel, "test:model:v2"),
-    ).toThrow(/Change the model ID itself/);
-  });
-
-  it("rejects Crux route trees passed to leaf-only stableModel", () => {
+  it("binds same-adapter route trees as portable GenerationModel values", () => {
     const routed = router({
+      id: "quality",
       classify: () => "fast" as const,
       routes: { fast: model, default: model },
     });
+    const bound = aiSdk(routed);
 
-    expect(() => stableModel(routed as unknown as LanguageModel)).toThrow(
-      /leaf AI SDK LanguageModel.*route tree/i,
-    );
+    expect(bound._tag).toBe("crux.generation-model");
+    expect(bound.identity).toEqual({
+      kind: "router",
+      router: "quality",
+      routes: [
+        { key: "default", target: "test:scripted-model" },
+        { key: "fast", target: "test:scripted-model" },
+      ],
+    });
+    expect(bound.native).toBe(routed);
   });
 
-  it("changes identity when the explicit stable key changes", () => {
-    const identityFor = (key: string) => {
+  it("changes identity when the bound model id changes", () => {
+    const identityFor = (modelId: string) => {
       const task = createCruxAi().generate.task(
         prompt({
           input: z.object({ topic: z.string() }),
           prompt: "Summarize.",
         }),
         {
-          model: stableModel(
-            {
-              provider: "test",
-              modelId: "model",
-              specificationVersion: "v3",
-            } as unknown as LanguageModel,
-            key,
-          ),
+          model: aiSdk({
+            provider: "test",
+            modelId,
+            specificationVersion: "v3",
+          } as unknown as LanguageModel),
         },
       );
       return getEvalTaskDescriptorForInternalUse(task).projectIdentity({
@@ -213,9 +167,7 @@ describe("managed AI task identity", () => {
       });
     };
 
-    expect(identityFor("test:model:v1")).not.toEqual(
-      identityFor("test:model:v2"),
-    );
+    expect(identityFor("model:v1")).not.toEqual(identityFor("model:v2"));
   });
 
   it("detects provider-reported model drift before evidence can be written", () => {
@@ -225,7 +177,7 @@ describe("managed AI task identity", () => {
         prompt: "Summarize.",
       }),
       {
-        model: stableModel({
+        model: aiSdk({
           provider: "test",
           modelId: "expected-model",
           specificationVersion: "v3",
@@ -464,7 +416,7 @@ describe("managed AI task identity", () => {
           return `${instruction}: ${input.topic}`;
         },
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
 
     const descriptor = getEvalTaskDescriptorForInternalUse(task);
@@ -496,7 +448,7 @@ describe("managed AI task identity", () => {
         },
         prompt: "Summarize.",
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
     const messagesTask = createCruxAi().generate.task(
       prompt({
@@ -506,7 +458,7 @@ describe("managed AI task identity", () => {
           return [{ role: "user", content: input.topic }];
         },
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
 
     const project = (task: typeof systemTask | typeof messagesTask) =>
@@ -532,7 +484,7 @@ describe("managed AI task identity", () => {
           return `Summarize ${input.topic}.`;
         },
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
 
     const execution = await executeEvalTaskForInternalUse(task, {
@@ -550,7 +502,7 @@ describe("managed AI task identity", () => {
         input: z.object({ topic: z.string() }),
         prompt: ({ input }) => `Summarize ${input.topic}.`,
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
     const descriptor = getEvalTaskDescriptorForInternalUse(task);
     const execution = await executeEvalTaskForInternalUse(task, {
@@ -574,7 +526,7 @@ describe("managed AI task identity", () => {
         use: [context({ id: "facts", system: "Use verified facts." })],
         prompt: ({ input }) => `Summarize ${input.topic}.`,
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
     const descriptor = getEvalTaskDescriptorForInternalUse(task);
     const execution = await executeEvalTaskForInternalUse(task, {
@@ -598,7 +550,7 @@ describe("managed AI task identity", () => {
         input: z.object({ topic: z.string() }),
         prompt: ({ input }) => `${input.topic}:${++nonce}`,
       }),
-      { model: stableModel(model) },
+      { model: aiSdk(model) },
     );
     const descriptor = getEvalTaskDescriptorForInternalUse(task);
     const execution = await executeEvalTaskForInternalUse(task, {

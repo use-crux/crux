@@ -1,6 +1,7 @@
 /** Durable safe read-model state attached to an application Work row. */
 
 import type { StatisticsLedgerExport } from "../../statistics";
+import type { EffectScopeRef } from "../../effect";
 import { initialApplicationWorkStatistics } from "./application-work-statistics";
 import type { RuntimeWorkItem } from "./work";
 
@@ -28,6 +29,8 @@ export interface RuntimeApplicationWorkState {
   readonly updatedAt: string;
   readonly progress?: RuntimeApplicationWorkProgress;
   readonly ownership: RuntimeApplicationWorkOwnership;
+  /** Stable Effect scope allocated with this canonical Work occurrence. */
+  readonly effects?: EffectScopeRef;
   /** Time of the first transition into running execution. */
   readonly startedAt?: string;
   /** Safe bounded reason retained after cooperative cancellation. */
@@ -42,11 +45,13 @@ export interface RuntimeApplicationWorkState {
 export function initialApplicationWorkState(
   workId: string,
   acceptedAt: Date,
+  effects?: EffectScopeRef,
 ): RuntimeApplicationWorkState {
   return Object.freeze({
     schemaVersion: 1,
     updatedAt: acceptedAt.toISOString(),
     ownership: Object.freeze({ state: "attached" }),
+    ...(effects ? { effects: Object.freeze({ ...effects }) } : {}),
     statistics: initialApplicationWorkStatistics(workId, acceptedAt),
   });
 }

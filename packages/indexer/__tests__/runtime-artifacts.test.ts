@@ -155,6 +155,69 @@ describe("runtime artifacts", () => {
     );
   });
 
+  it("imports an exported Agent into the sole generated Runtime Program", async () => {
+    const root = await fixtureRoot();
+    const sourceFile = join(root, "src/support.ts");
+    await mkdir(dirname(sourceFile), { recursive: true });
+    await writeFile(
+      sourceFile,
+      [
+        "import { agent } from '@use-crux/core/agent'",
+        "export const supportAgent = agent({ id: 'support' })",
+      ].join("\n"),
+    );
+    const definitions = [
+      {
+        id: "agent:support",
+        kind: "agent",
+        name: "support",
+        fidelity: "resolved",
+        fingerprint: "definition-support-v1",
+        source: { file: sourceFile, line: 2 },
+        metadata: { exportName: "supportAgent", exported: true },
+      },
+      {
+        id: "agent:internal",
+        kind: "agent",
+        name: "internal",
+        fidelity: "resolved",
+        fingerprint: "definition-internal-v1",
+        source: { file: sourceFile, line: 3 },
+        metadata: { exportName: "internalAgent", exported: false },
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    const result = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions,
+    });
+    const program = await readFile(
+      join(root, ".crux/generated/runtime/program.ts"),
+      "utf8",
+    );
+    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+
+    expect(result.manifest.targets).toEqual([
+      {
+        name: "support",
+        kind: "agent",
+        module: "./src/support.ts",
+        export: "supportAgent",
+        definitionId: "agent:support",
+        fingerprint: "definition-support-v1",
+      },
+    ]);
+    expect(program).toContain(
+      "import { supportAgent as target0 } from '../../../src/support'",
+    );
+    expect(program).toContain(
+      '{ target: target0, definition: { id: "agent:support", fingerprint: "definition-support-v1" } }',
+    );
+    expect(entry).toContain("createRuntimeHandler({ program: runtimeProgram })");
+    expect(entry).not.toContain("supportAgent");
+  });
+
   it("writes split Convex entry files without a top-level shim", async () => {
     const root = await fixtureRoot();
     await mkdir(join(root, "src"), { recursive: true });

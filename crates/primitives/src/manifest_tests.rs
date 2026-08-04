@@ -120,7 +120,7 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "21");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "23");
 }
 
 #[test]
@@ -148,14 +148,14 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:addc6acf870f116cf528d45497d6fd0073d336f89458f8a86317c89b0d18d46c"
+        "sha256:6f2d95954f770c702f77958bfd35e51547c5ff31012f7ae682c0e6c92c45aac1"
     );
 }
 
 #[test]
 fn completion_manifest_covers_all_admitted_shapes() {
     let sites = completion_site_manifest();
-    assert_eq!(sites.len(), 17);
+    assert_eq!(sites.len(), 18);
     let site = sites
         .iter()
         .find(|site| site.call_names == ["agent"] && site.property_path == ["prompt"])
@@ -186,10 +186,10 @@ fn completion_manifest_covers_all_admitted_shapes() {
             && site.exclude_self
     }));
 
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "21");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "23");
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:addc6acf870f116cf528d45497d6fd0073d336f89458f8a86317c89b0d18d46c"
+        "sha256:6f2d95954f770c702f77958bfd35e51547c5ff31012f7ae682c0e6c92c45aac1"
     );
 }
 

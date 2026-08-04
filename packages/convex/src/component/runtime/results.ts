@@ -114,7 +114,13 @@ export const pruneUnreferenced = mutation({
         .withIndex('by_namespace_status_updated', (query) => query.eq('namespace', namespace).eq('status', 'completed'))
         .filter((query) => query.eq(query.field('resultRef.location'), result.location))
         .first()
-      if (referenced) continue
+      const preparedSessionReference = await ctx.db
+        .query('runtimeSessionInputs')
+        .withIndex('by_prepared_result', (query) =>
+          query.eq('namespace', namespace).eq('preparedResultLocation', result.location),
+        )
+        .first()
+      if (referenced || preparedSessionReference) continue
       await deleteLocation(ctx, result.location)
       removed += 1
     }

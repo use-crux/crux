@@ -114,7 +114,7 @@ export interface SemanticCompilerView<
     symbols: readonly TSymbol[],
   ): readonly (readonly TDeclaration[])[];
   /**
-   * Prove that an expression resolves to one exact package-root value export.
+   * Prove that an expression resolves to one exact public package value export.
    *
    * Backends must use their active compiler program and fail closed when
    * lexical binding, package resolution, or export identity is ambiguous.

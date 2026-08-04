@@ -77,7 +77,11 @@ export async function acceptWorkInTransaction(
     tx,
     Object.freeze({
       ...created,
-      application: initialApplicationWorkState(created.workId, created.createdAt),
+      application: initialApplicationWorkState(
+        created.workId,
+        created.createdAt,
+        input.effects,
+      ),
     }),
   );
   await tx.state.putWork(work);

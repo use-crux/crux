@@ -1,0 +1,26 @@
+---
+title: SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE
+description: Prepared result evidence for a recovering durable Agent Session turn is missing or mismatched.
+---
+
+## What failed
+
+Recovery for a Session turn could not load the private prepared result artifact
+that matches the durable checkpoint.
+
+## Why
+
+After preparation, recovery must reuse the write-once result rather than
+re-running the provider, Tools, effects, or Thread publication. Missing or
+mismatched artifacts make safe replay impossible.
+
+## What still works
+
+Other completed turns and Sessions remain available. Inspection exposes only
+the stable code and operator next step—not prompts, outputs, or credentials.
+
+## Fix
+
+Restore the Runtime result store from a consistent backup that includes the
+Session checkpoint and prepared artifacts, then retry the turn through the
+normal worker path.

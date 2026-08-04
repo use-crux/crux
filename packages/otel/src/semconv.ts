@@ -142,6 +142,7 @@ export const primitiveSpanNames = {
   'plan.operation': 'crux.plan.operation',
   'task.operation': 'crux.task.operation',
   'thread.operation': 'crux.thread.operation',
+  'session.turn': 'crux.session.turn',
   'workspace.operation': 'crux.workspace.operation',
   'indexing.pipeline': 'crux.indexing.pipeline',
   'ingest.parse': 'crux.ingest.parse',

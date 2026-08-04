@@ -1,0 +1,24 @@
+---
+title: SESSION_NOT_FOUND
+description: No durable Agent Session exists for the key in the active Runtime namespace.
+---
+
+## What failed
+
+`getSession(target, key)` did not find a Session for that key in the active
+Runtime namespace.
+
+## Why
+
+`getSession()` never creates. Retrieval requires a Session that was previously
+created with `session()` against the same store and namespace.
+
+## What still works
+
+`session(target, { key })` can create or reopen when creation is intended.
+Other existing Sessions remain available.
+
+## Fix
+
+Call `session(target, { key })` to create the Session, or verify the Runtime
+namespace, store, and key match the process that created it.

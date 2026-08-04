@@ -37,6 +37,10 @@
       "types": "./src/work/index.ts",
       "import": "./src/work/index.ts"
     },
+    "./session": {
+      "types": "./src/session/index.ts",
+      "import": "./src/session/index.ts"
+    },
     "./eval": {
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
@@ -112,6 +116,10 @@
     "./runtime/internal/eval-host": {
       "types": "./src/runtime/eval-host/index.ts",
       "import": "./src/runtime/eval-host/index.ts"
+    },
+    "./runtime/internal/session-store": {
+      "types": "./src/runtime/session-store/index.ts",
+      "import": "./src/runtime/session-store/index.ts"
     },
     "./setup": {
       "types": "./src/setup/index.ts",
@@ -226,6 +234,10 @@
       "types": "./src/adapter/index.ts",
       "import": "./src/adapter/index.ts"
     },
+    "./adapter-authoring": {
+      "types": "./src/adapter-authoring.ts",
+      "import": "./src/adapter-authoring.ts"
+    },
     "./adapter/testing": {
       "types": "./src/adapter/testing.ts",
       "import": "./src/adapter/testing.ts"
@@ -271,6 +283,9 @@
     "*": {
       "signal": [
         "src/signal/index.ts"
+      ],
+      "session": [
+        "src/session/index.ts"
       ],
       "eval": [
         "src/eval/index.ts"
@@ -400,6 +415,9 @@
       ],
       "adapter": [
         "src/adapter/index.ts"
+      ],
+      "adapter-authoring": [
+        "src/adapter-authoring.ts"
       ],
       "adapter/testing": [
         "src/adapter/testing.ts"

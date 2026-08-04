@@ -62,8 +62,12 @@ export function createMemoryResultPayloadPort(
     },
     async pruneUnreferenced(options) {
       const referenced = new Set(
-        [...data.work.values()]
-          .map((work) => work.resultRef?.location)
+        [
+          ...[...data.work.values()].map((work) => work.resultRef?.location),
+          ...[...data.sessionInputs.values()].map(
+            (input) => input.preparedExecution?.preparedResultRef.location,
+          ),
+        ]
           .filter((location): location is string => location !== undefined),
       );
       const eligible = [...data.results.entries()].filter(

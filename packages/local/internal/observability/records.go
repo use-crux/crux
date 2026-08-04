@@ -333,6 +333,7 @@ var primitiveFamilyByName = map[string]string{
 	"delegate.invoke":           "delegate",
 	"workspace.operation":       "workspace",
 	"thread.operation":          "thread",
+	"session.turn":             "session",
 	"plan.operation":            "plan",
 	"task.operation":            "task",
 	"indexing.pipeline":         "indexing",

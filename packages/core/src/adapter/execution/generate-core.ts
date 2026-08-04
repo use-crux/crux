@@ -78,6 +78,7 @@ import {
   replaceResponseTranscriptText,
 } from "./response-text";
 import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
+import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
 import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
 import {
   applySystemMessagePrefixPatch,
@@ -123,12 +124,11 @@ import { appendStepSystemContext } from "./step-system-context";
 import type { StepReason } from "../../request/prepare/step-context";
 import {
   alignThreadInvocationInput,
-  commitThreadInvocation,
-  isThreadReplay,
   prepareThreadInvocation,
-  validateThreadReplay,
 } from "./thread-history";
 import { attachThreadCommit } from "./thread-result";
+import { managedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
+import { resolveStepIngress } from "./step-ingress";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -203,6 +203,7 @@ export async function generateCore<
   let pendingApprovals: readonly ApprovalRequestInfo[] | undefined;
   let stoppedBy: StopCondition | undefined;
   let steps = 0;
+  let stepBoundaries = 0;
   let providerResponseOrdinal = 0;
   const stepFacts: ResultStepFacts[] = [];
   let lastRequestReceipt: RequestReceipt | undefined;
@@ -548,11 +549,23 @@ export async function generateCore<
 
           for (let step = 0; step < maxSteps; step++) {
             steps++;
+            const boundaryReason = lastRequestReceipt
+              ? ("tool-result" as const)
+              : ("initial" as const);
+            messages = [
+              ...messages,
+              ...(await resolveStepIngress({
+                boundary: args[managedGenerationStepBoundary],
+                input: { stepIndex: stepBoundaries++, reason: boundaryReason },
+                prompt,
+                resolveOptions: boundaryResolveOpts,
+              })),
+            ];
             const stepSystemContext = await args.projectStepSystemContext?.();
             const providerMessages = await prepareProviderMessages(messages);
             const boundary = await prepareBoundary(
               providerMessages,
-              lastRequestReceipt ? "tool-result" : "initial",
+              boundaryReason,
             );
             emitInputTokenEstimate({
               messages: providerMessages,
@@ -699,6 +712,18 @@ export async function generateCore<
                 [],
               );
               messages = [...messages, ...guardedWriteback.corrective];
+              messages = [
+                ...messages,
+                ...(await resolveStepIngress({
+                  boundary: args[managedGenerationStepBoundary],
+                  input: {
+                    stepIndex: stepBoundaries++,
+                    reason: "validation-retry",
+                  },
+                  prompt,
+                  resolveOptions: boundaryResolveOpts,
+                })),
+              ];
               const stepSystemContext = await args.projectStepSystemContext?.();
               const providerMessages = await prepareProviderMessages(messages);
               const boundary = await prepareBoundary(
@@ -854,9 +879,8 @@ export async function generateCore<
             : result;
         },
         async (result) => {
-          if (result.threadCommit || result.pendingApprovals) return;
-          await validateThreadReplay(threadInvocation, isThreadReplay(result));
-          const threadCommit = await commitThreadInvocation(
+          const threadCommit = await checkpointAndCommitManagedGeneration(
+            args,
             threadInvocation,
             result,
           );

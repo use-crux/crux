@@ -5,9 +5,9 @@ import { z } from "zod";
 import { context, match, prompt, when } from "@use-crux/core";
 import { getEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
 import { skill } from "@use-crux/core/skill";
-import { createCruxAi, stableModel } from "../src";
+import { createCruxAi, aiSdk } from "../src";
 
-const model = stableModel({
+const model = aiSdk({
   provider: "test",
   modelId: "leaf",
   specificationVersion: "v3",
@@ -94,13 +94,10 @@ describe("pure prompt context identity", () => {
     const concise = context({ system: "Be concise." });
     const fallback = context({ system: "Use the default style." });
     const use = [
-      when(
-        () => {
-          selections += 1;
-          return true;
-        },
-        concise,
-      ),
+      when(() => {
+        selections += 1;
+        return true;
+      }, concise),
       match({
         on: () => {
           selections += 1;
@@ -135,9 +132,7 @@ describe("pure prompt context identity", () => {
               kind: "skill",
               id: "tone",
               instructions: "Write warmly.",
-              references: [
-                { name: "examples.md", content: "A warm example." },
-              ],
+              references: [{ name: "examples.md", content: "A warm example." }],
             },
           ],
         },

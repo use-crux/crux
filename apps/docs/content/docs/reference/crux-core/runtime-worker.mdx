@@ -24,13 +24,14 @@ interface RuntimeProgram {
   readonly manifestHash: string;
   readonly targets: readonly RuntimeProgramTarget[];
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
+  readonly generationModels: readonly GenerationModel[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 ```
 
-A provider-neutral declaration of the executable targets and inert
-managed-transport bindings for one project with shallow structural
-immutability. `manifestHash` is the SHA-256 hash
+A provider-neutral declaration of the executable targets, statically declared
+generation models, and inert managed-transport bindings for one project with
+shallow structural immutability. `manifestHash` is the SHA-256 hash
 of the canonical program declaration. It is distinct from the generated
 artifact hash that binds `program.ts` to the exact bytes of `manifest.json`.
 
@@ -40,7 +41,9 @@ references.
 The object does not contain live clients, credentials, Requests, mutable
 registration, or configuration lookup. Generated programs pair each target
 with its exact Project Index definition identity and fingerprint. Application
-Work acceptance pins that metadata together with `manifestHash`.
+Work acceptance pins that metadata together with `manifestHash`. Durable Agent
+Sessions select models only from `generationModels` and pin
+`{ definitionId, fingerprint }` in Session state.
 
 ## `createRuntimeProgram(options)`
 
@@ -56,6 +59,7 @@ interface CreateRuntimeProgramOptions {
         };
     }
   )[];
+  readonly generationModels?: readonly GenerationModel[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 
@@ -69,8 +73,10 @@ I/O or discovery. Generated code calls this same function.
 
 Validation rejects duplicate target or binding identities, bindings whose
 Signal target is absent from `targets`, and one adapter identity declared with
-incompatible providers. `transports` are represented in the program but the
-current execution worker leaves them inert.
+incompatible providers. `generationModels` are ordered and fingerprinted into
+the manifest; Session construction rejects a selected model that is absent from
+this list with `GENERATION_MODEL_NOT_STATIC`. `transports` are represented in
+the program but the current execution worker leaves them inert.
 
 ```ts
 import { createRuntimeProgram, durableTask } from "@use-crux/core/runtime";
@@ -82,7 +88,8 @@ const rebuild = durableTask("rebuild", {
 });
 
 export const runtimeProgram = createRuntimeProgram({
-  targets: [rebuild],
+  targets: [rebuild, supportAgent],
+  generationModels: [supportModel],
   transports: [],
 });
 ```

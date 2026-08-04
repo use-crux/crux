@@ -1,4 +1,3 @@
-import { createRuntimeError } from '@use-crux/core/runtime'
 import type {
   ClaimDueTimersOptions,
   ClaimExpiredWaitersOptions,
@@ -8,78 +7,35 @@ import type {
   LeasePort,
   RuntimeOutboxPort,
   RuntimeOutboxItem,
-  RuntimeCompositeInput,
-  RuntimeCompositeKind,
-  RuntimeCompositeResult,
-  RuntimeStatePort,
-  RuntimeStoreAdapter,
   RuntimeStoreTransaction,
   RuntimeTimerStorePort,
   RuntimeWaiterStorePort,
 } from '@use-crux/core/runtime'
 import type { EventCursor } from '@use-crux/core/runtime'
-import type { EvalHostAdmissionPort } from '@use-crux/core/runtime/internal/eval-host'
 import type { ConvexCtxPort } from '../store'
 import {
   decodeEvent,
   decodeLease,
   decodeOutbox,
-  decodeSnapshot,
   decodeTimer,
   decodeWaiter,
-  decodeWork,
   encodeEvent,
-  encodeIdempotency,
   encodeLease,
   encodeOutboxDate,
-  encodeSnapshot,
   encodeTimer,
   encodeWaiter,
   encodeWakeEnvelope,
-  decodeCompositeValue,
-  encodeCompositeValue,
-  encodeWork,
-  encodeWorkForCreate,
 } from './codec'
-import { assertConvexDeferredComponent, createConvexDeferredStore } from './deferred-store'
+import { createConvexDeferredStore } from './deferred-store'
 import { createConvexEvalHostAdmission } from './eval-host/admission'
-import { createConvexRuntimeResultStore, type ConvexRuntimeResultComponent } from './results'
+import { createConvexRuntimeResultStore } from './results'
+import { createConvexSessionStore } from './session-store'
+import type { ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './store-types'
+import { cleanArgs, noop, requireNamespace } from './store-utils'
+import { createConvexCompositeRunner } from './composite-runner'
+import { createConvexStateStore } from './state-store'
 
-/** Component refs needed by the Runtime Engine store adapter. */
-export interface ConvexRuntimeComponent {
-  readonly runtime: {
-    readonly state: Record<string, unknown>
-    readonly events: Record<string, unknown>
-    readonly waiters: Record<string, unknown>
-    readonly timers: Record<string, unknown>
-    readonly outbox: Record<string, unknown>
-    readonly leases: Record<string, unknown>
-    readonly deferred?: Record<string, unknown>
-    readonly results?: ConvexRuntimeResultComponent
-    readonly evalHost?: {
-      readonly admit?: unknown
-    }
-    readonly composites?: {
-      readonly run?: unknown
-    }
-  }
-}
-
-/** Configuration for {@link convexRuntimeStore}. */
-export interface ConvexRuntimeStoreOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
-  /** Current Convex mutation ctx. */
-  readonly ctx: TCtx
-  /** Crux Convex component refs, normally `components.crux`. */
-  readonly component: ConvexRuntimeComponent
-  /** Clock used for deterministic tests. */
-  readonly now?: () => Date
-}
-
-/** Convex Runtime store backed by the component, with optional Eval capabilities. */
-export interface ConvexRuntimeStore extends RuntimeStoreAdapter {
-  readonly results?: RuntimeStoreAdapter['results']
-  readonly evalHost?: EvalHostAdmissionPort
-}
+export type { ConvexRuntimeComponent, ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './store-types'
 
 export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   options: ConvexRuntimeStoreOptions<TCtx>,
@@ -87,74 +43,9 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   const now = options.now ?? (() => new Date())
   const run = <TResult>(ref: unknown, args: Record<string, unknown>) =>
     options.ctx.runMutation<TResult>(ref, cleanArgs(args))
-  // Keep store construction lazy for older generated component refs. Existing
-  // Runtime operations fail at their own missing ref; named defer provides the
-  // more specific version diagnostic when its port is first used.
-  const refs = options.component.runtime ?? ({} as ConvexRuntimeComponent['runtime'])
+  const refs = options.component.runtime
 
-  const state: RuntimeStatePort = {
-    createWork: async (work) => decodeWork(await run(refs.state.createWork, { work: encodeWorkForCreate(work) })),
-    getWork: async (workId, read) => {
-      const result = await run<unknown>(refs.state.getWork, {
-        workId,
-        namespace: read.namespace,
-      })
-      return result ? decodeWork(result) : null
-    },
-    putWork: (work) => run(refs.state.putWork, { work: encodeWork(work) }).then(noop),
-    listWork: async (query) =>
-      (
-        await run<readonly unknown[]>(refs.state.listWork, {
-          ...query,
-          updatedBefore: query.updatedBefore?.getTime(),
-        })
-      ).map(decodeWork),
-    pruneTerminalWork: (query) =>
-      run(refs.state.pruneTerminalWork, {
-        ...query,
-        before: query.before.getTime(),
-      }),
-    countWork: (query) => run(refs.state.countWork, { ...query }),
-    setWorkPending: async (workId, pending) => {
-      const result = await run<unknown>(refs.state.setWorkPending, {
-        workId,
-        namespace: pending.namespace,
-        work: pending.work,
-        idempotencyKey: pending.idempotencyKey,
-        now: now().getTime(),
-        from: pending.from,
-      })
-      return result ? decodeWork(result) : null
-    },
-    getSnapshot: async (flowId, read) => {
-      const result = await run<unknown>(refs.state.getSnapshot, {
-        flowId,
-        namespace: read.namespace,
-      })
-      return result ? decodeSnapshot(result) : null
-    },
-    putSnapshot: (snapshot) => run(refs.state.putSnapshot, { snapshot: encodeSnapshot(snapshot) }).then(noop),
-    pruneTerminalSnapshots: (query) =>
-      run(refs.state.pruneTerminalSnapshots, {
-        ...query,
-        before: query.before.getTime(),
-      }),
-    markSnapshotDelivered: (workId, delivery) =>
-      run(refs.state.markSnapshotDelivered, { workId, ...delivery }).then(noop),
-    hasIdempotencyKey: (namespace, key) => run(refs.state.hasIdempotencyKey, { namespace, key }),
-    putIdempotencyKey: (record) =>
-      run(refs.state.putIdempotencyKey, {
-        record: encodeIdempotency(record),
-      }).then(noop),
-    pruneIdempotencyKeys: (query) =>
-      run(refs.state.pruneIdempotencyKeys, {
-        ...query,
-        before: query.before.getTime(),
-      }),
-    incrementIdle: (namespace, scope) => run(refs.state.incrementIdle, { namespace, scope }),
-    decrementIdle: (namespace, scope) => run(refs.state.decrementIdle, { namespace, scope }),
-    getIdleCount: (namespace, scope) => run(refs.state.getIdleCount, { namespace, scope }),
-  }
+  const state = createConvexStateStore({ refs: refs.state, run, now })
 
   const events: DurableEventPort = {
     append: async (event, eventOptions) =>
@@ -310,54 +201,31 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     timers,
     outbox,
     deferred,
+    ...(refs.sessions?.run ? { sessions: createConvexSessionStore({ ref: refs.sessions.run, run }) } : {}),
   }
   return Object.freeze({
     id: 'convex',
+    durability: 'durable' as const,
     ...transaction,
     leases,
-    ...(refs.results ? { results: createConvexRuntimeResultStore({ refs: refs.results, run, now }) } : {}),
-    ...(refs.evalHost?.admit ? { evalHost: createConvexEvalHostAdmission({ ref: refs.evalHost.admit, run }) } : {}),
-    runComposite: async <K extends RuntimeCompositeKind>(
-      kind: K,
-      input: RuntimeCompositeInput[K],
-    ): Promise<RuntimeCompositeResult[K]> => {
-      if (kind.startsWith('defer.')) {
-        assertConvexDeferredComponent(refs.deferred)
-      }
-      const ref = refs.composites?.run
-      if (!ref) {
-        throw createRuntimeError({
-          code: 'SETUP_REQUIRED',
-          whatFailed: 'Convex Runtime Engine component is missing runtime.composites.run.',
-          why: 'Runtime Engine composites must execute inside one Convex component mutation for host-bound atomicity.',
-          whatStillWorks:
-            'Non-runtime Convex storage and already deployed older runtime functions can still run until they hit a composite commit.',
-          nextStep:
-            'Regenerate or update the Crux Convex component so components.crux.runtime.composites.run is available.',
-        })
-      }
-      return decodeCompositeValue<RuntimeCompositeResult[K]>(
-        await run(ref, { kind, input: encodeCompositeValue(input) }),
-      )
-    },
+    ...(refs.results
+      ? {
+          results: createConvexRuntimeResultStore({
+            refs: refs.results,
+            run,
+            now,
+          }),
+        }
+      : {}),
+    ...(refs.evalHost?.admit
+      ? {
+          evalHost: createConvexEvalHostAdmission({
+            ref: refs.evalHost.admit,
+            run,
+          }),
+        }
+      : {}),
+    runComposite: createConvexCompositeRunner({ refs, run }),
     transact: <T>(fn: (tx: RuntimeStoreTransaction) => Promise<T>) => fn(transaction),
   })
-}
-
-function noop(): void {}
-
-function requireNamespace(namespace: string | undefined, operation: string): string {
-  if (namespace) return namespace
-  throw createRuntimeError({
-    code: 'NAMESPACE_AMBIGUOUS',
-    whatFailed: `Convex Runtime Engine ${operation} was called without a namespace.`,
-    why: 'The Convex component cannot safely satisfy namespace-less runtime scans without reading unbounded runtime tables.',
-    whatStillWorks:
-      'Runtime handlers and maintenance created from convex({ namespace }) continue to pass their configured namespace.',
-    nextStep: 'Pass an explicit runtime namespace or use a Convex Runtime Engine definition configured with namespace.',
-  })
-}
-
-function cleanArgs<T extends Record<string, unknown>>(args: T): T {
-  return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined)) as T
 }

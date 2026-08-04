@@ -20,16 +20,22 @@ Node composer in `crux.config.ts`:
 import { config } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
 import { postgres } from "@use-crux/postgres/runtime";
+import { postgresRecordStore } from "@use-crux/postgres";
 
 export default config({
+  // Thread RecordStore is required for durable Agent Sessions and Thread owners.
+  storage: { records: postgresRecordStore() },
   runtime: node({
     store: postgres(),
   }),
 });
 ```
 
-`postgres()` reads `DATABASE_URL` by default. Apply its additive schema setup
-before starting application or worker processes:
+`postgres()` and `postgresRecordStore()` read `DATABASE_URL` by default and
+should target the same database. Runtime storage alone is enough for Flow Work;
+**durable Agent Sessions need both** the Runtime store and the Session-owned
+Thread `RecordStore`. Apply additive schema setup for both before starting
+application or worker processes:
 
 ```bash
 crux setup --apply

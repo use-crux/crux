@@ -13,6 +13,10 @@ import type {
 } from "../../reactive/records";
 import type { RuntimeOutboxItem, RuntimeTimerRecord } from "../../store";
 import type { WorkControlRecord } from "../../ports/work-control";
+import type {
+  RuntimeSessionInputRecord,
+  RuntimeSessionRecord,
+} from "../../ports/sessions";
 
 export type MemoryWriteRecorder = () => void;
 
@@ -53,6 +57,9 @@ export interface MemoryRuntimeData {
   signalIdempotency: Map<string, string>;
   signalDeliveries: Map<string, SignalDeliveryRecord>;
   workControl: Map<string, WorkControlRecord>;
+  sessionsByKey: Map<string, RuntimeSessionRecord>;
+  sessionsById: Map<string, RuntimeSessionRecord>;
+  sessionInputs: Map<string, RuntimeSessionInputRecord>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -80,6 +87,9 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     signalIdempotency: new Map(),
     signalDeliveries: new Map(),
     workControl: new Map(),
+    sessionsByKey: new Map(),
+    sessionsById: new Map(),
+    sessionInputs: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -115,6 +125,9 @@ export function cloneMemoryRuntimeData(
     signalIdempotency: new Map(data.signalIdempotency),
     signalDeliveries: new Map(data.signalDeliveries),
     workControl: new Map(data.workControl),
+    sessionsByKey: new Map(data.sessionsByKey),
+    sessionsById: new Map(data.sessionsById),
+    sessionInputs: new Map(data.sessionInputs),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -145,6 +158,9 @@ export function replaceMemoryRuntimeData(
   target.signalIdempotency = source.signalIdempotency;
   target.signalDeliveries = source.signalDeliveries;
   target.workControl = source.workControl;
+  target.sessionsByKey = source.sessionsByKey;
+  target.sessionsById = source.sessionsById;
+  target.sessionInputs = source.sessionInputs;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
   target.nextTimerId = source.nextTimerId;

@@ -196,6 +196,14 @@ export interface IndexFacts {
   targetDefinitionId?: string;
   targetVariable?: string;
   suspends?: boolean;
+  // session
+  operation?: "create" | "get";
+  target?: { kind: "agent" | "unresolved" | "dynamic" };
+  key?: { kind: "literal"; value: string } | { kind: "dynamic" };
+  identity?: "static" | "partial";
+  call?:
+    | { kind: "supported" }
+    | { kind: "ambiguous"; reason: "arity" | "options" };
   // composition
   participants?: string[];
   coordinator?: string;
@@ -1200,6 +1208,12 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case "flow":
       push("runtime", f.runtime);
       push("steps", f.stepNames);
+      break;
+    case "session":
+      push("operation", f.operation);
+      push("identity", f.identity);
+      push("target", f.targetVariable ?? f.target?.kind);
+      push("key", f.key?.kind);
       break;
     case "rag.knowledgeBase":
       push("id", f.knowledgeBaseId);

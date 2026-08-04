@@ -33,6 +33,7 @@ import { acceptWorkInTransaction } from "./work-accept";
 import { updateWorkProgressInTransaction } from "./work-progress";
 import { detachWorkInTransaction } from "./work-detach";
 import { leaseWorkInTransaction } from "./work-lease";
+import { acceptSessionInputsInTransaction } from "./session-inputs-accept";
 
 /** Transaction body selected for every known composite name. */
 export const runtimeCompositeBodies: {
@@ -49,6 +50,7 @@ export const runtimeCompositeBodies: {
   "event.emit": emitEventInTransaction,
   "timers.fire-due": fireDueTimersInTransaction,
   "task.enqueue": enqueueTaskInTransaction,
+  "session.inputs.accept": acceptSessionInputsInTransaction,
   "work.accept": acceptWorkInTransaction,
   "work.progress": updateWorkProgressInTransaction,
   "work.detach": detachWorkInTransaction,

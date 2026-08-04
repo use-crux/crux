@@ -430,6 +430,16 @@ function deliveredSuspend(
 
 export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
   switch (work.kind) {
+    case "session.turn":
+      return {
+        kind: work.kind,
+        sessionId: work.sessionId,
+        inputId: work.inputId,
+        cursor: work.cursor,
+        threadId: work.threadId,
+        input: cloneJsonValue(work.input, "Session turn input"),
+        model: { ...work.model },
+      };
     case "flow.resume":
       return { kind: work.kind, flowId: work.flowId };
     case "flow.timeout":

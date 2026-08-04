@@ -40,6 +40,10 @@ import {
   WORK_CONTROL_TOOL_NAME,
 } from "../agent/work-control-tool";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../generation-model/execution-checkpoint";
 import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
 import { transportDialect } from "./execution/transport-dialect";
@@ -135,7 +139,9 @@ export function adapter<
   TParams = unknown,
 >(
   spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TParams>,
-): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> {
+): (
+  client: TClient,
+) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> {
   // Reject a contradictory structured-output capability profile when the
   // adapter is defined, not on the first structured request.
   if (spec.structuredOutput) {
@@ -157,7 +163,14 @@ export function adapter<
       TRuntimeContext = unknown,
     >(
       prompt: TPrompt,
-      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+      opts: AdapterGenerateOptions<
+        TExtra,
+        TCallTools,
+        TPrompt,
+        TRuntimeContext,
+        TParams,
+        TRawResponse
+      >,
     ): Promise<AdapterGenerateResult<TRawResponse>> {
       const activeExecution = opts.transport
         ? createAdapterExecution(transportDialect(baseDialect, opts.transport))
@@ -189,6 +202,8 @@ export function adapter<
         safety: opts.safety,
         timeout: opts.timeout,
         signal: opts.signal,
+        [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
+        [managedGenerationStepBoundary]: opts[managedGenerationStepBoundary],
       })) as AdapterGenerateResult<TRawResponse>;
     }
 
@@ -200,9 +215,17 @@ export function adapter<
       TRuntimeContext = unknown,
     >(
       prompt: TPrompt,
-      opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+      opts: AdapterStreamOptions<
+        TExtra,
+        TCallTools,
+        TPrompt,
+        TRuntimeContext,
+        TParams,
+        TRawResponse
+      >,
     ): Promise<AdapterStreamResult<TPrompt>> {
-      if (opts.transport) throw new CruxTransportStreamUnsupportedError(spec.providerId);
+      if (opts.transport)
+        throw new CruxTransportStreamUnsupportedError(spec.providerId);
       const handle = await execution.stream({
         prompt,
         model: opts.model,
@@ -245,10 +268,19 @@ export function adapter<
       TRuntimeContext = unknown,
     >(
       prompt: TPrompt,
-      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+      opts: AdapterGenerateOptions<
+        TExtra,
+        TCallTools,
+        TPrompt,
+        TRuntimeContext,
+        TParams,
+        TRawResponse
+      >,
     ) {
       if (!execution.prepare) {
-        throw new TypeError(`Adapter "${spec.providerId}" does not expose public call handles.`);
+        throw new TypeError(
+          `Adapter "${spec.providerId}" does not expose public call handles.`,
+        );
       }
       return execution.prepare({
         prompt,
@@ -293,12 +325,15 @@ export function adapter<
         mergedTools,
         backgroundWork,
       );
-      const backgroundBoundTools = bindBackgroundAgentTools(toolsWithWorkControl, {
-        executor,
-        model,
-        work: backgroundWork,
-        foregroundWork,
-      });
+      const backgroundBoundTools = bindBackgroundAgentTools(
+        toolsWithWorkControl,
+        {
+          executor,
+          model,
+          work: backgroundWork,
+          foregroundWork,
+        },
+      );
       const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
         executor,
         model,
@@ -309,7 +344,14 @@ export function adapter<
           ? withMergedPromptTools(agent.prompt, boundTools)
           : agent.prompt;
 
-      const generateOpts: AdapterGenerateOptions<TExtra, undefined, AnyPrompt, unknown, TParams, TRawResponse> = {
+      const generateOpts: AdapterGenerateOptions<
+        TExtra,
+        undefined,
+        AnyPrompt,
+        unknown,
+        TParams,
+        TRawResponse
+      > = {
         model,
         input: options.input as Record<string, unknown>,
         maxSteps: options.maxSteps,
@@ -340,13 +382,9 @@ export function adapter<
         durationMs: Date.now() - start,
         usage: result._meta.usage,
         requests: Object.freeze(
-          result.steps.flatMap((step) =>
-            step.request ? [step.request] : [],
-          ),
+          result.steps.flatMap((step) => (step.request ? [step.request] : [])),
         ),
-        ...(result.threadCommit
-          ? { threadCommit: result.threadCommit }
-          : {}),
+        ...(result.threadCommit ? { threadCommit: result.threadCommit } : {}),
       };
     };
 

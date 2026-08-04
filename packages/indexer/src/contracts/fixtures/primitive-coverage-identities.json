@@ -552,6 +552,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "session",
+      "family": "session",
+      "fixtureClasses": {
+        "definitions": "session-native-static.test.ts",
+        "degradedBehavior": "session-native-static.test.ts",
+        "dependencies": "session-native-static.test.ts",
+        "diagnostics": "session-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "session-native-static.test.ts",
+        "runtimeMetadata": "session-native-static.test.ts",
+        "sourceGraph": "session-native-static.test.ts",
+        "sourceRefs": "session-native-static.test.ts",
+        "sources": "session-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "session-native-static.test.ts",
+        "positive": "session-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "storage",
       "family": "storage",
       "fixtureClasses": {

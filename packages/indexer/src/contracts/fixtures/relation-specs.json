@@ -41,6 +41,14 @@
       "runtimeJoin": true
     },
     {
+      "type": "session.targets_agent",
+      "fromKinds": ["session"],
+      "toKinds": ["agent"],
+      "presentation": "both",
+      "partial": false,
+      "runtimeJoin": true
+    },
+    {
       "type": "router.route.uses_prompt",
       "fromKinds": ["routing.router.route"],
       "toKinds": ["prompt"],

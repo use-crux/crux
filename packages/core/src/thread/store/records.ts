@@ -16,6 +16,7 @@ import { ThreadError } from "../errors";
 export interface ThreadControlRecord extends JsonObject {
   readonly schema: 1;
   readonly state: "live" | "deleted";
+  readonly owners: Readonly<Record<string, "open" | "closed">>;
   readonly heads: Readonly<Record<string, string>>;
   readonly leaves: Readonly<Record<string, string>>;
   readonly redactions: Readonly<Record<string, true>>;
@@ -74,6 +75,7 @@ export function parseThreadControlRecord(
   if (
     value.schema !== 1 ||
     (value.state !== "live" && value.state !== "deleted") ||
+    !isOwnerRecord(value.owners) ||
     !isStringRecord(value.heads) ||
     !isStringRecord(value.leaves) ||
     !isTrueRecord(redactions) ||
@@ -85,6 +87,19 @@ export function parseThreadControlRecord(
     throw corruptRecord("control");
   }
   return { ...value, redactions, removals } as ThreadControlRecord;
+}
+
+function isOwnerRecord(
+  value: unknown,
+): value is Readonly<Record<string, "open" | "closed">> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every(
+      (entry) => entry === "open" || entry === "closed",
+    )
+  );
 }
 
 /** Validate and narrow an untrusted immutable node record. */

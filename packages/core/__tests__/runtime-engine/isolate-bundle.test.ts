@@ -96,6 +96,8 @@ function coreSubpath(specifier: string): string {
     return "packages/core/src/runtime/eval-host/index.ts";
   if (subpath === "runtime/internal/eval-registry")
     return "packages/core/src/runtime/eval-registry/index.ts";
+  if (subpath === "runtime/internal/session-store")
+    return "packages/core/src/runtime/session-store/index.ts";
   if (subpath === "observability")
     return "packages/core/src/observability/index.ts";
   if (subpath === "storage") return "packages/core/src/storage/index.ts";

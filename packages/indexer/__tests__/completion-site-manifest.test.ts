@@ -79,6 +79,13 @@ describe("completion site manifest", () => {
         excludeSelf: true,
       },
       {
+        callNames: ["session", "getSession"],
+        propertyPath: ["$args", "0"],
+        slot: "scalarIdentifier",
+        acceptedKinds: ["agent"],
+        insertion: "identifier",
+      },
+      {
         callNames: ["agent"],
         propertyPath: ["prompt"],
         slot: "scalarIdentifier",
@@ -155,7 +162,7 @@ describe("completion site manifest", () => {
 
   it("admits every emitted declarative dependency role except documented exclusions", () => {
     const admitted = completionSiteManifest(nativeDirectPrimitiveManifest)
-      .filter((site) => !routingCallNames.has(site.callNames[0] ?? ""))
+      .filter((site) => !specializedCallNames.has(site.callNames[0] ?? ""))
       .flatMap((site) =>
         site.acceptedKinds.map((kind) =>
           roleKey(site.callNames[0] ?? "", site.propertyPath, kind),
@@ -221,12 +228,14 @@ const routingOwnerKinds = [
 
 const routingTargetKinds = [...routingOwnerKinds, "agent", "prompt"] as const;
 
-const routingCallNames = new Set([
+const specializedCallNames = new Set([
   "router",
   "split",
   "retry",
   "cascade",
   "fallback",
+  "session",
+  "getSession",
 ]);
 
 function roleKey(

@@ -17,6 +17,7 @@ export function createPostgresResultPayloadPort(
 ): RuntimeResultPayloadPort {
   const results = table(schema, "results");
   const work = table(schema, "work");
+  const sessionInputs = table(schema, "session_inputs");
 
   return {
     async put(payload, options): Promise<RuntimeResultRef> {
@@ -82,6 +83,10 @@ export function createPostgresResultPayloadPort(
           `NOT EXISTS (
              SELECT 1 FROM ${work}
               WHERE work.result_ref ->> 'location' = ${results}.location
+           )`,
+          `NOT EXISTS (
+             SELECT 1 FROM ${sessionInputs}
+              WHERE prepared_execution -> 'preparedResultRef' ->> 'location' = ${results}.location
            )`,
         ],
         values: [options.before, options.namespace],

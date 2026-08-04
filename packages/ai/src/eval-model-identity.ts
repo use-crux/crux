@@ -7,7 +7,7 @@ import {
   unavailable,
   type JsonProjection,
 } from "./eval-task-identity-projection";
-import { getStableModelIdentity } from "./stable-model";
+import { isBoundGenerationModel } from "./generation-model";
 
 type PromptProjector = (value: unknown) => JsonProjection;
 
@@ -17,8 +17,14 @@ export function projectModel(
   projectPrompt?: PromptProjector,
 ): JsonProjection {
   if (typeof model === "string") return projectJson({ modelId: model });
-  const identity = getStableModelIdentity(model);
-  if (identity !== undefined) return projectJson(identity);
+  if (isBoundGenerationModel(model)) {
+    return projectJson({
+      contract: "crux.generation-model.v1",
+      adapter: model.adapter,
+      definition: model.definition,
+      identity: model.identity,
+    });
+  }
   if (!isRecord(model)) return unavailable("model_identity_unattested");
   switch (model._tag) {
     case "crux.retry":
@@ -49,19 +55,33 @@ export function projectObservedModel(
   }
   if (
     typeof planned.kind === "string" &&
-    ["router", "cascade", "split", "fallback", "retry"].includes(
-      planned.kind,
-    )
+    ["router", "cascade", "split", "fallback", "retry"].includes(planned.kind)
   ) {
     return projectJson({ ...planned, resolvedModelId: modelId });
   }
-  if (planned.contract === "crux.ai.stable-model.v1" && planned.modelId === null) {
-    return { ok: true, value: planned };
+  if (
+    planned.contract === "crux.generation-model.v1" &&
+    isRecord(planned.identity) &&
+    planned.identity.kind === "model" &&
+    typeof planned.identity.model === "string"
+  ) {
+    const bound = planned.identity.model;
+    const boundModelId = bound.includes(":")
+      ? bound.slice(bound.indexOf(":") + 1)
+      : bound;
+    if (bound === modelId || boundModelId === modelId) {
+      return { ok: true, value: planned };
+    }
+    return projectJson({ ...planned, resolvedModelId: modelId });
   }
   return projectJson({ ...planned, modelId });
 }
 
-function projectRetry(model: Record<string, unknown>, covered: boolean, prompt?: PromptProjector) {
+function projectRetry(
+  model: Record<string, unknown>,
+  covered: boolean,
+  prompt?: PromptProjector,
+) {
   const child = projectModel(model.model, covered, prompt);
   if (!child.ok) return child;
   const options = projectJson(model.options);
@@ -70,7 +90,11 @@ function projectRetry(model: Record<string, unknown>, covered: boolean, prompt?:
     : options;
 }
 
-function projectFallback(model: Record<string, unknown>, covered: boolean, prompt?: PromptProjector) {
+function projectFallback(
+  model: Record<string, unknown>,
+  covered: boolean,
+  prompt?: PromptProjector,
+) {
   if (!Array.isArray(model.models) || !isRecord(model.options)) {
     return unavailable("identity_unavailable");
   }
@@ -82,11 +106,19 @@ function projectFallback(model: Record<string, unknown>, covered: boolean, promp
     covered,
   );
   return options.ok
-    ? projectJson({ kind: "fallback", models: models.value, options: options.value })
+    ? projectJson({
+        kind: "fallback",
+        models: models.value,
+        options: options.value,
+      })
     : options;
 }
 
-function projectSplit(model: Record<string, unknown>, covered: boolean, prompt?: PromptProjector) {
+function projectSplit(
+  model: Record<string, unknown>,
+  covered: boolean,
+  prompt?: PromptProjector,
+) {
   const config = model.config;
   if (!isRecord(config) || !isRecord(config.routes)) {
     return unavailable("identity_unavailable");
@@ -107,7 +139,11 @@ function projectSplit(model: Record<string, unknown>, covered: boolean, prompt?:
       : projected;
 }
 
-function projectCascade(model: Record<string, unknown>, covered: boolean, prompt?: PromptProjector) {
+function projectCascade(
+  model: Record<string, unknown>,
+  covered: boolean,
+  prompt?: PromptProjector,
+) {
   const config = model.config;
   if (!isRecord(config) || !Array.isArray(config.tiers)) {
     return unavailable("identity_unavailable");
@@ -137,7 +173,7 @@ function projectCascade(model: Record<string, unknown>, covered: boolean, prompt
   const boundPrompt =
     config.prompt === undefined
       ? { ok: true as const, value: null }
-      : prompt?.(config.prompt) ?? unavailable("identity_unavailable");
+      : (prompt?.(config.prompt) ?? unavailable("identity_unavailable"));
   return boundPrompt.ok
     ? projectJson({
         kind: "cascade",
@@ -146,7 +182,11 @@ function projectCascade(model: Record<string, unknown>, covered: boolean, prompt
     : boundPrompt;
 }
 
-function projectRouter(model: Record<string, unknown>, covered: boolean, prompt?: PromptProjector) {
+function projectRouter(
+  model: Record<string, unknown>,
+  covered: boolean,
+  prompt?: PromptProjector,
+) {
   if (!covered) return unavailable("unresolved_source_dependency");
   const config = model.config;
   if (!isRecord(config) || !isRecord(config.routes)) {

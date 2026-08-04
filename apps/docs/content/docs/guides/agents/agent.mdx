@@ -3,7 +3,7 @@ title: Agent
 description: Bundle a prompt with optional model and tools into a reusable agent primitive for composition utilities.
 ---
 
-Compositions need the same prompt+model+tools bundle everywhere: define it once with `agent()`. An agent wraps a [prompt](/docs/foundations/mental-model) with optional execution config: a default model, tools, and handoff targets. Agents are the building blocks for all composition patterns: [parallel](/docs/guides/compositions/parallel), [pipeline](/docs/guides/compositions/pipeline), [consensus](/docs/guides/compositions/consensus), and [swarm](/docs/guides/compositions/swarm).
+Compositions need the same prompt+model+tools bundle everywhere: define it once with `agent()`. An agent wraps a [prompt](/docs/foundations/mental-model) with optional execution config: a default model, tools, and handoff targets. Agents are the building blocks for all composition patterns: [parallel](/docs/guides/compositions/parallel), [pipeline](/docs/guides/compositions/pipeline), [consensus](/docs/guides/compositions/consensus), and [swarm](/docs/guides/compositions/swarm). For restart-safe keyed conversations, bind an adapter [`GenerationModel`](/docs/reference/crux-core/generation-model) and open a [durable Agent Session](/docs/guides/durable-execution/sessions).
 
 ```ts title="agents.ts"
 import { agent } from "@use-crux/core/agent";

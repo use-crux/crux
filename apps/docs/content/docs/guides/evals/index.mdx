@@ -24,8 +24,7 @@ host jobs, reservations, and fingerprints are automatic implementation details.
 ## Define production behavior once
 
 ```ts title="src/support.ts"
-import { generate, stableModel } from "@use-crux/ai";
-import { openai } from "@ai-sdk/openai";
+import { generate, aiSdk } from "@use-crux/ai";
 import { prompt } from "@use-crux/core";
 import { z } from "zod";
 
@@ -39,8 +38,10 @@ export const supportPrompt = prompt({
   prompt: ({ input }) => input.question,
 });
 
+const supportModel = aiSdk(nativeModel("nebula-text-v2"));
+
 export const support = generate.task(supportPrompt, {
-  model: stableModel(openai("gpt-4o-mini")),
+  model: supportModel,
   temperature: 0.2,
 });
 
@@ -49,9 +50,8 @@ const result = await support({ question: "Can I get a refund?" });
 
 `generate.task()` remains a normal callable production function. Evals use its
 private provider-neutral descriptor; you do not define an Eval-only copy.
-`stableModel()` returns the exact same AI SDK model and type while attesting
-that its hidden provider configuration is stable enough for exact evidence
-reuse. It needs no key for standard provider models.
+`aiSdk(native)` binds a frozen `GenerationModel` with secret-free definition
+identity for exact evidence reuse and durable Agent Sessions.
 
 For a small local check, `task` may also be an ordinary async function. Crux
 runs it inside an observed Eval cell, but cannot prove a reusable fingerprint,
@@ -178,13 +178,12 @@ receives the cell signal and nested ceilings automatically.
 An ordinary async task can forward the active context explicitly:
 
 ```ts title="src/opaque-support.ts"
-import { openai } from "@ai-sdk/openai";
-import { generate, stableModel } from "@use-crux/ai";
+import { generate, aiSdk } from "@use-crux/ai";
 import { evalContext } from "@use-crux/core/eval";
 import { supportInput, supportPrompt } from "./support";
 import type { z } from "zod";
 
-const model = stableModel(openai("gpt-4o-mini"));
+const model = aiSdk(nativeModel("nebula-text-v2"));
 
 export async function opaqueSupport(input: z.infer<typeof supportInput>) {
   const { signal, timeout } = evalContext();

@@ -36,10 +36,15 @@ describe("completion producer identity manifest", () => {
         "@use-crux/core",
         "@use-crux/core/routing",
       ]),
+      producer("call", "getSession", [
+        "@use-crux/core",
+        "@use-crux/core/session",
+      ]),
       producer("call", "mcp", ["@use-crux/mcp"]),
       producer("call", "prompt", ["@use-crux/core"]),
       producer("call", "retry", ["@use-crux/core/routing"]),
       producer("call", "router", ["@use-crux/core/routing"]),
+      producer("call", "session", ["@use-crux/core", "@use-crux/core/session"]),
       producer("call", "split", ["@use-crux/core/routing"]),
       producer("call", "thread", ["@use-crux/core/thread"]),
       producer("call", "tool", ["@use-crux/core", "@use-crux/core/tools"]),
@@ -102,6 +107,11 @@ const publicModules: Readonly<
     "core",
     "./routing",
     "src/routing/index.ts",
+  ),
+  "@use-crux/core/session": moduleEntry(
+    "core",
+    "./session",
+    "src/session/index.ts",
   ),
   "@use-crux/core/thread": moduleEntry(
     "core",

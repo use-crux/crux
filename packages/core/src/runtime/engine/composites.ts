@@ -62,6 +62,10 @@ import type {
   WorkDetachCompositeResult,
 } from "./composites/work-detach";
 import type { WorkLeaseCompositeInput } from "./composites/work-lease";
+import type {
+  SessionInputsAcceptCompositeInput,
+  SessionInputsAcceptCompositeResult,
+} from "./composites/session-inputs-accept";
 
 export { runtimeCompositeBodies } from "./composites/registry";
 
@@ -86,6 +90,7 @@ export type RuntimeCompositeKind =
   | "event.emit"
   | "timers.fire-due"
   | "task.enqueue"
+  | "session.inputs.accept"
   | "work.accept"
   | "work.progress"
   | "work.detach"
@@ -152,6 +157,8 @@ export interface RuntimeCompositeInput {
   };
   /** Create pending task work and write its wake envelope. */
   readonly "task.enqueue": EnqueueTaskInput;
+  /** Atomically accept ordered Session inputs and reserve at most one Work. */
+  readonly "session.inputs.accept": SessionInputsAcceptCompositeInput;
   /** Atomically accept one top-level application Flow Work occurrence. */
   readonly "work.accept": WorkAcceptCompositeInput;
   /** Replace the latest bounded application Work progress snapshot. */
@@ -216,6 +223,8 @@ export interface RuntimeCompositeResult {
   readonly "timers.fire-due": ScanTimersResult;
   /** Fresh pending task work. */
   readonly "task.enqueue": RuntimeWorkItem;
+  /** Accepted Session input records for public handle construction. */
+  readonly "session.inputs.accept": SessionInputsAcceptCompositeResult;
   /** Accepted application Work records. */
   readonly "work.accept": WorkAcceptCompositeResult;
   /** Progress replacement result. */

@@ -96,7 +96,7 @@ indexer configuration and Project Index contracts, but it must not depend on com
 
 Crux public APIs use names that describe the thing a user is declaring or doing:
 
-- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `plan()`, and `tasks()`.
+- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `session()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `plan()`, and `tasks()`.
 - Use provider-local noun exports in adapter packages. For example, `@use-crux/ai`, `@use-crux/openai`, and `@use-crux/google` all export `embedding()`. Consumers can alias at import sites when multiple providers are used in one file, e.g. `import { embedding as openAIEmbedding } from '@use-crux/openai'`.
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
@@ -1021,9 +1021,75 @@ controls from those same records. Local operator inspection projects only the
 safe digest, definition/effect/result references, ownership, bounded ledger,
 and Work events; it does not expose input or result payloads.
 
+### Durable Agent Sessions
+
+Durable Agent Sessions (`session/` plus Runtime Session ports) are keyed,
+Agent-only owners that reuse the same Work host, Runtime Program, worker,
+Effect scope, and statistics ledger. They are not a second queue, Thread head
+mechanism, registry, or async scope.
+
+**Identity and hash.** Public lookup identity is the SHA-256 of
+`["crux-session:v1", namespace, key]`. The public Session id and automatic Thread
+id additionally hash the Agent target id so cross-target key collisions remain
+detectable without collapsing distinct owners. Durable rows store the key hash,
+never the raw key, in operator projections.
+
+**Owner registration and Thread head.** Session creation uses a repairable
+`prepared → Thread owner registered → ready` protocol. Owner registration,
+owner-head selection, and deletion publication share the existing linearizable
+Thread `RecordStore.mutate` fence and the existing `heads` map entry for the
+Session owner. `session.thread` is a read-only view of finalized owner heads
+only.
+
+**Records, cursors, and leases.** Session control records retain accepted and
+processed cursors, pending input/work counts, optional activation linkage, and
+a lifetime statistics ledger export. Each accepted input keeps its own identity
+and server-assigned cursor. Activation Work uses the ordinary Runtime lease and
+wake path; there is no Session-specific lease domain.
+
+**Canonical Work and Effect scope.** Compatible pending inputs claim one
+canonical `session.turn` Work occurrence for the longest cursor-consecutive
+prefix. Joined input handles resolve that same Work and exact shared result or
+failure. The Work's Effect scope is the Session turn's effect boundary.
+
+**Preparation, checkpoints, and replay.** Before provider dispatch, the turn
+journals a sealed preparation plan against a pinned Thread revision/range and
+bounded request evidence. Recovery replays durable preparation and the
+write-once private result artifact. It never re-runs callbacks, provider
+requests, Tools, effects, or Thread publication. Missing prepared artifacts
+surface `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` without payload exposure.
+
+**Target authority and generated program.** Agents are first-class immutable
+Runtime Program targets. Selected models must appear in
+`RuntimeProgram.generationModels`; durable state pins only
+`{ definitionId, fingerprint }`. Generated programs import exported Agents and
+their fingerprints through the existing target authority. There is no Agent
+executor registry or host-level `agentExecutor` option.
+
+**Thread finalization.** After a successful generation checkpoint, the Session
+owner commits the canonical message group through the existing owner-scoped
+Thread path. Replay reuses the same commit receipt. Only Session-marked ingress
+messages project as user input; provider validation-correction traffic does not
+become Session history.
+
+**Observability privacy boundary.** `SessionRuntimeReadModel` and `session.turn`
+attributes project identity, state, cursors, bounded input-to-Work lineage,
+Thread revision, checkpoint request counts, recovery diagnostics, coverage, and
+lifetime stats. They never project prompts, inputs, outputs, reasoning, Tool
+arguments, credentials, sealed request ids, or provider-native objects.
+Evidence opens only when an observability sink is active.
+
+**Adapter laws.** Memory, PostgreSQL, and Convex implement the same normalized
+Session ports and composites. PostgreSQL durable deployments require Runtime
+storage and the Session-owned Thread `RecordStore` on the same database.
+Convex keeps Session writes inside atomic component transactions. Shared
+`runSessionConformanceTests` proves identity, concurrent acceptance, prefix
+claiming, checkpoint recovery, exact results, inspection, stats, and capability
+rejection across adapters.
+
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 
-Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, `RUNTIME_HOST_ONLY`, and `EVAL_REACTIVE_DISPATCH_FORBIDDEN`; raw adapter errors stay as causes.
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set includes Work/runtime codes plus Session and generation-model codes such as `GENERATION_MODEL_BINDING_MISSING`, `GENERATION_MODEL_NOT_STATIC`, `GENERATION_CAPABILITY_MISSING`, and `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline
 

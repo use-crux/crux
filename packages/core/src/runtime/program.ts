@@ -14,15 +14,30 @@ import {
 import type { RuntimeManagedTransportBinding } from "./transport";
 import { validateRuntimeManagedTransportBinding } from "./transport";
 import type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
+import { isAgent, type AnyAgent } from "../agent";
+import type { GenerationModel } from "../generation-model";
+import {
+  canonicalizeProgramGenerationModels,
+  generationModelManifestEntry,
+  targetGenerationModelReference,
+} from "./program-generation-models";
 
 const encoder = new TextEncoder();
 
 /** Executable Runtime target declaration with an explicit durable kind. */
-export type RuntimeProgramTarget = RuntimeHandlerTarget & {
-  readonly kind: "flow" | "task";
-};
+export type RuntimeProgramTarget =
+  | AnyAgent
+  | (Exclude<RuntimeHandlerTarget, AnyAgent> & {
+      readonly kind: "flow" | "task" | "agent";
+    });
 
-/** Immutable executable target, definition, and managed-transport truth for one project. */
+/**
+ * Immutable executable target, definition, generation-model, and transport truth
+ * for one project.
+ *
+ * @remarks Shallow-frozen and free of live clients, credentials, or registration.
+ * Durable Agent Sessions may select models only from `generationModels`.
+ */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
   readonly manifestHash: string;
@@ -30,6 +45,8 @@ export interface RuntimeProgram {
   readonly targets: readonly RuntimeProgramTarget[];
   /** Generated definition identity for each executable target. */
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
+  /** Canonically ordered, statically declared generation models. */
+  readonly generationModels: readonly GenerationModel[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -63,8 +80,10 @@ export type RuntimeProgramTargetInput =
 
 /** Declarations accepted by {@link createRuntimeProgram}. */
 export interface CreateRuntimeProgramOptions {
-  /** Statically imported Flow handles and durable task targets. */
+  /** Statically imported Flow, durable task, and Agent targets. */
   readonly targets: readonly RuntimeProgramTargetInput[];
+  /** Statically imported generation models available to Session selection. */
+  readonly generationModels?: readonly GenerationModel[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -74,6 +93,11 @@ export interface CreateRuntimeProgramOptions {
  *
  * Generated artifacts and hand-written hosts use this same pure construction
  * path. It performs no registration, discovery, configuration lookup, or I/O.
+ *
+ * @param options.targets - Statically imported Flow, task, and Agent targets.
+ * @param options.generationModels - Models durable Agent Sessions may select.
+ * @param options.transports - Inert managed-transport bindings.
+ * @returns A frozen program whose `manifestHash` covers targets, models, and transports.
  */
 export function createRuntimeProgram(
   options: CreateRuntimeProgramOptions,
@@ -84,6 +108,10 @@ export function createRuntimeProgram(
     "createRuntimeProgram()",
   );
   const targetDefinitions = canonicalTargetDefinitions(targets, declarations);
+  const generationModels = canonicalizeProgramGenerationModels(
+    options.generationModels ?? [],
+    targets,
+  );
   const transports = canonicalizeTransports(options.transports);
   validateSignalTargets(targets, transports);
   validateAdapterDeclarations(transports);
@@ -95,7 +123,9 @@ export function createRuntimeProgram(
         targets: targets.map((target, index) => ({
           ...targetManifestEntry(target),
           definition: targetDefinitions[index],
+          generationModel: targetGenerationModelReference(target),
         })),
+        generationModels: generationModels.map(generationModelManifestEntry),
         transports,
       }),
     ),
@@ -104,6 +134,7 @@ export function createRuntimeProgram(
     manifestHash,
     targets,
     targetDefinitions,
+    generationModels,
     transports,
   });
 }
@@ -112,6 +143,7 @@ function normalizeTargetDeclaration(
   input: RuntimeProgramTargetInput,
 ): RuntimeProgramTargetDeclaration {
   if ("target" in input && "definition" in input) {
+    validateTargetDefinition(input.definition);
     return Object.freeze({
       target: input.target,
       definition: Object.freeze({ ...input.definition }),
@@ -127,11 +159,29 @@ function normalizeTargetDeclaration(
           JSON.stringify({
             format: "crux-runtime-target:v1",
             id,
-            kind: input.kind,
+            kind: targetManifestEntry(input).kind,
           }),
         ),
       ),
     }),
+  });
+}
+
+function validateTargetDefinition(
+  definition: RuntimeProgramTargetDefinitionInput,
+): void {
+  if (
+    typeof definition.fingerprint === "string" &&
+    definition.fingerprint.trim().length > 0
+  ) {
+    return;
+  }
+  throw createRuntimeError({
+    code: "RUNTIME_ARTIFACT_MANIFEST_INVALID",
+    whatFailed: "Runtime target definition fingerprint is missing.",
+    why: "Durable target selection requires an exact definition fingerprint.",
+    whatStillWorks: "Targets with complete definition metadata remain valid.",
+    nextStep: "Provide the generated definition fingerprint for this target.",
   });
 }
 
@@ -199,11 +249,11 @@ function validateAdapterDeclarations(
 
 function targetManifestEntry(target: RuntimeProgramTarget): {
   readonly id: string;
-  readonly kind: "flow" | "task";
+  readonly kind: "flow" | "task" | "agent";
 } {
   return {
     id: runtimeHandlerTargetIdentity(target),
-    kind: target.kind,
+    kind: isAgent(target) ? "agent" : target.kind,
   };
 }
 function duplicateBinding(id: string): never {

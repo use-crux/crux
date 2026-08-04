@@ -26,9 +26,6 @@ import type { LoopRuntimePort } from "./loop-runtime-port";
 import { resolveModel } from "../routing/resolve";
 import type { CallProfileParams } from "../routing";
 import { createCompositions } from "../agent/create-compositions";
-import { agentRoutingContext } from "../agent/routing-context";
-import type { AgentExecutor } from "../agent/executor";
-import { getExecutionContext } from "../runtime/execution-context";
 import { createAdapterExecution, sdkLoopDialect } from "./execution/session";
 import type {
   CruxExecutor,
@@ -38,8 +35,12 @@ import type {
   ExecutorStreamOptions,
   ExecutorStreamResult,
 } from "./executor-contracts";
-import { mergeInputBudget } from "../request/budget/input-budget";
 import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
+import {
+  managedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+} from "../generation-model/execution-checkpoint";
+import { createLoopAgentExecutor } from "./execution/loop-agent-executor";
 
 export type {
   CruxExecutor,
@@ -154,7 +155,9 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<GenerateResult> {
-    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
+    const nativeMessages = (
+      opts as { readonly nativeMessages?: readonly unknown[] }
+    ).nativeMessages;
     return (await execution.generate({
       prompt,
       model,
@@ -180,6 +183,8 @@ export function loopRuntimeAdapter<
       activeTools: opts.activeTools,
       extra: opts.extra,
       signal,
+      [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
+      [managedGenerationStepBoundary]: opts[managedGenerationStepBoundary],
     })) as GenerateResult;
   }
 
@@ -229,7 +234,9 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<ExecutorStreamResult<TRawStream>> {
-    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
+    const nativeMessages = (
+      opts as { readonly nativeMessages?: readonly unknown[] }
+    ).nativeMessages;
     return (await execution.stream({
       prompt,
       model,
@@ -260,38 +267,7 @@ export function loopRuntimeAdapter<
 
   // ── Agent executor + compositions ───────────────────────────
 
-  const agentExecutor: AgentExecutor = async (agent, options) => {
-    const model = (agent.model ?? options.model) as TModel;
-    const start = Date.now();
-
-    const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
-    const generateOpts = {
-      model,
-      input: options.input as Record<string, unknown>,
-      routing: agentRoutingContext(agent, getExecutionContext()),
-      maxSteps: options.maxSteps,
-      validationRetry: options.validationRetry,
-      inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
-      prepareStep: options.prepareStep ?? agent.prepareStep,
-      activeTools: options.activeTools,
-      ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
-    } as unknown as ExecutorGenerateOptions<TModel>;
-
-    const result = await generate(agent.prompt, generateOpts);
-
-    return {
-      agentId: agent.id,
-      output: result.object ?? result.text,
-      durationMs: Date.now() - start,
-      usage: result._meta.usage,
-      requests: Object.freeze(
-        result.steps.flatMap((step) => (step.request ? [step.request] : [])),
-      ),
-      ...(result.threadCommit
-        ? { threadCommit: result.threadCommit }
-        : {}),
-    };
-  };
+  const agentExecutor = createLoopAgentExecutor(generate);
 
   const compositions = createCompositions(agentExecutor);
 

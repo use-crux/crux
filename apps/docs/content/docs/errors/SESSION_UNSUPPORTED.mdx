@@ -1,0 +1,25 @@
+---
+title: SESSION_UNSUPPORTED
+description: The configured Runtime store cannot persist durable Agent Sessions.
+---
+
+## What failed
+
+`session()` or `getSession()` ran against a Runtime store that has no Sessions
+port.
+
+## Why
+
+Durable Agent Sessions require honest store capability. Missing support is a
+hard failure before allocation, not a silent in-memory fallback.
+
+## What still works
+
+Object-bound Agents, prompts, and stores that do not claim Session durability
+continue to work. Runtime features that the store does support remain available.
+
+## Fix
+
+Use a Runtime store that implements Sessions (memory Runtime store in tests,
+`postgres()` from `@use-crux/postgres/runtime`, or Convex Runtime storage) and
+configure a linearizable Thread `RecordStore` for owner registration.

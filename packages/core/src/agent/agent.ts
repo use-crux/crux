@@ -1,24 +1,13 @@
-/**
- * Agent — a reusable agent definition bundling prompt + optional model + tools.
- *
- * Agents are the building blocks for composition utilities (`parallel`,
- * `pipeline`, `consensus`). They bundle a prompt with optional execution
- * config (model, tools) into a frozen, typed instance.
- *
- * Unlike delegates, agents are pure data objects with no execution logic.
- * Execution happens via an adapter-provided `AgentExecutor`.
- *
- * @module
- */
+/** Frozen, typed Agent definitions for provider-neutral composition. @module */
 
-import type { z } from 'zod'
-import type { AnyModel, AnyToolSet } from '../types'
-import type { Prompt } from '../prompt/prompt-types'
-import type { ContextEntry } from '../prompt/context-types'
-import type { AnyRoutable } from '../routing/types'
-import type { InputBudget } from '../request/budget/input-budget'
-import { mergeInputBudget } from '../request/budget/input-budget'
-import type { PrepareStep } from '../request/prepare/step'
+import type { z } from "zod";
+import type { AnyModel, AnyToolSet } from "../types";
+import type { Prompt } from "../prompt/prompt-types";
+import type { ContextEntry } from "../prompt/context-types";
+import type { AnyRoutable } from "../routing/types";
+import type { InputBudget } from "../request/budget/input-budget";
+import { mergeInputBudget } from "../request/budget/input-budget";
+import type { PrepareStep } from "../request/prepare/step";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -29,23 +18,20 @@ import type { PrepareStep } from '../request/prepare/step'
  * model or a native provider model id). Routing wrappers are inert core values
  * that loop-owned adapters resolve before the provider sees a concrete model.
  */
-export type RoutableModel<TModel = AnyModel> = TModel | AnyRoutable
+export type RoutableModel<TModel = AnyModel> = TModel | AnyRoutable;
 
-/** Configuration for `agent()`. */
-export interface AgentConfig<
+interface AgentConfigBase<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
-  TModel = AnyModel,
+  TModel extends RoutableModel | undefined = undefined,
 > {
   /** Unique identifier for this agent. */
-  id: string
+  id: string;
   /** Human-readable description of what this agent does. */
-  description?: string
+  description?: string;
   /** The prompt this agent executes. */
-  prompt: Prompt<TOwnInput, TOutput, TContexts>
-  /** Default model override. Takes precedence over composition-level model. */
-  model?: RoutableModel<TModel>
+  prompt: Prompt<TOwnInput, TOutput, TContexts>;
   /**
    * Default tools available to this agent. Named maps may contain ordinary
    * Tools or direct child Agents, with each key used as the provider tool name.
@@ -53,11 +39,11 @@ export interface AgentConfig<
    * policy, using its Agent/Prompt description and Prompt input/output
    * contracts. It inherits cancellation and ancestry, but not parent authority.
    */
-  tools?: AnyToolSet
+  tools?: AnyToolSet;
   /** Default whole-request input pressure settings for each provider call. */
-  inputBudget?: InputBudget
+  inputBudget?: InputBudget;
   /** Default callback evaluated before every semantic provider call. */
-  prepareStep?: PrepareStep<TModel>
+  prepareStep?: PrepareStep<TModel>;
   /**
    * Agent IDs this agent can hand off to in a swarm.
    *
@@ -80,7 +66,7 @@ export interface AgentConfig<
    * })
    * ```
    */
-  handoffs?: Array<string | { id: string; when: string }>
+  handoffs?: Array<string | { id: string; when: string }>;
   /**
    * Tool names available in swarm context.
    *
@@ -90,15 +76,28 @@ export interface AgentConfig<
    *
    * Can be overridden at the swarm level via `SwarmOptions.activeTools`.
    */
-  swarmTools?: string[]
+  swarmTools?: string[];
 }
+
+type AgentModelConfig<TModel> =
+  | { model: TModel }
+  | ([TModel] extends [undefined] ? { model?: undefined } : never);
+
+/** Configuration for `agent()`. */
+export type AgentConfig<
+  TOwnInput extends z.ZodType,
+  TOutput extends z.ZodType | undefined,
+  TContexts extends readonly ContextEntry[],
+  TModel extends RoutableModel | undefined = undefined,
+> = AgentConfigBase<TOwnInput, TOutput, TContexts, TModel> &
+  AgentModelConfig<TModel>;
 
 /** A single handoff target entry (normalized from string or object form). */
 export interface HandoffTarget {
   /** Target agent ID. */
-  readonly id: string
+  readonly id: string;
   /** Condition string injected into the transfer tool's description. */
-  readonly when?: string
+  readonly when?: string;
 }
 
 /** A frozen agent instance. Pure data — no execution logic. */
@@ -106,18 +105,18 @@ export interface Agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
-  TModel = AnyModel,
+  TModel extends RoutableModel | undefined = undefined,
 > {
   /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'Agent'
+  readonly _tag: "Agent";
   /** Unique identifier. */
-  readonly id: string
+  readonly id: string;
   /** Human-readable description. */
-  readonly description: string | undefined
+  readonly description: string | undefined;
   /** The prompt this agent executes. */
-  readonly prompt: Prompt<TOwnInput, TOutput, TContexts>
+  readonly prompt: Prompt<TOwnInput, TOutput, TContexts>;
   /** Default model override. */
-  readonly model: RoutableModel<TModel> | undefined
+  readonly model: TModel;
   /**
    * Default tools. Named maps may contain ordinary Tools or direct child
    * Agents; keys are provider tool names. Child Agents are awaited foreground
@@ -125,15 +124,15 @@ export interface Agent<
    * contracts, traverse ordinary Tool policy, and inherit cancellation and
    * ancestry but no parent authority.
    */
-  readonly tools: AnyToolSet | undefined
+  readonly tools: AnyToolSet | undefined;
   /** Default whole-request input pressure settings. */
-  readonly inputBudget: InputBudget | undefined
+  readonly inputBudget: InputBudget | undefined;
   /** Default callback evaluated before every semantic provider call. */
-  readonly prepareStep: PrepareStep<TModel> | undefined
+  readonly prepareStep: PrepareStep<TModel> | undefined;
   /** Agent IDs this agent can hand off to in a swarm. */
-  readonly handoffs: readonly HandoffTarget[]
+  readonly handoffs: readonly HandoffTarget[];
   /** Tool names available in swarm context. */
-  readonly swarmTools: readonly string[] | undefined
+  readonly swarmTools: readonly string[] | undefined;
 }
 
 /**
@@ -142,7 +141,12 @@ export interface Agent<
  * Uses `z.ZodType` as upper bounds — the widest Zod schema types — so
  * any `Agent<TInput, TOutput, TContexts>` is assignable to `AnyAgent`.
  */
-export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly ContextEntry[], AnyModel>
+export type AnyAgent = Agent<
+  z.ZodType,
+  z.ZodType | undefined,
+  readonly ContextEntry[],
+  RoutableModel | undefined
+>;
 
 /**
  * Extract the inferred input type from an agent's prompt schema.
@@ -154,11 +158,16 @@ export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly ContextE
  * ```
  */
 export type InferAgentInput<T> =
-  T extends Agent<infer TInput, z.ZodType | undefined, readonly ContextEntry[]>
+  T extends Agent<
+    infer TInput,
+    z.ZodType | undefined,
+    readonly ContextEntry[],
+    RoutableModel | undefined
+  >
     ? TInput extends z.ZodType
       ? z.infer<TInput>
       : unknown
-    : unknown
+    : unknown;
 
 /**
  * Extract the inferred output type from an agent's prompt schema.
@@ -171,11 +180,16 @@ export type InferAgentInput<T> =
  * ```
  */
 export type InferAgentOutput<T> =
-  T extends Agent<z.ZodType, infer TOutput, readonly ContextEntry[]>
+  T extends Agent<
+    z.ZodType,
+    infer TOutput,
+    readonly ContextEntry[],
+    RoutableModel | undefined
+  >
     ? TOutput extends z.ZodType
       ? z.infer<TOutput>
       : string
-    : unknown
+    : unknown;
 
 /**
  * Escape hatch type: accepts either an `Agent` instance or a plain async
@@ -186,7 +200,9 @@ export type InferAgentOutput<T> =
  * (`(input: { foo: string }) => …`) still satisfy `AgentLike`, while the
  * composition utilities infer the real shape from the call-site generic.
  */
-export type AgentLike<TInput = never, TOutput = unknown> = AnyAgent | ((input: TInput) => Promise<TOutput>)
+export type AgentLike<TInput = never, TOutput = unknown> =
+  | AnyAgent
+  | ((input: TInput) => Promise<TOutput>);
 
 /**
  * Extract the input type from an `AgentLike` — agent (via its prompt schema)
@@ -196,7 +212,7 @@ export type InferAgentLikeInput<T> = T extends AnyAgent
   ? InferAgentInput<T>
   : T extends (input: infer I) => Promise<unknown>
     ? I
-    : Record<string, unknown>
+    : Record<string, unknown>;
 
 /**
  * Extract the output type from an `AgentLike` — agent (via its prompt output
@@ -207,7 +223,7 @@ export type InferAgentLikeOutput<T> = T extends AnyAgent
   ? InferAgentOutput<T>
   : T extends (input: never) => Promise<infer O>
     ? O
-    : unknown
+    : unknown;
 
 // ── Type Guard ──────────────────────────────────────────────────────
 
@@ -227,55 +243,43 @@ export type InferAgentLikeOutput<T> = T extends AnyAgent
  * ```
  */
 export function isAgent(value: unknown): value is AnyAgent {
-  return typeof value === 'object' && value !== null && '_tag' in value && (value as { _tag: unknown })._tag === 'Agent'
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "_tag" in value &&
+    (value as { _tag: unknown })._tag === "Agent"
+  );
 }
 
 // ── Factory ─────────────────────────────────────────────────────────
 
-/**
- * Define a reusable agent that bundles a prompt with optional model and tools.
- *
- * Agents are pure data objects — they carry no execution logic. Composition
- * utilities (`parallel`, `pipeline`, `consensus`) execute agents via an
- * adapter-provided `AgentExecutor`.
- *
- * @param config - Agent configuration with id, prompt, and optional model/tools.
- * @returns A frozen `Agent` instance.
- *
- * @example
- * ```ts
- * import { agent } from '@use-crux/core/agent'
- * import { prompt } from '@use-crux/core'
- *
- * const reviewer = agent({
- *   id: 'content-reviewer',
- *   description: 'Reviews content for quality and accuracy',
- *   prompt: reviewPrompt,
- *   model: gpt4mini,        // optional: overrides composition-level model
- *   tools: [searchTool],    // optional: agent-specific tools
- * })
- * ```
- */
+/** Define a frozen Agent while retaining its exact model type. */
 export function agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
-  TModel = AnyModel,
->(config: AgentConfig<TOwnInput, TOutput, TContexts, TModel>): Agent<TOwnInput, TOutput, TContexts, TModel> {
+  const TModel extends RoutableModel | undefined = undefined,
+>(
+  config: AgentConfig<TOwnInput, TOutput, TContexts, TModel>,
+): Agent<TOwnInput, TOutput, TContexts, TModel> {
   return Object.freeze({
-    _tag: 'Agent' as const,
+    _tag: "Agent" as const,
     id: config.id,
     description: config.description,
     prompt: config.prompt,
-    model: config.model,
+    // The config union permits absence only for the undefined model.
+    model: config.model as TModel,
     tools: config.tools,
     inputBudget: mergeInputBudget(undefined, config.inputBudget),
     prepareStep: config.prepareStep,
     handoffs: Object.freeze(
       (config.handoffs ?? []).map(
-        (h): HandoffTarget => (typeof h === 'string' ? { id: h } : { id: h.id, when: h.when }),
+        (h): HandoffTarget =>
+          typeof h === "string" ? { id: h } : { id: h.id, when: h.when },
       ),
     ),
-    swarmTools: config.swarmTools ? Object.freeze([...config.swarmTools]) : undefined,
-  })
+    swarmTools: config.swarmTools
+      ? Object.freeze([...config.swarmTools])
+      : undefined,
+  });
 }

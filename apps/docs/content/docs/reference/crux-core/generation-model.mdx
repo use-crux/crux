@@ -1,0 +1,128 @@
+---
+title: GenerationModel
+description: Provider-neutral adapter-bound models for Agents, durable Agent Sessions, and Runtime programs.
+---
+
+A `GenerationModel` is a frozen, adapter-bound value that carries secret-free
+identity, capability evidence, and opaque execution authority. Application code
+does not supply capabilities or install a global executor.
+
+```ts
+import type {
+  GenerationModel,
+  AdapterBoundGenerationModel,
+  GenerationModelDefinition,
+  GenerationCapabilities,
+} from "@use-crux/core";
+```
+
+Construction for the Vercel AI SDK:
+
+```ts
+import { aiSdk } from "@use-crux/ai";
+
+export const supportModel = aiSdk(nativeModel("nebula-text-v2"));
+```
+
+Adapter authors use `defineGenerationModel` from
+`@use-crux/core/adapter-authoring`. That seam is not an application configuration
+API.
+
+## Shape
+
+```ts
+interface AdapterBoundGenerationModel<TNative = unknown, TCapabilities = GenerationCapabilities> {
+  readonly _tag: "crux.generation-model";
+  readonly adapter: { readonly id: string; readonly version: string };
+  readonly native: TNative;
+  readonly definition: GenerationModelDefinition;
+  readonly identity: NormalizedGenerationIdentity;
+  readonly capabilities: TCapabilities;
+  // opaque non-enumerable runtime port
+}
+
+type GenerationModel = AdapterBoundGenerationModel;
+
+interface GenerationModelDefinition {
+  readonly id: string;
+  readonly fingerprint: string;
+}
+```
+
+`definition.id` and `definition.fingerprint` are the only values durable Session
+state retains. They must match a model declared on the active
+[`RuntimeProgram`](/docs/reference/crux-core/runtime-worker#runtimeprogram).
+
+## Capabilities
+
+```ts
+interface GenerationCapabilities {
+  readonly contract: "crux.generation-capabilities.v1";
+  readonly language: readonly LanguageCapability[];
+  readonly image: readonly ImageCapability[];
+  readonly speech: readonly SpeechCapability[];
+  readonly transcription: readonly TranscriptionCapability[];
+  readonly embedding: readonly EmbeddingCapability[];
+}
+```
+
+Language facets used by durable Agent Sessions include `text-input`,
+`text-output`, and when required by the Agent, `structured-output` and
+`tool-calls`. Session construction rejects statically proven gaps with
+`GENERATION_CAPABILITY_MISSING` and still accepts broad capability evidence for
+runtime preflight.
+
+## Agent and Session usage
+
+```ts
+import { agent } from "@use-crux/core/agent";
+import { session } from "@use-crux/core";
+
+const support = agent({
+  id: "support",
+  model: supportModel,
+  prompt: supportPrompt,
+});
+
+// Optional immutable override; must be declared on the Runtime program
+await host.run(() =>
+  session(support, { key: "customer-42", model: premiumModel }),
+);
+```
+
+Precedence for durable Agent Sessions: Session override, then Agent model.
+Missing bindings fail with `GENERATION_MODEL_BINDING_MISSING` before any durable
+write. Models absent from the program fail with `GENERATION_MODEL_NOT_STATIC`.
+
+## Runtime program declaration
+
+```ts
+import { createRuntimeProgram } from "@use-crux/core/runtime";
+
+export const runtimeProgram = createRuntimeProgram({
+  targets: [support],
+  generationModels: [supportModel, premiumModel],
+  transports: [],
+});
+```
+
+Generated programs include exported Agent targets and their generation models.
+Do not maintain a second model registry in application code.
+
+## AI SDK binding
+
+`@use-crux/ai` exports `aiSdk(native)`:
+
+- one argument only: a language model or same-adapter route tree;
+- returns a frozen `AdapterBoundGenerationModel`;
+- derives secret-free identity and capability evidence;
+- installs an opaque runtime port that constructs an `AgentExecutor` through the
+  existing AI provider runtime.
+
+See the [`@use-crux/ai` reference](/docs/reference/adapters/ai#aisdknative).
+
+## Related
+
+- [Durable Agent Sessions](/docs/reference/crux-core/session)
+- [Runtime program and worker](/docs/reference/crux-core/runtime-worker)
+- [`@use-crux/ai`](/docs/reference/adapters/ai)

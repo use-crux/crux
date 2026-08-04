@@ -4,6 +4,7 @@ import type {
 } from "../project-index";
 import type { ModelInputOrigin } from "../safety/input-origin";
 import type { SafetyFinding } from "../safety/decision";
+import type { SessionRuntimeReadModel } from "../session/runtime-read-model";
 import type {
   CruxArtifactKind,
   CruxEdgeType,
@@ -950,6 +951,23 @@ export interface CruxThreadOperationAttributes {
     | "history.override";
 }
 
+/** Payload-safe identity, lineage, and settlement evidence for one Session turn. */
+export interface CruxSessionTurnAttributes extends CruxAttributes {
+  readonly sessionId: string;
+  readonly inputId: string;
+  readonly workId: string;
+  readonly cursor: string;
+  readonly threadId: string;
+  readonly outcome?:
+    | "completed"
+    | "cancelled"
+    | "blocked"
+    | "retry-scheduled"
+    | "dead-lettered"
+    | "lease-lost";
+  readonly session?: SessionRuntimeReadModel;
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
@@ -960,6 +978,7 @@ export type CruxSpanAttributesByPrimitive = {
   "defer.run": CruxDeferRunAttributes;
   "effect.run": CruxEffectRunAttributes;
   "thread.operation": CruxThreadOperationAttributes;
+  "session.turn": CruxSessionTurnAttributes;
   "custom.operation": CruxAttributes;
 };
 

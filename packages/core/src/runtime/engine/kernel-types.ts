@@ -12,57 +12,20 @@ import type { RuntimeEvent } from "../ports/events";
 import type { Lease } from "../ports/leases";
 import type { FlowSnapshot as RuntimeFlowSnapshot } from "../ports/state";
 import type { RuntimeTargetId, TaskId, WorkId } from "../ports/ids";
-import type {
-  RuntimeOutboxItem,
-  RuntimeStoreAdapter,
-  RuntimeTimerRecord,
-} from "../store";
+import type { RuntimeOutboxItem, RuntimeStoreAdapter } from "../store";
 import type { RuntimeRetentionConfig } from "./retention";
 import type { WakeEnvelope } from "./envelope";
 import type { RuntimeWorkItem, WorkItemError } from "./work";
-import type { RuntimeDeferredIntent } from "../ports/deferred";
 import type { RuntimeResultRef } from "../results/types";
-import type {
-  AbandonDeferredScopeInput,
-  DeferredScopeTransitionResult,
-  FinalizeDeferredScopeInput,
-  RenewDeferredScopeLeaseInput,
-  RenewDeferredScopeLeaseResult,
-  StageDeferredIntentInput,
-} from "./kernel-deferred";
-import type {
-  SignalPublishCompositeInput,
-  SignalPublishCompositeResult,
-} from "./composites/signal";
 import type {
   RecordSuspensionInput,
   RuntimeSuspensionSnapshotInput,
 } from "./kernel-flow-types";
-import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
-import type {
-  WorkAcceptCompositeInput,
-  WorkAcceptCompositeResult,
-} from "./composites/work-accept";
-import type {
-  WorkProgressCompositeInput,
-  WorkProgressCompositeResult,
-} from "./composites/work-progress";
-import type {
-  WorkDetachCompositeInput,
-  WorkDetachCompositeResult,
-} from "./composites/work-detach";
 import type {
   RuntimeScheduledWorkFlushRecord,
   RuntimeScheduledWorkIntent,
 } from "./kernel-scheduled-types";
-import type {
-  MaintenanceTickOptions,
-  MaintenanceTickResult,
-  ScanTimersOptions,
-  ScanTimersResult,
-  ScheduleTimerInput,
-} from "./kernel-timer-types";
-
+export type { RuntimeKernel } from "./kernel-contract";
 export type { RuntimeSuspendRegistration } from "./kernel-suspension-types";
 export type {
   RecordSuspensionInput,
@@ -116,10 +79,10 @@ export interface RuntimeTargetContext {
 
 /** Runtime target entry supplied by hand-written or generated handlers. */
 export interface RuntimeTarget {
-  /** Durable target id from `flow("name")` or `durableTask("name")`. */
+  /** Durable target id from a Flow, task, or Agent declaration. */
   readonly targetId: RuntimeTargetId;
-  /** Target kind used for diagnostics and future flow replay routing. */
-  readonly kind: "flow" | "task";
+  /** Target kind used for diagnostics and execution routing. */
+  readonly kind: "flow" | "task" | "agent";
   /** Execute the target and return the durable outcome to commit. */
   execute(context: RuntimeTargetContext): Promise<RuntimeTargetOutcome>;
 }
@@ -253,61 +216,3 @@ export type RuntimeWakeResult =
     }
   | { readonly status: 401; readonly outcome: "unverified" }
   | { readonly status: 409; readonly outcome: "busy" };
-
-/** Runtime kernel operations for durable work and wake handling. */
-export interface RuntimeKernel {
-  /** Atomically accept one top-level application Flow Work occurrence. */
-  acceptWork(
-    input: WorkAcceptCompositeInput,
-  ): Promise<WorkAcceptCompositeResult>;
-  /** Replace one live application Work progress snapshot. */
-  progressWork(
-    input: WorkProgressCompositeInput,
-  ): Promise<WorkProgressCompositeResult>;
-  /** Remove durable ownership without cancelling application Work. */
-  detachWork(
-    input: WorkDetachCompositeInput,
-  ): Promise<WorkDetachCompositeResult>;
-  /** Atomically arbitrate a manual Flow resume with its waiter and timer. */
-  resumeFlow(input: FlowManualResumeInput): Promise<RuntimeWorkItem | null>;
-  /** Atomically accept one Signal occurrence and every required delivery. */
-  publishSignal(
-    input: SignalPublishCompositeInput,
-  ): Promise<SignalPublishCompositeResult>;
-  /** Durably accept named deferred work without making it runnable. */
-  stageDeferredIntent(
-    input: StageDeferredIntentInput,
-  ): Promise<RuntimeDeferredIntent>;
-  /** Atomically finalize an invocation and release all staged siblings. */
-  finalizeDeferredScope(
-    input: FinalizeDeferredScopeInput,
-  ): Promise<DeferredScopeTransitionResult>;
-  /** Atomically abandon an unfinalized invocation and all staged siblings. */
-  abandonDeferredScope(
-    input: AbandonDeferredScopeInput,
-  ): Promise<DeferredScopeTransitionResult>;
-  /** Renew or fence the durable deferred scope lease token/expiry. */
-  renewDeferredScopeLease(
-    input: RenewDeferredScopeLeaseInput,
-  ): Promise<RenewDeferredScopeLeaseResult>;
-  /** Create pending task work and write its wake envelope to the outbox. */
-  enqueueTask(input: EnqueueTaskInput): Promise<RuntimeWorkItem>;
-  /** Persist a flow suspension and owned waiter registrations atomically. */
-  recordSuspension(input: RecordSuspensionInput): Promise<void>;
-  /** Append an event and resume all matching waiters that win the CAS race. */
-  emitEvent(input: EmitEventInput): Promise<EmitEventResult>;
-  /** Cancel non-terminal work and its owned waiter/timer registrations. */
-  cancelWork(input: CancelWorkInput): Promise<CancelWorkResult>;
-  /** Retry blocked or dead-lettered work after an operator believes the cause is fixed. */
-  retryWork(input: RetryWorkInput): Promise<RetryWorkResult>;
-  /** Persist a store-backed timer record. */
-  scheduleTimer(input: ScheduleTimerInput): Promise<RuntimeTimerRecord>;
-  /** Fire due store-backed timers through the waiter CAS race gate. */
-  scanTimers(options?: ScanTimersOptions): Promise<ScanTimersResult>;
-  /** Run one kernel-owned maintenance pass. */
-  maintenanceTick(
-    options?: MaintenanceTickOptions,
-  ): Promise<MaintenanceTickResult>;
-  /** Handle one verified wake envelope through lease, execution, and commit. */
-  handleWake(envelope: WakeEnvelope): Promise<RuntimeWakeResult>;
-}

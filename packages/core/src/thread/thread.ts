@@ -9,15 +9,12 @@
 
 import { resolveRecords } from "../runtime/runtime";
 import type { Storage } from "../storage";
-import {
-  deleteThread,
-  emptyThreadOwnerRegistry,
-  type ThreadOwnerRegistry,
-} from "./delete";
+import { deleteThread } from "./delete";
 import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
 import { commitThreadTurn, readThreadHistory } from "./entry";
 import { observeThreadOperation } from "./observability";
+import { registerThreadOwner, type ThreadOwner } from "./owner";
 import { redactThreadMessages } from "./redact";
 import { registerThreadInspectableResource } from "./runtime-bridge";
 import { commitThreadEdit } from "./store/alternatives";
@@ -41,13 +38,13 @@ import type { Thread, ThreadOptions } from "./types";
  * ```
  */
 export function thread(options: ThreadOptions): Thread {
-  return createThreadHandle(options, emptyThreadOwnerRegistry);
+  return createThreadHandle(options);
 }
 
-/** Create a Thread handle with an internal durable-owner registry seam. */
+/** Create a Thread handle bound to one optional durable owner. */
 export function createThreadHandle(
   options: ThreadOptions,
-  ownerRegistry: ThreadOwnerRegistry,
+  owner?: ThreadOwner,
 ): Thread {
   assertThreadId(options.id);
   let resolved: Storage | undefined;
@@ -68,6 +65,11 @@ export function createThreadHandle(
       );
     }
   };
+  const withOwner = async <T>(run: (storage: Storage) => Promise<T>) => {
+    const storage = resolveStorage();
+    if (owner) await registerThreadOwner(storage, options.id, owner);
+    return run(storage);
+  };
   registerThreadInspectableResource(options.id, resolveStorage);
   const append: Thread["append"] = (input, appendOptions) => {
     const messages = Array.isArray(input) ? input : [input];
@@ -79,7 +81,15 @@ export function createThreadHandle(
         roles: messages.map(({ role }) => role),
       },
       run: () =>
-        commitThreadAppend(resolveStorage(), options.id, input, appendOptions),
+        withOwner((storage) =>
+          commitThreadAppend(
+            storage,
+            options.id,
+            input,
+            appendOptions,
+            owner?.id,
+          ),
+        ),
       complete: (commit) => ({
         messageIds: commit.messageIds,
         decision: commit.status,
@@ -98,7 +108,10 @@ export function createThreadHandle(
         ...(readOptions?.before ? { before: readOptions.before } : {}),
         ...(readOptions?.limit ? { limit: readOptions.limit } : {}),
       },
-      run: () => readThread(resolveStorage(), options.id, readOptions),
+      run: () =>
+        withOwner((storage) =>
+          readThread(storage, options.id, readOptions, owner?.id),
+        ),
       complete: (snapshot) => ({
         entryCount: snapshot.entries.length,
         messageCount: snapshot.entries.filter(
@@ -119,7 +132,9 @@ export function createThreadHandle(
     });
   const readHistory: Thread["readHistory"] = () => readThreadHistory(read);
   const validateRevision: Thread["validateRevision"] = async (revision) => {
-    const current = await readThreadRevision(resolveStorage(), options.id);
+    const current = await withOwner((storage) =>
+      readThreadRevision(storage, options.id),
+    );
     if (current !== revision) {
       throw new ThreadError(
         "identity_conflict",
@@ -137,12 +152,18 @@ export function createThreadHandle(
         roles: turn.messages.map(({ role }) => role),
       },
       run: () =>
-        commitThreadTurn(
-          (messages, expectedHead) =>
-            commitThreadAppend(resolveStorage(), options.id, messages, {
-              expectedHead,
-            }),
-          turn,
+        withOwner((storage) =>
+          commitThreadTurn(
+            (messages, expectedHead) =>
+              commitThreadAppend(
+                storage,
+                options.id,
+                messages,
+                { expectedHead },
+                owner?.id,
+              ),
+            turn,
+          ),
         ),
       complete: (commit) => ({
         messageIds: commit.messageIds,
@@ -191,7 +212,7 @@ export function createThreadHandle(
     observeThreadOperation({
       threadId: options.id,
       operation: "delete",
-      run: () => deleteThread(resolveStorage(), options.id, ownerRegistry),
+      run: () => withOwner((storage) => deleteThread(storage, options.id)),
       complete: () => ({ state: "deleted" }),
     });
   return Object.freeze({

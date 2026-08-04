@@ -10,13 +10,18 @@
  */
 
 /** Runtime target kinds reserved by the artifact manifest. */
-export type RuntimeArtifactTargetKind = "flow" | "task" | "watcher" | "trigger";
+export type RuntimeArtifactTargetKind =
+  | "flow"
+  | "task"
+  | "agent"
+  | "watcher"
+  | "trigger";
 
 /** One statically importable runtime target. */
 export interface RuntimeArtifactManifestTarget {
-  /** Stable durable target id from `flow("name")` or `durableTask("name")`. */
+  /** Stable durable target id from an authored Flow, task, or Agent. */
   readonly name: string;
-  /** Runtime target family. v1 generation emits only `flow` and `task`. */
+  /** Runtime target family emitted by generated program discovery. */
   readonly kind: RuntimeArtifactTargetKind;
   /** Project-root-relative module path, for example `./src/flows/review.ts`. */
   readonly module: string;

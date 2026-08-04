@@ -766,6 +766,16 @@
       "definitionRef": null
     },
     {
+      "kind": "session",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "session.turn"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
       "kind": "rag.pipeline",
       "primary": "static-only",
       "secondary": [],

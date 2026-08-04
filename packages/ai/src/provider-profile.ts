@@ -10,8 +10,13 @@
  */
 
 import type { LanguageModel } from "ai";
-import type { GenerationSettings, ModelInfo, SystemBlock } from "@use-crux/core";
+import type {
+  GenerationSettings,
+  ModelInfo,
+  SystemBlock,
+} from "@use-crux/core";
 import type { StructuredOutputCapabilities } from "@use-crux/core/adapter";
+import { resolveAiSdkNativeModel } from "./generation-model";
 
 /**
  * The JSON Schema behavior Anthropic accepts through the AI SDK.
@@ -117,14 +122,15 @@ export function aiSdkStructuredCapabilities(
  * (which expose `.provider` and `.modelId` properties).
  */
 export function extractModelInfo(model: LanguageModel): ModelInfo {
-  if (typeof model === "string") {
-    const idx = model.indexOf(":");
+  const native = resolveAiSdkNativeModel(model) as LanguageModel;
+  if (typeof native === "string") {
+    const idx = native.indexOf(":");
     if (idx > 0) {
-      return { provider: model.slice(0, idx), modelId: model.slice(idx + 1) };
+      return { provider: native.slice(0, idx), modelId: native.slice(idx + 1) };
     }
-    return { provider: "", modelId: model };
+    return { provider: "", modelId: native };
   }
-  const m = model as { provider?: unknown; modelId?: unknown };
+  const m = native as { provider?: unknown; modelId?: unknown };
   return {
     provider: typeof m.provider === "string" ? m.provider : "",
     modelId: typeof m.modelId === "string" ? m.modelId : "",
@@ -208,7 +214,10 @@ const ANTHROPIC_REASONING_BUDGET_TOKENS = {
   low: 2000,
   medium: 8000,
   high: 24000,
-} as const satisfies Record<NonNullable<GenerationSettings["reasoning"]>, number>;
+} as const satisfies Record<
+  NonNullable<GenerationSettings["reasoning"]>,
+  number
+>;
 
 /** A system message with optional provider-specific cache options. */
 export interface SystemMessageWithOptions {
