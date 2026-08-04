@@ -24,6 +24,7 @@ use crate::rules::evidence::evidence_record_findings;
 use crate::rules::knowledge::knowledge_lint_findings;
 use crate::rules::relation::relation_lint_findings;
 use crate::rules::session::session_lint_findings;
+use crate::rules::signal::signal_lint_findings;
 use crate::rules::thread::thread_lint_findings;
 
 pub(crate) fn core_lint_findings(
@@ -52,6 +53,7 @@ pub(crate) fn core_lint_findings(
         by_id,
     ));
     findings.extend(session_lint_findings(builder, facts, by_id));
+    findings.extend(signal_lint_findings(builder, facts));
     findings.extend(safety_duplicate_policy_id_findings(
         builder,
         &facts.definitions,

@@ -198,12 +198,31 @@ export interface IndexFacts {
   suspends?: boolean;
   // session
   operation?: "create" | "get";
-  target?: { kind: "agent" | "unresolved" | "dynamic" };
+  target?:
+    | { kind: "agent" | "unresolved" | "dynamic" }
+    | { kind: "signal"; signalId: string };
   key?: { kind: "literal"; value: string } | { kind: "dynamic" };
   identity?: "static" | "partial";
   call?:
     | { kind: "supported" }
     | { kind: "ambiguous"; reason: "arity" | "options" };
+  // signal provider / transport binding
+  signalId?: string;
+  providerId?: string;
+  bindingId?: string;
+  transportKind?: "webhook";
+  transportVariable?: string;
+  signalIds?: string[];
+  signalVariables?: string[];
+  hasOnEvent?: boolean;
+  providerVariable?: string;
+  providerDefinitionId?: string;
+  adapterId?: string;
+  configRef?:
+    | { kind: "literal"; id: string; revision: string }
+    | { kind: "partial" }
+    | { kind: "dynamic" };
+  liveFields?: string[];
   // composition
   participants?: string[];
   coordinator?: string;
@@ -1214,6 +1233,20 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       push("identity", f.identity);
       push("target", f.targetVariable ?? f.target?.kind);
       push("key", f.key?.kind);
+      break;
+    case "signal":
+      push("signal", f.signalId);
+      break;
+    case "signal.provider":
+      push("provider", f.providerId);
+      push("identity", f.identity);
+      push("transport", f.transportKind);
+      break;
+    case "signal.transportBinding":
+      push("binding", f.bindingId);
+      push("identity", f.identity);
+      push("provider", f.providerId);
+      push("signal", f.signalId);
       break;
     case "rag.knowledgeBase":
       push("id", f.knowledgeBaseId);

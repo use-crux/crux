@@ -2382,6 +2382,93 @@
         "supported": true
       },
       "title": "Representation wrappers are ordered incorrectly"
+    },
+{
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Executable Signal providers require a statically proven non-empty string id so generated Runtime programs can import stable provider authority.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/signal-provider-unstable-identity",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Pass a direct string literal to signalProvider({ id }).",
+          "kind": "manual",
+          "title": "Use a stable provider id"
+        }
+      ],
+      "id": "signal.provider.unstable_identity",
+      "impact": "A missing or dynamic provider id cannot be pinned into the generated Runtime program and fails before managed-transport drain.",
+      "maturity": "experimental",
+      "phase": "index",
+      "profiles": ["recommended", "strict"],
+      "rationale": "Executable Signal providers require a statically proven non-empty string id so generated Runtime programs can import stable provider authority.",
+      "requires": ["definitions"],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line signal.provider.unstable_identity -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Signal provider identity is not stable"
+    },
+{
+      "category": "contracts",
+      "confidence": "high",
+      "description": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, or onEvent fields.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/signal-transport-binding-live-value",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Remove live Request, client, credential, socket, callback, handle, and onEvent fields from managedTransportBinding() options.",
+          "kind": "manual",
+          "title": "Keep the binding inert"
+        }
+      ],
+      "id": "signal.transportBinding.live_value",
+      "impact": "Live values in bindings are rejected by Runtime validation and must never enter generated program manifests.",
+      "maturity": "experimental",
+      "phase": "index",
+      "profiles": ["recommended", "strict"],
+      "rationale": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, or onEvent fields.",
+      "requires": ["definitions"],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line signal.transportBinding.live_value -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Managed transport binding contains a live value"
+    },
+{
+      "category": "runtime",
+      "confidence": "high",
+      "description": "Inert managed-transport bindings require static binding id, configRef, Signal target, and provider authority so generated Runtime programs can validate them.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/signal-transport-binding-unstable-identity",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "description": "Pass literal id, configRef, and signalId values and bind an authored signalProvider().",
+          "kind": "manual",
+          "title": "Use a stable inert binding"
+        }
+      ],
+      "id": "signal.transportBinding.unstable_identity",
+      "impact": "A partial binding cannot be imported into the sole generated Runtime program or validated before worker start.",
+      "maturity": "experimental",
+      "phase": "index",
+      "profiles": ["recommended", "strict"],
+      "rationale": "Inert managed-transport bindings require static binding id, configRef, Signal target, and provider authority so generated Runtime programs can validate them.",
+      "requires": ["definitions"],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line signal.transportBinding.unstable_identity -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Managed transport binding identity is not stable"
     }
   ]
 }

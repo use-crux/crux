@@ -53,6 +53,9 @@ package cache
 // metadata from vector-store/vectors to search-store/search.
 // Epoch 68 retains Session diagnostic evidence and findings so snapshots made
 // before durable Session linting cannot mask editor or CLI diagnostics.
+// Epoch 69 adds Signal provider, webhook transport, and managed transport
+// binding definitions, relations, source refs, and identity/live-value lints so
+// snapshots made before Signal transport tooling cannot mask the new catalogue.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 68
+const ProjectIndexSnapshotCacheEpoch = 69

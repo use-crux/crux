@@ -2,7 +2,9 @@ import { relative } from "node:path";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 import type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestProvider,
   RuntimeArtifactManifestTarget,
+  RuntimeArtifactManifestTransport,
 } from "@use-crux/core/runtime";
 import { RuntimeArtifactGenerationError } from "./findings";
 import type { RuntimeArtifactDriftReport } from "./types";
@@ -33,15 +35,38 @@ export function manifestPlanFromDefinitions(input: {
   const targets = input.definitions.flatMap((definition) =>
     targetFromDefinition(input.root, definition),
   );
+  const providers = input.definitions.flatMap((definition) =>
+    providerFromDefinition(input.root, definition),
+  );
+  const transports = input.definitions.flatMap((definition) =>
+    transportFromDefinition(input.root, definition),
+  );
   const byName = new Map<string, RuntimeArtifactManifestTarget[]>();
   for (const target of targets) {
     const matching = byName.get(target.name) ?? [];
     matching.push(target);
     byName.set(target.name, matching);
   }
-  const duplicateFindings = [...byName]
-    .filter((entry) => entry[1].length > 1)
-    .map(([name, matching]) => duplicateTargetFinding(name, matching));
+  const findings = [
+    ...[...byName]
+      .filter((entry) => entry[1].length > 1)
+      .map(([name, matching]) => duplicateTargetFinding(name, matching)),
+    ...duplicateIdentityFindings(
+      "provider",
+      providers.map((provider) => ({
+        id: provider.id,
+        module: provider.module,
+      })),
+    ),
+    ...duplicateIdentityFindings(
+      "transport",
+      transports.map((transport) => ({
+        id: transport.id,
+        module: transport.module,
+      })),
+    ),
+    ...missingProviderFindings(providers, transports),
+  ];
   return Object.freeze({
     manifest: Object.freeze({
       version: 2,
@@ -55,9 +80,15 @@ export function manifestPlanFromDefinitions(input: {
             compareCodepoint(a.kind, b.kind),
         ),
       ),
+      providers: Object.freeze(
+        [...providers].sort((a, b) => compareCodepoint(a.id, b.id)),
+      ),
+      transports: Object.freeze(
+        [...transports].sort((a, b) => compareCodepoint(a.id, b.id)),
+      ),
       evals: Object.freeze([]),
     }),
-    findings: Object.freeze(duplicateFindings),
+    findings: Object.freeze(findings),
   });
 }
 
@@ -111,6 +142,68 @@ function targetFromDefinition(
   ];
 }
 
+function providerFromDefinition(
+  root: string,
+  definition: ProjectDefinition,
+): readonly RuntimeArtifactManifestProvider[] {
+  if (definition.kind !== "signal.provider") return [];
+  if (definition.metadata?.exported !== true) return [];
+  const exportName =
+    typeof definition.metadata?.exportName === "string"
+      ? definition.metadata.exportName
+      : undefined;
+  const file = definition.source?.file;
+  if (!exportName || !file) return [];
+  return [
+    {
+      id: definition.name,
+      module: `./${relative(root, file).replace(/\\/g, "/")}`,
+      export: exportName,
+      definitionId: definition.id,
+      fingerprint: requiredFingerprint(definition),
+    },
+  ];
+}
+
+function transportFromDefinition(
+  root: string,
+  definition: ProjectDefinition,
+): readonly RuntimeArtifactManifestTransport[] {
+  if (definition.kind !== "signal.transportBinding") return [];
+  if (definition.metadata?.exported !== true) return [];
+  const exportName =
+    typeof definition.metadata?.exportName === "string"
+      ? definition.metadata.exportName
+      : undefined;
+  const file = definition.source?.file;
+  const facts = definition.metadata?.facts as
+    | {
+        readonly providerId?: string;
+        readonly signalId?: string;
+        readonly bindingId?: string;
+      }
+    | undefined;
+  const providerId =
+    typeof facts?.providerId === "string" ? facts.providerId : undefined;
+  const signalId =
+    typeof facts?.signalId === "string" ? facts.signalId : undefined;
+  if (!exportName || !file || !providerId || !signalId) return [];
+  return [
+    {
+      id:
+        typeof facts?.bindingId === "string" && facts.bindingId.length > 0
+          ? facts.bindingId
+          : definition.name,
+      module: `./${relative(root, file).replace(/\\/g, "/")}`,
+      export: exportName,
+      definitionId: definition.id,
+      fingerprint: requiredFingerprint(definition),
+      providerId,
+      signalId,
+    },
+  ];
+}
+
 function requiredFingerprint(definition: ProjectDefinition): string {
   if (definition.fingerprint) return definition.fingerprint;
   throw new TypeError(
@@ -134,6 +227,53 @@ function duplicateTargetFinding(
       "Other uniquely named runtime targets can still be discovered.",
     remediation: "Rename one target or remove the duplicate definition.",
   };
+}
+
+function duplicateIdentityFindings(
+  kind: "provider" | "transport",
+  entries: readonly { readonly id: string; readonly module: string }[],
+): readonly RuntimeArtifactFinding[] {
+  const byId = new Map<string, { readonly id: string; readonly module: string }[]>();
+  for (const entry of entries) {
+    const matching = byId.get(entry.id) ?? [];
+    matching.push(entry);
+    byId.set(entry.id, matching);
+  }
+  return [...byId]
+    .filter((entry) => entry[1].length > 1)
+    .map(([id, matching]) => ({
+      code: "TARGET_DUPLICATE",
+      category: "authored" as const,
+      featureKind: kind,
+      featureId: id,
+      source: matching[0]?.module.replace(/^\.\//, ""),
+      summary: `Runtime Signal ${kind} '${id}' is declared more than once.`,
+      reason: `Crux found ${matching.length} definitions with that durable identity and cannot choose between them.`,
+      whatStillWorks: `Other uniquely identified ${kind}s can still be discovered.`,
+      remediation: `Rename one ${kind} or remove the duplicate definition.`,
+    }));
+}
+
+function missingProviderFindings(
+  providers: readonly RuntimeArtifactManifestProvider[],
+  transports: readonly RuntimeArtifactManifestTransport[],
+): readonly RuntimeArtifactFinding[] {
+  const providerIds = new Set(providers.map((provider) => provider.id));
+  return transports
+    .filter((transport) => !providerIds.has(transport.providerId))
+    .map((transport) => ({
+      code: "CAPABILITY_MISSING",
+      category: "authored" as const,
+      featureKind: "transport",
+      featureId: transport.id,
+      source: transport.module.replace(/^\.\//, ""),
+      summary: `Runtime transport binding '${transport.id}' has no executable Signal provider.`,
+      reason: `Managed-transport normalization requires an exported signalProvider() whose id is '${transport.providerId}'.`,
+      whatStillWorks:
+        "Bindings whose provider identity matches an exported program provider remain valid.",
+      remediation:
+        "Export a signalProvider() with that id and include it in the generated Runtime program.",
+    }));
 }
 
 function compareCodepoint(left: string, right: string): number {

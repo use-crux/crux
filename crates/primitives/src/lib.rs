@@ -116,6 +116,7 @@ mod schema;
 mod scorer {
     pub(crate) mod facts;
 }
+mod signal;
 mod session {
     pub(crate) mod facts;
 }

@@ -22,6 +22,7 @@ import { evidenceRecordPrimitiveContributions } from "../evidence-record/primiti
 import { knowledgePrimitiveContributions } from "../knowledge/primitive-manifest";
 import { threadPrimitiveContributions } from "../thread/primitive-manifest";
 import { sessionPrimitiveContributions } from "../session/primitive-manifest";
+import { signalPrimitiveContributions } from "../signal/primitive-manifest";
 
 export { authoredEmbeddingPrimitiveManifest } from "./manifest";
 
@@ -34,6 +35,7 @@ export const embeddingPrimitiveManifest = Object.freeze({
     ...knowledgePrimitiveContributions.extractors,
     ...threadPrimitiveContributions.extractors,
     ...sessionPrimitiveContributions.extractors,
+    ...signalPrimitiveContributions.extractors,
     {
       name: "embedding",
       patterns: embeddingFactoryDeclarations.map((factory) => ({
@@ -76,6 +78,7 @@ export const embeddingPrimitiveManifest = Object.freeze({
     })),
     ...evidenceRecordPrimitiveContributions.relations,
     ...sessionPrimitiveContributions.relations,
+    ...signalPrimitiveContributions.relations,
   ],
 } satisfies IndexerExtension);
 

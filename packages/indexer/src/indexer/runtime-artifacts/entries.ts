@@ -1,7 +1,16 @@
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
 import type { GeneratedEvalArtifacts } from "./eval-registry";
 import { GENERATED_HEADER } from "./generated-files";
+import { importSpecifier } from "./import-specifier";
+import {
+  providerImports,
+  providerLocalNames,
+  transportImports,
+  transportLocalNames,
+} from "./program-providers";
+
+export { importSpecifier } from "./import-specifier";
 
 /** Render the canonical Runtime program shared by generated host entries. */
 export function runtimeProgramFile(input: {
@@ -14,14 +23,18 @@ export function runtimeProgramFile(input: {
     GENERATED_HEADER,
     "import { createRuntimeProgram, type RuntimeProgramTargetInput } from '@use-crux/core/runtime'",
     ...targetImports(input.manifest, input.outputFile, input.root),
+    ...providerImports(input.manifest, input.outputFile, input.root),
+    ...transportImports(input.manifest, input.outputFile, input.root),
     "",
     `export const runtimeArtifactManifestHash = '${input.artifactManifestHash}'`,
     "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     "",
     `const targets = [${targetProgramDeclarations(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTargetInput[]`,
-    "const transports = [] as const",
+    "const generationModels = [] as const",
+    `const providers = [${providerLocalNames(input.manifest).join(", ")}] as const`,
+    `const transports = [${transportLocalNames(input.manifest).join(", ")}] as const`,
     "",
-    "export const runtimeProgram = createRuntimeProgram({ targets, transports })",
+    "export const runtimeProgram = createRuntimeProgram({ targets, generationModels, providers, transports })",
     "",
   ].join("\n");
 }
@@ -172,14 +185,6 @@ export function convexTargetEntryFile(input: {
     "export const { executeEvalTarget, handleEvalRequest } = evalHost",
     "",
   ].join("\n");
-}
-
-/** Create a stable relative source import without its TypeScript extension. */
-export function importSpecifier(fromDir: string, toFile: string): string {
-  const withoutExtension = toFile.replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
-  let specifier = relative(fromDir, withoutExtension).replace(/\\/g, "/");
-  if (!specifier.startsWith(".")) specifier = `./${specifier}`;
-  return specifier;
 }
 
 function targetImports(
