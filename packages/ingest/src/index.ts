@@ -10,6 +10,7 @@ export type {
   IngestSourceLocation,
   IngestSourceFacts,
   IngestSpreadsheetCell,
+  IngestSpreadsheetMerge,
   IngestSpreadsheetRange,
   IngestSpreadsheetRow,
   IngestSheetPart,

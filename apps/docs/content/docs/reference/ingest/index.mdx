@@ -195,13 +195,24 @@ interface IngestSpreadsheetCell {
   address: string; // A1 cell address
   value: string; // the displayed value also emitted in `rows`
   formula?: string; // expression without the leading `=`
+  merge?: IngestSpreadsheetMerge;
+}
+
+interface IngestSpreadsheetMerge {
+  master: string; // A1 master cell address, for example "B2"
+  sourceRange: IngestSpreadsheetRange;
 }
 ```
 
 `sourceRows` aligns positionally with `rows` across the sheet/table
 `sourceRange`, including blank cells inside an emitted row, while skipped blank
 worksheet rows remain absent. `sourceRange` is the exact occupied range
-represented by the sheet, the table, or an emitted row.
+represented by the sheet, the table, or an emitted row. XLSX values are projected
+through Excel display semantics where possible, including saved numeric/date
+formats, rich text, hyperlinks, errors, and cached formula results. Merged cells
+carry the same `merge` descriptor on every member cell; only the master cell
+emits the merge value or formula, while followers keep their coordinates with an
+empty value.
 
 ### `SourceLoader`
 
