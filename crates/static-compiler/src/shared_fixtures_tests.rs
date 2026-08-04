@@ -392,7 +392,10 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "embedding.namespace-identity-mismatch",
             "embedding.sparse-media",
             "context-planning.history-cardinality",
-            "context-planning.invalid-wrapper-order"
+            "context-planning.invalid-wrapper-order",
+            "signal.provider.unstable_identity",
+            "signal.transportBinding.live_value",
+            "signal.transportBinding.unstable_identity"
         ]
     );
 
@@ -405,7 +408,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 30);
+    assert_eq!(coverage.identities.len(), 34);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -455,6 +458,10 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
                 "evidence.record" => "evidence-record-native-static.test.ts",
                 "session" => "session-native-static.test.ts",
                 "thread" => "thread-native-static.test.ts",
+                "signal"
+                | "signal.provider"
+                | "signal.transport"
+                | "signal.transportBinding" => "signal-native-static.test.ts",
                 _ => "first-party-native-negative-fixtures.test.ts",
             }
         );
