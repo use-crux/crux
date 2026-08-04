@@ -149,6 +149,8 @@ Session input admission dispatches through the provider-neutral
 append ordered ingress, reserve one canonical Work, and persist its wake in one
 transaction.
 
+Expose the provider-neutral Session step-boundary hook through adapter authoring.
+
 Export a provider-neutral Session conformance factory from
 `@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
 identity, ordered Work linkage, checkpoint replay, exact terminal result,

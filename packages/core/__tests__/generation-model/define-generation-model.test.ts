@@ -1,7 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
-import { defineGenerationModel } from "../../src/adapter-authoring";
+import type { ExecutorGenerateOptions } from "../../src";
+import {
+  defineGenerationModel,
+  managedGenerationStepBoundary,
+  type ManagedGenerationStepBoundary,
+  type ManagedGenerationStepBoundaryInput,
+  type ManagedGenerationStepBoundaryResult,
+  type ManagedGenerationStepIngress,
+} from "../../src/adapter-authoring";
 
 describe("defineGenerationModel", () => {
+  it("exposes the Session step boundary hook to adapter executors", () => {
+    const stepBoundary: ManagedGenerationStepBoundary = async (
+      _input: ManagedGenerationStepBoundaryInput,
+    ): Promise<ManagedGenerationStepBoundaryResult> => {
+      const ingress: ManagedGenerationStepIngress = {
+        id: "ingress",
+        cursor: 0,
+        input: {},
+      };
+      return { inputs: [ingress] };
+    };
+    const options: ExecutorGenerateOptions<string> = {
+      model: "fixture-model",
+      [managedGenerationStepBoundary]: stepBoundary,
+    };
+
+    expect(options[managedGenerationStepBoundary]).toBe(stepBoundary);
+  });
+
   it("freezes Core metadata and installs opaque runtime authority", () => {
     const createAgentExecutor = vi.fn(() => {
       throw new Error("not executed");
