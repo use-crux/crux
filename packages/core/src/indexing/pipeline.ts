@@ -71,11 +71,11 @@ export const transform = Object.freeze({
 /** Registry for building the built-in chunkers. */
 export const chunker = Object.freeze({
   text(options: ChunkingOptions = {}): Chunker {
-    return createChunker('text', '1', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
+    return createChunker('text', '2', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
   },
 
   structured(options: StructuredChunkerOptions = {}): Chunker {
-    return createChunker('structured', '1', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
+    return createChunker('structured', '2', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
   },
 
   parentChild(options: ParentChildChunkerOptions = {}): Chunker {
@@ -84,13 +84,13 @@ export const chunker = Object.freeze({
       childMaxChars: options.childMaxChars ?? 900,
       childOverlapChars: options.childOverlapChars ?? 120,
     }
-    return createChunker('parent-child', '1', normalizedOptions, async (document) =>
+    return createChunker('parent-child', '2', normalizedOptions, async (document) =>
       chunkDocumentParentChild(document, normalizedOptions),
     )
   },
 
   semantic(options: SemanticChunkerOptions): Chunker {
-    return createChunker(`semantic:${options.strategy}`, '1', sanitizeFingerprint(options), async (document) =>
+    return createChunker(`semantic:${options.strategy}`, '2', sanitizeFingerprint(options), async (document) =>
       chunkDocumentSemantic(document, options),
     )
   },

@@ -96,9 +96,9 @@ describe('indexer', () => {
       partIds: ['table:pricing'],
       sheets: ['Pricing'],
       tables: ['table:pricing'],
-      confidence: 'exact',
+      confidence: 'derived',
     })
-    expect(tableChunks[0].provenance?.sourceSpans?.[0]).toMatchObject({ partId: 'table:pricing' })
+    expect(tableChunks[0].provenance?.sourceSpans).toBeUndefined()
     expect(chunks.some((item) => item.provenance?.jsonPaths?.includes('$.plans[0]'))).toBe(true)
   })
 
@@ -288,8 +288,9 @@ describe('indexer', () => {
       partIds: ['csv:table:1'],
       pages: [1],
       tables: ['csv:table:1'],
-      confidence: 'exact',
+      confidence: 'derived',
     })
+    expect(tableChunk?.provenance?.sourceSpans).toBeUndefined()
   })
 
     it('applies overlap between adjacent chunks', async () => {

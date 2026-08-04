@@ -11,6 +11,13 @@
 import type { DenseEmbedding } from '../embedding'
 import type { ChunkingOptions, CruxDocument, SemanticBoundary } from './types'
 
+/** A contiguous slice of a source text. */
+export interface TextSlice {
+  readonly content: string
+  readonly start: number
+  readonly end: number
+}
+
 /** Split content into sentence segments with character offsets. */
 export function sentenceSegments(content: string): Array<{ text: string; start: number; end: number }> {
   const matches = [...content.matchAll(/[^.!?\n]+[.!?]?\s*/g)]
@@ -86,35 +93,42 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 /** Split content into chunks at paragraph boundaries, with overlap. */
 export function splitDocument(content: string, options: Required<ChunkingOptions>): string[] {
+  return splitDocumentSlices(content, options).map((slice) => slice.content)
+}
+
+/** Split content into original-source slices at paragraph boundaries, with overlap. */
+export function splitDocumentSlices(content: string, options: Required<ChunkingOptions>): TextSlice[] {
   if (content.length <= options.maxChars) {
-    return [content]
+    return [{ content, start: 0, end: content.length }]
   }
 
-  const paragraphs = content
-    .split(/\n\s*\n/g)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
+  const paragraphs = paragraphSlices(content)
 
-  const chunks: string[] = []
-  let current = ''
+  const chunks: TextSlice[] = []
+  let current: TextSlice | undefined
 
   for (const paragraph of paragraphs.length > 0 ? paragraphs : [content]) {
-    if (paragraph.length > options.maxChars) {
+    const paragraphSlice = typeof paragraph === 'string'
+      ? { content: paragraph, start: 0, end: paragraph.length }
+      : paragraph
+    if (paragraphSlice.content.length > options.maxChars) {
       flushCurrent()
-      for (const piece of splitLargeParagraph(paragraph, options.maxChars)) {
+      for (const piece of splitLargeParagraph(content, paragraphSlice.start, paragraphSlice.end, options.maxChars)) {
         pushChunk(piece)
       }
       continue
     }
 
-    const candidate = current ? `${current}\n\n${paragraph}` : paragraph
-    if (candidate.length <= options.maxChars) {
+    const candidate = current
+      ? { start: current.start, end: paragraphSlice.end, content: content.slice(current.start, paragraphSlice.end) }
+      : paragraphSlice
+    if (candidate.content.length <= options.maxChars) {
       current = candidate
       continue
     }
 
     flushCurrent()
-    current = paragraph
+    current = paragraphSlice
   }
 
   flushCurrent()
@@ -123,42 +137,68 @@ export function splitDocument(content: string, options: Required<ChunkingOptions
   function flushCurrent(): void {
     if (!current) return
     pushChunk(current)
-    current = ''
+    current = undefined
   }
 
-  function pushChunk(chunk: string): void {
+  function pushChunk(chunk: TextSlice): void {
     if (chunks.length === 0 || options.overlapChars <= 0) {
       chunks.push(chunk)
       return
     }
 
-    const overlap = chunks[chunks.length - 1].slice(-Math.min(options.overlapChars, chunks[chunks.length - 1].length))
-    chunks.push(overlap ? `${overlap}${chunk}` : chunk)
+    const start = Math.max(0, chunk.start - options.overlapChars)
+    chunks.push({ start, end: chunk.end, content: content.slice(start, chunk.end) })
   }
 }
 
-function splitLargeParagraph(paragraph: string, maxChars: number): string[] {
-  const sentences = paragraph
-    .match(/[^.!?]+[.!?]?\s*/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) ?? [paragraph]
-  const chunks: string[] = []
-  let current = ''
+function paragraphSlices(content: string): TextSlice[] {
+  const slices: TextSlice[] = []
+  const separator = /\n\s*\n/g
+  let start = 0
+  for (const match of content.matchAll(separator)) {
+    const end = match.index ?? 0
+    push(start, end)
+    start = end + match[0].length
+  }
+  push(start, content.length)
+  return slices
 
-  for (const sentence of sentences) {
-    if (sentence.length > maxChars) {
+  function push(sliceStart: number, sliceEnd: number): void {
+    const slice = content.slice(sliceStart, sliceEnd)
+    if (!slice.trim()) return
+    slices.push({ content: slice, start: sliceStart, end: sliceEnd })
+  }
+}
+
+function splitLargeParagraph(content: string, start: number, end: number, maxChars: number): TextSlice[] {
+  const paragraph = content.slice(start, end)
+  const sentences = [...paragraph.matchAll(/[^.!?]+[.!?]?\s*/g)]
+    .map((match) => ({
+      start: start + (match.index ?? 0),
+      end: start + (match.index ?? 0) + match[0].length,
+      content: match[0],
+    }))
+    .filter((sentence) => sentence.content.trim())
+  const chunks: TextSlice[] = []
+  let current: TextSlice | undefined
+
+  for (const sentence of sentences.length ? sentences : [{ start, end, content: paragraph }]) {
+    if (sentence.content.length > maxChars) {
       if (current) {
         chunks.push(current)
-        current = ''
+        current = undefined
       }
-      for (let index = 0; index < sentence.length; index += maxChars) {
-        chunks.push(sentence.slice(index, index + maxChars))
+      for (let index = sentence.start; index < sentence.end; index += maxChars) {
+        const pieceEnd = Math.min(index + maxChars, sentence.end)
+        chunks.push({ start: index, end: pieceEnd, content: content.slice(index, pieceEnd) })
       }
       continue
     }
 
-    const candidate = current ? `${current} ${sentence}` : sentence
-    if (candidate.length <= maxChars) {
+    const candidate = current
+      ? { start: current.start, end: sentence.end, content: content.slice(current.start, sentence.end) }
+      : sentence
+    if (candidate.content.length <= maxChars) {
       current = candidate
       continue
     }
