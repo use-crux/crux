@@ -1,10 +1,10 @@
 /**
- * Host-invoked, restart-safe transport normalization runner.
+ * Restart-safe transport normalization runner.
  *
  * @remarks This runner claims accepted envelopes and invokes provider
- * `onEvent` handlers. It is intentionally not an autonomous Runtime worker,
- * daemon, or second queue. Hosts and a later worker integration (PR2) must
- * call {@link TransportNormalizationRunner.runOnce} on a schedule they own.
+ * `onEvent` handlers. It is not a second queue, daemon, or transport lifecycle.
+ * Hosts may call {@link TransportNormalizationRunner.runOnce} directly; the
+ * existing Runtime worker invokes the same kernel once per maintenance tick.
  *
  * @module
  */
@@ -50,8 +50,9 @@ export interface TransportNormalizationRunOnceOptions {
 /**
  * Restart-safe normalization loop for accepted transport envelopes.
  *
- * @remarks Does not claim autonomous supervision, multi-worker ownership, or
- * Runtime maintenance integration. Those seams belong to a later PR.
+ * @remarks Ownership, polling cadence, abort/shutdown, namespace, and storage
+ * remain with the host or the existing Runtime worker that invokes
+ * {@link TransportNormalizationRunner.runOnce}.
  */
 export interface TransportNormalizationRunner {
   /**

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   CruxRuntimeError,
@@ -6,6 +7,9 @@ import {
   RuntimeManagedTransportContractError,
   type RuntimeManagedTransportBinding,
 } from "../../src/runtime/public";
+import { signal } from "../../src/signal";
+import { webhook } from "../../src/signal/transport";
+import { signalProvider } from "../../src/signal/provider";
 
 function binding(id: string, signalId: string): RuntimeManagedTransportBinding {
   return {
@@ -22,27 +26,55 @@ function binding(id: string, signalId: string): RuntimeManagedTransportBinding {
   };
 }
 
+function exampleProvider(id = "example") {
+  return signalProvider({
+    id,
+    transport: webhook({
+      async handle() {
+        throw new Error("unused");
+      },
+    }),
+    signals: {
+      order: signal({
+        id: "orders.created",
+        schema: z.object({ id: z.string().optional() }).passthrough(),
+      }),
+    },
+    async onEvent() {},
+  });
+}
+
+function providersFor(...bindings: readonly RuntimeManagedTransportBinding[]) {
+  const ids = new Set<string>();
+  for (const entry of bindings) {
+    ids.add(entry.adapter.id);
+    ids.add(entry.adapter.provider);
+  }
+  return [...ids].map((id) => exampleProvider(id));
+}
+
 describe("createRuntimeProgram", () => {
   it("canonicalizes declaration order into one immutable manifest", () => {
+    const transports = [
+      binding("updated", "orders.updated"),
+      binding("created", "orders.created"),
+    ] as const;
+    const providers = providersFor(...transports);
     const first = createRuntimeProgram({
       targets: [
         { name: "orders.updated", kind: "flow" },
         { name: "orders.created", kind: "flow" },
       ],
-      transports: [
-        binding("updated", "orders.updated"),
-        binding("created", "orders.created"),
-      ],
+      providers,
+      transports: [...transports],
     });
     const reordered = createRuntimeProgram({
       targets: [
         { name: "orders.created", kind: "flow" },
         { name: "orders.updated", kind: "flow" },
       ],
-      transports: [
-        binding("created", "orders.created"),
-        binding("updated", "orders.updated"),
-      ],
+      providers,
+      transports: [transports[1]!, transports[0]!],
     });
 
     expect(first.manifestHash).toMatch(/^[0-9a-f]{64}$/);
@@ -118,21 +150,22 @@ describe("createRuntimeProgram", () => {
   });
 
   it("rejects duplicate managed-binding identities", () => {
+    const created = binding("created", "orders.created");
     expect(() =>
       createRuntimeProgram({
         targets: [{ name: "orders.created", kind: "flow" }],
-        transports: [
-          binding("created", "orders.created"),
-          binding("created", "orders.created"),
-        ],
+        providers: providersFor(created),
+        transports: [created, created],
       }),
     ).toThrow(/Code: TARGET_DUPLICATE/);
   });
 
   it("allows a managed binding whose Signal id is not an executable target", () => {
+    const transport = binding("updated", "orders.updated");
     const program = createRuntimeProgram({
       targets: [{ name: "orders.created", kind: "flow" }],
-      transports: [binding("updated", "orders.updated")],
+      providers: providersFor(transport),
+      transports: [transport],
     });
     expect(program.transports.map((entry) => entry.target.signalId)).toEqual([
       "orders.updated",
@@ -140,14 +173,16 @@ describe("createRuntimeProgram", () => {
   });
 
   it("reuses the managed-transport validator for malformed or live declarations", () => {
+    const base = binding("created", "orders.created");
     const malformed = {
-      ...binding("created", "orders.created"),
+      ...base,
       client: new Request("https://example.test"),
     } as unknown as RuntimeManagedTransportBinding;
 
     expect(() =>
       createRuntimeProgram({
         targets: [{ name: "orders.created", kind: "flow" }],
+        providers: providersFor(base),
         transports: [malformed],
       }),
     ).toThrow(RuntimeManagedTransportContractError);
@@ -163,6 +198,7 @@ describe("createRuntimeProgram", () => {
           { name: "orders.created", kind: "flow" },
           { name: "orders.updated", kind: "flow" },
         ],
+        providers: providersFor(created, updated),
         transports: [
           created,
           {

@@ -12,15 +12,21 @@ import {
   type RuntimeHandlerTarget,
 } from "./handler/targets";
 import type { RuntimeManagedTransportBinding } from "./transport";
-import { validateRuntimeManagedTransportBinding } from "./transport";
 import type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
 import { isAgent, type AnyAgent } from "../agent";
 import type { GenerationModel } from "../generation-model";
+import type { SignalProvider } from "../signal/provider";
 import {
   canonicalizeProgramGenerationModels,
   generationModelManifestEntry,
   targetGenerationModelReference,
 } from "./program-generation-models";
+import {
+  canonicalizeProgramProviders,
+  providerManifestEntry,
+  validateProgramProviderBindings,
+} from "./program-providers";
+import { canonicalizeProgramTransports } from "./program-transports";
 
 const encoder = new TextEncoder();
 
@@ -32,11 +38,14 @@ export type RuntimeProgramTarget =
     });
 
 /**
- * Immutable executable target, definition, generation-model, and transport truth
- * for one project.
+ * Immutable executable target, definition, generation-model, provider, and
+ * transport truth for one project.
  *
- * @remarks Shallow-frozen and free of live clients, credentials, or registration.
- * Durable Agent Sessions may select models only from `generationModels`.
+ * @remarks Shallow-frozen and free of live clients, credentials, or registration
+ * in its inert declarations. Executable Signal providers are process authority
+ * analogous to named targets: they retain `onEvent` for normalization but never
+ * enter `RuntimeManagedTransportBinding` projections or secret-bearing hash
+ * fields. Durable Agent Sessions may select models only from `generationModels`.
  */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
@@ -47,6 +56,13 @@ export interface RuntimeProgram {
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
   /** Canonically ordered, statically declared generation models. */
   readonly generationModels: readonly GenerationModel[];
+  /**
+   * Explicitly imported executable Signal providers for managed-transport drain.
+   *
+   * @remarks Live process authority only. Manifest hashing retains provider ids,
+   * never callbacks, credentials, Requests, or clients.
+   */
+  readonly providers: readonly SignalProvider[];
   /** Canonically ordered, inert managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -84,6 +100,13 @@ export interface CreateRuntimeProgramOptions {
   readonly targets: readonly RuntimeProgramTargetInput[];
   /** Statically imported generation models available to Session selection. */
   readonly generationModels?: readonly GenerationModel[];
+  /**
+   * Explicitly imported executable Signal providers for transport normalization.
+   *
+   * @remarks Required for every managed-transport binding. Providers are live
+   * process authority and are never serialized into inert bindings.
+   */
+  readonly providers?: readonly SignalProvider[];
   /** Inert provider-neutral managed-transport bindings. */
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -96,8 +119,10 @@ export interface CreateRuntimeProgramOptions {
  *
  * @param options.targets - Statically imported Flow, task, and Agent targets.
  * @param options.generationModels - Models durable Agent Sessions may select.
+ * @param options.providers - Executable Signal providers for managed transports.
  * @param options.transports - Inert managed-transport bindings.
- * @returns A frozen program whose `manifestHash` covers targets, models, and transports.
+ * @returns A frozen program whose `manifestHash` covers targets, models,
+ *   provider ids, and transports.
  */
 export function createRuntimeProgram(
   options: CreateRuntimeProgramOptions,
@@ -112,11 +137,12 @@ export function createRuntimeProgram(
     options.generationModels ?? [],
     targets,
   );
-  const transports = canonicalizeTransports(options.transports);
+  const providers = canonicalizeProgramProviders(options.providers ?? []);
   // Signal transport targets name Signal definition ids, not Agent/Flow/task
   // Runtime targets. Binding well-formedness is enforced by the managed
-  // transport validator above; do not require a matching executable target.
-  validateAdapterDeclarations(transports);
+  // transport validator; do not require a matching executable target.
+  const transports = canonicalizeProgramTransports(options.transports);
+  validateProgramProviderBindings(providers, transports);
 
   const manifestHash = sha256Hex(
     encoder.encode(
@@ -128,6 +154,7 @@ export function createRuntimeProgram(
           generationModel: targetGenerationModelReference(target),
         })),
         generationModels: generationModels.map(generationModelManifestEntry),
+        providers: providers.map(providerManifestEntry),
         transports,
       }),
     ),
@@ -137,6 +164,7 @@ export function createRuntimeProgram(
     targets,
     targetDefinitions,
     generationModels,
+    providers,
     transports,
   });
 }
@@ -210,33 +238,6 @@ function canonicalTargetDefinitions(
   );
 }
 
-function canonicalizeTransports(
-  transports: readonly RuntimeManagedTransportBinding[],
-): readonly RuntimeManagedTransportBinding[] {
-  const canonical = transports
-    .map((transport) => validateRuntimeManagedTransportBinding(transport))
-    .sort((left, right) => compareText(left.id, right.id));
-  for (let index = 1; index < canonical.length; index += 1) {
-    if (canonical[index - 1]?.id === canonical[index]?.id) {
-      duplicateBinding(canonical[index]!.id);
-    }
-  }
-  return Object.freeze(canonical);
-}
-
-function validateAdapterDeclarations(
-  transports: readonly RuntimeManagedTransportBinding[],
-): void {
-  const adapters = new Map<string, RuntimeManagedTransportBinding["adapter"]>();
-  for (const transport of transports) {
-    const previous = adapters.get(transport.adapter.id);
-    if (previous && previous.provider !== transport.adapter.provider) {
-      incompatibleAdapter(transport);
-    }
-    adapters.set(transport.adapter.id, transport.adapter);
-  }
-}
-
 function targetManifestEntry(target: RuntimeProgramTarget): {
   readonly id: string;
   readonly kind: "flow" | "task" | "agent";
@@ -245,29 +246,4 @@ function targetManifestEntry(target: RuntimeProgramTarget): {
     id: runtimeHandlerTargetIdentity(target),
     kind: isAgent(target) ? "agent" : target.kind,
   };
-}
-function duplicateBinding(id: string): never {
-  throw createRuntimeError({
-    code: "TARGET_DUPLICATE",
-    whatFailed: `Runtime transport binding \`${id}\` is declared more than once.`,
-    why: "A Runtime program needs one stable declaration for each binding identity.",
-    whatStillWorks:
-      "Other uniquely identified targets and bindings remain valid.",
-    nextStep: `Remove or rename the duplicate binding \`${id}\`.`,
-  });
-}
-
-function incompatibleAdapter(transport: RuntimeManagedTransportBinding): never {
-  throw createRuntimeError({
-    code: "CAPABILITY_MISSING",
-    whatFailed: `Runtime transport adapter \`${transport.adapter.id}\` has incompatible declarations.`,
-    why: "One adapter identity cannot name different providers in the same Runtime program.",
-    whatStillWorks:
-      "Bindings with unique or compatible adapter declarations remain valid.",
-    nextStep: `Use one canonical provider declaration for adapter \`${transport.adapter.id}\`.`,
-  });
-}
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
 }

@@ -37,8 +37,9 @@ export interface RunTransportStoreConformanceTestsOptions {
  * Register provider-neutral transport envelope lifecycle laws.
  *
  * @remarks Covers accept-before-ack, duplicate/conflict, crash-after-ack,
- * bounded retry/dead-letter, and explicit replay. Normalization is host-invoked
- * through the restart-safe runner rather than an autonomous worker.
+ * bounded retry/dead-letter, and explicit replay. Normalization uses the
+ * restart-safe runner; the Runtime worker invokes the same kernel on its
+ * maintenance cadence.
  */
 export function runTransportStoreConformanceTests(
   options: RunTransportStoreConformanceTestsOptions,

@@ -17,6 +17,7 @@ import {
   acquireDurableRuntimeWorkerOwnership,
   acquireRuntimeWorkerOwnership,
 } from './ownership'
+import { createWorkerTransportDrain } from './worker-transport'
 
 const DEFAULT_STOP_TIMEOUT_MS = 10_000
 
@@ -63,7 +64,9 @@ export interface RuntimeWorkerStopOptions {
  * The worker resolves executable targets only from `program.targets`, disables
  * composer-owned maintenance, and runs its own immediate serial maintenance
  * loop. One worker may own a store and namespace in the current process.
- * `program.transports` remain inert.
+ * When the program declares managed transports, each tick also claims a bounded
+ * batch of accepted Signal-provider envelopes and normalizes them through the
+ * existing restart-safe transport kernel using `program.providers`.
  *
  * @param options - In-process runtime, immutable program, and optional polling override.
  * @returns An immutable worker handle whose `closed` promise tracks its lifecycle.
@@ -95,6 +98,19 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     )
   } catch (error) {
     runtime.dispose()
+    throw error
+  }
+
+  let transportDrain
+  try {
+    transportDrain = createWorkerTransportDrain({
+      program: options.program,
+      store: runtime.store,
+      namespace: runtime.namespace,
+    })
+  } catch (error) {
+    runtime.dispose()
+    releaseLocalOwnership()
     throw error
   }
 
@@ -148,6 +164,11 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     if (state !== 'running') return
     try {
       await runtime.maintenance.tick()
+      // Drain accepted transport envelopes on the same serial cadence. Claims
+      // left in-flight on stop expire under the existing lease/fence contract.
+      if (transportDrain && state === 'running') {
+        await transportDrain.runOnce()
+      }
     } catch (error) {
       await closeAfterFailure(error)
       return
