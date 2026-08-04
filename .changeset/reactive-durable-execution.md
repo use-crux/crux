@@ -144,3 +144,8 @@ step is independently resolved and enters the next real provider boundary
 before `prepareStep`; terminal-step ingress begins a new activation through an
 atomic lost-wake fence. Inspection reports bounded per-input claim, delivery,
 shared Work, checkpoint, and exact Thread basis evidence without payloads.
+
+Export a provider-neutral Session conformance factory from
+`@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
+identity, ordered Work linkage, checkpoint replay, exact terminal result,
+bounded inspection, and structured capability laws.

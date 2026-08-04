@@ -12,9 +12,7 @@ export type {
   RuntimeEngineAdapterTestHarness,
 } from "./engine";
 export { runReactiveCompositeAdapterTests } from "./reactive-composites";
-export type {
-  RunReactiveCompositeAdapterTestsOptions,
-} from "./reactive-composites";
+export type { RunReactiveCompositeAdapterTestsOptions } from "./reactive-composites";
 export { createTestRuntime } from "./test-runtime";
 export type {
   CreateTestRuntimeOptions,
@@ -23,3 +21,13 @@ export type {
   TestRuntimeSettleOptions,
   TestRuntimeSettleResult,
 } from "./test-runtime";
+export { runSessionConformanceTests } from "../../session/testing/conformance";
+export type {
+  RunSessionConformanceTestsOptions,
+  SessionConformanceHarness,
+  SessionConformanceInput,
+  SessionConformanceOutput,
+  SessionConformanceWorker,
+  SessionConformanceExecutionCounts,
+  SessionConformanceFaultBoundary,
+} from "../../session/testing/conformance";
