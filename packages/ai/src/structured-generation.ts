@@ -14,6 +14,7 @@
 
 import type { LanguageModel } from "ai";
 import type { GenerateObjectFn, Message } from "@use-crux/core";
+import { ValidationExhaustedError } from "@use-crux/core";
 import type {
   JsonSchemaObject,
   StructuredAttempt,
@@ -26,6 +27,7 @@ import {
   decodeStructuredValue,
 } from "@use-crux/core/adapter";
 import { resolveModel } from "@use-crux/core/routing";
+import type { z } from "zod";
 import type { SdkGateway } from "./gateway";
 import type { SdkLoopResultLike } from "./sdk-codec";
 import { createAiSdkCodec } from "./sdk-codec";
@@ -35,6 +37,9 @@ import {
 } from "./provider-profile";
 import { resolveAiSdkNativeModel } from "./generation-model";
 import { mapAiSdkError } from "./normalized-outcome";
+
+/** Safe prompt identity for standalone structured helpers (no authored prompt id). */
+const GENERATE_OBJECT_PROMPT_ID = "generateObject";
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
 export type StructuredGateway = Pick<SdkGateway, "generateText">;
@@ -130,7 +135,7 @@ export function createStructuredGenerateObjectFn(
         attempt.wireValue,
         plan.decodeManifest,
       );
-      return { object: options.schema.parse(decoded) as T };
+      return { object: parseAuthoredObject(options.schema, decoded) };
     };
 
     return resolveModel<LanguageModel, StructuredObjectResult<T>>(
@@ -178,4 +183,22 @@ function requestFromGenerateObjectOptions<T>(
 function modelLabel(model: LanguageModel): string {
   const info = extractModelInfo(model);
   return info.modelId || info.provider;
+}
+
+/**
+ * Authored-schema parse for standalone `GenerateObjectFn`.
+ *
+ * Failures become {@link ValidationExhaustedError} (attempts 0/0) so routing
+ * can classify them as `invalid_response`. Provider/transport/decode failures
+ * are never wrapped here — only Zod parse of the decoded wire value.
+ */
+function parseAuthoredObject<T>(schema: z.ZodType<T>, value: unknown): T {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new ValidationExhaustedError({
+    zodErrors: parsed.error,
+    attempts: 0,
+    maxAttempts: 0,
+    promptId: GENERATE_OBJECT_PROMPT_ID,
+  });
 }
