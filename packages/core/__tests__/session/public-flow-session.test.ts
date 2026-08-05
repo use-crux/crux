@@ -151,6 +151,61 @@ describe("public Flow Session lifecycle", () => {
     }
   });
 
+  it("close deactivates subscriptions so later Signal publication does not deliver", async () => {
+    const tick = signal({
+      id: "flow-session.close-tick",
+      schema: z.object({ id: z.string() }),
+    });
+    const ticker = flow(
+      "flow-session-close-tick",
+      { signals: { tick } },
+      async (scope) => {
+        await scope.waitFor(tick);
+        return "done" as const;
+      },
+    );
+    const { store, host, worker } = flowSessionHost("flow-session-close-sub", [
+      ticker,
+    ]);
+    try {
+      const owned = await host.run(() =>
+        session(ticker, { key: "close-sub" }),
+      );
+      const subscription = await host.run(() => owned.subscribe(tick));
+      expect(subscription.signalId).toBe("flow-session.close-tick");
+      await expect(owned.subscriptions()).resolves.toHaveLength(1);
+
+      await owned.close();
+      await expect(owned.status()).resolves.toMatchObject({ state: "closed" });
+      await expect(owned.subscriptions()).resolves.toEqual([]);
+      await expect(owned.subscribe(tick)).rejects.toMatchObject({
+        code: "SESSION_CLOSED",
+      });
+      await expect(owned.send(null)).rejects.toMatchObject({
+        code: "SESSION_CLOSED",
+      });
+      await expect(owned.close()).resolves.toBeUndefined();
+
+      const receipt = await tick.publish({ id: "after-close" });
+      expect(receipt.guarantee).toBe("process-local");
+      const deliveries = await store.transact(async (tx) => {
+        if (!tx.signals) throw new Error("missing signals");
+        return tx.signals.listDeliveries(
+          "flow-session-close-sub",
+          receipt.occurrenceId,
+        );
+      });
+      expect(
+        deliveries.some(
+          (delivery) => delivery.consumer.kind === "session.subscription",
+        ),
+      ).toBe(false);
+    } finally {
+      await worker.stop();
+      host.dispose();
+    }
+  });
+
   it("treats key-order variants as one canonical subscription identity", async () => {
     const changed = signal({
       id: "flow-session.match-order",

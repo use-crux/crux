@@ -23,6 +23,11 @@ export function upsertMemorySessionSubscription(
   if (!session) {
     throw new Error(`Session "${input.sessionId}" was not found.`);
   }
+  if (session.state !== "ready") {
+    throw new Error(
+      `Session "${input.sessionId}" no longer accepts Signal subscriptions.`,
+    );
+  }
   const match = sessionSubscriptionMatchValue(input.match);
   const matchKey = sessionSubscriptionMatchKey(match);
   const existing = [...data.sessionSubscriptions.values()].find(
@@ -99,12 +104,20 @@ export function listMemoryActiveSubscriptionsForSignal(
   signalId: string,
 ): readonly RuntimeSessionSubscriptionRecord[] {
   return Object.freeze(
-    [...data.sessionSubscriptions.values()].filter(
-      (subscription) =>
-        subscription.namespace === namespace &&
-        subscription.signalId === signalId &&
-        subscription.state === "active",
-    ),
+    [...data.sessionSubscriptions.values()].filter((subscription) => {
+      if (
+        subscription.namespace !== namespace ||
+        subscription.signalId !== signalId ||
+        subscription.state !== "active"
+      ) {
+        return false;
+      }
+      // Defense in depth: never fan out to sealed Session lifecycles.
+      const session = data.sessionsById.get(
+        scopedKey(namespace, subscription.sessionId),
+      );
+      return session?.state === "ready";
+    }),
   );
 }
 

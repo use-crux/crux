@@ -9,6 +9,7 @@ import {
   signalSourcePredicate,
 } from "../signal/source";
 import { SessionCapabilityError, SessionInputError } from "./errors";
+import { assertSessionAcceptsIngress } from "./lifecycle";
 import type { SessionSubscription } from "./target-types";
 import { sha256Hex } from "../content/sha256";
 import {
@@ -32,6 +33,10 @@ export async function subscribeSession(
   record: RuntimeSessionRecord,
   source: unknown,
 ): Promise<SessionSubscription> {
+  const latest = runtime.store.sessions
+    ? await runtime.store.sessions.get(runtime.namespace, record.sessionId)
+    : null;
+  assertSessionAcceptsIngress(latest ?? record);
   if (!isStaticSignalSource(source)) {
     throw new SessionInputError(
       "Session.subscribe() accepts only a Signal or match filter.",

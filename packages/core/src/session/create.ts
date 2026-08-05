@@ -15,6 +15,7 @@ import {
   GenerationModelNotStaticError,
   SessionCapabilityError,
   SessionIdentityConflictError,
+  SessionTombstonedError,
 } from "./errors";
 import { createSessionHandle } from "./handle";
 import { requireCompatibleModel } from "./model-guard";
@@ -171,6 +172,9 @@ async function createSessionRecord<TTarget extends SessionTarget>(
   });
   if (created.kind === "conflict") {
     throw new SessionIdentityConflictError(input.key);
+  }
+  if (created.kind === "tombstone") {
+    throw new SessionTombstonedError(input.key);
   }
   return readySessionHandle(
     host.runtime,

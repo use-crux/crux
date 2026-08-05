@@ -88,6 +88,19 @@ async function dispatch(port: SessionPort, operation: SessionOperation, encoded:
         requiredString(input[2]),
         requiredDate(input[3]),
       )
+    case 'close':
+      return await port.close?.(decodeCompositeValue(encoded))
+    case 'kill':
+      return await port.kill?.(decodeCompositeValue(encoded))
+    case 'delete':
+      return await port.delete?.(decodeCompositeValue(encoded))
+    case 'fork':
+      return await port.fork?.(decodeCompositeValue(encoded))
+    case 'listForks':
+      return await port.listForks?.(
+        requiredString(input[0]),
+        requiredString(input[1]),
+      )
   }
 }
 
@@ -115,6 +128,11 @@ function assertOperation(value: string): SessionOperation {
     case 'listSubscriptions':
     case 'listActiveSubscriptionsForSignal':
     case 'unsubscribe':
+    case 'close':
+    case 'kill':
+    case 'delete':
+    case 'fork':
+    case 'listForks':
       return value
     default:
       throw new Error(`Unknown Runtime Session operation "${value}".`)

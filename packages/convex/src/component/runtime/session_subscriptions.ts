@@ -30,6 +30,11 @@ export async function upsertSessionSubscription(ctx: MutationCtx, input: Subscri
   if (!sessionRow) {
     throw new Error(`Session "${input.sessionId}" was not found.`)
   }
+  if (sessionRow.state !== 'ready') {
+    throw new Error(
+      `Session "${input.sessionId}" no longer accepts Signal subscriptions.`,
+    )
+  }
   const match = sessionSubscriptionMatchValue(input.match)
   const matchKey = sessionSubscriptionMatchKey(match)
   const now = input.now.toISOString()
@@ -126,7 +131,13 @@ export async function listActiveSubscriptionsForSignal(
       q.eq('namespace', namespace).eq('signalId', signalId).eq('state', 'active'),
     )
     .collect()
-  return rows.map(subscriptionRecord)
+  // Defense in depth: only ready Sessions receive Signal fan-out.
+  const allowed = []
+  for (const row of rows) {
+    const session = await readSession(ctx, namespace, row.sessionId)
+    if (session?.state === 'ready') allowed.push(subscriptionRecord(row))
+  }
+  return allowed
 }
 
 export async function unsubscribeSessionSubscription(

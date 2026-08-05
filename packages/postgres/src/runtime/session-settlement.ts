@@ -3,6 +3,10 @@ import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import {
+  maybeFinalizeClosingSession,
+  sessionAcceptsWorkMutation,
+} from './session-controls'
+import {
   listTurnInputs,
   readSession,
   readSessionInput,
@@ -29,6 +33,7 @@ export async function settleSessionTurn(
     true,
   )
   if (!session) throw new Error(`Session "${input.sessionId}" was not found.`)
+  if (!sessionAcceptsWorkMutation(session)) return session
   const accepted = await readSessionInput(
     db,
     schema,
@@ -90,18 +95,23 @@ export async function settleSessionTurn(
     db,
     schema,
     faults,
-    Object.freeze({
-      ...session,
-      ...(outcome === 'completed' ? { processedCursor } : {}),
-      pendingInputs: session.pendingInputs - joined.length,
-      pendingWork:
-        outcome === 'completed' ? session.pendingWork - 1 : session.pendingWork,
-      blockedWork:
-        outcome === 'blocked' ? session.blockedWork + 1 : session.blockedWork,
-      statistics,
-      activation: outcome === 'completed' ? undefined : session.activation,
-      wakePending: session.acceptedCursor > processedCursor,
-      updatedAt: input.now.toISOString(),
-    }),
+    maybeFinalizeClosingSession(
+      Object.freeze({
+        ...session,
+        ...(outcome === 'completed' ? { processedCursor } : {}),
+        pendingInputs: session.pendingInputs - joined.length,
+        pendingWork:
+          outcome === 'completed'
+            ? session.pendingWork - 1
+            : session.pendingWork,
+        blockedWork:
+          outcome === 'blocked' ? session.blockedWork + 1 : session.blockedWork,
+        statistics,
+        activation: outcome === 'completed' ? undefined : session.activation,
+        wakePending: session.acceptedCursor > processedCursor,
+        updatedAt: input.now.toISOString(),
+      }),
+      input.now,
+    ),
   )
 }

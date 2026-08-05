@@ -12,9 +12,14 @@ export {
   GenerationModelCapabilityError,
   GenerationModelNotStaticError,
   SessionCapabilityError,
+  SessionClosedError,
+  SessionDeletedError,
   SessionIdentityConflictError,
   SessionInputError,
+  SessionLifecycleError,
+  SessionNotClosedError,
   SessionNotFoundError,
+  SessionTombstonedError,
 } from "./errors";
 export type {
   AgentModel,
@@ -22,6 +27,8 @@ export type {
   Session,
   SessionFor,
   SessionCheckpointInspection,
+  SessionForkLineage,
+  SessionForkSummary,
   SessionInputHandle,
   SessionInputDeliveryInspection,
   SessionInputInspection,

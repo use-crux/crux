@@ -1,5 +1,6 @@
 import { recordSessionStatistics } from '@use-crux/core/runtime/internal/session-store'
 import type { MutationCtx } from '../_generated/server.js'
+import { sessionAcceptsWorkMutation } from './session_controls'
 import {
   readSession,
   replaceSession,
@@ -18,6 +19,7 @@ type StepInput = Parameters<SessionPort['claimStepInputs']>[0]
 /** Link the complete cursor-consecutive prefix to one leased Work. */
 export async function startSessionTurn(ctx: MutationCtx, input: TurnInput) {
   const row = await requiredSession(ctx, input.namespace, input.sessionId)
+  if (!sessionAcceptsWorkMutation(sessionRecord(row))) return null
   const activation = row.activation
   if (!activation || activation.primaryInputId !== input.inputId) return null
   if (activation.state === 'running') {
@@ -64,6 +66,11 @@ export async function getSessionTurnInputs(ctx: MutationCtx, namespace: string, 
 /** Claim previously linked and newly accepted input at one semantic boundary. */
 export async function claimSessionStepInputs(ctx: MutationCtx, input: StepInput) {
   const row = await requiredSession(ctx, input.namespace, input.sessionId)
+  if (!sessionAcceptsWorkMutation(sessionRecord(row))) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer holds commit authority.`,
+    )
+  }
   const activation = row.activation
   if (!activation || activation.workId !== input.workId || activation.state !== 'running') {
     throw new Error(`Session activation "${input.workId}" is not running.`)

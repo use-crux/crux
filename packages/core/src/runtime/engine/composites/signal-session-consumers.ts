@@ -74,13 +74,21 @@ async function matchingSessionSubscriptions(
     input.namespace,
     input.signalId,
   );
-  return Object.freeze(
-    active.filter((subscription) =>
-      subscription.match === undefined
-        ? true
-        : matchesSignalData(subscription.match, input.payload),
-    ),
-  );
+  const matched: RuntimeSessionSubscriptionRecord[] = [];
+  for (const subscription of active) {
+    if (
+      subscription.match !== undefined &&
+      !matchesSignalData(subscription.match, input.payload)
+    ) {
+      continue;
+    }
+    // Defense in depth: never deliver to sealed Session lifecycles even if a
+    // subscription row remained active after a concurrent close/kill.
+    const session = await sessions.get(input.namespace, subscription.sessionId);
+    if (!session || session.state !== "ready") continue;
+    matched.push(subscription);
+  }
+  return Object.freeze(matched);
 }
 
 /**

@@ -56,6 +56,21 @@ void created.then(async (handle) => {
   expectTypeOf(handle.status()).resolves.toEqualTypeOf<SessionStatus>();
   expectTypeOf(handle.stats()).resolves.toEqualTypeOf<ExecutionStats>();
   expectTypeOf(handle.thread.read()).resolves.toEqualTypeOf<ThreadSnapshot>();
+  expectTypeOf(handle.close()).resolves.toEqualTypeOf<void>();
+  expectTypeOf(handle.kill()).resolves.toEqualTypeOf<void>();
+  expectTypeOf(handle.delete()).resolves.toEqualTypeOf<void>();
+  void handle.fork().then((child) => {
+    expectTypeOf(child.targetKind).toEqualTypeOf<"agent">();
+    expectTypeOf(child.send).parameters.toEqualTypeOf<
+      [{ message: string }]
+    >();
+  });
+  void handle.clone().then((child) => {
+    expectTypeOf(child.targetKind).toEqualTypeOf<"agent">();
+  });
+  expectTypeOf(handle.forks()).resolves.items.toMatchTypeOf<{
+    readonly sessionId: string;
+  }>();
   // @ts-expect-error Phase 1 acceptance has no joinable output contract.
   accepted.output;
   // @ts-expect-error Session-owned Thread views never expose mutation.

@@ -101,3 +101,61 @@ export class SessionTurnResultArtifactError extends CruxRuntimeError {
     this.name = "SessionTurnResultArtifactError";
   }
 }
+
+/** Raised when external ingress targets a closed, killed, or closing-sealed Session. */
+export class SessionClosedError extends Error {
+  readonly code = "SESSION_CLOSED";
+
+  constructor(sessionId: string) {
+    super(
+      `Session "${sessionId}" no longer accepts external ingress. It is closed or killed.`,
+    );
+    this.name = "SessionClosedError";
+  }
+}
+
+/** Raised when a handle method targets a deleted Session tombstone. */
+export class SessionDeletedError extends Error {
+  readonly code = "SESSION_DELETED";
+
+  constructor(sessionId: string) {
+    super(
+      `Session "${sessionId}" has been deleted. Only its key tombstone remains.`,
+    );
+    this.name = "SessionDeletedError";
+  }
+}
+
+/** Raised when delete is requested while the Session is still open or draining. */
+export class SessionNotClosedError extends Error {
+  readonly code = "SESSION_NOT_CLOSED";
+
+  constructor(sessionId: string) {
+    super(
+      `Session "${sessionId}" must be closed or killed before delete(). Open and closing Sessions remain Thread owners.`,
+    );
+    this.name = "SessionNotClosedError";
+  }
+}
+
+/** Raised when a stable key was deliberately ended and cannot be recreated. */
+export class SessionTombstonedError extends Error {
+  readonly code = "SESSION_TOMBSTONED";
+
+  constructor(key: string) {
+    super(
+      `Session key "${key}" is tombstoned and cannot silently resurrect a deleted lifecycle.`,
+    );
+    this.name = "SessionTombstonedError";
+  }
+}
+
+/** Raised when a lifecycle transition is illegal for the current durable state. */
+export class SessionLifecycleError extends Error {
+  readonly code = "SESSION_LIFECYCLE_CONFLICT";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SessionLifecycleError";
+  }
+}
