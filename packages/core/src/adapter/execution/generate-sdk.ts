@@ -577,7 +577,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         },
         async (result) => {
           await refreshEffectJournalRetryLinks(
-            result.steps.flatMap((step) =>
+            (result.steps ?? []).flatMap((step) =>
               step.request ? [step.request] : [],
             ),
           );

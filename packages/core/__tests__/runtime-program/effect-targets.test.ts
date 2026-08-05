@@ -10,10 +10,13 @@ import {
 } from "@use-crux/core/runtime";
 import { resetEffectDefinitionsForTesting } from "../../src/effect/define-effect";
 import { resetEffectLedgerForTesting } from "../../src/effect/internal/ledger";
+import { resetEffectOccurrencesForTesting } from "../../src/effect/internal/occurrence";
 import { resetHooks } from "../../src/runtime/runtime";
 
 afterEach(() => {
   resetEffectDefinitionsForTesting();
+  resetEffectLedgerForTesting();
+  resetEffectOccurrencesForTesting();
   resetHooks();
 });
 
@@ -95,6 +98,7 @@ describe("RuntimeProgram Effect recovery targets", () => {
     });
     const completed = await updateFlow.run();
     firstRuntime.dispose();
+    resetEffectLedgerForTesting();
 
     const restartedRuntime = config({
       runtime: node({
@@ -142,6 +146,7 @@ describe("RuntimeProgram Effect recovery targets", () => {
     });
     const completed = await updateFlow.run();
     firstRuntime.dispose();
+    resetEffectLedgerForTesting();
 
     const recoverV2 = vi.fn(async () => undefined);
     const updateV2 = effect(
@@ -253,11 +258,12 @@ describe("RuntimeProgram Effect recovery targets", () => {
     });
   });
 
-  it("rejects a recoverable Effect in a durable scope without a declared target", async () => {
+  it("keeps an undeclared recoverable Effect callable and reports handler_unavailable after restart", async () => {
     const store = inMemoryRuntimeStore();
     const execute = vi.fn(async () => "updated");
+    const recoverUpdate = vi.fn(async () => undefined);
     const update = effect("customer.undeclared-update", execute, {
-      recover: async () => undefined,
+      recover: recoverUpdate,
     });
     const runtime = config({
       runtime: node({
@@ -272,12 +278,153 @@ describe("RuntimeProgram Effect recovery targets", () => {
       }),
     });
 
-    await expect(update.run()).rejects.toMatchObject({
-      code: "TARGET_NOT_FOUND",
-      whatFailed: expect.stringMatching(/customer\.undeclared-update/),
-      nextStep: expect.stringMatching(/effectTargets/),
-    });
-    expect(execute).not.toHaveBeenCalled();
+    const execution = await update.run();
+    expect(execution.output).toBe("updated");
+    expect(execute).toHaveBeenCalledOnce();
     runtime.dispose();
+    resetEffectLedgerForTesting();
+
+    const restartedRuntime = config({
+      runtime: node({
+        store: store.testing.restart(),
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-a",
+        autoStartMaintenance: false,
+      }),
+    });
+
+    await expect(recover(execution.receipt)).resolves.toMatchObject({
+      status: "handler_unavailable",
+      error: {
+        code: "EFFECT_RECOVERY_HANDLER_UNAVAILABLE",
+        message: expect.stringMatching(/customer\.undeclared-update/),
+      },
+    });
+    expect(recoverUpdate).not.toHaveBeenCalled();
+    restartedRuntime.dispose();
+  });
+
+  it("recovers an undeclared durable Effect through its live definition", async () => {
+    const recoverUpdate = vi.fn(async () => undefined);
+    const update = effect("customer.live-update", async () => "updated", {
+      recover: recoverUpdate,
+    });
+    const runtime = config({
+      runtime: node({
+        store: inMemoryRuntimeStore(),
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-a",
+        autoStartMaintenance: false,
+      }),
+    });
+
+    const execution = await update.run();
+
+    await expect(recover(execution.receipt)).resolves.toMatchObject({
+      status: "recovered",
+    });
+    expect(recoverUpdate).toHaveBeenCalledOnce();
+    runtime.dispose();
+  });
+
+  it("retains a live handler for a process-only recovery envelope", async () => {
+    const recoverUpdate = vi.fn(async () => undefined);
+    const update = effect(
+      "customer.process-only-update",
+      async (input: Map<string, string>) => input.get("status"),
+      { recover: recoverUpdate },
+    );
+    const runtime = config({
+      runtime: node({
+        store: inMemoryRuntimeStore(),
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-a",
+        autoStartMaintenance: false,
+      }),
+    });
+
+    const execution = await update.run(new Map([["status", "updated"]]));
+
+    await expect(recover(execution.receipt)).resolves.toMatchObject({
+      status: "recovered",
+    });
+    expect(recoverUpdate).toHaveBeenCalledOnce();
+    runtime.dispose();
+  });
+
+  it("does not reuse a colliding live handler from another Runtime partition", async () => {
+    const firstStore = inMemoryRuntimeStore();
+    const recoverFirst = vi.fn(async () => undefined);
+    const first = effect("customer.first-update", async () => "first", {
+      recover: recoverFirst,
+    });
+    const firstRuntime = config({
+      runtime: node({
+        store: firstStore,
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-a",
+        autoStartMaintenance: false,
+      }),
+    });
+    const firstExecution = await first.run();
+    firstRuntime.dispose();
+    resetEffectLedgerForTesting();
+    resetEffectOccurrencesForTesting();
+
+    const recoverSecond = vi.fn(async () => undefined);
+    const second = effect("customer.second-update", async () => "second", {
+      recover: recoverSecond,
+    });
+    const secondRuntime = config({
+      runtime: node({
+        store: inMemoryRuntimeStore(),
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-b",
+        autoStartMaintenance: false,
+      }),
+    });
+    const secondExecution = await second.run();
+    expect(secondExecution.receipt.id).toBe(firstExecution.receipt.id);
+    secondRuntime.dispose();
+
+    const restartedRuntime = config({
+      runtime: node({
+        store: firstStore.testing.restart(),
+        program: createRuntimeProgram({
+          targets: [],
+          transports: [],
+          effectTargets: [],
+        }),
+        namespace: "tenant-a",
+        autoStartMaintenance: false,
+      }),
+    });
+
+    await expect(recover(firstExecution.receipt)).resolves.toMatchObject({
+      status: "handler_unavailable",
+    });
+    expect(recoverFirst).not.toHaveBeenCalled();
+    expect(recoverSecond).not.toHaveBeenCalled();
+    restartedRuntime.dispose();
   });
 });

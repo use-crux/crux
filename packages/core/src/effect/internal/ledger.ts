@@ -31,6 +31,7 @@ import {
   prepareLedgerReconciliation,
 } from "./reconcile";
 import type { DurableEffectScopeSnapshot } from "./durable-records";
+import type { DurableEffectLedgerBinding } from "./durable-binding";
 import { restoreDurableLedgerSnapshot } from "./ledger-restore";
 import { assertLedgerReceiptTransition } from "./durable-state-machine";
 import { persistDurableEffectReconciliation } from "./durable-recovery";
@@ -109,7 +110,10 @@ export interface EffectLedger {
   reconciliationsFor(receiptId: string): readonly ReconciliationAudit[];
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
   stackFor(boundaryId: string): readonly RecoveryStackEntry[];
-  restoreDurableSnapshot(snapshot: DurableEffectScopeSnapshot): void;
+  restoreDurableSnapshot(
+    snapshot: DurableEffectScopeSnapshot,
+    binding?: DurableEffectLedgerBinding,
+  ): void;
 }
 
 const receipts = new Map<string, EffectReceipt>();
@@ -346,7 +350,7 @@ export const effectLedger: EffectLedger = {
   stackFor(boundaryId) {
     return stacksByBoundary.get(boundaryId) ?? [];
   },
-  restoreDurableSnapshot(snapshot) {
+  restoreDurableSnapshot(snapshot, binding) {
     restoreDurableLedgerSnapshot(snapshot, {
       receipts,
       envelopes,
@@ -354,7 +358,7 @@ export const effectLedger: EffectLedger = {
       units,
       unitIdsByBoundary,
       stacksByBoundary,
-    });
+    }, binding);
   },
 };
 

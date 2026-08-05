@@ -1,7 +1,12 @@
 /** Durable snapshot hydration for the in-process ledger cache. @internal @module */
 
-import type { EffectReceipt, EffectScopeRecord } from "../receipt-types";
+import type {
+  EffectReceipt,
+  EffectScopeRecord,
+  RecoveryUnitRecord,
+} from "../receipt-types";
 import type { DurableEffectScopeSnapshot } from "./durable-records";
+import type { DurableEffectLedgerBinding } from "./durable-binding";
 import type {
   RecoveryStackEntry,
   RegisteredRecoveryUnit,
@@ -22,6 +27,7 @@ export interface LedgerRestoreState {
 export function restoreDurableLedgerSnapshot(
   snapshot: DurableEffectScopeSnapshot,
   state: LedgerRestoreState,
+  binding?: DurableEffectLedgerBinding,
 ): void {
   state.scopes.set(snapshot.scope.id, snapshot.scopeRecord.scope);
   for (const record of snapshot.receipts) {
@@ -30,6 +36,16 @@ export function restoreDurableLedgerSnapshot(
   const restoredUnitIds: string[] = [];
   for (const record of snapshot.units) {
     const cached = state.units.get(record.unit.id);
+    const liveEffect =
+      record.kind === "effect" &&
+      cached?.kind === "effect" &&
+      binding &&
+      cached.handlerBinding?.namespace === binding.namespace &&
+      cached.handlerBinding.store === binding.store &&
+      cached.handlerBinding.effectVersion === record.effectVersion &&
+      sameUnitIdentity(cached, record.unit)
+        ? cached
+        : undefined;
     const restored: RegisteredRecoveryUnit | undefined =
       record.kind === "boundary" && record.scope
         ? Object.freeze({
@@ -41,8 +57,14 @@ export function restoreDurableLedgerSnapshot(
           ? Object.freeze({
               kind: "effect" as const,
               ...record.unit,
-              ...(cached?.recoveryOperation
-                ? { recoveryOperation: cached.recoveryOperation }
+              ...(liveEffect?.execute
+                ? {
+                    execute: liveEffect.execute,
+                    handlerBinding: liveEffect.handlerBinding,
+                  }
+                : {}),
+              ...(liveEffect?.recoveryOperation
+                ? { recoveryOperation: liveEffect.recoveryOperation }
                 : {}),
             })
           : undefined;
@@ -93,4 +115,27 @@ export function restoreDurableLedgerSnapshot(
       durable: true,
     }));
   }
+}
+
+function sameUnitIdentity(
+  cached: RegisteredRecoveryUnit,
+  durable: RecoveryUnitRecord,
+): boolean {
+  return (
+    cached.id === durable.id &&
+    cached.boundaryId === durable.boundaryId &&
+    cached.idempotencyKey === durable.idempotencyKey &&
+    sameValues(cached.receiptIds, durable.receiptIds) &&
+    sameValues(cached.effectIds, durable.effectIds)
+  );
+}
+
+function sameValues(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }

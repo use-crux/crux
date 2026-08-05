@@ -29,7 +29,6 @@ import {
   createImplicitRootBoundary,
 } from "./boundary-identity";
 import {
-  hasDurableEffectLedger,
   linkDurableEffectReceiptEvidence,
   linkDurableEffectReceiptRetryCount,
   persistDurableReceiptTransition,
@@ -51,8 +50,6 @@ import {
   effectPreparationError,
   isOptionalEffectJsonSafe,
 } from "./execution-helpers";
-import { currentDurableEffectLedgerBinding } from "./durable-binding";
-import { assertRuntimeEffectTarget } from "../../runtime/effect-targets";
 import {
   currentEffectJournalContext,
   registerEffectJournalLinker,
@@ -103,12 +100,6 @@ export async function executeEffectOccurrence<TInput, TOutput>(
         "the effect out of this boundary, or use " +
         "`{ recovery: 'best-effort' }`.",
     });
-  }
-  if (options?.recover) {
-    const durableBinding = currentDurableEffectLedgerBinding();
-    if (durableBinding) {
-      assertRuntimeEffectTarget(durableBinding.program, definition);
-    }
   }
   const boundary =
     explicitBoundary?.ref ?? createImplicitRootBoundary();
@@ -257,7 +248,6 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           isOptionalEffectJsonSafe(input) &&
           isOptionalEffectJsonSafe(output) &&
           isOptionalEffectJsonSafe(captured),
-        resolveFromProgram: hasDurableEffectLedger(),
         recover: options.recover,
       });
     }
@@ -300,7 +290,6 @@ export async function executeEffectOccurrence<TInput, TOutput>(
           durable:
             isOptionalEffectJsonSafe(input) &&
             isOptionalEffectJsonSafe(captured),
-          resolveFromProgram: hasDurableEffectLedger(),
           status: "prepared",
           recover: options.recover,
         });

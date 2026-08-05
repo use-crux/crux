@@ -12,7 +12,10 @@ import type {
   RegisteredRecoveryUnit,
   StoredRecoveryEnvelope,
 } from "./recovery-stack";
-import { currentDurableEffectLedgerBinding } from "./durable-binding";
+import {
+  currentDurableEffectLedgerBinding,
+  type DurableEffectLedgerBinding,
+} from "./durable-binding";
 import {
   durableEnvelopeRecord,
   durableReceiptRecord,
@@ -26,7 +29,10 @@ export interface DurableLedgerCache {
   getUnit(id: string): RegisteredRecoveryUnit | undefined;
   getEnvelope(id: string): StoredRecoveryEnvelope | undefined;
   stackFor(boundaryId: string): readonly RecoveryStackEntry[];
-  restore(snapshot: DurableEffectScopeSnapshot): void;
+  restore(
+    snapshot: DurableEffectScopeSnapshot,
+    binding?: DurableEffectLedgerBinding,
+  ): void;
 }
 
 /** Whether the current execution has a durable Effects-capable Runtime store. */
@@ -249,7 +255,7 @@ export async function settleDurableEffectExecution(
       };
       if (await effects.settleExecution(settlement)) {
         if (expired) {
-          await restoreCache(effects, cache, scope.ref, binding.namespace);
+          await restoreCache(effects, cache, scope.ref, binding);
         }
         return;
       }
@@ -307,7 +313,7 @@ export async function restoreDurableEffectScope(
     namespace: binding.namespace,
   });
   if (!snapshot) return false;
-  cache.restore(snapshot);
+  cache.restore(snapshot, binding);
   return true;
 }
 
@@ -341,10 +347,10 @@ async function restoreCache(
   effects: import("../../runtime/ports/effects").RuntimeEffectStorePort,
   cache: DurableLedgerCache,
   scope: EffectScopeRef,
-  namespace: string,
+  binding: DurableEffectLedgerBinding,
 ): Promise<void> {
   cache.restore(requireValue(
-    await effects.reconstructScope(scope, { namespace }),
+    await effects.reconstructScope(scope, { namespace: binding.namespace }),
     "durable Effect scope",
-  ));
+  ), binding);
 }

@@ -38,6 +38,16 @@ export async function persistDurableScopeTransition(
       )];
     });
     if (!snapshot && missingUnits.length === 0) return;
+    if (
+      snapshot &&
+      missingUnits.length === 0 &&
+      snapshot.scopeRecord.scope.status === scope.status &&
+      snapshot.scopeRecord.scope.parentId === scope.parentId &&
+      snapshot.scopeRecord.scope.unitIds.length === scope.unitIds.length &&
+      snapshot.scopeRecord.scope.unitIds.every(
+        (unitId, index) => unitId === scope.unitIds[index],
+      )
+    ) return;
     const next = {
       ...(snapshot?.scopeRecord ?? { namespace: binding.namespace }),
       scope,

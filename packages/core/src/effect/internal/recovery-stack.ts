@@ -19,6 +19,8 @@ import type {
   RecoveryUnitLifecycle,
   RecoveryUnitRecord,
 } from "../receipt-types";
+import type { RuntimeStoreAdapter } from "../../runtime/store";
+import { currentDurableEffectLedgerBinding } from "./durable-binding";
 import { effectLedger } from "./ledger";
 
 /** Settlement shared by callers joining one in-flight recovery. */
@@ -57,6 +59,12 @@ export interface RegisteredEffectRecoveryUnit
   readonly execute?: (
     invocation: RecoveryHandlerInvocation,
   ) => Promise<void>;
+  /** Durable partition that owns the process-local handler binding. */
+  readonly handlerBinding?: {
+    readonly namespace: string;
+    readonly store: RuntimeStoreAdapter;
+    readonly effectVersion: number;
+  };
   readonly recoveryOperation?: Promise<RecoveryOperationResult>;
 }
 
@@ -95,6 +103,8 @@ export interface RecoveryUnitRegistration {
   readonly envelope: StoredRecoveryEnvelope;
   /** Bound recovery handler. */
   readonly execute?: NonNullable<RegisteredEffectRecoveryUnit["execute"]>;
+  /** Durable partition that owns the bound handler. */
+  readonly handlerBinding?: RegisteredEffectRecoveryUnit["handlerBinding"];
   /** Initial lifecycle for a known or ambiguous execution outcome. */
   readonly status?: "prepared" | "active";
 }
@@ -115,6 +125,9 @@ export function registerRecoveryUnit(
       status: registration.status ?? "active",
       idempotencyKey: registration.idempotencyKey,
       ...(registration.execute ? { execute: registration.execute } : {}),
+      ...(registration.handlerBinding
+        ? { handlerBinding: registration.handlerBinding }
+        : {}),
     }),
   );
 }
@@ -145,11 +158,11 @@ export function registerCustomRecoveryUnit<TInput, TOutput>(
     readonly resource?: EffectResource | readonly EffectResource[];
     readonly durable: boolean;
     readonly status?: "prepared" | "active";
-    readonly resolveFromProgram?: boolean;
     readonly recover: CustomRecovery<TInput, TOutput>;
   },
 ): void {
   const recovery = registration.recover;
+  const durableBinding = currentDurableEffectLedgerBinding();
   registerRecoveryUnit({
     boundaryId: registration.boundaryId,
     unitId: registration.unitId,
@@ -172,35 +185,40 @@ export function registerCustomRecoveryUnit<TInput, TOutput>(
       durable: registration.durable,
     }),
     status: registration.status,
-    ...(registration.resolveFromProgram
-      ? {}
-      : {
-          execute: async ({
-            envelope,
-            receipt,
-            resource,
-            idempotencyKey,
-            options,
-          }: RecoveryHandlerInvocation) => {
-            const context = {
-              input: envelope.input as TInput,
-              output: envelope.output as TOutput,
-              receipt,
-              resource,
-              idempotencyKey,
-              conflict: options?.conflict ?? "fail",
-              signal: options?.signal,
-            };
-            if (typeof recovery === "function") {
-              await recovery(context);
-              return;
-            }
-            await recovery.execute({
-              ...context,
-              captured: envelope.captured,
-            });
-          },
-        }),
+    ...(durableBinding
+      ? {
+          handlerBinding: Object.freeze({
+            namespace: durableBinding.namespace,
+            store: durableBinding.store,
+            effectVersion: registration.effectVersion,
+          }),
+        }
+      : {}),
+    execute: async ({
+      envelope,
+      receipt,
+      resource,
+      idempotencyKey,
+      options,
+    }: RecoveryHandlerInvocation) => {
+      const context = {
+        input: envelope.input as TInput,
+        output: envelope.output as TOutput,
+        receipt,
+        resource,
+        idempotencyKey,
+        conflict: options?.conflict ?? "fail",
+        signal: options?.signal,
+      };
+      if (typeof recovery === "function") {
+        await recovery(context);
+        return;
+      }
+      await recovery.execute({
+        ...context,
+        captured: envelope.captured,
+      });
+    },
   });
 }
 

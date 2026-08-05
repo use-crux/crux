@@ -49,7 +49,6 @@ export async function prepareDurableCustomEffect<TInput, TOutput>(input: {
         isOptionalEffectJsonSafe(input.value) &&
         isOptionalEffectJsonSafe(input.captured),
       status: "prepared",
-      resolveFromProgram: true,
       recover: input.recover,
     });
   }

@@ -107,39 +107,6 @@ export function resolveRuntimeEffectTarget(
   ];
 }
 
-/** Require the exact authored definition declared by a durable Runtime program. */
-export function assertRuntimeEffectTarget(
-  program:
-    | (object & {
-        readonly effectTargets?: readonly RuntimeEffectTarget[];
-      })
-    | undefined,
-  definition: { readonly id: string; readonly version: number } & object,
-): void {
-  if (
-    resolveRuntimeEffectTarget(program, definition.id, definition.version) ===
-    definition
-  ) {
-    return;
-  }
-  const declaredVersions = program?.effectTargets
-    ?.filter((target) => target.id === definition.id)
-    .map((target) => target.version);
-  throw createRuntimeError({
-    code: "TARGET_NOT_FOUND",
-    whatFailed:
-      `Recoverable Effect \`${definition.id}\` version ${definition.version} ` +
-      "is not declared by the active Runtime program.",
-    why: declaredVersions?.length
-      ? `The program declares version ${declaredVersions.join(", ")} for this Effect id.`
-      : "Durable recovery needs an exported exact-version target in the active program.",
-    whatStillWorks:
-      "The Effect remains callable when no durable Runtime store is active.",
-    nextStep:
-      `Add the exported Effect definition to createRuntimeProgram({ effectTargets: [...] }).`,
-  });
-}
-
 function duplicateEffectTarget(target: RuntimeEffectTarget): never {
   throw createRuntimeError({
     code: "TARGET_DUPLICATE",
