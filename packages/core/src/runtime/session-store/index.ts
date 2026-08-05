@@ -10,3 +10,7 @@ export type {
   StatisticsFact,
   StatisticsLedgerExport,
 } from "../../statistics";
+export {
+  sessionSubscriptionMatchKey,
+  sessionSubscriptionMatchValue,
+} from "../../session/subscription-match";

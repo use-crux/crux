@@ -7,14 +7,16 @@
 import type { JsonObject, JsonValue } from "../../../storage";
 import { canonicalSignalJson } from "../../../signal/canonical-json";
 import { SignalError } from "../../../signal/errors";
-import { matchesSignalData } from "../../../signal/match-runtime";
-import type { RuntimeWaiter } from "../../ports/waiters";
+import type { RuntimeSessionSubscriptionRecord } from "../../ports/sessions";
 import type {
   RuntimeSignalStorePort,
   SignalDeliveryRecord,
   SignalOccurrenceRecord,
 } from "../../reactive/records";
-import { signalDeliveryId } from "../../reactive/identity";
+import {
+  sessionSubscriptionDeliveryId,
+  signalDeliveryId,
+} from "../../reactive/identity";
 import {
   decodeSignalPayload,
   encodeSignalPayload,
@@ -24,6 +26,12 @@ import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
 import { emitEventInTransaction } from "../kernel-events";
 import { createRuntimeError } from "../errors";
+import {
+  isFlowSignalWaiter,
+  resolveDurableSignalConsumers,
+  type DurableSignalConsumers,
+} from "./signal-session-consumers";
+import type { RuntimeWaiter } from "../../ports/waiters";
 
 /** Input accepted by the atomic `signal.publish` composite. */
 export interface SignalPublishCompositeInput {
@@ -59,13 +67,21 @@ export type SignalPublishCompositeResult =
       readonly outboxCount: number;
     };
 
-/** Commit one occurrence plus every required Flow delivery, or neither. */
+/**
+ * Commit one occurrence plus every required Flow and Session delivery, or neither.
+ *
+ * @remarks Flow waiters remain an independent consumer. Session-owned Flow
+ * waiters only receive durable delivery when a matching active Session
+ * subscription also matches the payload. Session subscriptions fan out with
+ * restart-safe per-subscription delivery identities.
+ */
 export async function publishSignalInTransaction(
   tx: RuntimeStoreTransaction,
   deps: RuntimeCompositeDeps,
   input: SignalPublishCompositeInput,
 ): Promise<SignalPublishCompositeResult> {
-  const signals = await signalStoreForPublication(tx, input);
+  const consumers = await resolveDurableSignalConsumers(tx, input);
+  const signals = await signalStoreForPublication(tx, input, consumers);
   if (!signals) return { accepted: false };
   const replay = input.idempotencyHash
     ? await signals.findOccurrenceByIdempotency(
@@ -97,17 +113,13 @@ export async function publishSignalInTransaction(
     };
   }
 
-  const candidates = await tx.waiters.resolve(input.signalId, input.payload, {
-    namespace: input.namespace,
-  });
-  const required = candidates
-    .filter(isFlowSignalWaiter)
-    .filter((waiter) => signalWaiterMatches(waiter, input.payload));
-  if (required.length === 0) return { accepted: false };
+  if (consumers.waiters.length === 0 && consumers.subscriptions.length === 0) {
+    return { accepted: false };
+  }
   if (input.executionScope === "eval") {
     throw createRuntimeError({
       code: "EVAL_REACTIVE_DISPATCH_FORBIDDEN",
-      whatFailed: `Eval execution cannot dispatch Signal \`${input.signalId}\` to a durable Flow.`,
+      whatFailed: `Eval execution cannot dispatch Signal \`${input.signalId}\` to a durable consumer.`,
       why: "Durable reactive work started inside an Eval has no isolated execution or evidence contract.",
       whatStillWorks:
         "Process-local Signal publication and ordinary Eval task execution remain available.",
@@ -115,7 +127,9 @@ export async function publishSignalInTransaction(
         "Publish this Signal outside Eval execution, or remove the armed durable consumer before running the Eval.",
     });
   }
-  const requiredWaiterIds = new Set(required.map((waiter) => waiter.waiterId));
+  const requiredWaiterIds = new Set(
+    consumers.waiters.map((waiter) => waiter.waiterId),
+  );
 
   const occurrence: SignalOccurrenceRecord = Object.freeze({
     schemaVersion: 1,
@@ -132,6 +146,12 @@ export async function publishSignalInTransaction(
   await signals.putOccurrence(occurrence);
 
   const deliveries: SignalDeliveryRecord[] = [];
+  for (const subscription of consumers.subscriptions) {
+    const delivery = sessionSubscriptionDelivery(occurrence, subscription);
+    deliveries.push(delivery);
+    await signals.putDelivery(delivery);
+  }
+
   const deliveredOccurrence: JsonObject = {
     id: occurrence.occurrenceId,
     signalId: occurrence.signalId,
@@ -139,26 +159,30 @@ export async function publishSignalInTransaction(
     payloadCodec: occurrence.payloadCodec,
     acceptedAt: occurrence.acceptedAt,
   };
-  const emitted = await emitEventInTransaction(
-    tx,
-    deps,
-    {
-      namespace: input.namespace,
-      name: input.signalId,
-      payload: input.payload,
-      eventId: input.occurrenceId,
-    },
-    {
-      deliveryPayload: deliveredOccurrence,
-      includeWaiter: (waiter) => requiredWaiterIds.has(waiter.waiterId),
-      onFired: async (waiter) => {
-        if (!isFlowSignalWaiter(waiter)) return;
-        const delivery = deliveryFor(occurrence, waiter);
-        deliveries.push(delivery);
-        await signals.putDelivery(delivery);
-      },
-    },
-  );
+  const emitted =
+    consumers.waiters.length === 0
+      ? { outboxItems: Object.freeze([]) }
+      : await emitEventInTransaction(
+          tx,
+          deps,
+          {
+            namespace: input.namespace,
+            name: input.signalId,
+            payload: input.payload,
+            eventId: input.occurrenceId,
+          },
+          {
+            deliveryPayload: deliveredOccurrence,
+            includeWaiter: (waiter: RuntimeWaiter) =>
+              requiredWaiterIds.has(waiter.waiterId),
+            onFired: async (waiter: RuntimeWaiter) => {
+              if (!isFlowSignalWaiter(waiter)) return;
+              const delivery = waiterDelivery(occurrence, waiter);
+              deliveries.push(delivery);
+              await signals.putDelivery(delivery);
+            },
+          },
+        );
 
   return {
     accepted: true,
@@ -172,47 +196,24 @@ export async function publishSignalInTransaction(
 async function signalStoreForPublication(
   tx: RuntimeStoreTransaction,
   input: SignalPublishCompositeInput,
+  consumers: DurableSignalConsumers,
 ): Promise<RuntimeSignalStorePort | undefined> {
   if (tx.signals) return tx.signals;
-  const required = (
-    await tx.waiters.resolve(input.signalId, input.payload, {
-      namespace: input.namespace,
-    })
-  )
-    .filter(isFlowSignalWaiter)
-    .filter((waiter) => signalWaiterMatches(waiter, input.payload));
-  if (required.length === 0) return undefined;
+  if (consumers.waiters.length === 0 && consumers.subscriptions.length === 0) {
+    return undefined;
+  }
   throw new SignalError(
     "publication_rejected",
-    `Signal \`${input.signalId}\` requires durable Signal storage for its armed Flow delivery.`,
+    `Signal \`${input.signalId}\` requires durable Signal storage for its armed delivery.`,
   );
 }
 
-type FlowSignalWaiter = RuntimeWaiter & {
-  readonly workId: NonNullable<RuntimeWaiter["workId"]>;
-  readonly work: { readonly kind: "flow.resume"; readonly flowId: string };
-};
-
-function isFlowSignalWaiter(waiter: RuntimeWaiter): waiter is FlowSignalWaiter {
-  return (
-    waiter.source?.kind === "signal" &&
-    waiter.source.signalId === waiter.eventName &&
-    waiter.workId !== undefined &&
-    waiter.work.kind === "flow.resume"
-  );
-}
-
-function signalWaiterMatches(
-  waiter: FlowSignalWaiter,
-  payload: JsonValue,
-): boolean {
-  const match = waiter.source?.match;
-  return match === undefined || matchesSignalData(match, payload);
-}
-
-function deliveryFor(
+function waiterDelivery(
   occurrence: SignalOccurrenceRecord,
-  waiter: FlowSignalWaiter,
+  waiter: RuntimeWaiter & {
+    readonly workId: NonNullable<RuntimeWaiter["workId"]>;
+    readonly work: { readonly kind: "flow.resume"; readonly flowId: string };
+  },
 ): SignalDeliveryRecord {
   return Object.freeze({
     schemaVersion: 1,
@@ -227,6 +228,31 @@ function deliveryFor(
     }),
     state: "pending",
     attempts: 0,
+    updatedAt: occurrence.acceptedAt,
+  });
+}
+
+function sessionSubscriptionDelivery(
+  occurrence: SignalOccurrenceRecord,
+  subscription: RuntimeSessionSubscriptionRecord,
+): SignalDeliveryRecord {
+  return Object.freeze({
+    schemaVersion: 1,
+    namespace: occurrence.namespace,
+    deliveryId: sessionSubscriptionDeliveryId(
+      occurrence.occurrenceId,
+      subscription.subscriptionId,
+    ),
+    occurrenceId: occurrence.occurrenceId,
+    consumer: Object.freeze({
+      kind: "session.subscription" as const,
+      sessionId: subscription.sessionId,
+      subscriptionId: subscription.subscriptionId,
+    }),
+    // Session subscription acceptance completes at publish; Flow waiter
+    // delivery remains independent and applies only at the wait boundary.
+    state: "delivered",
+    attempts: 1,
     updatedAt: occurrence.acceptedAt,
   });
 }

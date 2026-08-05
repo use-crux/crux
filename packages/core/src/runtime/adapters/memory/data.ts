@@ -16,6 +16,7 @@ import type { WorkControlRecord } from "../../ports/work-control";
 import type {
   RuntimeSessionInputRecord,
   RuntimeSessionRecord,
+  RuntimeSessionSubscriptionRecord,
 } from "../../ports/sessions";
 import type { RuntimeTransportEnvelopeRecord } from "../../transport/records";
 
@@ -61,6 +62,7 @@ export interface MemoryRuntimeData {
   sessionsByKey: Map<string, RuntimeSessionRecord>;
   sessionsById: Map<string, RuntimeSessionRecord>;
   sessionInputs: Map<string, RuntimeSessionInputRecord>;
+  sessionSubscriptions: Map<string, RuntimeSessionSubscriptionRecord>;
   transportEnvelopes: Map<string, RuntimeTransportEnvelopeRecord>;
   nextEventId: number;
   nextWaiterId: number;
@@ -92,6 +94,7 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     sessionsByKey: new Map(),
     sessionsById: new Map(),
     sessionInputs: new Map(),
+    sessionSubscriptions: new Map(),
     transportEnvelopes: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
@@ -131,6 +134,7 @@ export function cloneMemoryRuntimeData(
     sessionsByKey: new Map(data.sessionsByKey),
     sessionsById: new Map(data.sessionsById),
     sessionInputs: new Map(data.sessionInputs),
+    sessionSubscriptions: new Map(data.sessionSubscriptions),
     transportEnvelopes: new Map(data.transportEnvelopes),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
@@ -165,6 +169,7 @@ export function replaceMemoryRuntimeData(
   target.sessionsByKey = source.sessionsByKey;
   target.sessionsById = source.sessionsById;
   target.sessionInputs = source.sessionInputs;
+  target.sessionSubscriptions = source.sessionSubscriptions;
   target.transportEnvelopes = source.transportEnvelopes;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;

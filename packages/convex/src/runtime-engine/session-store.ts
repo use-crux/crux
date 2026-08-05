@@ -35,5 +35,16 @@ export function createConvexSessionStore(options: ConvexSessionStoreOptions): Se
     checkpointPreparedExecution: (input) => call('checkpointPreparedExecution', input),
     completeTurn: (input) => call('completeTurn', input),
     blockTurn: (input) => call('blockTurn', input),
+    getByActivationWorkId: (namespace, workId) =>
+      call('getByActivationWorkId', [namespace, workId]),
+    upsertSubscription: (input) => call('upsertSubscription', input),
+    getSubscription: (namespace, sessionId, subscriptionId) =>
+      call('getSubscription', [namespace, sessionId, subscriptionId]),
+    listSubscriptions: (namespace, sessionId) =>
+      call('listSubscriptions', [namespace, sessionId]),
+    listActiveSubscriptionsForSignal: (namespace, signalId) =>
+      call('listActiveSubscriptionsForSignal', [namespace, signalId]),
+    unsubscribe: (namespace, sessionId, subscriptionId, now) =>
+      call('unsubscribe', [namespace, sessionId, subscriptionId, now]),
   }
 }

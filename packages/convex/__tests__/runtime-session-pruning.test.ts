@@ -16,6 +16,10 @@ const modules = {
   '../src/component/runtime/session_helpers.ts': () => import('../src/component/runtime/session_helpers'),
   '../src/component/runtime/session_identity.ts': () => import('../src/component/runtime/session_identity'),
   '../src/component/runtime/session_port.ts': () => import('../src/component/runtime/session_port'),
+  '../src/component/runtime/session_subscriptions.ts': () =>
+    import('../src/component/runtime/session_subscriptions'),
+  '../src/component/runtime/session_checkpoint.ts': () =>
+    import('../src/component/runtime/session_checkpoint'),
   '../src/component/runtime/sessions.ts': () => import('../src/component/runtime/sessions'),
 } satisfies Record<string, () => Promise<unknown>>
 
@@ -44,6 +48,7 @@ it('retains prepared Session result artifacts during unreferenced-result pruning
     sessionId,
     keyHash: 'key',
     targetId: 'agent',
+    targetKind: 'agent',
     threadId: 'thread',
     model: { definitionId: 'model', fingerprint: 'v1' },
     now,

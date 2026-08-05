@@ -36,8 +36,12 @@ export async function createSession(ctx: MutationCtx, input: CreateInput) {
     sessionId: input.sessionId,
     keyHash: input.keyHash,
     targetId: input.targetId,
+    targetKind: input.targetKind,
     threadId: input.threadId,
-    model: { ...input.model },
+    ...(input.model === undefined ? {} : { model: { ...input.model } }),
+    ...(input.definition === undefined
+      ? {}
+      : { definition: { ...input.definition } }),
     state: 'prepared',
     acceptedCursor: 0,
     pendingInputs: 0,
@@ -48,7 +52,12 @@ export async function createSession(ctx: MutationCtx, input: CreateInput) {
     createdAt: timestamp,
     updatedAt: timestamp,
   }
-  await ctx.db.insert('runtimeSessions', session)
+  await ctx.db.insert('runtimeSessions', {
+    ...session,
+    ...(session.activation
+      ? { activationWorkId: session.activation.workId }
+      : {}),
+  })
   return { kind: 'created' as const, session }
 }
 
@@ -143,15 +152,34 @@ export async function reserveSessionTurn(ctx: MutationCtx, input: ReserveInput) 
     target: input.target,
     state: 'queued' as const,
   }
-  await replaceSession(ctx, row, {
-    ...sessionRecord(row),
-    activation,
-    pendingWork: row.pendingWork + 1,
-    statistics: recordSessionStatistics(row.statistics, row.sessionId, input.now, [
-      { kind: 'work-accepted', target: input.target, state: 'queued' },
-    ]),
-    wakePending: true,
-    updatedAt: input.now.toISOString(),
-  })
+  await replaceSession(
+    ctx,
+    row,
+    {
+      ...sessionRecord(row),
+      activation,
+      pendingWork: row.pendingWork + 1,
+      statistics: recordSessionStatistics(row.statistics, row.sessionId, input.now, [
+        { kind: 'work-accepted', target: input.target, state: 'queued' },
+      ]),
+      wakePending: true,
+      updatedAt: input.now.toISOString(),
+    },
+    { activationWorkId: activation.workId },
+  )
   return activation
+}
+
+export async function getSessionByActivationWorkId(
+  ctx: MutationCtx,
+  namespace: string,
+  workId: string,
+) {
+  const row = await ctx.db
+    .query('runtimeSessions')
+    .withIndex('by_namespace_activation_work', (q) =>
+      q.eq('namespace', namespace).eq('activationWorkId', workId),
+    )
+    .unique()
+  return row ? sessionRecord(row) : null
 }

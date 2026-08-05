@@ -33,3 +33,15 @@ export type {
   SessionStatus,
   SessionThreadView,
 } from "./types";
+export type {
+  FlowSessionOptions,
+  FlowSessionSurface,
+  SessionForTarget,
+  SessionSubscription,
+  SessionSubscriptionSource,
+  SessionTarget,
+  SessionTargetInput,
+  SessionTargetOutput,
+  SessionTargetProgress,
+  SessionTargetResume,
+} from "./target-types";

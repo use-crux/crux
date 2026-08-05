@@ -112,7 +112,12 @@ async function settleSessionTurn(ctx: MutationCtx, input: TurnInput, outcome: 'c
     wakePending: row.acceptedCursor > processedCursor,
     updatedAt: input.now.toISOString(),
   }
-  return await replaceSession(ctx, row, next)
+  return await replaceSession(
+    ctx,
+    row,
+    next,
+    outcome === 'completed' ? { activationWorkId: null } : undefined,
+  )
 }
 
 function assertSameCheckpoint(

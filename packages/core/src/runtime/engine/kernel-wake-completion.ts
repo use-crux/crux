@@ -113,6 +113,32 @@ export async function completeWorkInTransaction(
       });
     } else if (completed.status === "blocked")
       await tx.sessions.blockTurn(turn);
+  } else if (
+    current.work.kind === "flow.resume" &&
+    tx.sessions?.getByActivationWorkId
+  ) {
+    const session = await tx.sessions.getByActivationWorkId(
+      current.namespace,
+      current.workId,
+    );
+    if (session?.activation?.primaryInputId) {
+      const turn = {
+        namespace: current.namespace,
+        sessionId: session.sessionId,
+        inputId: session.activation.primaryInputId,
+        now: completedAt,
+      };
+      if (completed.status === "completed") {
+        await tx.sessions.completeTurn(turn);
+        await reserveNextSessionActivation(tx, {
+          namespace: current.namespace,
+          sessionId: session.sessionId,
+          now: completedAt,
+        });
+      } else if (completed.status === "blocked") {
+        await tx.sessions.blockTurn(turn);
+      }
+    }
   }
   await tx.state.putIdempotencyKey({
     namespace: current.namespace,

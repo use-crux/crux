@@ -4,6 +4,7 @@ import type { JsonValue } from "../../storage";
 import type { WorkId } from "./ids";
 import type { RuntimeResultRef } from "../results/types";
 import type { StatisticsLedgerExport } from "../../statistics";
+import type { RuntimeTargetDefinitionRef } from "./target-definition";
 
 export interface RuntimeSessionRecord {
   readonly schemaVersion: 1;
@@ -11,9 +12,15 @@ export interface RuntimeSessionRecord {
   readonly sessionId: string;
   readonly keyHash: string;
   readonly targetId: string;
+  /** First-party Session target kind retained at creation. */
+  readonly targetKind: "agent" | "flow";
   readonly threadId: string;
-  /** Immutable statically declared GenerationModel selected when created. */
-  readonly model: {
+  /**
+   * Immutable statically declared GenerationModel selected when created.
+   *
+   * @remarks Required for Agent Sessions. Absent for Flow Sessions.
+   */
+  readonly model?: {
     readonly definitionId: string;
     readonly fingerprint: string;
   };
@@ -28,6 +35,33 @@ export interface RuntimeSessionRecord {
   readonly wakePending: boolean;
   /** One canonical Work reserved for the current finite activation. */
   readonly activation?: RuntimeSessionActivation;
+  /**
+   * Pinned Flow definition for Flow Sessions.
+   *
+   * @remarks Agent Sessions leave this unset and use GenerationModel instead.
+   */
+  readonly definition?: RuntimeTargetDefinitionRef;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Durable Signal subscription owned by one Session. */
+export interface RuntimeSessionSubscriptionRecord {
+  readonly schemaVersion: 1;
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly subscriptionId: string;
+  readonly signalId: string;
+  /** Canonical match data when the subscription is filtered. */
+  readonly match?: JsonValue;
+  /**
+   * Stable match identity used for idempotent upsert and delivery matching.
+   *
+   * @remarks Empty string means an unfiltered bare Signal. Always derived by
+   * the shared Session subscription match codec, never raw JSON.stringify.
+   */
+  readonly matchKey: string;
+  readonly state: "active" | "unsubscribed";
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -123,8 +157,20 @@ export interface CreateRuntimeSessionInput {
   readonly sessionId: string;
   readonly keyHash: string;
   readonly targetId: string;
+  readonly targetKind: RuntimeSessionRecord["targetKind"];
   readonly threadId: string;
-  readonly model: RuntimeSessionRecord["model"];
+  readonly model?: RuntimeSessionRecord["model"];
+  readonly definition?: RuntimeTargetDefinitionRef;
+  readonly now: Date;
+}
+
+/** Input for creating or reusing one durable Session Signal subscription. */
+export interface UpsertRuntimeSessionSubscriptionInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly subscriptionId: string;
+  readonly signalId: string;
+  readonly match?: JsonValue;
   readonly now: Date;
 }
 
@@ -221,4 +267,45 @@ export interface RuntimeSessionStorePort {
   completeTurn(input: RuntimeSessionTurnInput): Promise<RuntimeSessionRecord>;
   /** Retain one terminal safe blocker without exposing its payload. */
   blockTurn(input: RuntimeSessionTurnInput): Promise<RuntimeSessionRecord>;
+  /** Resolve the Session whose current activation owns a Work occurrence. */
+  getByActivationWorkId?(
+    namespace: string,
+    workId: WorkId,
+  ): Promise<RuntimeSessionRecord | null>;
+  /**
+   * Create or reuse one active Signal subscription for a Session.
+   *
+   * @remarks Idempotent by Session, Signal identity, and canonical match data.
+   */
+  upsertSubscription?(
+    input: UpsertRuntimeSessionSubscriptionInput,
+  ): Promise<RuntimeSessionSubscriptionRecord>;
+  /** Read one subscription by identity. */
+  getSubscription?(
+    namespace: string,
+    sessionId: string,
+    subscriptionId: string,
+  ): Promise<RuntimeSessionSubscriptionRecord | null>;
+  /** List active subscriptions for one Session. */
+  listSubscriptions?(
+    namespace: string,
+    sessionId: string,
+  ): Promise<readonly RuntimeSessionSubscriptionRecord[]>;
+  /**
+   * List every active subscription for one Signal in a Runtime namespace.
+   *
+   * @remarks Used by Signal publication to fan out independent Session
+   * deliveries without scanning every Session identity.
+   */
+  listActiveSubscriptionsForSignal?(
+    namespace: string,
+    signalId: string,
+  ): Promise<readonly RuntimeSessionSubscriptionRecord[]>;
+  /** Mark one subscription unsubscribed without deleting history. */
+  unsubscribe?(
+    namespace: string,
+    sessionId: string,
+    subscriptionId: string,
+    now: Date,
+  ): Promise<RuntimeSessionSubscriptionRecord>;
 }

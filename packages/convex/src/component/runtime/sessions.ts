@@ -58,6 +58,36 @@ async function dispatch(port: SessionPort, operation: SessionOperation, encoded:
       return await port.completeTurn(decodeCompositeValue(encoded))
     case 'blockTurn':
       return await port.blockTurn(decodeCompositeValue(encoded))
+    case 'getByActivationWorkId':
+      return await port.getByActivationWorkId?.(
+        requiredString(input[0]),
+        decodeCompositeValue(input[1]),
+      )
+    case 'upsertSubscription':
+      return await port.upsertSubscription?.(decodeCompositeValue(encoded))
+    case 'getSubscription':
+      return await port.getSubscription?.(
+        requiredString(input[0]),
+        requiredString(input[1]),
+        requiredString(input[2]),
+      )
+    case 'listSubscriptions':
+      return await port.listSubscriptions?.(
+        requiredString(input[0]),
+        requiredString(input[1]),
+      )
+    case 'listActiveSubscriptionsForSignal':
+      return await port.listActiveSubscriptionsForSignal?.(
+        requiredString(input[0]),
+        requiredString(input[1]),
+      )
+    case 'unsubscribe':
+      return await port.unsubscribe?.(
+        requiredString(input[0]),
+        requiredString(input[1]),
+        requiredString(input[2]),
+        requiredDate(input[3]),
+      )
   }
 }
 
@@ -79,6 +109,12 @@ function assertOperation(value: string): SessionOperation {
     case 'checkpointPreparedExecution':
     case 'completeTurn':
     case 'blockTurn':
+    case 'getByActivationWorkId':
+    case 'upsertSubscription':
+    case 'getSubscription':
+    case 'listSubscriptions':
+    case 'listActiveSubscriptionsForSignal':
+    case 'unsubscribe':
       return value
     default:
       throw new Error(`Unknown Runtime Session operation "${value}".`)

@@ -255,3 +255,16 @@ structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
 durable Agent Sessions from overloaded "session" vocabulary elsewhere and
 require PostgreSQL Runtime storage plus the Session-owned Thread RecordStore on
 the same database.
+
+Extend durable Sessions to first-party Flow targets with exact
+Agent-versus-Flow conditional typing for `session()` / `getSession()`, pinned
+Flow definition metadata, and optional GenerationModel only for Agent Sessions.
+Flow Session activation reuses the canonical `flow.resume` Work spine, owner
+Thread registration, and Work result handles. Durable Signal subscriptions are
+idempotent Session-owned transitions reconstructed from storage and participate
+in Signal publication fan-out with restart-safe per-subscription delivery
+identities. Session-owned Flow waiters receive durable Signal delivery only when
+a matching active Session subscription also matches the payload; non-Session
+Flow waiters remain an independent consumer. Memory, PostgreSQL, and Convex use
+one canonical subscription match-key codec for upsert idempotency and delivery
+matching, including key-order-invariant match data.

@@ -4,6 +4,7 @@ import {
   acceptSessionInputs,
   createSession,
   getSession,
+  getSessionByActivationWorkId,
   getSessionByKey,
   getSessionInput,
   getSessionInputAtCursor,
@@ -11,6 +12,13 @@ import {
   markSessionReady,
   reserveSessionTurn,
 } from './session_identity'
+import {
+  getSessionSubscription,
+  listActiveSubscriptionsForSignal,
+  listSessionSubscriptions,
+  unsubscribeSessionSubscription,
+  upsertSessionSubscription,
+} from './session_subscriptions'
 import { claimSessionStepInputs, getSessionTurnInputs, startSessionTurn } from './session_execution'
 import {
   blockSessionTurn,
@@ -39,5 +47,16 @@ export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeSt
     checkpointPreparedExecution: (input) => checkpointSessionExecution(ctx, input),
     completeTurn: (input) => completeSessionTurn(ctx, input),
     blockTurn: (input) => blockSessionTurn(ctx, input),
+    getByActivationWorkId: (namespace, workId) =>
+      getSessionByActivationWorkId(ctx, namespace, workId),
+    upsertSubscription: (input) => upsertSessionSubscription(ctx, input),
+    getSubscription: (namespace, sessionId, subscriptionId) =>
+      getSessionSubscription(ctx, namespace, sessionId, subscriptionId),
+    listSubscriptions: (namespace, sessionId) =>
+      listSessionSubscriptions(ctx, namespace, sessionId),
+    listActiveSubscriptionsForSignal: (namespace, signalId) =>
+      listActiveSubscriptionsForSignal(ctx, namespace, signalId),
+    unsubscribe: (namespace, sessionId, subscriptionId, now) =>
+      unsubscribeSessionSubscription(ctx, namespace, sessionId, subscriptionId, now),
   }
 }

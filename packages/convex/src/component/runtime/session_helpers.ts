@@ -23,8 +23,10 @@ export function sessionRecord(row: SessionRow): SessionRecord {
     sessionId: row.sessionId,
     keyHash: row.keyHash,
     targetId: row.targetId,
+    targetKind: row.targetKind ?? 'agent',
     threadId: row.threadId,
-    model: row.model,
+    ...(row.model === undefined ? {} : { model: row.model }),
+    ...(row.definition === undefined ? {} : { definition: row.definition }),
     state: row.state,
     acceptedCursor: row.acceptedCursor,
     ...(row.processedCursor === undefined ? {} : { processedCursor: row.processedCursor }),
@@ -80,8 +82,18 @@ export async function replaceSession(
   ctx: MutationCtx,
   row: NonNullable<Awaited<ReturnType<typeof readSession>>>,
   next: SessionRecord,
+  extras?: { readonly activationWorkId?: string | null },
 ) {
-  await ctx.db.replace(row._id, next)
+  const activationWorkId =
+    extras && 'activationWorkId' in extras
+      ? extras.activationWorkId === null
+        ? undefined
+        : extras.activationWorkId
+      : next.activation?.workId
+  await ctx.db.replace(row._id, {
+    ...next,
+    ...(activationWorkId === undefined ? {} : { activationWorkId }),
+  })
   return next
 }
 
