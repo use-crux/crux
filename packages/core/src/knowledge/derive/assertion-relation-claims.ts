@@ -47,6 +47,7 @@ export function validateAssertionRelationClaims(
   rawClaims: readonly RawAssertionRelationClaim[],
   chunks: readonly CruxChunk[],
   context: AssertionRelationRunContext,
+  targetKeys?: ReadonlySet<string>,
 ): { readonly claims: readonly NormalizedAssertionRelationClaim[]; readonly errors: readonly string[] } {
   const claims: NormalizedAssertionRelationClaim[] = []
   const errors: string[] = []
@@ -55,7 +56,7 @@ export function validateAssertionRelationClaims(
     const evidence = normalizeEvidence(raw.evidence)
     const from = resolveEndpoint(stage, raw.from, context)
     const to = resolveEndpoint(stage, raw.to, context)
-    const error = validateClaim(stage.id, type, from, to, evidence, raw.provenance, chunks)
+    const error = validateClaim(stage.id, type, from, to, evidence, raw.provenance, chunks, targetKeys)
     if (error) {
       errors.push(error)
       return
@@ -156,16 +157,40 @@ function validateClaim(
   evidence: readonly KnowledgeRef[],
   provenance: unknown,
   chunks: readonly CruxChunk[],
+  targetKeys?: ReadonlySet<string>,
 ): string | undefined {
   if (type === '<missing>') return `Derive ${stageId}: invalid assertion relation type`
   if ('error' in from) return `Derive ${stageId} relation ${type}: ${from.error}`
   if ('error' in to) return `Derive ${stageId} relation ${type}: ${to.error}`
   if (evidence.length === 0) return `Derive ${stageId} relation ${type}: missing evidence`
-  if (!evidence.every((ref) => ref.kind === 'chunk' && chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId))) {
-    return `Derive ${stageId} relation ${type}: invalid evidence`
-  }
+  const evidenceError = invalidEvidenceMessage(stageId, type, evidence, chunks, targetKeys)
+  if (evidenceError !== undefined) return evidenceError
   if (provenance !== undefined && provenance !== 'exact' && provenance !== 'derived') {
     return `Derive ${stageId} relation ${type}: invalid provenance`
+  }
+  return undefined
+}
+
+function invalidEvidenceMessage(
+  stageId: string,
+  type: AssertionRelationType | '<missing>',
+  evidence: readonly KnowledgeRef[],
+  chunks: readonly CruxChunk[],
+  targetKeys: ReadonlySet<string> | undefined,
+): string | undefined {
+  for (const ref of evidence) {
+    if (ref.kind !== 'chunk') return `Derive ${stageId} relation ${type}: invalid evidence`
+    const key = encodeKnowledgeRef(ref)
+    if (targetKeys === undefined) {
+      if (!chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId)) {
+        return `Derive ${stageId} relation ${type}: invalid evidence`
+      }
+      continue
+    }
+    if (targetKeys.has(key)) continue
+    return chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId)
+      ? `Derive ${stageId} relation ${type}: invalid evidence — context-only chunk`
+      : `Derive ${stageId} relation ${type}: invalid evidence`
   }
   return undefined
 }

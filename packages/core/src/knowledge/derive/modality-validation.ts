@@ -1,5 +1,9 @@
 /**
- * Fail-closed multimodal evidence validation for connected knowledge generation.
+ * Multimodal evidence validation for connected knowledge generation.
+ *
+ * Target media chunks are fail-closed: uncovered evidence is never silently
+ * omitted. Context-only media chunks are context, not evidence — they render
+ * when they can and are dropped with a warning when they cannot.
  *
  * @module
  */
@@ -8,6 +12,7 @@ import type { z } from 'zod'
 import type { AssetStore } from '../../asset'
 import type { CruxChunk } from '../../indexing/types'
 import type { KnowledgeContentPart, KnowledgeModality, KnowledgeModel } from '../model'
+import { chunkKey } from './target-selection'
 
 type NonTextModality = Exclude<KnowledgeModality, 'text'>
 type DiagnosticModality = NonTextModality | 'media'
@@ -22,55 +27,73 @@ export interface KnowledgeGenerationRequest<T> {
   readonly chunks: readonly CruxChunk[]
   readonly subject: string
   readonly assets?: AssetStore
+  /** Optional target chunk keys; media outside the target set is context-only. */
+  readonly targetKeys?: ReadonlySet<string>
 }
 
-/** Generate a structured object without silently omitting media-only evidence. */
+/** Generate a structured object, routing multimodal chunks through content parts. */
 export async function generateObjectWithEvidence<T>(
   input: KnowledgeGenerationRequest<T>,
-): Promise<{ object: T }> {
+): Promise<{ object: T; warnings: readonly string[] }> {
   const uncovered = mediaOnlyChunks(input.chunks)
   if (uncovered.length === 0) {
-    return input.model.generateObject({
-      system: input.system,
-      prompt: input.prompt,
-      schema: input.schema,
-    })
+    return { ...(await generatePlain(input)), warnings: [] }
   }
 
-  const parts = await contentPartsFor(input, uncovered)
   const generate = input.model.generateObjectFromParts
-  if (!generate) {
-    throw new Error(`${diagnosticPrefix(input, uncovered)} missing generateObjectFromParts.`)
+  const parts: KnowledgeContentPart[] = []
+  const warnings: string[] = []
+  for (const chunk of uncovered) {
+    const isTarget = input.targetKeys === undefined || input.targetKeys.has(chunkKey(chunk))
+    try {
+      if (!generate) throw new Error(`${diagnosticPrefix(input, [chunk])} missing generateObjectFromParts.`)
+      parts.push(...(await contentPartsFor(input, generate, chunk)))
+    } catch (error) {
+      if (isTarget) throw error
+      warnings.push(`${diagnosticPrefix(input, [chunk])}; dropped context media chunk.`)
+    }
   }
-  return generate({ system: input.system, parts, schema: input.schema })
+
+  if (!generate || parts.length === 0) {
+    return { ...(await generatePlain(input)), warnings }
+  }
+  const generated = await generate({
+    system: input.system,
+    parts: [{ kind: 'text', text: input.prompt }, ...parts],
+    schema: input.schema,
+  })
+  return { ...generated, warnings }
 }
 
 async function contentPartsFor<T>(
   input: KnowledgeGenerationRequest<T>,
-  uncovered: readonly MediaOnlyChunk[],
+  generate: NonNullable<KnowledgeGenerationRequest<T>['model']['generateObjectFromParts']>,
+  chunk: MediaOnlyChunk,
 ): Promise<readonly KnowledgeContentPart[]> {
   const declared = new Set(input.model.modalities ?? ['text'])
-  for (const chunk of uncovered) {
-    if (chunk.modality === 'media' || !declared.has(chunk.modality)) {
-      throw new Error(diagnosticPrefix(input, [chunk]))
-    }
+  if (chunk.modality === 'media' || !declared.has(chunk.modality)) {
+    throw new Error(diagnosticPrefix(input, [chunk]))
   }
   if (!input.assets) {
-    throw new Error(`${diagnosticPrefix(input, uncovered)} missing config.storage.assets.`)
+    throw new Error(`${diagnosticPrefix(input, [chunk])} missing config.storage.assets.`)
   }
+  if (!chunk.assetRef) {
+    throw new Error(`${diagnosticPrefix(input, [chunk])} missing source.assetRef.`)
+  }
+  const bytesRef = await input.assets.get(chunk.assetRef)
+  const isTarget = input.targetKeys === undefined || input.targetKeys.has(chunkKey(chunk))
+  return [
+    { kind: 'text', text: `${isTarget ? 'Media evidence' : 'Media'}: ${chunk.sourceId}/${chunk.chunkId}` },
+    { kind: 'media', mediaType: chunk.mediaType, bytesRef },
+  ]
+}
 
-  const parts: KnowledgeContentPart[] = [{ kind: 'text', text: input.prompt }]
-  for (const chunk of uncovered) {
-    if (!chunk.assetRef) {
-      throw new Error(`${diagnosticPrefix(input, [chunk])} missing source.assetRef.`)
-    }
-    const bytesRef = await input.assets.get(chunk.assetRef)
-    parts.push(
-      { kind: 'text', text: `Media evidence: ${chunk.sourceId}/${chunk.chunkId}` },
-      { kind: 'media', mediaType: chunk.mediaType, bytesRef },
-    )
-  }
-  return parts
+function generatePlain<T>(input: KnowledgeGenerationRequest<T>): Promise<{ object: T }> {
+  return input.model.generateObject({
+    system: input.system,
+    prompt: input.prompt,
+    schema: input.schema,
+  })
 }
 
 interface MediaOnlyChunk {
