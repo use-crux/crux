@@ -18,6 +18,8 @@ export interface ClaimManifestRecord extends JsonObject {
   readonly stageFingerprint: string
   readonly claimHashes: readonly string[]
   readonly warnings?: readonly string[]
+  /** Per-stage target/context role digest; present only for stages with a selector. */
+  readonly roleDigest?: string
 }
 
 /** Arguments that identify one source/stage claim manifest. */
@@ -43,11 +45,13 @@ export function isCurrentManifest(
   manifest: ClaimManifestRecord | undefined,
   sourceHash: string,
   stageFingerprint: string,
+  roleDigest?: string,
 ): manifest is ClaimManifestRecord {
   return manifest !== undefined &&
     manifest.extractionContractVersion === EXTRACTION_CONTRACT_VERSION &&
     manifest.sourceHash === sourceHash &&
-    manifest.stageFingerprint === stageFingerprint
+    manifest.stageFingerprint === stageFingerprint &&
+    (manifest.roleDigest ?? null) === (roleDigest ?? null)
 }
 
 /** Create a current manifest record for persisted claim hashes. */
@@ -56,6 +60,7 @@ export function createClaimManifest(args: {
   readonly stageFingerprint: string
   readonly claimHashes: readonly string[]
   readonly warnings: readonly string[]
+  readonly roleDigest?: string
 }): ClaimManifestRecord {
   return {
     _cruxRecordType: 'knowledge-claim-manifest',
@@ -64,6 +69,7 @@ export function createClaimManifest(args: {
     stageFingerprint: args.stageFingerprint,
     claimHashes: [...args.claimHashes].sort(),
     ...(args.warnings.length > 0 ? { warnings: [...args.warnings] } : {}),
+    ...(args.roleDigest !== undefined ? { roleDigest: args.roleDigest } : {}),
   }
 }
 
@@ -78,7 +84,8 @@ function isManifestRecord(value: unknown): value is ClaimManifestRecord {
     (
       value.warnings === undefined ||
       (Array.isArray(value.warnings) && value.warnings.every((warning) => typeof warning === 'string'))
-    )
+    ) &&
+    (value.roleDigest === undefined || typeof value.roleDigest === 'string')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -17,6 +17,7 @@ import {
   type AssertionClaimRecord,
   type RawAssertionClaim,
 } from './assertion-claims'
+import { isKnowledgeRef } from '../refs'
 import {
   toAssertionRelationClaimRecords,
   validateAssertionRelationClaims,
@@ -25,6 +26,7 @@ import {
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
 import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
+import { chunkKey } from './target-selection'
 
 /** Run one assertion stage and return cached claim records. Internal. */
 export async function runAssertionStage(input: {
@@ -32,6 +34,10 @@ export async function runAssertionStage(input: {
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
   readonly assets?: AssetStore
+  /** Selected target chunks supplied to deterministic runs; all visible chunks without a selector. */
+  readonly targets: readonly CruxChunk[]
+  /** Evidence-admissible target keys; undefined when the stage has no selector. */
+  readonly targetKeys: ReadonlySet<string> | undefined
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
@@ -47,6 +53,8 @@ async function runDeterministic(input: {
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
   readonly assets?: AssetStore
+  readonly targets: readonly CruxChunk[]
+  readonly targetKeys: ReadonlySet<string> | undefined
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
@@ -57,7 +65,7 @@ async function runDeterministic(input: {
   const emitted: AssertionRef[] = []
   const run = input.stage.run
   if (!run) throw new Error(`Derive ${input.stage.id} cannot run.`)
-  await run({ document: input.document, chunks: input.chunks }, {
+  await run({ document: input.document, chunks: input.chunks, targets: input.targets }, {
     emit: (type, data, opts) => {
       raw.push({
         type,
@@ -74,11 +82,11 @@ async function runDeterministic(input: {
     },
   })
 
-  const validated = validateAssertionClaims(input.stage, raw, input.chunks)
+  const validated = validateAssertionClaims(input.stage, raw, input.chunks, input.targetKeys)
   if (validated.errors.length > 0) {
     throw new Error(validated.errors[0] ?? `Derive ${input.stage.id} emitted an invalid assertion.`)
   }
-  const relations = validateAssertionRelationClaims(input.stage, rawRelations, input.chunks, { emitted })
+  const relations = validateAssertionRelationClaims(input.stage, rawRelations, input.chunks, { emitted }, input.targetKeys)
   if (relations.errors.length > 0) {
     throw new Error(relations.errors[0] ?? `Derive ${input.stage.id} emitted an invalid assertion relation.`)
   }
@@ -94,6 +102,8 @@ async function runGenerated(input: {
   readonly chunks: readonly CruxChunk[]
   readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
   readonly assets?: AssetStore
+  readonly targets: readonly CruxChunk[]
+  readonly targetKeys: ReadonlySet<string> | undefined
 }): Promise<{
   readonly claims: readonly AssertionClaimRecord[]
   readonly relationClaims: readonly AssertionRelationClaimRecord[]
@@ -101,8 +111,12 @@ async function runGenerated(input: {
 }> {
   const valid = new Map<string, AssertionClaimRecord>()
   const warnings: string[] = []
+  if (input.targetKeys !== undefined && input.targetKeys.size === 0) {
+    warnings.push(`Derive ${input.stage.id} has no target chunks for source ${input.document.sourceId}.`)
+    return { claims: [], relationClaims: [], warnings }
+  }
 
-  for (const batch of renderBoundedAssertionBatches(input.document, input.chunks, input.stage)) {
+  for (const batch of renderBoundedAssertionBatches(input.document, input.chunks, input.stage, input.targetKeys)) {
     const run = await runGeneratedBatch(input, batch)
     addRecords(valid, run.claims)
     warnings.push(...run.warnings)
@@ -117,12 +131,14 @@ async function runGeneratedBatch(
     readonly chunks: readonly CruxChunk[]
     readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
     readonly assets?: AssetStore
+    readonly targets: readonly CruxChunk[]
+    readonly targetKeys: ReadonlySet<string> | undefined
   },
   batch: DerivePromptBatch,
 ): Promise<{ readonly claims: readonly AssertionClaimRecord[]; readonly warnings: readonly string[] }> {
   const first = await readGeneratedAssertionClaims(input, batch)
   const valid = new Map<string, AssertionClaimRecord>()
-  const warnings: string[] = [...batch.warnings]
+  const warnings: string[] = [...batch.warnings, ...first.warnings]
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
   if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
 
@@ -134,6 +150,7 @@ async function runGeneratedBatch(
   })
   warnings.push(...repairedPrompt.warnings)
   const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
+  warnings.push(...repaired.warnings)
   if (repaired.errors.length > 0) {
     throw assertionValidationExhausted(input.stage.id, repaired.validationError)
   }
@@ -147,13 +164,15 @@ async function readGeneratedAssertionClaims(
     readonly chunks: readonly CruxChunk[]
     readonly stage: AssertionStage<Record<string, z.ZodType<unknown>>>
     readonly assets?: AssetStore
+    readonly targets: readonly CruxChunk[]
+    readonly targetKeys: ReadonlySet<string> | undefined
   },
   batch: DerivePromptBatch,
 ) {
   const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
-  const schema = payloadSchema(stage, batch.chunks)
+  const schema = payloadSchema(stage, batch.targetChunks)
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only assertions that match the requested schema.',
@@ -162,24 +181,65 @@ async function readGeneratedAssertionClaims(
     sourceId: input.document.sourceId,
     chunks: batch.chunks,
     subject: `stage "${stage.id}"`,
+    ...(input.targetKeys !== undefined ? { targetKeys: input.targetKeys } : {}),
     ...(input.assets ? { assets: input.assets } : {}),
   })
   const parsed = schema.safeParse(result.object)
   if (!parsed.success) {
+    const issues = input.targetKeys === undefined
+      ? parsed.error.issues
+      : contextOnlyEvidenceIssues(result.object, batch, input.targetKeys)
+    const substituted = issues.length > 0 ? issues : parsed.error.issues
     return {
       claims: [],
-      errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message),
-      validationError: parsed.error,
+      warnings: result.warnings,
+      errors: substituted.map((issue) => isContextOnlyEvidenceIssue(issue)
+        ? issue.message
+        : (issue.path.join('.') || issue.message)),
+      validationError: new z.ZodError([...substituted]),
     }
   }
-  const validated = validateAssertionClaims(stage, parsed.data.assertions, batch.chunks)
+  const validated = validateAssertionClaims(stage, parsed.data.assertions, batch.chunks, input.targetKeys)
   return {
     ...validated,
+    warnings: result.warnings,
     validationError: new z.ZodError(validated.issues.map((issue) => ({
       ...issue,
       path: ['assertions', ...issue.path],
     }))),
   }
+}
+
+function isContextOnlyEvidenceIssue(issue: z.core.$ZodIssue): boolean {
+  return (issue as { readonly code?: unknown }).code === 'context_only_evidence'
+}
+
+/** Replace union evidence failures with authored context-only diagnostics. */
+function contextOnlyEvidenceIssues(
+  object: unknown,
+  batch: DerivePromptBatch,
+  targetKeys: ReadonlySet<string>,
+): readonly z.core.$ZodIssue[] {
+  const assertions = (object as { readonly assertions?: unknown }).assertions
+  if (!Array.isArray(assertions)) return []
+  const visible = new Set(batch.chunks.map(chunkKey))
+  const issues: z.core.$ZodIssue[] = []
+  assertions.forEach((assertion, index) => {
+    const evidence = (assertion as { readonly evidence?: unknown }).evidence
+    if (!Array.isArray(evidence)) return
+    evidence.forEach((ref, evidenceIndex) => {
+      if (!isKnowledgeRef(ref) || ref.kind !== 'chunk') return
+      const key = chunkKey(ref)
+      if (visible.has(key) && !targetKeys.has(key)) {
+        issues.push({
+          code: 'context_only_evidence',
+          path: ['assertions', index, 'evidence', evidenceIndex],
+          message: 'evidence may only reference target chunks',
+        } as unknown as z.core.$ZodIssue)
+      }
+    })
+  })
+  return issues
 }
 
 function payloadSchema(

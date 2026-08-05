@@ -17,10 +17,16 @@ import type { AssertionSupport } from './identity'
 import { zodSchemaFingerprintValue } from './identity'
 import type { AssertionIdentityRefInput, AssertionRef, AssertionRelationType } from './relations'
 
+/** Select the subset of visible chunks that may be cited as evidence. */
+export type AssertionTargetSelector = (chunks: readonly CruxChunk[]) => readonly CruxChunk[]
+
 /** Placeholder input supplied to deterministic assertion runs. */
 export interface AssertionRunInput {
   readonly document: CruxDocument
+  /** All visible chunks rendered into the derive prompt. */
   readonly chunks: readonly CruxChunk[]
+  /** The subset of visible chunks that may be cited as evidence. */
+  readonly targets: readonly CruxChunk[]
 }
 
 /** Options attached to an emitted assertion claim. */
@@ -85,11 +91,14 @@ export type AssertionsConfig<TTypes extends Record<string, z.ZodType<unknown>>> 
   readonly id: string
   readonly version: number
   readonly types: TTypes
+  /** Optional selector narrowing which visible chunks may be cited as evidence. */
+  readonly targets?: AssertionTargetSelector
 } & StageMode<[AssertionRunInput, AssertionEmitApi<TTypes>]>
 
 /** Authored assertion vocabulary accepted by the indexing pipeline. */
 export type AssertionStage<TTypes extends Record<string, z.ZodType<unknown>>> = AssertionDeriveStage & {
   readonly types: TTypes
+  readonly targets?: AssertionTargetSelector
 } & (
     | {
         readonly mode: 'model'
@@ -133,6 +142,7 @@ export function assertions<const TTypes extends Record<string, z.ZodType<unknown
   const mode = validateMode(config)
   const normalizedTypes = normalizeTypes(config.types)
   validateIdentity(config.id, config.version)
+  const targets = validateTargets(config.targets)
   const fingerprintMode = mode === 'model' ? modelFingerprintInput(config) : { kind: 'run' as const }
   const fingerprint = stableHash({
     id: config.id,
@@ -152,6 +162,7 @@ export function assertions<const TTypes extends Record<string, z.ZodType<unknown
       types: normalizedTypes as TTypes,
       mode,
       model,
+      ...(targets !== undefined ? { targets } : {}),
       ...(config.instructions !== undefined ? { instructions: config.instructions } : {}),
       fingerprint: () => fingerprint,
     })
@@ -167,8 +178,15 @@ export function assertions<const TTypes extends Record<string, z.ZodType<unknown
     types: normalizedTypes as TTypes,
     mode,
     run,
+    ...(targets !== undefined ? { targets } : {}),
     fingerprint: () => fingerprint,
   })
+}
+
+function validateTargets(value: unknown): AssertionTargetSelector | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'function') throw new Error('Assertion targets must be a function.')
+  return value as AssertionTargetSelector
 }
 
 function validateIdentity(id: string, version: number): void {

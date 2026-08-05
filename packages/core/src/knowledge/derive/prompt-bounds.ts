@@ -10,6 +10,7 @@ import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { AssertionStage } from '../assertions/assertions'
 import type { RelationStage, RelationTypeSpec } from '../relate/relate'
 import { MAX_DERIVE_BATCH_CHARS, MAX_DERIVE_PROMPT_CHARS } from './bounds'
+import { chunkKey } from './target-selection'
 
 const MEDIA_PART_ESTIMATE_CHARS = 3000
 
@@ -27,6 +28,8 @@ export interface DerivePromptBatch extends BoundedDerivePrompt {
   readonly ordinal: number
   /** Chunks visible to this batch. */
   readonly chunks: readonly CruxChunk[]
+  /** The subset of chunk in {@link DerivePromptBatch.chunks} that may be cited as evidence. */
+  readonly targetChunks: readonly CruxChunk[]
 }
 
 /** Sort chunks into the deterministic derive processing order. */
@@ -59,11 +62,13 @@ export function renderBoundedAssertionBatches(
   document: CruxDocument,
   chunks: readonly CruxChunk[],
   stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
+  targetKeys?: ReadonlySet<string>,
 ): readonly DerivePromptBatch[] {
   return renderBatches({
     stageId: stage.id,
     document,
     chunks,
+    targetKeys,
     vocabulary: Object.entries(stage.types).map(([name, schema]) =>
       `${name}: ${stableStringify(z.toJSONSchema(schema))}`),
     chunkLabel: (chunk) => `[${chunk.sourceId}/${chunk.chunkId}]`,
@@ -92,48 +97,103 @@ function renderBatches(args: {
   readonly vocabulary: readonly string[]
   readonly chunkLabel: (chunk: CruxChunk) => string
   readonly instructions?: string
+  readonly targetKeys?: ReadonlySet<string>
 }): readonly DerivePromptBatch[] {
   const ordered = orderDeriveChunks(args.chunks)
-  const batches = chunkBatches(args, ordered)
-  return batches.length > 0
-    ? batches.map((batch, index) => renderBatch(args, batch, index))
-    : [renderBatch(args, [], 0)]
+  const groups = chunkBatches(args, ordered)
+  return groups.length > 0
+    ? groups.map((group, index) => renderBatch(args, group, index))
+    : [renderBatch(args, { chunks: [], dropped: [] }, 0)]
 }
 
 function chunkBatches(
   args: Parameters<typeof renderBatches>[0],
   chunks: readonly CruxChunk[],
-): readonly (readonly CruxChunk[])[] {
-  const batches: CruxChunk[][] = []
-  let current: CruxChunk[] = []
-  for (const chunk of chunks) {
-    const candidate = [...current, chunk]
-    if (fitsWithoutDocument(args, candidate)) {
-      current = candidate
-      continue
+): readonly { readonly chunks: readonly CruxChunk[]; readonly dropped: readonly CruxChunk[] }[] {
+  if (args.targetKeys === undefined) {
+    const batches: CruxChunk[][] = []
+    let current: CruxChunk[] = []
+    for (const chunk of chunks) {
+      const candidate = [...current, chunk]
+      if (fitsWithoutDocument(args, candidate)) {
+        current = candidate
+        continue
+      }
+      if (current.length > 0) {
+        batches.push(current)
+        current = []
+      }
+      if (fitsWithoutDocument(args, [chunk])) {
+        current = [chunk]
+      } else {
+        batches.push([truncateSingleChunk(args, chunk)])
+      }
     }
-    if (current.length > 0) {
-      batches.push(current)
-      current = []
-    }
-    if (fitsWithoutDocument(args, [chunk])) {
-      current = [chunk]
-    } else {
-      batches.push([truncateSingleChunk(args, chunk)])
-    }
+    if (current.length > 0) batches.push(current)
+    return batches.map((batch) => ({ chunks: batch, dropped: [] }))
   }
-  if (current.length > 0) batches.push(current)
-  return batches
+
+  const targets = chunks.filter((chunk) => args.targetKeys!.has(chunkKey(chunk)))
+  if (targets.length === 0) return []
+  const groups: { readonly chunks: readonly CruxChunk[]; readonly dropped: readonly CruxChunk[] }[] = []
+  for (const target of targets) {
+    const batch: CruxChunk[] = [target]
+    const dropped: CruxChunk[] = []
+    if (fitsWithoutDocument(args, batch)) {
+      const targetIndex = chunks.indexOf(target)
+      let left = targetIndex - 1
+      let right = targetIndex + 1
+      while (left >= 0 || right < chunks.length) {
+        const leftDistance = left < 0 ? Number.POSITIVE_INFINITY : targetIndex - left
+        const rightDistance = right >= chunks.length ? Number.POSITIVE_INFINITY : right - targetIndex
+        const fromLeft = leftDistance <= rightDistance
+        const candidate = fromLeft ? chunks[left]! : chunks[right]!
+        const stopSide = (): void => {
+          if (fromLeft) left = -1
+          else right = chunks.length
+        }
+        if (args.targetKeys!.has(chunkKey(candidate))) {
+          stopSide()
+          continue
+        }
+        const next = [...batch, candidate]
+        if (fitsWithoutDocument(args, next)) {
+          batch.push(candidate)
+        } else {
+          dropped.push(candidate)
+          stopSide()
+        }
+        if (fromLeft) left -= 1
+        else right += 1
+      }
+    } else {
+      batch[0] = truncateSingleChunk(args, target)
+    }
+    groups.push({ chunks: batch, dropped })
+  }
+  return groups
 }
 
 function renderBatch(
   args: Parameters<typeof renderBatches>[0],
-  chunks: readonly CruxChunk[],
+  group: { readonly chunks: readonly CruxChunk[]; readonly dropped: readonly CruxChunk[] },
   ordinal: number,
 ): DerivePromptBatch {
-  const warnings = chunks.flatMap((chunk) => truncationWarning(args.stageId, chunk))
+  const { chunks } = group
+  const warnings = [
+    ...chunks.flatMap((chunk) => truncationWarning(args.stageId, chunk)),
+    ...group.dropped.map((chunk) =>
+      `Derive ${args.stageId} dropped context chunk for source ${chunk.sourceId} chunk ${chunk.chunkId} from batch ${ordinal}.`),
+  ]
   const documentExcerpt = ordinal === 0 ? fitDocumentExcerpt(args, chunks) : ''
-  return { ordinal, chunks, prompt: promptText(args, chunks, documentExcerpt), warnings }
+  const targetKeys = args.targetKeys
+  return {
+    ordinal,
+    chunks,
+    targetChunks: targetKeys === undefined ? chunks : chunks.filter((chunk) => targetKeys.has(chunkKey(chunk))),
+    prompt: promptText(args, chunks, documentExcerpt),
+    warnings,
+  }
 }
 
 function fitsWithoutDocument(args: Parameters<typeof renderBatches>[0], chunks: readonly CruxChunk[]): boolean {
@@ -171,14 +231,23 @@ function promptText(
   chunks: readonly CruxChunk[],
   documentExcerpt: string,
 ): string {
+  const chunkLines = chunks.map((chunk) => `${roleLabel(args.targetKeys, chunks, chunk)}${args.chunkLabel(chunk)} ${chunk.content}`)
   return [
     args.instructions ?? '',
     `Source: ${args.document.sourceId}`,
     args.document.title ? `Title: ${args.document.title}` : '',
     `Vocabulary:\n${args.vocabulary.join('\n')}`,
     documentExcerpt ? `Document:\n${documentExcerpt}` : '',
-    `Chunks:\n${chunks.map((chunk) => `${args.chunkLabel(chunk)} ${chunk.content}`).join('\n')}`,
+    `Chunks:\n${chunkLines.join('\n')}`,
   ].filter(Boolean).join('\n\n')
+}
+
+/** Render a role marker only when a batch actually mixes target and context chunks. */
+function roleLabel(targetKeys: ReadonlySet<string> | undefined, chunks: readonly CruxChunk[], chunk: CruxChunk): string {
+  if (targetKeys === undefined) return ''
+  const hasContext = chunks.some((candidate) => !targetKeys.has(chunkKey(candidate)))
+  if (!hasContext) return ''
+  return targetKeys.has(chunkKey(chunk)) ? '[TARGET:] ' : '[CONTEXT:] '
 }
 
 function estimatedChunkChars(chunks: readonly CruxChunk[]): number {
