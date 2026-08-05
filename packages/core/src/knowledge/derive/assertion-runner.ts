@@ -186,10 +186,10 @@ async function readGeneratedAssertionClaims(
   })
   const parsed = schema.safeParse(result.object)
   if (!parsed.success) {
-    const issues = input.targetKeys === undefined
-      ? parsed.error.issues
-      : contextOnlyEvidenceIssues(result.object, batch, input.targetKeys)
-    const substituted = issues.length > 0 ? issues : parsed.error.issues
+    const substitutions = input.targetKeys === undefined
+      ? new Map<string, z.core.$ZodIssue>()
+      : contextOnlyEvidenceMap(result.object, batch, input.targetKeys)
+    const substituted = substituteSyntheticIssues(parsed.error.issues, substitutions)
     return {
       claims: [],
       warnings: result.warnings,
@@ -214,32 +214,74 @@ function isContextOnlyEvidenceIssue(issue: z.core.$ZodIssue): boolean {
   return (issue as { readonly code?: unknown }).code === 'context_only_evidence'
 }
 
-/** Replace union evidence failures with authored context-only diagnostics. */
-function contextOnlyEvidenceIssues(
+/** Chunk-identity rejection codes; co-located strictness issues are not covered by the authored message. */
+const IDENTITY_REJECTION_CODES = new Set(['invalid_union', 'invalid_literal'])
+
+/** Swap chunk-identity failures for authored diagnostics, suppressing their nested details, while keeping unrelated parse issues. */
+function substituteSyntheticIssues(
+  issues: readonly z.core.$ZodIssue[],
+  replacements: ReadonlyMap<string, z.core.$ZodIssue>,
+): readonly z.core.$ZodIssue[] {
+  const carried = new Set<string>()
+  const substituted: z.core.$ZodIssue[] = []
+  for (const issue of issues) {
+    const key = issue.path.join('.')
+    const exact = replacements.get(key)
+    if (exact !== undefined) {
+      // Preserve co-located defects (e.g. unrecognized_keys) at the same slot;
+      // only the identity rejection itself is swapped for the authored message.
+      if (!IDENTITY_REJECTION_CODES.has(issue.code)) substituted.push(issue)
+      if (!carried.has(key)) {
+        substituted.push(exact)
+        carried.add(key)
+      }
+      continue
+    }
+    // A nested identity failure inside a replaced evidence slot is covered by the authored message.
+    const coveredBy = (): boolean => {
+      for (const replacementKey of replacements.keys()) {
+        if (key.startsWith(`${replacementKey}.`)) return true
+      }
+      return false
+    }
+    if (coveredBy()) continue
+    substituted.push(issue)
+  }
+  for (const [key, replacement] of replacements) {
+    if (!carried.has(key)) substituted.push(replacement)
+  }
+  return substituted
+}
+
+/** Author context-only diagnostics for evidence refs, guarded against malformed model output. */
+function contextOnlyEvidenceMap(
   object: unknown,
   batch: DerivePromptBatch,
   targetKeys: ReadonlySet<string>,
-): readonly z.core.$ZodIssue[] {
+): ReadonlyMap<string, z.core.$ZodIssue> {
+  const replacements = new Map<string, z.core.$ZodIssue>()
+  if (typeof object !== 'object' || object === null) return replacements
   const assertions = (object as { readonly assertions?: unknown }).assertions
-  if (!Array.isArray(assertions)) return []
+  if (!Array.isArray(assertions)) return replacements
   const visible = new Set(batch.chunks.map(chunkKey))
-  const issues: z.core.$ZodIssue[] = []
   assertions.forEach((assertion, index) => {
+    if (typeof assertion !== 'object' || assertion === null) return
     const evidence = (assertion as { readonly evidence?: unknown }).evidence
     if (!Array.isArray(evidence)) return
     evidence.forEach((ref, evidenceIndex) => {
       if (!isKnowledgeRef(ref) || ref.kind !== 'chunk') return
       const key = chunkKey(ref)
       if (visible.has(key) && !targetKeys.has(key)) {
-        issues.push({
+        const path = ['assertions', index, 'evidence', evidenceIndex]
+        replacements.set(path.join('.'), {
           code: 'context_only_evidence',
-          path: ['assertions', index, 'evidence', evidenceIndex],
+          path,
           message: 'evidence may only reference target chunks',
         } as unknown as z.core.$ZodIssue)
       }
     })
   })
-  return issues
+  return replacements
 }
 
 function payloadSchema(

@@ -161,7 +161,6 @@ function chunkBatches(
           batch.push(candidate)
         } else {
           dropped.push(candidate)
-          stopSide()
         }
         if (fromLeft) left -= 1
         else right += 1

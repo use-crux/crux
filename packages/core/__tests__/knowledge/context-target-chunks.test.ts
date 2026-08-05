@@ -157,6 +157,173 @@ describe('connected knowledge context vs target chunks', () => {
     expect(model.generateObject).toHaveBeenCalledTimes(1)
   })
 
+  it('does not crash on malformed (null) model output and still repairs', async () => {
+    const prompts: string[] = []
+    let index = 0
+    const model: KnowledgeModel = {
+      name: 'assertion-extractor',
+      fingerprint: 'assertion-fp',
+      generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
+      generateObject: vi.fn(async ({ prompt }) => {
+        prompts.push(prompt)
+        const object = [
+          null,
+          { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')] }] },
+        ][index++]
+        return { object }
+      }),
+    }
+    const stage = assertions({
+      id: 'facts',
+      version: 1,
+      types: assertionTypes,
+      model,
+      targets: (chunks) => chunks.filter((chunk) => chunk.chunkId === 'c1'),
+    })
+    const sourceChunks = [chunk('c1', 0, 'alpha'), chunk('c2', 1, 'beta')]
+
+    const result = await runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: sourceChunks,
+    })
+
+    // The malformed first pass falls through to the repair prompt instead of throwing.
+    expect(result[0]?.claims).toBe(1)
+    expect(model.generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps independent schema failures visible in the repair prompt alongside context-only diagnostics', async () => {
+    const prompts: string[] = []
+    const invalid = {
+      assertions: [{
+        type: 'fact',
+        data: { value: 'x' },
+        evidence: [chunkRef('c2')],
+        stray: true,
+      }],
+    }
+    const fixed = {
+      assertions: [{
+        type: 'fact',
+        data: { value: 'x' },
+        evidence: [chunkRef('c1')],
+        stray: true,
+      }],
+    }
+    const model = fixedAssertionModel([invalid, fixed], prompts)
+    const stage = assertions({
+      id: 'facts',
+      version: 1,
+      types: assertionTypes,
+      model,
+      targets: (chunks) => chunks.filter((chunk) => chunk.chunkId === 'c1'),
+    })
+    const sourceChunks = [chunk('c1', 0, 'alpha'), chunk('c2', 1, 'beta')]
+
+    const error = await runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: sourceChunks,
+    }).catch((cause: unknown) => cause)
+
+    // The repair prompt discloses BOTH the context-only citation and the stray key.
+    expect(prompts[1]).toContain('evidence may only reference target chunks')
+    expect(prompts[1]).toContain('assertions.0')
+    // The surviving independent failure reaches the exhausted error, not just the context issue.
+    expect((error as ValidationExhaustedError).issues.some(
+      (issue) => issue.path === 'assertions.[0]' && issue.code !== 'context_only_evidence',
+    )).toBe(true)
+  })
+
+  it('keeps a co-located evidence defect visible in the repair prompt alongside the context-only diagnostic', async () => {
+    const prompts: string[] = []
+    const invalid = {
+      assertions: [{
+        type: 'fact',
+        data: { value: 'x' },
+        evidence: [{ kind: 'chunk', sourceId, chunkId: 'c2', stray: true }],
+      }],
+    }
+    const fixed = {
+      assertions: [{
+        type: 'fact',
+        data: { value: 'x' },
+        evidence: [{ kind: 'chunk', sourceId, chunkId: 'c1', stray: true }],
+      }],
+    }
+    const model = fixedAssertionModel([invalid, fixed], prompts)
+    const stage = assertions({
+      id: 'facts',
+      version: 1,
+      types: assertionTypes,
+      model,
+      targets: (chunks) => chunks.filter((chunk) => chunk.chunkId === 'c1'),
+    })
+    const sourceChunks = [chunk('c1', 0, 'alpha'), chunk('c2', 1, 'beta')]
+
+    const error = await runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: sourceChunks,
+    }).catch((cause: unknown) => cause)
+
+    // The evidence slot's own strictness defect survives substitution as its own line.
+    expect(prompts[1]).toContain('evidence may only reference target chunks')
+    expect(prompts[1]).toMatch(/assertions\.0\.evidence\.0\n/)
+    // The surviving defect reaches the exhausted error under an unrelated code.
+    expect((error as ValidationExhaustedError).issues.some(
+      (issue) => issue.path === 'assertions.[0].evidence.[0]' && issue.code !== 'context_only_evidence',
+    )).toBe(true)
+  })
+
+  it('keeps smaller context visible beyond a dropped overflow neighbor', async () => {
+    const prompts: string[] = []
+    const model = assertionModel(prompts, [])
+    const stage = assertions({
+      id: 'facts',
+      version: 1,
+      types: assertionTypes,
+      model,
+      targets: (chunks) => chunks.filter((chunk) => chunk.chunkId === 't1'),
+    })
+    const huge = `HUGE ${'x'.repeat(MAX_DERIVE_BATCH_CHARS + 1000)}`
+    const sourceChunks = [
+      chunk('t1', 0, 'target'),
+      chunk('c1', 1, 'near-context'),
+      chunk('c2', 2, huge),
+      chunk('c3', 3, 'far-context'),
+    ]
+
+    const result = await runDeriveStages({
+      records: inMemoryRecordStore(),
+      indexerId: 'kb',
+      namespace,
+      stages: [stage],
+      document: document(),
+      chunks: sourceChunks,
+    })
+
+    // The oversized neighbor is dropped with a warning; the farther small context stays visible.
+    expect(model.generateObject).toHaveBeenCalledTimes(1)
+    expect(prompts[0]).toContain('[TARGET:] [doc-1/t1]')
+    expect(prompts[0]).toContain('near-context')
+    expect(prompts[0]).toContain('far-context')
+    expect(prompts[0]).not.toContain('HUGE')
+    const warnings = result[0]?.warnings ?? []
+    expect(warnings.find((warning) => /dropped context chunk/.test(warning))).toContain('c2')
+    expect(warnings.some((warning) => /dropped context chunk/.test(warning) && /c3/.test(warning))).toBe(false)
+  })
+
   it('assertion relations reject evidence pointing at a context-only chunk', async () => {
     const stage = assertions({
       id: 'facts',
