@@ -215,7 +215,7 @@ describe("public Agent Session input acceptance", () => {
     });
     const base = inMemoryRuntimeStore();
     const seen: RuntimeCompositeKind[] = [];
-    const now = () => new Date("2026-08-05T00:00:00.000Z");
+    const now = () => new Date();
     const newWorkId = (): never => {
       throw new Error(
         "Session admission must reuse its canonical Work identity.",
