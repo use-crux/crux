@@ -7,8 +7,8 @@ import type {
   AdapterBoundGenerationModel,
   GenerationCapabilities,
   GenerationModel,
-  Session,
 } from "../src";
+import type { SessionForTarget } from "../src/session/target-types";
 import { defineGenerationModel } from "../src/adapter-authoring";
 
 expectTypeOf<AdapterBoundGenerationModel>().toMatchTypeOf<GenerationModel>();
@@ -90,21 +90,18 @@ const nativeSession = () =>
 const broadSession = () =>
   session(unboundAgent, { key: "broad:1", model: broadModel });
 
-type ExpectedSession = Session<{ message: string }, { reply: string }> & {
-  readonly targetKind: "agent";
-};
 expectTypeOf<
   Awaited<ReturnType<typeof boundSession>>
->().toEqualTypeOf<ExpectedSession>();
+>().toEqualTypeOf<SessionForTarget<typeof boundAgent>>();
 expectTypeOf<
   Awaited<ReturnType<typeof suppliedSession>>
->().toEqualTypeOf<ExpectedSession>();
+>().toEqualTypeOf<SessionForTarget<typeof unboundAgent>>();
 expectTypeOf<
   Awaited<ReturnType<typeof nativeSession>>
->().toEqualTypeOf<ExpectedSession>();
+>().toEqualTypeOf<SessionForTarget<typeof nativeAgent>>();
 expectTypeOf<
   Awaited<ReturnType<typeof broadSession>>
->().toEqualTypeOf<ExpectedSession>();
+>().toEqualTypeOf<SessionForTarget<typeof unboundAgent>>();
 
 if (false) {
   // @ts-expect-error Construction authority is absent from the application surface.

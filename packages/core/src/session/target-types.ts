@@ -85,25 +85,34 @@ export type SessionForTarget<TTarget extends SessionTarget> = Session<
 > &
   (TTarget extends AnyFlowTarget
     ? FlowSessionSurface<TTarget>
-    : { readonly targetKind: "agent" });
+    : AgentSessionSurface);
+
+/** Shared durable Signal subscription surface for Agent and Flow Sessions. */
+export type SessionSubscriptionSurface<TSource = StaticSignalSource> = {
+  /**
+   * Persist one durable Signal subscription for this Session.
+   *
+   * @remarks Idempotent by Session, Signal identity, and canonical match key.
+   * Active subscriptions fan out independently on Signal publication.
+   * Predicate closures are rejected; use match data or static declarations.
+   * Agent Sessions queue matching payloads as typed Agent input at the next
+   * safe boundary (or start a parked turn). Flow Sessions also gate
+   * Session-owned Flow waiters.
+   */
+  subscribe(source: TSource): Promise<SessionSubscription>;
+  /** List active durable Signal subscriptions owned by this Session. */
+  subscriptions(): Promise<readonly SessionSubscription[]>;
+};
+
+/** Agent Session Signal subscription surface. */
+export type AgentSessionSurface = {
+  readonly targetKind: "agent";
+} & SessionSubscriptionSurface<StaticSignalSource>;
 
 /** Flow-only Session operations layered onto the shared Session handle. */
 export type FlowSessionSurface<TTarget extends AnyFlowTarget> = {
   readonly targetKind: "flow";
-  /**
-   * Persist one durable Signal subscription for this Flow Session.
-   *
-   * @remarks Idempotent by Session, Signal identity, and canonical match key.
-   * Active subscriptions fan out independently on Signal publication and gate
-   * durable delivery to Session-owned Flow waiters. Predicate closures are
-   * rejected; use match data or static Flow declarations.
-   */
-  subscribe(
-    source: SessionSubscriptionSource<TTarget>,
-  ): Promise<SessionSubscription>;
-  /** List active durable Signal subscriptions owned by this Session. */
-  subscriptions(): Promise<readonly SessionSubscription[]>;
-};
+} & SessionSubscriptionSurface<SessionSubscriptionSource<TTarget>>;
 
 /** Match-only Signal source accepted by dynamic Flow Session subscription. */
 export type SessionSubscriptionSource<TTarget extends AnyFlowTarget> =

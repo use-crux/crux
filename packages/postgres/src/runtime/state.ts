@@ -119,6 +119,14 @@ export function createPostgresStatePort(
         values.push(options.updatedBefore)
         filters.push(`updated_at < $${values.length}`)
       }
+      if (options.kind) {
+        values.push(options.kind)
+        filters.push(`work->>'kind' = $${values.length}`)
+      }
+      if (options.sessionId) {
+        values.push(options.sessionId)
+        filters.push(`work->>'sessionId' = $${values.length}`)
+      }
       values.push(options.limit ?? 100)
       const result = await db.query(
         `SELECT * FROM ${workTable}

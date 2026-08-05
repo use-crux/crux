@@ -41,11 +41,18 @@ export type {
   SessionThreadView,
 } from "./types";
 export type {
+  SessionEvent,
+  SessionIngressSummary,
+  SessionStreamOptions,
+} from "./events";
+export type {
+  AgentSessionSurface,
   FlowSessionOptions,
   FlowSessionSurface,
   SessionForTarget,
   SessionSubscription,
   SessionSubscriptionSource,
+  SessionSubscriptionSurface,
   SessionTarget,
   SessionTargetInput,
   SessionTargetOutput,

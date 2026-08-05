@@ -313,8 +313,31 @@ export interface Session<TInput, TOutput = unknown> {
   status(): Promise<SessionStatus>;
   /** Read bounded payload-safe ordering and recovery diagnostics. */
   inspect(): Promise<SessionInspection>;
-  /** Read bounded statistics for the complete addressed Session lifetime. */
+  /**
+   * Read bounded statistics for the complete addressed Session lifetime.
+   *
+   * @remarks Reuses the owner-scoped statistics ledger and public
+   * {@link ExecutionStats} shape. Session ingress outcomes
+   * (accepted/deduplicated/delivered/resumed/dropped) are exact totals with
+   * first-64 identity attribution under `inputs`.
+   */
   stats(): Promise<ExecutionStats>;
+  /**
+   * Read ordered, reconnectable Session state/event records.
+   *
+   * @remarks Without `after`, emits `session.snapshot` (`initial`) then every
+   * retained event from the earliest retained position through the live tail.
+   * A valid `after` resumes strictly after that cursor. An expired/unknown
+   * `after` emits `session.snapshot` (`cursor-expired`) then continues from
+   * the earliest retained event. Snapshot events replace local reducer state;
+   * later retained events are authoritative (may restate snapshot facts).
+   * Closed Sessions end after the terminal `session.status` event. Retention
+   * is bounded by the durable event port — slow consumers cannot retain
+   * unbounded history.
+   */
+  stream(
+    options?: import("./events").SessionStreamOptions,
+  ): AsyncIterable<import("./events").SessionEvent>;
   /**
    * Seal external ingress, deactivate Signal subscriptions, and drain.
    *

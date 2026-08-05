@@ -278,3 +278,23 @@ claim/checkpoint/start and closed-owner Thread commit authority, retention-safe
 `fork()`/`clone()` that register the child owner/head pin before the Session
 fork record. Keyed recreation after delete is rejected. Memory, PostgreSQL, and
 Convex implement the lifecycle ports and shared conformance laws.
+
+Complete dynamic Signal ingress for Agent Sessions on the existing Session
+input lane, preparation journal, and one Runtime worker: durable Agent
+`subscribe()`/`subscriptions()`, independent fan-out with
+Session-subscription delivery identity deduplication, parked-turn activation
+and mid-turn deferral until the next declared safe boundary, cursor-resumable
+bounded `session.stream()` state/event records with stable expired-cursor
+snapshots, and restart-safe owner `session.stats()` aggregates that extend the
+shared statistics ledger with exact accepted/deduplicated/delivered/resumed/
+dropped totals plus first-64 identity coverage linked to canonical Work stats.
+Missing Agent targets on temporary publish dispatchers requeue
+`session.signal-ingress` Work with outbox backoff (no terminal idempotency);
+the program worker settles once. Boundary settlement lists pending ingress via
+targeted `listWork({ kind, sessionId })` so unrelated Work cannot starve a
+Session (Memory, PostgreSQL, and Convex). Concurrent worker and step-boundary
+settlement is atomic via delivery compare-and-set (`pending → leased →
+terminal`) and idempotent `acceptInputs` for stable `inputIds` (no double
+cursor/pending/stats; PostgreSQL uses `ON CONFLICT DO NOTHING`). Boundary
+scans prefer pending Session deliveries and retire residual ingress Work after
+terminal deliveries so the settle budget is not spent on already-settled rows.

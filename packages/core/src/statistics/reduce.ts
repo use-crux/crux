@@ -1,6 +1,8 @@
 import {
+  emptySessionInputOutcome,
   emptyToolOutcome,
   emptyWorkOutcome,
+  type MutableSessionInputOutcome,
   type MutableToolOutcome,
   type MutableUsage,
   type MutableWorkOutcome,
@@ -46,11 +48,27 @@ export function applyFact(
     case "lifecycle":
       increment(state.lifecycle, lifecycleKey(fact.event));
       return;
+    case "session-input":
+      increment(state.inputs, fact.outcome);
+      increment(sessionInputTarget(state, fact.identity), fact.outcome);
+      return;
     case "timing":
       state.activeTimeMs += fact.activeTimeMs;
       state.suspendedTimeMs += fact.suspendedTimeMs;
       if (fact.completed) state.completedAt = new Date(at);
   }
+}
+
+function sessionInputTarget(
+  state: OwnerState,
+  identity: string,
+): MutableSessionInputOutcome {
+  const current = state.inputsByIdentity.get(identity);
+  if (current) return current;
+  if (state.inputsByIdentity.size < 64) {
+    return mapValue(state.inputsByIdentity, identity, emptySessionInputOutcome);
+  }
+  return (state.otherInputs ??= emptySessionInputOutcome());
 }
 
 function applyTransportRetry(

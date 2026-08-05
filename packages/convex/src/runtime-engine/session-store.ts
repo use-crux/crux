@@ -26,6 +26,7 @@ export function createConvexSessionStore(options: ConvexSessionStoreOptions): Se
     inspectInputs: (namespace, sessionId, limit) => call('inspectInputs', [namespace, sessionId, limit]),
     markReady: (namespace, sessionId, now) => call('markReady', [namespace, sessionId, now]),
     acceptInputs: (input) => call('acceptInputs', input),
+    appendStatistics: (input) => call('appendStatistics', input),
     reserveTurn: (input) => call('reserveTurn', input),
     startTurn: (input) => call('startTurn', input),
     getTurnInputs: (namespace, sessionId, workId) => call('getTurnInputs', [namespace, sessionId, workId]),

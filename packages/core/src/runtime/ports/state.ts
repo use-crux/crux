@@ -104,6 +104,22 @@ export interface ListWorkOptions {
   readonly status: RuntimeWorkState;
   /** Only include records updated before this time. */
   readonly updatedBefore?: Date;
+  /**
+   * When set, only return rows whose work payload `kind` matches.
+   *
+   * @remarks Session boundary settlement uses this with
+   * `session.signal-ingress` so unrelated pending Work cannot crowd out the
+   * Session's deferred ingress. Adapters should push the filter into the store
+   * query when possible.
+   */
+  readonly kind?: RuntimeWork["kind"];
+  /**
+   * When set, only return session-scoped work for this Session id.
+   *
+   * @remarks Combined with {@link ListWorkOptions.kind} for targeted Agent
+   * Signal-ingress settlement. Ignored for work kinds without `sessionId`.
+   */
+  readonly sessionId?: string;
   /** Maximum number of records to return. */
   readonly limit?: number;
 }

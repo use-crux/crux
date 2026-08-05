@@ -32,3 +32,32 @@ export function sessionTurnIdentity(
     }),
   });
 }
+
+/**
+ * Derive one Work identity for deferred Agent Session Signal ingress.
+ *
+ * @remarks Stable for a Session-subscription delivery id so publish retries and
+ * worker wakes reconverge on one validation/activation attempt.
+ */
+export function sessionSignalIngressIdentity(
+  namespace: string,
+  deliveryId: string,
+): {
+  readonly workId: WorkId;
+  readonly effects: EffectScopeRef;
+} {
+  const hash = sha256Hex(
+    encoder.encode(
+      JSON.stringify(["crux-session-signal-ingress:v1", namespace, deliveryId]),
+    ),
+  );
+  const workId = `work_${hash}` as WorkId;
+  return Object.freeze({
+    workId,
+    effects: Object.freeze({
+      kind: "effect.scope" as const,
+      id: `effect_${hash}`,
+      runId: workId,
+    }),
+  });
+}

@@ -68,6 +68,19 @@ export function createSnapshot(state: OwnerState): StatisticsSnapshot {
       },
       approvals: { ...state.approvals },
       lifecycle: { ...state.lifecycle },
+      inputs: {
+        total: { ...state.inputs },
+        byIdentity: Object.fromEntries(
+          [...state.inputsByIdentity].map(([identity, value]) => [
+            identity,
+            { ...value },
+          ]),
+        ),
+        ...(state.otherInputs
+          ? { otherIdentities: { ...state.otherInputs } }
+          : {}),
+        identityAttribution: state.otherInputs ? "truncated" : "complete",
+      },
     },
   };
   defineDate(snapshot, "at", state.updatedAt);

@@ -211,6 +211,25 @@ export async function claimSessionStepInputs(
         encodeJson(delivery),
       ],
     )
+    await writeSession(
+      db,
+      schema,
+      faults,
+      Object.freeze({
+        ...session,
+        statistics: recordSessionStatistics(
+          session.statistics,
+          session.sessionId,
+          input.now,
+          candidates.map((member) => ({
+            kind: 'session-input' as const,
+            identity: member.inputId,
+            outcome: 'delivered' as const,
+          })),
+        ),
+        updatedAt: input.now.toISOString(),
+      }),
+    )
   }
   const replayable = (
     await listTurnInputs(

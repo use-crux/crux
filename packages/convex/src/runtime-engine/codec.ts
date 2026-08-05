@@ -26,6 +26,7 @@ export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown>
     workId: input.workId,
     namespace: input.namespace,
     work: input.work,
+    ...workIndexFields(input.work),
     targetId: input.targetId,
     status: 'pending',
     attempt: 1,
@@ -41,11 +42,26 @@ export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown>
 export function encodeWork(work: RuntimeWorkItem): Record<string, unknown> {
   return clean({
     ...work,
+    ...workIndexFields(work.work),
     notBefore: work.notBefore?.getTime(),
     lastError: work.lastError ? { ...work.lastError, at: work.lastError.at.getTime() } : undefined,
     createdAt: work.createdAt.getTime(),
     updatedAt: work.updatedAt.getTime(),
   })
+}
+
+function workIndexFields(work: RuntimeWorkItem['work'] | NewWorkItem['work']): {
+  readonly workKind: string
+  readonly workSessionId?: string
+} {
+  const sessionId =
+    'sessionId' in work && typeof work.sessionId === 'string'
+      ? work.sessionId
+      : undefined
+  return {
+    workKind: work.kind,
+    ...(sessionId === undefined ? {} : { workSessionId: sessionId }),
+  }
 }
 
 export function decodeWork(value: unknown): RuntimeWorkItem {

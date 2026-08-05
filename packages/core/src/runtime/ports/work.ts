@@ -44,6 +44,20 @@ export type RuntimeWork =
       }
     }
   | {
+      /**
+       * Authoritative Agent Session Signal ingress validation/activation.
+       *
+       * @remarks Publish only accepts the occurrence and a pending delivery.
+       * The Runtime worker, which holds the immutable program Agent, validates
+       * the payload and accepts Session input or terminalizes the delivery.
+       */
+      readonly kind: 'session.signal-ingress'
+      readonly sessionId: string
+      readonly deliveryId: string
+      readonly occurrenceId: string
+      readonly subscriptionId: string
+    }
+  | {
       readonly kind: 'watch.deliver'
       readonly subscriptionId: string
       readonly cursor: EventCursor

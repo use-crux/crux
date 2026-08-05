@@ -6,11 +6,16 @@ import type {
 } from "./internal";
 import { decodeRecordFingerprint, readOwner } from "./record";
 import {
+  emptySessionInputOutcome,
+  type MutableSessionInputOutcome,
+} from "./internal";
+import {
   readApprovals,
   readFailures,
   readLifecycle,
   readMap,
   readModelCalls,
+  readSessionInputOutcome,
   readTool,
   readUsage,
   readWork,
@@ -61,7 +66,15 @@ export function decodeState(value: unknown): OwnerState {
       "approvals",
       "lifecycle",
     ],
-    ["completedAt", "otherModels", "otherTools", "otherWork"],
+    [
+      "completedAt",
+      "otherModels",
+      "otherTools",
+      "otherWork",
+      "inputs",
+      "inputsByIdentity",
+      "otherInputs",
+    ],
     "state",
   );
   const owner = readOwner(state.owner, "state.owner");
@@ -102,10 +115,27 @@ export function decodeState(value: unknown): OwnerState {
   const failures = readFailures(state.failures);
   const approvals = readApprovals(state.approvals);
   const lifecycle = readLifecycle(state.lifecycle);
+  const inputs =
+    state.inputs === undefined
+      ? emptySessionInputOutcome()
+      : readSessionInputOutcome(state.inputs, "state.inputs");
+  const inputsByIdentity =
+    state.inputsByIdentity === undefined
+      ? new Map<string, MutableSessionInputOutcome>()
+      : readMap(
+          state.inputsByIdentity,
+          "state.inputsByIdentity",
+          readSessionInputOutcome,
+        );
+  const otherInputs =
+    state.otherInputs === undefined
+      ? undefined
+      : readSessionInputOutcome(state.otherInputs, "state.otherInputs");
 
   validateOverflow(models, otherModels, hasUsage, "models");
   validateOverflow(toolsByName, otherTools, hasCounts, "tools");
   validateOverflow(workByTarget, otherWork, hasWork, "work");
+  validateOverflow(inputsByIdentity, otherInputs, hasSessionInput, "inputs");
   if (!equalUsage(usage, sumUsage(models.values(), otherModels))) {
     invalid("usage totals");
   }
@@ -121,6 +151,14 @@ export function decodeState(value: unknown): OwnerState {
   }
   if (!equalWork(work, sumWork(workByTarget.values(), otherWork))) {
     invalid("Work totals");
+  }
+  if (
+    !sameRecord(
+      inputs,
+      sumSessionInputs(inputsByIdentity.values(), otherInputs),
+    )
+  ) {
+    invalid("Session input totals");
   }
 
   return {
@@ -148,6 +186,9 @@ export function decodeState(value: unknown): OwnerState {
     failures,
     approvals,
     lifecycle,
+    inputs,
+    inputsByIdentity,
+    ...(otherInputs ? { otherInputs } : {}),
   };
 }
 
@@ -173,6 +214,26 @@ function hasCounts(value: MutableToolOutcome): boolean {
 
 function hasWork(value: MutableWorkOutcome): boolean {
   return value.started > 0;
+}
+
+function hasSessionInput(value: MutableSessionInputOutcome): boolean {
+  return Object.values(value).some((count) => count > 0);
+}
+
+function sumSessionInputs(
+  values: Iterable<MutableSessionInputOutcome>,
+  overflow?: MutableSessionInputOutcome,
+): MutableSessionInputOutcome {
+  const all = overflow ? [...values, overflow] : [...values];
+  const total = (key: keyof MutableSessionInputOutcome) =>
+    all.reduce((sum, value) => sum + value[key], 0);
+  return {
+    accepted: total("accepted"),
+    deduplicated: total("deduplicated"),
+    delivered: total("delivered"),
+    resumed: total("resumed"),
+    dropped: total("dropped"),
+  };
 }
 
 function sumUsage(

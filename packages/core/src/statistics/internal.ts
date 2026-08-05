@@ -3,6 +3,7 @@ import type {
   FailureKind,
   LifecycleStats,
   ModelCallStats,
+  SessionInputOutcomeStats,
   StatisticsOwner,
   StatisticsUsageReport,
   ToolOutcomeStats,
@@ -26,6 +27,7 @@ export type MutableWorkOutcome = Omit<Mutable<WorkOutcomeStats>, "current"> & {
 };
 export type MutableApprovals = Mutable<ApprovalStats>;
 export type MutableLifecycle = Mutable<LifecycleStats>;
+export type MutableSessionInputOutcome = Mutable<SessionInputOutcomeStats>;
 
 export interface OwnerState {
   readonly owner: StatisticsOwner;
@@ -49,6 +51,9 @@ export interface OwnerState {
   readonly failures: Record<FailureKind, number>;
   readonly approvals: MutableApprovals;
   readonly lifecycle: MutableLifecycle;
+  readonly inputs: MutableSessionInputOutcome;
+  readonly inputsByIdentity: Map<string, MutableSessionInputOutcome>;
+  otherInputs?: MutableSessionInputOutcome;
 }
 
 export function createOwnerState(
@@ -97,11 +102,23 @@ export function createOwnerState(
       cancellations: 0,
       steeringInputs: 0,
     },
+    inputs: emptySessionInputOutcome(),
+    inputsByIdentity: new Map(),
   };
 }
 
 export function emptyToolOutcome(): MutableToolOutcome {
   return { called: 0, succeeded: 0, failed: 0, denied: 0, cancelled: 0 };
+}
+
+export function emptySessionInputOutcome(): MutableSessionInputOutcome {
+  return {
+    accepted: 0,
+    deduplicated: 0,
+    delivered: 0,
+    resumed: 0,
+    dropped: 0,
+  };
 }
 
 export function emptyWorkOutcome(): MutableWorkOutcome {

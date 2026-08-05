@@ -44,6 +44,10 @@ export default defineSchema({
     workId: v.string(),
     namespace: v.string(),
     work: v.any(),
+    /** Denormalized work.kind for targeted listWork (Agent ingress settlement). */
+    workKind: v.optional(v.string()),
+    /** Denormalized work.sessionId for Session-scoped listWork filters. */
+    workSessionId: v.optional(v.string()),
     targetId: v.string(),
     status: v.string(),
     attempt: v.number(),
@@ -60,7 +64,14 @@ export default defineSchema({
   })
     .index('by_work_id', ['workId'])
     .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
-    .index('by_status_updated', ['status', 'updatedAt']),
+    .index('by_status_updated', ['status', 'updatedAt'])
+    .index('by_namespace_status_kind_session_updated', [
+      'namespace',
+      'status',
+      'workKind',
+      'workSessionId',
+      'updatedAt',
+    ]),
 
   runtimeSessions: defineTable({
     schemaVersion: v.literal(1),

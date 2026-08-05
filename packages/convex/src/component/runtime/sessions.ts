@@ -34,6 +34,8 @@ async function dispatch(port: SessionPort, operation: SessionOperation, encoded:
       return await port.markReady(requiredString(input[0]), requiredString(input[1]), requiredDate(input[2]))
     case 'acceptInputs':
       return await port.acceptInputs(decodeCompositeValue(encoded))
+    case 'appendStatistics':
+      return await port.appendStatistics?.(decodeCompositeValue(encoded))
     case 'reserveTurn':
       return await port.reserveTurn(decodeCompositeValue(encoded))
     case 'startTurn':
@@ -114,6 +116,7 @@ function assertOperation(value: string): SessionOperation {
     case 'inspectInputs':
     case 'markReady':
     case 'acceptInputs':
+    case 'appendStatistics':
     case 'reserveTurn':
     case 'startTurn':
     case 'getTurnInputs':

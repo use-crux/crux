@@ -57,22 +57,74 @@ export const putWork = mutation({
   },
 })
 
+/**
+ * Max rows scanned when kind/session filters cannot use the denormalized index
+ * (legacy rows without workKind). Truthful backpressure bound.
+ */
+const LIST_WORK_FILTER_SCAN_CAP = 10_000
+
 export const listWork = mutation({
   args: {
     namespace: v.string(),
     status: v.string(),
     updatedBefore: v.optional(v.number()),
+    kind: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { namespace, status, updatedBefore, limit }) => {
+  handler: async (ctx, { namespace, status, updatedBefore, kind, sessionId, limit }) => {
+    const maxResults = limit ?? 100
+    // Prefer denormalized kind+session index so >1000 unrelated pending rows
+    // never starve Session-scoped Agent ingress settlement.
+    if (kind !== undefined && sessionId !== undefined) {
+      const rows = await ctx.db
+        .query('runtimeWork')
+        .withIndex('by_namespace_status_kind_session_updated', (q) =>
+          q
+            .eq('namespace', namespace)
+            .eq('status', status)
+            .eq('workKind', kind)
+            .eq('workSessionId', sessionId),
+        )
+        .take(maxResults)
+      return limitRows(
+        rows.filter(
+          (row) =>
+            updatedBefore === undefined || row.updatedAt < updatedBefore,
+        ),
+        maxResults,
+      )
+    }
+    const take =
+      kind !== undefined || sessionId !== undefined
+        ? LIST_WORK_FILTER_SCAN_CAP
+        : maxResults
     const rows = await ctx.db
       .query('runtimeWork')
-      .withIndex('by_namespace_status_updated', (q) => q.eq('namespace', namespace).eq('status', status))
-      .take(limit ?? 1_000)
+      .withIndex('by_namespace_status_updated', (q) =>
+        q.eq('namespace', namespace).eq('status', status),
+      )
+      .take(take)
     return limitRows(
-      rows.filter((row) => updatedBefore === undefined || row.updatedAt < updatedBefore),
-      limit,
+      rows.filter((row) => {
+        if (updatedBefore !== undefined && row.updatedAt >= updatedBefore) {
+          return false
+        }
+        if (kind === undefined && sessionId === undefined) return true
+        const workKind =
+          typeof row.workKind === 'string'
+            ? row.workKind
+            : (row.work as { kind?: string } | undefined)?.kind
+        const workSessionId =
+          typeof row.workSessionId === 'string'
+            ? row.workSessionId
+            : (row.work as { sessionId?: string } | undefined)?.sessionId
+        if (kind !== undefined && workKind !== kind) return false
+        if (sessionId !== undefined && workSessionId !== sessionId) return false
+        return true
+      }),
+      maxResults,
     )
   },
 })

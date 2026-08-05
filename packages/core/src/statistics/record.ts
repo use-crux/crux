@@ -216,6 +216,17 @@ function readFact(value: unknown, strict: boolean): StatisticsFact {
           "fact.event",
         ),
       };
+    case "session-input":
+      keys(fact, ["kind", "identity", "outcome"], [], strict);
+      return {
+        kind,
+        identity: readString(fact.identity, "fact.identity"),
+        outcome: readLiteral(
+          fact.outcome,
+          ["accepted", "deduplicated", "delivered", "resumed", "dropped"],
+          "fact.outcome",
+        ),
+      };
     case "timing": {
       keys(
         fact,
