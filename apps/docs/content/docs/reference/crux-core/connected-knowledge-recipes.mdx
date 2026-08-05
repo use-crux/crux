@@ -189,7 +189,7 @@ and truncations.
 | Request has `filter` | `Error("globalSearch() does not accept request filters. Create a typed knowledge view and call view.recipe(...) instead.")` |
 | Admission hook returns `false` | `Error("globalSearch() was rejected by the request admission hook before map calls.")` |
 | No admission hook and preflight calls exceed `32` | Plain `Error` with estimated calls, report count, and remedies |
-| Repair validation fails | `Error("globalSearch() batch <n> failed validation after repair: <details>")` |
+| Repair validation fails | `RetrievalRunError` with a `ValidationExhaustedError` cause containing safe issue paths and codes |
 
 ### Example
 

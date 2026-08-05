@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { NoOutputGeneratedError, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import type { ModelInfo } from '@use-crux/core'
+import { ValidationExhaustedError } from '@use-crux/core'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
 import { compileStructuredOutput } from '@use-crux/core/adapter'
 import { cascade, fallback, FallbackExhaustedError, router } from '@use-crux/core/routing'
@@ -357,5 +358,72 @@ describe('createStructuredGenerateObjectFn', () => {
       ],
       errors: [{ name: 'CruxAdapterError' }, { name: 'CruxAdapterError' }],
     })
+  })
+
+  it('throws ValidationExhaustedError for authored schema parse failures without rejected candidates', async () => {
+    const secret = 'leaked-candidate-title'
+    const schema = z.object({
+      title: z.string().superRefine((value, ctx) => {
+        if (value !== 'ok') {
+          ctx.addIssue({ code: 'custom', message: `rejected=${value}`, path: [] })
+        }
+      }),
+    })
+    const scripted = scriptedGateway({
+      generateText: [{ output: { title: secret } }],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const error = await generateObject({
+      model: model('primary'),
+      prompt: 'json please',
+      schema,
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ValidationExhaustedError)
+    expect(error).toMatchObject({
+      attempts: 0,
+      maxAttempts: 0,
+      name: 'ValidationExhaustedError',
+    })
+    const serialized = JSON.stringify(error)
+    expect(serialized).not.toContain(secret)
+    expect(serialized).not.toContain('rejected=')
+    expect((error as ValidationExhaustedError).lastOutput.preview).toBeUndefined()
+    expect((error as ValidationExhaustedError).issues).toEqual([
+      { path: 'title', depth: 1, code: 'custom' },
+    ])
+  })
+
+  it('falls back on authored schema parse failures under invalid_response', async () => {
+    const schema = z.object({ accepted: z.boolean() })
+    const scripted = scriptedGateway({
+      generateText: [
+        { output: { accepted: 'nope' } },
+        { output: { accepted: true } },
+      ],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const result = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema,
+    })
+
+    expect(result.object).toEqual({ accepted: true })
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual([
+      'primary',
+      'backup',
+    ])
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
   })
 })

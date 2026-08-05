@@ -12,6 +12,7 @@
 
 import type { FallbackModel } from "../generation/fallback";
 import { classifyError, shouldAttemptFallback } from "../generation/fallback";
+import { isValidationExhaustedError } from "../generation/validation-retry";
 import { getMeta } from "../generation/result-meta";
 import { composeAbortSignals, Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
@@ -258,8 +259,11 @@ export async function resolveFallback<M, R>({
       const err = error instanceof Error ? error : new Error(String(error));
       const durationMs = Date.now() - attemptStart;
       const errorCategory = classifyError(err);
+      // ValidationExhaustedError is policy-terminal for same-model retries, but
+      // model fallback may still try the next candidate under `invalid_response`.
+      // Other policy-terminal failures (guardrails, constraints) stay non-fallable.
       const willAttemptFallback =
-        !isPolicyTerminal(err) &&
+        (!isPolicyTerminal(err) || isValidationExhaustedError(err)) &&
         shouldAttemptFallbackSafely(err, options, attemptSpan);
 
       details.push({

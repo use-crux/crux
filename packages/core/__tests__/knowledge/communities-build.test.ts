@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { ValidationExhaustedError } from '../../src/generation/validation-retry'
 import { knowledgeCurrentKey } from '../../src/knowledge/keys'
 import { communities, knowledgeBase } from '../../src/knowledge'
 import { communityScopeKey } from '../../src/knowledge/communities/keys'
@@ -103,7 +104,75 @@ describe('connected knowledge community builds', () => {
 
     model.failReports()
     await docs.reindex([chunk('alpha', 'a1', 'Alpha changed with Gamma.')])
-    await expect(docs.communities?.prepare()).rejects.toThrow(/failed validation/)
+    await expect(docs.communities?.prepare()).rejects.toBeInstanceOf(ValidationExhaustedError)
+
+    const scopeKey = communityScopeKey({ strategyFingerprint: config.strategyFingerprint })
+    const store = createCommunityStore({ records: storage.records, indexerId: ns, namespace: ns, scopeKey })
+    expect((await store.currentGeneration())?.generationId).toBe(before)
+  })
+
+  it('repairs once after canonical ValidationExhaustedError and keeps safe feedback', async () => {
+    const storage = inMemoryStorage()
+    const secret = 'leaked-rejected-title'
+    const reportPrompts: string[] = []
+    let reportCalls = 0
+    const model = {
+      name: 'community-repair-ok',
+      fingerprint: 'community-repair-ok-v1',
+      strategyFingerprint: '',
+      generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
+      generateObject: vi.fn(async (args: { readonly prompt: string }) => {
+        if (args.prompt.includes('Extract canonical entity names')) {
+          return { object: entityOutput(args.prompt) }
+        }
+        reportCalls += 1
+        reportPrompts.push(args.prompt)
+        if (reportCalls === 1) {
+          throw new ValidationExhaustedError({
+            lastRawOutput: JSON.stringify({ title: secret }),
+            zodErrors: communityReportInvalidZodError(),
+            attempts: 0,
+            maxAttempts: 0,
+            promptId: 'generateObject',
+          })
+        }
+        return { object: reportOutput(args.prompt, reportCalls) }
+      }),
+    } satisfies KnowledgeModel & { readonly strategyFingerprint: string }
+
+    const docs = knowledgeBase({ id: ns, storage, communities: communities({ model }) })
+    await docs.index([chunk('alpha', 'a1', 'Alpha works with Beta.')])
+    await docs.communities?.prepare()
+
+    const reports = (await docs.communities?.reports({ limit: 20 }))?.reports ?? []
+    expect(reports.length).toBeGreaterThan(0)
+    expect(reportCalls).toBe(2)
+    expect(reportPrompts[1]).toContain('Fix these validation errors:')
+    expect(reportPrompts[1]).toMatch(/findings\.\[0\]\.evidence|title|invalid_type|invalid_union|too_small/)
+    expect(reportPrompts[1]).not.toContain(secret)
+    expect(reportPrompts[1]).not.toContain('leaked')
+  })
+
+  it('throws ValidationExhaustedError after one failed repair without partial publication', async () => {
+    const storage = inMemoryStorage()
+    const model = countingModel()
+    const config = communities({ model })
+    const docs = knowledgeBase({ id: ns, storage, communities: config })
+
+    await docs.index([chunk('alpha', 'a1', 'Alpha works with Beta.')])
+    await docs.communities?.prepare()
+    const before = (await docs.communities?.reports())?.reports[0]?.generationId
+    const reportCallsBefore = model.reportCalls()
+
+    model.failWithValidationExhaustion()
+    await docs.reindex([chunk('alpha', 'a1', 'Alpha changed with Gamma.')])
+    const error = await docs.communities?.prepare().catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ValidationExhaustedError)
+    expect(error).toMatchObject({ attempts: 1, maxAttempts: 1 })
+    // Bottom-up generation aborts at the first community that exhausts repair:
+    // one initial ValidationExhaustedError + exactly one domain repair attempt.
+    expect(model.reportCalls() - reportCallsBefore).toBe(2)
 
     const scopeKey = communityScopeKey({ strategyFingerprint: config.strategyFingerprint })
     const store = createCommunityStore({ records: storage.records, indexerId: ns, namespace: ns, scopeKey })
@@ -173,7 +242,7 @@ function chunk(
 function countingModel() {
   let relationCalls = 0
   let reportCalls = 0
-  let fail = false
+  let fail: 'none' | 'invalid-object' | 'validation-exhausted' = 'none'
   const model = {
     name: 'community-test',
     fingerprint: 'community-test-v1',
@@ -185,7 +254,18 @@ function countingModel() {
         return { object: entityOutput(args.prompt) }
       }
       reportCalls += 1
-      if (fail) return { object: { title: 'invalid', summary: 'x', findings: [{ statement: 'missing evidence' }] } }
+      if (fail === 'invalid-object') {
+        return { object: { title: 'invalid', summary: 'x', findings: [{ statement: 'missing evidence' }] } }
+      }
+      if (fail === 'validation-exhausted') {
+        throw new ValidationExhaustedError({
+          lastRawOutput: '{"title":"invalid"}',
+          zodErrors: communityReportInvalidZodError(),
+          attempts: 0,
+          maxAttempts: 0,
+          promptId: 'generateObject',
+        })
+      }
       return { object: reportOutput(args.prompt, reportCalls) }
     }),
     relationCalls: () => relationCalls,
@@ -195,7 +275,10 @@ function countingModel() {
       reportCalls = 0
     },
     failReports: () => {
-      fail = true
+      fail = 'invalid-object'
+    },
+    failWithValidationExhaustion: () => {
+      fail = 'validation-exhausted'
     },
   } satisfies KnowledgeModel & {
     readonly strategyFingerprint: string
@@ -203,8 +286,26 @@ function countingModel() {
     reportCalls(): number
     reset(): void
     failReports(): void
+    failWithValidationExhaustion(): void
   }
   return model
+}
+
+function communityReportInvalidZodError(): z.ZodError {
+  const parsed = z.object({
+    title: z.string().min(1),
+    summary: z.string(),
+    findings: z.array(z.object({
+      statement: z.string().min(1),
+      evidence: z.array(z.object({ kind: z.literal('chunk'), sourceId: z.string(), chunkId: z.string() })).min(1),
+    })),
+  }).safeParse({
+    title: 'invalid',
+    summary: 'x',
+    findings: [{ statement: 'missing evidence' }],
+  })
+  if (parsed.success) throw new Error('expected invalid community report fixture')
+  return parsed.error
 }
 
 function entityOutput(prompt: string) {

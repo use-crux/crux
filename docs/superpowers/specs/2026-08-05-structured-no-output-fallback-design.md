@@ -8,7 +8,7 @@ Treat AI SDK `NoOutputGeneratedError` as a failed structured-output attempt so C
 
 - Recognize the AI SDK's stable `AI_NoOutputGeneratedError` identity in the AI adapter without importing AI SDK error classes into Core.
 - Normalize it at the AI adapter boundary to a provider-neutral `CruxAdapterError` with kind `invalid-response` and a content-free machine code.
-- Map `invalid-response` to Core's existing `invalid_response` routing category. This remains distinct from `ValidationExhaustedError`, which is deliberately policy-terminal after repair is exhausted.
+- Map `invalid-response` to Core's existing `invalid_response` routing category. `ValidationExhaustedError` is also classified as `invalid_response`: same-model retries remain terminal, while an explicitly configured model fallback may select the next candidate.
 - Preserve policy-terminal behavior and do not retain provider output, raw structured text, or sensitive error payloads.
 - Keep Core independent of the AI SDK; Core only owns the provider-neutral adapter error kind.
 
@@ -17,5 +17,6 @@ Treat AI SDK `NoOutputGeneratedError` as a failed structured-output attempt so C
 - Direct standalone structured generation falls back after no output.
 - Both attempts appear when all fallback candidates produce no output.
 - The routing receipt classifies the failed attempt as `invalid_response` and records the successful secondary model.
+- Authored-schema validation exhaustion follows the same explicit `invalid_response` model-fallback policy without exposing the rejected candidate.
 - Existing structured repair and policy-terminal tests remain green.
 - A Connected Knowledge assertion/community integration path exercises the same standalone helper.
