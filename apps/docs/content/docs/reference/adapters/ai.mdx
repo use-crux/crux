@@ -347,6 +347,8 @@ Pre-bound `GenerateObjectFn` for `@use-crux/core` APIs (judges, extraction). Pas
 
 `generateObjectFn` shares the same AI SDK structured-attempt mechanics used by `generate()` for prompts with an `output` schema: provider-specific schema sanitation, core-backed `experimental_repairText`, and router/cascade model resolution all happen before the helper returns `{ object }`.
 
+The returned object always passes the authored schema. An authored-schema failure throws `ValidationExhaustedError` without exposing the rejected candidate. Because that error is classified as `invalid_response`, `fallback([...], { on: ["invalid_response"] })` can try the next configured model.
+
 ```ts
 import { judge } from "@use-crux/core/scoring";
 

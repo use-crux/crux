@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { stableHash } from '../../../indexing/hash'
 import type { KnowledgeRef } from '../../../knowledge/refs'
 import type { KnowledgeModel } from '../../../knowledge/model'
+import { generateObjectWithDomainRepair } from '../../../knowledge/structured-domain-repair'
 import type { FindingHit } from '../../types'
 import {
   GLOBAL_SEARCH_BATCH_BUDGET,
@@ -138,27 +139,40 @@ async function readBatch(
   batch: PackedBatch,
   validIds: ReadonlySet<string>,
 ) {
-  const first = await model.generateObject({ system: 'Return relevant connected-knowledge findings matching the schema.', prompt: renderPrompt(query, batch), schema: mapOutputSchema })
-  const parsed = parseMapOutput(first.object, validIds)
-  if (parsed.success) return parsed.data
-  const repaired = await model.generateObject({
-    system: 'Return corrected relevant connected-knowledge findings matching the schema.',
-    prompt: `${renderPrompt(query, batch)}\n\nFix these validation errors:\n${parsed.error}`,
-    schema: mapOutputSchema,
+  const basePrompt = renderPrompt(query, batch)
+  return generateObjectWithDomainRepair({
+    promptId: `globalSearch:batch:${batch.index + 1}`,
+    initial: () => model.generateObject({
+      system: 'Return relevant connected-knowledge findings matching the schema.',
+      prompt: basePrompt,
+      schema: mapOutputSchema,
+    }),
+    repair: (safeFeedback) => model.generateObject({
+      system: 'Return corrected relevant connected-knowledge findings matching the schema.',
+      prompt: `${basePrompt}\n\nFix these validation errors:\n${safeFeedback}`,
+      schema: mapOutputSchema,
+    }),
+    accept: (object) => acceptMapOutput(object, validIds),
   })
-  const repairParsed = parseMapOutput(repaired.object, validIds)
-  if (repairParsed.success) return repairParsed.data
-  throw new Error(`globalSearch() batch ${batch.index + 1} failed validation after repair: ${repairParsed.error}`)
 }
 
-function parseMapOutput(value: unknown, validIds: ReadonlySet<string>) {
+function acceptMapOutput(value: unknown, validIds: ReadonlySet<string>) {
   const parsed = mapOutputSchema.safeParse(value)
-  if (!parsed.success) return { success: false as const, error: parsed.error.message }
+  if (!parsed.success) return { ok: false as const, zodErrors: parsed.error }
   for (const finding of parsed.data.findings) {
     const invalid = finding.findingIds.find((id) => !validIds.has(id))
-    if (invalid) return { success: false as const, error: `Unknown finding id "${invalid}".` }
+    if (invalid) {
+      return {
+        ok: false as const,
+        zodErrors: new z.ZodError([{
+          code: 'custom',
+          path: ['findings', 'findingIds'],
+          message: 'unknown_finding_id',
+        }]),
+      }
+    }
   }
-  return { success: true as const, data: parsed.data }
+  return { ok: true as const, data: parsed.data }
 }
 
 function renderPrompt(query: string, batch: PackedBatch): string {
