@@ -125,18 +125,34 @@ func PackageDirFrom(start string) string {
 	}
 }
 
-// Dir resolves a local project root for commands that can operate from source
-// conventions when no Crux config exists.
+// DirFrom resolves the nearest project boundary in one upward walk. A config
+// wins over package.json only when both exist in the same directory; a distant
+// monorepo config must not eclipse a nearer package root.
+func DirFrom(start string) string {
+	dir := start
+	for {
+		for _, name := range ConfigNames {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return dir
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, "package.json")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return start
+		}
+		dir = parent
+	}
+}
+
+// Dir resolves a local project root from the nearest config or package
+// boundary.
 func Dir() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
-	if configDir := NearestConfigDirFrom(cwd); configDir != "" {
-		return configDir
-	}
-	if packageDir := PackageDirFrom(cwd); packageDir != "" {
-		return packageDir
-	}
-	return cwd
+	return DirFrom(cwd)
 }

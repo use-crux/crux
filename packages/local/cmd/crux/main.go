@@ -9,6 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/commands"
 	"github.com/use-crux/crux/packages/local/internal/commands/editorcmd"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -47,6 +48,14 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 
 	rootCmd.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
 	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
+	rootCmd.PersistentFlags().BoolVar(&f.JSON, "json", false, "Output JSON when the selected command supports it")
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if f.JSON && !commandSupportsJSON(cmd) {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s has no JSON output yet\n", cmd.CommandPath())
+			return domain.ExitError{Code: 2}
+		}
+		return nil
+	}
 
 	rootCmd.AddCommand(commands.NewDevCmd(f))
 	rootCmd.AddCommand(commands.NewConfigCmd(f))
@@ -113,7 +122,7 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	w("flows", "List runtime flow sessions")
 	w("stats", "Show aggregate statistics")
 	w("cost", "Show tracked model cost")
-	w("index", "List registered prompts, contexts, and tools")
+	w("index", "List every current Catalog definition")
 	w("lint", "Check authored Crux project health")
 	w("check", "Compile and gate authored Crux project health")
 	w("manifest", "Build a deployment Project Index manifest")
@@ -130,8 +139,20 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Flags"))
 	fl("--port", "Devtools server port (default 4400)")
 	fl("--no-color", "Disable colored output")
-	fl("--json", "JSON output (on subcommands)")
+	fl("--json", "Output JSON for supported commands; unsupported commands error")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "  %s\n\n", io.Sprint(output.Dim, "Run crux eval --help for the Eval workflow"))
 	return nil
+}
+
+func commandSupportsJSON(cmd *cobra.Command) bool {
+	if cmd.LocalNonPersistentFlags().Lookup("json") != nil {
+		return true
+	}
+	for current := cmd; current != nil && current.Parent() != nil; current = current.Parent() {
+		if current.PersistentFlags().Lookup("json") != nil {
+			return true
+		}
+	}
+	return false
 }

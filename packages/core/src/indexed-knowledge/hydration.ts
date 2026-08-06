@@ -1,8 +1,8 @@
 /**
- * Hydration diagnostics for indexed knowledge vector hits.
+ * Hydration diagnostics for indexed knowledge search hits.
  *
- * Vector stores can return keys that no longer hydrate to active chunk records
- * after adapter bugs, key mismatches, or stale physical vectors. This module
+ * Search stores can return keys that no longer hydrate to active chunk records
+ * after adapter bugs, key mismatches, or stale physical search records. This module
  * centralizes the fail-fast diagnostics required by the Retrieval beta runtime
  * contract.
  *
@@ -11,35 +11,35 @@
 
 import { RetrievalRunError } from '../retrieval/errors'
 
-/** Reason a vector hit could not hydrate into an active indexed chunk. */
+/** Reason a search hit could not hydrate into an active indexed chunk. */
 export type IndexedHydrationMissReason = 'missing_record' | 'inactive_or_wrong_namespace' | 'invalid_record'
 
-/** One vector-hit hydration miss. */
+/** One search-hit hydration miss. */
 export interface IndexedHydrationMiss {
-  /** Vector hit key that could not become a retrieval hit. */
+  /** Search hit key that could not become a retrieval hit. */
   readonly key: string
   /** Stable diagnostic reason for trace consumers. */
   readonly reason: IndexedHydrationMissReason
 }
 
-/** Fail when every vector hit missed because its backing record was absent. */
-export function assertVectorHitsHydrated(input: {
-  readonly vectorHitCount: number
+/** Fail when every search hit missed because its backing record was absent. */
+export function assertSearchHitsHydrated(input: {
+  readonly searchHitCount: number
   readonly hydratedCount: number
   readonly misses: readonly IndexedHydrationMiss[]
 }): void {
-  if (input.vectorHitCount === 0 || input.hydratedCount > 0) return
+  if (input.searchHitCount === 0 || input.hydratedCount > 0) return
   const missing = input.misses.filter((miss) => miss.reason === 'missing_record')
   if (missing.length === 0) return
 
   throw new RetrievalRunError(
     'hydration_miss',
-    `Vector hits could not be hydrated from indexed knowledge records. Check for a vector/record key or indexer id mismatch. Missing keys: ${missing
+    `Search hits could not be hydrated from indexed knowledge records. Check for a search/record key or indexer id mismatch. Missing keys: ${missing
       .map((miss) => miss.key)
       .join(', ')}`,
     {
       trace: {
-        vectorHitCount: input.vectorHitCount,
+        searchHitCount: input.searchHitCount,
         hydratedCount: input.hydratedCount,
         misses: input.misses,
       },
@@ -56,12 +56,12 @@ export function assertValidHydratedChunks(input: {
 
   throw new RetrievalRunError(
     'hydration_miss',
-    `Vector hits could not be hydrated from valid indexed chunk records. Check for a vector/record key or indexer id mismatch. Invalid keys: ${input.scoredKeys.join(
+    `Search hits could not be hydrated from valid indexed chunk records. Check for a search/record key or indexer id mismatch. Invalid keys: ${input.scoredKeys.join(
       ', ',
     )}`,
     {
       trace: {
-        vectorHitCount: input.scoredKeys.length,
+        searchHitCount: input.scoredKeys.length,
         hydratedCount: 0,
         misses: input.scoredKeys.map((key) => ({ key, reason: 'invalid_record' })),
       },

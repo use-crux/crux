@@ -1,6 +1,6 @@
 ---
 title: "@use-crux/postgres"
-description: PostgreSQL JSON records, pgvector retrieval, composed Connected Knowledge storage, and durable Runtime Engine storage.
+description: PostgreSQL JSON records, pgvector and lexical SearchStore retrieval, composed storage, and durable Runtime Engine storage.
 ---
 
 Peer dependency: `pg` >=8.22.0
@@ -10,8 +10,8 @@ Peer dependency: `pg` >=8.22.0
 ```ts
 import {
   postgresRecordStore,
+  postgresSearchStore,
   postgresStorage,
-  postgresVectorStore,
 } from "@use-crux/postgres";
 ```
 
@@ -32,23 +32,43 @@ await records.setup.apply();
 await records.put("docs:1", { title: "PostgreSQL" }, { ttlMs: 300_000 });
 ```
 
-### `postgresVectorStore(options)`
+### `postgresSearchStore(options)`
 
-`dimensions` is required. Add `sparseDimensions` to enable sparse vectors,
-hybrid search, and RRF fusion. Crux indices are zero-based; the adapter converts
-them to pgvector's one-based `sparsevec` representation.
+At least one of `dimensions`, `sparseDimensions`, or `lexical` is required.
+Set `dimensions` for a dense pgvector leg, `sparseDimensions` for a sparse
+pgvector leg, and `lexical` for PostgreSQL native full-text search. Crux sparse
+indices are zero-based; the adapter converts them to pgvector's one-based
+`sparsevec` representation.
 
 ```ts
-const vectors = postgresVectorStore({
+const search = postgresSearchStore({
   dimensions: 1536,
   sparseDimensions: 30_000,
+  lexical: { configuration: "simple" },
 });
-await vectors.setup.apply();
+await search.setup.apply();
 ```
 
-Search uses cosine HNSW indexes and exact JSONB metadata prefilters. HNSW is
-approximate. Hybrid search uses bounded candidates and normalized RRF with
-stable key tie-breaking. DBSF throws `StorageError("unsupported_capability")`.
+Dense search uses cosine HNSW indexes and exact JSONB metadata prefilters.
+HNSW is approximate. Lexical search stores chunk `content`, indexes a generated
+`tsvector` with GIN, parses queries with `websearch_to_tsquery()`, and ranks
+lexical candidates with PostgreSQL full-text ranking. Multi-leg search runs in
+one SQL statement with per-leg candidate CTEs and deterministic normalized RRF
+with stable key tie-breaking. Non-RRF fusion throws
+`StorageError("unsupported_capability")`.
+
+PostgreSQL lexical search is not BM25 in this release. True BM25 is deferred to
+RFC #352, and learned sparse providers are deferred to RFC #353. Sparse search
+remains a composable leg when `sparseDimensions` is configured.
+
+`setup.check()` never mutates the database. It reports missing columns,
+generated `tsvector` expression/configuration mismatches, missing GIN indexes,
+pgvector requirements, dimensions, and the Crux-owned presence constraint.
+`setup.apply()` safely creates missing schemas, tables, nullable columns,
+extension requirements, constraints, and indexes. After enabling lexical search
+for an existing knowledge base, run `knowledgeBase.reindex()` so active chunks
+populate `content`; `check()` reports
+`POSTGRES_SEARCH_LEXICAL_CONTENT_MISSING` until reindexing catches up.
 
 ### `postgresStorage(options)`
 
@@ -56,15 +76,23 @@ The composed factory shares one pool, one setup lifecycle, and one close
 boundary:
 
 ```ts
-const storage = postgresStorage({ dimensions: 1536 });
+const storage = postgresStorage({
+  dimensions: 1536,
+  lexical: true,
+});
 const result = await storage.setup.check();
 if (!result.ok) await storage.setup.apply();
 ```
 
 Setup is explicit and idempotent. `check()` never mutates the database;
 `apply()` creates the `vector` extension when needed, the storage schema,
-tables, constraints, and indexes. Data operations never run DDL. Diagnostics
+tables, constraints, generated full-text columns, and indexes. Data operations never run DDL. Diagnostics
 never include connection strings, SQL values, or stored content.
+
+When this bundle is assigned to `config({ storage })`, `crux setup --check`
+uses its setup capability and `crux setup --apply` runs the same safe-additive
+provisioning. The command releases pools created by the adapter afterward;
+caller-owned pools remain open.
 
 ## Runtime Engine
 
@@ -93,12 +121,13 @@ export default config({
 });
 ```
 
-| Option       | Type                              | Default             | Description                                                     |
-| ------------ | --------------------------------- | ------------------- | --------------------------------------------------------------- |
-| `url`        | `string`                          | `DATABASE_URL`      | Postgres connection URL.                                        |
-| `schema`     | `string`                          | `'crux_runtime'`    | Dedicated schema for Crux-owned runtime tables and indexes.     |
-| `pool`       | `Pool`                            | created from `url`  | Caller-supplied `pg` pool.                                      |
-| `setup.mode` | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
+| Option        | Type                              | Default             | Description                                                     |
+| ------------- | --------------------------------- | ------------------- | --------------------------------------------------------------- |
+| `url`         | `string`                          | `DATABASE_URL`      | Postgres connection URL.                                        |
+| `schema`      | `string`                          | `'crux_runtime'`    | Dedicated schema for Crux-owned runtime tables and indexes.     |
+| `pool`        | `Pool`                            | created from `url`  | Caller-supplied `pg` pool.                                      |
+| `poolOptions` | `PoolConfig`                      | `pg` defaults       | Options for the Crux-created pool.                              |
+| `setup.mode`  | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
 
 The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, scoped-idle counters, and durable Effect receipt/scope/unit/attempt/envelope rows. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
 
@@ -120,6 +149,8 @@ In tests, the package conformance suite can run against `CRUX_TEST_DATABASE_URL`
 ## Deployment notes
 
 - Use a shared Postgres database for multi-process or serverless deployments.
+- Run exactly one [`crux runtime worker`](/docs/guides/durable-execution/node) per namespace for the self-hosted Node topology; PostgreSQL advisory-lock ownership rejects an overlapping worker.
+- Configure `poolOptions.max` or a caller-owned pool's `max` to at least `2` for a Runtime worker. Its session-scoped ownership lease holds one connection while maintenance uses another.
 - Keep the runtime schema separate from application tables.
 - Pair Postgres with an external wake adapter such as `qstash()` in serverless deployments; a database row cannot wake a cold function by itself.
 - Namespace isolates environments sharing the same database. It is not an authorization boundary.

@@ -2,7 +2,8 @@
  * `@use-crux/ai` — Vercel AI SDK adapter.
  *
  * Provides `generate()` and `stream()` functions that execute Crux prompts
- * through the Vercel AI SDK (`ai` package), built on two boundaries:
+ * through the Vercel AI SDK (`ai` package), plus `aiSdk(native)` for portable
+ * adapter-bound `GenerationModel` values. Built on two boundaries:
  *
  * - **`aiSdkProviderRuntime`** (`@use-crux/core/adapter`) — core owns all
  *   policy: prompt resolution, `fallback()`/`router()`/`cascade()` routing,
@@ -107,7 +108,14 @@ import {
   createStreamTaskFactory,
   type AIStreamTaskFactory,
 } from "./eval-stream-task";
-export { stableModel } from "./stable-model";
+import { resolveAiSdkNativeModel } from "./generation-model";
+export {
+  aiSdk,
+  isAiSdkBoundModel,
+  isBoundGenerationModel,
+  resolveAiSdkNativeModel,
+} from "./generation-model";
+export type { AiSdkGenerationSource } from "./generation-model";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 export { aiSdkModelCapacity } from "./capacity";
@@ -615,9 +623,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
         streamImpl(
           prompt,
           taskOptions as AIExecutorCallOptions,
-        ) as unknown as Promise<
-          StreamResult<unknown, unknown>
-        >,
+        ) as unknown as Promise<StreamResult<unknown, unknown>>,
       (prompt, taskOptions) =>
         generateImpl(prompt, taskOptions as AIExecutorCallOptions),
       { executionContractKnown: options.gateway === undefined },
@@ -637,7 +643,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       attemptOptions: { readonly signal?: AbortSignal } = {},
     ) => {
       const result = await gateway.generateText({
-        model,
+        model: resolveAiSdkNativeModel(model) as LanguageModel,
         system: options.system,
         ...(options.prompt !== undefined
           ? { prompt: options.prompt }

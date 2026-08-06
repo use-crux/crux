@@ -94,12 +94,11 @@ import {
 import { OFFLOAD_SUPPORT_TOOL_NAME } from "../../request/offload/support-tool";
 import {
   alignThreadInvocationInput,
-  commitThreadInvocation,
-  isThreadReplay,
   prepareThreadInvocation,
-  validateThreadReplay,
 } from "./thread-history";
 import { attachThreadCommit } from "./thread-result";
+import { managedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
+import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
 import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
@@ -347,6 +346,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     resolved: () => resolved,
     rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
     configuredActiveTools: args.activeTools,
+    stepBoundary: args[managedGenerationStepBoundary],
     inputBudget: args.inputBudget,
     prepareStep: args.prepareStep,
     requestInput: args.input ?? {},
@@ -456,7 +456,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       model: modelInfo.modelId,
       media: dialect.media,
     });
-    if (args.prepareStep) {
+    if (args.prepareStep || args[managedGenerationStepBoundary]) {
       await planStep.prime({
         model: args.model,
         modelInfo,
@@ -581,9 +581,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               step.request ? [step.request] : [],
             ),
           );
-          if (result.threadCommit || result.pendingApprovals) return;
-          await validateThreadReplay(threadInvocation, isThreadReplay(result));
-          const threadCommit = await commitThreadInvocation(
+          const threadCommit = await checkpointAndCommitManagedGeneration(
+            args,
             threadInvocation,
             result,
           );

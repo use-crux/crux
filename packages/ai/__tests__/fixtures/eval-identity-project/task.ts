@@ -2,7 +2,7 @@ import { prompt, type AnyToolSet } from "@use-crux/core";
 import { MockLanguageModelV3 } from "ai/test";
 import { z } from "zod";
 
-import { createCruxAi, stableModel } from "../../../src";
+import { createCruxAi, aiSdk } from "../../../src";
 import { effectfulContext, pureContext, schemaTools } from "./contexts";
 
 const result = {
@@ -16,15 +16,12 @@ const result = {
 };
 
 function model() {
-  return stableModel(
+  return aiSdk(
     new MockLanguageModelV3({
-      // A recognized provider so tool schemas compile; the stable key below
-      // (not the provider/model id) is what fixes this model's Eval identity.
       provider: "openai",
       modelId: "gpt-4o",
       doGenerate: async () => result as never,
     }),
-    "fixture:identity-model:v1",
   );
 }
 

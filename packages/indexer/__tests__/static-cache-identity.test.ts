@@ -48,13 +48,13 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v88");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v94");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v93");
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v86");
   });
 
-  it("takes the combined Agent-tool and dynamic PromptText epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v45");
+  it("takes the Session diagnostic evidence contract epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v49");
   });
 
   it("projects static host manifest facets into extraction identity", () => {
@@ -135,6 +135,7 @@ describe("static cache identity", () => {
       "utf8",
     );
     const mirroredNames = new Set([
+      "@use-crux/indexer/crux-core",
       "@use-crux/indexer/crux-core-media",
       "crux-static-index-host",
       "runtime-relation-specs",

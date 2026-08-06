@@ -48,6 +48,12 @@ func renderPrimitivePayload(span api.InspectRunSpan, width int) string {
 	payload = sanitizeRunsRenderValue(payload).(map[string]any)
 	// _start is preserved for replay; strip from the visible projection.
 	delete(payload, "_start")
+	// Media payload bodies are deliberately never rendered. The run-detail
+	// activity projects only bounded descriptors (kind, media type, size, and
+	// lineage) so terminal inspection cannot expose inline media data.
+	if span.Kind == "media" || strings.HasPrefix(span.Primitive, "media.") || strings.HasPrefix(span.Op, "media.") {
+		return ""
+	}
 
 	// Backend can emit either the legacy short primitive (`tool`,
 	// `generation`, `flow`) or the canonical detailed form
@@ -164,6 +170,9 @@ func renderObservedError(raw json.RawMessage, width int) string {
 	}
 	if code := firstNonEmpty(stringField(payload, "code"), stringField(payload, "statusCode")); code != "" {
 		b.WriteString(kvRow("code", code, width))
+	}
+	if phase := stringField(payload, "phase"); phase != "" {
+		b.WriteString(kvRow("phase", phase, width))
 	}
 	if retryable, ok := payload["retryable"]; ok {
 		b.WriteString(kvRow("retryable", valuePreview(retryable, previewMax(width)), width))

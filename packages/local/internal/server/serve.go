@@ -10,11 +10,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/lifecycle"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -27,6 +29,7 @@ type DevServer struct {
 	Inspect               *inspect.Service
 	Devtools              *devtools.Service
 	Observability         *observability.Service
+	EvalCatalog           *evalserver.Collector
 	Port                  int
 	TunnelURL             string
 	IngestToken           string
@@ -37,6 +40,7 @@ type DevServer struct {
 	webSocketHub          *WSHub
 	closeRuntimeArtifacts func() error
 	runtimeArtifacts      RuntimeArtifactGenerator
+	enrichProjectRuntime  func(context.Context, string, store.IndexData) (store.IndexData, error)
 	projectRoot           string
 	startTunnel           func(context.Context, *slog.Logger) (*TunnelResult, error)
 	logger                *slog.Logger
@@ -145,6 +149,17 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if opts.ProjectIndexer != nil {
 		devtoolsSvc.WithProjectIndexer(opts.ProjectIndexer)
 	}
+	runtimeArtifacts = discoveryIsolatedRuntimeArtifactGenerator(runtimeArtifacts, devtoolsSvc)
+	evalCatalog := evalserver.NewFreshCollector(serverOpts.ProjectRoot, evalserver.CollectorDeps{
+		FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
+		WaitForStartup: func(waitCtx context.Context) error {
+			return waitForEvalDiscoveryStartup(waitCtx, opts.StartupJournal, devtoolsSvc.EvalDiscoveryIsolationRequired)
+		},
+		AcquireDiscovery: devtoolsSvc.AcquireEvalDiscoveryCapacity,
+		Lifetime:         ctx,
+		StartFlight:      workers.Go,
+	})
+	serverOpts.EvalCatalog = evalCatalog
 	observabilitySvc, err := observability.OpenService(ctx, serverOpts.ObservabilityDBPath)
 	if err != nil {
 		logger.Error("observability service initialization failed", "error", err)
@@ -177,6 +192,7 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		Inspect:         inspectSvc,
 		Devtools:        devtoolsSvc,
 		Observability:   observabilitySvc,
+		EvalCatalog:     evalCatalog,
 		Port:            opts.Port,
 		IngestToken:     ingestToken,
 		IngestTokenPath: ingestTokenPath,
@@ -198,6 +214,19 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		startup:               opts.StartupJournal,
 	}
 	return devServer
+}
+
+func waitForEvalDiscoveryStartup(ctx context.Context, journal *startup.Journal, isolationRequired func() bool) error {
+	if journal == nil {
+		return nil
+	}
+	if err := journal.WaitTask(ctx, "project-index"); err != nil {
+		return err
+	}
+	if isolationRequired == nil || !isolationRequired() {
+		return nil
+	}
+	return journal.WaitTask(ctx, "runtime-artifacts")
 }
 
 // Start begins listening. Returns immediately. Use Shutdown to stop.
@@ -230,6 +259,9 @@ func (d *DevServer) Start() error {
 func (d *DevServer) URL() string {
 	return fmt.Sprintf("http://localhost:%d", d.Port)
 }
+
+// ProjectRoot returns the root used by project-scoped in-process readers.
+func (d *DevServer) ProjectRoot() string { return d.projectRoot }
 
 // LocalURL returns the URL to open locally. When the primary listener is gated
 // (CRUX_HOST exposure), the session token is embedded so the opened link

@@ -31,7 +31,7 @@ export interface NativeStorageDefinition {
 }
 
 export interface NativeStorageReference {
-  readonly property: "storage" | "records" | "vectors" | "assets";
+  readonly property: "storage" | "records" | "search" | "assets";
   readonly expression: Expression;
   readonly target: NativeStorageDefinition;
 }
@@ -106,8 +106,8 @@ export function storagePropertyMatches(
       );
     case "records":
       return target.kind === "storage.recordStore";
-    case "vectors":
-      return target.kind === "storage.vectorStore";
+    case "search":
+      return target.kind === "storage.searchStore";
     case "assets":
       return target.kind === "storage.assetStore";
   }
@@ -136,7 +136,7 @@ export function storageDependencies(
     storage: uniqueTargets(refs, "storage"),
     storageScopes: uniqueTargets(refs, "storage", "storage.scope"),
     recordStores: uniqueTargets(refs, "records"),
-    vectorStores: uniqueTargets(refs, "vectors"),
+    searchStores: uniqueTargets(refs, "search"),
     assetStores: uniqueTargets(refs, "assets"),
   });
   return Object.keys(dependencies).length > 0 ? dependencies : undefined;

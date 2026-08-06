@@ -3,19 +3,19 @@ import {
   inMemoryAssetStore,
   inMemoryRecordStore,
   inMemoryStorage,
-  inMemoryVectorStore,
+  inMemorySearchStore,
   storage,
 } from "../../src/storage";
 
 describe("storage capabilities", () => {
-  it("keeps document data, vector search, and assets as explicit capabilities", async () => {
+  it("keeps document data, search, and assets as explicit capabilities", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const assets = inMemoryAssetStore();
-    const bundle = storage({ records, vectors, assets });
+    const bundle = storage({ records, search, assets });
 
     await bundle.records.put("docs:a", { title: "Alpha" });
-    await bundle.vectors?.upsert([{ key: "docs:a", dense: [1, 0] }]);
+    await bundle.search?.upsert([{ key: "docs:a", dense: [1, 0] }]);
     const asset = await bundle.assets?.put(
       {
         type: "data",
@@ -30,7 +30,7 @@ describe("storage capabilities", () => {
       title: "Alpha",
     });
     await expect(
-      bundle.vectors?.search({ mode: "dense", dense: [1, 0] }),
+      bundle.search?.search({ legs: [{ kind: "dense", vector: [1, 0] }] }),
     ).resolves.toEqual([expect.objectContaining({ key: "docs:a", score: 1 })]);
     await expect(
       bundle.assets?.get(asset?.ref ?? { uri: "" }),
@@ -41,7 +41,7 @@ describe("storage capabilities", () => {
     expect(Object.isFrozen(bundle)).toBe(true);
   });
 
-  it("does not pretend a record store is a vector or asset store", () => {
+  it("does not pretend a record store is a search or asset store", () => {
     const records = inMemoryRecordStore();
 
     expect("search" in records).toBe(false);
@@ -52,7 +52,7 @@ describe("storage capabilities", () => {
     const bundle = inMemoryStorage();
 
     expect(bundle.records._tag).toBe("RecordStore");
-    expect(bundle.vectors?._tag).toBe("VectorStore");
+    expect(bundle.search?._tag).toBe("SearchStore");
     expect(bundle.assets).toBeDefined();
   });
 });

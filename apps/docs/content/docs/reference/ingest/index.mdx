@@ -68,14 +68,14 @@ Parsers turn bytes into structured `parts`. The source decides the format from f
 | `text`     | `txt`, `unknown` | `text` part            | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them.      |
 | `markdown` | `md`             | `text`, `table` parts  | Parses Markdown + GFM. Preserves heading paths and table rows.                                          |
 | `html`     | `html`           | `text`, `table` parts  | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables.                          |
-| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; visual-only pages can use the caller's `media.describe` operation.                   |
+| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails. |
 | `image`    | `image`          | `text` parts           | Uses the explicitly bound `media.describe` operation.                                                   |
 | `audio`    | `audio`          | `text` parts           | Uses `media.transcribe` and preserves measured seconds intervals.                                       |
 | `video`    | `video`          | `text` parts           | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly.   |
 | `csv`      | `csv`            | `table` part           | Produces one table with rows, columns, and row range metadata.                                          |
 | `json`     | `json`           | `json` parts           | Produces one part per JSON path, including nested objects and arrays.                                   |
 | `docx`     | `docx`           | `text`, `table` parts  | Converts DOCX to HTML with Mammoth, then uses the HTML parser. Mammoth warnings become ingest warnings. |
-| `xlsx`     | `xlsx`           | `sheet`, `table` parts | Uses ExcelJS. Produces a sheet part and a table part for each non-empty worksheet.                      |
+| `xlsx`     | `xlsx`           | `sheet`, `table` parts | Uses ExcelJS. Retains exact source coordinates, formulas, and number-format-rendered cell values.       |
 
 Override parsers source-locally when a format needs domain-specific handling:
 
@@ -129,12 +129,17 @@ type IngestPart =
       id: string;
       rows: string[][];
       columns?: string[];
+      rowStart?: number;
+      rowEnd?: number;
+      sourceRange?: IngestSpreadsheetRange;
+      sourceRows?: IngestSpreadsheetRow[];
       content: string;
     }
   | {
       kind: "sheet";
       id: string;
       sheetName: string;
+      sourceRange?: IngestSpreadsheetRange;
       tables: IngestPart[];
       content: string;
     }
@@ -164,6 +169,50 @@ interface IngestDocument {
 ```
 
 `content` is derived when omitted. If you write a custom loader, you can provide parts, content, or both. Providing parts is preferred because provenance survives into indexing metadata.
+
+XLSX sheet and table parts retain provider-neutral worksheet coordinates
+alongside the compatibility `rows: string[][]` view:
+
+```ts
+interface IngestSpreadsheetRange {
+  address: string; // A1 range, for example "B2:C4"
+  rowStart: number;
+  rowEnd: number;
+  columnStart: number;
+  columnEnd: number;
+}
+
+interface IngestSpreadsheetRow {
+  row: number; // one-based worksheet row
+  address: string; // A1 row range, for example "B4:D4"
+  sourceRange: IngestSpreadsheetRange;
+  cells: IngestSpreadsheetCell[];
+}
+
+interface IngestSpreadsheetCell {
+  row: number;
+  column: number; // one-based worksheet column
+  address: string; // A1 cell address
+  value: string; // the displayed value also emitted in `rows`
+  formula?: string; // expression without the leading `=`
+  merge?: IngestSpreadsheetMerge;
+}
+
+interface IngestSpreadsheetMerge {
+  master: string; // A1 master cell address, for example "B2"
+  sourceRange: IngestSpreadsheetRange;
+}
+```
+
+`sourceRows` aligns positionally with `rows` across the sheet/table
+`sourceRange`, including blank cells inside an emitted row, while skipped blank
+worksheet rows remain absent. `sourceRange` is the exact occupied range
+represented by the sheet, the table, or an emitted row. XLSX values are projected
+through Excel display semantics where possible, including saved numeric/date
+formats, rich text, hyperlinks, errors, and cached formula results. Merged cells
+carry the same `merge` descriptor on every member cell; only the master cell
+emits the merge value or formula, while followers keep their coordinates with an
+empty value.
 
 ### `SourceLoader`
 

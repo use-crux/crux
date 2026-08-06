@@ -21,6 +21,8 @@ const resilient = fallback([
 
 `retry()` composes with every other routing primitive and preserves the child model's routing context requirements.
 
+`retry()` never retries `input_limit` failures. If a request is too large for a model, retrying the same model cannot make it fit; use `fallback()` to move to a larger candidate or `cascade()` with `escalateOn: ["input_limit"]` to leave a capacity-limited tier.
+
 Retry receipts include every attempt:
 
 ```ts

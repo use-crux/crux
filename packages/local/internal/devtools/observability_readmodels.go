@@ -74,15 +74,77 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 	}
 }
 
+func observabilityCostReport(ctx context.Context, obs *observability.Service) (store.CostEventData, bool) {
+	runs, err := observabilityReadModelRuns(ctx, obs)
+	if err != nil {
+		return store.CostEventData{}, false
+	}
+
+	total := 0.0
+	latest := int64(0)
+	byModel := map[string]any{}
+	byPrompt := map[string]any{}
+	for _, run := range runs {
+		switch normalizedStatus(run.Status) {
+		case "ok", "error", "running":
+		default:
+			continue
+		}
+		cost := floatMetric(rawMap(run.Metrics), "costUsd", "cost")
+		if cost == 0 {
+			continue
+		}
+		total += cost
+		latest = max(latest, parseUnixMillis(run.StartedAt))
+		addCostReportGroup(byModel, run.Model, cost)
+		addCostReportGroup(byPrompt, run.PromptID, cost)
+	}
+	if total == 0 {
+		return store.CostEventData{}, false
+	}
+	return store.CostEventData{
+		Kind:      "report",
+		Timestamp: latest,
+		Report: map[string]any{
+			"total":    map[string]any{"cost": total},
+			"byModel":  byModel,
+			"byPrompt": byPrompt,
+		},
+	}, true
+}
+
+func addCostReportGroup(group map[string]any, key string, cost float64) {
+	if key == "" {
+		return
+	}
+	entry, _ := group[key].(map[string]any)
+	if entry == nil {
+		entry = map[string]any{}
+		group[key] = entry
+	}
+	entry["cost"] = floatMetric(entry, "cost") + cost
+}
+
 func observabilityTimeseries(ctx context.Context, obs *observability.Service, buckets int) []store.TimeseriesBucket {
 	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil || len(runs) == 0 || buckets <= 0 {
 		return []store.TimeseriesBucket{}
 	}
 
+	eligible := make([]observability.RunSummary, 0, len(runs))
+	for _, run := range runs {
+		switch normalizedStatus(run.Status) {
+		case "ok", "error", "running":
+			eligible = append(eligible, run)
+		}
+	}
+	if len(eligible) == 0 {
+		return []store.TimeseriesBucket{}
+	}
+
 	minT := int64(math.MaxInt64)
 	maxT := int64(math.MinInt64)
-	for _, run := range runs {
+	for _, run := range eligible {
 		started := parseUnixMillis(run.StartedAt)
 		if started == 0 {
 			continue
@@ -104,7 +166,7 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 		result[i].T = minT + int64(float64(i)*bucketSize)
 	}
 
-	for _, run := range runs {
+	for _, run := range eligible {
 		started := parseUnixMillis(run.StartedAt)
 		if started == 0 {
 			continue
@@ -116,7 +178,7 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 			result[idx].Errors++
 		}
 		result[idx].TotalCost += floatMetric(rawMap(run.Metrics), "costUsd", "cost")
-		if run.DurationMs > 0 {
+		if status := normalizedStatus(run.Status); status == "ok" || status == "error" {
 			durations[idx] = append(durations[idx], run.DurationMs)
 		}
 	}
@@ -276,7 +338,10 @@ func observabilitySessions(ctx context.Context, obs *observability.Service) []st
 	}
 	grouped := make(map[string]*store.SessionInfo)
 	for _, run := range runs {
-		sessionID := stringMetric(rawMap(run.Attributes), "sessionId", "sessionID")
+		sessionID := run.SessionID
+		if sessionID == "" {
+			sessionID = stringMetric(rawMap(run.Attributes), "sessionId", "sessionID")
+		}
 		if sessionID == "" {
 			sessionID = "default"
 		}
@@ -393,7 +458,7 @@ func observabilityTimeline(ctx context.Context, obs *observability.Service, sess
 }
 
 func observabilityReadModelRuns(ctx context.Context, obs *observability.Service) ([]observability.RunSummary, error) {
-	return obs.RunsWithOptions(ctx, observability.RunListOptions{Limit: 500})
+	return obs.RunSummarySnapshot(ctx)
 }
 
 func flattenObservabilityDetailNodes(root observability.RunDetailNode) []observability.RunDetailNode {
@@ -454,14 +519,10 @@ func emptyStats() store.StatsResult {
 }
 
 func normalizedStatus(status string) string {
-	switch status {
-	case "ok", "success", "completed":
-		return "ok"
-	case "error", "failed", "fail":
-		return "error"
-	default:
-		return status
+	if normalized, ok := observability.NormalizeExecutionStatus(status); ok {
+		return normalized
 	}
+	return status
 }
 
 func rawMap(raw json.RawMessage) map[string]any {

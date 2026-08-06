@@ -57,10 +57,10 @@ same as `id`.
 
 | Option | Use it for |
 | --- | --- |
-| `storage` | One bundle that supplies records and vectors. |
-| `records` and `vectors` | Explicit store overrides when you do not use a bundle. |
+| `storage` | One bundle that supplies records and search. |
+| `records` and `search` | Explicit store overrides when you do not use a bundle. |
 | `embeddings` | Dense vector indexing and dense retrieval. |
-| `sparseEmbeddings` | Sparse or hybrid retrieval. |
+| `sparseEmbeddings` | Sparse or fused retrieval. |
 | `chunking` | Shorthand chunking options for simple document indexing. |
 | `pipeline` | Named indexing pipeline with transforms, chunker, cache identity, and derive stages. |
 | `metadataSchema` | Runtime metadata validation plus typed filters and views. |
@@ -138,7 +138,7 @@ outcome.
 A knowledge base exposes the Retrieval surfaces directly:
 
 ```ts
-const retriever = docs.retriever({ mode: "dense", limit: 6 });
+const retriever = docs.retriever({ search: { dense: true }, limit: 6 });
 const recipe = docs.recipe();
 const tools = docs.tools({ prefix: "docs", include: ["search", "getSource"] });
 const grounded = docs.grounding({
@@ -180,11 +180,11 @@ relations, and hydrated recipe hits stay inside the scoped namespace.
 const inspection = docs.inspect();
 
 console.log(inspection.namespace);
-console.log(inspection.capabilities.hybrid);
+console.log(inspection.capabilities.legs.lexical);
 console.log(inspection.lifecycle.indexedSources);
 ```
 
-`inspect()` reports configured storage, dense and sparse capabilities, filter
+`inspect()` reports configured storage, per-leg search capabilities, fusion, filter
 support, source strategy, and lifecycle counters. It does not read retrieved
 content.
 

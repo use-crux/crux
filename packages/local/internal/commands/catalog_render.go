@@ -9,7 +9,11 @@ import (
 )
 
 func printCatalogList(io *output.IO, catalog api.CatalogListV1) {
-	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "catalog"))
+	printCatalogListWithHeader(io, catalog, "catalog")
+}
+
+func printCatalogListWithHeader(io *output.IO, catalog api.CatalogListV1, header string) {
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, header))
 	if len(catalog.Definitions) == 0 {
 		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No Catalog definitions found. Run `crux check` or start `crux dev` to compile the project."))
 		return
@@ -30,8 +34,12 @@ func printCatalogList(io *output.IO, catalog api.CatalogListV1) {
 }
 
 func printCatalogDefinition(io *output.IO, catalog api.CatalogDefinitionV1) {
+	printCatalogDefinitionWithHeader(io, catalog, "catalog show")
+}
+
+func printCatalogDefinitionWithHeader(io *output.IO, catalog api.CatalogDefinitionV1, header string) {
 	definition := catalog.Definition
-	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "catalog show"))
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, header))
 	fmt.Fprintf(io.Out, "  ID: %s\n", io.Sprint(output.BoldCyan, definition.ID))
 	fmt.Fprintf(io.Out, "  Kind: %s\n", valueOrUnknown(definition.Kind))
 	fmt.Fprintf(io.Out, "  Fidelity: %s\n", valueOrUnknown(definition.Fidelity))

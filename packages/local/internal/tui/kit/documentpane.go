@@ -170,16 +170,16 @@ func (p *DocumentPane) Update(msg tea.Msg) bool {
 	case "k", "up":
 		p.scroll(-1)
 		return true
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		p.scroll(max(1, p.height))
 		return true
-	case "pgup":
+	case "pgup", "ctrl+u":
 		p.scroll(-max(1, p.height))
 		return true
-	case "home":
+	case "home", "g":
 		p.offset = 0
 		return true
-	case "end":
+	case "end", "G":
 		p.offset = len(p.lines)
 		p.clampOffset()
 		return true

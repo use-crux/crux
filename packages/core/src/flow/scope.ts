@@ -26,6 +26,7 @@ import {
 import { cancelRuntimeFlow } from "../runtime/api/flows";
 import { runtimeRequiredError } from "../runtime/api/runtime-required";
 import {
+  bindRuntimeTargetFactory,
   registerRuntimeTarget,
   runtimeTargetMap,
 } from "../runtime/api/target-registry";
@@ -160,6 +161,7 @@ import {
   flowResultOperation,
   suspendedFlowResultPayload,
 } from "./result";
+import { persistRuntimeFlowWorkResult } from "./runtime-work-result";
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -790,8 +792,13 @@ async function executeFlow<
 
     if (runtimeExecution) {
       runtimeExecution.fingerprint.complete();
+      const resultRef = await persistRuntimeFlowWorkResult(
+        runtimeExecution,
+        result,
+      );
       runtimeExecution.outcome = {
         status: "completed",
+        ...(resultRef ? { resultRef } : {}),
         flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
           status: "completed",
           effects: requireFlowEffectBoundary(effectBoundary).ref,
@@ -1320,10 +1327,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * const resumed = await reviewFlow.resume(suspended.flowId)
  * ```
  */
-export function flow<THandler extends InferredFlowHandler>(
-  name: string,
+export function flow<
+  const TName extends string,
+  THandler extends InferredFlowHandler,
+>(
+  name: TName,
   handler: THandler,
-): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>;
+): FlowHandle<
+  HandlerOutput<THandler>,
+  HandlerInput<THandler>,
+  undefined,
+  TName
+>;
 /**
  * Define a Flow with local signal contracts, static Signal wait sources, or both.
  *
@@ -1333,13 +1348,14 @@ export function flow<THandler extends InferredFlowHandler>(
  * @returns A frozen handle whose static sources are accepted only by `waitFor()`.
  */
 export function flow<
+  const TName extends string,
   const TSignals extends FlowSignalMap,
   THandler extends InferredFlowHandler<TSignals>,
 >(
-  name: string,
+  name: TName,
   options: FlowDefinitionOptions<TSignals>,
   handler: THandler,
-): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals>;
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals, TName>;
 export function flow(
   name: string,
   optionsOrHandler:
@@ -1616,8 +1632,9 @@ export function flow(
 
   registerRuntimeTarget(name, createRuntimeTarget);
 
-  const handle = {
+  const handle = bindRuntimeTargetFactory({
     name,
+    kind: "flow" as const,
 
     async run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput);
@@ -1702,7 +1719,7 @@ export function flow(
       }
       await cancelFlow(flowId);
     },
-  };
+  }, createRuntimeTarget);
 
   return Object.freeze(handle) as FlowHandle<
     unknown,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -26,7 +27,7 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 //	│   docs_agent │ ├ agent  retrieve(loop)  ━━━━━   9.80s  │ parent   8af2…f1c    │
 //	│   14.2s      │ ├ tool   rag.search …    │       0.54s  │ kind     agent.sub…  │
 //	│   18.4k tok  │ …                                       │ op       agent       │
-//	│              │ [↵] span detail [i] inspect [e] export  │ TIMING   …           │
+//	│              │ [↵] span detail [i] inspect [x] export  │ TIMING   …           │
 //	└──────────────┴─────────────────────────────────────────┴──────────────────────┘
 //
 // Focus moves with h/l. j/k cycles within the focused pane; ↵ activates
@@ -40,15 +41,25 @@ type Runs struct {
 	diagnosis       *RunDiagnosis
 	focus           runsFocus
 
-	runList        *kit.ListPane[api.ObservabilityRunSummary]
-	spanList       *kit.ListPane[RunRow]
-	spanDocument   *kit.DocumentPane
-	size           Size
-	layout         runsLayout
-	filteringRuns  bool
-	runQuery       string
-	runStatusIndex int
-	expandedRows   map[string]bool
+	runList          *kit.ListPane[api.ObservabilityRunSummary]
+	spanList         *kit.ListPane[RunRow]
+	spanDocument     *kit.DocumentPane
+	size             Size
+	layout           runsLayout
+	filteringRuns    bool
+	filters          runsFilterState
+	knownModels      []string
+	sessions         map[string]bool
+	expandedRows     map[string]bool
+	expandedPayloads map[string]bool
+	showAllSpans     bool
+	exportState      runExportState
+	detailIntent     uint64
+	detailPending    bool
+	detailPendingRun string
+	detailMovedAt    time.Time
+	runsValueVersion uint64
+	projection       runsListProjection
 }
 
 type runsFocus int
@@ -74,8 +85,14 @@ func NewRuns() *Runs {
 			return row.ID
 		}),
 		spanDocument: kit.NewDocumentPane(),
+		filters:      defaultRunsFilterState(),
 	}
-	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
+	r.runList.SetRowHeight(func(run api.ObservabilityRunSummary) int {
+		if r.isRunGroupStart(run) {
+			return 4
+		}
+		return 2
+	})
 	r.runList.SetFocused(true)
 	r.spanList.SetRowHeight(func(RunRow) int { return 1 })
 	return r
@@ -89,20 +106,51 @@ func (s *Runs) Editing() bool { return s.filteringRuns }
 // owns this route parameter; display names and legacy workspace selection do
 // not participate in resolving it.
 func (s *Runs) Focus(kind, id string) {
-	if kind != "run" || id == "" {
+	if id == "" {
 		return
 	}
+	if kind == "status-filter" && id == "failures" {
+		s.filters.Definition = ""
+		s.clearRunSelection()
+		s.runList.SetItems(nil)
+		s.runsResource.Cancel()
+		s.filters = defaultRunsFilterState()
+		s.filters.Status = runStatusFilterIndex(id)
+		s.filteringRuns = false
+		return
+	}
+	if kind == "definition" {
+		s.filters.Definition = id
+		s.clearRunSelection()
+		s.runList.SetItems(nil)
+		s.runsResource.Cancel()
+		return
+	}
+	if kind != "run" {
+		return
+	}
+	s.filters.Definition = ""
 	s.spanList.SetItems(nil)
 	s.detailResource.Cancel()
 	s.diagnosis = nil
 	s.routedRun = nil
 	s.pendingLocation = nil
 	s.filteringRuns = false
-	s.runQuery = ""
-	s.runStatusIndex = 0
+	s.filters = defaultRunsFilterState()
 	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
 	s.runList.Select(id)
+}
+
+func (s *Runs) FocusRoot() {
+	if s.filters.Definition == "" && s.filters.Status == 0 {
+		return
+	}
+	s.filters.Definition = ""
+	s.filters.Status = 0
+	s.clearRunSelection()
+	s.runList.SetItems(nil)
+	s.runsResource.Cancel()
 }
 
 // SelectedRunID returns the pane-owned stable identity of the active run.
@@ -142,8 +190,15 @@ func (s *Runs) Deactivate() bridge.Invalidations {
 // have never been requested for the current owner.
 func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
 	commands := make([]tea.Cmd, 0, 2)
+	// Navigation can outlive the ListPane's transient rows (for example after
+	// a filtered selection is cleared while a refresh is canceled). Rebuild
+	// the pane from the retained resource before deciding whether to refetch.
+	// This keeps the visible filter and its rows in the same state on re-entry.
+	s.ensureFilteredRunSelection(ctx, nil)
 	listRevision, listInvalid := invalidations.Revision(bridge.RunsListResource)
 	if listInvalid || s.runsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
+	} else if s.runsResource.Snapshot().Token.Owner != runsListOwnerForDefinition(s.filters.Definition) {
 		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
 	}
 
@@ -167,18 +222,23 @@ func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.I
 func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
-		if !s.runsResource.Apply(resource.ResourceResult[[]api.ObservabilityRunSummary](m)) {
+		if m.filters.requestIdentity() != s.filters.requestIdentity() {
 			return nil
 		}
+		if !s.runsResource.Apply(m.ResourceResult) {
+			return nil
+		}
+		s.runsValueVersion++
 		snapshot := s.runsResource.Snapshot()
 		if !snapshot.HasValue {
 			return nil
 		}
+		s.rememberRunModels(snapshot.Value)
 		selectedID := s.SelectedRunID()
 		if s.routedRun != nil {
 			s.ensureSelectedRunVisible(selectedID)
 		}
-		s.runList.SetItems(s.filteredRuns())
+		s.syncVisibleRuns()
 		if selectedID != "" {
 			s.runList.Select(selectedID)
 		}
@@ -194,6 +254,26 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 	case runDetailLoadedMsg:
 		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
+	case runDetailIntentMsg:
+		if m.intent != s.detailIntent || !s.detailPending {
+			return nil
+		}
+		if remaining := runDetailIntentDelay - runsDetailNow().Sub(s.detailMovedAt); remaining > 0 {
+			return s.detailIntentTick(remaining, m.intent)
+		}
+		s.detailPending = false
+		runID := s.detailPendingRun
+		s.detailPendingRun = ""
+		if runID == "" || runID != s.SelectedRunID() {
+			return nil
+		}
+		return s.fetchRunDetail(ctx, c, runID)
+	case runsSessionsLoadedMsg:
+		s.sessions = m.sessions
+	case runExportedMsg:
+		s.exportState = runExportState{runID: m.runID, message: "exported " + sanitizeRunsInline(m.path)}
+	case runExportErrMsg:
+		s.exportState = runExportState{runID: s.SelectedRunID(), message: "export failed · " + sanitizeRunsInline(m.err)}
 	case tea.KeyPressMsg:
 		return s.updateKey(ctx, m, c)
 	case tea.MouseWheelMsg:
@@ -272,9 +352,14 @@ func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 }
 
 func (s *Runs) Breadcrumb() ([]string, string) {
+	filters := s.projectRunsFilters(runsListNow())
 	path := []string{"runs"}
-	if selectedID := s.SelectedRunID(); selectedID != "" {
-		path = append(path, "run "+truncateRunsInline(selectedID, 8))
+	if filters.summary.Definition != "" {
+		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(filters.summary.Definition), 36, "…"))
+	}
+	if selected, _, ok := s.runList.Selected(); ok {
+		name := firstNonEmpty(selected.Name, selected.RunID)
+		path = append(path, kit.TruncateMiddle(sanitizeRunsInline(name), 36, "…"))
 	}
 	if cur := s.currentSpan(); cur != nil && s.focus == focusSpanDetail {
 		path = append(path, "span: "+sanitizeRunsInline(cur.Name))
@@ -282,7 +367,15 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 	right := ""
 	listSnapshot := s.runsResource.Snapshot()
 	if listSnapshot.HasValue {
-		right = fmt.Sprintf("%d runs · last 1h", len(s.runSummaries()))
+		count := len(s.filteredRuns())
+		window := "all time"
+		if filters.summary.Window != "all" {
+			window = "last " + filters.summary.Window
+		}
+		right = fmt.Sprintf("%d %s · %s", count, kit.Pluralize(count, "run"), window)
+	}
+	if exported := s.currentRunExportState(); exported != "" {
+		right = exported
 	}
 	return path, right
 }

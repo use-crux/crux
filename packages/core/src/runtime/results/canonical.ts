@@ -4,7 +4,14 @@ import { assertRuntimeJsonValue } from "../engine/json-value";
 import { createRuntimeError } from "../engine/errors";
 import { RUNTIME_RESULT_MAX_BYTES } from "./types";
 
-/** Canonical UTF-8 JSON representation used by every Runtime result adapter. */
+/**
+ * Create the canonical content identity used by Runtime result adapters.
+ *
+ * @param payload - JSON-safe result payload to canonicalize.
+ * @returns Stable UTF-8 bytes, JSON text, and SHA-256 content digest.
+ * @throws {CruxRuntimeError} When the payload is not JSON-safe or exceeds the
+ * Runtime result size limit.
+ */
 export function canonicalRuntimeResult(payload: JsonValue): {
   readonly bytes: Uint8Array;
   readonly json: string;

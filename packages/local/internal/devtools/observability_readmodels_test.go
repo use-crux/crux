@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -45,13 +47,28 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 		t.Fatalf("stats = %#v", stats)
 	}
 
+	costEvents := service.CostEvents(ctx)
+	if len(costEvents) != 1 || costEvents[0].Kind != "report" {
+		t.Fatalf("cost events = %#v, want one observability-derived report", costEvents)
+	}
+	report := costEvents[0].Report
+	if total := report["total"].(map[string]any)["cost"]; total != 0.00042 {
+		t.Fatalf("cost report total = %v, want stats total %v", total, stats.TotalCost)
+	}
+	if byModel := report["byModel"].(map[string]any); byModel["gpt-4o"] == nil {
+		t.Fatalf("cost report byModel = %#v, want gpt-4o", byModel)
+	}
+	if byPrompt := report["byPrompt"].(map[string]any); byPrompt["support.reply"] == nil {
+		t.Fatalf("cost report byPrompt = %#v, want support.reply", byPrompt)
+	}
+
 	usage := service.PromptUsage(ctx)
 	if usage["support.reply"].Count != 1 || usage["support.reply"].TotalCost != 0.00042 {
 		t.Fatalf("prompt usage = %#v", usage)
 	}
 
 	sessions := service.Sessions(ctx)
-	if len(sessions) != 1 || sessions[0].SessionID != "default" || sessions[0].TraceCount != 1 {
+	if len(sessions) != 1 || sessions[0].SessionID != "session_support_001" || sessions[0].TraceCount != 1 {
 		t.Fatalf("sessions = %#v", sessions)
 	}
 }
@@ -103,6 +120,125 @@ func TestObservabilityStatsExcludeIncompleteFromExecutionDenominators(t *testing
 	}
 	if stats.TotalCost != 0 || stats.TotalTokens != 0 || stats.AvgCost != 0 {
 		t.Fatalf("usage = cost:%v tokens:%d avg:%v, want incomplete usage excluded", stats.TotalCost, stats.TotalTokens, stats.AvgCost)
+	}
+	series := observabilityTimeseries(ctx, obs, 4)
+	executions := 0
+	for _, bucket := range series {
+		executions += bucket.Executions
+	}
+	if executions != stats.TotalExecutions {
+		t.Fatalf("timeseries executions = %d, want Stats-aligned %d", executions, stats.TotalExecutions)
+	}
+}
+
+func TestStatsAndOverviewUseTheSameFullHistory(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const count = 501
+	for i := 0; i < count; i++ {
+		runID := fmt.Sprintf("full-history-%03d", i)
+		startedAt := fmt.Sprintf("2026-05-16T18:%02d:%02d.000Z", (i/60)%60, i%60)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO operations (operation_id, first_seen_at, root_present) VALUES (?, ?, 1)`, runID, startedAt); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO runs (
+				run_id, operation_id, trace_id, name, root_primitive, status,
+				started_at, ended_at, duration_ms, total_input_tokens,
+				total_output_tokens, total_cost_usd, last_activity_at
+			) VALUES (?, ?, ?, 'full history', 'agent.run', 'ok', ?, ?, 10, 1, 1, 0.01, ?)
+		`, runID, runID, "trace-"+runID, startedAt, startedAt, startedAt); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE observability_revision SET value = value + 1 WHERE id = 1`); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	inspectService := inspect.NewService(state, t.TempDir()).WithObservability(obs)
+	service := NewService(state, inspectService).WithObservability(obs)
+	if got := service.Stats(ctx).TotalExecutions; got != count {
+		t.Fatalf("stats executions = %d, want full history %d", got, count)
+	}
+	overview, err := inspectService.OverviewRecordAPI(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.RunCount != count {
+		t.Fatalf("overview runs = %d, want same full history %d", overview.RunCount, count)
+	}
+}
+
+func TestStatsAndOverviewShareExecutionStatusDenominator(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statuses := []string{"completed", "failed", "running", "incomplete"}
+	for i, status := range statuses {
+		runID := fmt.Sprintf("status-denominator-%d", i)
+		startedAt := fmt.Sprintf("2026-05-16T18:00:0%d.000Z", i)
+		if _, err := db.ExecContext(ctx, `INSERT INTO operations (operation_id, first_seen_at, root_present) VALUES (?, ?, 1)`, runID, startedAt); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, `
+			INSERT INTO runs (
+				run_id, operation_id, trace_id, name, root_primitive, status,
+				started_at, ended_at, duration_ms, total_input_tokens,
+				total_output_tokens, total_cost_usd, last_activity_at
+			) VALUES (?, ?, ?, 'status denominator', 'agent.run', ?, ?, ?, 10, 1, 1, 1, ?)
+		`, runID, runID, "trace-"+runID, status, startedAt, startedAt, startedAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE observability_revision SET value = value + 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+
+	state := store.NewStore()
+	inspectService := inspect.NewService(state, t.TempDir()).WithObservability(obs)
+	service := NewService(state, inspectService).WithObservability(obs)
+	stats := service.Stats(ctx)
+	if stats.TotalExecutions != 3 || stats.SuccessCount != 1 || stats.ErrorCount != 1 || stats.RunningCount != 1 {
+		t.Fatalf("stats = %#v, want one completed, failed, and running execution", stats)
+	}
+	overview, err := inspectService.OverviewRecordAPI(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.RunCount != 4 {
+		t.Fatalf("overview catalog runs = %d, want all 4 statuses", overview.RunCount)
+	}
+	if overview.PassRate == nil || math.Abs(*overview.PassRate-1.0/3.0) > 1e-9 {
+		t.Fatalf("overview pass rate = %v, want Stats-aligned 1/3", overview.PassRate)
+	}
+	if overview.TotalCost != stats.TotalCost || overview.TotalCost != 3 {
+		t.Fatalf("overview/stats total cost = %v/%v, want 3 with incomplete excluded", overview.TotalCost, stats.TotalCost)
 	}
 }
 

@@ -4,11 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // loadedConfigFixture is a representative effective-config payload.
@@ -73,7 +81,7 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	}
 
 	var out, errOut strings.Builder
-	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{StderrTTY: true})
 	cmd := NewConfigCmd(cli.NewFactoryWithStreams(streams))
 	cmd.SetArgs([]string{"inspect", "--json", "--cwd", root})
 
@@ -93,6 +101,57 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("JSON output contains ANSI styling: %q", out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("JSON config inspect wrote spinner frames to stderr: %q", errOut.String())
+	}
+}
+
+func TestConfigInspectMissingCWDIsUsageError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	var out, errOut strings.Builder
+	cmd := NewConfigCmd(cli.NewFactoryWithStreams(
+		output.NewTestIO(&out, &errOut, output.TestIOOptions{StderrTTY: true}),
+	))
+	cmd.SetArgs([]string{"inspect", "--cwd", missing})
+
+	err := cmd.Execute()
+	var exitErr domain.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != 2 {
+		t.Fatalf("error = %T %v, want usage exit 2", err, err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), `--cwd path "`+missing+`" does not exist`) {
+		t.Fatalf("stderr = %q, want missing path", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "\r") || strings.Contains(errOut.String(), "\x1b[") {
+		t.Fatalf("stderr contains spinner frames: %q", errOut.String())
+	}
+}
+
+func TestConfigInspectDefaultRootStopsAtNearestPackageBoundary(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "crux.config.ts"), []byte("export default {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(workspace, "packages", "demo")
+	nested := filepath.Join(project, "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"name":"demo"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(nested)
+
+	root, err := resolveConfigInspectRoot("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != project {
+		t.Fatalf("default root = %q, want nearest package %q", root, project)
 	}
 }
 
@@ -123,8 +182,9 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		"persistence:", "store",
 		"lint:", "profile", "strict", "rules",
 		"plugins:", "@acme/tracer",
-		// Compact discovery summary + diagnostics.
-		"Discovered", "definitions", "relations", "Evals",
+		// The scoped config model is explicitly distinguished from the full Index.
+		"Project Index discovery", "definitions", "relations", "Evals",
+		"config imports only; Project Index counts unavailable (discovery was not run)",
 		"Diagnostics  1", "info", "project_model.missing_stable_id",
 	} {
 		if !strings.Contains(text, want) {
@@ -135,6 +195,72 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 	// Explicit values must be tagged as config, defaults as default.
 	if !strings.Contains(text, "first-party-only  (default)") {
 		t.Fatalf("default indexer.trust was not tagged (default):\n%s", text)
+	}
+}
+
+func TestMergeConfigDiscoveryReplacesCountsAndExplainsSource(t *testing.T) {
+	raw, err := mergeConfigDiscovery(loadedConfigFixture(t.TempDir()), store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:a", Kind: "prompt"},
+			{ID: "eval:a", Kind: "eval"},
+		},
+		Relations: []store.ProjectRelation{{ID: "relation:a"}},
+	}, "live Project Index", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model configInspect
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	if model.Discovered.Definitions != 2 || model.Discovered.Relations != 1 || model.Discovered.Evals != 1 {
+		t.Fatalf("discovery counts = %#v", model.Discovered)
+	}
+	if scope := configDiscoveryScope(model.Diagnostics); scope != "Project Index counts from live Project Index." {
+		t.Fatalf("scope = %q", scope)
+	}
+}
+
+func TestMergeConfigDiscoveryMakesUnavailableCountsExplicit(t *testing.T) {
+	raw, err := mergeConfigDiscovery(loadedConfigFixture(t.TempDir()), store.IndexData{}, "", errors.New("compiler unavailable"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model configInspect
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	if scope := configDiscoveryScope(model.Diagnostics); !strings.Contains(scope, "counts unavailable: compiler unavailable") {
+		t.Fatalf("scope = %q", scope)
+	}
+}
+
+func TestConfigInspectPipedStderrDoesNotAnimateWhenColorIsForced(t *testing.T) {
+	if os.Getenv("CRUX_CONFIG_PIPE_HELPER") == "1" {
+		streams := output.NewIO(false)
+		oldResolver := resolveProjectConfigForInspect
+		resolveProjectConfigForInspect = func(context.Context, string, string, string, commandWorkerProcess) (json.RawMessage, error) {
+			time.Sleep(2 * configSpinnerInterval)
+			return loadedConfigFixture("/tmp/project"), nil
+		}
+		defer func() { resolveProjectConfigForInspect = oldResolver }()
+		_, err := resolveProjectConfigWithProgress(context.Background(), streams, "/tmp/project", "", "", commandWorkerProcess{})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestConfigInspectPipedStderrDoesNotAnimateWhenColorIsForced$")
+	cmd.Env = append(os.Environ(), "CRUX_CONFIG_PIPE_HELPER=1", "CLICOLOR_FORCE=1", "NO_COLOR=")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("helper failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("piped stderr received spinner frames: %q", stderr.String())
 	}
 }
 

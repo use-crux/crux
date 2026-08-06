@@ -52,16 +52,23 @@ export function validateAssertionClaims(
   stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
   rawClaims: readonly RawAssertionClaim[],
   chunks: readonly CruxChunk[],
-): { readonly claims: readonly NormalizedAssertionClaim[]; readonly errors: readonly string[] } {
+  targetKeys?: ReadonlySet<string>,
+): {
+  readonly claims: readonly NormalizedAssertionClaim[]
+  readonly errors: readonly string[]
+  readonly issues: readonly z.core.$ZodIssue[]
+} {
   const claims: NormalizedAssertionClaim[] = []
   const errors: string[] = []
-  rawClaims.forEach((raw) => {
+  const issues: z.core.$ZodIssue[] = []
+  rawClaims.forEach((raw, index) => {
     const type = typeof raw.type === 'string' ? raw.type : '<missing>'
     const schema = stage.types[type]
     const evidence = normalizeEvidence(raw.evidence)
-    const validated = validateClaim(stage.id, type, schema, raw, evidence, chunks)
+    const validated = validateClaim(stage.id, type, schema, raw, evidence, chunks, targetKeys)
     if (validated.error !== undefined) {
       errors.push(validated.error)
+      issues.push(...validated.issues.map((issue) => ({ ...issue, path: [index, ...issue.path] })))
       return
     }
     claims.push({
@@ -71,7 +78,7 @@ export function validateAssertionClaims(
       provenance: raw.provenance === 'exact' ? 'exact' : 'derived',
     })
   })
-  return { claims, errors }
+  return { claims, errors, issues }
 }
 
 /** Convert normalized assertion claims into cached claim records. */
@@ -110,6 +117,7 @@ export async function readCachedAssertionClaimCount(args: {
   readonly sourceId: string
   readonly sourceHash: string
   readonly stageFingerprint: string
+  readonly roleDigest?: string
 }): Promise<{
   readonly manifest: ClaimManifestRecord | undefined
   readonly count?: number
@@ -120,7 +128,7 @@ export async function readCachedAssertionClaimCount(args: {
     stageId: args.stage.id,
     sourceId: args.sourceId,
   }))
-  if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint)) {
+  if (!isCurrentManifest(manifest, args.sourceHash, args.stageFingerprint, args.roleDigest)) {
     return { manifest }
   }
   const keys = manifest.claimHashes.map((hash) => claimKey(args, hash))
@@ -146,6 +154,7 @@ export async function replaceAssertionClaimRecords(args: {
   readonly sourceId: string
   readonly sourceHash: string
   readonly stageFingerprint: string
+  readonly roleDigest?: string
   readonly previous: ClaimManifestRecord | undefined
   readonly claims: readonly (AssertionClaimRecord | AssertionRelationClaimRecord)[]
   readonly warnings: readonly string[]
@@ -162,6 +171,7 @@ export async function replaceAssertionClaimRecords(args: {
     stageFingerprint: args.stageFingerprint,
     claimHashes: args.claims.map((claim) => claim.claimHash),
     warnings: args.warnings,
+    ...(args.roleDigest !== undefined ? { roleDigest: args.roleDigest } : {}),
   }))
 }
 
@@ -177,29 +187,68 @@ function validateClaim(
   raw: RawAssertionClaim,
   evidence: readonly KnowledgeRef[],
   chunks: readonly CruxChunk[],
-): { readonly data: JsonValue; readonly error?: never } | { readonly data?: never; readonly error: string } {
-  if (!schema) return { error: `Derive ${stageId} type ${type}: unknown type` }
+  targetKeys?: ReadonlySet<string>,
+):
+  | { readonly data: JsonValue; readonly error?: never; readonly issues?: never }
+  | { readonly data?: never; readonly error: string; readonly issues: readonly z.core.$ZodIssue[] } {
+  if (!schema) {
+    return { error: `Derive ${stageId} type ${type}: unknown type`, issues: [validationIssue(['type'])] }
+  }
   const parsed = schema.safeParse(raw.data)
-  if (!parsed.success) return { error: `Derive ${stageId} type ${type}: invalid data` }
+  if (!parsed.success) {
+    return {
+      error: `Derive ${stageId} type ${type}: invalid data`,
+      issues: parsed.error.issues.map((issue) => ({ ...issue, path: ['data', ...issue.path] })),
+    }
+  }
   const data = toAssertionJsonData(parsed.data)
-  if (data === undefined) return { error: `Derive ${stageId} type ${type}: data must be JSON` }
-  if (evidence.length === 0) return { error: `Derive ${stageId} type ${type}: missing evidence` }
-  if (!evidence.every((ref) => isEvidenceChunk(ref, chunks))) {
-    return { error: `Derive ${stageId} type ${type}: invalid evidence` }
+  if (data === undefined) {
+    return { error: `Derive ${stageId} type ${type}: data must be JSON`, issues: [validationIssue(['data'])] }
+  }
+  if (evidence.length === 0) {
+    return { error: `Derive ${stageId} type ${type}: missing evidence`, issues: [validationIssue(['evidence'])] }
+  }
+  const evidenceError = invalidEvidenceMessage(stageId, type, evidence, chunks, targetKeys)
+  if (evidenceError !== undefined) {
+    return { error: evidenceError, issues: [validationIssue(['evidence'])] }
   }
   if (raw.provenance !== undefined && raw.provenance !== 'exact' && raw.provenance !== 'derived') {
-    return { error: `Derive ${stageId} type ${type}: invalid provenance` }
+    return { error: `Derive ${stageId} type ${type}: invalid provenance`, issues: [validationIssue(['provenance'])] }
   }
   return { data }
+}
+
+function invalidEvidenceMessage(
+  stageId: string,
+  type: string,
+  evidence: readonly KnowledgeRef[],
+  chunks: readonly CruxChunk[],
+  targetKeys: ReadonlySet<string> | undefined,
+): string | undefined {
+  for (const ref of evidence) {
+    if (ref.kind !== 'chunk') return `Derive ${stageId} type ${type}: invalid evidence`
+    const key = encodeKnowledgeRef(ref)
+    if (targetKeys === undefined) {
+      if (!chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId)) {
+        return `Derive ${stageId} type ${type}: invalid evidence`
+      }
+      continue
+    }
+    if (targetKeys.has(key)) continue
+    return chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId)
+      ? `Derive ${stageId} type ${type}: invalid evidence — context-only chunk`
+      : `Derive ${stageId} type ${type}: invalid evidence`
+  }
+  return undefined
+}
+
+function validationIssue(path: readonly PropertyKey[]): z.core.$ZodIssue {
+  return { code: 'custom', path: [...path], message: 'invalid value' }
 }
 
 function normalizeEvidence(value: unknown): readonly KnowledgeRef[] {
   const values = Array.isArray(value) ? value : value === undefined ? [] : [value]
   return values.filter(isKnowledgeRef)
-}
-
-function isEvidenceChunk(ref: KnowledgeRef, chunks: readonly CruxChunk[]): boolean {
-  return ref.kind === 'chunk' && chunks.some((chunk) => chunk.sourceId === ref.sourceId && chunk.chunkId === ref.chunkId)
 }
 
 function deletePreviousClaims(args: {

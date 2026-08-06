@@ -28,7 +28,7 @@ func TestDefinitionChooserMakesCompleteLongIDAndEveryMetadataReferenceViewable(t
 
 	seen := make(map[string]bool, len(references))
 	for page := 0; page < 80; page++ {
-		frame := ansi.Strip(overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 1))
+		frame := ansi.Strip(overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 24))
 		assertTerminalFrameGeometry(t, frame, 70, 24)
 		lines := strings.Split(frame, "\n")
 		border := ""
@@ -74,13 +74,13 @@ func TestDefinitionChooserBoundsOneChoiceWithManyMetadataRowsAt70x24(t *testing.
 		{ID: "agent:many-metadata", References: references},
 		{ID: "prompt:next-choice", References: []observability.DefinitionRef{{ID: "prompt:next-choice", Kind: "prompt", Role: "resolve"}}},
 	})
-	frame := overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 1)
+	frame := overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 24)
 	assertTerminalFrameGeometry(t, ansi.Strip(frame), 70, 24)
 
 	chooser.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	if got := chooser.SelectedID(); got != "prompt:next-choice" {
 		t.Fatalf("page down from oversized metadata row selected %q", got)
 	}
-	frame = overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 1)
+	frame = overlayOnto(kit.PadBlock("", 70, 24), chooser.View(), 70, 24)
 	assertTerminalFrameGeometry(t, ansi.Strip(frame), 70, 24)
 }

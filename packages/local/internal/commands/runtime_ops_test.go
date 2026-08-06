@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 )
 
 func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
@@ -108,6 +110,32 @@ func TestRuntimeSetupIsNotACommand(t *testing.T) {
 	}
 }
 
+func TestRuntimeWorkerCommandRunsOneSupervisedProcess(t *testing.T) {
+	previous := runRuntimeWorkerForCommand
+	t.Cleanup(func() { runRuntimeWorkerForCommand = previous })
+	root := t.TempDir()
+	called := 0
+	runRuntimeWorkerForCommand = func(_ context.Context, gotRoot string, process commandWorkerProcess) error {
+		called++
+		if gotRoot != root {
+			t.Fatalf("root = %q, want %q", gotRoot, root)
+		}
+		if process.stderr == nil {
+			t.Fatal("worker diagnostic stream is nil")
+		}
+		return nil
+	}
+
+	cmd := NewRuntimeCmd(cli.NewFactoryWithStreams(output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{})))
+	cmd.SetArgs([]string{"--cwd", root, "worker"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if called != 1 {
+		t.Fatalf("worker starts = %d, want 1", called)
+	}
+}
+
 func TestRuntimeStatusPrintsTruncatedCountMarkers(t *testing.T) {
 	var out, errOut bytes.Buffer
 	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
@@ -130,6 +158,37 @@ func TestRuntimeStatusPrintsTruncatedCountMarkers(t *testing.T) {
 	}
 	if !strings.Contains(text, "blocked") || !strings.Contains(text, "1") {
 		t.Fatalf("exact count missing from status output:\n%s", text)
+	}
+}
+
+func TestRuntimeStatusLeadsWithRuntimeRequiredDiagnostic(t *testing.T) {
+	oldRunner := runRuntimeOperationForCommand
+	t.Cleanup(func() { runRuntimeOperationForCommand = oldRunner })
+	runRuntimeOperationForCommand = func(context.Context, string, string, string, commandWorkerProcess) (json.RawMessage, error) {
+		return nil, &eventwire.WorkerEventError{
+			Scope:   "artifact",
+			Code:    "RUNTIME_REQUIRED",
+			Message: "crux runtime requires a Crux runtime engine.\n\nWhy: durable work needs a configured engine.\nCode: RUNTIME_REQUIRED",
+		}
+	}
+
+	cmd := NewRuntimeCmd(cli.NewFactoryWithStreams(
+		output.NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, output.TestIOOptions{}),
+	))
+	cmd.SetArgs([]string{"--cwd", t.TempDir(), "status"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("runtime status unexpectedly succeeded")
+	}
+	if !strings.HasPrefix(err.Error(), "crux runtime requires a Crux runtime engine.") {
+		t.Fatalf("error = %q, want Runtime diagnostic first", err)
+	}
+	if strings.Contains(err.Error(), "project index worker artifact failed") {
+		t.Fatalf("error retained worker wrapper: %q", err)
+	}
+	var workerErr *eventwire.WorkerEventError
+	if errors.As(err, &workerErr) {
+		t.Fatalf("error still exposes worker transport type: %T", err)
 	}
 }
 

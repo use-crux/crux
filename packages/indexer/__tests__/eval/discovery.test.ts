@@ -1,8 +1,16 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { evaluate } from "@use-crux/core/eval";
+import { getEvalDefinitionForInternalUse } from "@use-crux/core/eval/internal/runner";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverRuntimeEvalDefinitions } from "../../src/indexer/eval-discovery";
+import {
+  definitionFromAuthoredEval,
+  executionArmsFromAuthoredEval,
+  isAuthoredEval,
+  type DiscoveredAuthoredEval,
+} from "../../src/indexer/evals";
 import { evalTimeoutDiscoveryBehavior } from "./discovery-timeout.behavior";
 
 const roots: string[] = [];
@@ -16,6 +24,61 @@ afterEach(async () => {
 
 describe("Eval Project Index discovery", () => {
   evalTimeoutDiscoveryBehavior();
+
+  it("projects runtime facts across the bundled Core boundary", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));
+    roots.push(root);
+    const source = join(root, "evals/bundled.eval.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(source, "export default {}\n");
+    const authored = evaluate({
+      id: "bundled",
+      task: async (input: string) => input,
+      timeout: { totalMs: 30_000 },
+      cases: [{ input: "hello" }],
+    });
+    const foreignSymbol = Symbol.for("@use-crux/core/eval/internal-definition");
+    const foreignEval = {
+      _tag: "CruxEval",
+      id: authored.id,
+      [foreignSymbol]: getEvalDefinitionForInternalUse(authored),
+    } as unknown as DiscoveredAuthoredEval;
+    const executionArms = executionArmsFromAuthoredEval(foreignEval);
+
+    const definition = await definitionFromAuthoredEval(
+      root,
+      source,
+      "default",
+      foreignEval,
+      executionArms,
+    );
+
+    expect(definition.metadata).toMatchObject({
+      evalExecutionArms: [
+        {
+          name: "current",
+          execution: "coordinator",
+          requiredHostCapabilities: [],
+        },
+      ],
+      timeout: {
+        authored: { totalMs: 30_000 },
+        effective: { totalMs: 30_000 },
+      },
+    });
+  });
+
+  it("rejects malformed Eval shells before projecting runtime facts", () => {
+    const malformed = {
+      _tag: "CruxEval" as const,
+      id: "malformed",
+    };
+
+    expect(isAuthoredEval(malformed)).toBe(false);
+    expect(() =>
+      executionArmsFromAuthoredEval(malformed as DiscoveredAuthoredEval),
+    ).toThrowError(/Expected a Crux Eval/);
+  });
 
   it("emits coordinator placement for an ordinary callable Eval", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));

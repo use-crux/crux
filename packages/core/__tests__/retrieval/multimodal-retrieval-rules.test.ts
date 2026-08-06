@@ -61,12 +61,12 @@ describe('multimodal retrieval rules', () => {
 
     const queryProvider = vi.fn(async () => [[1, 0]])
     const configured = fakeDense('configured-space', queryProvider)
-    const vectorSearch = vi.spyOn(storage.vectors!, 'search')
+    const searchSpy = vi.spyOn(storage.search!, 'search')
     const search = retriever({ id: 'docs', namespace: 'docs', storage, dense: configured })
 
     await expect(search.retrieve('dog')).rejects.toBeInstanceOf(EmbeddingSpaceMismatchError)
     expect(queryProvider).toHaveBeenCalledOnce()
-    expect(vectorSearch).toHaveBeenCalledOnce()
+    expect(searchSpy).toHaveBeenCalledOnce()
   })
 
   it('rejects media for sparse and custom retrievers before their implementations run', async () => {
@@ -79,12 +79,12 @@ describe('multimodal retrieval rules', () => {
       batch: { maxSize: 8 },
       embed: sparseProvider,
     })
-    const vectorSearch = vi.spyOn(storage.vectors!, 'search')
+    const searchSpy = vi.spyOn(storage.search!, 'search')
     const sparseSearch = retriever({ id: 'sparse', namespace: 'docs', storage, sparse })
 
     await expect(sparseSearch.retrieve(image as never)).rejects.toBeInstanceOf(EmbeddingModalityError)
     expect(sparseProvider).not.toHaveBeenCalled()
-    expect(vectorSearch).not.toHaveBeenCalled()
+    expect(searchSpy).not.toHaveBeenCalled()
 
     const customImplementation = vi.fn(async () => [])
     const custom = retriever({

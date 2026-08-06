@@ -44,40 +44,33 @@ func newShutdownTestApp(ctx context.Context) *App {
 	return app
 }
 
-func TestAppWaitsForCleanupBeforeWorkspaceQuitCompletes(t *testing.T) {
-	cleanupStarted := make(chan struct{})
+func TestAppRestoresTerminalBeforeWorkspaceCleanupCompletes(t *testing.T) {
 	cleanupRelease := make(chan struct{})
 	app := newShutdownTestApp(t.Context())
 	app.SetShutdownCallback(func() error {
-		close(cleanupStarted)
 		<-cleanupRelease
 		return nil
 	})
 
 	done := runShutdownTestProgram(t, app, "q")
-
-	select {
-	case <-cleanupStarted:
-	case <-time.After(time.Second):
-		t.Fatal("workspace q did not start cleanup")
-	}
-	select {
-	case result := <-done:
-		t.Fatalf("program completed before cleanup was released: %+v", result)
-	case <-time.After(30 * time.Millisecond):
-	}
-
-	close(cleanupRelease)
 	select {
 	case result := <-done:
 		if result.err != nil {
 			t.Fatalf("run program: %v", result.err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("program did not quit after cleanup completed")
+		t.Fatal("program kept the terminal open while cleanup was blocked")
 	}
 
-	result := app.ShutdownResult()
+	finished := make(chan ShutdownResult, 1)
+	go func() { finished <- app.FinishShutdown() }()
+	select {
+	case <-finished:
+		t.Fatal("cleanup completed before its dependency was released")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(cleanupRelease)
+	result := <-finished
 	if !result.Completed {
 		t.Fatal("shutdown result was not marked complete")
 	}
@@ -106,9 +99,19 @@ func TestAppRunsCleanupOnceAndIgnoresWorkAfterShutdownStarts(t *testing.T) {
 
 	done := runShutdownTestProgram(t, app, "q")
 	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("run program: %v", result.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("program did not quit before cleanup")
+	}
+	cleanupDone := make(chan ShutdownResult, 1)
+	go func() { cleanupDone <- app.FinishShutdown() }()
+	select {
 	case <-cleanupStarted:
 	case <-time.After(time.Second):
-		t.Fatal("workspace q did not start cleanup")
+		t.Fatal("FinishShutdown did not start workspace cleanup")
 	}
 
 	cancelRoot()
@@ -116,14 +119,7 @@ func TestAppRunsCleanupOnceAndIgnoresWorkAfterShutdownStarts(t *testing.T) {
 	app.SetStartupSummary("late work")
 	close(cleanupRelease)
 
-	select {
-	case result := <-done:
-		if result.err != nil {
-			t.Fatalf("run program: %v", result.err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("program did not quit after cleanup completed")
-	}
+	<-cleanupDone
 
 	if calls := cleanupCalls.Load(); calls != 1 {
 		t.Fatalf("cleanup calls = %d, want one", calls)
@@ -156,9 +152,12 @@ func TestAppPaletteQuitAliasesUseTheSameCleanupPath(t *testing.T) {
 				if result.err != nil {
 					t.Fatalf("run program: %v", result.err)
 				}
-			case <-time.After(time.Second):
+			// The aggregate race suite runs several render-heavy packages in
+			// parallel; keep the deadline about deadlock detection, not CPU share.
+			case <-time.After(5 * time.Second):
 				t.Fatal("palette quit did not complete")
 			}
+			app.FinishShutdown()
 			select {
 			case <-cleanupCalled:
 			default:
@@ -209,6 +208,7 @@ func TestAppRootCancellationWaitsForCleanupBeforeQuitting(t *testing.T) {
 		<-done
 		t.Fatal("root cancellation did not request App shutdown")
 	}
+	app.FinishShutdown()
 
 	select {
 	case <-cleanupCalled:
@@ -237,6 +237,7 @@ func TestAppRawCtrlCRecordsInterruptAfterCleanup(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("raw Ctrl+C did not complete")
 	}
+	app.FinishShutdown()
 	select {
 	case <-cleanupCalled:
 	default:
@@ -264,6 +265,7 @@ func TestAppBootQuitUsesTheSameCleanupPath(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("boot q did not complete")
 	}
+	app.FinishShutdown()
 	select {
 	case <-cleanupCalled:
 	default:

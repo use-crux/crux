@@ -48,11 +48,14 @@ func TestPathInsideIgnoredDir(t *testing.T) {
 	if !pathInsideIgnoredDir(root, filepath.Join(root, ".cache", "indexer", "state.json")) {
 		t.Fatal(".cache path not ignored")
 	}
-	if !pathInsideIgnoredDir(root, filepath.Join(root, "generated", "client.ts")) {
-		t.Fatal("generated path not ignored")
+	if !pathInsideIgnoredDir(root, filepath.Join(root, "crux", "generated", "next.ts")) {
+		t.Fatal("crux/generated path not ignored")
 	}
-	if !pathInsideIgnoredDir(root, filepath.Join(root, "crux.generated", "next.ts")) {
-		t.Fatal("crux.generated path not ignored")
+	if pathInsideIgnoredDir(root, filepath.Join(root, "crux.generated", "next.ts")) {
+		t.Fatal("old generated path ignored unexpectedly")
+	}
+	if pathInsideIgnoredDir(root, filepath.Join(root, "crux", "custom.ts")) {
+		t.Fatal("crux source path ignored unexpectedly")
 	}
 	if !pathInsideIgnoredDir(root, filepath.Join(root, "convex", "_crux", "generated.ts")) {
 		t.Fatal("convex/_crux path not ignored")

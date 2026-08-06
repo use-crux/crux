@@ -7,6 +7,8 @@
 
 import { isValidationExhaustedError } from "./validation-retry";
 import { isCruxAdapterError } from "../adapter/normalized-outcome";
+import { RequestCompositionError } from "../request/errors";
+import { FallbackExhaustedError } from "../routing/errors";
 import type {
   BoundOf,
   ComposedCtx,
@@ -26,7 +28,8 @@ export type ErrorCategory =
   | "server_error"
   | "connection_error"
   | "auth_error"
-  | "invalid_response";
+  | "invalid_response"
+  | "input_limit";
 
 /** Per-fallback timeout budgets. */
 export interface FallbackTimeoutOptions {
@@ -143,7 +146,43 @@ export function isFallback(model: unknown): model is FallbackModel {
  * (e.g., validation errors, content policy violations).
  */
 export function classifyError(error: unknown): ErrorCategory | null {
+  return classifyErrorBounded(error, new Set(), 0);
+}
+
+const MAX_CLASSIFICATION_DEPTH = 16;
+const MAX_COLLECTION_ERRORS = 32;
+
+function classifyErrorBounded(
+  error: unknown,
+  seen: Set<object>,
+  depth: number,
+): ErrorCategory | null {
   if (!(error instanceof Error)) return null;
+  if (depth > MAX_CLASSIFICATION_DEPTH) return null;
+  if (seen.has(error)) return null;
+  seen.add(error);
+
+  if (
+    error instanceof RequestCompositionError &&
+    error.code === "REQUEST_TOO_LARGE"
+  ) {
+    return "input_limit";
+  }
+
+  if (error instanceof FallbackExhaustedError) {
+    return classifyInputLimitCollection(error.errors, seen, depth);
+  }
+
+  if (error instanceof AggregateError) {
+    return classifyInputLimitCollection(error.errors, seen, depth);
+  }
+
+  const causeCategory = classifyErrorBounded(
+    (error as { cause?: unknown }).cause,
+    seen,
+    depth + 1,
+  );
+  if (causeCategory === "input_limit") return "input_limit";
 
   // Validation exhaustion (all retries failed on structured output)
   if (isValidationExhaustedError(error)) return "invalid_response";
@@ -157,6 +196,7 @@ export function classifyError(error: unknown): ErrorCategory | null {
     if (kind === "timeout") return "timeout";
     if (kind === "invalid-request" && code.endsWith(".authentication"))
       return "auth_error";
+    if (kind === "invalid-response") return "invalid_response";
     if (kind === "provider-error" && code.includes("connection"))
       return "connection_error";
     if (kind === "provider-error" && error.providerError.retryable)
@@ -211,6 +251,23 @@ export function classifyError(error: unknown): ErrorCategory | null {
   }
 
   return null;
+}
+
+function classifyInputLimitCollection(
+  errors: readonly unknown[],
+  seen: Set<object>,
+  depth: number,
+): ErrorCategory | null {
+  if (errors.length === 0) return null;
+  if (errors.length > MAX_COLLECTION_ERRORS) return null;
+  for (const error of errors) {
+    if (
+      classifyErrorBounded(error, new Set(seen), depth + 1) !== "input_limit"
+    ) {
+      return null;
+    }
+  }
+  return "input_limit";
 }
 
 /**

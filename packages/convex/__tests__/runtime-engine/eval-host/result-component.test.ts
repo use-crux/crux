@@ -61,6 +61,25 @@ describe('Convex Runtime result component', () => {
     await expect(t.run(async (ctx) => await ctx.db.query('runtimeResultChunks').collect())).resolves.toHaveLength(2)
   })
 
+  it('rejects a conflicting chunk payload for an existing content address', async () => {
+    const t = convexTest({ schema, modules })
+    const location = `convex:${'c'.repeat(64)}:sha256:${'d'.repeat(64)}`
+    const result = {
+      namespace: 'tenant-a',
+      sha256: 'd'.repeat(64),
+      size: 2,
+      mediaType: 'application/vnd.crux.eval-result+json',
+      location,
+      chunks: ['e30='],
+      createdAt: 100,
+    }
+
+    await t.mutation(putResult, result)
+    await expect(t.mutation(putResult, { ...result, chunks: ['W10='] })).rejects.toThrow(
+      'different content',
+    )
+  })
+
   it('retains referenced payloads and removes orphaned chunks after work cleanup', async () => {
     const t = convexTest({ schema, modules })
     const sha256 = 'c'.repeat(64)

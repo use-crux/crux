@@ -2,6 +2,7 @@ import {
   createRuntimeError,
   type RuntimeSetupMode,
   type RuntimeSetupPort,
+  type RuntimeResultPayloadPort,
   type RuntimeStoreAdapter,
   type RuntimeStoreTransaction,
   type RuntimeEffectStorePort,
@@ -23,6 +24,10 @@ import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
 import { createPostgresDeferredStore } from './deferred'
 import { createPostgresEffectStore } from './effects'
+import { createPostgresMaintenanceOwnership } from './maintenance-ownership'
+import { createPostgresResultPayloadPort } from './results'
+import { createPostgresSessionStore } from './sessions'
+import { createPostgresTransportStore } from './transport'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -48,10 +53,12 @@ export interface PostgresRuntimeStoreOptions {
    * Caller-owned `pg` pool.
    *
    * Use this when your app already manages pooling. Crux will not close a
-   * caller-owned pool from {@link PostgresRuntimeStore.close}.
+   * caller-owned pool from {@link PostgresRuntimeStore.close}. Runtime workers
+   * require the pool's `max` to be at least 2 because ownership reserves one
+   * connection while maintenance uses another.
    */
   readonly pool?: Pool
-  /** Additional `pg` pool options when Crux creates the pool. */
+  /** Additional `pg` pool options. Runtime workers require `max >= 2`. */
   readonly poolOptions?: Omit<PoolConfig, 'connectionString'>
   /** SQL schema that owns Crux runtime tables. Defaults to `crux_runtime`. */
   readonly schema?: string
@@ -73,6 +80,8 @@ export interface PostgresRuntimeStore extends RuntimeStoreAdapter {
   readonly id: 'postgres'
   /** Durable Effect records stored in PostgreSQL transactions. */
   readonly effects: RuntimeEffectStorePort
+  /** Canonical content-addressed terminal result payload storage. */
+  readonly results: RuntimeResultPayloadPort
   /** Resource verification and additive DDL setup. */
   readonly setup: RuntimeSetupPort
   /** Fault-injection controls for conformance tests. */
@@ -81,17 +90,14 @@ export interface PostgresRuntimeStore extends RuntimeStoreAdapter {
   close(): Promise<void>
 }
 
-type PostgresRuntimePorts = RuntimeStoreTransaction & {
-  readonly effects: RuntimeEffectStorePort
-}
-
 /**
  * Create a Postgres Runtime Engine store adapter.
  *
- * The adapter persists state, events, waiters, timers, outbox rows,
- * idempotency keys, leases, and scoped-idle counters in a Crux-owned SQL
- * schema. It does not deliver wake requests by itself; compose it with a wake
- * adapter such as QStash when running in serverless environments.
+ * The adapter persists state, events, waiters, timers, outbox rows, terminal
+ * result payloads, idempotency keys, leases, and scoped-idle counters in a
+ * Crux-owned SQL schema. It does not deliver wake requests by itself; compose
+ * it with a wake adapter such as QStash when running in serverless
+ * environments.
  *
  * @param options - Connection, schema, and setup options.
  * @returns A durable store adapter accepted by runtime composers.
@@ -136,7 +142,9 @@ export function postgres(
   function portsFor(
     client: PgExecutor = pool,
     txFaults = faults,
-  ): PostgresRuntimePorts {
+  ): RuntimeStoreTransaction & {
+    readonly effects: RuntimeEffectStorePort
+  } {
     return {
       state: createPostgresStatePort(client, schema, txFaults),
       events: createPostgresEventPort(client, schema, txFaults),
@@ -145,14 +153,19 @@ export function postgres(
       outbox: createPostgresOutboxPort(client, schema, txFaults),
       deferred: createPostgresDeferredStore(client, schema, txFaults),
       effects: createPostgresEffectStore(client, schema, txFaults),
+      sessions: createPostgresSessionStore(client, schema, txFaults),
+      transports: createPostgresTransportStore(client, schema, txFaults),
     }
   }
 
   const ports = portsFor()
   const store: PostgresRuntimeStore = Object.freeze({
     id: 'postgres',
+    durability: 'durable',
     ...ports,
     leases: createPostgresLeasePort(pool, schema),
+    maintenanceOwnership: createPostgresMaintenanceOwnership(pool, schema),
+    results: createPostgresResultPayloadPort(pool, schema),
     setup: createPostgresSetupPort(pool, schema),
     async transact<T>(
       fn: (tx: RuntimeStoreTransaction) => Promise<T>,

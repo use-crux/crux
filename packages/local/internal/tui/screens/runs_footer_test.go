@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -59,5 +60,49 @@ func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	if strings.Contains(out, "inspect raw") {
 		t.Fatalf("Runs footer advertised raw inspection for a span without a payload:\n%s", out)
+	}
+}
+
+func TestRunsFilterFooterAdvertisesApplyAndClear(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-filter", Name: "refund"})
+	runs.filteringRuns = true
+	runs.filters.Query = "refund"
+
+	labels := strings.Join(keybindLabels(runs.Keybinds()), " · ")
+	for _, want := range []string{"esc apply", "^x clear"} {
+		if !strings.Contains(labels, want) {
+			t.Fatalf("filter footer omitted %q: %s", want, labels)
+		}
+	}
+	runs.Update(testContext, tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}, nil)
+	if runs.filters.Query != "" {
+		t.Fatalf("^x left filter query %q, want cleared", runs.filters.Query)
+	}
+}
+
+func TestRunsModelFilterStatesNewestPageScope(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "model run", Model: "openai/gpt-5"})
+	runs.filters.Model = "openai/gpt-5"
+
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 70, Height: 24}))
+	if !strings.Contains(view, "model: gpt-5 · newest 100") {
+		t.Fatalf("model filter hid its bounded-page scope:\n%s", view)
+	}
+}
+
+func TestRunsModelFilterScopeSurvivesCombinedFilterMetadata(t *testing.T) {
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-model", Name: "refund", Model: "openai/gpt-5"})
+	runs.filters.Model = "openai/gpt-5"
+	runs.filters.Session = "session-refund"
+	runs.filters.Query = "refund"
+
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 160, Height: 24}))
+	for _, want := range []string{"model: gpt-5 · newest 100", "session: session-refund", "/refund"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("combined filters hid %q:\n%s", want, view)
+		}
 	}
 }

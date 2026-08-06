@@ -29,6 +29,8 @@ export function decodeRuntimeArtifactManifest(
       "evalPrivacyFingerprint",
       "targets",
       "effectTargets",
+      "providers",
+      "transports",
       "evals",
     ]) ||
     typeof value.evalPrivacyFingerprint !== "string" ||
@@ -36,6 +38,10 @@ export function decodeRuntimeArtifactManifest(
     !value.targets.every(isTarget) ||
     !Array.isArray(value.effectTargets) ||
     !value.effectTargets.every(isEffectTarget) ||
+    !Array.isArray(value.providers) ||
+    !value.providers.every(isProvider) ||
+    !Array.isArray(value.transports) ||
+    !value.transports.every(isTransport) ||
     !Array.isArray(value.evals) ||
     !value.evals.every(isEval)
   ) {
@@ -43,6 +49,29 @@ export function decodeRuntimeArtifactManifest(
   }
   return value as unknown as RuntimeArtifactManifest;
 }
+
+function isTarget(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      "name",
+      "kind",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+    ]) &&
+    typeof value.name === "string" &&
+    ["flow", "task", "agent", "watcher", "trigger"].includes(
+      String(value.kind),
+    ) &&
+    typeof value.module === "string" &&
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string"
+  );
+}
+
 
 function isEffectTarget(value: unknown): boolean {
   return (
@@ -56,14 +85,43 @@ function isEffectTarget(value: unknown): boolean {
   );
 }
 
-function isTarget(value: unknown): boolean {
+function isProvider(value: unknown): boolean {
   return (
     isRecord(value) &&
-    hasExactKeys(value, ["name", "kind", "module", "export"]) &&
-    typeof value.name === "string" &&
-    ["flow", "task", "watcher", "trigger"].includes(String(value.kind)) &&
+    hasExactKeys(value, [
+      "id",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+    ]) &&
+    typeof value.id === "string" &&
     typeof value.module === "string" &&
-    typeof value.export === "string"
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string"
+  );
+}
+
+function isTransport(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      "id",
+      "module",
+      "export",
+      "definitionId",
+      "fingerprint",
+      "providerId",
+      "signalId",
+    ]) &&
+    typeof value.id === "string" &&
+    typeof value.module === "string" &&
+    typeof value.export === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.fingerprint === "string" &&
+    typeof value.providerId === "string" &&
+    typeof value.signalId === "string"
   );
 }
 

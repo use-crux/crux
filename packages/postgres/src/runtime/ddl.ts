@@ -13,6 +13,18 @@ import {
   EFFECTS_REQUIRED_INDEXES,
   effectsDdlStatements,
 } from './ddl-effects'
+import {
+  SESSION_POSTGRES_TABLES,
+  SESSION_REQUIRED_COLUMNS,
+  SESSION_REQUIRED_INDEXES,
+  sessionDdlStatements,
+} from './ddl-sessions'
+import {
+  TRANSPORT_POSTGRES_TABLES,
+  TRANSPORT_REQUIRED_COLUMNS,
+  TRANSPORT_REQUIRED_INDEXES,
+  transportDdlStatements,
+} from './ddl-transport'
 
 export const DEFAULT_POSTGRES_SCHEMA = 'crux_runtime'
 
@@ -26,8 +38,11 @@ const TABLES = [
   'idempotency',
   'leases',
   'idle_counters',
+  'results',
   ...DEFERRED_POSTGRES_TABLES,
   ...EFFECTS_POSTGRES_TABLES,
+  ...SESSION_POSTGRES_TABLES,
+  ...TRANSPORT_POSTGRES_TABLES,
 ] as const
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
@@ -48,6 +63,8 @@ export const REQUIRED_COLUMNS: Readonly<
     'idle_scope',
     'lease_token',
     'last_error',
+    'result_ref',
+    'application',
     'created_at',
     'updated_at',
   ],
@@ -58,7 +75,10 @@ export const REQUIRED_COLUMNS: Readonly<
     'target_id',
     'status',
     'effects',
+    'definition',
+    'result_obligation',
     'input',
+    'input_digest',
     'continuation',
     'completed_steps',
     'fingerprint',
@@ -112,8 +132,19 @@ export const REQUIRED_COLUMNS: Readonly<
   idempotency: ['namespace', 'key', 'completed_at'],
   leases: ['resource', 'token', 'expires_at', 'owner_id'],
   idle_counters: ['namespace', 'scope', 'count'],
+  results: [
+    'location',
+    'namespace',
+    'sha256',
+    'size',
+    'media_type',
+    'payload',
+    'created_at',
+  ],
   ...DEFERRED_REQUIRED_COLUMNS,
   ...EFFECTS_REQUIRED_COLUMNS,
+  ...SESSION_REQUIRED_COLUMNS,
+  ...TRANSPORT_REQUIRED_COLUMNS,
 }
 
 export function createSchemaSql(schema: string): string {
@@ -130,6 +161,7 @@ export function ddlStatements(schema: string): readonly string[] {
   const idempotency = table(schema, 'idempotency')
   const leases = table(schema, 'leases')
   const idleCounters = table(schema, 'idle_counters')
+  const results = table(schema, 'results')
 
   return [
     createSchemaSql(schema),
@@ -146,10 +178,16 @@ export function ddlStatements(schema: string): readonly string[] {
       idle_scope text,
       lease_token text,
       last_error jsonb,
+      result_ref jsonb,
+      application jsonb,
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (namespace, work_id)
     )`,
+    `ALTER TABLE ${work}
+      ADD COLUMN IF NOT EXISTS result_ref jsonb`,
+    `ALTER TABLE ${work}
+      ADD COLUMN IF NOT EXISTS application jsonb`,
     `CREATE TABLE IF NOT EXISTS ${snapshots} (
       namespace text NOT NULL,
       flow_id text NOT NULL,
@@ -157,7 +195,10 @@ export function ddlStatements(schema: string): readonly string[] {
       target_id text NOT NULL,
       status text NOT NULL,
       effects jsonb,
+      definition jsonb,
+      result_obligation jsonb,
       input jsonb NOT NULL,
+      input_digest text,
       continuation jsonb,
       completed_steps jsonb NOT NULL,
 	      fingerprint jsonb NOT NULL,
@@ -169,6 +210,12 @@ export function ddlStatements(schema: string): readonly string[] {
 	    )`,
     `ALTER TABLE ${snapshots}
 	      ADD COLUMN IF NOT EXISTS effects jsonb`,
+    `ALTER TABLE ${snapshots}
+      ADD COLUMN IF NOT EXISTS definition jsonb`,
+    `ALTER TABLE ${snapshots}
+      ADD COLUMN IF NOT EXISTS result_obligation jsonb`,
+    `ALTER TABLE ${snapshots}
+      ADD COLUMN IF NOT EXISTS input_digest text`,
     `ALTER TABLE ${snapshots}
       ADD COLUMN IF NOT EXISTS continuation jsonb`,
     `ALTER TABLE ${snapshots}
@@ -243,10 +290,23 @@ export function ddlStatements(schema: string): readonly string[] {
       count integer NOT NULL,
       PRIMARY KEY (namespace, scope)
     )`,
+    `CREATE TABLE IF NOT EXISTS ${results} (
+      location text PRIMARY KEY,
+      namespace text NOT NULL,
+      sha256 text NOT NULL,
+      size integer NOT NULL,
+      media_type text NOT NULL,
+      payload jsonb NOT NULL,
+      created_at timestamptz NOT NULL
+    )`,
     ...deferredDdlStatements(schema),
     ...effectsDdlStatements(schema),
+    ...sessionDdlStatements(schema),
+    ...transportDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_name_event_id_idx')}
+      ON ${events} (namespace, name, event_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_appended_at_idx')}
       ON ${events} (namespace, appended_at)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_duplicate_key_idx')}
@@ -283,6 +343,8 @@ export function ddlStatements(schema: string): readonly string[] {
       ON ${outbox} (namespace, confirmed_at) WHERE state = 'confirmed'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'idempotency_completed_at_idx')}
       ON ${idempotency} (namespace, completed_at)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'results_namespace_created_at_idx')}
+      ON ${results} (namespace, created_at)`,
   ]
 }
 
@@ -343,6 +405,7 @@ export async function checkDdl(
   const existingIndexes = new Set(indexResult.rows.map((row) => row.indexname))
   const requiredIndexes = [
     'events_namespace_event_id_idx',
+    'events_namespace_name_event_id_idx',
     'events_namespace_appended_at_idx',
     'events_namespace_duplicate_key_idx',
     'waiters_armed_event_idx',
@@ -361,8 +424,11 @@ export async function checkDdl(
     'outbox_work_pending_idx',
     'outbox_confirmed_at_idx',
     'idempotency_completed_at_idx',
+    'results_namespace_created_at_idx',
     ...DEFERRED_REQUIRED_INDEXES,
     ...EFFECTS_REQUIRED_INDEXES,
+    ...SESSION_REQUIRED_INDEXES,
+    ...TRANSPORT_REQUIRED_INDEXES,
   ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),

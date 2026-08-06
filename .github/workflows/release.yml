@@ -230,6 +230,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Build local runtime worker
+        run: make -C packages/local build-local-workers
+
       - name: PostgreSQL storage release coverage
         run: pnpm --filter @use-crux/postgres test
 
@@ -502,6 +505,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Build local runtime worker
+        run: make -C packages/local build-local-workers
 
       - name: PostgreSQL storage release coverage
         run: pnpm --filter @use-crux/postgres test

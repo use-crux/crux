@@ -12,7 +12,7 @@
 import type { z } from 'zod'
 import type { ChunkingOptions, Corpus, IndexingPipeline, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
-import type { RecordStore, Storage, VectorStore } from '../storage'
+import type { RecordStore, SearchStore, Storage } from '../storage'
 import { grounding } from '../citations'
 import type { Grounding, GroundingConfig } from '../citations'
 import type { MetadataFilter } from './request'
@@ -40,6 +40,7 @@ import { createAssertionSet, type AssertionSet, type AssertionSetOptions } from 
 import type { AssertionStage } from '../knowledge/assertions/assertions'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
 import type { KnowledgeCommunitiesSurface } from '../knowledge/communities/lifecycle'
+import { createRetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 import { createRecipeCommunitiesBinding, globalSearchRecipeRetriever } from './recipe/communities-binding'
 import type { Context } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
@@ -63,13 +64,16 @@ export interface KnowledgeBaseInspection {
   /** Configured storage ports available to indexing and retrieval. */
   storage: {
     records: boolean
-    vectors: boolean
+    search: boolean
   }
   /** Retrieval and lifecycle capabilities inferred from configured primitives. */
   capabilities: {
-    dense: boolean
-    sparse: boolean
-    hybrid: boolean
+    legs: {
+      dense: boolean
+      sparse: boolean
+      lexical: boolean
+    }
+    fusion: readonly 'rrf'[]
     delete: boolean
     filter: 'pre' | 'post' | false
   }
@@ -90,7 +94,7 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
   limit?: number
   threshold?: number
   filter?: TFilter
-  mode?: 'dense' | 'sparse' | 'hybrid'
+  search?: import('./request').RetrievalSearchPlan
 }
 
 /** Recipe options for {@link KnowledgeBase.recipe}. */
@@ -122,11 +126,11 @@ export interface KnowledgeBaseConfig<
   storage?: Storage
   /** Explicit record store override. */
   records?: RecordStore
-  /** Explicit vector store override. */
-  vectors?: VectorStore
-  /** Dense embedding model used for dense or hybrid search. */
+  /** Explicit search store override. */
+  search?: SearchStore
+  /** Dense embedding model used for dense search legs. */
   embeddings?: DenseEmbedding<TModality>
-  /** Sparse embedding model used for sparse or hybrid search. */
+  /** Sparse embedding model used for sparse search legs. */
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions
@@ -218,8 +222,19 @@ function createKnowledgeBaseHandle<
   config: KnowledgeBaseConfig<TMetadataSchema, TModality> & { namespace: string },
   includeScope: boolean,
 ): KnowledgeBase<TMetadataSchema, TModality> {
-  const runtime = createKnowledgeBaseRuntime(config)
   const records = config.records ?? config.storage?.records
+  const communityRefreshHost = config.communities && records
+    ? createRetainedCommunityRefreshHost({
+        records,
+        ...(config.storage?.assets ? { assets: config.storage.assets } : {}),
+        config: config.communities,
+        ...(config.lifecycle?.retention ? { retention: config.lifecycle.retention } : {}),
+      })
+    : undefined
+  const runtime = createKnowledgeBaseRuntime({
+    ...config,
+    ...(communityRefreshHost ? { communityRefreshHost } : {}),
+  })
   const communities = createRecipeCommunitiesBinding({
     records,
     assets: config.storage?.assets,
@@ -227,6 +242,7 @@ function createKnowledgeBaseHandle<
     namespace: config.namespace,
     config: config.communities,
     retention: config.lifecycle?.retention,
+    ...(communityRefreshHost ? { refreshHost: communityRefreshHost } : {}),
   })
 
   const handle = {

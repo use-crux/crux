@@ -73,24 +73,11 @@ type keyGroup struct {
 	items [][2]string // [key, label]
 }
 
-// View renders the help overlay sized to fit roughly 80×~24 in a modal.
+// View renders the help overlay sized to its executable key groups.
 func (h *Help) View(viewportWidth, viewportHeight int) string {
 	if !h.open {
 		return ""
 	}
-	w := 88
-	if w > viewportWidth-4 {
-		w = viewportWidth - 4
-	}
-	colW := (w - 4) / 3
-	if colW < 1 {
-		colW = 1
-	}
-
-	header := " " + shell.TealBold.Render("? help") + "  " +
-		shell.TextMuted.Render("keybinds · type to filter · esc to close")
-	header = padTo(header, w)
-
 	groups := make([]keyGroup, 0, 2)
 	if len(h.workspaceBinds) > 0 {
 		groups = append(groups, keyGroup{title: "Workspace", items: helpItems(h.workspaceBinds)})
@@ -103,19 +90,38 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 		groups = append(groups, keyGroup{title: title, items: helpItems(h.screenBinds)})
 	}
 
-	// Build groups, possibly filtered. Layout into 3 columns by index.
-	cols := make([][]string, 3)
-	for i, g := range groups {
-		if !h.matchesFilter(g) {
-			continue
+	filtered := filterHelpGroups(groups, h.filter)
+	if len(filtered) == 0 {
+		filtered = append(filtered, keyGroup{title: "No matches"})
+	}
+
+	headerText := "? help  keybinds · type to filter · esc to close"
+	naturalColWidth := 20
+	for _, g := range filtered {
+		naturalColWidth = max(naturalColWidth, longestHelpLine(g)+2)
+	}
+	dividerCells := len(filtered) - 1
+	longest := max(len(headerText), naturalColWidth*len(filtered)+dividerCells)
+	maxBodyRows := 1
+	for _, g := range filtered {
+		maxBodyRows = max(maxBodyRows, len(g.items)+1)
+	}
+	size := contentModalSize(viewportWidth, viewportHeight, longest, maxBodyRows, 4)
+	w := size.innerWidth
+	columnCells := max(len(filtered), w-dividerCells)
+	colW := columnCells / len(filtered)
+	extraCells := columnCells % len(filtered)
+	bodyRows := max(1, size.outerHeight-4)
+
+	cols := make([]string, 0, len(filtered))
+	for index, g := range filtered {
+		width := colW
+		if index < extraCells {
+			width++
 		}
-		col := i % 3
 		var sub strings.Builder
 		sub.WriteString(" " + shell.SectionTag.Render(g.title) + "\n")
-		for _, item := range g.items {
-			if h.filter != "" && !strings.Contains(strings.ToLower(item[0]+" "+item[1]), strings.ToLower(h.filter)) {
-				continue
-			}
+		for _, item := range g.items[:min(len(g.items), max(0, bodyRows-1))] {
 			key := lipgloss.NewStyle().
 				Background(shell.ColorSurface).
 				Foreground(shell.ColorTeal).
@@ -123,36 +129,26 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 				Render(padString2(item[0], 6))
 			sub.WriteString(" " + key + "  " + shell.TextDim.Render(item[1]) + "\n")
 		}
-		cols[col] = append(cols[col], sub.String())
+		cols = append(cols, kit.PadBlock(sub.String(), width, bodyRows))
 	}
 
-	colStr := make([]string, 3)
-	for i, c := range cols {
-		colStr[i] = strings.Join(c, "\n")
-	}
-	maxH := 0
-	for _, c := range colStr {
-		ch := strings.Count(c, "\n") + 1
-		if ch > maxH {
-			maxH = ch
-		}
-	}
-
-	colA := kit.PadBlock(colStr[0], colW, maxH)
-	colB := kit.PadBlock(colStr[1], colW, maxH)
-	colC := kit.PadBlock(colStr[2], colW, maxH)
-	body := kit.ComposeColumns(colA, colB, colC)
-
-	border := lipgloss.NewStyle().
-		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
-		Border(lipgloss.RoundedBorder()).
-		Render
+	header := " " + shell.TealBold.Render("? help") + "  " +
+		shell.TextMuted.Render("keybinds · type to filter · esc to close")
+	header = padTo(header, w)
+	body := kit.ComposeColumnsOpen(cols...)
 
 	inner := header + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		body
-	return border(inner)
+	return renderModal(inner, w)
+}
+
+func longestHelpLine(group keyGroup) int {
+	longest := len(group.title)
+	for _, item := range group.items {
+		longest = max(longest, 11+lipgloss.Width(item[1]))
+	}
+	return longest
 }
 
 func helpItems(bindings []shell.Keybind) [][2]string {
@@ -163,20 +159,28 @@ func helpItems(bindings []shell.Keybind) [][2]string {
 	return items
 }
 
-func (h *Help) matchesFilter(g keyGroup) bool {
-	if h.filter == "" {
-		return true
+func filterHelpGroups(groups []keyGroup, filter string) []keyGroup {
+	if filter == "" {
+		return groups
 	}
-	q := strings.ToLower(h.filter)
-	if strings.Contains(strings.ToLower(g.title), q) {
-		return true
-	}
-	for _, item := range g.items {
-		if strings.Contains(strings.ToLower(item[0]+" "+item[1]), q) {
-			return true
+	q := strings.ToLower(filter)
+	filtered := make([]keyGroup, 0, len(groups))
+	for _, group := range groups {
+		if strings.Contains(strings.ToLower(group.title), q) {
+			filtered = append(filtered, group)
+			continue
+		}
+		items := make([][2]string, 0, len(group.items))
+		for _, item := range group.items {
+			if strings.Contains(strings.ToLower(item[0]+" "+item[1]), q) {
+				items = append(items, item)
+			}
+		}
+		if len(items) > 0 {
+			filtered = append(filtered, keyGroup{title: group.title, items: items})
 		}
 	}
-	return false
+	return filtered
 }
 
 func padString2(s string, width int) string {

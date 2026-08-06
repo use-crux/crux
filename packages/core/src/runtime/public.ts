@@ -19,20 +19,68 @@ export type {
   RuntimeManagedTransportBinding,
   RuntimeSignalTransportTarget,
   RuntimeTransportConfigRef,
+  RuntimeTransportEnvelopeFailure,
+  RuntimeTransportEnvelopeIdentity,
+  RuntimeTransportEnvelopeRecord,
+  RuntimeTransportEnvelopeState,
+  RuntimeTransportStorePort,
+  AcceptRuntimeTransportEnvelopeInput,
+  AcceptRuntimeTransportEnvelopeResult,
+  ClaimRuntimeTransportEnvelopesOptions,
+  CompleteRuntimeTransportNormalizationInput,
+  FailRuntimeTransportNormalizationInput,
+  ReplayRuntimeTransportEnvelopeInput,
+  AcceptTransportEnvelopeOptions,
+  AcceptTransportEnvelopeResult,
+  ClaimTransportEnvelopesOptions,
+  NormalizeClaimedTransportEnvelopeOptions,
+  NormalizeClaimedTransportEnvelopeResult,
+  ReplayTransportEnvelopeOptions,
+  CreateTransportNormalizationRunnerOptions,
+  TransportNormalizationRunOnceOptions,
+  TransportNormalizationRunResult,
+  TransportNormalizationRunner,
 } from "./transport";
 export {
   RuntimeManagedTransportContractError,
+  TransportEnvelopeConflictError,
+  TransportEnvelopeNotFoundError,
+  TransportEnvelopeNotReplayableError,
+  TransportStoreMissingError,
   validateRuntimeAcceptedTransportEnvelope,
   validateRuntimeManagedTransportAdapterDeclaration,
   validateRuntimeManagedTransportBinding,
+  transportEnvelopeDigest,
+  acceptTransportEnvelope,
+  claimTransportEnvelopes,
+  normalizeClaimedTransportEnvelope,
+  replayTransportEnvelope,
+  createTransportNormalizationRunner,
 } from "./transport";
 
 export { createRuntimeProgram } from "./program";
-export type { CreateRuntimeProgramOptions, RuntimeProgram } from "./program";
+export type {
+  CreateRuntimeProgramOptions,
+  RuntimeProgram,
+  RuntimeProgramTarget,
+  RuntimeProgramTargetDeclaration,
+  RuntimeProgramTargetDefinition,
+  RuntimeProgramTargetDefinitionInput,
+  RuntimeProgramTargetInput,
+} from "./program";
 export type {
   RuntimeEffectTarget,
   RuntimeEffectTargetDefinition,
 } from "./effect-targets";
+export type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
+
+export { createRuntimeWorker } from "./worker/create-runtime-worker";
+export type {
+  CreateRuntimeWorkerOptions,
+  RuntimeWorker,
+  RuntimeWorkerStopOptions,
+} from "./worker/create-runtime-worker";
+export type * from "./ports/maintenance-ownership";
 
 export type {
   RuntimeArtifactManifest,
@@ -40,7 +88,9 @@ export type {
   RuntimeArtifactManifestEval,
   RuntimeArtifactManifestEvalCase,
   RuntimeArtifactManifestEvalVariant,
+  RuntimeArtifactManifestProvider,
   RuntimeArtifactManifestTarget,
+  RuntimeArtifactManifestTransport,
   RuntimeArtifactTargetKind,
 } from "./artifacts";
 
@@ -75,6 +125,11 @@ export type {
   WorkItemError,
   WorkTransition,
 } from "./engine/work";
+export type {
+  RuntimeApplicationWorkOwnership,
+  RuntimeApplicationWorkProgress,
+  RuntimeApplicationWorkState,
+} from "./engine/application-work-state";
 
 export { createRuntimeKernel, wakeEnvelopeForWork } from "./engine/kernel";
 export type {
@@ -104,6 +159,10 @@ export type {
   ScanTimersOptions,
   ScanTimersResult,
   ScheduleTimerInput,
+} from "./engine/kernel";
+export type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
 } from "./engine/kernel";
 
 export {
@@ -343,6 +402,7 @@ export type {
 } from "./reactive/records";
 export type * from "./store";
 
+export { canonicalRuntimeResult } from "./results/canonical";
 export {
   RUNTIME_RESULT_MAX_BYTES,
   RUNTIME_RESULT_MEDIA_TYPE,

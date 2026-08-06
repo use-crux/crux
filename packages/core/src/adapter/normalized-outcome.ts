@@ -37,7 +37,8 @@ export type CruxFinishReason =
  *
  * `refusal`/`safety`/`content-filter` cover model-side blocking; `rate-limit`/
  * `timeout`/`aborted`/`invalid-request`/`provider-error` cover transport and
- * request outcomes; `unknown` is the honest fallback.
+ * request outcomes; `invalid-response` covers a completed call that produced
+ * no usable model response; `unknown` is the honest fallback.
  */
 export type CruxProviderErrorKind =
   | "refusal"
@@ -47,6 +48,7 @@ export type CruxProviderErrorKind =
   | "timeout"
   | "aborted"
   | "invalid-request"
+  | "invalid-response"
   | "provider-error"
   | "unknown";
 

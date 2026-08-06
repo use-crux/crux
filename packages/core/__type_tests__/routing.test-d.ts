@@ -158,6 +158,9 @@ const resilient = fallback([retry(gpt5, { attempts: 2, backoff: 'exponential' })
 void generate(supportPrompt, { model: resilient, input: { question: 'hi' } })
 void stream(supportPrompt, { model: resilient, input: { question: 'hi' } })
 
+// @ts-expect-error — retrying the same model cannot recover from input limits
+retry(gpt5, { attempts: 2, on: ['input_limit'] })
+
 const resilientTiered = fallback([tierRouter, haiku])
 void generate(supportPrompt, {
   model: resilientTiered,
@@ -196,6 +199,7 @@ const genericCascade = cascade({
   tiers: [
     {
       model: haiku,
+      escalateOn: ['input_limit'],
       evaluate: ({ result }) => {
         expectTypeOf(result).toEqualTypeOf<unknown>()
         return typeof result === 'object' && result !== null

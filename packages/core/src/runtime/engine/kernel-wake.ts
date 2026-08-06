@@ -26,6 +26,7 @@ import {
   flushNamedDeferEvidenceAfterCommit,
 } from './named-defer-evidence'
 import { transition } from './work'
+import { openSessionTurnObservability } from '../../session/turn-observability'
 import { runWithDurableEffectLedger } from '../../effect/internal/durable-binding'
 import type { RuntimeProgram } from '../program'
 
@@ -128,11 +129,12 @@ export async function handleWake(
       return { status: 200, outcome: 'retry-scheduled' }
     }
 
-    const leased = transition(fresh, {
-      status: 'leased',
+    const leased = await deps.runComposite('work.lease', {
+      namespace: fresh.namespace,
+      workId: fresh.workId,
       leaseToken: lease.token,
     })
-    await deps.store.state.putWork(leased)
+    if (!leased) return { status: 409, outcome: 'busy' }
 
     const heartbeat = startLeaseExtensionHeartbeat(
       {
@@ -145,20 +147,25 @@ export async function handleWake(
         activeLease = extended
       },
     )
+    const sessionEvidence = openSessionTurnObservability(leased, deps.store)
     try {
       const executeTarget = () => target.execute({ work: leased, lease })
-      const outcome = await executeWithNamedDeferEvidence(leased, () =>
-        deps.store.effects
-          ? runWithDurableEffectLedger(
-              {
-                namespace: leased.namespace,
-                store: deps.store,
-                ...(deps.program ? { program: deps.program } : {}),
-              },
-              executeTarget,
-            )
-          : executeTarget(),
-      )
+      const execute = () =>
+        executeWithNamedDeferEvidence(leased, () =>
+          deps.store.effects
+            ? runWithDurableEffectLedger(
+                {
+                  namespace: leased.namespace,
+                  store: deps.store,
+                  ...(deps.program ? { program: deps.program } : {}),
+                },
+                executeTarget,
+              )
+            : executeTarget(),
+        )
+      const outcome = sessionEvidence
+        ? await sessionEvidence.withContext(execute)
+        : await execute()
       await completeWork({
         runComposite: deps.runComposite,
         work: leased,
@@ -168,10 +175,14 @@ export async function handleWake(
         now: deps.now,
         newWorkId: deps.newWorkId,
       })
+      await sessionEvidence?.settle(
+        outcome.status === 'suspended' ? 'blocked' : outcome.status,
+      )
       await flushNamedDeferEvidenceAfterCommit(leased)
       return { status: 200, outcome: 'processed' }
     } catch (error) {
       if (isLeaseLostError(error)) {
+        await sessionEvidence?.settle('lease-lost')
         return { status: 200, outcome: 'lease-lost' }
       }
       const result = await failWork({
@@ -186,6 +197,13 @@ export async function handleWake(
       if (result.outcome !== 'lease-lost') {
         await flushNamedDeferEvidenceAfterCommit(leased)
       }
+      await sessionEvidence?.settle(
+        result.outcome === 'retry-scheduled' ||
+          result.outcome === 'dead-lettered' ||
+          result.outcome === 'blocked'
+          ? result.outcome
+          : 'lease-lost',
+      )
       return result
     } finally {
       heartbeat.stop()

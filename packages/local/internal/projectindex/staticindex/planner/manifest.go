@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.12"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.13"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -21,7 +21,6 @@ var defaultCallNames = []string{
 	"compressToBudget",
 	"convexRecordStore",
 	"convexStorage",
-	"convexVectorStore",
 	"convexAssetStore",
 	"createTool",
 	"cruxFlow",
@@ -48,7 +47,7 @@ var defaultCallNames = []string{
 	"inMemoryAssetStore",
 	"inMemoryRecordStore",
 	"inMemoryStorage",
-	"inMemoryVectorStore",
+	"inMemorySearchStore",
 	"injectable",
 	"index",
 	"indexChunks",
@@ -61,6 +60,9 @@ var defaultCallNames = []string{
 	"communities",
 	"parallel",
 	"pipeline",
+	"postgresRecordStore",
+	"postgresSearchStore",
+	"postgresStorage",
 	"prompt",
 	"registry",
 	"reindex",
@@ -90,7 +92,7 @@ var defaultCallNames = []string{
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
-	"upstashVectorStore",
+	"upstashSearchStore",
 	"urlSource",
 	"urlsSource",
 	"view",
@@ -109,7 +111,6 @@ var defaultCallInterestNames = []string{
 	"compressToBudget",
 	"convexRecordStore",
 	"convexStorage",
-	"convexVectorStore",
 	"convexAssetStore",
 	"createTool",
 	"cruxFlow",
@@ -136,7 +137,7 @@ var defaultCallInterestNames = []string{
 	"inMemoryAssetStore",
 	"inMemoryRecordStore",
 	"inMemoryStorage",
-	"inMemoryVectorStore",
+	"inMemorySearchStore",
 	"injectable",
 	"index",
 	"indexChunks",
@@ -149,6 +150,9 @@ var defaultCallInterestNames = []string{
 	"communities",
 	"parallel",
 	"pipeline",
+	"postgresRecordStore",
+	"postgresSearchStore",
+	"postgresStorage",
 	"prompt",
 	"registry",
 	"reindex",
@@ -178,7 +182,7 @@ var defaultCallInterestNames = []string{
 	"tool",
 	"transcribe",
 	"upstashRedisRecordStore",
-	"upstashVectorStore",
+	"upstashSearchStore",
 	"urlSource",
 	"urlsSource",
 	"view",

@@ -4,9 +4,13 @@
 
 import { expectTypeOf } from 'vitest'
 import type { z } from 'zod'
-import { defineProviderRuntime, providerRuntimeConformance } from '@use-crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
+import { providerRuntimeConformance } from '@use-crux/core/adapter/testing'
 import type {
   ConformanceViolation,
+  ProviderRuntimeConformanceHarness,
+} from '@use-crux/core/adapter/testing'
+import type {
   CruxAdapter,
   CruxExecutor,
   ExecutorOutcome,
@@ -14,7 +18,6 @@ import type {
   ExecutorProviderStreamHandle,
   NativeProviderPort,
   LoopOwnedRuntimeContract,
-  ProviderRuntimeConformanceHarness,
   ProviderOwnership,
   SingleTurnRuntimeContract,
   StructuredAttempt,

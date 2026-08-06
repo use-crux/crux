@@ -1,0 +1,25 @@
+---
+title: SESSION_INPUT_INVALID
+description: An input could not be durably accepted by a durable Agent Session.
+---
+
+## What failed
+
+`send()` or `sendMany()` rejected input before allocating a cursor or wake.
+
+## Why
+
+Accepted Session input must match the Agent Prompt `inputSchema` and pass
+strict JSON-safety bounds (depth, value count, encoded size, no cycles, no
+accessors, no non-JSON types). Atomic `sendMany()` rejects the entire batch
+when any member is invalid.
+
+## What still works
+
+Previously accepted inputs and completed turns remain intact. Other Sessions
+are unaffected.
+
+## Fix
+
+Provide values that parse with the Agent Prompt schema and are plain JSON-safe
+data. For batches, fix or remove the invalid member and retry the whole array.

@@ -29,6 +29,5 @@ export async function withStorageTransaction<T>(pool: Pool, fn: (client: PoolCli
 }
 
 export function backendError(operation: string, cause: unknown): never {
-  void cause
-  throw new StorageError('backend_error', `PostgreSQL storage ${operation} failed.`)
+  throw new StorageError('backend_error', `PostgreSQL storage ${operation} failed.`, { cause })
 }

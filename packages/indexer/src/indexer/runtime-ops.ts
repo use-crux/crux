@@ -28,6 +28,7 @@ import type {
   RuntimePreflightMissingTarget,
   RuntimeStatusCount,
 } from './runtime-ops-types'
+import { inspectApplicationWork } from './runtime-ops-application-work'
 
 export type {
   RuntimeCancelOperationResult,
@@ -384,6 +385,10 @@ async function inspectWork(
         namespace: runtime.namespace,
       })
     : undefined
+  const application =
+    work.application && snapshot
+      ? await inspectApplicationWork(runtime, work, snapshot)
+      : undefined
   return {
     operation: 'inspect',
     ok: true,
@@ -399,6 +404,7 @@ async function inspectWork(
           },
         }
       : {}),
+    ...(application ? { application } : {}),
   }
 }
 

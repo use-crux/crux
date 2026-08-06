@@ -44,6 +44,11 @@ type Service struct {
 	mutationMu    sync.Mutex
 	manifestStore deploymentManifestReader
 
+	summarySnapshotMu       sync.Mutex
+	summarySnapshotRevision int64
+	summarySnapshotReady    bool
+	summarySnapshot         []RunSummary
+
 	retentionSettings     retentionSettings
 	evidenceSettings      evidenceSettings
 	evidenceNow           func() time.Time
@@ -174,6 +179,22 @@ type RunSummary struct {
 	Error          json.RawMessage    `json:"error,omitempty"`
 }
 
+// NormalizeExecutionStatus defines the shared headline execution denominator
+// used by Local Stats and Overview. The boolean is false for lifecycle states
+// that remain visible in the catalog but are not completed/live executions.
+func NormalizeExecutionStatus(status string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "ok", "success", "completed", "passed":
+		return "ok", true
+	case "error", "failed", "fail":
+		return "error", true
+	case "running":
+		return "running", true
+	default:
+		return "", false
+	}
+}
+
 // RunDeliveryHealth reports what is truthfully known about ingest/delivery
 // health for one run. "unknown" is a distinct status from "healthy": the
 // server never invents correlation between a run and an out-of-band source
@@ -214,8 +235,10 @@ type RunListOptions struct {
 	// stable across concurrent inserts; Offset is not and remains only for
 	// maintenance and internal callers.
 	Cursor string
-	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
-	// UI list endpoints leave this off; single-run detail reads remain exact.
+	// IncludeExpensiveRollups enriches RunsWithOptions results from span/event
+	// JSON plus segment, delivery, and topology projections. When false, list
+	// reads use only the operation/run rollup columns selected by the base query;
+	// single-run detail and canonical RunsPage reads remain exact.
 	IncludeExpensiveRollups bool
 }
 

@@ -14,16 +14,16 @@ import { memory, memoryBlock } from '../src/memory'
 import { retriever } from '../src/retrieval'
 import { config } from '../src/runtime'
 import { handoff } from '../src/agent'
-import { inMemoryRecordStore, inMemoryVectorStore, storage } from '../src/storage'
-import type { RecordStore, Storage, VectorStore } from '../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore, storage } from '../src/storage'
+import type { RecordStore, SearchStore, Storage } from '../src/storage'
 import { workspace, type WorkspaceConfig } from '../src/workspace'
 import { z } from 'zod'
 
 declare const records: RecordStore
-declare const vectors: VectorStore
+declare const search: SearchStore
 declare const dense: DenseEmbedding
 
-const betaStorage = storage({ records, vectors })
+const betaStorage = storage({ records, search })
 expectTypeOf(betaStorage).toEqualTypeOf<Storage>()
 
 workspace({
@@ -63,7 +63,7 @@ indexer({
   id: 'docs',
   namespace: 'docs',
   records,
-  vectors,
+  search,
   dense,
 })
 
@@ -86,7 +86,7 @@ retriever({
   id: 'docs',
   namespace: 'docs',
   records,
-  vectors,
+  search,
   dense,
 })
 
@@ -119,7 +119,7 @@ createSemanticCache({
 
 createSemanticCache({
   records,
-  vectors,
+  search,
   embedding: dense,
   ttl: 60_000,
   scope: 'global',
@@ -157,7 +157,7 @@ memory({
   id: 'profile',
   namespace: 'user:1',
   records,
-  vectors,
+  search,
   blocks: [memoryBlock({ id: 'profile', kind: 'custom' })],
 })
 
@@ -200,4 +200,4 @@ handoff({
 })
 
 void inMemoryRecordStore
-void inMemoryVectorStore
+void inMemorySearchStore

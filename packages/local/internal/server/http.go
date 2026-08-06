@@ -20,6 +20,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/manifeststore"
+	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/review"
 	"github.com/use-crux/crux/packages/local/internal/reviewwriter"
@@ -47,6 +48,7 @@ type ServerOptions struct {
 	ReviewDBPath         string
 	ReviewService        *review.Service
 	ReviewWriter         review.RepositoryWriter
+	EvalCatalog          endpoints.EvalCatalogReads
 	RuntimeBridge        *runtimebridge.Service
 	ProjectRoot          string
 	ServerVersion        string
@@ -177,6 +179,12 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	opt.workers.Go(func() { bridge.DiscoverPeers(ctx, runtimeBridge, opt.ProjectRoot) })
 
 	reviewCaseWriter, reviewRepositoryWritable := reviewWriter(opt, privacyProvider)
+	evalCatalog := opt.EvalCatalog
+	if evalCatalog == nil {
+		evalCatalog = evalserver.NewCollector(opt.ProjectRoot, evalserver.CollectorDeps{
+			FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
+		})
+	}
 	return localserver.New(localserver.Options{
 		Logger:                   logger,
 		Devtools:                 devSvc,
@@ -187,17 +195,15 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		ReviewRepositoryWritable: reviewRepositoryWritable,
 		BaselineWriter:           evalwriter.Writer{ProjectRoot: opt.ProjectRoot},
 		EvalRunner:               evalrunner.Coordinator{ProjectRoot: opt.ProjectRoot},
-		EvalCatalog: evalserver.NewCollector(opt.ProjectRoot, evalserver.CollectorDeps{
-			FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
-		}),
-		RuntimeBridge:      runtimeBridge,
-		ResourceInspection: resourceInspection,
-		Hub:                wsHub,
-		ProjectIndex:       wsHub,
-		Completion:         wsHub,
-		PromptText:         wsHub,
-		ProjectRoot:        opt.ProjectRoot,
-		ConfigPath:         opt.ConfigPath,
+		EvalCatalog:              evalCatalog,
+		RuntimeBridge:            runtimeBridge,
+		ResourceInspection:       resourceInspection,
+		Hub:                      wsHub,
+		ProjectIndex:             wsHub,
+		Completion:               wsHub,
+		PromptText:               wsHub,
+		ProjectRoot:              opt.ProjectRoot,
+		ConfigPath:               opt.ConfigPath,
 		SourceResolver: localserver.SourceResolverOptions{
 			ScriptPath:     opt.SourceResolverScript,
 			EmbeddedScript: assets.EmbeddedSourceResolverScript(),

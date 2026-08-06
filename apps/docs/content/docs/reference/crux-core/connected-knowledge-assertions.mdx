@@ -71,6 +71,7 @@ type AssertionsConfig<TTypes extends Record<string, z.ZodType<unknown>>> = {
   readonly id: string;
   readonly version: number;
   readonly types: TTypes;
+  readonly targets?: (chunks: readonly CruxChunk[]) => readonly CruxChunk[];
 } & (
   | {
       readonly model: KnowledgeModel;
@@ -90,6 +91,7 @@ type AssertionsConfig<TTypes extends Record<string, z.ZodType<unknown>>> = {
 | `id` | `string` | Required | Must be non-empty. |
 | `version` | `number` | Required | Must be an integer greater than or equal to `1`. |
 | `types` | `Record<string, z.ZodType<unknown>>` | Required | Must include at least one Zod schema. Type names must be non-empty and cannot contain `:` or `%`. |
+| `targets` | `(chunks: readonly CruxChunk[]) => readonly CruxChunk[]` | All chunks | Optional. Receives the deterministic visible chunk order; returned chunks are matched back by `(sourceId, chunkId)`. Every assertion evidence ref must point at a target chunk. |
 | `model` | `KnowledgeModel` | Required in model mode | Mutually exclusive with `run`. |
 | `instructions` | `string` | `undefined` | Only valid with `model`. |
 | `run` | `AssertionRun<TTypes>` | Required in run mode | Mutually exclusive with `model`. Must be a function. |
@@ -99,12 +101,28 @@ type AssertionsConfig<TTypes extends Record<string, z.ZodType<unknown>>> = {
 The returned stage includes `_tag: "AssertionStage"`, `kind: "assertion"`,
 `id`, `version`, normalized `types`, `mode`, and `fingerprint()`.
 
+### Target chunks
+
+Every visible chunk is rendered into the derive prompt, but only the chunks
+selected by `targets` may be cited as assertion evidence. Selectors receive the
+deterministic visible chunk order and may return any subset; chunks are matched
+back by `(sourceId, chunkId)`, so references survive batching and truncation.
+Returning chunks outside the visible set throws, and duplicates are ignored.
+With no selector, every visible chunk is a target — the default behavior.
+
+Evidence citing a context-only chunk is rejected during validation with a
+`context_only_evidence` issue (model stages after repair retries, run stages
+immediately). An empty target selection skips model generation for that source
+with a warning manifest; deterministic runs still validate any emitted claims
+against the empty target set.
+
 ### Emit API
 
 ```ts
 interface AssertionRunInput {
   readonly document: CruxDocument;
   readonly chunks: readonly CruxChunk[];
+  readonly targets: readonly CruxChunk[];
 }
 
 interface AssertionEmitOptions {

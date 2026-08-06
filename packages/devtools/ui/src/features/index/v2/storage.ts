@@ -3,14 +3,14 @@ import type { IndexIndex, ViewDef } from "./adapt";
 
 export type StorageDefinitionKind =
   | "storage.recordStore"
-  | "storage.vectorStore"
+  | "storage.searchStore"
   | "storage.assetStore"
   | "storage.bundle"
   | "storage.scope";
 
 const STORAGE_KINDS = new Set<string>([
   "storage.recordStore",
-  "storage.vectorStore",
+  "storage.searchStore",
   "storage.assetStore",
   "storage.bundle",
   "storage.scope",
@@ -18,7 +18,7 @@ const STORAGE_KINDS = new Set<string>([
 
 const COMPONENT_KEYS = [
   "recordStoreId",
-  "vectorStoreId",
+  "searchStoreId",
   "assetStoreId",
   "storageId",
 ] as const;
@@ -186,9 +186,9 @@ function storageCapabilities(
   const capabilities = raw as IndexedStorageCapabilities;
   const filtered: IndexedStorageCapabilities = {
     ...(capabilities.record ? { record: capabilities.record } : {}),
-    ...(capabilities.vector ? { vector: capabilities.vector } : {}),
+    ...(capabilities.search ? { search: capabilities.search } : {}),
   };
-  return filtered.record || filtered.vector ? filtered : undefined;
+  return filtered.record || filtered.search ? filtered : undefined;
 }
 
 /** Returns true when a view definition represents a first-class Storage Beta definition. */

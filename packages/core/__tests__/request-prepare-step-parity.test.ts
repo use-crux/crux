@@ -7,7 +7,7 @@ import {
   tool,
   type AdapterSpec,
 } from "../src";
-import { fakeLoopRuntime } from "../src/adapter";
+import { fakeLoopRuntime } from "../src/adapter/testing";
 
 const textPrompt = prompt({
   id: "prepare-step-stream-parity",

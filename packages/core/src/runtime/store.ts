@@ -30,6 +30,13 @@ import type {
 } from "./ports/retention";
 import type { RuntimeResultPayloadPort } from "./results/types";
 import type { RuntimeSignalStorePort } from "./reactive/records";
+import type { RuntimeMaintenanceOwnershipPort } from "./ports/maintenance-ownership";
+import type { RuntimeSessionStorePort } from "./ports/sessions";
+import type { RuntimeTransportStorePort } from "./transport/store";
+import {
+  sessionPostPublicationSeam,
+  type SessionPostPublicationSeam,
+} from "../session/post-publication-seam";
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = "scheduled" | "fired" | "cancelled";
@@ -232,6 +239,8 @@ export interface RuntimeStoreTransaction {
   readonly effects?: RuntimeEffectStorePort;
   /** Optional internal storage for atomically accepted Work-control commands. */
   readonly workControl?: RuntimeWorkControlPort;
+  /** Optional transactional durable Agent Session identity and ingress records. */
+  readonly sessions?: RuntimeSessionStorePort;
   /**
    * Optional durable Signal occurrence and delivery storage.
    *
@@ -239,10 +248,19 @@ export interface RuntimeStoreTransaction {
    * then fail capability preflight before allocating Flow work.
    */
   readonly signals?: RuntimeSignalStorePort;
+  /**
+   * Optional durable managed-transport envelope storage.
+   *
+   * @remarks Existing adapters may omit this port. Transport acceptance then
+   * fails with `TRANSPORT_STORE_MISSING` before host acknowledgment.
+   */
+  readonly transports?: RuntimeTransportStorePort;
 }
 
 /** Durable record store used by Runtime Engine kernels. */
 export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
+  /** Optional deterministic Session fault boundary implemented by test stores. @internal */
+  readonly [sessionPostPublicationSeam]?: SessionPostPublicationSeam;
   /** Stable adapter id used in conformance output. */
   readonly id: string;
   /**
@@ -254,6 +272,8 @@ export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
   readonly durability?: "durable" | "process-local";
   /** Durable leases for concurrent workers. */
   readonly leases: LeasePort;
+  /** Optional cross-process ownership capability for one maintenance worker per namespace. */
+  readonly maintenanceOwnership?: RuntimeMaintenanceOwnershipPort;
   /** Optional private content-addressed result storage capability. */
   readonly results?: RuntimeResultPayloadPort;
   /**

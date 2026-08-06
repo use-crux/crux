@@ -46,6 +46,7 @@ help:
 	@echo "  make test-go         Prepare embedded assets and run hermetic Go tests"
 	@echo "  make test-go-integration  Run Go tests with the current Rust/Oxc indexer worker"
 	@echo "  make test            Alias for test-go"
+	@echo "  make tui-shots       Capture real TUI screens (ANSI + images) via scripts/tui-shots.sh"
 	@echo "  make clean           Remove local runtime build outputs"
 
 .PHONY: build-local-workers
@@ -101,6 +102,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Embedded project-runtime-indexer.mjs from local-workers dist"; \
 	else \
 		echo "Error: $(LOCAL_WORKERS_DIST)/project-runtime-indexer.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
+		exit 1; \
+	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/runtime-worker.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/runtime-worker.mjs" "$(EMBED_DIR)/runtime-worker.mjs"; \
+		echo "Embedded runtime-worker.mjs from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/runtime-worker.mjs not found"; \
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
@@ -212,3 +221,9 @@ inspect-go:
 .PHONY: bench
 bench:
 	$(GO) test -run '^$$' -bench . -benchmem ./internal/observability ./internal/inspect ./internal/store
+
+# Visual capture loop for the real TUI binary (does not build assets).
+# Requires ./crux. Optional: vhs for PNG/GIF. See scripts/tui-shots.sh.
+.PHONY: tui-shots
+tui-shots:
+	@bash ./scripts/tui-shots.sh

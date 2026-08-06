@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -124,28 +125,33 @@ func (p *Palette) resolve() Chosen {
 	return chosen
 }
 
-// View renders the palette modal. Caller must overlay this onto the body
-// screen; this function returns the modal block sized to roughly 64×~14.
+// View renders the content-sized palette modal.
 func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	if !p.open {
 		return ""
-	}
-	w := 64
-	if w > viewportWidth-4 {
-		w = viewportWidth - 4
 	}
 	visible := 8
 	if visible > len(p.filtered) {
 		visible = len(p.filtered)
 	}
+	longest := len("↑↓ select  ↵ run  tab complete    8 results · 8 / 8")
+	for _, command := range p.filtered[:visible] {
+		longest = max(longest, lipgloss.Width(command.Cmd)+lipgloss.Width(command.Desc)+7)
+	}
+	size := contentModalSize(viewportWidth, viewportHeight, longest, visible, 6)
+	w := size.innerWidth
+	rowCapacity := max(0, size.outerHeight-6)
+	visible = min(visible, rowCapacity)
 
 	// Input row
 	prompt := lipgloss.NewStyle().Foreground(shell.ColorViolet).Bold(true).Render(":")
-	input := lipgloss.NewStyle().Foreground(shell.ColorText).Render(p.input)
 	caret := lipgloss.NewStyle().Foreground(shell.ColorText).Background(shell.ColorText).Render(" ")
-	inputRow := " " + prompt + " " + input + caret +
-		strings.Repeat(" ", maxInt(1, w-lipgloss.Width(p.input)-6)) +
-		lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render("cmd")
+	inputValue := kit.Truncate(kit.SanitizeInline(p.input), maxInt(1, w-5), "…")
+	input := lipgloss.NewStyle().Foreground(shell.ColorText).Render(inputValue)
+	inputRow := " " + prompt + " " + input + caret
+	if p.input == "" {
+		inputRow += shell.TextMuted.Render(" type a command")
+	}
 	inputRow = padTo(inputRow, w)
 
 	var rows []string
@@ -164,6 +170,9 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 		rows = append(rows, padTo(row, w))
 		_ = bg
 	}
+	for len(rows) < rowCapacity {
+		rows = append(rows, strings.Repeat(" ", w))
+	}
 	// Footer hint with result counter aligned right.
 	left := " " + lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(
 		shell.Teal.Render("↑↓")+" select  "+
@@ -172,7 +181,8 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	)
 	count := ""
 	if len(p.filtered) > 0 {
-		count = fmt.Sprintf("%d results · %d / %d", len(p.filtered), p.cursor+1, len(p.filtered))
+		resultCount := len(p.filtered)
+		count = fmt.Sprintf("%d %s · %d / %d", resultCount, kit.Pluralize(resultCount, "result"), p.cursor+1, resultCount)
 	} else {
 		count = "no matches"
 	}
@@ -183,18 +193,12 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	}
 	hint := fitToWidth(left+strings.Repeat(" ", pad)+right, w)
 
-	border := lipgloss.NewStyle().
-		Background(shell.ColorPanel).
-		BorderForeground(shell.ColorBorderBright).
-		Border(lipgloss.RoundedBorder()).
-		Render
-
 	body := inputRow + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		strings.Join(rows, "\n") + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
 		hint
-	return border(body)
+	return renderModal(body, w)
 }
 
 func (p *Palette) refilter() {
@@ -215,12 +219,16 @@ func (p *Palette) refilter() {
 }
 
 func defaultCommands() []Command {
-	return []Command{
-		{ID: "goto-overview", Cmd: ":goto overview", Desc: "Jump to Overview", Glyph: "→"},
-		{ID: "goto-insights", Cmd: ":goto insights", Desc: "Jump to Insights", Glyph: "→"},
-		{ID: "goto-runs", Cmd: ":goto runs", Desc: "Jump to Runs", Glyph: "→"},
-		{ID: "quit", Cmd: ":quit", Desc: "Exit the workbench", Glyph: "✕"},
+	commands := make([]Command, 0, len(shell.DefaultNav)+1)
+	for _, item := range shell.DefaultNav {
+		commands = append(commands, Command{
+			ID:    "goto-" + item.ID,
+			Cmd:   ":goto " + item.ID,
+			Desc:  "Jump to " + item.Label,
+			Glyph: "→",
+		})
 	}
+	return append(commands, Command{ID: "quit", Cmd: ":quit", Desc: "Exit the workbench", Glyph: "✕"})
 }
 
 func padTo(s string, width int) string {

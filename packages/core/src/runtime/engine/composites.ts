@@ -48,7 +48,24 @@ import type {
   SignalPublishCompositeResult,
 } from "./composites/signal";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
+import type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
+} from "./composites/work-accept";
 import { runtimeCompositeBodies } from "./composites/registry";
+import type {
+  WorkProgressCompositeInput,
+  WorkProgressCompositeResult,
+} from "./composites/work-progress";
+import type {
+  WorkDetachCompositeInput,
+  WorkDetachCompositeResult,
+} from "./composites/work-detach";
+import type { WorkLeaseCompositeInput } from "./composites/work-lease";
+import type {
+  SessionInputsAcceptCompositeInput,
+  SessionInputsAcceptCompositeResult,
+} from "./composites/session-inputs-accept";
 
 export { runtimeCompositeBodies } from "./composites/registry";
 
@@ -73,6 +90,11 @@ export type RuntimeCompositeKind =
   | "event.emit"
   | "timers.fire-due"
   | "task.enqueue"
+  | "session.inputs.accept"
+  | "work.accept"
+  | "work.progress"
+  | "work.detach"
+  | "work.lease"
   | "work.cancel"
   | "work.operator-retry"
   | "maintenance.reclaim-lease"
@@ -135,6 +157,16 @@ export interface RuntimeCompositeInput {
   };
   /** Create pending task work and write its wake envelope. */
   readonly "task.enqueue": EnqueueTaskInput;
+  /** Atomically accept ordered Session inputs and reserve at most one Work. */
+  readonly "session.inputs.accept": SessionInputsAcceptCompositeInput;
+  /** Atomically accept one top-level application Flow Work occurrence. */
+  readonly "work.accept": WorkAcceptCompositeInput;
+  /** Replace the latest bounded application Work progress snapshot. */
+  readonly "work.progress": WorkProgressCompositeInput;
+  /** Detach durable ownership without changing execution. */
+  readonly "work.detach": WorkDetachCompositeInput;
+  /** Move pending application Work under a worker lease. */
+  readonly "work.lease": WorkLeaseCompositeInput;
   /** Cancel non-terminal work and its owned registrations. */
   readonly "work.cancel": CancelWorkInput;
   /** Move blocked or dead-lettered work back to pending. */
@@ -191,6 +223,16 @@ export interface RuntimeCompositeResult {
   readonly "timers.fire-due": ScanTimersResult;
   /** Fresh pending task work. */
   readonly "task.enqueue": RuntimeWorkItem;
+  /** Accepted Session input records for public handle construction. */
+  readonly "session.inputs.accept": SessionInputsAcceptCompositeResult;
+  /** Accepted application Work records. */
+  readonly "work.accept": WorkAcceptCompositeResult;
+  /** Progress replacement result. */
+  readonly "work.progress": WorkProgressCompositeResult;
+  /** Ownership detach result. */
+  readonly "work.detach": WorkDetachCompositeResult;
+  /** Leased row, or null when the pending state was lost. */
+  readonly "work.lease": RuntimeWorkItem | null;
   /** Cancellation attempt result. */
   readonly "work.cancel": CancelWorkResult;
   /** Operator retry attempt result. */

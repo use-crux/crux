@@ -64,7 +64,7 @@ export interface CascadeTierEvaluation {
 export type CascadeTierEvaluationResult = boolean | CascadeTierEvaluation
 
 /** Error-like result categories that may escalate a tier instead of throwing. */
-export type CascadeEscalationCategory = 'invalid_response'
+export type CascadeEscalationCategory = 'invalid_response' | 'input_limit'
 
 /** A single tier in a cascade. */
 export interface CascadeTier<M, TResult = unknown, TIn = unknown> {

@@ -57,8 +57,8 @@ export type {
   SemanticSyntaxView,
   TypeScriptSemanticBackendOptions,
 } from './semantic'
-export { indexProjectRuntimeForHost } from './runtime'
-export type { IndexProjectRuntimeHostOptions } from './runtime'
+export { indexProjectRuntimeForHost, loadRuntimeWorkerHost } from './runtime'
+export type { IndexProjectRuntimeHostOptions, LoadRuntimeWorkerHostOptions } from './runtime'
 export {
   diffRuntimeArtifactDrift,
   generateRuntimeArtifacts,

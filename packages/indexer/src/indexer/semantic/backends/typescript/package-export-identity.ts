@@ -11,9 +11,9 @@ export interface TypeScriptPackageExportIdentityInput {
 }
 
 /**
- * Creates exact compiler-selected package-root export identity proof.
+ * Creates exact compiler-selected public package export identity proof.
  *
- * A successful proof returns the requested root export's terminal symbol so
+ * A successful proof returns the requested module export's terminal symbol so
  * callers can compare it with the terminal reached from the authored tag.
  */
 export function createTypeScriptPackageExportIdentity(
@@ -26,9 +26,10 @@ export function createTypeScriptPackageExportIdentity(
 ) => ts.Symbol | undefined {
   return (moduleSpecifier, module, expectedModuleName, expectedExportName) => {
     const moduleName = expectedModuleName || moduleSpecifier.text;
+    const packageName = packageRootName(moduleName);
     if (
       moduleName !== moduleSpecifier.text ||
-      moduleName !== "@use-crux/core"
+      packageName !== "@use-crux/core"
     ) {
       return undefined;
     }
@@ -45,7 +46,7 @@ export function createTypeScriptPackageExportIdentity(
       input.moduleResolution?.invalidate();
       return undefined;
     }
-    if (resolution.packageId.name !== moduleName) return undefined;
+    if (resolution.packageId.name !== packageName) return undefined;
     const resolvedSource = input.program.getSourceFile(
       resolution.resolvedFileName,
     );
@@ -65,4 +66,11 @@ export function createTypeScriptPackageExportIdentity(
       input.checker,
     );
   };
+}
+
+function packageRootName(moduleName: string): string {
+  const segments = moduleName.split("/");
+  return moduleName.startsWith("@")
+    ? segments.slice(0, 2).join("/")
+    : (segments[0] ?? moduleName);
 }

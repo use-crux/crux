@@ -9,6 +9,7 @@ import type { CruxChunk } from '../../indexing'
 import type { AssetStore } from '../../storage'
 import { generateObjectWithEvidence } from '../derive/modality-validation'
 import type { KnowledgeModel } from '../model'
+import { generateObjectWithDomainRepair } from '../structured-domain-repair'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { CommunityGraphInput, KnowledgeCommunity, KnowledgeCommunityClustering } from './cluster'
 import {
@@ -77,32 +78,39 @@ async function readReportOutput(input: {
 }): Promise<CommunityReportOutput> {
   const prompt = renderReportPrompt(input.community, input.graph, input.children)
   const chunks = reportChunks(input.community, input.graph, input.children)
-  const first = await generateObjectWithEvidence({
-    model: input.model,
-    system: 'Return a community report that matches the requested schema.',
-    prompt,
-    schema: communityReportOutputSchema,
-    sourceId: sourceIdsFor(chunks).join(', '),
-    chunks,
-    subject: `community "${input.community.communityId}"`,
-    ...(input.assets ? { assets: input.assets } : {}),
-  })
-  const parsed = communityReportOutputSchema.safeParse(first.object)
-  if (parsed.success) return parsed.data
+  const sourceId = sourceIdsFor(chunks).join(', ')
+  const subject = `community "${input.community.communityId}"`
+  const promptId = `community:${input.community.communityId}`
 
-  const repaired = await generateObjectWithEvidence({
-    model: input.model,
-    system: 'Return a corrected community report that matches the requested schema.',
-    prompt: `${prompt}\n\nFix these validation errors:\n${parsed.error.issues.map((issue) => issue.message).join('\n')}`,
-    schema: communityReportOutputSchema,
-    sourceId: sourceIdsFor(chunks).join(', '),
-    chunks,
-    subject: `community "${input.community.communityId}"`,
-    ...(input.assets ? { assets: input.assets } : {}),
+  return generateObjectWithDomainRepair({
+    promptId,
+    initial: () => generateObjectWithEvidence({
+      model: input.model,
+      system: 'Return a community report that matches the requested schema.',
+      prompt,
+      schema: communityReportOutputSchema,
+      sourceId,
+      chunks,
+      subject,
+      ...(input.assets ? { assets: input.assets } : {}),
+    }),
+    repair: (safeFeedback) => generateObjectWithEvidence({
+      model: input.model,
+      system: 'Return a corrected community report that matches the requested schema.',
+      prompt: `${prompt}\n\nFix these validation errors:\n${safeFeedback}`,
+      schema: communityReportOutputSchema,
+      sourceId,
+      chunks,
+      subject,
+      ...(input.assets ? { assets: input.assets } : {}),
+    }),
+    accept: (object) => {
+      const parsed = communityReportOutputSchema.safeParse(object)
+      return parsed.success
+        ? { ok: true, data: parsed.data }
+        : { ok: false, zodErrors: parsed.error }
+    },
   })
-  const repairParsed = communityReportOutputSchema.safeParse(repaired.object)
-  if (repairParsed.success) return repairParsed.data
-  throw new Error(`Community "${input.community.communityId}" report failed validation after repair: ${repairParsed.error.message}`)
 }
 
 function toReport(

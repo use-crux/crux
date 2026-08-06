@@ -6,7 +6,7 @@ description: Turn documents into chunked, embedded retrieval records.
 Before a retriever can answer anything, your source material has to be written somewhere searchable: split into chunks, embedded, and stored. Indexing is that write side of retrieval. Loaders produce documents, the indexer turns those documents into active chunks, and retrievers query those chunks later.
 
 ```txt
-loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> RecordStore + VectorStore
+loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> RecordStore + SearchStore
 ```
 
 In production you usually call the indexer through `corpus.sync()` so Crux can skip unchanged sources and delete stale ones safely.
@@ -18,7 +18,7 @@ import { embedding } from "@use-crux/core/embedding";
 import { corpus, indexer } from "@use-crux/core/indexing";
 import {
   inMemoryRecordStore,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "@use-crux/core/storage";
 import { filesSource } from "@use-crux/ingest/files";
 
@@ -35,13 +35,13 @@ const dense = embedding({
   }),
 });
 const records = inMemoryRecordStore();
-const vectors = inMemoryVectorStore();
+const search = inMemorySearchStore();
 
 const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -65,14 +65,14 @@ await docsCorpus.sync(source.load(), {
 
 That is the normal product path. `corpus.sync()` skips unchanged sources, reindexes changed sources, records failed sources, and deletes stale sources only when you say the input is complete.
 
-Add `sparse` too when your retriever will run sparse or hybrid search:
+Add `sparse` too when your retriever will run sparse or fused search:
 
 ```ts
 const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
 });
@@ -81,14 +81,13 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid" },
 });
 ```
 
-The rule is simple: index the vector types you want to query later.
+The rule is simple: index the vector payloads and content you want to query later.
 
 ## Index Media Documents
 
@@ -125,14 +124,14 @@ audio intervals, or video intervals before indexing when they need independent
 hits. Direct `indexDocuments()` is the supported authored-media path; corpus
 source hashing for arbitrary authored `Blob` media remains deferred.
 
-The record and vector stores receive only allowlisted attribution. Bytes remain
+The record and search stores receive only allowlisted attribution. Bytes remain
 in `AssetStore`; signed URLs, provider file ids, filenames, and base64 never
-enter indexed records, vector metadata, stage caches, or traces. Media sources
+enter indexed records, search metadata, stage caches, or traces. Media sources
 bypass pre-embedding pipeline caches.
 
-The first vector write records the namespace's dense embedding space. A later
+The first dense search write records the namespace's dense embedding space. A later
 write with a different model, dimensions, normalization, modalities, or role
-tasks throws before any vector mutation. Use `clear()` and reindex, or choose a
+tasks throws before any search mutation. Use `clear()` and reindex, or choose a
 new namespace.
 
 ## Add A Pipeline
@@ -152,7 +151,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
   cache: true,
@@ -236,7 +235,7 @@ const docsIndexer = indexer({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   pipeline,
   cache: true,
@@ -303,21 +302,24 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: {
-    mode: "hybrid",
-    fusion: "dbsf",
-    limit: 8,
-  },
+  limit: 8,
   context: {
     query: ({ question }) => question,
     limit: 5,
   },
 });
 
-const hits = await docs.retrieve("how do billing credits work?");
+const hits = await docs.retrieve({
+  query: "how do billing credits work?",
+  search: {
+    dense: true,
+    lexical: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
+});
 ```
 
 If your retriever uses a different `id` from the indexer that wrote the records, set `indexerId` so parent refs, chunk hydration, and cleanup all use the same indexed read model:
@@ -328,7 +330,7 @@ const docs = retriever({
   indexerId: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
 });
 ```
@@ -352,14 +354,10 @@ const searchableDocs = retriever({
   id: "docs-tools",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: {
-    mode: "hybrid",
-    fusion: "dbsf",
-    limit: 8,
-  },
+  limit: 8,
   inject: "tool",
   tools: { prefix: true },
 });

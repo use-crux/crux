@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/evalfs"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
 	"github.com/use-crux/crux/packages/local/internal/tui"
@@ -18,15 +19,11 @@ import (
 )
 
 func printIngestTokenHint(io *output.IO, token, tokenPath string) {
-	if token == "" {
+	if token == "" || tokenPath == "" {
 		return
 	}
-	suffix := ""
-	if tokenPath != "" {
-		suffix = fmt.Sprintf(" (saved at %s)", devText(io, tokenPath))
-	}
-	devStatusf(io, "%s Remote observability ingest: %s%s\n",
-		devBullet(io), devStrong(io, "CRUX_DEVTOOLS_TOKEN="+token), suffix)
+	devStatusf(io, "%s Remote observability ingest: %s · read with %s\n",
+		devBullet(io), devStrong(io, "ingest token "+tokenPath), devText(io, "cat "+tokenPath))
 }
 
 func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, startup *startupTracker) *tui.App {
@@ -34,11 +31,15 @@ func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, sta
 }
 
 func newTUIProgram(io *output.IO, app *tui.App) *tea.Program {
-	return tea.NewProgram(app,
+	var program *tea.Program
+	filter := tui.NewInputCoalescer(func(msg tea.Msg) { program.Send(msg) })
+	program = tea.NewProgram(app,
 		tea.WithInput(io.In),
 		tea.WithOutput(tuiOutput(io.Out)),
 		tea.WithoutSignalHandler(),
+		tea.WithFilter(filter.Filter),
 	)
+	return program
 }
 
 // Bubble Tea probes synchronized-output and Unicode-width modes on startup.
@@ -95,7 +96,12 @@ func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, server
 		devAccent(io, "?"), devStrong(io, serverURL))
 	printIngestTokenHint(io, devSrv.IngestToken, devSrv.IngestTokenPath)
 
-	c := devtools.NewDirectClientFromService(devSrv.Devtools).WithObservability(devSrv.Observability)
+	c := devtools.NewDirectClientFromService(devSrv.Devtools).
+		WithObservability(devSrv.Observability).
+		WithEvalReads(
+			evalfs.OpenProject(devSrv.ProjectRoot()),
+			devSrv.EvalCatalog,
+		)
 	app := newTUIApp(ctx, serverURL, c, startup)
 	app.SetBrowserOpener(devSrv.LocalURL(), opener)
 	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
@@ -173,11 +179,7 @@ func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, server
 	app.SetShutdownCallback(shutdownTUI)
 
 	_, programErr := p.Run()
-	result := app.ShutdownResult()
-	if !result.Completed {
-		cleanupErr := shutdownTUI()
-		return errors.Join(programErr, cleanupErr)
-	}
+	result := app.FinishShutdown()
 	if result.Err == nil {
 		devStatusf(io, "%s Workbench closed. Dev server stopped.\n", devBullet(io))
 	} else if result.Cause == tui.ShutdownRawInterrupt {

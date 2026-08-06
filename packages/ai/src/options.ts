@@ -16,6 +16,7 @@ import type {
 } from "ai";
 import type { z } from "zod";
 import type {
+  AdapterBoundGenerationModel,
   ContextEntry,
   GenerationSettings,
   InputBudget,
@@ -59,8 +60,16 @@ type AiTransportResult = SdkLoopResultLike;
 /** Message history accepted by `@use-crux/ai` generation calls. */
 export type AIMessageHistory = readonly Message[] | readonly ModelMessage[];
 
-/** Language model or Core routing wrapper accepted by this adapter. @internal */
-export type AISupportedModel = LanguageModel | AnyRoutable;
+/**
+ * Language model, adapter-bound GenerationModel, or Core routing wrapper
+ * accepted by this adapter.
+ *
+ * @internal
+ */
+export type AISupportedModel =
+  | LanguageModel
+  | AdapterBoundGenerationModel
+  | AnyRoutable;
 
 /** Metadata passed to an AI SDK adapter `transport` callback. */
 export interface AITransportInfo {

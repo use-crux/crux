@@ -15,7 +15,7 @@ export type { ConvexRuntimeEngineDefinition, ConvexRuntimeEngineOptions } from '
 export { createConvexRuntimeHandlers } from './runtime-engine/handlers'
 export type { ConvexRuntimeHandlers, CreateConvexRuntimeHandlersOptions } from './runtime-engine/handlers'
 export { convexRuntimeStore } from './runtime-engine/store'
-export type { ConvexRuntimeComponent, ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './runtime-engine/store'
+export type { ConvexRuntimeComponent, ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './runtime-engine/store-types'
 export { createConvexEvalHttpAction } from './runtime-engine/eval-host/http-action'
 export type {
   ConvexEvalHttpActionReference,
@@ -132,6 +132,9 @@ export const convexRuntimeRecords: RecordStore = {
 
 export const convexRuntimeStorage: Storage = {
   records: convexRuntimeRecords,
+  get search() {
+    return getConvexCruxRuntime()?.storage.search
+  },
   get assets() {
     return resolveRuntimeStorage().assets
   },

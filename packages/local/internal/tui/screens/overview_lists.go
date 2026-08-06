@@ -48,7 +48,7 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		return header + "\n" + strings.Join(rows, "\n")
 	}
 	if len(insights) == 0 {
-		hint := " " + shell.TextMuted.Render("no insights yet — collect more runs or wait for the analyzer.")
+		hint := " " + shell.TextMuted.Render("No insights yet — run `crux eval`, or use your app with `crux dev` running.")
 		rows := []string{hint}
 		for len(rows) < bodyRows {
 			rows = append(rows, strings.Repeat(" ", width))
@@ -57,13 +57,12 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 	}
 
 	rows := o.insightList.Render(func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
-		// Row 1: bar + severity dot + ID + tag chip + title + target + age.
+		// Row: bar + severity dot + title + category + target + age + spark.
 		bar := "  "
 		if selected && o.focusedPanel == panelInsights {
 			bar = shell.SelectionBar(shell.SeverityColor(ins.Severity)) + " "
 		}
 		sev := kit.SeverityDot(ins.Severity)
-		id := shell.TextMuted.Render(padString3(truncate(ins.InsightID, 7), 7))
 		tag := ""
 		if len(ins.Tags) > 0 {
 			tag = shell.Teal.Render(padString3(truncate(ins.Tags[0], 12), 12))
@@ -80,13 +79,13 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		}
 		skW := lipgloss.Width(sk)
 
-		titleBudget := rowW - 8 - 7 - 13 - 13 - 5 - skW - 6
+		titleBudget := rowW - 2 - 2 - 13 - 13 - 5 - skW - 4
 		if titleBudget < 12 {
 			titleBudget = 12
 		}
-		title := shell.Text.Render(padString3(truncate(ins.Title, titleBudget), titleBudget))
+		title := shell.Text.Render(padString3(kit.TruncateWords(kit.SanitizeInline(ins.Title), titleBudget, "…"), titleBudget))
 
-		line1Parts := []string{bar, sev, " ", id, " ", tag, " ", title, " ", target, " ", ago}
+		line1Parts := []string{bar, sev, " ", title, " ", tag, " ", target, " ", ago}
 		if sk != "" {
 			line1Parts = append(line1Parts, "  ", sk)
 		}
@@ -103,7 +102,11 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 func (o *Overview) renderRecentRunsBlock(width, height int) string {
 	snapshot := o.runsResource.Snapshot()
 	runs := o.runRows()
-	meta := appendResourceStatus(recentRunsMeta(runs), resourceStatus(snapshot))
+	meta := runTabCountsMeta(o.overviewSummary().RunTabCounts)
+	if meta == "" {
+		meta = recentRunsMeta(runs)
+	}
+	meta = appendResourceStatus(meta, resourceStatus(snapshot))
 	header := overviewPaneHeader(width, focusTitle("Recent runs", o.focusedPanel == panelRuns), "", meta)
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH
@@ -117,30 +120,41 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 		}
 		return header + "\n" + strings.Join(rows, "\n")
 	}
-	rows := o.runList.Render(func(r api.InspectRunRecord, _ int, selected bool, rowW int) string {
+	rows := o.runList.Render(func(r api.InspectRunRecord, index int, selected bool, rowW int) string {
 		prefix := " "
 		if selected && o.focusedPanel == panelRuns {
 			prefix = shell.SelectionBar(shell.ColorTeal) + " "
 		}
 		dot := kit.StatusDot(r.Status)
-		id := shortID(inspectOperationID(r), 7)
-		target := truncate(r.TargetID, 14)
+		name := kit.SanitizeInline(firstNonEmpty(o.runNames[inspectOperationID(r)], r.TargetID, r.FlowID, r.RootPrimitive, inspectOperationID(r)))
 		lat := durStr(r.DurationMs)
 		tok := formatTokensShort(r.TokenCount)
 		ago := relTimeUnix(r.StartedAt)
-		// Single-line row matching the design's run/<id> <target> <lat>·<tok> tok … <ago>
-		row := fmt.Sprintf("%s%s  %s  %s   %s · %s tok",
-			prefix,
-			dot,
-			shell.Text.Render(padString3("run/"+id, 16)),
-			shell.TextDim.Render(padString3(target, 14)),
-			shell.TextDim.Render(padString3(lat, 7)),
-			shell.TextDim.Render(padString3(tok, 6)),
-		)
-		// Right-align age.
+
+		sessionID := o.overviewRunSession(r)
+		session := shortOverviewSession(sessionID)
+		sessionColumn := ""
+		if session != "" {
+			style := shell.Teal
+			if index > 0 && o.overviewRunSession(runs[index-1]) == sessionID {
+				style = shell.TextMuted
+			}
+			sessionColumn = style.Render(padString3(session, 12)) + "  "
+		}
+		metrics := shell.TextDim.Render(lat + " · " + tok + " tok")
+		leading := prefix + dot + "  "
 		rightStr := shell.TextMuted.Render(ago)
-		used := lipgloss.Width(row)
-		pad := rowW - used - lipgloss.Width(rightStr) - 1
+		nameBudget := rowW -
+			lipgloss.Width(leading) -
+			lipgloss.Width(sessionColumn) -
+			lipgloss.Width(metrics) -
+			lipgloss.Width(rightStr) - 5
+		if nameBudget < 8 {
+			nameBudget = 8
+		}
+		name = kit.TruncateMiddle(name, nameBudget, "…")
+		row := leading + shell.Text.Render(padString3(name, nameBudget)) + "  " + sessionColumn + metrics
+		pad := rowW - lipgloss.Width(row) - lipgloss.Width(rightStr) - 1
 		if pad < 1 {
 			pad = 1
 		}
@@ -148,12 +162,30 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 		return padRow(row, rowW)
 	})
 	if len(runs) == 0 {
-		rows = append(rows, " "+shell.TextMuted.Render("no runs yet — start a flow or prompt to see traces here."))
+		rows = append(rows, padRow(" "+shell.TextMuted.Render("No runs yet — use your app with `crux dev` running, or run `crux eval`."), width))
 	}
 	for len(rows) < bodyRows {
 		rows = append(rows, strings.Repeat(" ", width))
 	}
 	return header + "\n" + strings.Join(rows, "\n")
+}
+
+func (o *Overview) overviewRunSession(run api.InspectRunRecord) string {
+	return firstNonEmpty(run.SessionID, o.runSessions[inspectOperationID(run)])
+}
+
+func runTabCountsMeta(counts api.InspectRunTabCounts) string {
+	if counts.All == 0 && counts.Live == 0 && counts.Failures == 0 {
+		return ""
+	}
+	return fmt.Sprintf("all %d · live %d · failures %d", counts.All, counts.Live, counts.Failures)
+}
+
+func shortOverviewSession(sessionID string) string {
+	label := kit.SanitizeInline(sessionID)
+	label = strings.TrimPrefix(label, "session_")
+	label = strings.TrimPrefix(label, "session-")
+	return kit.TruncateMiddle(label, 12, "…")
 }
 
 func padString3(s string, width int) string {
@@ -197,5 +229,6 @@ func recentRunsMeta(runs []api.InspectRunRecord) string {
 			window = fmt.Sprintf("last %dd", int(d.Hours()/24)+1)
 		}
 	}
-	return fmt.Sprintf("%s · %d runs", window, len(runs))
+	count := len(runs)
+	return fmt.Sprintf("%s · %d %s", window, count, kit.Pluralize(count, "run"))
 }

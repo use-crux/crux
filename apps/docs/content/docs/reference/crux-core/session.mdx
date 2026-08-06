@@ -1,0 +1,320 @@
+---
+title: Durable Agent Sessions
+description: Exact session, getSession, handle, inspection, stats, Runtime read model, and capability contracts.
+---
+
+Durable Agent Sessions are keyed, restart-safe owners for one Agent
+conversation. Import from the package root or the focused subpath:
+
+```ts
+import {
+  session,
+  getSession,
+  type Session,
+  type SessionFor,
+  type SessionOptions,
+  type SessionTurnHandle,
+  type SessionStatus,
+  type SessionInspection,
+  type SessionRuntimeReadModel,
+  SessionIdentityConflictError,
+  SessionNotFoundError,
+  SessionInputError,
+  SessionCapabilityError,
+  GenerationModelBindingError,
+  GenerationModelNotStaticError,
+  GenerationModelCapabilityError,
+} from "@use-crux/core";
+
+// equivalent focused surface
+import { session, getSession } from "@use-crux/core/session";
+```
+
+This page documents only the shipped Agent Session surface. It does not cover
+lifecycle close/kill/delete/fork, Signal subscriptions into Sessions, Flow
+Sessions, Channels, or transports.
+
+## `session(target, options)`
+
+```ts
+function session<TAgent extends AnyAgent, TModel extends GenerationModel | undefined>(
+  target: TAgent,
+  options: SessionOptions<TAgent, TModel> & SessionModelGuard<TAgent, TModel>,
+): Promise<SessionFor<TAgent>>;
+```
+
+Create or reopen one inert keyed Session for `target`.
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `options.key` | yes | Non-empty caller key bound to one Agent within the active Runtime namespace |
+| `options.model` | when Agent has no bound model | Immutable Session-level `GenerationModel` override |
+
+**Promise timing:** resolves after durable preparation and Thread-owner
+registration complete. It does not execute the Agent.
+
+**Throws before Session / Work / Thread mutation:**
+
+| Error | Code |
+| --- | --- |
+| `SessionIdentityConflictError` | `SESSION_IDENTITY_CONFLICT` |
+| `SessionCapabilityError` | `SESSION_UNSUPPORTED` |
+| `GenerationModelBindingError` | `GENERATION_MODEL_BINDING_MISSING` |
+| `GenerationModelNotStaticError` | `GENERATION_MODEL_NOT_STATIC` |
+| `GenerationModelCapabilityError` | `GENERATION_CAPABILITY_MISSING` |
+| `TypeError` | empty key |
+
+Requires an active Work host (`createWorkHost(...).run(...)`) and Runtime store
+with Sessions support, plus a configured linearizable Thread `RecordStore`.
+
+## `getSession(target, key)`
+
+```ts
+function getSession<TAgent extends AnyAgent>(
+  target: TAgent,
+  key: string,
+): Promise<SessionFor<TAgent>>;
+```
+
+Retrieve an existing Session without creating one. Repairs interrupted owner
+preparation when a compatible record exists.
+
+**Throws:** `SessionNotFoundError`, `SessionIdentityConflictError`,
+`SessionCapabilityError`, `TypeError` (empty key), and model capability errors
+when the pinned program model cannot execute the Agent.
+
+## Types
+
+### `SessionOptions` / `SessionModelGuard`
+
+```ts
+type SessionOptions<A extends AnyAgent, M extends GenerationModel | undefined> = {
+  readonly key: string;
+} & (
+  | { readonly model?: M } // when Agent already has a GenerationModel
+  | { readonly model: M } // when Agent has no GenerationModel
+);
+```
+
+`SessionModelGuard` is a compile-time compatibility check. Exact missing
+language facets become a false type; broad capability evidence remains accepted
+for runtime preflight.
+
+### `Session<TInput, TOutput>` / `SessionFor<TAgent>`
+
+```ts
+interface Session<TInput, TOutput = unknown> {
+  readonly id: string;
+  readonly thread: SessionThreadView;
+  send(input: TInput): Promise<SessionTurnHandle<TOutput>>;
+  sendMany(
+    inputs: readonly TInput[],
+  ): Promise<readonly SessionTurnHandle<TOutput>[]>;
+  status(): Promise<SessionStatus>;
+  inspect(): Promise<SessionInspection>;
+  stats(): Promise<ExecutionStats>;
+}
+
+type SessionFor<TAgent extends AnyAgent> = Session<
+  InferAgentInput<TAgent>,
+  InferAgentOutput<TAgent>
+>;
+```
+
+### `SessionThreadView`
+
+```ts
+interface SessionThreadView {
+  readonly id: string;
+  read(options?: ThreadReadOptions): Promise<ThreadSnapshot>;
+}
+```
+
+Read-only owner-scoped Thread view. Reads only finalized Session heads. There
+is no public append/edit/delete surface on this view.
+
+### Input and turn handles
+
+```ts
+interface SessionInputHandle {
+  readonly id: string;
+  readonly cursor: string;
+  readonly acceptedAt: Date;
+}
+
+interface SessionTurnHandle<TOutput> extends SessionInputHandle {
+  work(): Promise<WorkHandle<TOutput>>;
+  result(): Promise<TOutput>;
+}
+```
+
+| Method | Promise timing |
+| --- | --- |
+| `send` / `sendMany` | Durable acceptance only |
+| `work()` | After an activation opportunity links this input to Work |
+| `result()` | After the linked Work publishes its exact terminal output |
+
+`sendMany([])` resolves to a frozen empty array without allocating cursors.
+Invalid members fail the entire batch with `SESSION_INPUT_INVALID` before any
+cursor advances.
+
+### `SessionStatus`
+
+```ts
+interface SessionStatus {
+  readonly state: "parked" | "running" | "blocked";
+  readonly acceptedCursor?: string;
+  readonly processedCursor?: string;
+  readonly pendingInputs: number;
+  readonly pendingWork: number;
+}
+```
+
+Detached compact snapshot. Lifecycle closure APIs are outside this surface.
+
+### `SessionInspection`
+
+```ts
+interface SessionInspection {
+  readonly id: string;
+  readonly targetId: string;
+  readonly threadId: string;
+  readonly wakePending: boolean;
+  readonly inputs: readonly SessionInputInspection[];
+  readonly checkpoint?: SessionCheckpointInspection;
+  readonly recovery?: SessionRecoveryDiagnostic;
+  readonly coverage: { readonly inputs: "complete" | "truncated"; readonly limit: 64 };
+}
+
+interface SessionInputInspection {
+  readonly id: string;
+  readonly cursor: string;
+  readonly state: "accepted" | "queued" | "running" | "completed" | "blocked";
+  readonly workId?: string;
+  readonly checkpointPrepared: boolean;
+  readonly delivery?: SessionInputDeliveryInspection;
+}
+
+interface SessionInputDeliveryInspection {
+  readonly stepIndex: number;
+  readonly reason: "initial" | "tool-result" | "validation-retry";
+  readonly deliveredAt: Date;
+}
+
+interface SessionCheckpointInspection {
+  readonly inputId: string;
+  readonly workId: string;
+  readonly checkpointedAt: Date;
+  readonly thread: {
+    readonly revision: string;
+    readonly range: string;
+    readonly offset: number;
+    readonly length: number;
+    readonly start?: string;
+    readonly end?: string;
+  };
+  readonly requestIds: readonly string[];
+  readonly requestCoverage: "complete" | "truncated";
+}
+
+interface SessionRecoveryDiagnostic {
+  readonly code: "SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE";
+  readonly nextStep: string;
+}
+```
+
+Public handle inspection may list sealed request identities for operator
+correlation. Runtime Bridge serialization replaces that list with a bounded
+`requestCount` and never exposes request payloads.
+
+### `stats()`
+
+Returns the shared [`ExecutionStats`](/docs/reference/crux-core/work) aggregate
+for the complete addressed Session lifetime (usage, timing, model calls, tools,
+child work, failures, approvals, lifecycle).
+
+## GenerationModel precedence
+
+1. Optional immutable Session `model` override supplied to `session()`.
+2. Otherwise the Agent's bound `model`.
+
+The selected model must be declared on the active
+[`RuntimeProgram.generationModels`](/docs/reference/crux-core/runtime-worker#runtimeprogram)
+(or generated equivalent). Durable state stores only
+`{ definitionId, fingerprint }`. See
+[GenerationModel](/docs/reference/crux-core/generation-model).
+
+## `SessionRuntimeReadModel`
+
+Closed JSON-safe projection used by the Runtime Bridge and `session.turn`
+observability. Schema version is `1`.
+
+```ts
+interface SessionRuntimeReadModel {
+  readonly schema: 1;
+  readonly identity: {
+    readonly sessionId: string;
+    readonly keyHash: string;
+    readonly targetId: string;
+    readonly threadId: string;
+  };
+  readonly status: SessionStatus;
+  readonly wakePending: boolean;
+  readonly activation?: { readonly inputId: string; readonly workId: string };
+  readonly thread: { readonly revision: string };
+  readonly inputs: readonly SessionRuntimeInput[];
+  readonly checkpoint?: SessionRuntimeCheckpoint;
+  readonly recovery?: SessionRecoveryDiagnostic;
+  readonly coverage: { readonly inputs: "complete" | "truncated"; readonly limit: 64 };
+  readonly stats: ExecutionStats;
+}
+```
+
+Dates serialize as ISO strings. Checkpoints expose `requestCount`, not sealed
+request ids. The projection never includes prompts, inputs, outputs, reasoning,
+Tool arguments, credentials, or provider-native objects. Evidence construction
+opens only when an observability sink is active.
+
+## Capability and store requirements
+
+| Requirement | Failure |
+| --- | --- |
+| Runtime store with Sessions port | `SESSION_UNSUPPORTED` |
+| Active Work host / Runtime binding | host/runtime errors from Work admission |
+| Linearizable Thread `RecordStore` | Thread owner registration / commit failures |
+| Declared generation models | `GENERATION_MODEL_*` codes above |
+
+PostgreSQL deployments must initialize Runtime storage and
+`postgresRecordStore` against the same database. Convex deployments use the
+component Runtime and RecordStore together inside the host boundary.
+
+## `runSessionConformanceTests`
+
+```ts
+import { runSessionConformanceTests } from "@use-crux/core/runtime/testing";
+```
+
+Provider-neutral factory used by memory, PostgreSQL, and Convex adapters. The
+harness injects only setup, reconstruction, fault, attempt, and observation
+seams; every law calls public Session, Thread, and Work APIs.
+
+## Errors
+
+| Code | Class / surface |
+| --- | --- |
+| [`SESSION_IDENTITY_CONFLICT`](/docs/errors/SESSION_IDENTITY_CONFLICT) | `SessionIdentityConflictError` |
+| [`SESSION_NOT_FOUND`](/docs/errors/SESSION_NOT_FOUND) | `SessionNotFoundError` |
+| [`SESSION_INPUT_INVALID`](/docs/errors/SESSION_INPUT_INVALID) | `SessionInputError` |
+| [`SESSION_UNSUPPORTED`](/docs/errors/SESSION_UNSUPPORTED) | `SessionCapabilityError` |
+| [`GENERATION_MODEL_BINDING_MISSING`](/docs/errors/GENERATION_MODEL_BINDING_MISSING) | `GenerationModelBindingError` |
+| [`GENERATION_MODEL_NOT_STATIC`](/docs/errors/GENERATION_MODEL_NOT_STATIC) | `GenerationModelNotStaticError` |
+| [`GENERATION_CAPABILITY_MISSING`](/docs/errors/GENERATION_CAPABILITY_MISSING) | `GenerationModelCapabilityError` |
+| [`SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE`](/docs/errors/SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE) | recovery diagnostic / Runtime error |
+
+## Related
+
+- [Progressive guide](/docs/guides/durable-execution/sessions)
+- [Recipes](/docs/guides/durable-execution/sessions/recipes)
+- [GenerationModel](/docs/reference/crux-core/generation-model)
+- [Application Work](/docs/reference/crux-core/work)
+- [Runtime program and worker](/docs/reference/crux-core/runtime-worker)

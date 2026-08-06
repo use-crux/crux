@@ -53,8 +53,14 @@ describe("semantic backend parity", () => {
         files,
       });
 
-      expect(typescriptPatch.status).toBe("ok");
-      expect(nativePatch.status).toBe("ok");
+      expect(
+        typescriptPatch.status,
+        JSON.stringify(typescriptPatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
+      expect(
+        nativePatch.status,
+        JSON.stringify(nativePatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
       expect(typescriptPatch.semanticBackend).toBe("typescript");
       expect(nativePatch.semanticBackend).toBe("native");
       assertFixtureCoverage(fixture, root, typescriptPatch.facts);
@@ -93,8 +99,14 @@ describe("semantic backend parity", () => {
         semanticBackend: { name: "native" },
       });
 
-      expect(typescriptPatch.status).toBe("ok");
-      expect(nativePatch.status).toBe("ok");
+      expect(
+        typescriptPatch.status,
+        JSON.stringify(typescriptPatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
+      expect(
+        nativePatch.status,
+        JSON.stringify(nativePatch.facts.diagnostics ?? [], null, 2),
+      ).toBe("ok");
       expect(typescriptPatch.semanticBackend).toBe("typescript");
       expect(nativePatch.semanticBackend).toBe("native");
       expect(cachedTypescriptPatch.status).toBe("ok");
@@ -188,9 +200,7 @@ function assertFixtureCoverage(
     expect.arrayContaining([...(fixture.expect.diagnosticCodes ?? [])]),
   );
   expect(coverage.diagnosticDefinitionIds).toEqual(
-    expect.arrayContaining([
-      ...(fixture.expect.diagnosticDefinitionIds ?? []),
-    ]),
+    expect.arrayContaining([...(fixture.expect.diagnosticDefinitionIds ?? [])]),
   );
   for (const [definitionId, expectedFacts] of Object.entries(
     fixture.expect.definitionFacts ?? {},
@@ -221,6 +231,33 @@ function assertFixtureCoverage(
     const promptTextSourceRefs = normalizedPromptTextSourceRefs(facts, root);
     expect(promptTextSourceRefs).toEqual(fixture.expect.promptTextSourceRefs);
   }
+  if (fixture.name === "non-owner-session-thread-mutation-shared-analyzer") {
+    const finding = (facts.lintFindings ?? []).find(
+      (candidate) => candidate.ruleId === "session.non_owner_thread_mutation",
+    );
+    const source = {
+      file: join(root, "src/session-mutation.ts"),
+      line: 7,
+      column: 11,
+    };
+    expect(finding).toMatchObject({
+      ruleId: "session.non_owner_thread_mutation",
+      severity: "error",
+      source,
+      primaryDefinitionId: "session:support-agent:customer-a",
+      evidence: [
+        {
+          kind: "source",
+          label: "Non-owner Session Thread mutation",
+          source,
+          data: {
+            method: "append",
+            sessionDefinitionId: "session:support-agent:customer-a",
+          },
+        },
+      ],
+    });
+  }
 }
 
 function semanticFactCoverage(facts: IndexPatchFacts): {
@@ -245,7 +282,9 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
       ...new Set((facts.lintFindings ?? []).map((finding) => finding.ruleId)),
     ].sort(),
     diagnosticCodes: [
-      ...new Set((facts.diagnostics ?? []).map((diagnostic) => diagnostic.code)),
+      ...new Set(
+        (facts.diagnostics ?? []).map((diagnostic) => diagnostic.code),
+      ),
     ].sort(),
     diagnosticDefinitionIds: [
       ...new Set(

@@ -22,7 +22,7 @@ import {
   embedding,
   retrievalModel,
   reranker,
-  stableModel,
+  aiSdk,
   aiSdkProviderRuntime,
 } from "@use-crux/ai";
 import {
@@ -80,44 +80,42 @@ Internally, `@use-crux/ai` keeps AI SDK request planning and result projection i
 
 For Anthropic AI SDK models, Crux converts resolved `systemBlocks` into AI SDK system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block at the end of the stable cached prefix.
 
-### `stableModel(model, key?)`
+### `aiSdk(native)`
 
-Attest an AI SDK model's stable identity for exact Eval evidence reuse:
+Bind a native AI SDK language model or same-adapter route tree to a frozen
+[`GenerationModel`](/docs/reference/crux-core/generation-model) for Agents,
+durable Agent Sessions, Runtime programs, and Eval identity:
 
 ```ts
-import { stableModel } from "@use-crux/ai";
-import { openai } from "@ai-sdk/openai";
+import { aiSdk } from "@use-crux/ai";
+import { agent } from "@use-crux/core/agent";
 
-const standard = stableModel(openai("gpt-4o-mini"));
-const custom = stableModel(createCustomModel(), "acme:support-model:v2");
+const supportModel = aiSdk(nativeModel("nebula-text-v2"));
+const support = agent({
+  id: "support",
+  model: supportModel,
+  prompt: supportPrompt,
+});
 ```
 
-The function returns the same reference with the exact inferred model type. A
-standard object derives `provider:modelId`. Supply a secret-free versioned key
-when endpoint, middleware, or provider configuration is hidden, and bump that
-key whenever those semantics change. Never include credentials: the key enters
-fingerprint material. Calling `stableModel()` again with a conflicting key on
-the same object throws; create a new provider model object for the new version.
-`stableModel()` is leaf-only: do not wrap a `router()`, `split()`, `retry()`,
-`fallback()`, or `cascade()` tree. Attest its object model leaves instead;
-Crux fingerprints callback-free wrapper options, routes, weights, and budgets
-recursively, then records the resolved model target after execution. Runtime
-routing callbacks remain fresh because source provenance does not attest
-closure or ambient state; route-tree evidence also remains fresh when the
-resolved target was not covered at planning.
+One argument only. The adapter owns capability derivation from native identity
+and catalog evidence. The return value is a frozen
+`AdapterBoundGenerationModel` with secret-free `definition.id` /
+`definition.fingerprint`, complete language capability evidence, and an opaque
+runtime port that constructs an `AgentExecutor` through
+`aiSdkProviderRuntime`. Application code does not pass capabilities or install
+a global executor.
 
-Bare model objects remain valid for generation and Evals, but execute fresh
-with `model_identity_unattested` because Crux will not trust constructor names,
-function source, or provider metadata without the explicit attestation.
+Same-adapter routers may be bound once. Do not nest already-bound
+`GenerationModel` leaves inside `aiSdk()`; compose bound leaves with Core
+routers when needed. Declare every Session-selected model on
+`createRuntimeProgram({ generationModels })` or the generated program.
 
-Exact Eval reuse covers the data-only prompt-rendering context class: static
-contexts, loaded inline skills, and tools that declare only schemas. Planning
-never invokes a renderer, selector, or tool. Function-form prompt content,
-dynamic Context renderers, `when()`/`match()` selectors, tools with `execute`,
-function-form context tools, memoized contexts, and
-memory/retriever/blackboard/contributor/tool-source entries remain fresh
-because their effective output or effects cannot be proven from source
-structure alone.
+Bare native model objects remain valid for ordinary generation, but durable
+Agent Sessions require a bound `GenerationModel`. Eval task identity projects
+bound models from their portable definition; unbound objects remain
+`model_identity_unattested` because constructor names and ambient provider
+metadata are not secret-free durable identity.
 
 ### Multimodal content
 
@@ -348,6 +346,8 @@ Pre-bound `GenerateObjectFn` for `@use-crux/core` APIs (judges, extraction). Pas
 **Signature:** `GenerateObjectFn`, `(opts: { model, system?, prompt, schema }) => Promise<{ object: T }>`
 
 `generateObjectFn` shares the same AI SDK structured-attempt mechanics used by `generate()` for prompts with an `output` schema: provider-specific schema sanitation, core-backed `experimental_repairText`, and router/cascade model resolution all happen before the helper returns `{ object }`.
+
+The returned object always passes the authored schema. An authored-schema failure throws `ValidationExhaustedError` without exposing the rejected candidate. Because that error is classified as `invalid_response`, `fallback([...], { on: ["invalid_response"] })` can try the next configured model.
 
 ```ts
 import { judge } from "@use-crux/core/scoring";

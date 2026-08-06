@@ -5,6 +5,7 @@ import type { RuntimeWork } from "../../ports/work";
 import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
 import type { RuntimeWorkItem } from "../work";
+import { recordApplicationWorkResumption } from "../application-work-events";
 
 /** Input accepted by the `flow.manual-resume` composite. */
 export interface FlowManualResumeInput {
@@ -75,10 +76,13 @@ export async function resumeFlowManuallyInTransaction(
     }
   }
 
-  return await tx.state.setWorkPending(input.workId, {
+  const pending = await tx.state.setWorkPending(input.workId, {
     namespace: input.namespace,
     work: input.work,
     idempotencyKey: input.idempotencyKey,
     now: deps.now(),
   });
+  return pending
+    ? await recordApplicationWorkResumption(tx, current, pending, deps.now())
+    : null;
 }

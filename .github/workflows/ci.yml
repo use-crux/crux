@@ -69,8 +69,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Build and embed local workers
+        run: make -C packages/local build-local-workers embed-workers
+
       - name: Test
-        run: pnpm turbo run test --filter='!@use-crux/indexer'
+        run: pnpm turbo run test --filter='!@use-crux/indexer' --filter='!@use-crux/postgres'
 
   postgres-storage:
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -109,6 +112,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Build and embed local workers
+        run: make -C packages/local build-local-workers embed-workers
 
       - name: PostgreSQL storage release coverage
         run: pnpm --filter @use-crux/postgres test

@@ -16,7 +16,11 @@ import {
 } from "../../request/history/source";
 import { ThreadCommitError } from "../../thread/errors";
 import type { ThreadCommit } from "../../thread/types";
-import type { AssistantContentPart, ToolCallPart } from "../../types/content";
+import type { AssistantContentPart } from "../../types/content";
+import type { ManagedThreadPublication } from "../../generation-model/execution-checkpoint";
+import type { ThreadHistoryRange } from "../../request/history/source";
+import { acceptedThreadTurnMessages } from "./thread-publication";
+import { authoredMessages } from "./authored-messages";
 
 /** Observable reason a resolved Thread did not participate in one invocation. */
 export interface ThreadHistoryOverride {
@@ -33,6 +37,7 @@ export interface ManagedThreadInvocation {
   readonly head?: string;
   readonly binding?: NonNullable<ResolvedPrompt["threadBinding"]>;
   readonly source?: HistorySource;
+  readonly basis?: ThreadHistoryRange;
   readonly override?: ThreadHistoryOverride;
 }
 
@@ -72,6 +77,10 @@ export async function prepareThreadInvocation(
     current: authored,
     validate: () => binding.validateRevision(history.revision),
   });
+  const basis = source.artifactRange?.({
+    offset: 0,
+    length: history.messageIds.length,
+  });
   return {
     resolved,
     historyLength: history.messages.length,
@@ -80,6 +89,7 @@ export async function prepareThreadInvocation(
     ...(history.head ? { head: history.head } : {}),
     binding,
     source,
+    ...(basis ? { basis } : {}),
   };
 }
 
@@ -141,17 +151,54 @@ export async function commitThreadInvocation(
   invocation: ManagedThreadInvocation,
   result: ManagedThreadResult,
 ): Promise<ThreadCommit | undefined> {
+  const publication = prepareThreadPublication(invocation, result);
+  return publication
+    ? commitThreadPublication(invocation, publication)
+    : undefined;
+}
+
+/** Prepare canonical owner-Thread evidence without publishing it. @internal */
+export function prepareThreadPublication(
+  invocation: ManagedThreadInvocation,
+  result: ManagedThreadResult,
+): ManagedThreadPublication | undefined {
   if (!invocation.binding) return undefined;
   const tail =
     result.messages && result.messages.length > invocation.responseOffset
       ? result.messages.slice(invocation.responseOffset)
       : [];
-  const messages = acceptedTurnMessages(invocation.userMessage, tail, result);
+  const messages = acceptedThreadTurnMessages(
+    invocation.userMessage,
+    tail,
+    result,
+  );
   if (messages.length === 0) return undefined;
+  return Object.freeze({
+    threadId: invocation.binding.id,
+    ...(invocation.head ? { after: invocation.head } : {}),
+    messages: Object.freeze(messages),
+    ...(invocation.basis ? { basis: invocation.basis } : {}),
+  });
+}
+
+/** Publish one prepared turn through its exact managed Thread binding. @internal */
+export async function commitThreadPublication(
+  invocation: ManagedThreadInvocation,
+  publication: ManagedThreadPublication,
+): Promise<ThreadCommit> {
+  if (
+    !invocation.binding ||
+    publication.threadId !== invocation.binding.id ||
+    publication.after !== invocation.head
+  ) {
+    throw new ThreadCommitError(
+      "Prepared Thread publication does not match its managed invocation.",
+    );
+  }
   try {
     return await invocation.binding.commitTurn({
-      messages,
-      after: invocation.head,
+      messages: publication.messages,
+      after: publication.after,
     });
   } catch (error) {
     if (error instanceof ThreadCommitError) throw error;
@@ -160,123 +207,6 @@ export async function commitThreadInvocation(
       error,
     );
   }
-}
-
-function acceptedAssistant(result: ManagedThreadResult): Message | undefined {
-  const content =
-    result.content !== undefined
-      ? result.content
-      : result.text !== undefined
-        ? [{ type: "text" as const, text: result.text }]
-        : undefined;
-  if (content === undefined) return undefined;
-  return {
-    role: "assistant",
-    content,
-  };
-}
-
-function acceptedTurnMessages(
-  userMessage: Message | undefined,
-  tail: readonly Message[],
-  result: ManagedThreadResult,
-): Message[] {
-  const rounds: Message[] = [];
-  let finalAssistant: Message | undefined;
-  for (let index = 0; index < tail.length; index++) {
-    const message = tail[index];
-    if (message?.role !== "assistant") continue;
-    const calls = assistantToolCalls(message);
-    if (calls.length === 0) {
-      finalAssistant = message;
-      continue;
-    }
-    const pending = new Set(calls.map((call) => call.toolCallId));
-    const results: Message[] = [];
-    for (
-      let resultIndex = index + 1;
-      resultIndex < tail.length;
-      resultIndex++
-    ) {
-      const result = tail[resultIndex];
-      if (result?.role !== "tool") break;
-      const toolCallId = result.metadata?.toolCallId;
-      if (typeof toolCallId === "string" && pending.delete(toolCallId)) {
-        results.push(result);
-      }
-      index = resultIndex;
-    }
-    if (pending.size === 0) {
-      rounds.push(canonicalToolCallMessage(message, calls), ...results);
-    }
-  }
-  const finalAcceptedAssistant =
-    finalAssistant ??
-    (tail.length === 0 ? acceptedAssistant(result) : undefined);
-  return [
-    ...(userMessage ? [userMessage] : []),
-    ...rounds,
-    ...(finalAcceptedAssistant ? [finalAcceptedAssistant] : []),
-  ];
-}
-
-function assistantToolCalls(message: Message): readonly ToolCallPart[] {
-  if (message.role !== "assistant") return [];
-  const contentCalls =
-    typeof message.content === "string"
-      ? []
-      : message.content.filter(
-          (part): part is ToolCallPart => part.type === "tool-call",
-        );
-  if (contentCalls.length > 0) return contentCalls;
-  const metadataCalls = message.metadata?.toolCalls;
-  if (!Array.isArray(metadataCalls)) return [];
-  return metadataCalls.flatMap((call) => {
-    if (
-      typeof call !== "object" ||
-      call === null ||
-      !("id" in call) ||
-      !("name" in call) ||
-      typeof call.id !== "string" ||
-      typeof call.name !== "string"
-    ) {
-      return [];
-    }
-    return [
-      {
-        type: "tool-call" as const,
-        toolCallId: call.id,
-        toolName: call.name,
-        input: "args" in call ? call.args : undefined,
-      },
-    ];
-  });
-}
-
-function canonicalToolCallMessage(
-  message: Extract<Message, { role: "assistant" }>,
-  calls: readonly ToolCallPart[],
-): Message {
-  const content =
-    typeof message.content === "string"
-      ? [
-          ...(message.content
-            ? [{ type: "text" as const, text: message.content }]
-            : []),
-          ...calls,
-        ]
-      : [
-          ...message.content.filter((part) => part.type !== "tool-call"),
-          ...calls,
-        ];
-  return { ...message, content };
-}
-
-function authoredMessages(resolved: ResolvedPrompt): readonly Message[] {
-  if (resolved.prompt) {
-    return [{ role: "user", content: resolved.prompt }];
-  }
-  return (resolved.messages ?? []) as readonly Message[];
 }
 
 function findRenderedUserMessage(

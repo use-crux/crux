@@ -57,6 +57,11 @@
 // Core definition API (prompt authoring domain)
 export { signal } from "./signal";
 export {
+  managedTransportBinding,
+  signalProvider,
+} from "./signal/provider";
+export { webhook } from "./signal/transport";
+export {
   prompt,
   context,
   createContexts,
@@ -174,7 +179,8 @@ export {
   inMemoryAssetStore,
   inMemoryRecordStore,
   inMemoryStorage,
-  inMemoryVectorStore,
+  inMemorySearchStore,
+  searchStoreCapabilities,
   storage,
   StorageError,
 } from "./storage";
@@ -260,14 +266,20 @@ export type {
   RecordStoreCapabilities,
   RecordWrite,
   RecordWriteOptions,
+  SearchFusion,
+  SearchHit,
+  SearchLeg,
+  SearchLegKind,
+  SearchLegMatch,
+  SearchQuery,
+  SearchRecord,
+  SearchStore,
+  SearchStoreCapabilities,
+  SearchStoreCapabilityConfig,
   StoredAsset,
   Storage,
   StorageErrorCode,
   UrlAsset,
-  VectorHit,
-  VectorRecord,
-  VectorSearchQuery,
-  VectorStore,
 } from "./storage";
 export { createPrompts } from "./prompt";
 export type { PromptTree, PromptTreeResult } from "./prompt";
@@ -393,6 +405,80 @@ export type {
   FlowSignalSpec,
   NoPayloadSignal,
 } from "./flow";
+export { createWorkHost, getWork, spawn } from "./work";
+export {
+  getSession,
+  session,
+  GenerationModelBindingError,
+  GenerationModelCapabilityError,
+  GenerationModelNotStaticError,
+  SessionCapabilityError,
+  SessionIdentityConflictError,
+  SessionInputError,
+  SessionNotFoundError,
+} from "./session";
+export type {
+  AgentModel,
+  AgentRequiredCapabilities,
+  FlowSessionOptions,
+  FlowSessionSurface,
+  Session,
+  SessionFor,
+  SessionForTarget,
+  SessionSubscription,
+  SessionSubscriptionSource,
+  SessionTarget,
+  SessionTargetInput,
+  SessionTargetOutput,
+  SessionTargetProgress,
+  SessionTargetResume,
+  SessionCheckpointInspection,
+  SessionInputHandle,
+  SessionInputDeliveryInspection,
+  SessionInputInspection,
+  SessionInspection,
+  SessionRecoveryDiagnostic,
+  SessionTurnHandle,
+  SessionModelGuard,
+  SessionOptions,
+  SessionStatus,
+  SessionThreadView,
+  SessionRuntimeCheckpoint,
+  SessionRuntimeIdentity,
+  SessionRuntimeInput,
+  SessionRuntimeReadModel,
+} from "./session";
+export type {
+  AdapterBoundGenerationModel,
+  CapabilitiesOf,
+  EmbeddingCapability,
+  GenerationAdapterIdentity,
+  GenerationCapabilities,
+  GenerationModel,
+  GenerationModelDefinition,
+  GenerationOperation,
+  ImageCapability,
+  LanguageCapability,
+  NormalizedGenerationIdentity,
+  RequiredLanguageCapabilities,
+  SpeechCapability,
+  Supports,
+  TranscriptionCapability,
+} from "./generation-model";
+export type {
+  CancelOptions,
+  CancelReceipt,
+  DetachReceipt,
+  ExecutionStats,
+  SpawnWorkOptions,
+  CreateWorkHostOptions,
+  WorkEvent,
+  WorkHandle,
+  WorkProgress,
+  WorkStatus,
+  WorkStreamOptions,
+  WorkHost,
+} from "./work";
 export {
   CruxEffectError,
   EFFECT_ERROR_CODES,
@@ -1055,9 +1141,7 @@ export { RequestCompositionError } from "./request/errors";
 export { mergeInputBudget } from "./request/budget/input-budget";
 export { PreparationError } from "./request/prepare/step";
 export { ResourceReadError } from "./request/prepare/resources";
-export type {
-  InputBudget,
-} from "./request/budget/input-budget";
+export type { InputBudget } from "./request/budget/input-budget";
 export type {
   PreparationErrorReason,
   PrepareStep,
@@ -1096,9 +1180,7 @@ export type {
 } from "./request/prepare/step-context";
 export type { PreparationDecisionInspection } from "./request/prepare/journal";
 export { preview } from "./request/preview/preview";
-export type {
-  RequestPreviewTarget,
-} from "./request/preview/preview";
+export type { RequestPreviewTarget } from "./request/preview/preview";
 export type {
   PreviewAdaptation,
   PreviewAdaptationState,

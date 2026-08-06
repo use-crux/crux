@@ -7,7 +7,13 @@ export type RuntimeArtifactHost = "next" | "convex" | "cloudflare";
 export interface RuntimeArtifactFinding {
   readonly code: string;
   readonly category: "authored" | "configuration" | "environment" | "internal";
-  readonly featureKind?: "eval" | "runtime" | "target" | "generated-file";
+  readonly featureKind?:
+    | "eval"
+    | "runtime"
+    | "target"
+    | "generated-file"
+    | "provider"
+    | "transport";
   readonly featureId?: string;
   readonly arm?: string;
   readonly source?: string;

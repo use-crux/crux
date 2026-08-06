@@ -64,11 +64,9 @@ func (s *Runs) updateSpanDocumentInput(msg tea.Msg) (tea.Cmd, bool) {
 }
 
 func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {
-	runs := s.filteredRuns()
-	if len(runs) == 0 {
+	if len(s.filteredRuns()) == 0 {
 		return nil
 	}
-	s.runList.SetItems(runs)
 	var msg tea.KeyPressMsg
 	if delta > 0 {
 		msg = tea.KeyPressMsg{Text: "j", Code: 'j'}
@@ -90,18 +88,79 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 		return nil, true
 	}
 	s.diagnosis = nil
-	return s.fetchRunDetail(ctx, c, selectedID), true
+	return s.scheduleRunDetail(selectedID), true
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
-	s.runStatusIndex = (s.runStatusIndex + 1) % (len(runStatusFilters) + 1)
-	return s.ensureFilteredRunSelection(ctx, c)
+	s.filters.Status = (s.filters.Status + 1) % len(runStatusFilters)
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) cycleRunWindow(ctx context.Context, c DataClient) tea.Cmd {
+	s.filters.Window = (s.filters.Window + 1) % len(runWindows)
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) cycleRunGroup(ctx context.Context, c DataClient) tea.Cmd {
+	selectedID := s.SelectedRunID()
+	s.filters.Group = (s.filters.Group + 1) % len(runGroups)
+	s.syncVisibleRuns()
+	if selectedID != "" {
+		s.runList.Select(selectedID)
+	}
+	if s.activeRunGroup().label == "session" {
+		return fetchRunsSessions(ctx, c)
+	}
+	return nil
+}
+
+func (s *Runs) cycleRunModel(ctx context.Context, c DataClient) tea.Cmd {
+	if len(s.knownModels) == 0 {
+		return nil
+	}
+	if s.filters.Model == "" {
+		s.filters.Model = s.knownModels[0]
+	} else {
+		next := 0
+		for index, model := range s.knownModels {
+			if model == s.filters.Model {
+				next = index + 1
+				break
+			}
+		}
+		if next < len(s.knownModels) {
+			s.filters.Model = s.knownModels[next]
+		} else {
+			s.filters.Model = ""
+		}
+	}
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) toggleSelectedSessionFilter(ctx context.Context, c DataClient) tea.Cmd {
+	if s.filters.Session != "" {
+		s.filters.Session = ""
+		return s.refreshFilteredRuns(ctx, c)
+	}
+	selected, _, ok := s.runList.Selected()
+	if !ok || selected.SessionID == "" {
+		return nil
+	}
+	s.filters.Session = selected.SessionID
+	return s.refreshFilteredRuns(ctx, c)
+}
+
+func (s *Runs) refreshFilteredRuns(ctx context.Context, c DataClient) tea.Cmd {
+	local := s.ensureFilteredRunSelection(ctx, c)
+	if c == nil {
+		return local
+	}
+	return tea.Batch(local, s.fetchRunsList(ctx, c))
 }
 
 func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea.Cmd {
 	previousID := s.SelectedRunID()
-	runs := s.filteredRuns()
-	s.runList.SetItems(runs)
+	runs := s.syncVisibleRuns()
 	if len(runs) == 0 {
 		s.clearRunSelection()
 		return nil
@@ -117,10 +176,13 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 		return nil
 	}
 	s.diagnosis = nil
-	return s.fetchRunDetail(ctx, c, selectedID)
+	return s.scheduleRunDetail(selectedID)
 }
 
 func (s *Runs) clearRunSelection() {
+	s.detailIntent++
+	s.detailPending = false
+	s.detailPendingRun = ""
 	s.runList.SetItems(nil)
 	s.spanList.SetItems(nil)
 	s.routedRun = nil

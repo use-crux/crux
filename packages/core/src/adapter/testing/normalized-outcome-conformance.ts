@@ -41,6 +41,7 @@ const ERROR_KINDS: readonly CruxProviderErrorKind[] = [
   "timeout",
   "aborted",
   "invalid-request",
+  "invalid-response",
   "provider-error",
   "unknown",
 ];

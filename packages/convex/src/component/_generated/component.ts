@@ -193,7 +193,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         read: FunctionReference<
           "mutation",
           "internal",
-          { after?: string; limit?: number; namespace: string },
+          { after?: string; limit?: number; name?: string; namespace: string },
           any,
           Name
         >;

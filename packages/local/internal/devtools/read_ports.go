@@ -112,8 +112,22 @@ func (s *Service) BudgetSnapshots(context.Context) []store.BudgetSnapshotData {
 	return s.store.GetBudgetSnapshots()
 }
 
-func (s *Service) CostEvents(context.Context) []store.CostEventData {
-	return s.store.GetCostEvents()
+func (s *Service) CostEvents(ctx context.Context) []store.CostEventData {
+	events := s.store.GetCostEvents()
+	if s.observability == nil {
+		return events
+	}
+	report, ok := observabilityCostReport(ctx, s.observability)
+	if !ok {
+		return events
+	}
+	result := make([]store.CostEventData, 0, len(events)+1)
+	for _, event := range events {
+		if event.Kind != "report" {
+			result = append(result, event)
+		}
+	}
+	return append(result, report)
 }
 
 func (s *Service) AgentEvents(context.Context) []store.AgentEventData {

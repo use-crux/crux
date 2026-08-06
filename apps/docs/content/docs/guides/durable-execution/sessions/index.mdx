@@ -1,0 +1,290 @@
+---
+title: Durable Agent Sessions
+description: Own a long-lived Agent conversation with ordered durable turns, reconnection, and payload-safe inspection.
+---
+
+A **durable Agent Session** is a keyed, restart-safe owner for one Agent's
+conversation. It is not one endless model request, a transport, a Channel, or a
+Flow handle. Create or reopen the Session, accept ordered inputs, and join the
+exact Agent result when the Runtime worker finishes the turn.
+
+Crux also uses the word "session" for Safety sessions, skill activation, and
+observability grouping. This guide is only about the durable Agent Session API:
+`session()` / `getSession()`.
+
+## When to use one
+
+Use a durable Agent Session when:
+
+- one Agent must own one business conversation across requests or process restarts;
+- acceptance must be durable even if the worker has not finished yet;
+- concurrent messages should keep server-assigned order;
+- operators need payload-safe status, inspection, and statistics without reading
+  prompts or tool arguments.
+
+Do **not** use one for a single request-scoped generation, a finite exported
+Flow occurrence ([Application Work](/docs/guides/durable-execution/work)), or
+typed process-local events ([Signals](/docs/guides/durable-execution/signals)).
+
+## Smallest working example
+
+Export an Agent with a bound generation model, generate the Runtime program,
+bind a Work host, create the Session, send, and join the result:
+
+```ts
+import { createWorkHost, prompt, session } from "@use-crux/core";
+import { agent } from "@use-crux/core/agent";
+import { node } from "@use-crux/core/runtime";
+import { aiSdk } from "@use-crux/ai";
+import { z } from "zod";
+import { runtimeProgram } from "./.crux/generated/runtime/program";
+
+const supportModel = aiSdk(nativeModel("nebula-text-v2"));
+
+export const support = agent({
+  id: "support",
+  model: supportModel,
+  prompt: prompt({
+    input: z.object({ message: z.string() }),
+    output: z.object({ reply: z.string() }),
+    system: "Reply to the customer.",
+    prompt: ({ input }) => input.message,
+  }),
+});
+
+const host = createWorkHost({
+  runtime: node({ namespace: "app" }),
+  program: runtimeProgram,
+});
+
+const conversation = await host.run(() =>
+  session(support, { key: "customer-42" }),
+);
+const turn = await conversation.send({ message: "Hello" });
+const output = await turn.result(); // { reply: string }
+```
+
+`send()` resolves when the input is durably accepted. It does **not** wait for
+the model. `result()` waits for the canonical Work occurrence that owns the
+turn.
+
+Process-local `node()` is enough for demos and tests. Production durability
+needs a durable Runtime store **and** a Session-owned Thread `RecordStore` on
+the same database; see [recipes](/docs/guides/durable-execution/sessions/recipes).
+
+## Identity and create / get
+
+A Session key is caller-controlled and required. Lookup identity is the hash of
+Runtime namespace plus key. The public Session id and automatic Thread id also
+include the stable Agent target id, so two Agents cannot silently share one key.
+
+```ts
+import { getSession, session } from "@use-crux/core";
+
+const created = await host.run(() =>
+  session(support, { key: "customer-42" }),
+);
+const reopened = await host.run(() => getSession(support, "customer-42"));
+// created.id === reopened.id
+```
+
+| Call | Behavior |
+| --- | --- |
+| `session(agent, { key })` | Create or reopen. Returns only after the Session-owned Thread owner is ready. |
+| `getSession(agent, key)` | Retrieve without creating. Fails if missing. |
+
+Compatible concurrent `session()` calls with the same target and key return the
+same Session. The same key with a different Agent throws
+`SESSION_IDENTITY_CONFLICT`. Missing keyed retrieval throws `SESSION_NOT_FOUND`.
+
+## Model binding and Session override
+
+Durable turns need an adapter-bound [`GenerationModel`](/docs/reference/crux-core/generation-model).
+With `@use-crux/ai`, bind once:
+
+```ts
+import { aiSdk } from "@use-crux/ai";
+
+const economy = aiSdk(nativeModel("nebula-text-v2"));
+const premium = aiSdk(nativeModel("nebula-text-v3"));
+
+export const support = agent({
+  id: "support",
+  model: economy,
+  prompt: supportPrompt,
+});
+
+// Optional immutable Session override (must appear in RuntimeProgram.generationModels)
+const conversation = await host.run(() =>
+  session(support, { key: "customer-42", model: premium }),
+);
+```
+
+Precedence is **Session override, then Agent model**. Creation rejects before
+Session, Work, or Thread mutation when:
+
+| Code | Cause |
+| --- | --- |
+| `GENERATION_MODEL_BINDING_MISSING` | Neither Session nor Agent has a bound model |
+| `GENERATION_MODEL_NOT_STATIC` | Bound model is absent from the Runtime program |
+| `GENERATION_CAPABILITY_MISSING` | Model cannot cover the Agent's language requirements |
+
+Declared models live on the immutable Runtime program
+(`createRuntimeProgram({ generationModels })` or the generated program).
+`getSession()` reuses the model pinned when the Session was created; it does
+not substitute another model.
+
+## Send, sendMany, and ordering
+
+```ts
+const first = await conversation.send({ message: "First" });
+const batch = await conversation.sendMany([
+  { message: "Second" },
+  { message: "Third" },
+]);
+```
+
+- Every accepted input keeps its own id, server-assigned cursor, and handle.
+- `sendMany()` validates and accepts the whole array atomically in order, or
+  accepts none.
+- Concurrent `send()` calls serialize; cursors stay strictly ordered.
+- Compatible pending inputs share one canonical `session.turn` Work. Joined
+  handles resolve the same Work and exact shared result or failure through
+  `turn.work()` / `turn.result()`.
+- Mid-turn ingress becomes model-visible only at the next real provider
+  boundary (initial step, tool result, or validation retry)—never mid-step.
+
+Admission requires a Prompt `inputSchema`, strict JSON-safe values (bounded
+depth, size, and structure), and no open accessors, cycles, or non-JSON types.
+
+## Thread ownership
+
+Every Session registers exactly one canonical Thread owner. `conversation.thread`
+is a **read-only** view of that owner head:
+
+```ts
+const snapshot = await conversation.thread.read();
+// snapshot.entries contains only finalized Session-owned messages
+```
+
+Do not open a second mutable Thread for the same Agent and share it with the
+Session. Project Index diagnostics flag shared concrete-Agent Thread tenancy and
+non-owner mutation reached through `session.thread`.
+
+## Result, work, inspection, and stats
+
+```ts
+const turn = await conversation.send({ message: "Hello" });
+const work = await turn.work(); // same Work as the activation occurrence
+const output = await turn.result(); // exact Agent output
+const status = await conversation.status();
+const inspection = await conversation.inspect();
+const stats = await conversation.stats();
+```
+
+| API | Promise timing | Contents |
+| --- | --- | --- |
+| `send` / `sendMany` | Acceptance only | Input handles / turn handles |
+| `turn.work()` | After activation claim links the input | Canonical `WorkHandle` |
+| `turn.result()` | After terminal Work completion | Exact Agent output |
+| `status()` | Immediate snapshot | `parked` / `running` / `blocked`, cursors, pending counts |
+| `inspect()` | Immediate snapshot | Bounded input lineage, checkpoint, recovery diagnostic |
+| `stats()` | Immediate snapshot | Lifetime Work statistics for this Session |
+
+Inspection and Runtime Bridge projections never expose prompts, inputs,
+outputs, reasoning, Tool arguments, credentials, sealed request ids, or
+provider-native objects. Checkpoints report Thread basis and request count, not
+private request payloads.
+
+## Safe boundaries, replay, and recovery
+
+One Runtime worker, one canonical Work path, and one Effect scope own each
+activation:
+
+1. Acceptance writes ordered ingress and reserves wake intent.
+2. The worker claims the longest cursor-consecutive compatible prefix.
+3. Preparation journals a sealed plan against a pinned Thread revision.
+4. Recovery replays durable facts—never callbacks, provider requests, Tools,
+   effects, or Thread publication.
+5. Thread publication is idempotent through the Session owner head.
+6. Terminal results complete the shared Work; joined handles reconnect to the
+   same value.
+
+If prepared result evidence is missing after a crash,
+`SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` blocks with a payload-safe next step.
+Restore the Runtime result store from a consistent backup, then retry.
+
+## Errors
+
+Session-specific codes live under [Runtime Errors](/docs/errors) with dedicated
+pages:
+
+- [`SESSION_IDENTITY_CONFLICT`](/docs/errors/SESSION_IDENTITY_CONFLICT)
+- [`SESSION_NOT_FOUND`](/docs/errors/SESSION_NOT_FOUND)
+- [`SESSION_INPUT_INVALID`](/docs/errors/SESSION_INPUT_INVALID)
+- [`SESSION_UNSUPPORTED`](/docs/errors/SESSION_UNSUPPORTED)
+- [`GENERATION_MODEL_BINDING_MISSING`](/docs/errors/GENERATION_MODEL_BINDING_MISSING)
+- [`GENERATION_MODEL_NOT_STATIC`](/docs/errors/GENERATION_MODEL_NOT_STATIC)
+- [`GENERATION_CAPABILITY_MISSING`](/docs/errors/GENERATION_CAPABILITY_MISSING)
+- [`SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE`](/docs/errors/SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE)
+
+## Testing
+
+Prefer public Session APIs with a real memory Runtime and Thread `RecordStore`.
+Drive the worker explicitly; do not sleep for races.
+
+```ts
+import { config, createWorkHost, session } from "@use-crux/core";
+import {
+  createRuntimeProgram,
+  createRuntimeWorker,
+  inMemoryRuntimeStore,
+  node,
+} from "@use-crux/core/runtime";
+import { inMemoryRecordStore } from "@use-crux/core/storage";
+
+config({ storage: { records: inMemoryRecordStore() } });
+const store = inMemoryRuntimeStore();
+const program = createRuntimeProgram({
+  targets: [support],
+  generationModels: [supportModel],
+  transports: [],
+});
+const host = createWorkHost({
+  runtime: node({ store, namespace: "test", autoStartMaintenance: false }),
+  program,
+});
+const worker = createRuntimeWorker({
+  runtime: node({ store, namespace: "test", autoStartMaintenance: false }),
+  program,
+  pollIntervalMs: 5,
+});
+```
+
+Adapters implement
+[`runSessionConformanceTests`](/docs/reference/crux-core/session#runsessionconformancetests)
+from `@use-crux/core/runtime/testing` for identity, ordering, checkpoint replay,
+exact results, inspection, and capability laws.
+
+## Production operation
+
+1. Export Agents and generation models into the generated Runtime program.
+2. Run one execution worker per Runtime namespace for the store.
+3. Configure Runtime storage and the Session-owned Thread `RecordStore` against
+   the **same** database (PostgreSQL) or Convex component.
+4. Authenticate application requests before calling `session` / `getSession`;
+   keys are identifiers, not authorization.
+5. Inspect with Devtools Catalog (authored target/key evidence) and Runs
+   (`session.turn` lineage, recovery, stats)—never by dumping private payloads.
+
+Copy-paste deployment patterns live in the
+[recipes](/docs/guides/durable-execution/sessions/recipes).
+
+## Related
+
+- [Recipes](/docs/guides/durable-execution/sessions/recipes)
+- [API reference](/docs/reference/crux-core/session)
+- [GenerationModel](/docs/reference/crux-core/generation-model)
+- [Application Work](/docs/guides/durable-execution/work)
+- [Node execution worker](/docs/guides/durable-execution/node)
+- [Threads](/docs/guides/threads)

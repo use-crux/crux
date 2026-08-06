@@ -74,8 +74,8 @@ export function createPostgresStatePort(
         `INSERT INTO ${workTable}
           (namespace, work_id, work, target_id, status, attempt, max_attempts,
            not_before, idempotency_key, idle_scope, lease_token, last_error,
-           created_at, updated_at)
-         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)
+           result_ref, application, created_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16)
          ON CONFLICT (namespace, work_id) DO UPDATE SET
            work = EXCLUDED.work,
            target_id = EXCLUDED.target_id,
@@ -87,6 +87,8 @@ export function createPostgresStatePort(
            idle_scope = EXCLUDED.idle_scope,
            lease_token = EXCLUDED.lease_token,
            last_error = EXCLUDED.last_error,
+           result_ref = EXCLUDED.result_ref,
+           application = EXCLUDED.application,
            created_at = EXCLUDED.created_at,
            updated_at = EXCLUDED.updated_at`,
         [
@@ -102,6 +104,8 @@ export function createPostgresStatePort(
           work.idleScope,
           work.leaseToken,
           work.lastError ? encodeJson(work.lastError) : null,
+          work.resultRef ? encodeJson(work.resultRef) : null,
+          work.application ? encodeJson(work.application) : null,
           work.createdAt,
           work.updatedAt,
         ],
@@ -204,17 +208,21 @@ export function createPostgresStatePort(
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${snapshotTable}
-          (namespace, flow_id, work_id, target_id, status, effects, input,
-           continuation, completed_steps, fingerprint, pending_suspends,
-           delivered_suspends, scheduled_work, updated_at)
+          (namespace, flow_id, work_id, target_id, status, effects, definition,
+           result_obligation, input, input_digest, continuation, completed_steps, fingerprint,
+           pending_suspends, delivered_suspends, scheduled_work, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb,
-                 $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14)
+                 $9::jsonb, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb,
+                 $15::jsonb, $16::jsonb, $17)
          ON CONFLICT (namespace, flow_id) DO UPDATE SET
            work_id = EXCLUDED.work_id,
            target_id = EXCLUDED.target_id,
            status = EXCLUDED.status,
            effects = EXCLUDED.effects,
+           definition = EXCLUDED.definition,
+           result_obligation = EXCLUDED.result_obligation,
            input = EXCLUDED.input,
+           input_digest = EXCLUDED.input_digest,
            continuation = EXCLUDED.continuation,
            completed_steps = EXCLUDED.completed_steps,
            fingerprint = EXCLUDED.fingerprint,
@@ -229,7 +237,12 @@ export function createPostgresStatePort(
           snapshot.targetId,
           snapshot.status,
           snapshot.effects ? encodeJson(snapshot.effects) : null,
+          snapshot.definition ? encodeJson(snapshot.definition) : null,
+          snapshot.resultObligation
+            ? encodeJson(snapshot.resultObligation)
+            : null,
           encodeJson(snapshot.input),
+          snapshot.inputDigest ?? null,
           snapshot.continuation !== undefined
             ? encodeJson(snapshot.continuation)
             : null,

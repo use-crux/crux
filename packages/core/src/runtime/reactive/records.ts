@@ -8,16 +8,25 @@ import type { JsonValue } from "../../storage";
 import type { SignalPayloadCodec } from "./payload-codec";
 
 /** Stable reference to one durable reactive consumer. */
-export type ReactiveConsumerRef = {
-  /** Consumer kind used for delivery routing. */
-  readonly kind: "flow.signal-wait";
-  /** Durable Flow occurrence waiting for the Signal. */
-  readonly flowId: string;
-  /** Waiter resolved by this delivery. */
-  readonly waiterId: string;
-  /** Suspended work item resumed by this delivery. */
-  readonly workId: string;
-};
+export type ReactiveConsumerRef =
+  | {
+      /** Consumer kind used for delivery routing. */
+      readonly kind: "flow.signal-wait";
+      /** Durable Flow occurrence waiting for the Signal. */
+      readonly flowId: string;
+      /** Waiter resolved by this delivery. */
+      readonly waiterId: string;
+      /** Suspended work item resumed by this delivery. */
+      readonly workId: string;
+    }
+  | {
+      /** Independent Session Signal subscription consumer. */
+      readonly kind: "session.subscription";
+      /** Session that owns the durable subscription. */
+      readonly sessionId: string;
+      /** Stable subscription identity within the Session. */
+      readonly subscriptionId: string;
+    };
 
 /** Canonical durable Signal occurrence. */
 export interface SignalOccurrenceRecord {

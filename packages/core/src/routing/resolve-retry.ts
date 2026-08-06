@@ -233,9 +233,10 @@ function retryRouting(
 
 function shouldRetryCategory(
   category: ErrorCategory | null,
-  allowed: readonly ErrorCategory[] | undefined,
+  allowed: readonly unknown[] | undefined,
 ): boolean {
   if (category === null) return false;
+  if (category === "input_limit") return false;
   if (allowed && allowed.length > 0) return allowed.includes(category);
   return category !== "auth_error" && category !== "invalid_response";
 }

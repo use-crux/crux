@@ -27,6 +27,7 @@ func (c *FixtureClient) fixtureRunDetail(traceID string) api.ObservabilityRunDet
 		Run: api.ObservabilityRunSummary{
 			RunID:         traceID,
 			TraceID:       traceID,
+			SessionID:     "session_docs",
 			Name:          "docs_agent",
 			RootPrimitive: api.SpanPrimitiveAgent,
 			Status:        "failed",

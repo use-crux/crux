@@ -1,5 +1,5 @@
 import type { Context } from '../prompt/context-types'
-import type { RecordStore, Storage, VectorStore } from '../storage'
+import type { RecordStore, SearchStore, Storage } from '../storage'
 import type { AnyToolSet } from '../types'
 import type { MemoryNamespace } from './namespace'
 import type { MemoryBudget } from './rendering'
@@ -46,14 +46,14 @@ export interface MemoryConfig {
    * Storage bundle backing this memory instance.
    *
    * When omitted, memory uses an in-process bundle from `inMemoryStorage()`.
-   * Pass `records` and optionally `vectors` directly when only those
+   * Pass `records` and optionally `search` directly when only those
    * capabilities should be shared with memory.
    */
   storage?: Storage
   /** Record store backing block reads, writes, proposal state, and listings. */
   records?: RecordStore
-  /** Optional vector store used by semantic recall when a block has an embedder. */
-  vectors?: VectorStore
+  /** Optional search store used by semantic recall when a block has an embedder. */
+  search?: SearchStore
   /** Namespace scope for all reads, writes, tools, capture, and proposals. */
   namespace: MemoryNamespace
   /** Ordered memory blocks composed by this memory instance. */

@@ -202,6 +202,24 @@ describe("runtime operations", () => {
         flowId: "flow_runtime_ops_replay",
         fingerprint: ["step:old-label"],
       },
+      application: {
+        inputDigest: "input-runtime-ops",
+        definition: {
+          definitionId: "flow:runtime-ops-review",
+          fingerprint: "definition-runtime-ops-v1",
+        },
+        effects: {
+          kind: "effect.scope",
+          id: "effect_runtime_ops_replay",
+        },
+        ownership: { state: "attached" },
+        result: { available: false },
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            name: "crux.work:work_runtime_ops_replay",
+          }),
+        ]),
+      },
     });
 
     const retry = await runRuntimeOperation({
@@ -395,9 +413,13 @@ async function runtimeOpsFixtureRoot(options: {
             kind: "flow",
             module: "./src/runtime-targets.ts",
             export: "reviewFlow",
+            definitionId: "flow:runtime-ops-review",
+            fingerprint: "definition-runtime-ops-review",
           },
         ],
         effectTargets: [],
+        providers: [],
+        transports: [],
         evals: [],
       },
       null,
@@ -426,22 +448,59 @@ async function seedReplayDivergedWork(
     namespace: "local",
     status: "suspended",
     input: {},
+    inputDigest: "input-runtime-ops",
+    definition: {
+      targetId: "runtime-ops-review" as RuntimeTargetId,
+      definitionId: "flow:runtime-ops-review",
+      fingerprint: "definition-runtime-ops-v1",
+      manifestHash: "manifest-runtime-ops-v1",
+    },
+    resultObligation: { kind: "required" },
+    effects: {
+      kind: "effect.scope",
+      id: "effect_runtime_ops_replay",
+      runId: "work_runtime_ops_replay",
+    },
     completedSteps: {},
     fingerprint: ["step:old-label"],
     pendingSuspends: [],
     scheduledWork: {},
     updatedAt: now,
   });
-  await store.state.putWork(
-    transition(work, {
-      status: "blocked",
-      lastError: {
-        code: "REPLAY_DIVERGED",
-        message: "previous replay drift",
-        at: now,
-      },
-    }),
-  );
+  const blocked = transition(work, {
+    status: "blocked",
+    lastError: {
+      code: "REPLAY_DIVERGED",
+      message: "previous replay drift",
+      at: now,
+    },
+  });
+  const applicationWork = {
+    ...blocked,
+    application: {
+      schemaVersion: 1 as const,
+      updatedAt: now.toISOString(),
+      ownership: { state: "attached" as const },
+    },
+  };
+  await store.state.putWork(applicationWork);
+  for (let index = 0; index < 201; index += 1) {
+    await store.events.append({
+      namespace: "local",
+      name: `unrelated:${index}`,
+      payload: { index },
+    });
+  }
+  await store.events.append({
+    namespace: "local",
+    name: "crux.work:work_runtime_ops_replay",
+    payload: {
+      schemaVersion: 1,
+      type: "work.status",
+      workId: "work_runtime_ops_replay",
+      status: { state: "blocked" },
+    },
+  });
 }
 
 async function seedCancellableWork(store: PostgresRuntimeStore): Promise<void> {

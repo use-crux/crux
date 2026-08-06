@@ -17,6 +17,12 @@ import type {
 import type { EvalFacts } from "./eval-facts";
 import type { EffectFacts } from "./effect-facts";
 import type { EvidenceRecordFacts } from "./evidence-record-facts";
+import type {
+  SignalFacts,
+  SignalProviderFacts,
+  SignalTransportBindingFacts,
+  SignalTransportFacts,
+} from "./signal-facts";
 import {
   PromptTextDiagnosticEvidenceSchema,
   type PromptTextDiagnosticEvidence,
@@ -281,7 +287,7 @@ export interface DataAccessFact {
     | "store"
     | "block"
     | "storage.recordStore"
-    | "storage.vectorStore"
+    | "storage.searchStore"
     | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
@@ -343,8 +349,8 @@ export interface DependencyFacts {
   stores?: string[];
   /** Storage Beta record-store dependencies referenced by variable or definition id. */
   recordStores?: string[];
-  /** Storage Beta vector-store dependencies referenced by variable or definition id. */
-  vectorStores?: string[];
+  /** Storage Beta search-store dependencies referenced by variable or definition id. */
+  searchStores?: string[];
   /** Storage Beta asset-store dependencies referenced by variable or definition id. */
   assetStores?: string[];
   /** Storage Beta bundle dependencies referenced by variable or definition id. */
@@ -407,8 +413,8 @@ export interface ProjectRuntimeJoin {
   memoryStoreId?: string;
   /** Runtime join key for a Storage Beta record-store definition. */
   recordStoreId?: string;
-  /** Runtime join key for a Storage Beta vector-store definition. */
-  vectorStoreId?: string;
+  /** Runtime join key for a Storage Beta search-store definition. */
+  searchStoreId?: string;
   /** Runtime join key for a Storage Beta asset-store definition. */
   assetStoreId?: string;
   /** Runtime join key for a Storage Beta bundle definition. */
@@ -494,6 +500,11 @@ export type ProjectDefinitionKind =
   | "tool"
   | "mcp.server"
   | "agent"
+  | "session"
+  | "signal"
+  | "signal.provider"
+  | "signal.transport"
+  | "signal.transportBinding"
   | "flow"
   | "flow.step"
   | "task"
@@ -537,7 +548,7 @@ export type ProjectDefinitionKind =
   | "blackboard"
   | "workspace"
   | "storage.recordStore"
-  | "storage.vectorStore"
+  | "storage.searchStore"
   | "storage.assetStore"
   | "storage.bundle"
   | "storage.scope"
@@ -791,6 +802,44 @@ export interface AgentFacts {
   prepareHandler?: SourceRefSummary;
 }
 
+/** Stable authored evidence for one durable Agent Session call site. */
+export interface SessionFacts {
+  readonly kind: "session";
+  /** Public operation represented by this call site. */
+  readonly operation: "create" | "get";
+  /** Authored local or imported Agent binding supplied as the target. */
+  readonly targetVariable?: string;
+  /** Semantically resolved Agent definition when the target is statically known. */
+  readonly targetDefinitionId?: string;
+  /** Compiler classification used to reject unresolved or runtime-selected targets. */
+  readonly target:
+    | { readonly kind: "agent" }
+    | { readonly kind: "unresolved" }
+    | { readonly kind: "dynamic" };
+  /** Evidence for whether the stable caller key is a direct string literal. */
+  readonly key:
+    | { readonly kind: "literal"; readonly value: string }
+    | { readonly kind: "dynamic" };
+  /** Whether both target and caller key establish a static Session identity. */
+  readonly identity: "static" | "partial";
+  /** Whether the call uses one canonical public Session argument shape. */
+  readonly call:
+    | { readonly kind: "supported" }
+    | {
+        readonly kind: "ambiguous";
+        readonly reason: "arity" | "options";
+      };
+}
+
+export type {
+  SignalFacts,
+  SignalProviderFacts,
+  SignalTransportBindingFacts,
+  SignalTransportBindingLiveField,
+  SignalTransportFacts,
+} from "./signal-facts";
+export { SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS } from "./signal-facts";
+
 export interface FlowFacts {
   kind: "flow";
   stepNames?: string[];
@@ -972,19 +1021,19 @@ export interface IndexedStorageCapabilities {
     /** Whether native batch record operations are available. */
     batch?: boolean | "unknown";
   };
-  /** Vector-index capabilities when the definition is a vector store or bundle. */
-  vector?: {
-    /** Whether dense-vector similarity search is available. */
-    dense?: boolean | "unknown";
-    /** Whether sparse-vector search is available. */
-    sparse?: boolean | "unknown";
-    /** Whether dense and sparse queries can be combined by the same store. */
-    hybrid?: boolean | "unknown";
-    /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
-    fusion?: readonly ("rrf" | "dbsf")[] | "unknown";
-    /** Whether metadata filters run before vector search, after vector search, or not at all. */
+  /** Search-index capabilities when the definition is a search store or bundle. */
+  search?: {
+    /** Whether each search leg is available. */
+    legs?: {
+      dense?: boolean | "unknown";
+      sparse?: boolean | "unknown";
+      lexical?: boolean | "unknown";
+    };
+    /** Supported result fusion algorithms, or `unknown` when the adapter cannot report them. */
+    fusion?: readonly "rrf"[] | "unknown";
+    /** Whether metadata filters run before search, after search, or not at all. */
     filter?: "pre" | "post" | false | "unknown";
-    /** Read-after-write visibility expected from the vector backend. */
+    /** Read-after-write visibility expected from the search backend. */
     consistency?: "strong" | "eventual" | "unknown";
   };
 }
@@ -993,7 +1042,7 @@ export interface IndexedStorageCapabilities {
 export interface StorageFacts {
   kind:
     | "storage.recordStore"
-    | "storage.vectorStore"
+    | "storage.searchStore"
     | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
@@ -1005,8 +1054,8 @@ export interface StorageFacts {
   capabilities?: IndexedStorageCapabilities;
   /** Record store variable or definition id used by a bundle. */
   records?: string;
-  /** Vector store variable or definition id used by a bundle. */
-  vectors?: string;
+  /** Search store variable or definition id used by a bundle. */
+  search?: string;
   /** Asset store variable or definition id used by a bundle. */
   assets?: string;
   /** Base storage variable or definition id wrapped by a scope. */
@@ -1064,6 +1113,11 @@ export type PrimitiveSpecificFacts =
   | RegistryFacts
   | SkillFacts
   | AgentFacts
+  | SessionFacts
+  | SignalFacts
+  | SignalProviderFacts
+  | SignalTransportFacts
+  | SignalTransportBindingFacts
   | FlowFacts
   | FlowStepFacts
   | CompositionFacts
@@ -1316,6 +1370,11 @@ export const ProjectDefinitionKindSchema = z.enum([
   "tool",
   "mcp.server",
   "agent",
+  "session",
+  "signal",
+  "signal.provider",
+  "signal.transport",
+  "signal.transportBinding",
   "flow",
   "flow.step",
   "task",
@@ -1359,7 +1418,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "blackboard",
   "workspace",
   "storage.recordStore",
-  "storage.vectorStore",
+  "storage.searchStore",
   "storage.assetStore",
   "storage.bundle",
   "storage.scope",
@@ -1691,7 +1750,7 @@ export const DataAccessFactSchema = z.object({
       "store",
       "block",
       "storage.recordStore",
-      "storage.vectorStore",
+      "storage.searchStore",
       "storage.assetStore",
       "storage.bundle",
       "storage.scope",
@@ -1758,7 +1817,7 @@ export const DependencyFactsSchema = z
     workspaces: z.array(z.string()).optional(),
     stores: z.array(z.string()).optional(),
     recordStores: z.array(z.string()).optional(),
-    vectorStores: z.array(z.string()).optional(),
+    searchStores: z.array(z.string()).optional(),
     assetStores: z.array(z.string()).optional(),
     storage: z.array(z.string()).optional(),
     storageScopes: z.array(z.string()).optional(),
@@ -1809,7 +1868,7 @@ export const ProjectRuntimeJoinSchema = z
     memoryId: z.string().optional(),
     memoryStoreId: z.string().optional(),
     recordStoreId: z.string().optional(),
-    vectorStoreId: z.string().optional(),
+    searchStoreId: z.string().optional(),
     assetStoreId: z.string().optional(),
     storageId: z.string().optional(),
     storageScopeId: z.string().optional(),

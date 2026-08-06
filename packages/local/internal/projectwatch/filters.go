@@ -6,21 +6,20 @@ import (
 )
 
 var ignoredDirectoryNames = map[string]bool{
-	".cache":         true,
-	".crux":          true,
-	".git":           true,
-	".next":          true,
-	".turbo":         true,
-	".vercel":        true,
-	".venv":          true,
-	"_crux":          true,
-	"build":          true,
-	"coverage":       true,
-	"crux.generated": true,
-	"dist":           true,
-	"generated":      true,
-	"node_modules":   true,
-	"out":            true,
+	".cache":       true,
+	".crux":        true,
+	".git":         true,
+	".next":        true,
+	".turbo":       true,
+	".vercel":      true,
+	".venv":        true,
+	"_crux":        true,
+	"build":        true,
+	"coverage":     true,
+	"dist":         true,
+	"generated":    true,
+	"node_modules": true,
+	"out":          true,
 }
 
 var watchedFileExtensions = map[string]bool{

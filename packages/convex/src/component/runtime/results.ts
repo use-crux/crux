@@ -28,6 +28,13 @@ export const put = mutation({
       ) {
         throw new Error('Runtime result location is already bound to different content.')
       }
+      const chunks = await ctx.db
+        .query('runtimeResultChunks')
+        .withIndex('by_location_index', (query) => query.eq('location', args.location))
+        .collect()
+      if (chunks.some((chunk, index) => chunk.content !== args.chunks[index])) {
+        throw new Error('Runtime result location is already bound to different content.')
+      }
       return null
     }
     await ctx.db.insert('runtimeResults', {
@@ -107,7 +114,13 @@ export const pruneUnreferenced = mutation({
         .withIndex('by_namespace_status_updated', (query) => query.eq('namespace', namespace).eq('status', 'completed'))
         .filter((query) => query.eq(query.field('resultRef.location'), result.location))
         .first()
-      if (referenced) continue
+      const preparedSessionReference = await ctx.db
+        .query('runtimeSessionInputs')
+        .withIndex('by_prepared_result', (query) =>
+          query.eq('namespace', namespace).eq('preparedResultLocation', result.location),
+        )
+        .first()
+      if (referenced || preparedSessionReference) continue
       await deleteLocation(ctx, result.location)
       removed += 1
     }

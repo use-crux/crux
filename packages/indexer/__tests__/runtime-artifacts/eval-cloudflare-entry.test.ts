@@ -63,6 +63,7 @@ describe("generated Cloudflare Eval registry", () => {
         kind: "task",
         name: "nested",
         fidelity: "resolved",
+        fingerprint: "definition-nested-v1",
         source: { file: targetFile, line: 1 },
         metadata: { exportName: "nested" },
       },
@@ -78,11 +79,11 @@ describe("generated Cloudflare Eval registry", () => {
       workerFile,
       [
         "import { createCloudflareEvalHost } from '@use-crux/cloudflare'",
-        "import { deployedEvals, runtimeProgram, runtimeTargets } from './_crux/generated'",
+        "import { deployedEvals, runtimeTargets } from './_crux/generated'",
         "interface Env { CRUX_EVAL_HOST: DurableObjectNamespace; CRUX_EVAL_HOST_TOKEN: string }",
         "const host = createCloudflareEvalHost<Env>({",
         "  binding: 'CRUX_EVAL_HOST', deploymentId: 'production-eu', registry: deployedEvals,",
-        "  targets: runtimeTargets, program: runtimeProgram, hostCapabilities: ['asset-store'], token: (env) => env.CRUX_EVAL_HOST_TOKEN,",
+        "  targets: runtimeTargets, hostCapabilities: ['asset-store'], token: (env) => env.CRUX_EVAL_HOST_TOKEN,",
         "})",
         "export const CruxEvalHost = host.DurableObject",
         "export default { fetch: host.fetch }",
@@ -95,7 +96,6 @@ describe("generated Cloudflare Eval registry", () => {
     expect(result.manifest.evals).toHaveLength(1);
     expect(generated).toContain("export const deployedEvals");
     expect(generated).toContain("export const runtimeTargets");
-    expect(generated).toContain("export const runtimeProgram");
     expect(generated).toContain("import { nested as target0 }");
     expect(generated).toContain("runtimeTargets = [target0] as const");
     expect(generated).toContain("import eval0 from '../../evals/support.eval'");

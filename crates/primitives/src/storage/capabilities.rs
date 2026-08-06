@@ -13,10 +13,10 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             backend: "inMemoryRecordStore",
             capabilities: Some(in_memory_record_capabilities()),
         },
-        "inMemoryVectorStore" => StorageFactoryDescriptor {
-            kind: "storage.vectorStore",
-            backend: "inMemoryVectorStore",
-            capabilities: Some(in_memory_vector_capabilities()),
+        "inMemorySearchStore" => StorageFactoryDescriptor {
+            kind: "storage.searchStore",
+            backend: "inMemorySearchStore",
+            capabilities: Some(in_memory_search_capabilities()),
         },
         "inMemoryAssetStore" => StorageFactoryDescriptor {
             kind: "storage.assetStore",
@@ -28,7 +28,7 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             backend: "inMemoryStorage",
             capabilities: Some(json!({
                 "record": in_memory_record_capabilities()["record"],
-                "vector": in_memory_vector_capabilities()["vector"],
+                "search": in_memory_search_capabilities()["search"],
             })),
         },
         "convexRecordStore" => StorageFactoryDescriptor {
@@ -37,20 +37,6 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             capabilities: Some(
                 json!({ "record": { "ttl": "lazy", "filter": "scan", "watch": false, "batch": false } }),
             ),
-        },
-        "convexVectorStore" => StorageFactoryDescriptor {
-            kind: "storage.vectorStore",
-            backend: "convexVectorStore",
-            capabilities: Some(json!({
-                "vector": {
-                    "dense": true,
-                    "sparse": false,
-                    "hybrid": false,
-                    "fusion": [],
-                    "filter": "post",
-                    "consistency": "strong"
-                }
-            })),
         },
         "convexAssetStore" => StorageFactoryDescriptor {
             kind: "storage.assetStore",
@@ -61,15 +47,7 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             kind: "storage.bundle",
             backend: "convexStorage",
             capabilities: Some(json!({
-                "record": { "ttl": "lazy", "filter": "scan", "watch": false, "batch": false },
-                "vector": {
-                    "dense": true,
-                    "sparse": false,
-                    "hybrid": false,
-                    "fusion": [],
-                    "filter": "post",
-                    "consistency": "strong"
-                }
+                "record": { "ttl": "lazy", "filter": "scan", "watch": false, "batch": false }
             })),
         },
         "upstashRedisRecordStore" => StorageFactoryDescriptor {
@@ -79,18 +57,39 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
                 json!({ "record": { "ttl": "native", "filter": "scan", "watch": "unknown", "batch": false } }),
             ),
         },
-        "upstashVectorStore" => StorageFactoryDescriptor {
-            kind: "storage.vectorStore",
-            backend: "upstashVectorStore",
+        "upstashSearchStore" => StorageFactoryDescriptor {
+            kind: "storage.searchStore",
+            backend: "upstashSearchStore",
             capabilities: Some(json!({
-                "vector": {
-                    "dense": true,
-                    "sparse": false,
-                    "hybrid": false,
-                    "fusion": [],
+                "search": {
+                    "legs": {
+                        "dense": true,
+                        "sparse": false,
+                        "lexical": false
+                    },
+                    "fusion": ["rrf"],
                     "filter": "pre",
                     "consistency": "eventual"
                 }
+            })),
+        },
+        "postgresRecordStore" => StorageFactoryDescriptor {
+            kind: "storage.recordStore",
+            backend: "postgresRecordStore",
+            capabilities: Some(json!({
+                "record": { "ttl": "lazy", "filter": "native", "watch": false, "batch": true }
+            })),
+        },
+        "postgresSearchStore" => StorageFactoryDescriptor {
+            kind: "storage.searchStore",
+            backend: "postgresSearchStore",
+            capabilities: None,
+        },
+        "postgresStorage" => StorageFactoryDescriptor {
+            kind: "storage.bundle",
+            backend: "postgresStorage",
+            capabilities: Some(json!({
+                "record": { "ttl": "lazy", "filter": "native", "watch": false, "batch": true }
             })),
         },
         _ => return None,
@@ -102,13 +101,15 @@ fn in_memory_record_capabilities() -> Value {
     json!({ "record": { "ttl": "lazy", "filter": "scan", "watch": true, "batch": false } })
 }
 
-fn in_memory_vector_capabilities() -> Value {
+fn in_memory_search_capabilities() -> Value {
     json!({
-        "vector": {
-            "dense": true,
-            "sparse": true,
-            "hybrid": true,
-            "fusion": [],
+        "search": {
+            "legs": {
+                "dense": true,
+                "sparse": true,
+                "lexical": false
+            },
+            "fusion": ["rrf"],
             "filter": "pre",
             "consistency": "strong"
         }

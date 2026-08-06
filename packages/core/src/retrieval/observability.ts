@@ -12,6 +12,7 @@ import {
   knowledgeBaseDefinitionRef,
   retrieverDefinitionRef,
 } from "../observability/definition-ref";
+import type { RetrievalSearchPlan } from "./request";
 import type { RetrieverHit, RetrieverMode, RetrieverSource } from "./types";
 
 let retrievalOperationCounter = 0;
@@ -26,7 +27,7 @@ export async function runRetrievalOperation(args: {
   limit?: number;
   threshold?: number;
   filter?: Record<string, unknown>;
-  fusion?: "rrf" | "dbsf";
+  searchPlan?: RetrievalSearchPlan;
   run: () => Promise<RetrieverHit[]>;
 }): Promise<RetrieverHit[]> {
   const startedAt = Date.now();
@@ -40,7 +41,7 @@ export async function runRetrievalOperation(args: {
     ...(args.limit !== undefined ? { limit: args.limit } : {}),
     ...(args.threshold !== undefined ? { threshold: args.threshold } : {}),
     ...(args.filter ? { filter: args.filter } : {}),
-    ...(args.fusion ? { fusion: args.fusion } : {}),
+    ...searchPlanAttributes(args.searchPlan),
   };
 
   const span = observe.openSpan({
@@ -60,7 +61,7 @@ export async function runRetrievalOperation(args: {
   try {
     const hits = await span.withContext(args.run);
     span.withContext(() => {
-      emitRetrievalHitsArtifact(span.spanId, {
+    emitRetrievalHitsArtifact(span.spanId, {
         ...eventBase,
         hits,
       });
@@ -83,7 +84,10 @@ export function emitRetrievalHitsArtifact(
     mode: RetrieverMode | "recipe";
     query: string;
     limit?: number;
-    fusion?: "rrf" | "dbsf";
+    fusion?: "rrf";
+    rrfK?: number;
+    searchLegs?: readonly string[];
+    searchCandidates?: Record<string, number>;
     recipeId?: string;
     hits: readonly RetrieverHit[];
   },
@@ -98,6 +102,9 @@ export function emitRetrievalHitsArtifact(
       mode: args.mode,
       ...(args.recipeId ? { recipeId: args.recipeId } : {}),
       ...(args.fusion ? { fusion: args.fusion } : {}),
+      ...(args.rrfK !== undefined ? { rrfK: args.rrfK } : {}),
+      ...(args.searchLegs ? { searchLegs: args.searchLegs } : {}),
+      ...(args.searchCandidates ? { searchCandidates: args.searchCandidates } : {}),
       ...(args.limit !== undefined ? { limit: args.limit } : {}),
       returned: args.hits.length,
       resultCount: args.hits.length,
@@ -113,6 +120,9 @@ export function emitRetrievalHitsArtifact(
       ...(args.recipeId ? { recipeId: args.recipeId } : {}),
       ...(args.limit !== undefined ? { limit: args.limit } : {}),
       ...(args.fusion ? { fusion: args.fusion } : {}),
+      ...(args.rrfK !== undefined ? { rrfK: args.rrfK } : {}),
+      ...(args.searchLegs ? { searchLegs: args.searchLegs } : {}),
+      ...(args.searchCandidates ? { searchCandidates: args.searchCandidates } : {}),
       returned: args.hits.length,
       resultCount: args.hits.length,
     },
@@ -130,6 +140,29 @@ export function emitRetrievalHitsArtifact(
         resultCount: args.hits.length,
       },
     });
+  }
+}
+
+function searchPlanAttributes(plan: RetrievalSearchPlan | undefined): Record<string, unknown> {
+  if (!plan) return {}
+  const searchLegs = [
+    ...(plan.dense ? ['dense'] : []),
+    ...(plan.sparse ? ['sparse'] : []),
+    ...(plan.lexical ? ['lexical'] : []),
+  ]
+  const searchCandidates = Object.fromEntries(
+    ([
+      ['dense', plan.dense],
+      ['sparse', plan.sparse],
+      ['lexical', plan.lexical],
+    ] as const).flatMap(([kind, value]) =>
+      typeof value === 'object' && value.candidates !== undefined ? [[kind, value.candidates]] : [],
+    ),
+  )
+  return {
+    ...(searchLegs.length > 0 ? { searchLegs } : {}),
+    ...(Object.keys(searchCandidates).length > 0 ? { searchCandidates } : {}),
+    ...(plan.fusion ? { fusion: plan.fusion.strategy, ...(plan.fusion.k !== undefined ? { rrfK: plan.fusion.k } : {}) } : {}),
   }
 }
 

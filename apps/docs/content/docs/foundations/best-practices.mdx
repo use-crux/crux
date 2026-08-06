@@ -175,7 +175,9 @@ Settings are SDK-agnostic: every adapter maps them to the provider's native cont
 
 Use Zod schemas on prompt `input` and `output`: Crux validates these automatically. Inside your application code, trust the typed results without re-validating.
 
-For user-facing input, rely on Crux's top-level auto-escaping (enabled by default). Only use `rawFields` when you intentionally need unescaped top-level content like HTML; escape nested strings explicitly.
+For user-facing input, rely on Crux's auto-escaping (enabled by default). Use
+`escapeFields` for validated nested objects or arrays, and only use
+`rawFields` when you intentionally need unescaped top-level content like HTML.
 
 ## Start with `inMemoryRecordStore()`, swap later
 

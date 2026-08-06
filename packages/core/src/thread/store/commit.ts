@@ -15,6 +15,7 @@ import {
 } from "../../storage";
 import { ThreadCommitError, ThreadError } from "../errors";
 import { deriveThreadGroup } from "../groups";
+import { MAIN_THREAD_OWNER_ID } from "../owner";
 import type {
   AppendOptions,
   ThreadCommit,
@@ -44,7 +45,6 @@ import {
 import { replayThreadAppend } from "./replay";
 import { isNodePublished } from "./path";
 
-const OWNER = "main";
 const CONSISTENCY_ATTEMPTS = 8;
 
 interface CommitDecision {
@@ -64,6 +64,7 @@ export async function commitThreadAppend(
   threadId: string,
   input: ThreadMessageInput | readonly ThreadMessageInput[],
   options: ThreadAppendCommitOptions = {},
+  ownerId = MAIN_THREAD_OWNER_ID,
 ): Promise<ThreadCommit> {
   ensureMutationCapability(storage, threadId);
   const messages = Array.isArray(input) ? input : [input];
@@ -85,7 +86,7 @@ export async function commitThreadAppend(
     const hasExpectedHead = Object.hasOwn(options, "expectedHead");
     const parentId = hasExpectedHead
       ? options.expectedHead ?? null
-      : options.after ?? observedControl?.heads[OWNER] ?? null;
+      : options.after ?? observedControl?.heads[ownerId] ?? null;
     const replay = await replayThreadAppend(
       storage,
       threadId,
@@ -146,7 +147,7 @@ export async function commitThreadAppend(
           }
 
           const now = new Date().toISOString();
-          const currentHead = control?.heads[OWNER];
+          const currentHead = control?.heads[ownerId];
           const selected = currentHead === (parentId ?? undefined);
           const leaves = advanceRememberedLeaves(
             control?.leaves ?? {},
@@ -166,9 +167,10 @@ export async function commitThreadAppend(
           const next: ThreadControlRecord = {
             schema: 1,
             state: "live",
+            owners: control?.owners ?? {},
             heads: {
               ...(control?.heads ?? {}),
-              ...(selected ? { [OWNER]: leafId } : {}),
+              ...(selected ? { [ownerId]: leafId } : {}),
             },
             leaves: {
               ...leaves.value,

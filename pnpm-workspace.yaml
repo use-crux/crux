@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "examples/*"
   - "packages/*"
+  - "packages/local/fixtures/*"
   - "packages/local/npm/*"
 linkWorkspacePackages: true
 sharedWorkspaceLockfile: true

@@ -163,6 +163,12 @@ export function runtimeFlowSnapshot(
     flowId: execution.snapshot.flowId,
     workId: execution.work.workId,
     targetId: execution.work.targetId,
+    ...(execution.snapshot.definition
+      ? { definition: execution.snapshot.definition }
+      : {}),
+    ...(execution.snapshot.resultObligation
+      ? { resultObligation: execution.snapshot.resultObligation }
+      : {}),
     namespace: execution.work.namespace,
     status: options.status,
     effects: options.effects,
@@ -188,6 +194,7 @@ export function flowIdForRuntimeWork(work: RuntimeWorkItem): RuntimeFlowId {
       return work.work.flowId;
     case "task.run":
     case "watch.deliver":
+    case "session.turn":
       throw new Error(
         `Runtime target \`${work.targetId}\` received non-flow work \`${work.work.kind}\`.`,
       );

@@ -75,6 +75,21 @@ detached background work. Call `prepare()` to refresh in-process, or
 Use `prepare({ force: true })` to rebuild even when the current generation is
 ready.
 
+## Background Refresh
+
+After `index()`, `reindex()`, or `remove()` changes connected knowledge inputs,
+Crux marks the affected community scope dirty. When the call runs inside a
+defer-capable Crux execution boundary, Crux also schedules the community refresh
+as retained background work. The mutation can return before reports finish
+building, and `status()` reports `building` while the retained refresh is
+scheduled or running.
+
+Without a defer-capable boundary, scheduling is skipped. The mutation still
+succeeds, retrieval over indexed sources stays correct, and communities remain
+`stale` until a caller awaits `prepare()` or `reports()`. This stale state is
+supported: Crux does not start detached serverless work that the host cannot
+retain.
+
 ## Views
 
 Views expose the same community surface, scoped to a resolved view revision.

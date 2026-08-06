@@ -31,9 +31,11 @@
     "@types/node": "^24.12.4",
     "@types/pg": "^8.20.0",
     "embedded-postgres": "18.4.0-beta.17",
+    "esbuild": "^0.28.0",
     "pg": "^8.22.0",
     "typescript": "5.9.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "pg": "^8.22.0"

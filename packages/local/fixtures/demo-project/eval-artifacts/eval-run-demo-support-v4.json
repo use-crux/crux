@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 4,
+  "runId": "eval-run-demo-support-v4",
+  "evalId": "demo.support-quality",
+  "sourceKey": {
+    "relativeFile": "evals/support.eval.ts",
+    "export": "default"
+  },
+  "startedAt": 1785403200000,
+  "endedAt": 1785403205420,
+  "definitionFingerprint": "efb6b8ab0050a034948aba555f3a19b9989ccba8190d9d2f143c8e5b413d8536",
+  "selection": {
+    "cases": ["refund-window", "unsupported-exception", "account-lockout"],
+    "variants": ["current", "concise"],
+    "trials": 1,
+    "caseTrials": {
+      "refund-window": 1,
+      "unsupported-exception": 1,
+      "account-lockout": 1
+    }
+  },
+  "costControl": "not_required",
+  "blockingVariants": ["current"],
+  "cells": [
+    {
+      "caseId": "refund-window",
+      "variant": "current",
+      "trial": 0,
+      "status": "passed",
+      "task": { "status": "executed", "reason": "no_exact_evidence" },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [
+        {
+          "status": "computed",
+          "reason": "deterministic_local",
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1",
+          "value": 1,
+          "label": "grounded"
+        }
+      ],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "passed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "Can I refund my monthly plan after seven days?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "output": {
+        "answer": "Yes, monthly plans are refundable within 14 days.",
+        "citations": ["policy-refunds"]
+      },
+      "metrics": { "durationMs": 1450, "costUsd": 0.012 },
+      "runIds": ["run_demo_support_good"],
+      "capturedSignals": ["modelCalls"]
+    },
+    {
+      "caseId": "refund-window",
+      "variant": "concise",
+      "trial": 0,
+      "status": "failed",
+      "task": {
+        "status": "reused",
+        "reason": "exact_evidence",
+        "evidenceFingerprint": "demo-refund-concise-evidence-v1",
+        "evidenceRef": "eval-evidence://demo/refund-window/concise/0"
+      },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [
+        {
+          "status": "computed",
+          "reason": "deterministic_local",
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1",
+          "value": 0.35,
+          "label": "unsupported"
+        }
+      ],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "failed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "Can I refund my monthly plan after seven days?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "output": {
+        "answer": "Ask support for an exception.",
+        "citations": []
+      },
+      "metrics": { "durationMs": 860, "costUsd": 0.006 },
+      "runIds": ["run_demo_support_regression"],
+      "capturedSignals": ["modelCalls"]
+    },
+    {
+      "caseId": "unsupported-exception",
+      "variant": "current",
+      "trial": 0,
+      "status": "passed",
+      "task": { "status": "executed", "reason": "live_required" },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [
+        {
+          "status": "computed",
+          "reason": "deterministic_local",
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1",
+          "value": 0.92,
+          "label": "grounded"
+        }
+      ],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "passed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "Can support invent a refund exception?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "output": {
+        "answer": "No. Exceptions require manager approval.",
+        "citations": ["policy-refunds"]
+      },
+      "metrics": { "durationMs": 1220, "costUsd": 0.009 },
+      "runIds": ["run_demo_support_approval"],
+      "capturedSignals": ["modelCalls"]
+    },
+    {
+      "caseId": "unsupported-exception",
+      "variant": "concise",
+      "trial": 0,
+      "status": "skipped",
+      "skipReason": "recorded demo skip",
+      "task": { "status": "skipped", "reason": "source_skipped" },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [],
+      "assertions": {
+        "ran": 0,
+        "notEvaluated": 1,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "not-evaluated",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "Can support invent a refund exception?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "metrics": { "durationMs": 0 },
+      "runIds": [],
+      "capturedSignals": []
+    },
+    {
+      "caseId": "account-lockout",
+      "variant": "current",
+      "trial": 0,
+      "status": "failed",
+      "task": { "status": "executed", "reason": "no_exact_evidence" },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [
+        {
+          "status": "computed",
+          "reason": "deterministic_local",
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1",
+          "value": 0.5,
+          "label": "incomplete"
+        }
+      ],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "failed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "How do I recover access to a locked account?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "output": {
+        "answer": "Use account recovery.",
+        "citations": []
+      },
+      "metrics": { "durationMs": 1010, "costUsd": 0.007 },
+      "runIds": ["run_demo_account_lookup"],
+      "capturedSignals": ["modelCalls"]
+    },
+    {
+      "caseId": "account-lockout",
+      "variant": "concise",
+      "trial": 0,
+      "status": "passed",
+      "task": { "status": "executed", "reason": "fresh_requested" },
+      "scorerContracts": [
+        {
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1"
+        }
+      ],
+      "scores": [
+        {
+          "status": "computed",
+          "reason": "deterministic_local",
+          "name": "quality",
+          "contractFingerprint": "demo-quality-score-v1",
+          "value": 0.88,
+          "label": "grounded"
+        }
+      ],
+      "assertions": {
+        "ran": 1,
+        "notEvaluated": 0,
+        "outcomes": [
+          {
+            "id": "eval:expect:0",
+            "level": "eval",
+            "phase": "expect",
+            "index": 0,
+            "status": "passed",
+            "matcher": "toContain",
+            "soft": false
+          }
+        ]
+      },
+      "input": { "question": "How do I recover access to a locked account?" },
+      "expected": { "citations": ["policy-refunds"] },
+      "output": {
+        "answer": "Use account recovery and verify the policy.",
+        "citations": ["policy-refunds"]
+      },
+      "metrics": { "durationMs": 880, "costUsd": 0.006 },
+      "runIds": ["run_demo_invoice_summary"],
+      "capturedSignals": ["modelCalls"]
+    }
+  ],
+  "variants": [
+    {
+      "name": "current",
+      "fingerprint": "demo-support-arm-current-v2",
+      "overrideKeys": [],
+      "blocking": true
+    },
+    {
+      "name": "concise",
+      "fingerprint": "demo-support-arm-concise-v2",
+      "overrideKeys": [],
+      "blocking": false
+    }
+  ],
+  "aggregates": {
+    "current": {
+      "cells": 3,
+      "passed": 2,
+      "failed": 1,
+      "errored": 0,
+      "timedOut": 0,
+      "skipped": 0,
+      "passRate": 0.6666666667,
+      "scores": {
+        "quality": { "mean": 0.8066666667, "sem": 0.153, "n": 3 }
+      },
+      "trialConsistency": 1,
+      "latencyMs": 1226.6667,
+      "knownCostUsd": 0.028
+    },
+    "concise": {
+      "cells": 2,
+      "passed": 1,
+      "failed": 1,
+      "errored": 0,
+      "timedOut": 0,
+      "skipped": 1,
+      "passRate": 0.5,
+      "scores": {
+        "quality": { "mean": 0.615, "sem": 0.265, "n": 2 }
+      },
+      "trialConsistency": 1,
+      "latencyMs": 870,
+      "knownCostUsd": 0.012
+    }
+  },
+  "gates": {
+    "passed": false,
+    "blockingPassed": true,
+    "results": [
+      {
+        "gate": "quality",
+        "variantName": "current",
+        "threshold": 0.8,
+        "actual": 0.8066666667,
+        "passed": true
+      },
+      {
+        "gate": "quality",
+        "variantName": "concise",
+        "threshold": 0.8,
+        "actual": 0.615,
+        "passed": false
+      }
+    ]
+  },
+  "cost": {
+    "actualUsd": 0.04,
+    "reservedMaximumUsd": 0,
+    "unknownActionCount": 0,
+    "task": { "actualUsd": 0.04 },
+    "judge": {}
+  },
+  "provenance": {
+    "task": "opaque",
+    "host": "injected",
+    "evidenceStore": {
+      "identity": "demo-evidence-store-v1",
+      "consistency": "read_after_write",
+      "write": "written"
+    }
+  },
+  "status": "complete",
+  "passed": false
+}

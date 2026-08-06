@@ -16,6 +16,7 @@ import (
 // do the structural work like the target terminal design.
 var (
 	shellPalette = theme.Resolve(colorprofile.TrueColor)
+	shellStyles  = theme.NewStyles(shellPalette)
 
 	ColorBG       = shellPalette.Bg
 	ColorPanel    = shellPalette.Bg
@@ -58,18 +59,22 @@ var (
 // these instead of building fresh lipgloss.NewStyle() calls everywhere — keeps
 // the visual language consistent and centralized.
 var (
-	BG        = lipgloss.NewStyle().Background(ColorBG)
-	Text      = lipgloss.NewStyle().Foreground(ColorText)
-	TextDim   = lipgloss.NewStyle().Foreground(ColorTextDim)
-	TextMuted = lipgloss.NewStyle().Foreground(ColorTextMuted)
-	Teal      = lipgloss.NewStyle().Foreground(ColorTeal)
-	TealBold  = lipgloss.NewStyle().Foreground(ColorTeal).Bold(true)
-	Amber     = lipgloss.NewStyle().Foreground(ColorAmber)
-	Rose      = lipgloss.NewStyle().Foreground(ColorRose)
-	Violet    = lipgloss.NewStyle().Foreground(ColorViolet)
-	Green     = lipgloss.NewStyle().Foreground(ColorGreen)
-	Panel     = lipgloss.NewStyle().Background(ColorPanel)
-	PanelAlt  = lipgloss.NewStyle().Background(ColorPanelAlt)
+	BG             = lipgloss.NewStyle().Background(ColorBG)
+	Text           = lipgloss.NewStyle().Foreground(ColorText)
+	TextDim        = lipgloss.NewStyle().Foreground(ColorTextDim)
+	TextMuted      = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	Teal           = lipgloss.NewStyle().Foreground(ColorTeal)
+	TealBold       = lipgloss.NewStyle().Foreground(ColorTeal).Bold(true)
+	Amber          = lipgloss.NewStyle().Foreground(ColorAmber)
+	Rose           = lipgloss.NewStyle().Foreground(ColorRose)
+	Violet         = lipgloss.NewStyle().Foreground(ColorViolet)
+	Green          = lipgloss.NewStyle().Foreground(ColorGreen)
+	Panel          = lipgloss.NewStyle().Background(ColorPanel)
+	PanelAlt       = lipgloss.NewStyle().Background(ColorPanelAlt)
+	SurfaceRail    = shellStyles.SurfaceRail
+	SurfaceBody    = shellStyles.SurfaceBody
+	SurfaceBand    = shellStyles.SurfaceBand
+	SurfaceOverlay = shellStyles.SurfaceOverlay
 	// SectionTag is the small uppercase-grey label used for KPI section
 	// titles (`OPEN INSIGHTS`, `PASS RATE`) and detail-pane sections
 	// (`IDENTITY`, `TIMING`, `COST`). The design uses thin weight, not

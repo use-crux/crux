@@ -21,6 +21,7 @@ describe('API freeze guardrails', () => {
       'typescriptSemanticBackendCapabilities',
       'typescriptSemanticBackendIdentity',
       'indexProjectRuntimeForHost',
+      'loadRuntimeWorkerHost',
       'diffRuntimeArtifactDrift',
       'generateRuntimeArtifacts',
       'manifestFromDefinitions',

@@ -23,6 +23,9 @@ func (s *Index) renderDetail(width, height int) string {
 	}
 	status := sanitizeIndexInline(resourceStatus(s.snapshot.Snapshot()))
 	meta := appendResourceStatus(indexDocumentPosition(s.detail.Position()), status)
+	if status == "" {
+		meta = appendResourceStatus(meta, s.indexStatusStrip())
+	}
 	meta = appendResourceStatus(meta, s.currentExportState())
 	header := overviewPaneHeader(
 		width,
@@ -53,11 +56,25 @@ func (s *Index) syncDetail() indexDefinitionDocument {
 		s.detail.SetContent("", "")
 		return indexDefinitionDocument{}
 	}
+	if count := s.relationCount(); count == 0 {
+		s.relationCursor = 0
+	} else {
+		s.relationCursor = min(max(s.relationCursor, 0), count-1)
+	}
 	document := s.definitionDocument(definition)
 	s.detail.SetContent(definition.ID, document.content)
 	return document
 }
 
 func (s *Index) definitionDocument(definition api.ProjectDefinition) indexDefinitionDocument {
-	return buildIndexDefinitionDocument(s.indexData(), definition)
+	return buildIndexDefinitionDocumentWithOptions(
+		s.indexData(),
+		definition,
+		s.layout.detail.W,
+		indexDefinitionDetailOptions{
+			activity:       s.currentDefinitionActivity(),
+			showSuppressed: s.showSuppressed,
+			relationCursor: s.relationCursor,
+		},
+	)
 }

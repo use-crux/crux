@@ -61,4 +61,40 @@ describe("Convex Runtime Flow Effects snapshots", () => {
       effects: snapshot.effects,
     });
   });
+
+  it("round-trips the accepted public Work definition and result obligation", async () => {
+    const runtime = convexTest({ schema, modules });
+    const snapshot: FlowSnapshot = {
+      flowId: "flow_public_work" as FlowId,
+      workId: "work_public_work" as WorkId,
+      targetId: "review" as RuntimeTargetId,
+      namespace: "tenant-a",
+      status: "running",
+      definition: {
+        targetId: "review" as RuntimeTargetId,
+        definitionId: "flow:review",
+        fingerprint: "review-v1",
+        manifestHash: "manifest-v1",
+      },
+      resultObligation: { kind: "required" },
+      input: { documentId: "doc_1" },
+      completedSteps: {},
+      fingerprint: [],
+      pendingSuspends: [],
+      updatedAt: new Date("2026-08-03T00:00:00.000Z"),
+    };
+
+    await runtime.mutation(putSnapshot, {
+      snapshot: encodeSnapshot(snapshot),
+    });
+
+    const stored = await runtime.mutation(getSnapshot, {
+      namespace: "tenant-a",
+      flowId: "flow_public_work",
+    });
+    expect(decodeSnapshot<FlowSnapshot>(stored)).toMatchObject({
+      definition: snapshot.definition,
+      resultObligation: snapshot.resultObligation,
+    });
+  });
 });

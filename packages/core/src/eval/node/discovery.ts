@@ -1,14 +1,19 @@
 /** Same-realm filesystem discovery and selection for authored Node Evals. */
 
 import { readdir, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnyEval } from "../evaluate";
-import { getEvalDefinitionForInternalUse } from "../internal/definition";
+import {
+  getEvalDefinitionForInternalUse,
+  isEvalForInternalUse,
+} from "../internal/definition";
 
 export interface EvalModule {
   readonly relativeFile: string;
   readonly exports: Readonly<Record<string, unknown>>;
+  /** Package boundary used for discovery-wide ID uniqueness. */
+  readonly scope?: string;
 }
 
 export interface DiscoveredEval {
@@ -40,10 +45,12 @@ export async function discoverProjectEvals(
   const files = await findEvalFiles(projectRoot);
   const modules: EvalModule[] = [];
   const errors: EvalDiscoveryError[] = [];
+  const scopeCache = new Map<string, string>();
   for (const relativeFile of files) {
     try {
       modules.push({
         relativeFile,
+        scope: await evalDiscoveryScope(projectRoot, relativeFile, scopeCache),
         exports: (await import(
           pathToFileURL(resolve(projectRoot, relativeFile)).href
         )) as Record<string, unknown>,
@@ -68,10 +75,12 @@ export function collectEvalModules(
 ): EvalDiscoveryResult {
   const evals: DiscoveredEval[] = [];
   const errors: EvalDiscoveryError[] = [];
+  const scopeByFile = new Map<string, string>();
   for (const module of [...modules].sort((a, b) =>
     a.relativeFile.localeCompare(b.relativeFile),
   )) {
     const relativeFile = normalizePath(module.relativeFile);
+    scopeByFile.set(relativeFile, normalizePath(module.scope ?? "."));
     const candidates = Object.entries(module.exports).filter(([, value]) =>
       isEval(value),
     );
@@ -99,7 +108,7 @@ export function collectEvalModules(
       }),
     );
   }
-  errors.push(...duplicateIdErrors(evals));
+  errors.push(...duplicateIdErrors(evals, scopeByFile));
   return Object.freeze({
     evals: Object.freeze(errors.length === 0 ? evals : []),
     errors: Object.freeze(errors),
@@ -206,7 +215,8 @@ async function walk(
     if (
       ["node_modules", "dist", ".crux", ".git", ".next", ".turbo"].includes(
         entry.name,
-      )
+      ) ||
+      isTestFixtureDirectory(directory, entry.name)
     )
       continue;
     const relativeFile = normalizePath(join(directory, entry.name));
@@ -223,6 +233,43 @@ async function walk(
   }
 }
 
+function isTestFixtureDirectory(directory: string, name: string): boolean {
+  if (name === "__fixtures__") return true;
+  return (
+    name === "fixtures" &&
+    normalizePath(directory).split("/").includes("__tests__")
+  );
+}
+
+/** Resolve the nearest package boundary for one discovered Eval source. */
+export async function evalDiscoveryScope(
+  projectRoot: string,
+  relativeFile: string,
+  cache: Map<string, string> = new Map(),
+): Promise<string> {
+  let directory = normalizePath(dirname(relativeFile));
+  const visited: string[] = [];
+  while (directory !== "." && directory !== "") {
+    const cached = cache.get(directory);
+    if (cached !== undefined) {
+      for (const item of visited) cache.set(item, cached);
+      return cached;
+    }
+    visited.push(directory);
+    try {
+      if ((await stat(join(projectRoot, directory, "package.json"))).isFile()) {
+        for (const item of visited) cache.set(item, directory);
+        return directory;
+      }
+    } catch {
+      // Keep walking to the project package boundary.
+    }
+    directory = normalizePath(dirname(directory));
+  }
+  for (const item of visited) cache.set(item, ".");
+  return ".";
+}
+
 function discoveryExportMessage(
   file: string,
   names: readonly string[],
@@ -237,25 +284,24 @@ function discoveryExportMessage(
 
 function duplicateIdErrors(
   evals: readonly DiscoveredEval[],
+  scopeByFile: ReadonlyMap<string, string>,
 ): EvalDiscoveryError[] {
-  const byId = new Map<string, DiscoveredEval[]>();
-  for (const entry of evals)
-    byId.set(entry.id, [...(byId.get(entry.id) ?? []), entry]);
-  return [...byId]
+  const byScopedId = new Map<string, DiscoveredEval[]>();
+  for (const entry of evals) {
+    const scope = scopeByFile.get(entry.sourceKey.relativeFile) ?? ".";
+    const key = `${scope}\0${entry.id}`;
+    byScopedId.set(key, [...(byScopedId.get(key) ?? []), entry]);
+  }
+  return [...byScopedId]
     .filter(([, entries]) => entries.length > 1)
-    .map(([id, entries]) => ({
+    .map(([scopedId, entries]) => ({
       file: entries[0]!.sourceKey.relativeFile,
-      message: `Duplicate Eval id '${id}' in ${entries.map((entry) => entry.sourceKey.relativeFile).join(", ")}. Add a unique explicit id or rename a source file.`,
+      message: `Duplicate Eval id '${scopedId.slice(scopedId.indexOf("\0") + 1)}' in ${entries.map((entry) => entry.sourceKey.relativeFile).join(", ")}. Eval ids must be unique within one package; add a unique explicit id or rename a source file.`,
     }));
 }
 
 export function isEval(value: unknown): value is AnyEval {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "_tag" in value &&
-    value._tag === "CruxEval"
-  );
+  return isEvalForInternalUse(value);
 }
 
 function wildcardPattern(value: string): RegExp {

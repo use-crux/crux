@@ -244,25 +244,25 @@ describe("native semantic direct Crux projectors", () => {
         import {
           inMemoryAssetStore,
           inMemoryRecordStore,
-          inMemoryVectorStore,
+          inMemorySearchStore,
           storage,
         } from '@use-crux/core/storage'
         import {
           postgresRecordStore,
           postgresStorage,
-          postgresVectorStore,
+          postgresSearchStore,
         } from '@use-crux/postgres'
 
         export const records = inMemoryRecordStore()
-        export const vectors = inMemoryVectorStore()
+        export const search = inMemorySearchStore()
         export const assets = inMemoryAssetStore()
-        export const appStorage = storage({ records, vectors, assets })
+        export const appStorage = storage({ records, search, assets })
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
         export const pgRecords = postgresRecordStore()
-        export const pgDense = postgresVectorStore({ dimensions: 2 })
-        export const pgSparse = postgresVectorStore({ dimensions: 2, sparseDimensions: 8 })
+        export const pgDense = postgresSearchStore({ dimensions: 2 })
+        export const pgSparse = postgresSearchStore({ dimensions: 2, sparseDimensions: 8 })
         const dynamicOptions = { dimensions: 2, sparseDimensions: 8 }
-        export const pgDynamic = postgresVectorStore(dynamicOptions)
+        export const pgDynamic = postgresSearchStore(dynamicOptions)
         export const pgStorage = postgresStorage({ dimensions: 2, sparseDimensions: 8 })
       `,
     );
@@ -309,32 +309,43 @@ describe("native semantic direct Crux projectors", () => {
     });
     expect(
       storageDefinitions?.find(
-        (definition) => definition.id === "storage.vectorStore:pgDense",
-      ),
-    ).toMatchObject({
-      metadata: {
-        capabilities: { vector: { sparse: false, hybrid: false, fusion: [] } },
-      },
-    });
-    expect(
-      storageDefinitions?.find(
-        (definition) => definition.id === "storage.vectorStore:pgSparse",
+        (definition) => definition.id === "storage.searchStore:pgDense",
       ),
     ).toMatchObject({
       metadata: {
         capabilities: {
-          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+          search: {
+            legs: { dense: true, sparse: false, lexical: false },
+            fusion: [],
+          },
         },
       },
     });
     expect(
       storageDefinitions?.find(
-        (definition) => definition.id === "storage.vectorStore:pgDynamic",
+        (definition) => definition.id === "storage.searchStore:pgSparse",
       ),
     ).toMatchObject({
       metadata: {
         capabilities: {
-          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+          search: {
+            legs: { dense: true, sparse: true, lexical: false },
+            fusion: ["rrf"],
+          },
+        },
+      },
+    });
+    expect(
+      storageDefinitions?.find(
+        (definition) => definition.id === "storage.searchStore:pgDynamic",
+      ),
+    ).toMatchObject({
+      metadata: {
+        capabilities: {
+          search: {
+            legs: { dense: true, sparse: true, lexical: false },
+            fusion: ["rrf"],
+          },
         },
       },
     });
@@ -346,7 +357,10 @@ describe("native semantic direct Crux projectors", () => {
       metadata: {
         capabilities: {
           record: { ttl: "lazy", filter: "native", watch: false, batch: true },
-          vector: { sparse: true, hybrid: true, fusion: ["rrf"] },
+          search: {
+            legs: { dense: true, sparse: true, lexical: false },
+            fusion: ["rrf"],
+          },
         },
       },
     });

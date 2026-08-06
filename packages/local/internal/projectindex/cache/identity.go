@@ -38,12 +38,28 @@ package cache
 // Connected Knowledge snapshot contracts so neither parent cache can mask the
 // other.
 // Epoch 64 advances the direct Agent-tool relation contract so mixed tool/agent
-// tool maps keep typed native-direct edges across restart boundaries.
+// tool maps keep typed native-direct edges across restart boundaries. A feature
+// branch independently assigned Epoch 64 to the Epoch 63/60 reconciliation that
+// restores runtime-rich Eval execution and timeout facts across the
+// bundled-worker/package-copy boundary.
 // Epoch 65 combines that contract with dynamic nested PromptText identity across
 // restart boundaries so neither independently assigned epoch 64 can mask the
 // other.
-// Epoch 66 adds recoverable Effect Runtime-addressability findings and their
-// rule descriptor across restart boundaries.
+// Epoch 66 combines main's Epoch 65 lineage with the feature branch's Epoch 64
+// runtime-rich Eval lineage. It preserves the historical Epoch 55, 59, and 60
+// collision reconciliations while ensuring neither parent snapshot can mask the
+// other's Project Index contract.
+// Epoch 67 renames Storage Beta retrieval-index Project Index read-model
+// metadata from vector-store/vectors to search-store/search.
+// Epoch 68 retains Session diagnostic evidence and findings so snapshots made
+// before durable Session linting cannot mask editor or CLI diagnostics.
+// Epoch 69 adds Signal provider, webhook transport, and managed transport
+// binding definitions, relations, source refs, and identity/live-value lints so
+// snapshots made before Signal transport tooling cannot mask the new catalogue.
+// Epoch 70 advances Signal transport parity on main.
+// Epoch 71 combines that Signal transport contract with recoverable Effect
+// Runtime-addressability findings and their rule descriptor so neither parent
+// snapshot can mask the other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 66
+const ProjectIndexSnapshotCacheEpoch = 71

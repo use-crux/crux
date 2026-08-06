@@ -8,14 +8,31 @@ const (
 	OverviewInsightsResource ResourceName = "overview:insights"
 	OverviewRunsResource     ResourceName = "overview:runs"
 	OverviewActivityResource ResourceName = "overview:activity"
+	InsightsListResource     ResourceName = "insights:list"
+	InsightsEvalRunsResource ResourceName = "insights:eval-runs"
 	RunsListResource         ResourceName = "runs:list"
 	RunsAnyDetailResource    ResourceName = "runs:detail:*"
 	IndexSnapshotResource    ResourceName = "index:snapshot"
+	EvalsCatalogResource     ResourceName = "evals:catalog"
+	EvalsRunsResource        ResourceName = "evals:runs"
+	EvalsAnyRunResource      ResourceName = "evals:run:*"
+	EvalsBaselinesResource   ResourceName = "evals:baselines"
+	EvalsAnyLocalRunResource ResourceName = "evals:local-run:*"
 )
 
 // RunsDetailResource identifies one exact selected-run detail projection.
 func RunsDetailResource(runID string) ResourceName {
 	return ResourceName("runs:detail:" + runID)
+}
+
+// EvalsRunResource identifies one exact persisted Eval run.
+func EvalsRunResource(runID string) ResourceName {
+	return ResourceName("evals:run:" + runID)
+}
+
+// EvalsLocalRunResource identifies availability of one exact observed run.
+func EvalsLocalRunResource(runID string) ResourceName {
+	return ResourceName("evals:local-run:" + runID)
 }
 
 // Invalidations retains the newest revision floor for each named resource.

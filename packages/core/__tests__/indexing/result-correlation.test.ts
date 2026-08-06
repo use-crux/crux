@@ -6,7 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from "../../src/observability";
-import { inMemoryRecordStore, inMemoryVectorStore } from "../../src/storage";
+import { inMemoryRecordStore, inMemorySearchStore } from "../../src/storage";
 
 describe("indexing result correlation", () => {
   afterEach(() => {
@@ -20,7 +20,7 @@ describe("indexing result correlation", () => {
       id: "docs",
       namespace: "kb",
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
     });
 
     const result = await docs.indexDocuments([
@@ -47,7 +47,7 @@ describe("indexing result correlation", () => {
       id: "docs",
       namespace: "kb",
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
     });
 
     const result = await docs.indexDocuments(
@@ -78,7 +78,7 @@ describe("indexing result correlation", () => {
         id: "docs",
         namespace: "kb",
         records: inMemoryRecordStore(),
-        vectors: inMemoryVectorStore(),
+        search: inMemorySearchStore(),
       });
       const chunk = {
         namespace: "kb",
@@ -111,12 +111,12 @@ describe("indexing result correlation", () => {
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const docsIndexer = indexer({
       id: "docs",
       namespace: "kb",
       records,
-      vectors,
+      search,
     });
     const progress: object[] = [];
     const docs = corpus({
@@ -159,7 +159,7 @@ describe("indexing result correlation", () => {
       id: "docs",
       namespace: "kb",
       records: inMemoryRecordStore(),
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
     });
 
     const chunks = await docs.chunk([

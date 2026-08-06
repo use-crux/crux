@@ -2,11 +2,13 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 )
 
 func newRuntimeStatusCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
@@ -22,9 +24,10 @@ func newRuntimeStatusCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Co
 
 func newRuntimeInspectCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:   "inspect <workId>",
-		Short: "Inspect one Runtime Engine work item",
-		Args:  cobra.ExactArgs(1),
+		Use:     "inspect <workId>",
+		Short:   "Inspect one Runtime Engine work item",
+		Example: "  crux runtime inspect work_123",
+		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAndPrintRuntimeOperation(cmd, f, opts, "inspect", args[0])
 		},
@@ -33,9 +36,10 @@ func newRuntimeInspectCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.C
 
 func newRuntimeRetryCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:   "retry <workId>",
-		Short: "Retry blocked or dead-lettered Runtime Engine work",
-		Args:  cobra.ExactArgs(1),
+		Use:     "retry <workId>",
+		Short:   "Retry blocked or dead-lettered Runtime Engine work",
+		Example: "  crux runtime retry work_123",
+		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAndPrintRuntimeOperation(cmd, f, opts, "retry", args[0])
 		},
@@ -44,9 +48,10 @@ func newRuntimeRetryCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Com
 
 func newRuntimeCancelCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:   "cancel <workId>",
-		Short: "Cancel non-terminal Runtime Engine work",
-		Args:  cobra.ExactArgs(1),
+		Use:     "cancel <workId>",
+		Short:   "Cancel non-terminal Runtime Engine work",
+		Example: "  crux runtime cancel work_123",
+		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAndPrintRuntimeOperation(cmd, f, opts, "cancel", args[0])
 		},
@@ -61,9 +66,13 @@ func runAndPrintRuntimeOperation(cmd *cobra.Command, f *cli.Factory, opts *runti
 	}
 	result, err := runRuntimeOperationForCommand(cmd.Context(), root, operation, workID, newCommandWorkerProcess(io))
 	if err != nil {
+		var workerErr *eventwire.WorkerEventError
+		if errors.As(err, &workerErr) && workerErr.Message != "" {
+			return errors.New(workerErr.Message)
+		}
 		return err
 	}
-	if opts.jsonOutput {
+	if f.JSONOutput(opts.jsonOutput) {
 		return writePrettyJSON(io.Out, result)
 	}
 	return printRuntimeOperationResult(io, result)

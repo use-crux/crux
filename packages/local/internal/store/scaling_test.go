@@ -26,7 +26,7 @@ func BenchmarkStoreEventIngestionMixed(b *testing.B) {
 			RetrievalID: "retrieval",
 			RetrieverID: "main",
 			Namespace:   "docs",
-			Mode:        "hybrid",
+			Mode:        "search",
 			Query:       "refund policy",
 			ResultCount: 5,
 			DurationMs:  25,

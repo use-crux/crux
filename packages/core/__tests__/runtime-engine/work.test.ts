@@ -89,6 +89,10 @@ describe('runtime work state machine', () => {
         .status,
     ).toBe('pending')
     expect(
+      transition(makeWorkItem({ status: 'blocked' }), { status: 'cancelled' })
+        .status,
+    ).toBe('cancelled')
+    expect(
       transition(makeWorkItem({ status: 'dead-letter' }), { status: 'pending' })
         .status,
     ).toBe('pending')
@@ -130,6 +134,7 @@ const LEGAL_TRANSITIONS = new Set<string>([
   'suspended->pending',
   'suspended->cancelled',
   'blocked->pending',
+  'blocked->cancelled',
   'dead-letter->pending',
 ])
 

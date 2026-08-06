@@ -51,7 +51,7 @@ func TestRunsListPaneFilterChoosesAdjacentRun(t *testing.T) {
 	}
 	runs.Update(testContext, runsListLoadedForTest(runs, values...), nil)
 	runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, nil)
-	runs.runQuery = "visible"
+	runs.filters.Query = "visible"
 
 	runs.ensureFilteredRunSelection(testContext, nil)
 
@@ -69,7 +69,7 @@ func TestRunsListPaneRefreshReconcilesActiveFilter(t *testing.T) {
 	}
 	runs.Update(testContext, runsListLoadedForTest(runs, values...), nil)
 	runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, nil)
-	runs.runQuery = "visible"
+	runs.filters.Query = "visible"
 	runs.ensureFilteredRunSelection(testContext, nil)
 
 	runs.Update(testContext, runsListLoadedForTest(runs,

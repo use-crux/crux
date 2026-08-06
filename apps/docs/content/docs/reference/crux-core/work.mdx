@@ -1,0 +1,226 @@
+---
+title: Application Work
+description: Exact spawn, getWork, WorkHandle, status, event, control, and statistics contracts.
+---
+
+Application Work durably accepts an exported Flow and returns a typed live
+handle for one finite occurrence.
+
+```ts
+import {
+  createWorkHost,
+  getWork,
+  spawn,
+  type WorkHandle,
+} from "@use-crux/core";
+```
+
+## `spawn()`
+
+```ts
+const work = await spawn(reviewDocument, input, {
+  idempotencyKey: "request_123",
+});
+
+const inputlessWork = await spawn(refreshIndex, {
+  idempotencyKey: "refresh_123",
+});
+```
+
+For an inputless Flow, omit `input`. Acceptance atomically writes the canonical
+Runtime Work record, initial Flow snapshot, definition identity, result
+obligation, and wake outbox row. A compatible idempotent retry returns the same
+occurrence. The key is scoped by Runtime namespace and target.
+
+## `getWork()`
+
+```ts
+const work = await getWork(reviewDocument, workId);
+```
+
+Reconnects retained Work without executing it. The exported target must match
+the target accepted for the Work ID.
+
+Both functions require an active host binding:
+
+```ts
+const host = createWorkHost({ runtime, program });
+const work = await host.run(() => getWork(reviewDocument, workId));
+```
+
+## `WorkHandle<TResult>`
+
+```ts
+interface WorkHandle<TResult> {
+  readonly id: string;
+  readonly effects: EffectScopeRef;
+  status(): Promise<WorkStatus>;
+  result(): Promise<TResult>;
+  progress(update: WorkProgress): Promise<void>;
+  cancel(options?: CancelOptions): Promise<CancelReceipt>;
+  detach(): Promise<DetachReceipt>;
+  stream(options?: WorkStreamOptions): AsyncIterable<WorkEvent>;
+  stats(): Promise<ExecutionStats>;
+}
+```
+
+`effects` is the stable Effect scope allocated at acceptance. The handle is a
+live control reference, not a serializable durable reference; persist `id` and
+reconnect with `getWork()`.
+
+### `status()`
+
+Returns a safe snapshot whose `state` is `queued`, `running`, `suspended`,
+`blocked`, `completed`, `failed`, or `cancelled`. Every state includes `id`,
+`ownership`, `updatedAt`, and optional latest `progress`. Status never exposes
+the result or a raw failure.
+
+```ts
+type WorkStatus =
+  | (WorkStatusBase & { readonly state: "queued"; readonly acceptedAt: Date })
+  | (WorkStatusBase & { readonly state: "running"; readonly startedAt: Date })
+  | (WorkStatusBase & {
+      readonly state: "suspended";
+      readonly suspendedOn: WorkSuspensionSummary;
+    })
+  | (WorkStatusBase & {
+      readonly state: "blocked";
+      readonly blockedOn: WorkBlockSummary;
+    })
+  | (WorkStatusBase & {
+      readonly state: "completed";
+      readonly completedAt: Date;
+      readonly resultAvailable: boolean;
+    })
+  | (WorkStatusBase & {
+      readonly state: "failed";
+      readonly failedAt: Date;
+      readonly failure: WorkFailure;
+    })
+  | (WorkStatusBase & {
+      readonly state: "cancelled";
+      readonly cancelledAt: Date;
+      readonly reason?: string;
+    });
+
+interface WorkStatusBase {
+  readonly id: string;
+  readonly progress?: WorkProgressSnapshot;
+  readonly ownership: WorkOwnership;
+  readonly updatedAt: Date;
+}
+
+type WorkOwnership =
+  | { readonly state: "attached" }
+  | {
+      readonly state: "detached";
+      readonly reason: "explicit" | "owner-ended";
+      readonly detachedAt: Date;
+    };
+```
+
+### `result()`
+
+Waits for the exact inferred successful Flow result. It throws:
+
+| Error                    | Meaning                                      |
+| ------------------------ | -------------------------------------------- |
+| `WorkFailedError`        | Work reached a safe terminal failure.        |
+| `WorkCancelledError`     | Cooperative cancellation terminalized Work.  |
+| `WorkResultExpiredError` | The terminal result payload is not retained. |
+
+Joining never re-enqueues or re-executes Work.
+
+### `progress()`
+
+```ts
+interface WorkProgress {
+  readonly message?: string; // at most 1,024 characters
+  readonly current?: number; // finite and non-negative
+  readonly total?: number; // finite and non-negative
+}
+```
+
+Replaces the full latest snapshot and publishes one safe ordered progress
+event. When both counts are present, `current <= total`. Terminal Work throws
+`WorkNotActiveError`.
+
+### `cancel()`
+
+```ts
+interface CancelOptions {
+  readonly reason?: string; // at most 512 safe characters
+}
+
+interface CancelReceipt {
+  readonly workId: string;
+  readonly outcome: "cancelled" | "already-terminal";
+  readonly status: Extract<
+    WorkStatus,
+    { readonly state: "completed" | "failed" | "cancelled" }
+  >;
+}
+```
+
+Cancellation is idempotent and cooperative. The terminal transaction preserves
+a completion that wins the race and cancels owned durable wait registrations
+when cancellation wins.
+
+### `detach()`
+
+```ts
+interface DetachReceipt {
+  readonly workId: string;
+  readonly outcome: "detached" | "already-detached" | "already-terminal";
+  readonly ownership: WorkOwnership;
+}
+```
+
+Detachment changes ownership only. It does not cancel, wake, or re-execute Work.
+
+### `stream()`
+
+```ts
+interface WorkStreamOptions {
+  readonly after?: string;
+}
+
+type WorkEvent =
+  | (WorkEventBase & {
+      readonly type: "work.snapshot";
+      readonly status: WorkStatus;
+    })
+  | (WorkEventBase & {
+      readonly type: "work.status";
+      readonly status: WorkStatus;
+    })
+  | (WorkEventBase & {
+      readonly type: "work.progress";
+      readonly progress: WorkProgressSnapshot;
+    });
+
+interface WorkEventBase {
+  readonly id: string;
+  readonly cursor: string;
+  readonly workId: string;
+  readonly occurredAt: Date;
+}
+```
+
+Every event has `id`, opaque `cursor`, `workId`, and `occurredAt`. Without
+`after`, the stream starts with one snapshot. A retained cursor resumes strictly
+after it; an expired cursor produces a replacement snapshot. The stream ends at
+the completed, failed, or cancelled boundary and contains no results or raw
+failures.
+
+### `stats()`
+
+Returns `ExecutionStats`, an alias of the bounded owner-scoped `ScopeStats`
+projection. The canonical statistics ledger tracks mechanical timing and
+lifecycle facts and is reconstructed from the Work record after restart.
+
+## Related
+
+- [Application Work guide](/docs/guides/durable-execution/work)
+- [Runtime worker](/docs/reference/crux-core/runtime-worker)
+- [Runtime work records](/docs/reference/crux-core/runtime-work-records)

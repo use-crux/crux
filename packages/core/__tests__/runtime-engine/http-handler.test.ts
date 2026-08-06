@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   allowUnsignedDevWake,
   CruxRuntimeError,
+  createRuntimeProgram,
   createRuntimeHandler,
   encodeWakeEnvelope,
   inMemoryRuntimeStore,
@@ -14,6 +15,51 @@ import {
 } from '@use-crux/core/runtime'
 
 describe('createRuntimeHandler', () => {
+  it('uses a Runtime program as the authoritative targets and manifest', async () => {
+    const target = durableTask('program-handler-target', {
+      run: () => undefined,
+    })
+    const program = createRuntimeProgram({ targets: [target], transports: [] })
+    const { GET } = createRuntimeHandler({
+      runtime: node({
+        store: inMemoryRuntimeStore(),
+        namespace: 'program-handler-test',
+        autoStartMaintenance: false,
+      }),
+      program,
+    })
+
+    await expect(
+      GET(new Request('https://example.com/api/crux')).then((response) =>
+        response.json(),
+      ),
+    ).resolves.toMatchObject({
+      manifestHash: program.manifestHash,
+      targets: [target.name],
+    })
+  })
+
+  it('rejects a missing program and target list with a Runtime diagnostic', () => {
+    const runtime = node({
+      store: inMemoryRuntimeStore(),
+      namespace: 'missing-handler-input-test',
+      autoStartMaintenance: false,
+    })
+
+    const failure = (() => {
+      try {
+        createRuntimeHandler({ runtime } as Parameters<
+          typeof createRuntimeHandler
+        >[0])
+      } catch (error) {
+        return error
+      }
+    })()
+
+    expect(failure).toBeInstanceOf(CruxRuntimeError)
+    expect(failure).toMatchObject({ code: 'TARGET_NOT_FOUND' })
+  })
+
   it('fails closed in production when no wake verifier is configured', () => {
     const originalNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'

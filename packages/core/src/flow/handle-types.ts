@@ -111,9 +111,12 @@ export interface FlowHandle<
   T,
   TInput = void,
   TSignals extends FlowSignalMap | undefined = undefined,
+  TName extends string = string,
 > {
   /** The flow's registered name. */
-  readonly name: string;
+  readonly name: TName;
+  /** Runtime programs identify Flow handles explicitly. */
+  readonly kind: "flow";
   /**
    * Execute the Flow with typed input and runtime options.
    *

@@ -74,7 +74,7 @@ func NewSetupCmd(f *cli.Factory) *cobra.Command {
 			if check && apply {
 				return fmt.Errorf("choose at most one of --check or --apply")
 			}
-			return runSetupCommand(cmd, f, cwd, jsonOutput, apply)
+			return runSetupCommand(cmd, f, cwd, f.JSONOutput(jsonOutput), apply)
 		},
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "Check setup and generated files without mutating")

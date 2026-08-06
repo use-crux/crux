@@ -10,6 +10,7 @@ import type {
   WaiterId,
   WorkId,
 } from "./ids";
+import type { RuntimeTargetDefinitionRef } from "./target-definition";
 
 /** Flow snapshot shape persisted by runtime-backed Flow replay. */
 export interface FlowSnapshot {
@@ -21,6 +22,10 @@ export interface FlowSnapshot {
   readonly workId: WorkId;
   /** Name-based target id for the Flow definition. */
   readonly targetId: RuntimeTargetId;
+  /** Exact generated definition pinned at application Work acceptance. */
+  readonly definition?: RuntimeTargetDefinitionRef;
+  /** Write-once terminal result obligation for application-spawned Flow Work. */
+  readonly resultObligation?: { readonly kind: "required" };
   /** Runtime namespace. */
   readonly namespace: string;
   /** Flow lifecycle status. */
@@ -33,6 +38,8 @@ export interface FlowSnapshot {
     | "cancelled";
   /** JSON input captured at first run. */
   readonly input: JsonValue;
+  /** SHA-256 of the canonical accepted input for safe identity inspection. */
+  readonly inputDigest?: string;
   /** Serializable observability carrier for the next execution segment. */
   readonly continuation?: JsonValue;
   /** Existing label-keyed step cache, unchanged by the Runtime Engine. */

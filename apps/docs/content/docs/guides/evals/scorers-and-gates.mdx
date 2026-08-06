@@ -77,22 +77,19 @@ with literal ESM. `unresolved_source_dependency` is reserved for a tracked
 source closure that contains an unreadable, dynamic, CommonJS, generated, or
 otherwise unresolvable dependency.
 
-AI SDK `LanguageModel` objects do not expose a durable identity for endpoint,
-headers, middleware, or captured provider configuration. Wrap a standard model
-with `stableModel(model)` from `@use-crux/ai` to attest those hidden semantics;
-Crux derives `provider:modelId` and keeps the exact same object and inferred
-type. For custom providers or middleware, pass a secret-free versioned key and
-bump it whenever hidden behavior changes:
+AI SDK `LanguageModel` objects do not expose a durable portable identity for
+endpoint, headers, middleware, or captured provider configuration. Bind them
+with `aiSdk(native)` from `@use-crux/ai` so Eval identity projects the frozen
+`GenerationModel` definition:
 
 ```ts
-const model = stableModel(custom("support"), "acme:support:v3");
+const model = aiSdk(nativeModel("support-text-v3"));
 ```
 
-Keys are fingerprint material: never put API keys, bearer tokens, headers, or
-other credentials in them. An unattested object still runs normally, but its
-output is fresh and the plan reports `model_identity_unattested` with the
-`stableModel(model)` remedy. A provider-reported model ID that differs after
-execution prevents the new evidence from being written.
+An unbound object still runs normally, but its output is fresh and the plan
+reports `model_identity_unattested` with the `aiSdk(native)` remedy. A
+provider-reported model ID that differs after execution prevents the new
+evidence from being written.
 
 Function-form prompt fields use inert structural markers. The Node coordinator
 proves their authored identity from the Eval's literal-ESM project-source

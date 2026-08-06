@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -43,6 +44,11 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
   crux lint --fail-on warning
   crux lint --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.json = f.JSONOutput(opts.json)
+			if err := validateLintOptions(opts); err != nil {
+				fmt.Fprintf(f.Streams().Err, "crux lint: %v\n", err)
+				return domain.ExitError{Code: 2}
+			}
 			// An explicit --port is a request to read the running dev server.
 			// Without this promotion the flag was silently ignored and the
 			// one-shot index could report stale findings.
@@ -51,12 +57,16 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 			}
 			if opts.server {
 				var index api.IndexData
-				if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
+				if err := f.ClientFor("lint --server").GetJSON(cmd.Context(), "/api/index", &index); err != nil {
 					return err
 				}
 				return writeLintResult(f.Streams(), index, opts)
 			}
-			return runLint(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
+			err := runLint(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
+			if !opts.json {
+				printLiveLintCrossReference(cmd.Context(), f, opts.root)
+			}
+			return err
 		},
 	}
 
@@ -71,8 +81,47 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
+func printLiveLintCrossReference(ctx context.Context, f *cli.Factory, root string) {
+	const probeTimeout = 750 * time.Millisecond
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	port := f.Port
+	if port == 0 {
+		port = 4400
+	}
+	if index, err := readLiveLintIndex(probeCtx, f); err == nil &&
+		index.Project != nil && sameProjectRoot(root, index.Project.Root) {
+		fmt.Fprintf(f.Streams().Out,
+			"Live Index reports %d findings — run 'crux lint --port %d' or start crux dev.\n",
+			len(index.LintFindings), port)
+		return
+	}
+	fmt.Fprintf(f.Streams().Out,
+		"Tip: live Index mode is available with 'crux lint --port %d' after starting crux dev.\n", port)
+}
+
+var readLiveLintIndex = func(ctx context.Context, f *cli.Factory) (api.IndexData, error) {
+	var index api.IndexData
+	err := f.ClientFor("lint").GetJSON(ctx, "/api/index", &index)
+	return index, err
+}
+
+func validateLintOptions(opts lintOptions) error {
+	if _, err := selectLintFindings(nil, lintSelectionOptions{profile: opts.profile}); err != nil {
+		return err
+	}
+	if _, err := lintGateFailures(nil, opts.failOn); err != nil {
+		return err
+	}
+	return nil
+}
+
 func runLint(ctx context.Context, io *output.IO, opts lintOptions, run projectIndexRunFunc) error {
-	result, err := run(ctx, oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID})
+	result, err := run(
+		ctx,
+		oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID},
+		newCommandWorkerProcess(io),
+	)
 	if err != nil {
 		fmt.Fprintf(io.Err, "crux lint: %v\n", err)
 		return domain.ExitError{Code: 2}

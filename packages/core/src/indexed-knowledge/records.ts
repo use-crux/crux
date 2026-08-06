@@ -9,7 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk } from '../indexing/types'
-import type { ExactFilter, JsonObject, SparseVector } from '../storage'
+import type { ExactFilter, JsonObject, SearchLegMatch, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
 import { projectSourceFacts } from '../indexing/source-facts'
@@ -123,8 +123,8 @@ export function createIndexedParentRecord(input: {
   }
 }
 
-/** Project the persisted fields copied into vector metadata. */
-export function indexedVectorMetadata(value: IndexedChunkRecord, embeddingSpace?: string): ExactFilter {
+/** Project the persisted fields copied into search metadata. */
+export function indexedSearchMetadata(value: IndexedChunkRecord, embeddingSpace?: string): ExactFilter {
   return {
     _cruxRecordType: value._cruxRecordType,
     namespace: value.namespace,
@@ -164,6 +164,7 @@ export function asIndexedParentRecord(value: unknown): IndexedParentStoredRecord
 export function indexedChunkToHit(input: {
   readonly value: JsonObject
   readonly score: number
+  readonly matches?: readonly SearchLegMatch[]
 }): RetrieverHit | null {
   const value = input.value
   if (
@@ -187,6 +188,11 @@ export function indexedChunkToHit(input: {
     : undefined
 
   const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
+  const matches = input.matches?.map((match) => ({ ...match }))
+  const provenance = {
+    ...(isRecord(value.provenance) ? value.provenance : {}),
+    ...(matches ? { matches } : {}),
+  }
 
   return {
     namespace: value.namespace,
@@ -196,7 +202,7 @@ export function indexedChunkToHit(input: {
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
-    ...(isRecord(value.provenance) ? { provenance: value.provenance } : {}),
+    ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
   }
 }
 

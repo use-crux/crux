@@ -543,6 +543,9 @@ importers:
       pdfjs-dist:
         specifier: ^5.0.0
         version: 5.7.284
+      ssf:
+        specifier: ^0.11.2
+        version: 0.11.2
     devDependencies:
       '@types/node':
         specifier: ^24.12.4
@@ -593,6 +596,15 @@ importers:
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
+
+  packages/local/fixtures/demo-project:
+    dependencies:
+      '@use-crux/core':
+        specifier: workspace:*
+        version: link:../../../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/local/npm/local: {}
 
@@ -708,6 +720,9 @@ importers:
       embedded-postgres:
         specifier: 18.4.0-beta.17
         version: 18.4.0-beta.17
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.1
       pg:
         specifier: ^8.22.0
         version: 8.22.0
@@ -717,6 +732,9 @@ importers:
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/react:
     dependencies:
@@ -5327,6 +5345,10 @@ packages:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
     engines: {node: '>= 0.6'}
 
+  frac@1.1.2:
+    resolution: {integrity: sha512-w/XBfkibaTl3YDqASwfDUqkna4Z2p9cFSr1aHDt0WoMTECnRfBOv2WArlZILlqgWlmdIlALXGpM2AOhEk5W3IA==}
+    engines: {node: '>=0.8'}
+
   framer-motion@12.40.0:
     resolution: {integrity: sha512-uaBd3qC1v3KQqBEjwTUd183K6PbS+j0yR9w9VmEOLWA/tnUcSn8Xa3uck7t4dgpDoUss8xQTcj8W2L07lrnLFg==}
     peerDependencies:
@@ -7446,6 +7468,10 @@ packages:
 
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
+
+  ssf@0.11.2:
+    resolution: {integrity: sha512-+idbmIXoYET47hH+d7dfm2epdOMUDjqcB4648sTZ+t2JwoyBFL/insLfB/racrDmsKB3diwsDA696pZMieAC5g==}
+    engines: {node: '>=0.8'}
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
@@ -12822,6 +12848,8 @@ snapshots:
 
   forwarded@0.2.0: {}
 
+  frac@1.1.2: {}
+
   framer-motion@12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       motion-dom: 12.40.0
@@ -15507,6 +15535,10 @@ snapshots:
   split2@4.2.0: {}
 
   sprintf-js@1.0.3: {}
+
+  ssf@0.11.2:
+    dependencies:
+      frac: 1.1.2
 
   stackback@0.0.2: {}
 

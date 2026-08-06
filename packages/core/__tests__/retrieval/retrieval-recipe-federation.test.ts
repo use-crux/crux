@@ -92,7 +92,7 @@ describe('retrievalRecipe federation', () => {
       id: 'broken-docs',
       namespace: 'docs',
       retrieve: vi.fn(async () => {
-        throw new Error('vector store unavailable')
+        throw new Error('search store unavailable')
       }),
     })
 
@@ -107,7 +107,7 @@ describe('retrievalRecipe federation', () => {
 
     expect(hits).toEqual([expect.objectContaining({ source: { id: 'stable' }, chunkId: 'a' })])
     expect(trace.warnings).toEqual([
-      'Retrieval source "broken-docs" failed and was skipped: vector store unavailable',
+      'Retrieval source "broken-docs" failed and was skipped: search store unavailable',
     ])
     expect(trace.steps[0]).toMatchObject({
       stepId: 'retrieve',
@@ -119,8 +119,8 @@ describe('retrievalRecipe federation', () => {
           status: 'skipped',
           queryCount: 1,
           hitCount: 0,
-          warnings: ['vector store unavailable'],
-          error: { message: 'vector store unavailable', name: 'Error' },
+          warnings: ['search store unavailable'],
+          error: { message: 'search store unavailable', name: 'Error' },
         },
       ],
     })
@@ -136,7 +136,7 @@ describe('retrievalRecipe federation', () => {
       id: 'broken-docs',
       namespace: 'docs',
       retrieve: vi.fn(async () => {
-        throw new Error('vector store unavailable')
+        throw new Error('search store unavailable')
       }),
     })
 

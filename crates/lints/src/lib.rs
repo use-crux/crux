@@ -35,6 +35,10 @@ mod rules {
     pub(crate) mod relation;
     pub(crate) mod routing;
     pub(crate) mod runtime;
+    pub(crate) mod session;
+    #[cfg(test)]
+    mod session_tests;
+    pub(crate) mod signal;
     pub(crate) mod thread;
     #[cfg(test)]
     mod thread_tests;

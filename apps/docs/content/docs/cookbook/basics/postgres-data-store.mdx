@@ -1,15 +1,15 @@
 ---
 title: Postgres Storage
-description: Implement durable Crux RecordStore, pgvector VectorStore, and bytea AssetStore adapters on Postgres.
+description: Implement durable Crux RecordStore, SearchStore, and bytea AssetStore adapters on Postgres.
 ---
 
 Use a `RecordStore` when Crux needs durable JSON records. Postgres is a good fit when your app already uses it for product data and you want corpus ledgers, retrieval chunks, workspace metadata, and other Storage Beta records in the same operational database.
 
-This recipe starts with a `RecordStore`, then shows optional Postgres-backed vector and asset storage. You can use only the pieces you need:
+This recipe starts with a `RecordStore`, then shows optional Postgres-backed search and asset storage. You can use only the pieces you need:
 
 ```ts
 const records = postgresRecordStore(pool);
-const vectors = postgresVectorStore(pool); // optional, dense pgvector search
+const search = postgresSearchStore({ pool, dimensions: 1536, lexical: true });
 const assets = postgresAssetStore(pool); // optional, modest bytea-backed files
 ```
 
@@ -200,154 +200,76 @@ function matchesTopLevelFilter(
 }
 ```
 
-## VectorStore With pgvector
+## SearchStore With pgvector And Lexical Search
 
-Postgres can also be a dense `VectorStore` through the `pgvector` extension. This is useful when you want a simple deployment and dense semantic search is enough.
+Use the first-party PostgreSQL `SearchStore` when retrieval search should live in the same database as records:
 
-It is not the cleanest default for sparse or hybrid retrieval. Crux sparse vectors are `{ indices, values }`, while Postgres full-text search uses `tsvector`/`tsquery`. If you want sparse or hybrid search in Postgres, build a custom retriever that combines pgvector and full-text search, or implement a product-specific `VectorStore` with your own fusion. For first-class sparse/hybrid vector APIs, Upstash Vector is currently the simpler bundled path.
+```ts
+import { postgresSearchStore } from "@use-crux/postgres";
 
-Schema for dense pgvector:
+const search = postgresSearchStore({
+  pool,
+  dimensions: 1536,
+  sparseDimensions: 30_000,
+  lexical: { configuration: "simple" },
+});
+
+const setup = await search.setup.check();
+if (!setup.ok) await search.setup.apply();
+```
+
+At least one of `dimensions`, `sparseDimensions`, or `lexical` is required. Dense and sparse legs use pgvector. Lexical search uses native PostgreSQL full-text search over the indexed chunk `content`.
+
+The Crux-owned search table includes only the configured payload columns. With dense, sparse, and lexical enabled, the relevant shape is:
 
 ```sql
 create extension if not exists vector;
 
-create table crux_vectors (
+create table crux_search (
   key text primary key,
   dense vector(1536),
+  sparse sparsevec(30000),
+  content text,
+  search_document tsvector GENERATED ALWAYS AS (
+    to_tsvector('simple'::regconfig, coalesce(content, ''))
+  ) STORED,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index crux_vectors_dense_idx
-  on crux_vectors using hnsw (dense vector_cosine_ops);
+create index crux_search_dense_idx
+  on crux_search using hnsw (dense vector_cosine_ops);
 
-create index crux_vectors_metadata_idx
-  on crux_vectors using gin (metadata);
+create index crux_search_sparse_idx
+  on crux_search using hnsw (sparse sparsevec_ip_ops);
+
+create index crux_search_document_idx
+  on crux_search using gin (search_document);
+
+create index crux_search_metadata_idx
+  on crux_search using gin (metadata);
 ```
 
-Change `vector(1536)` to match your embedding dimensions.
-
-```ts
-import type {
-  VectorHit,
-  VectorRecord,
-  VectorSearchQuery,
-  VectorStore,
-} from "@use-crux/core/storage";
-
-export function postgresVectorStore(pool: Queryable): VectorStore {
-  return {
-    async upsert(records: readonly VectorRecord[]) {
-      for (const record of records) {
-        if (!record.dense) {
-          throw new Error("postgresVectorStore() supports dense vectors only.");
-        }
-
-        await pool.query(
-          `
-          insert into crux_vectors (key, dense, metadata, updated_at)
-          values ($1, $2::vector, $3::jsonb, now())
-          on conflict (key) do update
-            set dense = excluded.dense,
-                metadata = excluded.metadata,
-                updated_at = now()
-          `,
-          [
-            record.key,
-            toPgVector(record.dense),
-            JSON.stringify(record.metadata ?? {}),
-          ],
-        );
-      }
-    },
-
-    async delete(keys: readonly string[]) {
-      if (keys.length === 0) return;
-
-      await pool.query(
-        `
-        delete from crux_vectors
-        where key = any($1::text[])
-        `,
-        [keys],
-      );
-    },
-
-    async search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-      if (query.mode !== "dense") {
-        throw new Error("postgresVectorStore() supports dense search only.");
-      }
-
-      const limit = query.limit ?? 10;
-      const threshold = query.threshold ?? 0;
-      const filter = query.filter ? JSON.stringify(query.filter) : null;
-
-      const rows = await pool.query<{
-        key: string;
-        score: number;
-        metadata: Record<string, unknown>;
-      }>(
-        `
-        select key,
-               1 - (dense <=> $1::vector) as score,
-               metadata
-        from crux_vectors
-        where dense is not null
-          and ($2::jsonb is null or metadata @> $2::jsonb)
-          and 1 - (dense <=> $1::vector) >= $3
-        order by dense <=> $1::vector
-        limit $4
-        `,
-        [toPgVector(query.dense), filter, threshold, limit],
-      );
-
-      return rows.rows.map((row) => ({
-        key: row.key,
-        score: row.score,
-        metadata: row.metadata,
-      }));
-    },
-
-    capabilities() {
-      return {
-        dense: true,
-        sparse: false,
-        hybrid: false,
-        fusion: [],
-        filter: "pre",
-        consistency: "strong",
-      };
-    },
-  };
-}
-
-function toPgVector(vector: readonly number[]): string {
-  if (vector.length === 0) {
-    throw new Error("Vector must not be empty.");
-  }
-
-  for (const value of vector) {
-    if (!Number.isFinite(value)) {
-      throw new Error("Vector contains a non-finite value.");
-    }
-  }
-
-  return `[${vector.join(",")}]`;
-}
-```
+Crux resolves the lexical configuration with a parameterized `regconfig` lookup before DDL or queries. Lexical queries use `websearch_to_tsquery(configuration, query)` and rank candidates with PostgreSQL full-text ranking. Empty parsed lexical queries return no lexical candidates.
 
 Use it with indexing and retrieval:
 
 ```ts
 const records = postgresRecordStore(pool);
-const vectors = postgresVectorStore(pool);
+const search = postgresSearchStore({
+  pool,
+  dimensions: 1536,
+  lexical: true,
+});
+
+await search.setup.apply();
 
 const docsIndexer = indexer({
   id: "docs",
   namespace: "docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -355,11 +277,28 @@ const docs = retriever({
   id: "docs",
   namespace: "docs",
   records,
-  vectors,
+  search,
   dense,
-  search: { mode: "dense", limit: 8 },
+});
+
+const hits = await docs.retrieve({
+  query: "billing credits",
+  search: {
+    dense: { candidates: 120 },
+    lexical: { candidates: 80 },
+    fusion: { strategy: "rrf", k: 60 },
+  },
+  limit: 8,
 });
 ```
+
+`setup.check()` is non-mutating. It reports missing columns, generated expression/configuration mismatches, missing GIN indexes, pgvector requirements, dimensions, and presence constraints with stable finding codes. `setup.apply()` creates missing schemas, tables, nullable columns, the `vector` extension when required, constraints, and indexes. It does not rewrite content from the records table or silently change a text-search configuration.
+
+After enabling lexical search on an existing knowledge base, run `knowledgeBase.reindex()` so active chunks write `content` into their `SearchRecord`s. Until then, `setup.check()` reports `POSTGRES_SEARCH_LEXICAL_CONTENT_MISSING` for active indexed chunks with null content.
+
+For multi-leg queries, PostgreSQL ranks each leg in filtered candidate CTEs, full-joins candidates by key, and calculates deterministic normalized RRF in one server-side statement. Final ordering is fused score descending, then key ascending.
+
+PostgreSQL lexical search is not BM25 in this release. True BM25 is deferred to RFC #352, and learned sparse providers are deferred to RFC #353. Sparse search remains a composable leg when `sparseDimensions` is configured.
 
 ## AssetStore With `bytea`
 
@@ -494,17 +433,18 @@ await files.write("/outputs/report.pdf", pdfBytes, {
 ```ts
 import { indexer } from "@use-crux/core/indexing";
 import { retriever } from "@use-crux/core/retrieval";
+import { postgresSearchStore } from "@use-crux/postgres";
 import { Pool } from "pg";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const records = postgresRecordStore(pool);
-const vectors = postgresVectorStore(pool);
+const search = postgresSearchStore({ pool, dimensions: 1536, lexical: true });
 
 const docsIndexer = indexer({
   id: "docs",
   namespace: "docs",
   records,
-  vectors,
+  search,
   dense,
 });
 
@@ -512,12 +452,12 @@ const docs = retriever({
   id: "docs",
   namespace: "docs",
   records,
-  vectors,
+  search,
   dense,
 });
 ```
 
-Postgres owns JSON record hydration. `VectorStore` owns similarity search. `AssetStore` owns bytes for workspaces. Keeping those capabilities separate makes each adapter simpler and avoids pretending Postgres is also object storage or vector infrastructure unless you explicitly add those capabilities.
+Postgres owns JSON record hydration. `SearchStore` owns retrieval search. `AssetStore` owns bytes for workspaces. Keeping those capabilities separate makes each adapter simpler and avoids pretending Postgres is also object storage unless you explicitly add those capabilities.
 
 ## Production Notes
 
@@ -545,9 +485,9 @@ For asset storage, keep a hard size limit if you use Postgres `bytea`. Store lar
     href="/docs/guides/storage/crux-store"
   />
   <Card
-    title="VectorStore guide"
-    description="Pair Postgres records with vector search."
-    href="/docs/guides/storage/vector-store"
+    title="SearchStore guide"
+    description="Pair Postgres records with retrieval search."
+    href="/docs/guides/storage/search-store"
   />
   <Card
     title="AssetStore guide"

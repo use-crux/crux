@@ -77,7 +77,9 @@ export interface ProjectConfigInspect {
     readonly rules: ProjectConfigSetting;
   };
   readonly plugins: ProjectConfigList;
+  /** Config-import Project Model counts, not the compiled Project Index. */
   readonly discovered: {
+    readonly scope: "config-model";
     readonly definitions: number;
     readonly relations: number;
     readonly evals: number;

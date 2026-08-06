@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
@@ -91,19 +92,19 @@ func TestRunCheckUsesExitZeroOneAndTwoContract(t *testing.T) {
 	}{
 		{
 			name: "zero", failOn: "none", wantCode: 0, wantStdout: true,
-			run: func(context.Context, oneshot.Options) (oneshot.Result, error) {
+			run: func(context.Context, oneshot.Options, commandWorkerProcess) (oneshot.Result, error) {
 				return oneshot.Result{Index: checkFixtureIndex(t.TempDir()), Execution: oneshot.Execution{Status: "complete"}}, nil
 			},
 		},
 		{
 			name: "one", failOn: "warning", wantCode: 1, wantStdout: true,
-			run: func(context.Context, oneshot.Options) (oneshot.Result, error) {
+			run: func(context.Context, oneshot.Options, commandWorkerProcess) (oneshot.Result, error) {
 				return oneshot.Result{Index: checkFixtureIndex(t.TempDir()), Execution: oneshot.Execution{Status: "complete"}}, nil
 			},
 		},
 		{
 			name: "two", failOn: "error", wantCode: 2,
-			run: func(context.Context, oneshot.Options) (oneshot.Result, error) {
+			run: func(context.Context, oneshot.Options, commandWorkerProcess) (oneshot.Result, error) {
 				return oneshot.Result{}, errors.New("config failed")
 			},
 		},
@@ -133,6 +134,53 @@ func TestRunCheckUsesExitZeroOneAndTwoContract(t *testing.T) {
 	}
 }
 
+func TestCheckInputErrorsExitTwoBeforeIndexing(t *testing.T) {
+	original := runProjectIndexForCommand
+	t.Cleanup(func() { runProjectIndexForCommand = original })
+	called := false
+	runProjectIndexForCommand = func(context.Context, oneshot.Options, commandWorkerProcess) (oneshot.Result, error) {
+		called = true
+		return oneshot.Result{}, nil
+	}
+
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "profile",
+			args: []string{"--profile", "bogus"},
+			want: `crux check: unknown lint profile "bogus" (expected off, recommended, strict, or experimental)`,
+		},
+		{
+			name: "fail-on",
+			args: []string{"--fail-on", "critical"},
+			want: `crux check: unknown --fail-on severity "critical" (expected error, warning, or info)`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called = false
+			var out, errOut bytes.Buffer
+			cmd := NewCheckCmd(cli.NewFactoryWithStreams(
+				output.NewTestIO(&out, &errOut, output.TestIOOptions{}),
+			))
+			cmd.SetArgs(test.args)
+			err := cmd.Execute()
+			var exit domain.ExitError
+			if !errors.As(err, &exit) || exit.Code != 2 {
+				t.Fatalf("error = %v, want exit code 2", err)
+			}
+			if called {
+				t.Fatal("Project Index worker ran before check input validation")
+			}
+			if strings.TrimSpace(errOut.String()) != test.want {
+				t.Fatalf("stderr = %q, want %q", errOut.String(), test.want)
+			}
+		})
+	}
+}
+
 func TestDaemonCheckAndLintCompileFixtureFindingsMatchByteForByte(t *testing.T) {
 	root := t.TempDir()
 	daemon := devtools.NewService(store.NewStore(), nil).
@@ -154,7 +202,7 @@ func TestDaemonCheckAndLintCompileFixtureFindingsMatchByteForByte(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	run := func(ctx context.Context, options oneshot.Options) (result oneshot.Result, err error) {
+	run := func(ctx context.Context, options oneshot.Options, _ commandWorkerProcess) (result oneshot.Result, err error) {
 		return oneshot.New(commandParityIndexer{}, commandNoCacheStore{}).Run(ctx, options)
 	}
 	var checkOut, checkErr bytes.Buffer

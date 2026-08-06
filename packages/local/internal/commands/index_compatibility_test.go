@@ -20,7 +20,9 @@ func TestIndexCompatibilityRoutesListAndDefinitionToCatalog(t *testing.T) {
 	}{
 		{argument: "", mode: "catalog-list", path: "/api/catalog"},
 		{argument: "prompt:writer", mode: "catalog-show", path: "/api/catalog/prompt:writer"},
-		{argument: "prompts", mode: "legacy-category", path: "/api/index"},
+		{argument: "prompts", mode: "catalog-kind", path: "/api/catalog?kind=prompt"},
+		{argument: "contexts", mode: "catalog-kind", path: "/api/catalog?kind=context"},
+		{argument: "tools", mode: "catalog-kind", path: "/api/catalog?kind=tool"},
 		{argument: "diagnostics", mode: "legacy-category", path: "/api/index"},
 	}
 	for _, test := range tests {

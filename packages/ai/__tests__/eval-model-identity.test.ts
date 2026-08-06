@@ -3,11 +3,17 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { prompt } from "@use-crux/core";
-import { cascade, fallback, retry, router, split } from "@use-crux/core/routing";
+import {
+  cascade,
+  fallback,
+  retry,
+  router,
+  split,
+} from "@use-crux/core/routing";
 import { getEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
-import { createCruxAi, stableModel } from "../src";
+import { createCruxAi, aiSdk } from "../src";
 
-const leaf = stableModel({
+const leaf = aiSdk({
   provider: "test",
   modelId: "leaf",
   specificationVersion: "v3",
@@ -54,7 +60,10 @@ describe("routable model identity", () => {
       ),
     ).toEqual({
       kind: "retry",
-      model: expect.objectContaining({ key: "test:leaf" }),
+      model: expect.objectContaining({
+        contract: "crux.generation-model.v1",
+        identity: { kind: "model", model: "test:leaf" },
+      }),
       options: {
         id: "retry-leaf",
         description: "Retry transient failures",
@@ -169,7 +178,10 @@ describe("routable model identity", () => {
           {
             model: {
               kind: "retry",
-              model: expect.objectContaining({ key: "test:leaf" }),
+              model: expect.objectContaining({
+                contract: "crux.generation-model.v1",
+                identity: { kind: "model", model: "test:leaf" },
+              }),
               options: { attempts: 2 },
             },
             escalateOn: ["invalid_response"],

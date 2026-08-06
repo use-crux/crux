@@ -11,7 +11,7 @@ import (
 )
 
 func tailTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
-	ws, err := api.ConnectWS(c.BaseURL)
+	ws, err := c.ConnectWebSocket(ctx)
 	if err != nil {
 		return err
 	}

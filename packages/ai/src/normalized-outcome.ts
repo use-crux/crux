@@ -109,6 +109,14 @@ export function mapAiSdkError(error: unknown): CruxProviderError | undefined {
     });
   }
 
+  if (name === "AI_NoOutputGeneratedError") {
+    return cruxProviderError({
+      kind: "invalid-response",
+      code: "ai-sdk.no_output_generated",
+      retryable: true,
+    });
+  }
+
   const status = readStatus(error);
   const isRetryable = readIsRetryable(error);
 

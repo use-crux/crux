@@ -4,6 +4,10 @@
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Eval and insight filesystem boundary.
 
+The generated Runtime program, Go-to-Node supervision, durable ownership, and
+cross-process recovery design is documented in
+[`docs/runtime-program-worker-architecture.md`](docs/runtime-program-worker-architecture.md).
+
 ## Local Configuration Boundary
 
 Local Crux tooling should treat source and runtime evidence as the primary description of the
@@ -54,12 +58,12 @@ must not absorb Eval, Inspect, or Review projections.
 and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
 cache, or Static Index internals directly.
 
-The Go-owned Project Index snapshot cache epoch is 49 because it combines the runtime-rich Eval
-timeout-policy facts introduced at epoch 48 with provider-visible tool Safety boundary metadata.
-Epoch 48 snapshots are rejected after restart so they cannot hide the Safety metadata. This is a
-Project Index read-model migration only; static/semantic Index cache identities, Eval Run V4, Eval
-Host V2, task/scorer evidence identity, and Baseline identity remain at their already-established
-versions and epochs.
+The Go-owned Project Index snapshot cache epoch is 60 because it combines main's epoch-59 Thread and
+context-planning contract with the feature lineage's runtime-rich Eval execution and timeout facts.
+Snapshots from either colliding epoch-55 lineage and from main's epoch 59 are rejected after restart
+so neither can hide fields from the combined read model. This is a Project Index read-model migration
+only; static/semantic Index cache identities, Eval Run V4, Eval Host V2, task/scorer evidence identity,
+and Baseline identity remain at their already-established versions and epochs.
 
 Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
 state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,

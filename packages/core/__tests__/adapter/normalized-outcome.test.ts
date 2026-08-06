@@ -38,6 +38,7 @@ describe("normalized adapter outcome taxonomy", () => {
       "timeout",
       "aborted",
       "invalid-request",
+      "invalid-response",
       "provider-error",
       "unknown",
     ];

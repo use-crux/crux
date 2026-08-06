@@ -6,59 +6,103 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
+type favorableDirection int
+
+const (
+	favorableDown favorableDirection = -1
+	favorableUp   favorableDirection = 1
+)
+
+type overviewKPICell struct {
+	label      string
+	value      string
+	delta      string
+	deltaColor color.Color
+	spark      []float64
+	sparkColor color.Color
+}
+
 func (o *Overview) renderKPIStrip(width int) string {
 	summary := o.overviewSummary()
-	contentW := width - 3
+	stats := o.projectedStats()
+
+	openChange := float64(0)
+	if len(summary.OpenInsightsHistory) >= 2 {
+		openChange = float64(summary.OpenInsightsHistory[len(summary.OpenInsightsHistory)-1] - summary.OpenInsightsHistory[0])
+	}
+	passChange, _ := seriesDelta(stats.PassRateSeries)
+	costChange, _ := seriesDelta(stats.CostSeries)
+	latencyChange, _ := seriesDelta(stats.LatencySeries)
+
+	cells := []overviewKPICell{
+		{
+			label: "Open insights", value: fmt.Sprintf("%d", summary.InsightCount),
+			delta: fmtDeltaCount(summary.OpenInsightsHistory), deltaColor: deltaColor(openChange, favorableDown),
+			spark: floatsFromInts(summary.OpenInsightsHistory), sparkColor: shell.ColorTeal,
+		},
+		{
+			label: "Pass rate", value: percent(firstFloat(stats.PassRate, summary.PassRate)),
+			delta: fmtDeltaRate(stats.PassRateSeries), deltaColor: deltaColor(passChange, favorableUp),
+			spark: stats.PassRateSeries, sparkColor: shell.ColorRose,
+		},
+	}
+	if summary.MeanScore != nil {
+		cells = append(cells, overviewKPICell{
+			label: "Mean score", value: score(summary.MeanScore),
+			deltaColor: shell.ColorAmber, sparkColor: shell.ColorViolet,
+		})
+	}
+	cells = append(cells,
+		overviewKPICell{
+			label: "Cost / 100 runs", value: dollars(stats.CostPer100Runs),
+			delta: fmtDeltaCost(stats.CostSeries), deltaColor: deltaColor(costChange, favorableDown),
+			spark: stats.CostSeries, sparkColor: shell.ColorAmber,
+		},
+		overviewKPICell{
+			label: "p95 latency", value: latency(summary.P95LatencyMs),
+			delta: fmtDeltaLatency(stats.LatencySeries), deltaColor: deltaColor(latencyChange, favorableDown),
+			spark: stats.LatencySeries, sparkColor: shell.ColorAmber,
+		},
+	)
+
+	contentW := width - len(cells) + 1
 	if contentW < 4 {
 		contentW = 4
 	}
-	cellW := contentW / 4
-	rem := contentW - cellW*4
+	cellW := contentW / len(cells)
+	rem := contentW - cellW*len(cells)
+	rendered := make([]string, 0, len(cells))
+	for i, cell := range cells {
+		width := cellW
+		if i == len(cells)-1 {
+			width += rem
+		}
+		rendered = append(rendered, o.kpiCell(
+			width,
+			cell.label,
+			cell.value,
+			cell.delta,
+			cell.deltaColor,
+			cell.spark,
+			cell.sparkColor,
+		))
+	}
 
-	// KPI accent colors match the design's visual coding:
-	//   Open insights → teal (neutral trend; severity counts carry the
-	//     status info as colored sub-text)
-	//   Pass rate     → rose (going-down-is-bad)
-	//   Cost / latency → amber (going-up-is-bad)
-	o1 := o.kpiCell(cellW, "Open insights",
-		fmt.Sprintf("%d", summary.InsightCount),
-		o.formatSeverityCounts(),
-		shell.ColorTextDim,
-		overviewSparkFromInts(summary.OpenInsightsHistory, summary.InsightCount),
-		shell.ColorTeal,
-	)
-	o2 := o.kpiCell(cellW, "Pass rate",
-		percent(summary.PassRate),
-		"",
-		shell.ColorRose,
-		passRateSpark(summary),
-		shell.ColorRose,
-	)
-	o3 := o.kpiCell(cellW, "Cost / 100 runs",
-		dollars(summary.CostPer100Runs),
-		fmtDeltaCost(summary.CostSpark),
-		shell.ColorAmber,
-		metricSpark(summary.CostSpark, summary.CostPer100Runs),
-		shell.ColorAmber,
-	)
-	o4 := o.kpiCell(cellW+rem, "p95 latency",
-		latency(summary.P95LatencyMs),
-		fmtDeltaLatency(summary.LatencySpark),
-		shell.ColorAmber,
-		metricSpark(summary.LatencySpark, summary.P95LatencyMs),
-		shell.ColorAmber,
-	)
-
-	// Compose adds a vertical border between cells, which gives the design's
-	// crisp 4-cell strip a clear separator.
+	// Compose adds a vertical border between cells, which gives the KPI strip
+	// clear separators even when the optional mean-score cell is present.
 	// The body panes' headers carry their own top divider now (see
 	// PaneHeader); skipping the explicit one here avoids a double rule
 	// between the KPI strip and the first body section.
-	return kit.ComposeColumns(o1, o2, o3, o4)
+	band := strings.Split(kit.ComposeColumnsOpen(rendered...), "\n")
+	for index := range band {
+		band[index] = theme.SurfaceLine(shell.SurfaceBand, band[index], width)
+	}
+	return strings.Join(band, "\n")
 }
 
 func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor color.Color, spark []float64, sparkColor color.Color) string {
@@ -69,18 +113,14 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor col
 		Render(value)
 	dlt := lipgloss.NewStyle().Foreground(deltaColor).Render(delta)
 
-	// Sparkline as a filled-area braille curve, given the full inner width
-	// of the KPI cell (label/value occupy the rows above).
+	// The shared renderer hides short or flat series instead of inventing a
+	// trend, and uses one data point per block-ramp cell.
 	sk := ""
 	sparkCols := width - 4
 	if sparkCols < 8 {
 		sparkCols = 8
 	}
-	if len(spark) > 0 {
-		sk = kit.SparklineFilled(spark, sparkCols, sparkColor)
-	} else {
-		sk = lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("·", sparkCols))
-	}
+	sk = kit.Sparkline(spark, sparkCols, sparkColor)
 
 	// 5 rows: blank · label · big value + inline delta · blank · sparkline
 	cell := strings.Join([]string{
@@ -93,22 +133,12 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor col
 	return panelRect(cell, width, 5)
 }
 
-func (o *Overview) formatSeverityCounts() string {
-	c := o.overviewSummary().OpenInsightSeverityCounts
-	if len(c) == 0 {
-		return ""
+func deltaColor(change float64, favorable favorableDirection) color.Color {
+	if change == 0 {
+		return shell.ColorAmber
 	}
-	parts := make([]string, 0, 3)
-	if h := c["high"]; h > 0 {
-		parts = append(parts, fmt.Sprintf("%d high", h))
+	if (change > 0 && favorable == favorableUp) || (change < 0 && favorable == favorableDown) {
+		return shell.ColorGreen
 	}
-	// Accept both `medium` (canonical) and `med` (shorthand sometimes
-	// used by backend) so the chip never disappears due to naming drift.
-	if m := c["medium"] + c["med"]; m > 0 {
-		parts = append(parts, fmt.Sprintf("%d med", m))
-	}
-	if l := c["low"]; l > 0 {
-		parts = append(parts, fmt.Sprintf("%d low", l))
-	}
-	return strings.Join(parts, " · ")
+	return shell.ColorRose
 }

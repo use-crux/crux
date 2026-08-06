@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createConvexRuntimeHandlers, type ConvexRuntimeComponent } from '../src/runtime'
 import { createConvexRuntimeTargetExecutor } from '../src/runtime-node'
 import { flow } from '../src/server'
+import { encodeCompositeValue } from '../src/runtime-engine/codec'
 
 const component = {
   runtime: {
@@ -188,7 +189,16 @@ describe('createConvexRuntimeHandlers()', () => {
           throw new Error('Convex inline handlers must not extend leases.')
         }
         if (ref === refs.leases.release) return null
-        if (ref === refs.composites.run) return null
+        if (ref === refs.composites.run) {
+          if (args.kind === 'work.lease') {
+            return encodeCompositeValue({
+              ...work,
+              status: 'leased',
+              leaseToken: lease.token,
+            })
+          }
+          return null
+        }
         return null
       }),
     }

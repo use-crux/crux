@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { LanguageModel } from 'ai'
+import { NoOutputGeneratedError, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import type { ModelInfo } from '@use-crux/core'
+import { ValidationExhaustedError } from '@use-crux/core'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
 import { compileStructuredOutput } from '@use-crux/core/adapter'
-import { cascade, fallback, router } from '@use-crux/core/routing'
+import { cascade, fallback, FallbackExhaustedError, router } from '@use-crux/core/routing'
 import type { SdkLoopResultLike } from '../src/executor'
 import { attemptStructuredGeneration, createStructuredGenerateObjectFn } from '../src/structured-generation'
 import { aiSdkStructuredCapabilities } from '../src/provider-profile'
@@ -117,6 +118,21 @@ describe('attemptStructuredGeneration', () => {
     expectInvalid(attempt)
     expect(attempt.rawText).toBe('{"title":1}')
     expect(attempt.error.issues[0]?.message).toContain('response did not match the expected schema')
+  })
+
+  it('normalizes AI SDK no-output failures as invalid adapter responses', async () => {
+    const scripted = scriptedGateway({ generateText: [new NoOutputGeneratedError()] })
+
+    await expect(
+      attemptStructuredGeneration(scripted.gateway, structuredRequest(z.object({ title: z.string() }))),
+    ).rejects.toMatchObject({
+      name: 'CruxAdapterError',
+      providerError: {
+        kind: 'invalid-response',
+        code: 'ai-sdk.no_output_generated',
+        retryable: true,
+      },
+    })
   })
 
   it('throws non-validation provider errors unchanged', async () => {
@@ -288,6 +304,123 @@ describe('createStructuredGenerateObjectFn', () => {
         kind: 'fallback',
         attempts: [
           { model: 'primary', status: 'error' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
+  })
+
+  it('falls back on AI SDK no-output structured responses', async () => {
+    const scripted = scriptedGateway({
+      generateText: [
+        new NoOutputGeneratedError(),
+        { output: { accepted: true } },
+      ],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const result = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema: z.object({ accepted: z.boolean() }),
+    })
+
+    expect(result.object).toEqual({ accepted: true })
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
+  })
+
+  it('retains every no-output attempt when fallback is exhausted', async () => {
+    const scripted = scriptedGateway({
+      generateText: [new NoOutputGeneratedError(), new NoOutputGeneratedError()],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const error = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema: z.object({ accepted: z.boolean() }),
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(FallbackExhaustedError)
+    expect(error).toMatchObject({
+      attempts: [
+        { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
+        { model: 'backup', status: 'error', errorCategory: 'invalid_response' },
+      ],
+      errors: [{ name: 'CruxAdapterError' }, { name: 'CruxAdapterError' }],
+    })
+  })
+
+  it('throws ValidationExhaustedError for authored schema parse failures without rejected candidates', async () => {
+    const secret = 'leaked-candidate-title'
+    const schema = z.object({
+      title: z.string().superRefine((value, ctx) => {
+        if (value !== 'ok') {
+          ctx.addIssue({ code: 'custom', message: `rejected=${value}`, path: [] })
+        }
+      }),
+    })
+    const scripted = scriptedGateway({
+      generateText: [{ output: { title: secret } }],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const error = await generateObject({
+      model: model('primary'),
+      prompt: 'json please',
+      schema,
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ValidationExhaustedError)
+    expect(error).toMatchObject({
+      attempts: 0,
+      maxAttempts: 0,
+      name: 'ValidationExhaustedError',
+    })
+    const serialized = JSON.stringify(error)
+    expect(serialized).not.toContain(secret)
+    expect(serialized).not.toContain('rejected=')
+    expect((error as ValidationExhaustedError).lastOutput.preview).toBeUndefined()
+    expect((error as ValidationExhaustedError).issues).toEqual([
+      { path: 'title', depth: 1, code: 'custom' },
+    ])
+  })
+
+  it('falls back on authored schema parse failures under invalid_response', async () => {
+    const schema = z.object({ accepted: z.boolean() })
+    const scripted = scriptedGateway({
+      generateText: [
+        { output: { accepted: 'nope' } },
+        { output: { accepted: true } },
+      ],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const result = await generateObject({
+      model: fallback([model('primary'), model('backup')], { on: ['invalid_response'] }),
+      prompt: 'json please',
+      schema,
+    })
+
+    expect(result.object).toEqual({ accepted: true })
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual([
+      'primary',
+      'backup',
+    ])
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error', errorCategory: 'invalid_response' },
           { model: 'backup', status: 'ok' },
         ],
       },

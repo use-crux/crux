@@ -3,6 +3,12 @@ title: Conversation Threads
 description: Bind an agent to durable conversation history, then use the full Threads guides for lifecycle and branch behavior.
 ---
 
+For long-lived keyed Agent ownership across requests and restarts, prefer
+[durable Agent Sessions](/docs/guides/durable-execution/sessions). A Session
+owns one canonical Thread head and exposes only a read-only view of finalized
+messages. The pattern below is the lower-level Thread binding used when the
+application manages the Thread handle itself.
+
 An Agent uses a Thread through its Prompt. Put the Thread in the Prompt's
 `use` array, then run the Agent through an adapter-backed composition:
 

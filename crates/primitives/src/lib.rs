@@ -116,6 +116,10 @@ mod schema;
 mod scorer {
     pub(crate) mod facts;
 }
+mod signal;
+mod session {
+    pub(crate) mod facts;
+}
 mod source_refs;
 mod storage {
     pub(crate) mod capabilities;

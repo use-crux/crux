@@ -137,6 +137,9 @@ export function createMemoryStatePort(
         maxAttempts: existing.maxAttempts,
         idempotencyKey: options.idempotencyKey,
         idleScope: existing.idleScope,
+        application: existing.application
+          ? structuredClone(existing.application)
+          : undefined,
         createdAt: new Date(existing.createdAt),
         updatedAt: options.now ? new Date(options.now) : new Date(),
       });
@@ -297,6 +300,9 @@ export function cloneWorkItem(work: RuntimeWorkItem): RuntimeWorkItem {
     resultRef: work.resultRef
       ? cloneRuntimeResultRef(work.resultRef)
       : undefined,
+    application: work.application
+      ? structuredClone(work.application)
+      : undefined,
     createdAt: new Date(work.createdAt),
     updatedAt: new Date(work.updatedAt),
   });
@@ -324,6 +330,14 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     flowId: snapshot.flowId,
     workId: snapshot.workId,
     targetId: snapshot.targetId,
+    ...(snapshot.definition
+      ? { definition: Object.freeze({ ...snapshot.definition }) }
+      : {}),
+    ...(snapshot.resultObligation
+      ? {
+          resultObligation: Object.freeze({ ...snapshot.resultObligation }),
+        }
+      : {}),
     namespace: snapshot.namespace,
     status: snapshot.status,
     ...(snapshot.effects
@@ -336,6 +350,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
         }
       : {}),
     input: cloneJsonValue(snapshot.input, "flow snapshot input"),
+    ...(snapshot.inputDigest ? { inputDigest: snapshot.inputDigest } : {}),
     ...(snapshot.continuation
       ? {
           continuation: cloneJsonValue(
@@ -415,6 +430,16 @@ function deliveredSuspend(
 
 export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
   switch (work.kind) {
+    case "session.turn":
+      return {
+        kind: work.kind,
+        sessionId: work.sessionId,
+        inputId: work.inputId,
+        cursor: work.cursor,
+        threadId: work.threadId,
+        input: cloneJsonValue(work.input, "Session turn input"),
+        model: { ...work.model },
+      };
     case "flow.resume":
       return { kind: work.kind, flowId: work.flowId };
     case "flow.timeout":

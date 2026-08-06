@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("project config inspect", () => {
-  it("uses the Eval product term in the discovered wire projection", async () => {
+  it("labels discovery counts as config-model scoped", async () => {
     const root = await mkdtemp(join(tmpdir(), "crux-config-inspect-"));
     roots.push(root);
 
@@ -24,6 +24,7 @@ describe("project config inspect", () => {
     >;
 
     expect(discovered).toHaveProperty("evals", 0);
+    expect(discovered).toHaveProperty("scope", "config-model");
     expect(discovered).not.toHaveProperty("evaluations");
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   CruxRuntimeError,
@@ -6,6 +7,9 @@ import {
   RuntimeManagedTransportContractError,
   type RuntimeManagedTransportBinding,
 } from "../../src/runtime/public";
+import { signal } from "../../src/signal";
+import { webhook } from "../../src/signal/transport";
+import { signalProvider } from "../../src/signal/provider";
 
 function binding(id: string, signalId: string): RuntimeManagedTransportBinding {
   return {
@@ -22,21 +26,56 @@ function binding(id: string, signalId: string): RuntimeManagedTransportBinding {
   };
 }
 
+function exampleProvider(id = "example") {
+  return signalProvider({
+    id,
+    transport: webhook({
+      async handle() {
+        throw new Error("unused");
+      },
+    }),
+    signals: {
+      order: signal({
+        id: "orders.created",
+        schema: z.object({ id: z.string().optional() }).passthrough(),
+      }),
+    },
+    async onEvent() {},
+  });
+}
+
+function providersFor(...bindings: readonly RuntimeManagedTransportBinding[]) {
+  // adapter.id is the application-owned executable provider identity.
+  // adapter.provider is the external system string (e.g. "example"), not a second provider.
+  const ids = new Set<string>();
+  for (const entry of bindings) {
+    ids.add(entry.adapter.id);
+  }
+  return [...ids].map((id) => exampleProvider(id));
+}
+
 describe("createRuntimeProgram", () => {
   it("canonicalizes declaration order into one immutable manifest", () => {
+    const transports = [
+      binding("updated", "orders.updated"),
+      binding("created", "orders.created"),
+    ] as const;
+    const providers = providersFor(...transports);
     const first = createRuntimeProgram({
-      targets: [{ name: "orders.updated" }, { name: "orders.created" }],
-      transports: [
-        binding("updated", "orders.updated"),
-        binding("created", "orders.created"),
+      targets: [
+        { name: "orders.updated", kind: "flow" },
+        { name: "orders.created", kind: "flow" },
       ],
+      providers,
+      transports: [...transports],
     });
     const reordered = createRuntimeProgram({
-      targets: [{ name: "orders.created" }, { name: "orders.updated" }],
-      transports: [
-        binding("created", "orders.created"),
-        binding("updated", "orders.updated"),
+      targets: [
+        { name: "orders.created", kind: "flow" },
+        { name: "orders.updated", kind: "flow" },
       ],
+      providers,
+      transports: [transports[1]!, transports[0]!],
     });
 
     expect(first.manifestHash).toMatch(/^[0-9a-f]{64}$/);
@@ -45,67 +84,110 @@ describe("createRuntimeProgram", () => {
       first.targets.map((target) =>
         "name" in target ? target.name : target.targetId,
       ),
-    ).toEqual([
-      "orders.created",
-      "orders.updated",
-    ]);
+    ).toEqual(["orders.created", "orders.updated"]);
     expect(first.transports.map((transport) => transport.id)).toEqual([
       "created",
       "updated",
     ]);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.targets)).toBe(true);
+    expect(Object.isFrozen(first.targetDefinitions)).toBe(true);
+    expect(Object.isFrozen(first.targetDefinitions[0])).toBe(true);
     expect(Object.isFrozen(first.transports)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.adapter)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.configRef)).toBe(true);
     expect(Object.isFrozen(first.transports[0]?.target)).toBe(true);
   });
 
+  it("includes generated definition identity in the immutable manifest", () => {
+    const first = createRuntimeProgram({
+      targets: [
+        {
+          target: { name: "orders.created" },
+          definition: { id: "flow:orders-created", fingerprint: "revision-1" },
+        },
+      ],
+      transports: [],
+    });
+    const changed = createRuntimeProgram({
+      targets: [
+        {
+          target: { name: "orders.created" },
+          definition: { id: "flow:orders-created", fingerprint: "revision-2" },
+        },
+      ],
+      transports: [],
+    });
+
+    expect(first.targetDefinitions).toEqual([
+      {
+        targetId: "orders.created",
+        definitionId: "flow:orders-created",
+        fingerprint: "revision-1",
+      },
+    ]);
+    expect(changed.manifestHash).not.toBe(first.manifestHash);
+  });
+
   it("rejects duplicate target identities with the Runtime diagnostic shape", () => {
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.created" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.created", kind: "flow" },
+        ],
         transports: [],
       }),
     ).toThrow(CruxRuntimeError);
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.created" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.created", kind: "flow" },
+        ],
         transports: [],
       }),
     ).toThrow(/Code: TARGET_DUPLICATE/);
   });
 
   it("rejects duplicate managed-binding identities", () => {
+    const created = binding("created", "orders.created");
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
-        transports: [
-          binding("created", "orders.created"),
-          binding("created", "orders.created"),
-        ],
+        targets: [{ name: "orders.created", kind: "flow" }],
+        providers: providersFor(created),
+        transports: [created, created],
       }),
     ).toThrow(/Code: TARGET_DUPLICATE/);
   });
 
-  it("rejects a managed binding whose Signal target is not declared", () => {
-    expect(() =>
-      createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
-        transports: [binding("updated", "orders.updated")],
-      }),
-    ).toThrow(/Code: TARGET_NOT_FOUND/);
+  it("allows a managed binding whose Signal id is not an executable target", () => {
+    const transport = binding("updated", "orders.updated");
+    const program = createRuntimeProgram({
+      targets: [{ name: "orders.created", kind: "flow" }],
+      providers: providersFor(transport),
+      transports: [transport],
+    });
+    expect(program.providers.map((entry) => entry.id)).toEqual([
+      transport.adapter.id,
+    ]);
+    expect(program.transports[0]?.adapter.provider).toBe("example");
+    expect(program.transports.map((entry) => entry.target.signalId)).toEqual([
+      "orders.updated",
+    ]);
   });
 
   it("reuses the managed-transport validator for malformed or live declarations", () => {
+    const base = binding("created", "orders.created");
     const malformed = {
-      ...binding("created", "orders.created"),
+      ...base,
       client: new Request("https://example.test"),
     } as unknown as RuntimeManagedTransportBinding;
 
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }],
+        targets: [{ name: "orders.created", kind: "flow" }],
+        providers: providersFor(base),
         transports: [malformed],
       }),
     ).toThrow(RuntimeManagedTransportContractError);
@@ -117,7 +199,11 @@ describe("createRuntimeProgram", () => {
 
     expect(() =>
       createRuntimeProgram({
-        targets: [{ name: "orders.created" }, { name: "orders.updated" }],
+        targets: [
+          { name: "orders.created", kind: "flow" },
+          { name: "orders.updated", kind: "flow" },
+        ],
+        providers: providersFor(created, updated),
         transports: [
           created,
           {

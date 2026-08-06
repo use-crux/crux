@@ -10,6 +10,7 @@
 
 import type { Storage } from "../../storage";
 import { ThreadError } from "../errors";
+import { MAIN_THREAD_OWNER_ID } from "../owner";
 import type {
   ThreadEntry,
   ThreadReadOptions,
@@ -34,6 +35,7 @@ export async function readThread(
   storage: Storage,
   threadId: string,
   options: ThreadReadOptions = {},
+  ownerId = MAIN_THREAD_OWNER_ID,
 ): Promise<ThreadSnapshot> {
   validateReadOptions(options);
   const rawControl = await storage.records.get(threadControlKey(threadId));
@@ -49,7 +51,7 @@ export async function readThread(
   if (control.state === "deleted") {
     throw new ThreadError("deleted", `Thread "${threadId}" has been deleted.`);
   }
-  const head = options.at ?? control.heads.main;
+  const head = options.at ?? control.heads[ownerId];
   const revision = threadControlRevision(control);
   if (!head) return frozenSnapshot(threadId, revision, undefined, []);
   if (options.at && !(await isNodePublished(storage, threadId, control, head))) {

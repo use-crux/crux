@@ -32,8 +32,13 @@ type indexLayout struct {
 
 // Resize distributes the concrete body size to Index's stateful panes.
 func (s *Index) Resize(size Size) {
-	s.size = Size{Width: max(0, size.Width), Height: max(0, size.Height)}
-	s.layout = prepareIndexLayout(s.size)
+	nextSize := Size{Width: max(0, size.Width), Height: max(0, size.Height)}
+	nextLayout := prepareIndexLayout(nextSize)
+	if s.size == nextSize && s.layout == nextLayout {
+		return
+	}
+	s.size = nextSize
+	s.layout = nextLayout
 	s.definitions.SetSize(s.layout.list.W, max(0, s.layout.list.H-3))
 	s.detail.SetSize(s.layout.detail.W, max(0, s.layout.detail.H-3))
 	s.syncDetail()

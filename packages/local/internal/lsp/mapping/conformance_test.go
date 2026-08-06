@@ -20,7 +20,7 @@ func TestDiagnosticConformanceFixtures(t *testing.T) {
 	mapper := New(Options{
 		Root: "/workspace", ConfigFile: "/workspace/crux.config.ts",
 		Definition: func(id string) (api.ProjectDefinition, bool) {
-			if id != "prompt:def" {
+			if id != "prompt:def" && id != "session:support" {
 				return api.ProjectDefinition{}, false
 			}
 			endLine, startColumn, endColumn := 4, 2, 5

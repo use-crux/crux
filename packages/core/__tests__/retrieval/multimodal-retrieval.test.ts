@@ -46,8 +46,8 @@ describe('multimodal retrieval dog proof', () => {
     const records = (await storage.records.list('indexer:products:namespace:products:')).entries
     const serializedRecords = JSON.stringify(records)
     expect(serializedRecords).not.toMatch(/"media"|100,111,103|99,97,116|base64|fileId|filename/)
-    const vectorHits = await storage.vectors?.search({ mode: 'dense', dense: [1, 0], limit: 10 })
-    expect(JSON.stringify(vectorHits)).not.toMatch(/100,111,103|99,97,116|base64|fileId|filename/)
+    const searchHits = await storage.search?.search({ legs: [{ kind: 'dense', vector: [1, 0] }], limit: 10 })
+    expect(JSON.stringify(searchHits)).not.toMatch(/100,111,103|99,97,116|base64|fileId|filename/)
   })
 
   it('supports bare media through recipes and uses dense-only hybrid provenance', async () => {
@@ -68,15 +68,15 @@ describe('multimodal retrieval dog proof', () => {
       id: 'product-search', retriever: hybrid, steps: [retrieve()],
     })
 
-    const direct = await hybrid.retrieve(dogPhoto)
-    const throughRecipe = await recipe.retrieve(dogPhoto)
+    const direct = await hybrid.retrieve(dogPhoto, { search: { dense: true } })
+    const throughRecipe = await recipe.retrieve(dogPhoto, { search: { dense: true } })
 
     expect(direct[0].provenance?.matchedQueries).toEqual(['<media:image>'])
     expect(throughRecipe[0].source.id).toBe('rex')
     expect(sparseProvider).not.toHaveBeenCalled()
   })
 
-  it('rejects a mismatched retriever before query embedding or vector search', async () => {
+  it('rejects a mismatched retriever before query embedding or search', async () => {
     const storage = inMemoryStorage()
     const indexed = semanticFake('indexed-space', 2)
     await indexer({ id: 'products', namespace: 'products', storage, dense: indexed })
@@ -86,14 +86,14 @@ describe('multimodal retrieval dog proof', () => {
       kind: 'dense', name: 'query-space', dimensions: 3, maxInputTokens: 100,
       modalities: ['text', 'image'], batch: { maxSize: 8 }, embed: queryProvider,
     })
-    const vectorSearch = vi.spyOn(storage.vectors!, 'search')
+    const searchSpy = vi.spyOn(storage.search!, 'search')
     const mismatched = retriever({
       id: 'products', namespace: 'products', storage, dense: query,
     })
 
     await expect(mismatched.retrieve('dog')).rejects.toBeInstanceOf(EmbeddingSpaceMismatchError)
     expect(queryProvider).not.toHaveBeenCalled()
-    expect(vectorSearch).not.toHaveBeenCalled()
+    expect(searchSpy).not.toHaveBeenCalled()
   })
 })
 

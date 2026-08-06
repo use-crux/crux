@@ -103,6 +103,21 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/runtime-engine"
   />
   <Card
+    title="Application Work"
+    description="spawn, getWork, typed Work handles, control, event streams, and statistics."
+    href="/docs/reference/crux-core/work"
+  />
+  <Card
+    title="Durable Agent Sessions"
+    description="session, getSession, turn handles, inspection, stats, and SessionRuntimeReadModel."
+    href="/docs/reference/crux-core/session"
+  />
+  <Card
+    title="GenerationModel"
+    description="Adapter-bound models for Agents, Sessions, Runtime programs, and Eval identity."
+    href="/docs/reference/crux-core/generation-model"
+  />
+  <Card
     title="Plan"
     description="plan, plan handles, list, ref, and creation tools."
     href="/docs/reference/crux-core/plan"
@@ -139,7 +154,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Storage"
-    description="RecordStore, VectorStore, AssetStore, and storage bundles."
+    description="RecordStore, SearchStore, AssetStore, and storage bundles."
     href="/docs/reference/crux-core/storage"
   />
   <Card
@@ -316,7 +331,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
-| `storage`                     | `Storage`                  | Standard records, vectors, and assets bundle used by durable primitives.             |
+| `storage`                     | `Storage`                  | Standard records, search, and assets bundle used by durable primitives.              |
 | `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
 | `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
 | `generation.autoEscape`       | `boolean`                  | Auto-escape top-level XML-like user input fields. Defaults to `true`.                |
@@ -444,7 +459,7 @@ const model = fallback([gpt4o, claudeSonnet], {
 | `timeout`        | `{ attempt?, firstToken? }?`              | Per-attempt and stream first-token budgets in ms                                             |
 | `onFallback`     | `(info) => void \| Promise<void>`         | Called before moving from a failed model to the next one                                     |
 
-`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'invalid_response'`
+`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'invalid_response' | 'input_limit'`
 
 ### `classifyError(error)`
 
@@ -458,7 +473,10 @@ Classifies an error into an `ErrorCategory` or `null`.
 | `TimeoutError`, `ETIMEDOUT`, `AbortError` | `timeout`            |
 | `ECONNREFUSED`, `ENOTFOUND`               | `connection_error`   |
 | invalid response predicate                | `invalid_response`   |
+| `REQUEST_TOO_LARGE` request composition   | `input_limit`        |
 | HTTP 400, unknown                         | `null` (no fallback) |
+
+`fallback()` tries the next candidate on `input_limit` by default. `cascade()` only escalates a tier for that category when the tier sets `escalateOn: ["input_limit"]`. `retry()` does not accept or retry `input_limit`, because repeating the same model cannot change its context capacity.
 
 ## Validation retry
 
@@ -529,11 +547,11 @@ Think of `embedding()` as provider policy, not search policy:
 const dense = embedding({ kind: 'dense', ... }) // semantic vector
 const sparse = embedding({ kind: 'sparse', ... }) // keyword vector
 
-indexer({ dense, sparse })   // write vectors
-retriever({ dense, sparse }) // query vectors
+indexer({ dense, sparse })   // write vector payloads
+retriever({ dense, sparse }) // query vector legs
 ```
 
-Hybrid search uses both embeddings through `retriever()` or `VectorStore.search()`. It is not `kind: 'hybrid'`.
+Fused retrieval uses both embeddings through `retriever()` or `SearchStore.search()`. It is not `kind: 'hybrid'`.
 
 | Field            | Type                                                               | Description                                    |
 | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------- |
@@ -554,7 +572,7 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 | `countTokens`    | `(text) => number`                                                           | Optional tokenizer for `maxInputTokens` checks           |
 | `embed`          | `(inputs: NormalizedEmbeddingInput[], { role }) => Promise<{ embeddings }>` | Validated provider batch call                            |
 
-Hybrid retrieval is composed _above_ this layer through stores or retrievers.
+Fused retrieval is composed _above_ this layer through stores or retrievers.
 
 Dense instances expose readonly `modalities`, `fingerprint`, and `space`
 derived from vector-producing policy. Sparse instances expose
@@ -611,13 +629,19 @@ const docs = retriever({
   id: "docs",
   namespace: "product-docs",
   records,
-  vectors,
+  search,
   dense,
   sparse,
-  search: { mode: "hybrid" },
 });
 
-const hits = await docs.retrieve("refund policy");
+const hits = await docs.retrieve({
+  query: "refund policy",
+  search: {
+    dense: true,
+    lexical: true,
+    fusion: { strategy: "rrf", k: 60 },
+  },
+});
 
 const answer = prompt({
   use: [docs],
@@ -631,7 +655,7 @@ const answer = prompt({
 | `indexerId` | `string?`                                      | Writer indexer id when it differs from `id`       |
 | `namespace` | `string`                                       | Required corpus boundary                          |
 | `records`   | `RecordStore?`                                 | JSON record hydration for record-backed retrieval |
-| `vectors`   | `VectorStore?`                                 | Dense, sparse, or hybrid vector search            |
+| `search`    | `SearchStore?`                                 | Dense, sparse, or lexical retrieval search        |
 | `dense`     | `DenseEmbedding?`                              | Dense query embedding                             |
 | `sparse`    | `SparseEmbedding?`                             | Sparse query embedding                            |
 | `retrieve`  | `(query, options) => Promise<RetrieverHit[]>?` | Fully custom retrieval path                       |
@@ -656,7 +680,7 @@ Creates the write-time document indexing primitive. It owns chunking, transforms
 
 Documents may provide text, `asset` shorthand, or explicit media parts. Each
 media part becomes one chunk; media bytes are stored through `AssetStore` and
-never persisted in records or vector metadata. The namespace's dense embedding
+never persisted in records or search metadata. The namespace's dense embedding
 space is guarded before writes.
 
 | Field        | Type                | Description                              |
@@ -664,7 +688,7 @@ space is guarded before writes.
 | `id`         | `string`            | Stable indexer identifier                |
 | `namespace`  | `string`            | Required corpus boundary                 |
 | `records`    | `RecordStore`       | Chunk, parent, and corpus record storage |
-| `vectors`    | `VectorStore?`      | Dense, sparse, or hybrid vector index    |
+| `search`     | `SearchStore?`      | Dense, sparse, or lexical retrieval index |
 | `dense`      | `DenseEmbedding?`   | Dense write-time embedding               |
 | `sparse`     | `SparseEmbedding?`  | Sparse write-time embedding              |
 | `chunker`    | `Chunker?`          | Override default chunker                 |
@@ -732,4 +756,4 @@ import type {
 
 - Guide: [Foundations](/docs/foundations), mental model and primitives tour
 - Reference: [Adapters](/docs/reference/adapters), execution layer
-- Reference: [Storage](/docs/reference/storage), persistent RecordStore, VectorStore, and AssetStore implementations
+- Reference: [Storage](/docs/reference/storage), persistent RecordStore, SearchStore, and AssetStore implementations

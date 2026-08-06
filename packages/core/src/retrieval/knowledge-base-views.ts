@@ -11,6 +11,7 @@ import type { EmbeddingModality } from '../embedding'
 import { loadViewRevision, type ViewRevision } from '../knowledge/view/revision'
 import { createAssertionSet } from '../knowledge/assertions/set'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import { createRetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 import type { KnowledgeViewRegistry, ViewRegistration } from '../knowledge/view/registry'
 import type { KnowledgeBaseViewConfig, KnowledgeView, KnowledgeViewRecipeConfig, KnowledgeViewResolution, KnowledgeViewRetrieverConfig } from '../knowledge/view/view'
 import { normalizeViewWhere, type NormalizedViewWhere } from '../knowledge/view/where'
@@ -133,6 +134,17 @@ function createViewHandle<
     viewId: registration.viewId,
     resolveView: availableRevision,
     retention: config.retention,
+    ...(config.records && config.communities
+      ? {
+          refreshHost: createRetainedCommunityRefreshHost({
+            records: config.records,
+            ...(config.assets ? { assets: config.assets } : {}),
+            config: config.communities,
+            resolveView: availableRevision,
+            ...(config.retention ? { retention: config.retention } : {}),
+          }),
+        }
+      : {}),
   })
 
   const handle: KnowledgeView<TMetadataSchema, TModality> = {

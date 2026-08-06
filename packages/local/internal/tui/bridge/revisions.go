@@ -12,6 +12,7 @@ type Domain string
 
 const (
 	DomainRuns      Domain = "runs"
+	DomainEvals     Domain = "evals"
 	DomainInsights  Domain = "insights"
 	DomainBaselines Domain = "baselines"
 	DomainFeedback  Domain = "feedback"
@@ -92,6 +93,7 @@ func (d Domains) List() []Domain {
 // Revisions carries monotonic counters for each live data domain.
 type Revisions struct {
 	Runs      uint64
+	Evals     uint64
 	Insights  uint64
 	Baselines uint64
 	Feedback  uint64
@@ -123,6 +125,8 @@ func (r *Revisions) bump(domains ...Domain) Domains {
 		switch domain {
 		case DomainRuns:
 			r.Runs++
+		case DomainEvals:
+			r.Evals++
 		case DomainInsights:
 			r.Insights++
 		case DomainBaselines:
@@ -150,10 +154,10 @@ func domainsForInspectEvent(ev api.InspectEvent) []Domain {
 		return []Domain{DomainRuns, DomainActivity}
 	case strings.Contains(kind, "insight"):
 		return []Domain{DomainInsights, DomainActivity}
-	case strings.Contains(kind, "eval"):
-		return []Domain{DomainActivity}
 	case strings.Contains(kind, "baseline"):
 		return []Domain{DomainBaselines, DomainContext, DomainActivity}
+	case strings.Contains(kind, "eval"):
+		return []Domain{DomainEvals, DomainActivity}
 	case strings.Contains(kind, "feedback"):
 		return []Domain{DomainFeedback, DomainActivity}
 	case strings.Contains(kind, "index"):

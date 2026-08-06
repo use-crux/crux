@@ -5,7 +5,7 @@
  */
 
 /** Extraction prompt/cache shape version; bump when generated derive output semantics change. */
-export const EXTRACTION_CONTRACT_VERSION = 2
+export const EXTRACTION_CONTRACT_VERSION = 3
 
 /** Maximum estimated content characters assigned to one generated derive batch. */
 export const MAX_DERIVE_BATCH_CHARS = 12000

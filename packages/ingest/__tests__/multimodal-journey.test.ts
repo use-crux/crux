@@ -1,6 +1,6 @@
 import { embedding } from '@use-crux/core/embedding'
 import { indexer, retriever } from '@use-crux/core'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '@use-crux/core/storage'
 import { describe, expect, it, vi } from 'vitest'
 import { fileSource } from '../src'
 
@@ -19,12 +19,12 @@ describe('multimodal ingest product journey', () => {
       namespace: 'kb', sourceId: 'demo-video', media: { transcribe },
     }).documents())
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const dense = embedding({ kind: 'dense', name: 'journey', dimensions: 2, maxInputTokens: 100,
       batch: { maxSize: 8 }, embed: async () => [[1, 0]] })
-    await indexer({ id: 'journey', namespace: 'kb', records, vectors, dense }).indexDocuments([document])
+    await indexer({ id: 'journey', namespace: 'kb', records, search, dense }).indexDocuments([document])
 
-    const hits = await retriever({ id: 'journey', namespace: 'kb', records, vectors, dense }).retrieve('launch')
+    const hits = await retriever({ id: 'journey', namespace: 'kb', records, search, dense }).retrieve('launch')
     expect(hits[0]).toMatchObject({ content: 'Launch at noon.', source: {
       id: 'demo-video', assetRef: { uri: 'asset://demo-video' }, mediaType: 'video/mp4',
       location: { type: 'time', unit: 'seconds', start: 3, end: 5 },

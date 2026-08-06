@@ -10,13 +10,7 @@
 import type { LeaseToken, WorkId } from "../ports/ids";
 import type { FlowSnapshot } from "../ports/state";
 import type { RuntimeStoreTransaction } from "../store";
-import type { CruxRuntimeErrorCode } from "./errors";
 import type { RuntimeTargetOutcome, RuntimeWakeResult } from "./kernel-types";
-import { recordSuspensionInTransaction } from "./kernel-events";
-import {
-  flushScheduledWorkInTransaction,
-  mergeScheduledWorkRecords,
-} from "./kernel-scheduled-work";
 import { putWorkWithIdleAccounting } from "./kernel-idle";
 import {
   assertLeaseHeldInTransaction,
@@ -32,26 +26,19 @@ import { transition, type RuntimeWorkItem } from "./work";
 import { recordSignalDeliveryAttempt } from "../reactive/delivery-state";
 import { runtimeRetrySnapshotForError } from "./target-retry";
 import { persistMergedRetrySnapshot } from "./kernel-predicate-suspension";
+import { settleFailedSignalWork } from "./signal-delivery-settlement";
 import {
-  settleCompletedSignalWork,
-  settleFailedSignalWork,
-} from "./signal-delivery-settlement";
-/** Serialized failure details carried into a wake failure composite. */
-export type WakeFailureInput =
-  | {
-      /** Dead-letter ordinary failures after attempts are exhausted. */
-      readonly kind: "dead-letter";
-      /** Message preserved from the original thrown value. */
-      readonly message: string;
-    }
-  | {
-      /** Block public runtime diagnostics without retrying. */
-      readonly kind: "blocked";
-      /** Stable runtime error code that caused the terminal block. */
-      readonly code: CruxRuntimeErrorCode;
-      /** Message preserved from the original thrown value. */
-      readonly message: string;
-    };
+  applicationWorkFailure,
+  type WakeFailureInput,
+} from "./application-work-failure";
+import {
+  appendApplicationWorkStatusEvent,
+  recordApplicationWorkStatusTransition,
+} from "./application-work-events";
+import { recordApplicationWorkTransition } from "./application-work-statistics";
+
+export type { WakeFailureInput } from "./application-work-failure";
+export { completeWorkInTransaction } from "./kernel-wake-completion";
 interface FailWorkOptions {
   readonly runComposite: RuntimeCompositeRunner;
   readonly work: RuntimeWorkItem;
@@ -164,14 +151,23 @@ export async function retryWorkAfterFailureInTransaction(
     input.work,
     input.leaseToken,
   );
-  const retryWork = transition(current, {
+  let retryWork = transition(current, {
     status: "pending",
     attempt: current.attempt + 1,
     notBefore: input.retryAt,
   });
   await persistMergedRetrySnapshot(tx, input.retrySnapshot);
   await recordSignalDeliveryAttempt(tx, current, "pending", deps.now());
-  await tx.state.putWork(retryWork);
+  if (retryWork.application) {
+    retryWork = await recordApplicationWorkStatusTransition(
+      tx,
+      current,
+      retryWork,
+      deps.now(),
+    );
+  } else {
+    await tx.state.putWork(retryWork);
+  }
   await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
     deliverAt: input.retryAt,
   });
@@ -192,24 +188,25 @@ export async function failWorkInTransaction(
     input.work,
     input.leaseToken,
   );
-  const failedWork =
-    input.failure.kind === "dead-letter"
-      ? transition(current, {
-          status: "dead-letter",
-          lastError: {
-            code: "WORK_DEAD_LETTERED",
-            message: input.failure.message,
-            at: deps.now(),
-          },
-        })
-      : transition(current, {
-          status: "blocked",
-          lastError: {
-            code: input.failure.code,
-            message: input.failure.message,
-            at: deps.now(),
-          },
-        });
+  let failedWork = transition(current, {
+    status: input.failure.kind === "dead-letter" ? "dead-letter" : "blocked",
+    lastError: await applicationWorkFailure(
+      tx,
+      current,
+      input.failure,
+      deps.now,
+    ),
+  });
+  const failedAt = deps.now();
+  failedWork = await appendApplicationWorkStatusEvent(
+    tx,
+    recordApplicationWorkTransition(current, failedWork, failedAt, {
+      completed: failedWork.status === "dead-letter",
+      ...(failedWork.status === "dead-letter"
+        ? { facts: [{ kind: "failure", failureKind: "work" }] }
+        : {}),
+    }),
+  );
 
   await settleFailedSignalWork(
     tx,
@@ -224,74 +221,4 @@ export async function failWorkInTransaction(
     current,
     failedWork,
   );
-}
-
-/** Commit a successful target outcome inside a transaction. */
-export async function completeWorkInTransaction(
-  tx: RuntimeStoreTransaction,
-  deps: RuntimeCompositeDeps,
-  input: {
-    readonly work: RuntimeWorkItem;
-    readonly leaseToken: LeaseToken;
-    readonly outcome: RuntimeTargetOutcome;
-    readonly idempotencyKey: string;
-  },
-): Promise<void> {
-  const current = await assertLeaseHeldInTransaction(
-    tx,
-    input.work,
-    input.leaseToken,
-  );
-  await settleCompletedSignalWork(tx, current, input.outcome, deps.now());
-  if (input.outcome.status === "suspended") {
-    await recordSuspensionInTransaction(tx, deps, input.outcome.suspension);
-    await tx.state.putIdempotencyKey({
-      namespace: current.namespace,
-      key: input.idempotencyKey,
-      completedAt: deps.now(),
-    });
-    return;
-  }
-
-  const completed =
-    input.outcome.status === "completed"
-      ? transition(current, {
-          status: "completed",
-          resultRef: input.outcome.resultRef,
-        })
-      : input.outcome.status === "cancelled"
-        ? transition(current, { status: "cancelled" })
-        : transition(current, {
-            status: "blocked",
-            lastError: input.outcome.error,
-          });
-  if (
-    (input.outcome.status === "completed" ||
-      input.outcome.status === "cancelled") &&
-    "flowSnapshot" in input.outcome
-  ) {
-    const flushedWork = await flushScheduledWorkInTransaction(
-      tx,
-      input.outcome.scheduledWork,
-      deps.now,
-    );
-    await tx.state.putSnapshot({
-      ...input.outcome.flowSnapshot,
-      scheduledWork: mergeScheduledWorkRecords(
-        input.outcome.flowSnapshot.scheduledWork,
-        flushedWork,
-      ),
-    });
-  }
-  await putWorkWithIdleAccounting(
-    tx,
-    { newWorkId: deps.newWorkId, now: deps.now },
-    current,
-    completed,
-  );
-  await tx.state.putIdempotencyKey({
-    namespace: current.namespace,
-    key: input.idempotencyKey,
-    completedAt: deps.now(),
-  });
 }

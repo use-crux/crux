@@ -68,7 +68,7 @@ export interface TsgoCanonicalExportIdentityOptions {
   readonly validationDependencies?: SemanticCacheValidationDependencyCollector;
 }
 
-/** Creates exact package-root export identity operations for one native project. */
+/** Creates exact public package export identity operations for one native project. */
 export function createTsgoCanonicalExportIdentity(
   project: Project,
   options: TsgoCanonicalExportIdentityOptions = {},
@@ -211,7 +211,8 @@ export function createTsgoCanonicalExportIdentity(
     ) {
       return false;
     }
-    if (!packageManifestMatches(module, moduleName)) return false;
+    if (!packageManifestMatches(module, packageRootName(moduleName)))
+      return false;
     const rootExport = project.checker
       .getExportsOfModule(module)
       .find((symbol) => symbol.name === exportName);
@@ -219,6 +220,13 @@ export function createTsgoCanonicalExportIdentity(
     if (!terminal || terminal === "type-only") return false;
     packageTerminals.set(terminal.id, terminal);
     return true;
+  }
+
+  function packageRootName(moduleName: string): string {
+    const segments = moduleName.split("/");
+    return moduleName.startsWith("@")
+      ? segments.slice(0, 2).join("/")
+      : (segments[0] ?? moduleName);
   }
 
   function terminalSymbol(

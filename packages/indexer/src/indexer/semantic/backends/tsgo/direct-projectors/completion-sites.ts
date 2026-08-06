@@ -5,6 +5,7 @@ import type {
   NativeDirectPrimitiveSpec,
 } from "./manifest";
 import { objectDependencyTargetKinds } from "./manifest";
+import { sessionCompletionSites } from "../../../../session/semantic-manifest";
 
 /** Syntax shapes recognized by the cache-bypassing completion compiler. */
 export type CompletionSlot =
@@ -79,7 +80,11 @@ export function completionSiteManifest(
       completionSitesForDependency(primitive.callName, dependency),
     ),
   );
-  return mergeEquivalentSites([...routingCompletionSites, ...dependencySites]);
+  return mergeEquivalentSites([
+    ...routingCompletionSites,
+    ...sessionCompletionSites,
+    ...dependencySites,
+  ]);
 }
 
 function completionSitesForDependency(

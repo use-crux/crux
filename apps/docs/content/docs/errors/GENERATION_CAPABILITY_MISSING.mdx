@@ -1,0 +1,24 @@
+---
+title: GENERATION_CAPABILITY_MISSING
+description: The selected GenerationModel cannot execute the Agent contract.
+---
+
+## What failed
+
+`session()` resolved a bound model whose declared language capabilities do not
+cover the Agent requirements (for example structured output or tool calls).
+
+## Why
+
+Capability preflight runs before durable allocation so missing facets cannot
+create a Session that the worker cannot execute.
+
+## What still works
+
+Sessions using compatible declared models remain available. No Session, Work,
+or Thread mutation occurs for the failed call.
+
+## Fix
+
+Select a `GenerationModel` that declares the required language capabilities, or
+narrow the Agent Prompt/tools so the required facets match the model.

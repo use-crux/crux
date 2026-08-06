@@ -3,25 +3,25 @@ import { EmbeddingSpaceMismatchError, embedding } from "../../src/embedding";
 import { indexedEmbeddingSpaceKey } from "../../src/indexed-knowledge";
 import { indexer } from "../../src/indexing";
 import { retriever } from "../../src/retrieval";
-import { inMemoryRecordStore, inMemoryVectorStore } from "../../src/storage";
+import { inMemoryRecordStore, inMemorySearchStore } from "../../src/storage";
 
 describe("namespace embedding-space guard", () => {
   it("retains the guard for surviving writers and names them in mismatch errors", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const firstSpace = textEmbedding("first-space", 2);
     const a = indexer({
       id: "a",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
     const b = indexer({
       id: "b",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
 
@@ -39,7 +39,7 @@ describe("namespace embedding-space guard", () => {
         id: "b",
         namespace: "shared",
         records,
-        vectors,
+        search,
         dense: firstSpace,
       }).retrieve("query"),
     ).resolves.toHaveLength(1);
@@ -49,7 +49,7 @@ describe("namespace embedding-space guard", () => {
       id: "c",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: textEmbedding("second-space", 3, cProvider),
     });
     const rejected = c.indexDocuments([document("c-source")]);
@@ -66,20 +66,20 @@ describe("namespace embedding-space guard", () => {
 
   it("deletes the guard with the last writer so another space can claim it", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const firstSpace = textEmbedding("first-space", 2);
     const a = indexer({
       id: "a",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
     const b = indexer({
       id: "b",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
 
@@ -95,7 +95,7 @@ describe("namespace embedding-space guard", () => {
       id: "c",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: textEmbedding("second-space", 3),
     });
     await expect(
@@ -111,25 +111,25 @@ describe("namespace embedding-space guard", () => {
 
   it("does not register a same-space writer whose vector write fails", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const firstSpace = textEmbedding("first-space", 2);
     const a = indexer({
       id: "a",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
     const b = indexer({
       id: "b",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     });
 
     await a.indexDocuments([document("a-source")]);
-    vi.spyOn(vectors, "upsert").mockRejectedValueOnce(
+    vi.spyOn(search, "upsert").mockRejectedValueOnce(
       new Error("vector write failed"),
     );
     await expect(b.indexDocuments([document("b-source")])).rejects.toThrow(
@@ -146,7 +146,7 @@ describe("namespace embedding-space guard", () => {
       id: "c",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: textEmbedding("second-space", 3),
     });
     await expect(
@@ -156,12 +156,12 @@ describe("namespace embedding-space guard", () => {
 
   it("preserves the single-indexer clear and reindex experience", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const first = indexer({
       id: "docs",
       namespace: "docs",
       records,
-      vectors,
+      search,
       dense: textEmbedding("first-space", 2),
     });
 
@@ -175,7 +175,7 @@ describe("namespace embedding-space guard", () => {
       id: "docs",
       namespace: "docs",
       records,
-      vectors,
+      search,
       dense: textEmbedding("second-space", 3),
     });
     await expect(
@@ -185,13 +185,13 @@ describe("namespace embedding-space guard", () => {
 
   it("rejects mixed legacy hits when premature guard deletion permits another claim", async () => {
     const records = inMemoryRecordStore();
-    const vectors = inMemoryVectorStore();
+    const search = inMemorySearchStore();
     const firstSpace = textEmbedding("first-space", 2);
     await indexer({
       id: "b",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: firstSpace,
     }).indexDocuments([document("b-source")]);
 
@@ -201,18 +201,18 @@ describe("namespace embedding-space guard", () => {
       id: "c",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: secondSpace,
     }).indexDocuments([document("c-source")]);
 
-    const search = retriever({
+    const docs = retriever({
       id: "c",
       namespace: "shared",
       records,
-      vectors,
+      search,
       dense: secondSpace,
     });
-    await expect(search.retrieve("query")).rejects.toBeInstanceOf(
+    await expect(docs.retrieve("query")).rejects.toBeInstanceOf(
       EmbeddingSpaceMismatchError,
     );
   });

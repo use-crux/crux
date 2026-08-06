@@ -36,6 +36,12 @@ import type { InputBudget } from "../../request/budget/input-budget";
 import type { PrepareStep } from "../../request/prepare/step";
 import type { ThreadCommit } from "../../thread/types";
 import type { SystemBlock } from "../../resolver/types";
+import {
+  managedGenerationCheckpoint,
+  type ManagedGenerationCheckpoint,
+  managedGenerationStepBoundary,
+  type ManagedGenerationStepBoundary,
+} from "../../generation-model/execution-checkpoint";
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
@@ -54,6 +60,10 @@ export interface AdapterExecutionGenerateArgs<
   TModel,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
 > {
+  /** Session-owned durable completion hook. @internal */
+  readonly [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
+  /** Session coordinator invoked before preparation at semantic steps. @internal */
+  readonly [managedGenerationStepBoundary]?: ManagedGenerationStepBoundary;
   /** Prompt definition to resolve for this run. */
   readonly prompt: AnyPrompt;
 

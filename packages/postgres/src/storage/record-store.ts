@@ -36,7 +36,7 @@ export function createRecordStore<T extends JsonObject = JsonObject>(
   closeOwnedPool = false,
   setup: PostgresStorageSetup = createStorageSetup(connection.pool, connection.schema, {
     records: true,
-    vectors: false,
+    search: false,
   }),
 ): PostgresRecordStore<T> {
   const { pool, schema } = connection

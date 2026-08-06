@@ -2,10 +2,12 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
@@ -43,7 +45,7 @@ func (c *overviewRunsProgramClient) Runs(context.Context) ([]api.InspectRunRecor
 	return c.inspectRuns(), nil
 }
 
-func (c *overviewRunsProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+func (c *overviewRunsProgramClient) ObservabilityRunsPage(context.Context, ...string) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{
 		c.observabilityRun(firstSimilarRunID),
 		c.observabilityRun(secondSimilarRunID),
@@ -244,5 +246,98 @@ func TestBackRestoresOverviewRouteFocusAndRunSelection(t *testing.T) {
 	}
 	if got := client.requestedRunIDs(); len(got) != 2 || got[0] != secondSimilarRunID || got[1] != secondSimilarRunID {
 		t.Fatalf("run detail requests = %#v, want exact run before and after Back", got)
+	}
+}
+
+type overviewFailuresProgramClient struct {
+	*uitest.FixtureClient
+
+	mu      sync.Mutex
+	filters []api.InspectRunsOptions
+}
+
+func (c *overviewFailuresProgramClient) ObservabilityRunsPageWithOptions(
+	ctx context.Context,
+	options api.InspectRunsOptions,
+	definitionID ...string,
+) (api.ObservabilityRunsPage, error) {
+	c.mu.Lock()
+	c.filters = append(c.filters, options)
+	c.mu.Unlock()
+	return c.FixtureClient.ObservabilityRunsPageWithOptions(ctx, options, definitionID...)
+}
+
+func (c *overviewFailuresProgramClient) latestFilter() (api.InspectRunsOptions, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.filters) == 0 {
+		return api.InspectRunsOptions{}, false
+	}
+	return c.filters[len(c.filters)-1], true
+}
+
+type overviewFailuresProgramDriver struct {
+	app   *App
+	stage int
+}
+
+func (d *overviewFailuresProgramDriver) Init() tea.Cmd {
+	return d.app.Init()
+}
+
+func (d *overviewFailuresProgramDriver) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, appCmd := d.app.Update(msg)
+	client := d.app.client.(*overviewFailuresProgramClient)
+
+	var driverCmd tea.Cmd
+	switch d.stage {
+	case 0:
+		overview := d.app.workbench.screens["overview"].(*screens.Overview)
+		if overview.Counts()["runs"] > 0 {
+			d.stage++
+			driverCmd = keyCommand(tea.KeyPressMsg{Text: "f", Code: 'f'})
+		}
+	case 1:
+		if d.app.workbench.activeNav == "runs" {
+			if _, ok := client.latestFilter(); ok {
+				return d, tea.Quit
+			}
+		}
+	}
+	return d, tea.Batch(appCmd, driverCmd)
+}
+
+func (d *overviewFailuresProgramDriver) View() tea.View {
+	return d.app.View()
+}
+
+func TestOverviewFailuresJumpPreselectsServerFilterThroughRealProgram(t *testing.T) {
+	client := &overviewFailuresProgramClient{FixtureClient: uitest.NewFixtureClient()}
+	app := newTestApp("http://localhost:4400", client, "", false)
+	app.MarkBootComplete()
+
+	_, _, err := runTestProgram(t, &overviewFailuresProgramDriver{app: app}, "")
+	if err != nil {
+		t.Fatalf("run app: %v", err)
+	}
+	if app.workbench.activeNav != "runs" {
+		t.Fatalf("active nav = %q, want runs", app.workbench.activeNav)
+	}
+	filter, ok := client.latestFilter()
+	if !ok {
+		t.Fatal("Runs did not request a server-side failures filter")
+	}
+	want := []string{"error", "fail", "failed"}
+	if len(filter.Status) != len(want) {
+		t.Fatalf("failure statuses = %#v, want %#v", filter.Status, want)
+	}
+	for i := range want {
+		if filter.Status[i] != want[i] {
+			t.Fatalf("failure statuses = %#v, want %#v", filter.Status, want)
+		}
+	}
+	view := ansi.Strip(app.workbench.screens["runs"].View(screens.Size{Width: 100, Height: 30}))
+	if !strings.Contains(view, "filter: failures") {
+		t.Fatalf("Runs did not retain the preselected failures filter:\n%s", view)
 	}
 }

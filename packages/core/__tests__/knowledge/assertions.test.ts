@@ -193,6 +193,62 @@ describe('assertions', () => {
     expect(second).toEqual([{ stageId: 'facts', status: 'cached', claims: 1, warnings: first[0]?.warnings }])
     expect(model.generateObject).toHaveBeenCalledTimes(2)
   })
+
+  it('sends authored data and exact batch evidence constraints to the model', async () => {
+    const { records } = inMemoryStorage()
+    const chunks = [
+      chunk('doc-1', 'c1', 'Fact'),
+      chunk('doc-1', 'c2', 'Price is 12 EUR'),
+    ]
+    await persistChunks(records, chunks)
+    const valid = {
+      assertions: [{
+        type: 'price',
+        data: { amount: 12, currency: 'EUR' },
+        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
+        provenance: 'exact',
+      }],
+    }
+    const generateObject = vi.fn(async ({ schema }: Parameters<NonNullable<KnowledgeModel['generateObject']>>[0]) => {
+      expect(schema.safeParse(valid).success).toBe(true)
+      expect(schema.safeParse({ assertions: [{
+        type: 'price',
+        data: { value: 'wrong schema' },
+        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
+      }] }).success).toBe(false)
+      expect(schema.safeParse({ assertions: [{
+        type: 'fact',
+        data: { value: 'unoffered evidence' },
+        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'not-offered' }],
+      }] }).success).toBe(false)
+      expect(schema.safeParse({ assertions: [{
+        type: 'fact',
+        data: { value: 'missing evidence' },
+      }] }).success).toBe(false)
+      return { object: valid } as never
+    })
+    const stage = assertions({
+      id: 'facts',
+      version: 1,
+      types: schemas,
+      model: knowledgeModel({
+        name: 'assertion-extractor',
+        version: 'wire-schema-v1',
+        generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
+        generateObject,
+      }),
+    })
+
+    await expect(runDeriveStages({
+      records,
+      indexerId,
+      namespace,
+      stages: [stage],
+      document: document('doc-1'),
+      chunks,
+    })).resolves.toMatchObject([{ status: 'ran', claims: 1 }])
+    expect(generateObject).toHaveBeenCalledOnce()
+  })
 })
 
 function countingModel(objects: readonly unknown[]): KnowledgeModel {

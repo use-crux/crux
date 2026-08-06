@@ -3,7 +3,7 @@ import type { AssetStore } from '../../src/asset'
 import { inMemoryAssetStore } from '../../src/asset'
 import { embedding, embeddingSpaceDigest } from '../../src/embedding'
 import { indexer, indexingPipeline, transform } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 describe('multimodal indexing storage', () => {
   it('materializes before embedding, bypasses pipeline caches, and persists no media payload', async () => {
@@ -18,7 +18,7 @@ describe('multimodal indexing storage', () => {
       delete: assetStore.delete,
     }
     const records = inMemoryRecordStore()
-    const vectors = inMemoryVectorStore()
+    const search = inMemorySearchStore()
     const runTransform = vi.fn((document) => document)
     const runProvider = vi.fn(async (inputs) => {
       events.push('embed')
@@ -37,7 +37,7 @@ describe('multimodal indexing storage', () => {
     const docs = indexer({
       id: 'products',
       namespace: 'products',
-      storage: { records, vectors, assets },
+      storage: { records, search, assets },
       dense,
       cache: true,
       pipeline: indexingPipeline({
@@ -82,7 +82,7 @@ describe('multimodal indexing storage', () => {
       modalities: ['text', 'image'],
       writers: ['products'],
     })
-    const [hit] = await vectors.search({ mode: 'dense', dense: [1, 0], limit: 1 })
+    const [hit] = await search.search({ legs: [{ kind: 'dense', vector: [1, 0] }], limit: 1 })
     expect(hit.metadata?.embeddingSpace).toBe(digest)
   })
 
@@ -153,8 +153,8 @@ describe('multimodal indexing storage', () => {
 
   it('keeps dry-runs free of asset, record, vector, and cache writes', async () => {
     const records = inMemoryRecordStore()
-    const vectorBase = inMemoryVectorStore()
-    const upsert = vi.fn(vectorBase.upsert.bind(vectorBase))
+    const searchBase = inMemorySearchStore()
+    const upsert = vi.fn(searchBase.upsert.bind(searchBase))
     const put = vi.fn()
     const dense = embedding({
       kind: 'dense', name: 'media', dimensions: 2, maxInputTokens: 100,
@@ -164,7 +164,7 @@ describe('multimodal indexing storage', () => {
       id: 'dry', namespace: 'kb', dense, cache: true,
       storage: {
         records,
-        vectors: { ...vectorBase, upsert },
+        search: { ...searchBase, upsert },
         assets: { put, get: vi.fn(), delete: vi.fn() },
       },
     })
@@ -188,7 +188,7 @@ describe('multimodal indexing storage', () => {
       id: 'failed-put', namespace: 'kb',
       storage: {
         records,
-        vectors: inMemoryVectorStore(),
+        search: inMemorySearchStore(),
         assets: {
           put: vi.fn(async () => { throw new Error('asset backend unavailable') }),
           get: vi.fn(),

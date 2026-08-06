@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding, type DenseEmbedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage validation', () => {
@@ -17,7 +17,7 @@ describe('indexer embedding-stage validation', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -55,7 +55,7 @@ describe('indexer embedding-stage validation', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -93,7 +93,7 @@ describe('indexer embedding-stage validation', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense: embedding({
         kind: 'dense',
         name: 'dense-test',
@@ -140,7 +140,7 @@ describe('indexer embedding-stage validation', () => {
       id: 'docs',
       namespace: 'kb',
       records,
-      vectors: inMemoryVectorStore(),
+      search: inMemorySearchStore(),
       dense,
       cache: true,
     })

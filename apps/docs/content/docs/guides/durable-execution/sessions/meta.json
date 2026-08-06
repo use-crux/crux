@@ -1,0 +1,5 @@
+{
+  "title": "Durable Agent Sessions",
+  "description": "Keyed Agent ownership, ordered durable turns, reconnection, recovery, and production setup.",
+  "pages": ["index", "recipes"]
+}

@@ -19,6 +19,8 @@ import (
 
 var errNoInspectService = fmt.Errorf("Inspect service not configured")
 var errNoObservabilityService = fmt.Errorf("observability service not configured")
+var errNoDevtoolsService = fmt.Errorf("devtools service not configured")
+var errNoEvalReads = errors.New("eval reads not configured")
 
 // DirectClient exposes the devtools read API against an in-process store.
 // It lets native clients use the same logical routes as the HTTP API without a
@@ -27,6 +29,8 @@ type DirectClient struct {
 	devtools      *Service
 	inspect       *inspect.Service
 	observability *observability.Service
+	eval          endpoints.EvalReads
+	evalCatalog   endpoints.EvalCatalogReads
 }
 
 func NewDirectClient(s *store.Store, inspectServices ...*inspect.Service) *DirectClient {
@@ -44,6 +48,13 @@ func NewDirectClientFromService(devtools *Service) *DirectClient {
 func (c *DirectClient) WithObservability(service *observability.Service) *DirectClient {
 	c.observability = service
 	c.devtools.WithObservability(service)
+	return c
+}
+
+// WithEvalReads attaches the existing Eval artifact and discovery readers.
+func (c *DirectClient) WithEvalReads(reads endpoints.EvalReads, catalog endpoints.EvalCatalogReads) *DirectClient {
+	c.eval = reads
+	c.evalCatalog = catalog
 	return c
 }
 

@@ -1,0 +1,34 @@
+---
+title: GENERATION_MODEL_NOT_STATIC
+description: The selected GenerationModel is not declared by the active Runtime program.
+---
+
+## What failed
+
+`session()` selected a bound model that is absent from
+`RuntimeProgram.generationModels`.
+
+## Why
+
+Durable Session execution can only pin models that the immutable Runtime
+program declares. Dynamic, undeclared models would break reconnect and worker
+loading.
+
+## What still works
+
+Declared models and Sessions that already use them remain available. No
+Session, Work, or Thread mutation occurs for the failed call.
+
+## Fix
+
+Add the selected model to program construction or the generated program inputs:
+
+```ts
+createRuntimeProgram({
+  targets: [support],
+  generationModels: [supportModel, overrideModel],
+  transports: [],
+});
+```
+
+Then regenerate Runtime artifacts before deploying app and worker processes.

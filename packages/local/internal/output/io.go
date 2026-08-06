@@ -71,10 +71,13 @@ func NewIO(noColor bool) *IO {
 		colorProfile: colorprofile.Detect(os.Stdout, os.Environ()),
 		stdinTTY:     stdinFileTTY || force,
 		stdoutTTY:    stdoutFileTTY || force,
-		stderrTTY:    stderrFileTTY || force,
-		ci:           detectCI(),
-		term:         os.Getenv("TERM"),
-		outFile:      os.Stdout,
+		// Progress animation requires a physical terminal. Color/TTY force
+		// overrides may style redirected output, but must not emit cursor-control
+		// frames into a pipe or file.
+		stderrTTY: stderrFileTTY,
+		ci:        detectCI(),
+		term:      os.Getenv("TERM"),
+		outFile:   os.Stdout,
 	}
 }
 
@@ -131,8 +134,8 @@ func (io *IO) IsStdinTTY() bool { return io.stdinTTY }
 // a force override is set). Drives whether stdout-bound hyperlinks are emitted.
 func (io *IO) IsStdoutTTY() bool { return io.stdoutTTY }
 
-// IsStderrTTY reports whether the diagnostic stream is an interactive terminal
-// (or a force override is set). Drives whether live status lines animate.
+// IsStderrTTY reports whether the diagnostic stream is a physical interactive
+// terminal. Force-color overrides never make redirected stderr safe to animate.
 func (io *IO) IsStderrTTY() bool { return io.stderrTTY }
 
 // ColorEnabled reports whether styled output should emit ANSI color. When false,
@@ -221,7 +224,8 @@ func colorEnabledFor(noColor, streamTTY bool) bool {
 
 // forceTTY reports whether a TTY/color force override is set: CLICOLOR_FORCE to
 // any non-"0" value, or CRUX_FORCE_TTY to any non-empty value (mirrors gh's
-// GH_FORCE_TTY). Used to drive both color and IsStdout/StderrTTY in tests/CI.
+// GH_FORCE_TTY). It can force color and primary-stream TTY behavior, but never
+// makes redirected stderr safe for cursor-control animation.
 func forceTTY() bool {
 	if v := os.Getenv("CLICOLOR_FORCE"); v != "" && v != "0" {
 		return true

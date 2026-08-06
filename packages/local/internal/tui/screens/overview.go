@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
@@ -19,6 +20,10 @@ type Overview struct {
 	runsResource     *resource.Resource[[]api.InspectRunRecord]
 	activityResource *resource.Resource[[]api.InspectActivityEvent]
 	activityOverlay  []api.InspectActivityEvent
+	runNames         map[string]string
+	runSessions      map[string]string
+	stats            *store.StatsResult
+	statsTimeseries  []store.TimeseriesBucket
 
 	// Cross-pane cursor state. Overview is the workflow launchpad — j/k
 	// moves a cursor through the focused panel; h/l toggles the focused
@@ -133,13 +138,22 @@ func (o *Overview) Refresh(ctx context.Context, client DataClient, invalidations
 func (o *Overview) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case overviewLoadedMsg:
-		o.summaryResource.Apply(resource.ResourceResult[api.InspectOverviewRecord](m))
+		if o.summaryResource.Apply(m.Result) {
+			if m.StatsLoaded {
+				o.stats = m.Stats
+			}
+			if m.TimeseriesLoaded {
+				o.statsTimeseries = m.Timeseries
+			}
+		}
 	case insightsLoadedMsg:
 		if o.insightsResource.Apply(resource.ResourceResult[[]api.InspectInsightRecord](m)) {
 			o.insightList.SetItems(o.insightRows())
 		}
 	case runsLoadedMsg:
-		if o.runsResource.Apply(resource.ResourceResult[[]api.InspectRunRecord](m)) {
+		if o.runsResource.Apply(m.Result) {
+			o.runNames = m.Names
+			o.runSessions = m.Sessions
 			o.runList.SetItems(o.runRows())
 		}
 	case activityLoadedMsg:

@@ -9,15 +9,21 @@
  */
 
 import {
+  runtimeTargetFactoryFor,
   runtimeTargetMap,
   type RuntimeTargetRuntimeRef,
 } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
 import type { RuntimeTarget, RuntimeTargetMap } from '../engine/kernel'
+import { isAgent, type AnyAgent } from '../../agent'
+import { createSessionAgentRuntimeTarget } from '../../session/runtime-target'
+import type { GenerationModel } from '../../generation-model'
+import { createGenerationModelResolver } from '../../generation-model/resolver'
 
 /** Runtime target accepted by generated, hand-written, or adapter entry files. */
 export type RuntimeHandlerTarget =
   | RuntimeTarget
+  | AnyAgent
   | {
       /** Stable target name returned by `flow()` handles and `durableTask()`. */
       readonly name: string
@@ -25,8 +31,10 @@ export type RuntimeHandlerTarget =
 
 /** Options for resolving handler targets into a kernel map. */
 export interface NormalizeRuntimeHandlerTargetsOptions {
-  /** Exported `flow()` handles and `durableTask()` targets. */
+  /** Exported Flow, task, and Agent targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
+  /** Statically declared generation models available to Session selection. */
+  readonly generationModels?: readonly GenerationModel[]
   /** Mutable runtime reference used by process-local target factories. */
   readonly runtimeRef: RuntimeTargetRuntimeRef
   /** User-facing entry label included in diagnostics. */
@@ -34,10 +42,12 @@ export interface NormalizeRuntimeHandlerTargetsOptions {
 }
 
 /** Canonicalize Runtime target declarations without resolving executable targets. */
-export function canonicalizeRuntimeHandlerTargets(
-  targets: readonly RuntimeHandlerTarget[],
+export function canonicalizeRuntimeHandlerTargets<
+  TTarget extends RuntimeHandlerTarget,
+>(
+  targets: readonly TTarget[],
   entry = 'runtime entry',
-): readonly RuntimeHandlerTarget[] {
+): readonly TTarget[] {
   const seen = new Set<string>()
   const canonical = [...targets].sort((left, right) =>
     compareText(
@@ -57,6 +67,7 @@ export function canonicalizeRuntimeHandlerTargets(
 export function runtimeHandlerTargetIdentity(
   target: RuntimeHandlerTarget,
 ): string {
+  if (isAgent(target)) return target.id
   return 'name' in target ? target.name : target.targetId
 }
 
@@ -64,18 +75,33 @@ export function runtimeHandlerTargetIdentity(
 export function normalizeRuntimeHandlerTargets(
   options: NormalizeRuntimeHandlerTargetsOptions,
 ): RuntimeTargetMap {
-  const registeredTargets = runtimeTargetMap(options.runtimeRef)
   const entries: Array<[string, RuntimeTarget]> = []
   const entry = options.entry ?? 'runtime entry'
-
-  for (const target of canonicalizeRuntimeHandlerTargets(
+  const canonicalTargets = canonicalizeRuntimeHandlerTargets(
     options.targets,
     entry,
-  )) {
+  )
+  const resolveGenerationModel = createGenerationModelResolver(
+    options.generationModels ?? [],
+  )
+  const registeredTargets = canonicalTargets.some(
+    (target) => !isRuntimeTarget(target),
+  )
+    ? runtimeTargetMap(options.runtimeRef)
+    : undefined
+
+  for (const target of canonicalTargets) {
     const name = runtimeHandlerTargetIdentity(target)
-    const runtimeTarget = isRuntimeTarget(target)
+    const explicitFactory = runtimeTargetFactoryFor(target)
+    const runtimeTarget = isAgent(target)
+      ? createSessionAgentRuntimeTarget(
+          target,
+          options.runtimeRef,
+          resolveGenerationModel,
+        )
+      : isRuntimeTarget(target)
       ? target
-      : registeredTargets[name]
+      : explicitFactory?.(options.runtimeRef) ?? registeredTargets?.[name]
     if (!runtimeTarget) throw unresolvedTargetError(name, entry)
     entries.push([name, runtimeTarget])
   }

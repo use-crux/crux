@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
@@ -21,32 +22,39 @@ func (w *Workbench) View() string {
 	}
 
 	root := kit.Rect{W: w.width, H: w.height}
-	regions := kit.SplitV(root, kit.Fill(), kit.Fixed(1))
-	bodyRect, statusRect := regions[0], regions[1]
-	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), w.statusText(statusRect.W))
 	path, right := w.breadcrumbContent()
-	base := strings.Join(append(w.layoutBody(bodyRect, path, right), statusBar), "\n")
+	base := kit.ReconcileBordersStyled(strings.Join(w.layoutBody(root, path, right), "\n"), workbenchStyles)
+	overlayCanvas := workbenchOverlayCanvas(w.width, w.height)
 
+	overlay := ""
 	switch {
 	case w.palette.IsOpen():
-		return overlayOnto(base, w.palette.View(w.width, w.height), w.width, 1)
+		overlay = w.palette.View(overlayCanvas.W, overlayCanvas.H)
 	case w.help.IsOpen():
-		return overlayOnto(base, w.help.View(w.width, w.height), w.width, 0)
+		overlay = w.help.View(overlayCanvas.W, overlayCanvas.H)
 	case w.inspect.IsOpen():
-		return overlayOnto(base, w.inspect.View(w.width, w.height), w.width, 0)
+		overlay = w.inspect.View(overlayCanvas.W, overlayCanvas.H)
 	case w.definitionChooser.IsOpen():
-		return overlayOnto(base, w.definitionChooser.View(), w.width, 1)
-	default:
+		overlay = w.definitionChooser.View()
+	}
+	if overlay == "" {
 		return base
 	}
+	overlay = kit.ReconcileBordersStyled(overlay, workbenchStyles)
+	return overlayOnto(base, overlay, w.width, w.height)
 }
 
-func (w *Workbench) layoutBody(bodyRect kit.Rect, path []string, right string) []string {
-	if kit.Classify(bodyRect.W) == kit.LayoutSingle {
-		return w.layoutScreenColumn(bodyRect, path, right)
+func (w *Workbench) layoutBody(root kit.Rect, path []string, right string) []string {
+	if kit.Classify(root.W) == kit.LayoutSingle {
+		rows := kit.SplitV(root, kit.Fill(), kit.Fixed(1), kit.Fixed(1))
+		return append(
+			w.layoutScreenColumn(rows[0], path, right),
+			shell.HorizontalBorder(rows[1].W),
+			shell.StatusBar(rows[2].W, w.statusKeybinds(), w.statusBadge()),
+		)
 	}
 
-	panes := kit.SplitH(bodyRect, kit.Fixed(shell.NavRailWidth), kit.Fill())
+	panes := kit.SplitH(root, kit.Fixed(shell.NavRailWidth), kit.Fill())
 	rail := shell.NavRail(panes[0].H, w.navWithCounts(), w.activeNav, shell.NavRailFooter{
 		TargetID:         w.devContext.Target.ID,
 		TargetKind:       w.devContext.Target.Kind,
@@ -54,10 +62,16 @@ func (w *Workbench) layoutBody(bodyRect kit.Rect, path []string, right string) [
 		BaselineLabel:    w.devContext.Baseline.Label,
 		BaselineRelative: w.devContext.Baseline.PromotedAtRelative,
 	})
+	rightRows := kit.SplitV(kit.Rect{W: panes[1].W, H: panes[1].H}, kit.Fill(), kit.Fixed(1), kit.Fixed(1))
+	rightColumn := append(
+		w.layoutScreenColumn(rightRows[0], path, right),
+		shell.HorizontalBorder(rightRows[1].W),
+		shell.StatusBar(rightRows[2].W, w.statusKeybinds(), w.statusBadge()),
+	)
 	return kit.ComposeStyled(panes, [][]string{
 		blockLines(rail),
-		w.layoutScreenColumn(panes[1], path, right),
-	}, workbenchStyles)
+		rightColumn,
+	}, workbenchStyles, workbenchStyles.SurfaceRail)
 }
 
 func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) []string {
@@ -65,12 +79,15 @@ func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) 
 		return nil
 	}
 	breadcrumb := shell.Breadcrumb(r.W, path, right)
-	screenH := max(0, r.H-len(blockLines(breadcrumb)))
+	// Render one logical row through the shared status seam; PadBlock clips
+	// that structural continuation to the column before the boundary is drawn.
+	screenH := max(0, r.H-len(blockLines(breadcrumb))+1)
 	screenView := w.activeScreen().View(screens.Size{Width: r.W, Height: screenH})
-	return blockLines(kit.PadBlock(breadcrumb+"\n"+screenView, r.W, r.H))
+	framed := shell.FrameScreen(r.W, breadcrumb, screenView)
+	return blockLines(kit.PadBlock(framed, r.W, r.H))
 }
 
-func overlayOnto(base, overlay string, width, top int) string {
+func overlayOnto(base, overlay string, width, height int) string {
 	if overlay == "" {
 		return base
 	}
@@ -80,15 +97,35 @@ func overlayOnto(base, overlay string, width, top int) string {
 	for _, line := range overlayLines {
 		overlayWidth = max(overlayWidth, lipgloss.Width(line))
 	}
-	leftPad := 0
-	if overlayWidth < width {
-		leftPad = max(1, (width-overlayWidth)/2)
+	overlayCanvas := workbenchOverlayCanvas(width, height)
+	overlayWidth = min(overlayCanvas.W, overlayWidth)
+	left := overlayCanvas.X + max(0, (overlayCanvas.W-overlayWidth)/2)
+	top := max(0, (height-len(overlayLines))/3)
+	canvasHeight := max(len(baseLines), height)
+	canvas := strings.Split(kit.PadBlock(base, width, canvasHeight), "\n")
+	for row, line := range overlayLines {
+		y := top + row
+		if y >= len(canvas) {
+			break
+		}
+		rightStart := left + overlayWidth
+		canvas[y] = kit.Fit(ansi.Cut(canvas[y], 0, left), left, "") +
+			ansi.ResetStyle +
+			kit.Fit(line, overlayWidth, "") +
+			ansi.ResetStyle +
+			kit.Fit(ansi.Cut(canvas[y], rightStart, width), width-rightStart, "")
 	}
-	height := max(len(baseLines), top+len(overlayLines))
-	canvas := lipgloss.NewCanvas(width, height)
-	canvas.Compose(lipgloss.NewLayer(base))
-	canvas.Compose(lipgloss.NewLayer(overlay).X(leftPad).Y(top).Z(1))
-	return kit.PadBlock(canvas.Render(), width, height)
+	return strings.Join(canvas, "\n")
+}
+
+func workbenchOverlayCanvas(width, height int) kit.Rect {
+	canvas := kit.Rect{W: max(0, width), H: max(0, height)}
+	if kit.Classify(width) == kit.LayoutSingle {
+		return canvas
+	}
+	canvas.X = min(width, shell.NavRailWidth+1)
+	canvas.W = max(0, width-canvas.X)
+	return canvas
 }
 
 func blockLines(value string) []string {
@@ -98,11 +135,15 @@ func blockLines(value string) []string {
 	return strings.Split(strings.TrimRight(value, "\n"), "\n")
 }
 
-// contextMeta composes the right-side block of the breadcrumb row.
+// contextMeta composes independently droppable right-side breadcrumb segments.
+// shell.Breadcrumb removes these from the right when the terminal narrows.
 func (w *Workbench) contextMeta() string {
 	parts := make([]string, 0, 5)
 	if w.serverURL != "" {
-		parts = append(parts, osc8Link(w.serverURL, "local "+compactURLLabel(w.serverURL)))
+		// OSC 8 links are decorated with an underline by several terminals even
+		// when the text style does not request one. Keep the persistent local
+		// host label accent-only so underscores remain visually crisp.
+		parts = append(parts, shell.Teal.Render("local "+compactURLLabel(w.serverURL)))
 	}
 	if w.tunnelURL != "" {
 		parts = append(parts, osc8Link(w.tunnelURL, "tunnel "+compactURLLabel(w.tunnelURL)))
@@ -153,7 +194,7 @@ func truncateStr(value string, limit int) string {
 // osc8Link wraps text in the terminal hyperlink protocol while retaining a
 // readable label in terminals that ignore the escape sequence.
 func osc8Link(url, text string) string {
-	return "\x1b]8;;" + url + "\x07" + text + "\x1b]8;;\x07"
+	return "\x1b]8;;" + url + "\x07" + shell.Teal.Render(text) + "\x1b]8;;\x07"
 }
 
 func compactURLLabel(raw string) string {

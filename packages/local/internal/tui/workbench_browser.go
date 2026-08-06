@@ -2,10 +2,14 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 // BrowserOpener launches the browser devtools URL. It is injected at the
@@ -14,6 +18,10 @@ import (
 type BrowserOpener func(context.Context, string) error
 
 type browserResultMsg struct {
+	Status string
+}
+
+type statusToastExpiredMsg struct {
 	Status string
 }
 
@@ -46,16 +54,40 @@ func (w *Workbench) browserAction() interaction.Action {
 }
 
 func (w *Workbench) handleBrowserResult(result browserResultMsg) tea.Cmd {
-	w.browserStatus = kit.Truncate(kit.SanitizeInline(result.Status), 256, "…")
-	return nil
+	return w.showStatusToast(result.Status, 4*time.Second)
+
 }
 
-func (w *Workbench) statusText(width int) string {
-	if w.browserStatus != "" {
-		return kit.Truncate(w.browserStatus, width, "…")
+func (w *Workbench) showStatusToast(value string, duration time.Duration) tea.Cmd {
+	w.statusToast = kit.Truncate(kit.SanitizeInline(value), 256, "…")
+	status := w.statusToast
+	return tea.Tick(duration, func(time.Time) tea.Msg {
+		return statusToastExpiredMsg{Status: status}
+	})
+}
+
+func (w *Workbench) statusBadge() shell.StatusBadge {
+	if w.statusToast != "" {
+		badge := shell.StatusBadge{Full: w.statusToast}
+		if strings.HasPrefix(w.statusToast, "browser launch failed") {
+			badge.Compact = kit.TruncateWords(w.statusToast, 19, "…")
+			badge.Warning = true
+		}
+		return badge
 	}
-	if w.startupStatus != "" {
-		return kit.Truncate(w.startupStatus, width, "…")
+	if w.pendingPrefix == "g" {
+		return shell.StatusBadge{}
 	}
-	return ".crux/evals"
+	if w.startupDiagnostic != nil {
+		count := len(w.startupDiagnostic.Children)
+		if count == 0 {
+			count = 1
+		}
+		return shell.StatusBadge{
+			Full:    fmt.Sprintf("⚠ %d %s · ! details", count, kit.Pluralize(count, "issue")),
+			Compact: fmt.Sprintf("⚠%d !", count),
+			Warning: true,
+		}
+	}
+	return shell.StatusBadge{}
 }

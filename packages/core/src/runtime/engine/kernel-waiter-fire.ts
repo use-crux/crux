@@ -12,6 +12,7 @@ import {
   isPredicateSignalWaiter,
   queuePredicateCandidate,
 } from "./kernel-predicate-wait";
+import { recordApplicationWorkResumption } from "./application-work-events";
 
 interface FireWaiterOptions {
   readonly tx: RuntimeStoreTransaction;
@@ -54,7 +55,10 @@ export async function fireWaiter(options: FireWaiterOptions): Promise<{
     options.waiter.workId,
     options.eventId,
   );
-  const transitioned = await options.tx.state.setWorkPending(
+  const previous = await options.tx.state.getWork(options.waiter.workId, {
+    namespace: options.waiter.namespace,
+  });
+  let transitioned = await options.tx.state.setWorkPending(
     options.waiter.workId,
     {
       namespace: options.waiter.namespace,
@@ -63,6 +67,14 @@ export async function fireWaiter(options: FireWaiterOptions): Promise<{
       now: options.deps.now(),
     },
   );
+  if (previous && transitioned?.application) {
+    transitioned = await recordApplicationWorkResumption(
+      options.tx,
+      previous,
+      transitioned,
+      options.deps.now(),
+    );
+  }
   const current = transitioned
     ? null
     : await options.tx.state.getWork(options.waiter.workId, {

@@ -111,6 +111,31 @@
       "ruleId": "flow.suspension_without_coverage"
     },
     {
+      "negativeFixture": "session-native-static.test.ts",
+      "positiveFixture": "session-native-static.test.ts",
+      "ruleId": "session.ambiguous_construction"
+    },
+    {
+      "negativeFixture": "session-native-static.test.ts",
+      "positiveFixture": "session-native-static.test.ts",
+      "ruleId": "session.invalid_target"
+    },
+    {
+      "negativeFixture": "semantic-backend-parity.test.ts",
+      "positiveFixture": "semantic-backend-parity.test.ts",
+      "ruleId": "session.non_owner_thread_mutation"
+    },
+    {
+      "negativeFixture": "session-native-static.test.ts",
+      "positiveFixture": "session-native-static.test.ts",
+      "ruleId": "session.shared_agent_thread"
+    },
+    {
+      "negativeFixture": "session-native-static.test.ts",
+      "positiveFixture": "session-native-static.test.ts",
+      "ruleId": "session.unstable_identity"
+    },
+    {
       "negativeFixture": "index-lint-native-parity.test.ts",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "ruleId": "flow.duplicate_step_label"
@@ -309,6 +334,21 @@
       "negativeFixture": "request-context-planning-semantic.test.ts",
       "positiveFixture": "request-context-planning-semantic.test.ts",
       "ruleId": "context-planning.invalid-wrapper-order"
+    },
+    {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
+      "ruleId": "signal.provider.unstable_identity"
+    },
+    {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
+      "ruleId": "signal.transportBinding.unstable_identity"
+    },
+    {
+      "negativeFixture": "signal-lint-native-parity.test.ts",
+      "positiveFixture": "signal-lint-native-parity.test.ts",
+      "ruleId": "signal.transportBinding.live_value"
     }
   ]
 }

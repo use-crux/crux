@@ -158,6 +158,7 @@ function routeTarget(value: unknown): unknown {
 function shouldRetry(error: unknown, options: RetryOptions): boolean {
   const category = classifyError(error);
   if (category === null) return false;
+  if (category === "input_limit") return false;
   if (options.on && options.on.length > 0) return options.on.includes(category);
   return category !== "auth_error" && category !== "invalid_response";
 }

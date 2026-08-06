@@ -106,7 +106,7 @@ describe("prepareStep resources", () => {
       {
         storage,
         records: storage.records,
-        vectors: storage.vectors,
+        search: storage.search,
         namespace: "run",
         memoryId: "control-memory",
       },

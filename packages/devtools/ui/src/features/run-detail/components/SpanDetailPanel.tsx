@@ -116,7 +116,11 @@ import {
 import { EvalCard } from "./EvalCard";
 import { DeferredWorkCard } from "./DeferredWorkCard";
 import { EffectCard } from "./EffectCard";
-import { ThreadOperationCard } from "./ThreadOperationCard";
+import {
+  isRuntimeStateDetail,
+  RuntimeStateCard,
+  runtimeStateTitle,
+} from "./RuntimeStateCard";
 import { WorkspaceSnapshotCard } from "../workspace-snapshot/card";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
 import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
@@ -4428,7 +4432,7 @@ export function SpanDetailPanel({
     );
   }
 
-  if (node.primitive === "thread.operation") {
+  if (isRuntimeStateDetail(node)) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <SelectedSpanHeader
@@ -4440,11 +4444,11 @@ export function SpanDetailPanel({
         />
         <div className="flex-1 overflow-auto px-4 py-4">
           <SectionErrorBoundary
-            title="Thread operation"
+            title={runtimeStateTitle(node)}
             compact
             resetKey={node.id}
           >
-            <ThreadOperationCard node={node} />
+            <RuntimeStateCard node={node} />
           </SectionErrorBoundary>
         </div>
       </div>

@@ -3,6 +3,8 @@
   "description": "The optional engine that makes flows and background work survive restarts, retries, and time.",
   "pages": [
     "index",
+    "work",
+    "sessions",
     "signals",
     "next-vercel",
     "node",

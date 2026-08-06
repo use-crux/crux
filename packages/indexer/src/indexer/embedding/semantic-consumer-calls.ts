@@ -14,10 +14,11 @@ import {
   sparseMediaIndexingFinding,
 } from "./semantic-lints";
 import {
+  retrievalLegSelection,
   semanticEmbeddingConsumerForCall,
   type SemanticEmbeddingConsumer,
 } from "./semantic-model";
-import { semanticInputModalities, stringProperty } from "./semantic-values";
+import { semanticInputModalities } from "./semantic-values";
 
 type Node = SemanticAnalyzerNode<SemanticAnalyzerView>;
 
@@ -68,8 +69,11 @@ function retrievalFindings(
     !requestInput && args[1]
       ? semanticObjectExpression(args[1], view, new Set())
       : undefined;
-  const mode = modeOverride(requestInput ? request : options, view);
-  const active = mode ? { ...consumer, mode } : consumer;
+  const active = withSearchOverride(
+    consumer,
+    requestInput ? request : options,
+    view,
+  );
   const input = requestInput ?? args[0];
   return consumerModalityFindings(
     active,
@@ -128,7 +132,7 @@ function consumerForExpression(
         ? consumerForExpression(root, receiver, view, nextSeen)
         : undefined;
       if (knowledgeBase?.kind === "rag.knowledgeBase") {
-        return withRetrieverMode(knowledgeBase, unwrapped, view);
+        return withRetrieverSearch(knowledgeBase, unwrapped, view);
       }
     }
     return undefined;
@@ -139,7 +143,7 @@ function consumerForExpression(
     : undefined;
 }
 
-function withRetrieverMode(
+function withRetrieverSearch(
   consumer: SemanticEmbeddingConsumer,
   call: Node,
   view: SemanticAnalyzerView,
@@ -148,19 +152,25 @@ function withRetrieverMode(
   const config = options
     ? semanticObjectExpression(options, view, new Set())
     : undefined;
-  const mode = modeOverride(config, view);
-  return mode ? { ...consumer, mode } : consumer;
+  return withSearchOverride(consumer, config, view);
 }
 
-function modeOverride(
+function withSearchOverride(
+  consumer: SemanticEmbeddingConsumer,
   config: Node | undefined,
   view: SemanticAnalyzerView,
-): SemanticEmbeddingConsumer["mode"] | undefined {
-  if (!config || !propertyInitializer(config, "mode", view)) return undefined;
-  const mode = stringProperty(config, "mode", view);
-  return mode === "dense" || mode === "sparse" || mode === "hybrid"
-    ? mode
-    : "unknown";
+): SemanticEmbeddingConsumer {
+  if (!config || !propertyInitializer(config, "search", view)) return consumer;
+  return {
+    ...consumer,
+    retrievalLegs: retrievalLegSelection(
+      config,
+      "search",
+      consumer.dense,
+      consumer.sparse,
+      view,
+    ),
+  };
 }
 
 function callReceiver(

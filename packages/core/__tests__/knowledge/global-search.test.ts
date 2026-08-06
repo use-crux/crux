@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { ValidationExhaustedError } from '../../src/generation/validation-retry'
 import { communities, knowledgeBase, type KnowledgeModel } from '../../src/knowledge'
 import { createCommunityReportRecord, type CommunityReport } from '../../src/knowledge/communities/records'
 import { communityScopeKey } from '../../src/knowledge/communities/keys'
@@ -102,7 +103,15 @@ describe('globalSearch()', () => {
     ])
 
     const recipe = docs.recipe({ steps: [globalSearch({ model, detail: 'detailed' })] })
-    await expect(recipe.retrieve('query')).rejects.toThrow(/failed validation after repair/)
+    const error = await recipe.retrieve('query').catch((caught: unknown) => caught)
+    expect(error).toMatchObject({
+      name: 'RetrievalRunError',
+      cause: expect.any(ValidationExhaustedError),
+    })
+    expect((error as { cause: ValidationExhaustedError }).cause).toMatchObject({
+      attempts: 1,
+      maxAttempts: 1,
+    })
     expect(model.searchCalls()).toBe(2)
   })
 

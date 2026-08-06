@@ -2,20 +2,21 @@ import type { PostgresStorageSetupFinding } from './types'
 import { quoteIdent, storageTable, type PgExecutor } from './sql'
 
 const RECORD_COLUMNS = ['key', 'value', 'expires_at', 'version'] as const
-const VECTOR_COLUMNS = ['key', 'dense', 'metadata'] as const
+const SEARCH_BASE_COLUMNS = ['key', 'metadata'] as const
 
 export interface StorageDdlOptions {
   readonly records: boolean
-  readonly vectors: boolean
+  readonly search: boolean
   readonly dimensions?: number
   readonly sparseDimensions?: number
+  readonly lexicalConfiguration?: string
 }
 
 export function storageDdlStatements(schema: string, options: StorageDdlOptions): readonly string[] {
   const records = storageTable(schema, 'records')
-  const vectors = storageTable(schema, 'vectors')
+  const search = storageTable(schema, 'search')
   const statements: string[] = []
-  if (options.vectors) statements.push('CREATE EXTENSION IF NOT EXISTS vector')
+  if (searchNeedsPgvector(options)) statements.push('CREATE EXTENSION IF NOT EXISTS vector')
   statements.push(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schema)}`)
   if (options.records) {
     statements.push(
@@ -33,50 +34,55 @@ export function storageDdlStatements(schema: string, options: StorageDdlOptions)
         ON ${records} USING gin (value jsonb_path_ops)`,
     )
   }
-  if (options.vectors) {
-    const dimensions = options.dimensions!
-    const presenceConstraint =
-      options.sparseDimensions === undefined
-        ? 'dense vector(' + dimensions + ') NOT NULL'
-        : `dense vector(${dimensions}), sparse sparsevec(${options.sparseDimensions}),
-          CONSTRAINT vectors_has_vector CHECK (dense IS NOT NULL OR sparse IS NOT NULL)`
+  if (options.search) {
+    const payloadColumns = searchPayloadColumnDefinitions(options)
+    const presenceConstraint = searchPresenceConstraint(options)
     statements.push(
-      `CREATE TABLE IF NOT EXISTS ${vectors} (
+      `CREATE TABLE IF NOT EXISTS ${search} (
         key text PRIMARY KEY,
-        ${presenceConstraint},
+        ${payloadColumns.join(',\n        ')},
         metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+        ${presenceConstraint ? `,\n        ${presenceConstraint}` : ''}
       )`,
-      `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'vectors_dense_hnsw_idx')}
-        ON ${vectors} USING hnsw (dense vector_cosine_ops)`,
     )
+    if (options.dimensions !== undefined) {
+      statements.push(
+        `ALTER TABLE ${search}
+          ADD COLUMN IF NOT EXISTS dense vector(${options.dimensions})`,
+        `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'search_dense_hnsw_idx')}
+          ON ${search} USING hnsw (dense vector_cosine_ops)`,
+      )
+    }
     if (options.sparseDimensions !== undefined) {
       statements.push(
-        `ALTER TABLE ${vectors}
+        `ALTER TABLE ${search}
           ADD COLUMN IF NOT EXISTS sparse sparsevec(${options.sparseDimensions})`,
-        `ALTER TABLE ${vectors} ALTER COLUMN dense DROP NOT NULL`,
-        `DO $crux$
-         BEGIN
-           IF NOT EXISTS (
-             SELECT 1 FROM pg_constraint c
-             JOIN pg_class t ON t.oid = c.conrelid
-             JOIN pg_namespace n ON n.oid = t.relnamespace
-             WHERE n.nspname = ${quoteLiteral(schema)}
-               AND t.relname = 'vectors'
-               AND c.conname = 'vectors_has_vector'
-           ) THEN
-             ALTER TABLE ${vectors}
-               ADD CONSTRAINT vectors_has_vector
-               CHECK (dense IS NOT NULL OR sparse IS NOT NULL);
-           END IF;
-         END
-         $crux$`,
-        `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'vectors_sparse_hnsw_idx')}
-          ON ${vectors} USING hnsw (sparse sparsevec_cosine_ops)`,
+        `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'search_sparse_hnsw_idx')}
+          ON ${search} USING hnsw (sparse sparsevec_cosine_ops)`,
+      )
+    }
+    if (options.lexicalConfiguration !== undefined) {
+      const configuration = quoteLiteral(options.lexicalConfiguration)
+      statements.push(
+        `ALTER TABLE ${search}
+          ADD COLUMN IF NOT EXISTS content text`,
+        `ALTER TABLE ${search}
+          ADD COLUMN IF NOT EXISTS search_document tsvector GENERATED ALWAYS AS (
+            to_tsvector(${configuration}::regconfig, coalesce(content, ''))
+          ) STORED`,
+        `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'search_document_gin_idx')}
+          ON ${search} USING gin (search_document)`,
+      )
+    }
+    if (presenceConstraint) {
+      statements.push(
+        `ALTER TABLE ${search} DROP CONSTRAINT IF EXISTS search_has_payload`,
+        `ALTER TABLE ${search} ADD CONSTRAINT search_has_payload CHECK (${searchPresenceExpression(options)})`,
       )
     }
     statements.push(
-      `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'vectors_metadata_gin_idx')}
-        ON ${vectors} USING gin (metadata jsonb_path_ops)`,
+      `CREATE INDEX IF NOT EXISTS ${qualifiedIndex(schema, 'search_metadata_gin_idx')}
+        ON ${search} USING gin (metadata jsonb_path_ops)`,
     )
   }
   return statements
@@ -88,15 +94,15 @@ export async function checkStorageDdl(
   options: StorageDdlOptions,
 ): Promise<PostgresStorageSetupFinding[]> {
   const findings: PostgresStorageSetupFinding[] = []
-  if (options.vectors) {
+  if (searchNeedsPgvector(options)) {
     const extension = await executor.query<{ installed: boolean }>(
       `SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') AS installed`,
     )
     if (!extension.rows[0]?.installed) {
       findings.push({
-        code: 'POSTGRES_VECTOR_EXTENSION_MISSING',
+        code: 'POSTGRES_SEARCH_VECTOR_EXTENSION_MISSING',
         resource: 'extension:vector',
-        message: 'The PostgreSQL vector extension is not installed.',
+        message: 'The PostgreSQL vector extension required by search storage is not installed.',
         remediation: 'CREATE EXTENSION IF NOT EXISTS vector;',
       })
       return findings
@@ -139,60 +145,145 @@ export async function checkStorageDdl(
       findings,
     )
   }
-  if (options.vectors) {
-    const columns = [...VECTOR_COLUMNS, ...(options.sparseDimensions === undefined ? [] : ['sparse'])]
-    const exists = await checkTable(executor, schema, 'vectors', columns, findings)
+  if (options.search) {
+    const columns = [
+      ...SEARCH_BASE_COLUMNS,
+      ...(options.dimensions === undefined ? [] : ['dense']),
+      ...(options.sparseDimensions === undefined ? [] : ['sparse']),
+      ...(options.lexicalConfiguration === undefined ? [] : ['content', 'search_document']),
+    ]
+    const exists = await checkTable(executor, schema, 'search', columns, findings)
     if (exists) {
       await Promise.all([
-        checkColumnType(executor, schema, 'vectors', 'key', 'text', findings),
-        checkColumnType(executor, schema, 'vectors', 'metadata', 'jsonb', findings),
-        checkColumnType(executor, schema, 'vectors', 'dense', `vector(${options.dimensions})`, findings),
-        checkNotNull(
-          executor,
-          schema,
-          'vectors',
-          ['key', 'metadata', ...(options.sparseDimensions === undefined ? ['dense'] : [])],
-          findings,
-        ),
-        checkPrimaryKey(executor, schema, 'vectors', 'key', findings),
+        checkColumnType(executor, schema, 'search', 'key', 'text', findings),
+        checkColumnType(executor, schema, 'search', 'metadata', 'jsonb', findings),
+        checkNotNull(executor, schema, 'search', ['key', 'metadata'], findings),
+        checkPrimaryKey(executor, schema, 'search', 'key', findings),
+        checkSearchPresenceConstraint(executor, schema, options, findings),
       ])
+      if (options.dimensions !== undefined) {
+        await checkColumnType(executor, schema, 'search', 'dense', `vector(${options.dimensions})`, findings)
+      }
       if (options.sparseDimensions !== undefined) {
-        await checkColumnType(executor, schema, 'vectors', 'sparse', `sparsevec(${options.sparseDimensions})`, findings)
-        const constraint = await executor.query<{ installed: boolean }>(
-          `SELECT EXISTS (
-             SELECT 1 FROM pg_constraint c
-             JOIN pg_class t ON t.oid = c.conrelid
-             JOIN pg_namespace n ON n.oid = t.relnamespace
-             WHERE n.nspname = $1 AND t.relname = 'vectors'
-               AND c.conname = 'vectors_has_vector'
-           ) AS installed`,
-          [schema],
-        )
-        if (!constraint.rows[0]?.installed) {
-          findings.push({
-            code: 'POSTGRES_STORAGE_CONSTRAINT_MISSING',
-            resource: 'vectors:vectors_has_vector',
-            message: 'The vector presence constraint is missing.',
-          })
-        }
+        await checkColumnType(executor, schema, 'search', 'sparse', `sparsevec(${options.sparseDimensions})`, findings)
+      }
+      if (options.lexicalConfiguration !== undefined) {
+        await checkColumnType(executor, schema, 'search', 'content', 'text', findings)
+        await checkColumnType(executor, schema, 'search', 'search_document', 'tsvector', findings)
+        await checkSearchDocumentGeneration(executor, schema, options.lexicalConfiguration, findings)
       }
     }
     await checkIndexes(
       executor,
       schema,
       {
-        vectors_dense_hnsw_idx: ['using hnsw', 'vector_cosine_ops'],
+        ...(options.dimensions === undefined ? {} : { search_dense_hnsw_idx: ['using hnsw', 'vector_cosine_ops'] }),
         ...(options.sparseDimensions === undefined
           ? {}
-          : {
-              vectors_sparse_hnsw_idx: ['using hnsw', 'sparsevec_cosine_ops'],
-            }),
-        vectors_metadata_gin_idx: ['using gin', 'jsonb_path_ops'],
+          : { search_sparse_hnsw_idx: ['using hnsw', 'sparsevec_cosine_ops'] }),
+        ...(options.lexicalConfiguration === undefined ? {} : { search_document_gin_idx: ['using gin'] }),
+        search_metadata_gin_idx: ['using gin', 'jsonb_path_ops'],
       },
       findings,
     )
   }
   return findings
+}
+
+function searchNeedsPgvector(options: StorageDdlOptions): boolean {
+  return options.search && (options.dimensions !== undefined || options.sparseDimensions !== undefined)
+}
+
+function searchPayloadColumnDefinitions(options: StorageDdlOptions): readonly string[] {
+  const columns: string[] = []
+  if (options.dimensions !== undefined) columns.push(`dense vector(${options.dimensions})`)
+  if (options.sparseDimensions !== undefined) columns.push(`sparse sparsevec(${options.sparseDimensions})`)
+  if (options.lexicalConfiguration !== undefined) {
+    columns.push(
+      `content text`,
+      `search_document tsvector GENERATED ALWAYS AS (
+        to_tsvector(${quoteLiteral(options.lexicalConfiguration)}::regconfig, coalesce(content, ''))
+      ) STORED`,
+    )
+  }
+  return columns
+}
+
+function searchPresenceConstraint(options: StorageDdlOptions): string {
+  return `CONSTRAINT search_has_payload CHECK (${searchPresenceExpression(options)})`
+}
+
+function searchPresenceExpression(options: StorageDdlOptions): string {
+  return [
+    ...(options.dimensions === undefined ? [] : ['dense IS NOT NULL']),
+    ...(options.sparseDimensions === undefined ? [] : ['sparse IS NOT NULL']),
+    ...(options.lexicalConfiguration === undefined ? [] : ['content IS NOT NULL']),
+  ].join(' OR ')
+}
+
+async function checkSearchPresenceConstraint(
+  executor: PgExecutor,
+  schema: string,
+  options: StorageDdlOptions,
+  findings: PostgresStorageSetupFinding[],
+): Promise<void> {
+  const expected = searchPresenceExpression(options)
+  const result = await executor.query<{ definition: string }>(
+    `SELECT pg_get_constraintdef(c.oid) AS definition
+     FROM pg_constraint c
+     JOIN pg_class t ON t.oid = c.conrelid
+     JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = $1 AND t.relname = 'search'
+       AND c.conname = 'search_has_payload'`,
+    [schema],
+  )
+  const actual = result.rows[0]?.definition
+  if (actual === undefined) {
+    findings.push({
+      code: 'POSTGRES_STORAGE_CONSTRAINT_MISSING',
+      resource: 'search:search_has_payload',
+      message: 'The search payload presence constraint is missing.',
+    })
+    return
+  }
+  if (!normalizeConstraint(actual).includes(normalizeConstraint(expected))) {
+    findings.push({
+      code: 'POSTGRES_STORAGE_CONSTRAINT_INCOMPATIBLE',
+      resource: 'search:search_has_payload',
+      message: 'The search payload presence constraint is incompatible.',
+    })
+  }
+}
+
+async function checkSearchDocumentGeneration(
+  executor: PgExecutor,
+  schema: string,
+  configuration: string,
+  findings: PostgresStorageSetupFinding[],
+): Promise<void> {
+  const result = await executor.query<{ expression: string | null }>(
+    `SELECT pg_get_expr(d.adbin, d.adrelid) AS expression
+     FROM pg_attribute a
+     JOIN pg_class t ON t.oid = a.attrelid
+     JOIN pg_namespace n ON n.oid = t.relnamespace
+     LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE n.nspname = $1 AND t.relname = 'search'
+       AND a.attname = 'search_document' AND NOT a.attisdropped`,
+    [schema],
+  )
+  const expression = result.rows[0]?.expression
+  const normalized = expression?.toLowerCase() ?? ''
+  if (!expression || !normalized.includes('to_tsvector') || !normalized.includes(configuration.toLowerCase())) {
+    findings.push({
+      code: 'POSTGRES_SEARCH_CONFIGURATION_INCOMPATIBLE',
+      resource: 'search:search_document',
+      message: 'The generated search document uses an incompatible PostgreSQL text-search configuration.',
+    })
+  }
+}
+
+function normalizeConstraint(value: string): string {
+  return value.toLowerCase().replaceAll('"', '').replaceAll(/[()\s]+/g, '')
 }
 
 async function checkTable(

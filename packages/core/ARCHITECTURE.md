@@ -4,6 +4,10 @@ Internal implementation details of `@use-crux/core`. For usage documentation,
 see the [Crux docs](../../apps/docs/content/docs); the
 [package README](./README.md) is the concise npm landing page.
 
+The cross-package Runtime program, execution-worker ownership, replay, and
+shutdown design is documented in
+[`packages/local/docs/runtime-program-worker-architecture.md`](../local/docs/runtime-program-worker-architecture.md).
+
 ## Tool-source boundary
 
 Core treats execution-time tool discovery as a provider-neutral, branded
@@ -92,7 +96,7 @@ indexer configuration and Project Index contracts, but it must not depend on com
 
 Crux public APIs use names that describe the thing a user is declaring or doing:
 
-- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `plan()`, and `tasks()`.
+- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `session()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `plan()`, and `tasks()`.
 - Use provider-local noun exports in adapter packages. For example, `@use-crux/ai`, `@use-crux/openai`, and `@use-crux/google` all export `embedding()`. Consumers can alias at import sites when multiple providers are used in one file, e.g. `import { embedding as openAIEmbedding } from '@use-crux/openai'`.
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
@@ -144,7 +148,7 @@ Workspace records use explicit storage capabilities:
 - `RecordStore` stores metadata, paths, MIME type, size, timestamps, previews, and small inline text/JSON.
 - `AssetStore` stores binary and oversized payloads.
 
-`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `VectorStore`, and `AssetStore` implementations for tests and demos. Durable asset stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `AssetStore` instead of overloading records with raw bytes.
+`SearchStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `SearchStore`, and `AssetStore` implementations for tests and demos. Durable asset stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `AssetStore` instead of overloading records with raw bytes.
 
 Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; the artifacts facet is a typed view over those same file records (`status`, artifact `kind`, provenance, and download references), not a second store or keyspace.
 
@@ -357,7 +361,7 @@ packages/core/src/       Published as @use-crux/core
 │   ├── communities/    Deterministic bounded clustering, report generations with member-hash reuse, leased single-flight builds, readiness lifecycle
 │   └── conformance.ts  Runner-agnostic storage conformance suite for adapter packages
 ├── storage/
-│   └── index.ts        RecordStore, VectorStore, AssetStore, storage(), and in-memory implementations
+│   └── index.ts        RecordStore, SearchStore, AssetStore, storage(), and in-memory implementations
 ├── workspace/
 │   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped assets, maxVersions GC), TTL/quota guards, asset-backed payloads, canonical operation spans
 ├── indexing/
@@ -534,7 +538,7 @@ stream the returned `raw` is SDK-shaped but may be a runtime-composed logical st
 spanning attempts rather than object-identical to one provider attempt.
 
 Constraint settlement is occurrence- and value-precise: the streaming gate records which
-occurrence *value* passed (identity path plus a canonical subject fingerprint), and
+occurrence _value_ passed (identity path plus a canonical subject fingerprint), and
 completion suppresses a terminal re-check only when the same occurrence still carries the
 same subject. A rewrite of the constrained path invalidates its settlement; a rewrite
 elsewhere preserves it. This is what keeps a `constraint.judge()` from running twice.
@@ -564,7 +568,7 @@ Prompt resolution carries private, non-serializable retrieval fold provenance
 with the resolved value. In system mode the fresh resolved system is guarded
 before replacing the active system. In messages mode Core verifies and patches
 the one folded system prefix, preserving its trusted suffix and every later
-assistant/tool turn. Resolver-owned family—not a spoofable source string—marks
+assistant/tool turn. Resolver-owned family—not a forgeable source string—marks
 retrieval text. Prefix mismatch or failed writeback terminates before another
 provider call, and the carrier never enters public types, metadata, provider
 requests, audit, or observability. With no applicable policy, request bytes and
@@ -846,7 +850,7 @@ prompts expose literal `hasOutput` values for adapter branching.
 The `adapt` field on prompts supports three matching strategies, checked in order:
 
 1. **Exact provider match** — `adapt.openai` when provider is `"openai"`
-2. **Model ID prefix** — for OpenRouter-style routing where `modelId` is `"openai/gpt-4o"`, the prefix `"openai"` is extracted and matched
+2. **Model ID prefix** — for OpenRouter-style routing where `modelId` is `"openai/model-4o"`, the prefix `"openai"` is extracted and matched
 3. **Wildcard** — `adapt['*']` applies to all providers
 
 Each adaptation can `prependSystem`, `appendSystem`, `prependPrompt`, `appendPrompt`, and override `settings`.
@@ -905,9 +909,9 @@ Embedding cache access emits nested `cache.lookup` spans with cache namespace, h
 
 Hybrid search lives above this layer:
 
-- dense-only vector stores handle `VectorStore.search({ dense })`
-- sparse-only and hybrid-capable vector stores handle `VectorStore.search({ sparse })` and `VectorStore.search({ dense, sparse, fusion? })`
-- Upstash is the reference `VectorStore` for dense + sparse + hybrid query composition
+- dense-capable search stores handle `SearchStore.search({ legs: [{ kind: 'dense', vector }] })`
+- sparse-capable search stores handle sparse legs and multi-leg stores compose dense/sparse/lexical queries with RRF fusion
+- SearchStore is the reference contract for dense, sparse, and lexical query composition
 
 ## Retrieval and Indexing Pipeline
 
@@ -928,7 +932,7 @@ Those boundaries are deliberate:
 - retrieval turns text or media queries into scored hits, context, and tools
 - reranking, when used, happens after raw retrieval and before context/tool rendering
 
-This keeps hybrid support in the correct layer. Dense and sparse are embedding kinds. Hybrid is a retrieval strategy composed through `VectorStore.search({ dense, sparse, fusion })`, not a third embedding kind.
+This keeps multi-leg support in the correct layer. Dense and sparse are embedding kinds. Retrieval composition is expressed through `SearchStore.search({ legs, fusion })`, not as a third embedding kind.
 
 Media documents preserve one-input-one-vector semantics: each media part becomes
 one chunk, and page/time/region splitting stays upstream. The indexer stores
@@ -1006,9 +1010,86 @@ Lease ownership is a kernel-level fencing contract. `handleWake()` claims a stor
 
 Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store, wake, and host-safe lease-extension settings while still delegating to `createRuntime()` and the same kernel path.
 
+Application Work is a typed projection of one parentless Runtime Flow occurrence,
+not another queue or lifecycle. `createWorkHost()` binds request-scoped
+`spawn()` and `getWork()` calls to one immutable Runtime Program. Acceptance
+derives identity from namespace, exported target, and caller key, then commits
+the Work row, Flow snapshot, canonical input digest, pinned definition, Effect
+scope, result obligation, and wake outbox row in one store composite. The
+public handle reads status, progress, cursor events, statistics, result, and
+controls from those same records. Local operator inspection projects only the
+safe digest, definition/effect/result references, ownership, bounded ledger,
+and Work events; it does not expose input or result payloads.
+
+### Durable Agent Sessions
+
+Durable Agent Sessions (`session/` plus Runtime Session ports) are keyed,
+Agent-only owners that reuse the same Work host, Runtime Program, worker,
+Effect scope, and statistics ledger. They are not a second queue, Thread head
+mechanism, registry, or async scope.
+
+**Identity and hash.** Public lookup identity is the SHA-256 of
+`["crux-session:v1", namespace, key]`. The public Session id and automatic Thread
+id additionally hash the Agent target id so cross-target key collisions remain
+detectable without collapsing distinct owners. Durable rows store the key hash,
+never the raw key, in operator projections.
+
+**Owner registration and Thread head.** Session creation uses a repairable
+`prepared → Thread owner registered → ready` protocol. Owner registration,
+owner-head selection, and deletion publication share the existing linearizable
+Thread `RecordStore.mutate` fence and the existing `heads` map entry for the
+Session owner. `session.thread` is a read-only view of finalized owner heads
+only.
+
+**Records, cursors, and leases.** Session control records retain accepted and
+processed cursors, pending input/work counts, optional activation linkage, and
+a lifetime statistics ledger export. Each accepted input keeps its own identity
+and server-assigned cursor. Activation Work uses the ordinary Runtime lease and
+wake path; there is no Session-specific lease domain.
+
+**Canonical Work and Effect scope.** Compatible pending inputs claim one
+canonical `session.turn` Work occurrence for the longest cursor-consecutive
+prefix. Joined input handles resolve that same Work and exact shared result or
+failure. The Work's Effect scope is the Session turn's effect boundary.
+
+**Preparation, checkpoints, and replay.** Before provider dispatch, the turn
+journals a sealed preparation plan against a pinned Thread revision/range and
+bounded request evidence. Recovery replays durable preparation and the
+write-once private result artifact. It never re-runs callbacks, provider
+requests, Tools, effects, or Thread publication. Missing prepared artifacts
+surface `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` without payload exposure.
+
+**Target authority and generated program.** Agents are first-class immutable
+Runtime Program targets. Selected models must appear in
+`RuntimeProgram.generationModels`; durable state pins only
+`{ definitionId, fingerprint }`. Generated programs import exported Agents and
+their fingerprints through the existing target authority. There is no Agent
+executor registry or host-level `agentExecutor` option.
+
+**Thread finalization.** After a successful generation checkpoint, the Session
+owner commits the canonical message group through the existing owner-scoped
+Thread path. Replay reuses the same commit receipt. Only Session-marked ingress
+messages project as user input; provider validation-correction traffic does not
+become Session history.
+
+**Observability privacy boundary.** `SessionRuntimeReadModel` and `session.turn`
+attributes project identity, state, cursors, bounded input-to-Work lineage,
+Thread revision, checkpoint request counts, recovery diagnostics, coverage, and
+lifetime stats. They never project prompts, inputs, outputs, reasoning, Tool
+arguments, credentials, sealed request ids, or provider-native objects.
+Evidence opens only when an observability sink is active.
+
+**Adapter laws.** Memory, PostgreSQL, and Convex implement the same normalized
+Session ports and composites. PostgreSQL durable deployments require Runtime
+storage and the Session-owned Thread `RecordStore` on the same database.
+Convex keeps Session writes inside atomic component transactions. Shared
+`runSessionConformanceTests` proves identity, concurrent acceptance, prefix
+claiming, checkpoint recovery, exact results, inspection, stats, and capability
+rejection across adapters.
+
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 
-Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, `RUNTIME_HOST_ONLY`, and `EVAL_REACTIVE_DISPATCH_FORBIDDEN`; raw adapter errors stay as causes.
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set includes Work/runtime codes plus Session and generation-model codes such as `GENERATION_MODEL_BINDING_MISSING`, `GENERATION_MODEL_NOT_STATIC`, `GENERATION_CAPABILITY_MISSING`, and `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline
 
@@ -1459,11 +1540,11 @@ Built-in block reads and writes emit the canonical observability graph from the 
 Crux public storage is split by capability:
 
 1. **`RecordStore`** — JSON records with `get`, `put`, `create`, `delete`, `list`, optional TTL, filters, and optional watches.
-2. **`VectorStore`** — Dense, sparse, and hybrid vector records with `upsert`, `delete`, and `search`.
+2. **`SearchStore`** — Dense, sparse, and lexical search records with `upsert`, `delete`, and `search`.
 3. **`AssetStore`** — Binary and oversized payload storage for workspaces.
-4. **`Storage`** — A convenience bundle: `{ records, vectors?, assets? }`.
+4. **`Storage`** — A convenience bundle: `{ records, search?, assets? }`.
 
-The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
+The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemorySearchStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
 
 ### Working Memory Internals
 
@@ -1477,7 +1558,7 @@ Keys use the standard block prefix plus an auto-generated episode ID. The `recor
 
 `recall()` has two paths:
 
-- **With embeddings**: Embeds the query, calls `VectorStore.search({ mode: 'dense', dense })`, takes top-N results
+- **With embeddings**: Embeds the query, calls `SearchStore.search({ legs: [{ kind: 'dense', vector }] })`, takes top-N results
 - **Without embeddings**: Falls back to `RecordStore.list()` by prefix (recency order)
 
 Both paths respect `filter` for metadata matching.
@@ -1726,7 +1807,7 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 
 - No manual schema or function references needed
 - Works with memory blocks, blackboards, plans, workspace metadata, and other `RecordStore` consumers
-- Convex storage is records-only; dense recall needs an explicit `VectorStore` such as `upstashVectorStore()`
+- Convex storage is records-only; dense recall needs an explicit `SearchStore`.
 - `createConvexTransport({ api, useQuery })` uses the same document contract for React reads
 - Component `memory.list` owns only `by_key` prefix pagination and returns `{ docs, cursor }`
 - Store-document policy owns `_cruxDoc` decoding, TTL cleanup, top-level value filters, vector hit shaping, and filtered-page filling
@@ -1822,9 +1903,9 @@ Five functions extracted from adapter duplication, exported as `@internal`. `Orc
 
 Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` implementations for use with primitives that need SDK-agnostic generation (compaction, scoring, extraction):
 
-| Adapter               | Object                                  | Text                                  | Embeddings             | Rerankers          |
-| --------------------- | --------------------------------------- | ------------------------------------- | ---------------------- | ------------------ |
-| `@use-crux/ai`        | `generateObjectFn` (singleton)          | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`       |
+| Adapter               | Object                           | Text                                  | Embeddings             | Rerankers          |
+| --------------------- | -------------------------------- | ------------------------------------- | ---------------------- | ------------------ |
+| `@use-crux/ai`        | `generateObjectFn` (singleton)   | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`       |
 | `@use-crux/openai`    | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/google`    | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/anthropic` | `createGenerateObjectFn(client)` | `createGenerateTextFn(client, model)` | generation-only        | via `@use-crux/ai` |
@@ -1884,17 +1965,17 @@ result = {
 
 ### Convex (`convex/`)
 
-`convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared vector index, while dense search requires an explicit `VectorStore` (`convexVectorStore()` throws `unsupported_capability` with migration guidance). `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
+`convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared search index, while dense search requires an explicit `SearchStore`. `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
 `createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, versioned compare-and-set, and capability reporting.
 
 ### Upstash (`upstash/`)
 
-`upstashVectorStore(config)` — `VectorStore` backed by Upstash Vector for dense, sparse, and hybrid retrieval.
+`upstashSearchStore(config)` — `SearchStore` backed by Upstash for dense and sparse retrieval.
 
 `upstashRedisRecordStore(config)` — `RecordStore` backed by Upstash Redis for JSON records with native TTL.
 
-Use `upstashVectorStore()` for retrieval/indexing code and pair it with an explicit `RecordStore` when a primitive needs hydration.
+Use `upstashSearchStore()` for retrieval/indexing code and pair it with an explicit `RecordStore` when a primitive needs hydration.
 
 ## Canonical Observability Runtime
 

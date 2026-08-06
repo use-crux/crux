@@ -131,3 +131,52 @@ func TestObservabilityRefreshUsesExactDetailsWhenPayloadCarriesCompleteRunIDs(t 
 		t.Fatal("complete runIds payload emitted an unnecessary detail wildcard")
 	}
 }
+
+func TestEvalAndBaselineBatchesInvalidateOnlyTheirNamedResources(t *testing.T) {
+	evalInvalidations := invalidationsForBatch(bridge.Batch{
+		Changed: bridge.NewDomains(bridge.DomainEvals),
+		Revs:    bridge.Revisions{Evals: 7},
+	})
+	for _, name := range []bridge.ResourceName{
+		bridge.EvalsCatalogResource, bridge.EvalsRunsResource, bridge.EvalsAnyRunResource,
+	} {
+		if revision, ok := evalInvalidations.Revision(name); !ok || revision != 7 {
+			t.Fatalf("%s invalidation = (%d,%v), want Eval revision 7", name, revision, ok)
+		}
+	}
+	if _, ok := evalInvalidations.Revision(bridge.EvalsBaselinesResource); ok {
+		t.Fatal("Eval event over-refreshed Baselines")
+	}
+
+	baselineInvalidations := invalidationsForBatch(bridge.Batch{
+		Changed: bridge.NewDomains(bridge.DomainBaselines),
+		Revs:    bridge.Revisions{Baselines: 9},
+	})
+	if revision, ok := baselineInvalidations.Revision(bridge.EvalsBaselinesResource); !ok || revision != 9 {
+		t.Fatalf("baseline invalidation = (%d,%v), want 9", revision, ok)
+	}
+	if _, ok := baselineInvalidations.Revision(bridge.EvalsCatalogResource); ok {
+		t.Fatal("Baseline event over-refreshed Eval catalog")
+	}
+}
+
+func TestIndexBatchAlsoInvalidatesEvalCatalogOnly(t *testing.T) {
+	invalidations := invalidationsForBatch(bridge.Batch{
+		Changed: bridge.NewDomains(bridge.DomainIndex),
+		Revs:    bridge.Revisions{Index: 11},
+	})
+	for _, name := range []bridge.ResourceName{
+		bridge.IndexSnapshotResource, bridge.EvalsCatalogResource,
+	} {
+		if revision, ok := invalidations.Revision(name); !ok || revision != 11 {
+			t.Fatalf("%s invalidation = (%d,%v), want Index revision 11", name, revision, ok)
+		}
+	}
+	for _, unrelated := range []bridge.ResourceName{
+		bridge.EvalsRunsResource, bridge.EvalsAnyRunResource, bridge.EvalsBaselinesResource,
+	} {
+		if _, ok := invalidations.Revision(unrelated); ok {
+			t.Fatalf("Index event over-refreshed %s", unrelated)
+		}
+	}
+}

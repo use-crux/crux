@@ -15,7 +15,7 @@ function managedTask(
   requiredHostCapabilities: readonly (
     | "asset-store"
     | "record-store"
-    | "vector-store"
+    | "search-store"
   )[] = [],
   callContractFingerprint = "projection-call-v1",
   projectIdentity: () => {
@@ -150,7 +150,7 @@ describe("Eval execution projection", () => {
   it("places a managed task with normalized host requirements in the runtime", () => {
     const evalValue = evaluate({
       id: "hosted",
-      task: managedTask(["vector-store", "asset-store", "vector-store"]),
+      task: managedTask(["search-store", "asset-store", "search-store"]),
       cases: [{ input: "hello" }],
     });
 
@@ -158,7 +158,7 @@ describe("Eval execution projection", () => {
       status: "ready",
       name: "current",
       execution: "runtime",
-      requiredHostCapabilities: ["asset-store", "vector-store"],
+      requiredHostCapabilities: ["asset-store", "search-store"],
     });
   });
 });

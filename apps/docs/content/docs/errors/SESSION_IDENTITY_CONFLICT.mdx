@@ -1,0 +1,24 @@
+---
+title: SESSION_IDENTITY_CONFLICT
+description: A durable Agent Session key is already bound to a different Agent target.
+---
+
+## What failed
+
+`session()` or `getSession()` received a key that already identifies another
+Agent target in the active Runtime namespace.
+
+## Why
+
+One key binds to exactly one Agent target within a namespace. Sharing keys across
+targets would make Thread ownership and turn recovery ambiguous.
+
+## What still works
+
+The original Session remains reconnectable with its original Agent target.
+Other keys and namespaces are unaffected.
+
+## Fix
+
+Use the original Agent with `getSession(originalAgent, key)`, or choose a new
+key for the second Agent.

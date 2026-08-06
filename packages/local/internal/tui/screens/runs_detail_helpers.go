@@ -138,25 +138,38 @@ func commaInt(n int) string {
 // kvRow is the standard `muted-key  value` row used in detail panes across
 // screens. Defined here because Runs is the most invariant consumer; other
 // screens import it via the package.
-func kvRow(k, v string, _ int) string {
-	kCol := 14
-	k = kit.SanitizeInline(k)
-	v = kit.SanitizeInline(v)
-	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padRunsInline(k, kCol))
-	val := lipgloss.NewStyle().Foreground(shell.ColorText).Render(v)
-	row := fmt.Sprintf(" %s %s", key, val)
-	return row + "\n"
+func kvRow(k, v string, width int) string {
+	return labelValueRows(k, v, width, shell.ColorText)
 }
 
 // kvRowColored is kvRow with a colored value.
-func kvRowColored(k, v string, c color.Color, _ int) string {
-	kCol := 14
-	k = kit.SanitizeInline(k)
-	v = kit.SanitizeInline(v)
-	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padRunsInline(k, kCol))
-	val := lipgloss.NewStyle().Foreground(c).Render(v)
-	row := fmt.Sprintf(" %s %s", key, val)
-	return row + "\n"
+func kvRowColored(k, v string, c color.Color, width int) string {
+	return labelValueRows(k, v, width, c)
+}
+
+func labelValueRows(label, value string, width int, valueColor color.Color) string {
+	const preferredLabelWidth = 14
+	labelWidth := min(preferredLabelWidth, max(1, width-3))
+	valueStart := labelWidth + 2
+	valueWidth := max(1, width-valueStart)
+	label = kit.TruncateMiddle(kit.SanitizeInline(label), labelWidth, "…")
+	value = kit.SanitizeInline(value)
+	wrapped := strings.Split(lipgloss.Wrap(value, valueWidth, " /._-"), "\n")
+	if len(wrapped) == 0 {
+		wrapped = []string{""}
+	}
+
+	keyStyle := lipgloss.NewStyle().Foreground(shell.ColorTextMuted)
+	valueStyle := lipgloss.NewStyle().Foreground(valueColor)
+	lines := make([]string, 0, len(wrapped))
+	for index, line := range wrapped {
+		prefix := strings.Repeat(" ", valueStart)
+		if index == 0 {
+			prefix = " " + keyStyle.Render(padRunsInline(label, labelWidth)) + " "
+		}
+		lines = append(lines, kit.Fit(prefix+valueStyle.Render(line), width, "…"))
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // padString2 right-pads an ASCII string with spaces to a fixed width.

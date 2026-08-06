@@ -31,13 +31,14 @@ import type {
   IndexResult,
 } from '../indexing'
 import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
-import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
+import type { ExactFilter, RecordStore, SearchStore, Storage } from '../storage'
 import type { ChunkingOptions, PipelineCacheConfig } from '../indexing'
 import type { KnowledgeBaseRetrieverConfig } from './knowledge-base'
 import type { RetrievalKnowledgeBinding } from './recipe/knowledge-binding'
 import type { Retriever } from './types'
 import type { KnowledgeViewRegistry } from '../knowledge/view/registry'
 import type { CommunitiesConfig } from '../knowledge/communities/communities'
+import type { RetainedCommunityRefreshHost } from '../knowledge/communities/retained-refresh'
 /** Documents, chunks, or loader results accepted by `knowledgeBase().index()`. */
 export type KnowledgeBaseIndexInput = readonly KnowledgeBaseIndexItem[] | AsyncIterable<KnowledgeBaseIndexItem>
 
@@ -83,11 +84,11 @@ export interface KnowledgeBaseRuntimeConfig<TModality extends EmbeddingModality 
   storage?: Storage
   /** Explicit record store override. */
   records?: RecordStore
-  /** Explicit vector store override. */
-  vectors?: VectorStore
-  /** Dense embedding model for dense or hybrid retrieval. */
+  /** Explicit search store override. */
+  search?: SearchStore
+  /** Dense embedding model for dense retrieval legs. */
   embeddings?: DenseEmbedding<TModality>
-  /** Sparse embedding model for sparse or hybrid retrieval. */
+  /** Sparse embedding model for sparse retrieval legs. */
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
   chunking?: ChunkingOptions
@@ -95,6 +96,8 @@ export interface KnowledgeBaseRuntimeConfig<TModality extends EmbeddingModality 
   pipeline?: IndexingPipeline
   /** Connected knowledge communities configuration. */
   communities?: CommunitiesConfig
+  /** Internal retained refresh host shared with the public communities surface. */
+  communityRefreshHost?: RetainedCommunityRefreshHost
   /** Metadata schema used to validate indexed metadata. */
   metadataSchema?: z.ZodType<unknown>
   /** Indexing cache configuration. */
@@ -105,11 +108,14 @@ export interface KnowledgeBaseRuntimeConfig<TModality extends EmbeddingModality 
 
 export interface KnowledgeBaseRuntime<TModality extends EmbeddingModality = EmbeddingModality> {
   readonly sourceKind: 'corpus' | 'direct'
-  readonly storage: { records: boolean; vectors: boolean }
+  readonly storage: { records: boolean; search: boolean }
   readonly capabilities: {
-    dense: boolean
-    sparse: boolean
-    hybrid: boolean
+    legs: {
+      dense: boolean
+      sparse: boolean
+      lexical: boolean
+    }
+    fusion: readonly 'rrf'[]
     delete: boolean
     filter: 'pre' | 'post' | false
   }
@@ -129,7 +135,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
   config: KnowledgeBaseRuntimeConfig<TModality>,
 ): KnowledgeBaseRuntime<TModality> {
   const records = config.records ?? config.storage?.records
-  const vectors = config.vectors ?? config.storage?.vectors
+  const search = config.search ?? config.storage?.search
   const retention = config.lifecycle?.retention ?? 'cleanup'
   const lifecycle: KnowledgeBaseLifecycleState = {
     status: 'ready',
@@ -145,6 +151,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
     namespace: config.namespace,
     pipeline: config.pipeline,
     communities: config.communities,
+    communityRefreshHost: config.communityRefreshHost,
     retention,
   })
 
@@ -201,7 +208,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
       return { result, failures: [], indexed: true, sourceIds }
     }
 
-    const index = createKnowledgeBaseIndexer(config, records, vectors)
+    const index = createKnowledgeBaseIndexer(config, records, search)
     if (items.every(isKnowledgeBaseChunk)) {
       const prepared = partitionKnowledgeBaseChunksByMetadata(config.id, config.metadataSchema, items)
       if (prepared.chunks.length > 0 || prepared.failures.length === 0) {
@@ -252,7 +259,7 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
       nativePrimitive: 'indexing.pipeline',
     }, async () => config.corpus
       ? config.corpus.deleteSource(sourceId)
-      : { sourceId, deletedCount: await createKnowledgeBaseIndexer(config, records, vectors).deleteSource(sourceId) })
+      : { sourceId, deletedCount: await createKnowledgeBaseIndexer(config, records, search).deleteSource(sourceId) })
     await connected.afterRemove(sourceId)
     await refreshKnowledgeBaseLifecycleState(lifecycle, config.id, config.namespace, records)
     return result
@@ -265,28 +272,30 @@ export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
       indexerId: config.id,
       namespace: config.namespace,
       records,
-      vectors,
+      search,
       storage: config.storage,
       dense: config.embeddings,
       sparse: config.sparseEmbeddings,
-      search: {
-        mode: retrieverConfig?.mode,
-        limit: retrieverConfig?.limit,
-        threshold: retrieverConfig?.threshold,
-        filter: retrieverConfig?.filter,
-      },
+      limit: retrieverConfig?.limit,
+      threshold: retrieverConfig?.threshold,
+      filter: retrieverConfig?.filter,
+      plan: retrieverConfig?.search,
     }) as Retriever<TFilter, TModality>
   }
+  const searchCapabilities = search?.capabilities()
 
   return Object.freeze({
     sourceKind: config.corpus ? 'corpus' : 'direct',
-    storage: { records: records !== undefined, vectors: vectors !== undefined },
+    storage: { records: records !== undefined, search: search !== undefined },
     capabilities: {
-      dense: config.embeddings !== undefined,
-      sparse: config.sparseEmbeddings !== undefined,
-      hybrid: config.embeddings !== undefined && config.sparseEmbeddings !== undefined,
+      legs: {
+        dense: searchCapabilities?.legs.dense ?? false,
+        sparse: searchCapabilities?.legs.sparse ?? false,
+        lexical: searchCapabilities?.legs.lexical ?? false,
+      },
+      fusion: searchCapabilities?.fusion ?? [],
       delete: true,
-      filter: vectors?.capabilities().filter ?? false,
+      filter: searchCapabilities?.filter ?? false,
     },
     lifecycle,
     index,

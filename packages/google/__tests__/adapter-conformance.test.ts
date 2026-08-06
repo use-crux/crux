@@ -1,5 +1,5 @@
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
+import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter/testing'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import type { GoogleCacheName } from '../src/cached-content'
 import type { GoogleCachedContentLifecycle } from '../src/cached-content'

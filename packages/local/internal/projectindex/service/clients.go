@@ -34,6 +34,20 @@ type SemanticPrewarmer interface {
 	PrewarmProjectSemantic(ctx context.Context) error
 }
 
+// EvalDiscoveryCapacity coordinates Eval discovery with compiler work that
+// would otherwise occupy the full semantic worker pool.
+type EvalDiscoveryCapacity interface {
+	AcquireEvalDiscoveryCapacity(ctx context.Context) (release func(), err error)
+}
+
+// ContendedCompilerCapacity coordinates other CPU-heavy compiler work with
+// Eval discovery after full-pool semantic demand has been observed.
+type ContendedCompilerCapacity interface {
+	AcquireContendedCompilerCapacity(ctx context.Context) (release func(), err error)
+	EvalDiscoveryIsolationRequired() bool
+	PrepareEvalDiscoveryIsolation(request projectindex.ProjectSemanticIndexRequest)
+}
+
 // RuntimeClient owns explicit runtime-rich Project Index enrichment.
 type RuntimeClient interface {
 	projectindex.ProjectRuntimeIndexer

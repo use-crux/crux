@@ -258,7 +258,7 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["indexing.pipeline", "ingest.parse", "corpus.sync"],
   },
-  "storage.vectorStore": {
+  "storage.searchStore": {
     primary: "runtime-contributor",
     runtimeIdentity: "none",
     runtimePrimitiveNames: [
@@ -377,7 +377,7 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimePrimitiveNames: ["scoring.judge"],
   },
   eval: { primary: "eval-owned", runtimeIdentity: "eval" },
-  // Category F — genuinely static-only (8 kinds). Declarative/config; never
+  // Category F — genuinely static-only kinds. Declarative/config; never
   // the target or subject of any runtime primitive.
   registry: { primary: "static-only" },
   "knowledge.relation": { primary: "static-only" },
@@ -386,6 +386,15 @@ export const DEFINITION_KIND_COVERAGE = {
   "knowledge.model": { primary: "static-only" },
   "storage.bundle": { primary: "static-only" },
   "storage.scope": { primary: "static-only" },
+  signal: { primary: "static-only" },
+  "signal.provider": { primary: "static-only" },
+  "signal.transport": { primary: "static-only" },
+  "signal.transportBinding": { primary: "static-only" },
+  session: {
+    primary: "runtime-observed-unjoined",
+    runtimePrimitiveNames: ["session.turn"],
+    runtimeIdentity: "none",
+  },
   // Refuted category-A claim: no first-party emitter, compiled-definition
   // builder (JS-TypeScript semantic or native Rust/Oxc), or public pipeline
   // execution API exists for `rag.pipeline` anywhere in the repo — only dead

@@ -29,9 +29,13 @@ func (s *Runs) toggleSelectedDuplicateGroup() bool {
 
 func (s *Runs) flattenedSpanRows() []RunRow {
 	if s.diagnosis != nil {
-		spans := make([]api.InspectRunSpan, len(s.diagnosis.Timeline))
+		timeline := s.diagnosis.Timeline
+		if !s.showAllSpans && runStatusFailed(s.diagnosis.Summary.Status) {
+			timeline = s.failurePathRows()
+		}
+		spans := make([]api.InspectRunSpan, len(timeline))
 		activities := make(map[string]api.ObservabilityRunDetailNode, len(s.diagnosis.Timeline))
-		for index, row := range s.diagnosis.Timeline {
+		for index, row := range timeline {
 			spans[index] = row.Span
 			activities[row.ID] = row.Activity
 		}

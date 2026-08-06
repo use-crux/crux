@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -22,7 +23,7 @@ func (c *preservingRunDetailClient) ObservabilityRunDetail(context.Context, stri
 	return c.detail, true, nil
 }
 
-// TestRunsExportEmitsCmd asserts pressing `e` with a selected run
+// TestRunsExportEmitsCmd asserts pressing `x` with a selected run
 // returns a non-nil tea.Cmd — the cmd writes the run's JSON to
 // ~/.crux/exports/run-{id}.json and emits an `exportSavedMsg`. The
 // actual file IO is exercised via the cmd; the screen-level behavior
@@ -35,22 +36,22 @@ func TestRunsExportEmitsCmd(t *testing.T) {
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
 	})
 
-	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
-		t.Error("pressing `e` returned nil cmd; expected export emitter")
+		t.Error("pressing `x` returned nil cmd; expected export emitter")
 	}
 }
 
-// TestRunsExportWithoutSelectionIsNoop asserts pressing `e` with no
+// TestRunsExportWithoutSelectionIsNoop asserts pressing `x` with no
 // run loaded does nothing (returns nil) so the user doesn't see a
 // surprise file appear.
 func TestRunsExportWithoutSelectionIsNoop(t *testing.T) {
 	r := NewRuns()
 	// No detail and no pane selection.
 
-	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd != nil {
-		t.Errorf("pressing `e` without a run returned non-nil cmd %v", cmd)
+		t.Errorf("pressing `x` without a run returned non-nil cmd %v", cmd)
 	}
 }
 
@@ -113,5 +114,29 @@ func TestRunsExportPreservesCompleteObservabilityDetail(t *testing.T) {
 	}
 	if got.Debug == nil || len(got.Debug.Records) != 1 {
 		t.Fatalf("exported debug graph = %#v, want source debug graph", got.Debug)
+	}
+}
+
+func TestRunsExportCompletionSurfacesSavedPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	runs := NewRuns()
+	selectRunForTest(runs, "run-visible")
+	setRunDetailForTest(runs, api.ObservabilityRunDetail{
+		Run:  api.ObservabilityRunSummary{RunID: "run-visible"},
+		Root: api.ObservabilityRunDetailNode{ID: "root"},
+	})
+	runs.Resize(Size{Width: 160, Height: 40})
+
+	export := runs.exportRun()
+	if export == nil {
+		t.Fatal("loaded run did not enable export")
+	}
+	msg := export()
+	runs.Update(testContext, msg, nil)
+	exported := msg.(runExportedMsg)
+	_, right := runs.Breadcrumb()
+	if !strings.Contains(right, "exported "+exported.path) {
+		t.Fatalf("Runs breadcrumb toast = %q, want saved path %q", right, exported.path)
 	}
 }

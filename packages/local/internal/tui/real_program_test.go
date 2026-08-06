@@ -1,10 +1,22 @@
 package tui
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/screens"
+	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
 type realProgramSmokeModel struct {
@@ -47,5 +59,236 @@ func TestRealProgramHarnessBootsAndExits(t *testing.T) {
 	}
 	if !strings.Contains(output, "program ready") {
 		t.Fatalf("program output = %q, want rendered view", output)
+	}
+}
+
+type slowIndexFixtureClient struct {
+	*uitest.FixtureClient
+	indexData       api.IndexData
+	projectStarted  chan struct{}
+	projectRelease  chan struct{}
+	activityStarted chan struct{}
+	activityRelease chan struct{}
+	projectOnce     sync.Once
+	activityOnce    sync.Once
+	projectCalls    atomic.Int32
+}
+
+func newSlowIndexFixtureClient() *slowIndexFixtureClient {
+	definitions := make([]api.ProjectDefinition, 713)
+	for index := range definitions {
+		definitions[index] = api.ProjectDefinition{
+			ID:   fmt.Sprintf("prompt:slow-refresh-%03d", index),
+			Kind: "prompt",
+			Name: fmt.Sprintf("slow refresh %03d", index),
+		}
+	}
+	data := api.IndexData{Definitions: definitions}
+	return &slowIndexFixtureClient{
+		FixtureClient:   uitest.NewFixtureClient(),
+		indexData:       data,
+		projectStarted:  make(chan struct{}),
+		projectRelease:  make(chan struct{}),
+		activityStarted: make(chan struct{}),
+		activityRelease: make(chan struct{}),
+	}
+}
+
+func (c *slowIndexFixtureClient) ProjectIndex(ctx context.Context) (api.IndexData, error) {
+	c.projectCalls.Add(1)
+	c.projectOnce.Do(func() { close(c.projectStarted) })
+	select {
+	case <-c.projectRelease:
+		return c.indexData, nil
+	case <-ctx.Done():
+		return api.IndexData{}, ctx.Err()
+	}
+}
+
+func (c *slowIndexFixtureClient) DefinitionActivity(ctx context.Context, definitionID string) (api.CatalogRuntimeActivityV1, error) {
+	c.activityOnce.Do(func() { close(c.activityStarted) })
+	select {
+	case <-c.activityRelease:
+		return api.CatalogRuntimeActivityV1{DefinitionID: definitionID}, nil
+	case <-ctx.Done():
+		return api.CatalogRuntimeActivityV1{}, ctx.Err()
+	}
+}
+
+func runSlowIndexApp(t *testing.T, client *slowIndexFixtureClient) (*App, *io.PipeWriter, <-chan shutdownProgramResult) {
+	t.Helper()
+	app := NewApp(t.Context(), "http://localhost:5501", client, "", false)
+	app.MarkBootComplete()
+	app.workbench.screens["index"].(*screens.Index).SetIndexForTest(client.indexData)
+
+	input, writer := io.Pipe()
+	program := tea.NewProgram(
+		app,
+		tea.WithInput(input),
+		tea.WithOutput(io.Discard),
+		tea.WithEnvironment([]string{"NO_COLOR=1", "TERM=dumb"}),
+		tea.WithWindowSize(100, 30),
+		tea.WithoutSignalHandler(),
+	)
+	app.SetProgram(program)
+	done := make(chan shutdownProgramResult, 1)
+	go func() {
+		model, err := program.Run()
+		done <- shutdownProgramResult{model: model, err: err}
+	}()
+	return app, writer, done
+}
+
+func writeProgramKey(t *testing.T, writer io.Writer, key string) {
+	t.Helper()
+	if _, err := io.WriteString(writer, key); err != nil {
+		t.Fatalf("write program key %q: %v", key, err)
+	}
+	time.Sleep(10 * time.Millisecond)
+}
+
+func awaitProgramExit(t *testing.T, done <-chan shutdownProgramResult) {
+	t.Helper()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("run program: %v", result.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("program did not process q while Index data work was blocked")
+	}
+}
+
+func awaitProgramExitWithin(t *testing.T, done <-chan shutdownProgramResult, limit time.Duration) {
+	t.Helper()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("run program: %v", result.err)
+		}
+	case <-time.After(limit):
+		t.Fatalf("program did not exit within %s", limit)
+	}
+}
+
+func TestRealProgramProcessesKeysDuringSlowIndexRefreshes(t *testing.T) {
+	t.Run("project index", func(t *testing.T) {
+		client := newSlowIndexFixtureClient()
+		app, input, done := runSlowIndexApp(t, client)
+		defer input.Close()
+		defer close(client.projectRelease)
+		defer close(client.activityRelease)
+
+		writeProgramKey(t, input, "5")
+		app.SendMsg(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainIndex), Revs: bridge.Revisions{Index: 1}})
+		select {
+		case <-client.projectStarted:
+		case <-time.After(time.Second):
+			t.Fatal("slow ProjectIndex refresh did not start")
+		}
+		for revision := uint64(2); revision <= 8; revision++ {
+			app.SendMsg(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainIndex), Revs: bridge.Revisions{Index: revision}})
+		}
+		writeProgramKey(t, input, "v")
+		writeProgramKey(t, input, "1")
+		writeProgramKey(t, input, "q")
+		awaitProgramExit(t, done)
+
+		if calls := client.projectCalls.Load(); calls != 1 {
+			t.Fatalf("blocked ProjectIndex calls = %d, want one coalesced active request", calls)
+		}
+		if app.workbench.activeNav != "overview" {
+			t.Fatalf("screen switch during refresh ended on %q, want overview", app.workbench.activeNav)
+		}
+		indexView := ansi.Strip(app.workbench.screens["index"].View(screens.Size{Width: 80, Height: 24}))
+		if !strings.Contains(indexView, "OTHER 713") {
+			t.Fatalf("v was not processed during refresh:\n%s", indexView)
+		}
+	})
+
+	t.Run("definition activity", func(t *testing.T) {
+		client := newSlowIndexFixtureClient()
+		close(client.projectRelease)
+		app, input, done := runSlowIndexApp(t, client)
+		defer input.Close()
+		defer close(client.activityRelease)
+
+		writeProgramKey(t, input, "5")
+		app.SendMsg(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainIndex), Revs: bridge.Revisions{Index: 1}})
+		select {
+		case <-client.activityStarted:
+		case <-time.After(time.Second):
+			t.Fatal("slow DefinitionActivity refresh did not start")
+		}
+		writeProgramKey(t, input, "!")
+		writeProgramKey(t, input, "1")
+		writeProgramKey(t, input, "q")
+		awaitProgramExit(t, done)
+
+		if app.workbench.activeNav != "overview" {
+			t.Fatalf("screen switch during activity refresh ended on %q, want overview", app.workbench.activeNav)
+		}
+		if app.workbench.statusToast != "no startup issues" {
+			t.Fatalf("! during activity refresh set status %q", app.workbench.statusToast)
+		}
+	})
+}
+
+func TestRealProgramNavigationAndQuitStayResponsiveWhenDataLayerIsWedged(t *testing.T) {
+	client := newSlowIndexFixtureClient()
+	app, input, done := runSlowIndexApp(t, client)
+	defer input.Close()
+	defer close(client.projectRelease)
+	defer close(client.activityRelease)
+
+	cleanupRelease := make(chan struct{})
+	defer close(cleanupRelease)
+	app.SetShutdownCallback(func() error {
+		<-cleanupRelease
+		return nil
+	})
+
+	writeProgramKey(t, input, "5")
+	app.SendMsg(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainIndex), Revs: bridge.Revisions{Index: 1}})
+	select {
+	case <-client.projectStarted:
+	case <-time.After(time.Second):
+		t.Fatal("wedged ProjectIndex refresh did not start")
+	}
+
+	indexEvents := make(chan store.IndexData, 2_000)
+	bridgeCtx, cancelBridge := context.WithCancel(t.Context())
+	bridgeSession := bridge.Start(bridgeCtx, bridge.Sources{IndexChanged: indexEvents}, app.SendMsg)
+	defer func() {
+		cancelBridge()
+		_ = bridgeSession.Wait(context.Background())
+	}()
+	floodDone := make(chan struct{})
+	go func() {
+		defer close(floodDone)
+		for range 1_998 {
+			indexEvents <- store.IndexData{}
+		}
+		close(indexEvents)
+	}()
+
+	started := time.Now()
+	writeProgramKey(t, input, "1")
+	writeProgramKey(t, input, "q")
+	limit := time.Second
+	if raceTestEnabled {
+		limit = 2 * time.Second
+	}
+	awaitProgramExitWithin(t, done, limit)
+	if elapsed := time.Since(started); elapsed > limit {
+		t.Fatalf("navigation and quit took %s, want at most %s", elapsed, limit)
+	}
+	if app.workbench.activeNav != "overview" {
+		t.Fatalf("screen switch during wedged refresh ended on %q, want overview", app.workbench.activeNav)
+	}
+	select {
+	case <-floodDone:
+	case <-time.After(time.Second):
+		t.Fatal("event flood producer remained blocked after program exit")
 	}
 }

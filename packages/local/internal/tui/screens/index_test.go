@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
 func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
@@ -17,10 +18,32 @@ func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
 
 	for _, binding := range bindings {
 		switch binding.Key {
-		case "j/↓", "k/↑", "pgdn/ctrl+d", "pgup/ctrl+u", "home", "end", "l/→/tab", "e":
+		case "j/↓", "k/↑", "pgdn/^d", "pgup/^u", "home", "end", "l/→/tab", "↵", "v", "x":
 		default:
 			t.Errorf("Index advertised unhandled key %q (%s)", binding.Key, binding.Label)
 		}
+	}
+}
+
+func TestIndexEnterOnLintRowAnchorsDetailToLint(t *testing.T) {
+	index := NewIndex()
+	data := sampleIndex()
+	data.Definitions[0].Description = strings.Repeat("long authored description ", 30)
+	data.LintFindings = []api.IndexLintFinding{{
+		ID: "lint:writer", RuleID: "prompt.missing_eval", Title: "Missing Eval",
+		PrimaryDefinitionID: "prompt:writer.prompt",
+	}}
+	index.SetIndexForTest(data)
+	index.Resize(Size{Width: 100, Height: 18})
+
+	index.Update(testContext, tea.KeyPressMsg{Code: tea.KeyEnter}, nil)
+
+	if index.focus != indexFocusDetail {
+		t.Fatal("Enter on lint row did not focus detail")
+	}
+	view := stripANSI(index.View(Size{}))
+	if !strings.Contains(view, "LINT") || !strings.Contains(view, "prompt.missing_eval") {
+		t.Fatalf("Enter on lint row did not anchor visible detail to LINT:\n%s", view)
 	}
 }
 
@@ -75,6 +98,61 @@ func TestIndexCursorCyclesDefinitions(t *testing.T) {
 	c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
 	if got := c.SelectedDefinitionID(); got != "prompt:writer.prompt" {
 		t.Errorf("after k = %q, want %q", got, "prompt:writer.prompt")
+	}
+}
+
+func TestIndexSixtyMovementBacklogProjectsOnlyFinalSelection(t *testing.T) {
+	definitions := make([]api.ProjectDefinition, 100)
+	for i := range definitions {
+		definitions[i] = api.ProjectDefinition{
+			ID: "prompt:" + fmt.Sprint(i), Kind: "prompt", Name: fmt.Sprint(i), Fidelity: "resolved",
+		}
+	}
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{Definitions: definitions})
+	client := uitest.NewFixtureClient()
+
+	commands := 0
+	for _, key := range strings.Repeat("j", 30) + strings.Repeat("k", 30) {
+		if cmd := index.Update(testContext, tea.KeyPressMsg{Text: string(key), Code: key}, client); cmd != nil {
+			commands++
+		}
+	}
+	if commands != 1 {
+		t.Fatalf("movement burst scheduled %d detail intents, want one", commands)
+	}
+	if got := index.SelectedDefinitionID(); got != definitions[0].ID {
+		t.Fatalf("final selection = %q, want %q", got, definitions[0].ID)
+	}
+
+	index.selectionMovedAt = indexSelectionNow().Add(-indexSelectionIntentDelay)
+	if cmd := index.Update(testContext, indexSelectionIntentMsg{intent: index.selectionIntent}, client); cmd == nil {
+		t.Fatal("final selection intent did not schedule its activity read")
+	}
+	if index.selectionPending {
+		t.Fatal("final selection intent remained pending")
+	}
+}
+
+func BenchmarkIndexMovementAtRepoScale(b *testing.B) {
+	definitions := make([]api.ProjectDefinition, 741)
+	for i := range definitions {
+		definitions[i] = api.ProjectDefinition{
+			ID: "prompt:" + fmt.Sprint(i), Kind: "prompt", Name: "definition " + fmt.Sprint(i), Fidelity: "resolved",
+		}
+	}
+	index := NewIndex()
+	index.SetIndexForTest(api.IndexData{Definitions: definitions})
+	index.Resize(Size{Width: 140, Height: 43})
+	client := uitest.NewFixtureClient()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := 'j'
+		if i%2 == 1 {
+			key = 'k'
+		}
+		index.Update(testContext, tea.KeyPressMsg{Text: string(key), Code: key}, client)
+		_ = index.View(Size{})
 	}
 }
 
@@ -187,15 +265,15 @@ func TestIndexViewOmitsSuppressedFindingsFromBadgesAndLists(t *testing.T) {
 	}
 }
 
-// TestIndexExportEmitsCmd asserts `e` returns a non-nil cmd that
+// TestIndexExportEmitsCmd asserts `x` returns a non-nil cmd that
 // exports the focused definition as JSON.
 func TestIndexExportEmitsCmd(t *testing.T) {
 	c := NewIndex()
 	c.SetIndexForTest(sampleIndex())
 
-	cmd := c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
-		t.Error("pressing `e` returned nil; expected export cmd")
+		t.Error("pressing `x` returned nil; expected export cmd")
 	}
 }
 

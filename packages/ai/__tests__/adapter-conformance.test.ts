@@ -2,7 +2,7 @@ import type { LanguageModel } from "ai";
 import type {
   ProviderConformanceScript,
   ProviderRuntimeConformanceHarness,
-} from "@use-crux/core/adapter";
+} from "@use-crux/core/adapter/testing";
 import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
 import { aiSdkProviderRuntime } from "../src";
 import { liveSdkGateway, type SdkGateway } from "../src/gateway";

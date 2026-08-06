@@ -24,8 +24,7 @@ export function mergeRetrieveOptions(
   return {
     ...(request.limit !== undefined ? { limit: request.limit } : {}),
     ...(request.threshold !== undefined ? { threshold: request.threshold } : {}),
-    ...(request.mode ? { mode: request.mode } : {}),
-    ...(request.fusion ? { fusion: request.fusion } : {}),
+    ...(request.search ? { search: request.search } : {}),
     ...(request.caller ? { caller: request.caller } : {}),
     ...(stepConfig?.limit !== undefined ? { limit: stepConfig.limit } : {}),
     ...(stepConfig?.threshold !== undefined ? { threshold: stepConfig.threshold } : {}),

@@ -13,6 +13,8 @@ import {
   createRuntimeProgram,
   bindHostRuntime,
   durableTask,
+  createRuntimeProgram,
+  createRuntimeWorker,
   CruxRuntimeError,
 } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
@@ -31,6 +33,8 @@ The Runtime Engine is the durable execution layer for event waits, timers, backg
 | `serverless({ store, wake, endpoint, publicUrl, namespace, retention })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL.                                                          |
 | `genericQueue({ enqueue, secret, devSecret, maxDelayMs })`               | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding.                                                            |
 | `createRuntime({ runtime, targets, leaseTtlMs, leaseExtension })`        | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here.                                                         |
+| `createRuntimeProgram({ targets, transports })`                          | Validate and freeze the immutable target and managed-transport truth shared by generated and hand-written hosts.                                                                                              |
+| `createRuntimeWorker({ runtime, program, pollIntervalMs? })`             | Start one process-local maintenance worker for an immutable program. See the [worker reference](/docs/reference/crux-core/runtime-worker).                                                                    |
 | `bindHostRuntime(definition, binding)`                                   | Host adapter path for platforms whose store/wake require request context, such as Convex. It delegates through the same kernel as `createRuntime()` and can pass `leaseExtension: false` for timerless hosts. |
 | `withCruxBuild(nextConfig, options?)`                                    | `@use-crux/core/runtime/next` build plugin that runs `crux runtime generate` while Next evaluates config, covering Webpack and Turbopack builds.                                                              |
 

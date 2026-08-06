@@ -2,6 +2,7 @@ package screens
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
@@ -21,6 +22,11 @@ func setOverviewDataForTest(
 func applyOverviewSummaryForTest(o *Overview, value api.InspectOverviewRecord) {
 	_, token := o.summaryResource.Begin(testContext, overviewSummaryOwner, 0)
 	o.summaryResource.Apply(resource.ResourceResult[api.InspectOverviewRecord]{Token: token, Value: value})
+}
+
+func applyOverviewStatsForTest(o *Overview, stats store.StatsResult, timeseries []store.TimeseriesBucket) {
+	o.stats = &stats
+	o.statsTimeseries = append([]store.TimeseriesBucket(nil), timeseries...)
 }
 
 func applyOverviewInsightsForTest(o *Overview, value []api.InspectInsightRecord) {

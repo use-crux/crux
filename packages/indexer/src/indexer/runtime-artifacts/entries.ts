@@ -1,42 +1,75 @@
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
 import type { GeneratedEvalArtifacts } from "./eval-registry";
 import { GENERATED_HEADER } from "./generated-files";
+import { importSpecifier } from "./import-specifier";
+import {
+  providerImports,
+  providerLocalNames,
+  transportImports,
+  transportLocalNames,
+} from "./program-providers";
+
+export { importSpecifier } from "./import-specifier";
+
+/** Render the canonical Runtime program shared by generated host entries. */
+export function runtimeProgramFile(input: {
+  readonly artifactManifestHash: string;
+  readonly manifest: RuntimeArtifactManifest;
+  readonly outputFile: string;
+  readonly root: string;
+}): string {
+  return [
+    GENERATED_HEADER,
+    "import { createRuntimeProgram, type RuntimeProgramTargetInput } from '@use-crux/core/runtime'",
+    ...targetImports(input.manifest, input.outputFile, input.root),
+    ...effectTargetImports(input.manifest, input.outputFile, input.root),
+    ...providerImports(input.manifest, input.outputFile, input.root),
+    ...transportImports(input.manifest, input.outputFile, input.root),
+    "",
+    `export const runtimeArtifactManifestHash = '${input.artifactManifestHash}'`,
+    "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
+    "",
+    `const targets = [${targetProgramDeclarations(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTargetInput[]`,
+    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
+    "const generationModels = [] as const",
+    `const providers = [${providerLocalNames(input.manifest).join(", ")}] as const`,
+    `const transports = [${transportLocalNames(input.manifest).join(", ")}] as const`,
+    "",
+    "export const runtimeProgram = createRuntimeProgram({ targets, effectTargets, generationModels, providers, transports })",
+    "",
+  ].join("\n");
+}
 
 /** Render the generated Next runtime entry. */
 export function nextEntryFile(input: {
   readonly manifest: RuntimeArtifactManifest;
   readonly outputFile: string;
   readonly root: string;
-  readonly manifestHash: string;
   readonly evalArtifacts: GeneratedEvalArtifacts;
 }): string {
   const hasEvals = input.evalArtifacts.manifestEntries.length > 0;
   return [
     GENERATED_HEADER,
-    "import { createRuntimeHandler, createRuntimeProgram } from '@use-crux/core/runtime'",
+    "import { createRuntimeHandler } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
+    `import { runtimeProgram } from '${importSpecifier(dirname(input.outputFile), join(input.root, ".crux/generated/runtime/program.ts"))}'`,
     ...(hasEvals
       ? [
           "import type { InProcessRuntimeEngineDefinition } from '@use-crux/core/runtime'",
           "import { createServerlessEvalHost, type EvalHostStore, type ServerlessEvalHost } from '@use-crux/core/runtime/internal/eval-host'",
-          "import projectConfig from '../crux.config'",
+          `import projectConfig from '${importSpecifier(dirname(input.outputFile), join(input.root, "crux.config"))}'`,
         ]
       : []),
-    ...targetImports(input.manifest, input.outputFile, input.root),
-    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
-    `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
-    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
-    "const program = createRuntimeProgram({ targets, effectTargets, transports: [] })",
     registryDeclaration("evalRegistry", input.evalArtifacts),
     ...(hasEvals ? evalHostCapabilityLines([]) : []),
     "",
     ...(hasEvals
-      ? nextEvalHostLines(input.manifestHash)
+      ? nextEvalHostLines()
       : [
-          `export const { GET, POST } = createRuntimeHandler({ targets, program, manifestHash: '${input.manifestHash}' })`,
+          "export const { GET, POST } = createRuntimeHandler({ program: runtimeProgram })",
         ]),
     "",
   ].join("\n");
@@ -51,15 +84,11 @@ export function cloudflareGeneratedEntryFile(input: {
 }): string {
   return [
     GENERATED_HEADER,
-    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
     ...targetImports(input.manifest, input.outputFile, input.root),
-    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
     `export const runtimeTargets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
-    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
-    "export const runtimeProgram = createRuntimeProgram({ targets: runtimeTargets, effectTargets, transports: [] })",
     registryDeclaration("deployedEvals", input.evalArtifacts),
     "",
   ].join("\n");
@@ -131,24 +160,20 @@ export function convexTargetEntryFile(input: {
     "'use node'",
     "",
     "import { createConvexEvalHost, createConvexRuntimeTargetExecutor } from '@use-crux/convex/runtime/node'",
-    "import { createRuntimeProgram } from '@use-crux/core/runtime'",
     "import { createDeployedEvalRegistry } from '@use-crux/core/runtime/internal/eval-registry'",
     "import { components } from '../_generated/api'",
     ...targetImports(input.manifest, input.outputFile, input.root),
-    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...input.evalArtifacts.entryImports,
     "",
     `const targets = [${targetLocalNames(input.manifest).join(", ")}] as const`,
-    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
-    "const program = createRuntimeProgram({ targets, effectTargets, transports: [] })",
     registryDeclaration("evalRegistry", input.evalArtifacts),
-    ...evalHostCapabilityLines(["record-store", "vector-store"]),
+    ...evalHostCapabilityLines(["record-store", "search-store"]),
     "",
     "const deploymentId = process.env.CONVEX_CLOUD_URL",
     "if (!deploymentId) throw new Error('Generated Crux Eval host requires Convex to provide CONVEX_CLOUD_URL.')",
     "const evalHostToken = process.env.CRUX_EVAL_HOST_TOKEN",
     "",
-    "const runtime = createConvexRuntimeTargetExecutor({ component: components.crux, targets, program })",
+    "const runtime = createConvexRuntimeTargetExecutor({ component: components.crux, targets })",
     "const evalHost = createConvexEvalHost({",
     "  component: components.crux,",
     "  registry: evalRegistry,",
@@ -164,14 +189,6 @@ export function convexTargetEntryFile(input: {
   ].join("\n");
 }
 
-/** Create a stable relative source import without its TypeScript extension. */
-export function importSpecifier(fromDir: string, toFile: string): string {
-  const withoutExtension = toFile.replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
-  let specifier = relative(fromDir, withoutExtension).replace(/\\/g, "/");
-  if (!specifier.startsWith(".")) specifier = `./${specifier}`;
-  return specifier;
-}
-
 function targetImports(
   manifest: RuntimeArtifactManifest,
   outputFile: string,
@@ -180,9 +197,10 @@ function targetImports(
   return manifest.targets.map((target, index) => {
     const sourceFile = join(root, target.module.replace(/^\.\//, ""));
     const specifier = importSpecifier(dirname(outputFile), sourceFile);
-    return `import { ${target.export} as ${targetLocalName(index)} } from '${specifier}'`;
+    return `import { ${target.export} as ${targetLocalName(index)} } from ${JSON.stringify(specifier)}`;
   });
 }
+
 
 function effectTargetImports(
   manifest: RuntimeArtifactManifest,
@@ -192,16 +210,8 @@ function effectTargetImports(
   return (manifest.effectTargets ?? []).map((target, index) => {
     const sourceFile = join(root, target.module.replace(/^\.\//, ""));
     const specifier = importSpecifier(dirname(outputFile), sourceFile);
-    return `import { ${target.export} as ${effectTargetLocalName(index)} } from '${specifier}'`;
+    return `import { ${target.export} as ${effectTargetLocalName(index)} } from ${JSON.stringify(specifier)}`;
   });
-}
-
-function targetLocalNames(manifest: RuntimeArtifactManifest): string[] {
-  return manifest.targets.map((_, index) => targetLocalName(index));
-}
-
-function targetLocalName(index: number): string {
-  return `target${index}`;
 }
 
 function effectTargetLocalNames(
@@ -216,6 +226,23 @@ function effectTargetLocalName(index: number): string {
   return `effectTarget${index}`;
 }
 
+function targetLocalNames(manifest: RuntimeArtifactManifest): string[] {
+  return manifest.targets.map((_, index) => targetLocalName(index));
+}
+
+function targetProgramDeclarations(
+  manifest: RuntimeArtifactManifest,
+): string[] {
+  return manifest.targets.map(
+    (target, index) =>
+      `{ target: ${targetLocalName(index)}, definition: { id: ${JSON.stringify(target.definitionId)}, fingerprint: ${JSON.stringify(target.fingerprint)} } }`,
+  );
+}
+
+function targetLocalName(index: number): string {
+  return `target${index}`;
+}
+
 function registryDeclaration(
   name: string,
   evalArtifacts: GeneratedEvalArtifacts,
@@ -223,10 +250,10 @@ function registryDeclaration(
   return `export const ${name} = createDeployedEvalRegistry({persistencePolicy:{redactPaths:${JSON.stringify(evalArtifacts.redactPaths)}},entries:${evalArtifacts.registrySource}})`;
 }
 
-function nextEvalHostLines(manifestHash: string): string[] {
+function nextEvalHostLines(): string[] {
   return [
     "const runtime = projectConfig.config.runtime",
-    `const runtimeHandlers = createRuntimeHandler({ targets, program, runtime, manifestHash: '${manifestHash}' })`,
+    "const runtimeHandlers = createRuntimeHandler({ program: runtimeProgram, runtime })",
     "let evalHost: ServerlessEvalHost<EvalHostStore> | undefined",
     "",
     "async function dispatch(request: Request): Promise<Response> {",
@@ -264,8 +291,7 @@ function nextEvalHostLines(manifestHash: string): string[] {
     "    deploymentId,",
     "    token,",
     "    hostCapabilities: evalHostCapabilities,",
-    "    targets,",
-    "    program,",
+    "    targets: runtimeProgram.targets,",
     "  })",
     "  return evalHost",
     "}",

@@ -37,6 +37,8 @@ import {
   preparationResourceReads,
 } from "../../request/prepare/resources";
 import { commitPreparationDecision } from "../../request/prepare/journal";
+import type { ManagedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
+import { resolveStepIngress } from "./step-ingress";
 
 interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>;
@@ -63,6 +65,7 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly resolved: () => ResolvedPrompt;
   readonly rearm: (resolved: ResolvedPrompt) => Promise<void>;
   readonly configuredActiveTools?: readonly string[];
+  readonly stepBoundary?: ManagedGenerationStepBoundary;
   readonly onSealed?: (receipt: RequestReceipt) => void;
 }
 
@@ -99,24 +102,35 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
     | undefined;
   const representationEpoch = createRequestRepresentationEpoch();
   const prepareStepState = createPrepareStepState();
+  let boundaryIndex = 0;
   let primed: Awaited<ReturnType<typeof prepareBoundary>> | undefined;
 
   async function prepareBoundary(step: ExecutorRequestStepInput<TModel>) {
+    const reason = previousRequestId
+      ? ("tool-result" as const)
+      : ("initial" as const);
+    const stepIndex = boundaryIndex++;
+    const messages = [
+      ...step.messages,
+      ...(await resolveStepIngress({
+        boundary: options.stepBoundary,
+        input: { stepIndex, reason },
+        prompt: options.prompt,
+        resolveOptions: options.resolveOptions(),
+      })),
+    ];
     const resources = createPreparationResources({
       entries: options.prompt.contexts,
       requestInput: options.requestInput,
       promptId: options.prompt.id,
     });
-    const reason = previousRequestId
-      ? ("tool-result" as const)
-      : ("initial" as const);
     const amendment = await runPrepareStep({
       callback: options.prepareStep,
       state: prepareStepState,
       requestInput: options.requestInput,
       reason,
       previousReceipt,
-      messages: step.messages,
+      messages,
       resources,
       signal: options.signal,
     });
@@ -140,7 +154,8 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
       boundaryModelInfo,
       reason,
       resources,
-      stepIndex: prepareStepState.index - 1,
+      messages,
+      stepIndex: options.prepareStep ? prepareStepState.index - 1 : stepIndex,
     };
   }
 
@@ -148,24 +163,26 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
     if (step.previousCall) {
       recordPrepareStepOutcome(prepareStepState, step.previousCall);
     }
-    const prepared = options.prepareStep
-      ? primed ?? (await prepareBoundary(step))
-      : {
-          amendment: undefined,
-          baseline: options.resolved(),
-          boundary: {
-            resolved: options.resolved(),
-            model: step.model,
-            inputBudget: options.inputBudget,
-            activeTools: options.configuredActiveTools,
-          },
-          boundaryModelInfo: step.modelInfo,
-          reason: previousRequestId
-            ? ("tool-result" as const)
-            : ("initial" as const),
-          resources: undefined,
-          stepIndex: -1,
-        };
+    const prepared =
+      options.prepareStep || options.stepBoundary
+        ? (primed ?? (await prepareBoundary(step)))
+        : {
+            amendment: undefined,
+            baseline: options.resolved(),
+            boundary: {
+              resolved: options.resolved(),
+              model: step.model,
+              inputBudget: options.inputBudget,
+              activeTools: options.configuredActiveTools,
+            },
+            boundaryModelInfo: step.modelInfo,
+            reason: previousRequestId
+              ? ("tool-result" as const)
+              : ("initial" as const),
+            resources: undefined,
+            messages: step.messages,
+            stepIndex: -1,
+          };
     primed = undefined;
     const {
       amendment,
@@ -175,6 +192,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
       reason,
       resources,
       stepIndex,
+      messages,
     } = prepared;
     const mappedSettings = options.dialect.mapSettings(
       boundary.resolved.settings,
@@ -195,7 +213,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
           boundary.resolved === baseline
             ? step.systemBlocks
             : boundary.resolved.systemBlocks,
-        messages: [...step.messages],
+        messages: [...messages],
         settings: mappedSettings,
         schema: options.schema,
         outputSchema: options.outputSchema,
@@ -258,7 +276,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
   };
   return Object.assign(planner, {
     async prime(step: ExecutorRequestStepInput<TModel>): Promise<void> {
-      if (!options.prepareStep || primed) return;
+      if ((!options.prepareStep && !options.stepBoundary) || primed) return;
       primed = await prepareBoundary(step);
     },
   });

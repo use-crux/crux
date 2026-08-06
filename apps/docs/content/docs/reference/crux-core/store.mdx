@@ -18,7 +18,7 @@ await records.put("plan:abc", { title: "My Plan", version: 1 });
 const plan = await records.get("plan:abc");
 ```
 
-Use `RecordStore` for memory records, cache entries, flow snapshots, plans, tasks, blackboards, workspace metadata, and other structured Crux state. Use [`VectorStore`](/docs/guides/storage/vector-store) for similarity search and [`AssetStore`](/docs/guides/storage/asset-storage) for binary or oversized payloads.
+Use `RecordStore` for memory records, cache entries, flow snapshots, plans, tasks, blackboards, workspace metadata, and other structured Crux state. Use [`SearchStore`](/docs/guides/storage/search-store) for retrieval search and [`AssetStore`](/docs/guides/storage/asset-storage) for binary or oversized payloads.
 
 ## Interface
 
@@ -125,7 +125,7 @@ const page = await records.list(keySpace.plan.prefix);
 | `convexRecordStore()`       | `@use-crux/convex`       | Convex-backed records        |
 | `upstashRedisRecordStore()` | `@use-crux/upstash`      | Upstash Redis-backed records |
 
-Bundle records with vectors and assets through `storage({ records, vectors, assets })` when a primitive needs multiple capabilities.
+Bundle records with search and assets through `storage({ records, search, assets })` when a primitive needs multiple capabilities.
 
 ## Related
 

@@ -21,6 +21,12 @@ import type {
   DurableEffectRecoveryUnitRecord,
   DurableEffectScopeRecord,
 } from "../../../effect/internal/durable-records";
+import type {
+  RuntimeSessionInputRecord,
+  RuntimeSessionRecord,
+  RuntimeSessionSubscriptionRecord,
+} from "../../ports/sessions";
+import type { RuntimeTransportEnvelopeRecord } from "../../transport/records";
 
 export type MemoryWriteRecorder = () => void;
 
@@ -67,6 +73,11 @@ export interface MemoryRuntimeData {
   effectEnvelopes: Map<string, DurableEffectEnvelopeRecord>;
   effectAttempts: Map<string, DurableEffectRecoveryAttemptRecord>;
   effectReconciliations: Map<string, DurableEffectReconciliationRecord[]>;
+  sessionsByKey: Map<string, RuntimeSessionRecord>;
+  sessionsById: Map<string, RuntimeSessionRecord>;
+  sessionInputs: Map<string, RuntimeSessionInputRecord>;
+  sessionSubscriptions: Map<string, RuntimeSessionSubscriptionRecord>;
+  transportEnvelopes: Map<string, RuntimeTransportEnvelopeRecord>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -100,6 +111,11 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     effectEnvelopes: new Map(),
     effectAttempts: new Map(),
     effectReconciliations: new Map(),
+    sessionsByKey: new Map(),
+    sessionsById: new Map(),
+    sessionInputs: new Map(),
+    sessionSubscriptions: new Map(),
+    transportEnvelopes: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -146,6 +162,11 @@ export function cloneMemoryRuntimeData(
         [...records],
       ]),
     ),
+    sessionsByKey: new Map(data.sessionsByKey),
+    sessionsById: new Map(data.sessionsById),
+    sessionInputs: new Map(data.sessionInputs),
+    sessionSubscriptions: new Map(data.sessionSubscriptions),
+    transportEnvelopes: new Map(data.transportEnvelopes),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -182,6 +203,11 @@ export function replaceMemoryRuntimeData(
   target.effectEnvelopes = source.effectEnvelopes;
   target.effectAttempts = source.effectAttempts;
   target.effectReconciliations = source.effectReconciliations;
+  target.sessionsByKey = source.sessionsByKey;
+  target.sessionsById = source.sessionsById;
+  target.sessionInputs = source.sessionInputs;
+  target.sessionSubscriptions = source.sessionSubscriptions;
+  target.transportEnvelopes = source.transportEnvelopes;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
   target.nextTimerId = source.nextTimerId;

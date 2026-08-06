@@ -1,7 +1,7 @@
 /**
  * Canonical Storage Beta API for Crux.
  *
- * `RecordStore` is for JSON records, `VectorStore` is for dense/sparse/hybrid
+ * `RecordStore` is for JSON records, `SearchStore` is for retrieval-index
  * search, and `AssetStore` is for optional media persistence. Use
  * {@link storage} to bundle capabilities for Crux primitives.
  *
@@ -11,10 +11,11 @@
 export { StorageError } from "./errors";
 export { storage } from "./bundle";
 export { mutateRecord } from "./mutate";
+export { searchStoreCapabilities } from "./capabilities";
 export {
   inMemoryRecordStore,
   inMemoryStorage,
-  inMemoryVectorStore,
+  inMemorySearchStore,
 } from "./memory";
 export { matchesExactFilter } from "./filter";
 export { keySpace } from "./keyspace";
@@ -32,10 +33,8 @@ export type {
 } from "../asset";
 
 export type {
-  DenseVectorSearchQuery,
   ExactFilter,
   FilterValue,
-  HybridVectorSearchQuery,
   JsonObject,
   JsonPrimitive,
   JsonValue,
@@ -48,14 +47,21 @@ export type {
   RecordStoreCapabilities,
   RecordWrite,
   RecordWriteOptions,
+  SearchFusion,
+  SearchHit,
+  SearchLeg,
+  SearchLegKind,
+  SearchLegMatch,
+  SearchQuery,
+  SearchRecord,
+  SearchStore,
+  SearchStoreCapabilities,
+  SearchStoreCapabilityConfig,
   SparseVector,
-  SparseVectorSearchQuery,
   Storage,
-  VectorHit,
-  VectorRecord,
-  VectorSearchQuery,
-  VectorStore,
-  VectorStoreCapabilities,
+  StorageSetupFinding,
+  StorageSetupPort,
+  StorageSetupResult,
 } from "./types";
 export type { StorageErrorCode, StorageErrorOptions } from "./errors";
 export type { MutateRecordOptions } from "./mutate";

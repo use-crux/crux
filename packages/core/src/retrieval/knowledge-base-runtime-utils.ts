@@ -107,13 +107,13 @@ export function emptyMetadataFailureRun(failures: readonly KnowledgeBaseMetadata
 export function createKnowledgeBaseIndexer<TModality extends EmbeddingModality>(
   config: KnowledgeBaseRuntimeConfig<TModality>,
   records: RecordStore | undefined,
-  vectors: Parameters<typeof indexer>[0]['vectors'] | undefined,
+  search: Parameters<typeof indexer>[0]['search'] | undefined,
 ) {
   return indexer({
     id: config.id,
     namespace: config.namespace,
     records,
-    vectors,
+    search,
     storage: config.storage,
     dense: config.embeddings,
     sparse: config.sparseEmbeddings,

@@ -24,7 +24,16 @@ export interface CommunityBuildDescriptor {
 
 export interface CommunityRefreshHost {
   /** Ensure a build for the descriptor runs to completion; joining an in-flight equivalent build satisfies the call. */
-  ensure(descriptor: CommunityBuildDescriptor): Promise<void>
+  ensure(descriptor: CommunityBuildDescriptor, options?: { readonly force?: boolean }): Promise<void>
+  /**
+   * Return whether retained work is already scheduled or running for this
+   * descriptor.
+   *
+   * Optional. A host that can answer lets `status()` report `"building"` while
+   * a refresh is in flight; a host that omits it reports `"stale"` until the
+   * refresh publishes.
+   */
+  hasPending?(descriptor: CommunityBuildDescriptor): boolean
 }
 
 export interface CommunityReportsOptions {
@@ -75,7 +84,14 @@ export function createKnowledgeCommunitiesSurface(
   async function status(): Promise<CommunityReadinessStatus> {
     if (!input.records) throw new Error('knowledgeBase().communities requires record storage.')
     const currentScope = await scope()
+    const descriptor = {
+      indexerId: input.indexerId,
+      namespace: input.namespace,
+      scopeKey: currentScope.scopeKey,
+      ...(input.viewId ? { viewId: input.viewId } : {}),
+    }
     const store = createCommunityStore({ ...input, records: input.records, scopeKey: currentScope.scopeKey })
+    if (input.refreshHost?.hasPending?.(descriptor)) return 'building'
     if (isCommunityBuildInProcess(input.indexerId, input.namespace, currentScope.scopeKey)) return 'building'
     if (await store.isLeaseStale(30_000)) return 'stale'
     if ((await store.claimLease('__probe__', { ttlMs: 30_000, now: Date.now() })) === false) return 'building'
@@ -105,7 +121,7 @@ export function createKnowledgeCommunitiesSurface(
       scopeKey: currentScope.scopeKey,
       ...(input.viewId ? { viewId: input.viewId } : {}),
     }
-    if (input.refreshHost) return input.refreshHost.ensure(descriptor)
+    if (input.refreshHost) return input.refreshHost.ensure(descriptor, options)
     return buildCommunities({
       records: input.records,
       indexerId: input.indexerId,
@@ -166,7 +182,6 @@ function paginateReports(reports: readonly CommunityReport[], options: Community
 
 function warnStale(input: CreateCommunitiesSurfaceInput, scopeKey: string, dirtySourceIds: readonly string[]): void {
   if (
-    input.refreshHost ||
     typeof process !== 'undefined' && (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test')
   ) return
   const key = `${input.indexerId}\0${input.namespace}\0${scopeKey}`

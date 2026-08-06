@@ -1,0 +1,24 @@
+---
+title: WORK_IDEMPOTENCY_CONFLICT
+description: A Work idempotency tuple was reused with different normalized input.
+---
+
+## What failed
+
+`spawn()` received a Runtime namespace, exported Flow target, and caller key
+that already identify another normalized JSON input.
+
+## Why
+
+One application Work idempotency tuple must describe exactly one occurrence.
+Changing its input would make retries ambiguous.
+
+## What still works
+
+The first accepted Work remains unchanged and reconnectable through
+`getWork()`.
+
+## Fix
+
+Retry with the original input, or use a new caller-owned idempotency key for a
+new occurrence.

@@ -20,10 +20,12 @@ import type {
   JsonObject,
   RecordEntry,
   RecordStore,
+  SearchQuery,
+  SearchRecord,
   Storage,
   StorageErrorCode,
-  VectorRecord,
-  VectorSearchQuery,
+  StorageSetupPort,
+  StorageSetupResult,
 } from "../src/storage";
 import { workspace } from "../src/workspace";
 import type { WorkspaceConfig } from "../src/workspace";
@@ -85,67 +87,65 @@ void exactFilter;
 const badFilter: ExactFilter = { tags: ["ready"] };
 void badFilter;
 
-const denseQuery: VectorSearchQuery = {
-  mode: "dense",
-  dense: [1, 0],
+const denseQuery: SearchQuery = {
+  legs: [{ kind: "dense", vector: [1, 0] }],
   filter: { status: "ready" },
 };
-const sparseQuery: VectorSearchQuery = {
-  mode: "sparse",
-  sparse: { indices: [0], values: [1] },
+const sparseQuery: SearchQuery = {
+  legs: [{ kind: "sparse", vector: { indices: [0], values: [1] } }],
 };
-const hybridQuery: VectorSearchQuery = {
-  mode: "hybrid",
-  dense: [1, 0],
-  sparse: { indices: [0], values: [1] },
-  fusion: "rrf",
+const lexicalQuery: SearchQuery = {
+  legs: [{ kind: "lexical", query: "refund policy" }],
+};
+const fusedQuery: SearchQuery = {
+  legs: [
+    { kind: "dense", vector: [1, 0], candidates: 100 },
+    { kind: "sparse", vector: { indices: [0], values: [1] }, candidates: 100 },
+  ],
+  fusion: { strategy: "rrf", k: 60 },
 };
 void denseQuery;
 void sparseQuery;
-void hybridQuery;
+void lexicalQuery;
+void fusedQuery;
 
-// @ts-expect-error — dense queries cannot carry sparse vectors.
-const invalidDenseQuery: VectorSearchQuery = {
-  mode: "dense",
-  dense: [1],
-  sparse: { indices: [0], values: [1] },
-};
+// @ts-expect-error — search queries require at least one leg.
+const invalidEmptyQuery: SearchQuery = { legs: [] };
+void invalidEmptyQuery;
+
+// @ts-expect-error — dense legs use `vector`, not the old `dense` query field.
+const invalidDenseQuery: SearchQuery = { legs: [{ kind: "dense", dense: [1] }] };
 void invalidDenseQuery;
 
-// @ts-expect-error — sparse queries cannot carry dense vectors.
-const invalidSparseQuery: VectorSearchQuery = {
-  mode: "sparse",
-  sparse: { indices: [0], values: [1] },
-  dense: [1],
-};
-void invalidSparseQuery;
-
-// @ts-expect-error — hybrid queries require both dense and sparse vectors.
-const invalidHybridQuery: VectorSearchQuery = { mode: "hybrid", dense: [1] };
-void invalidHybridQuery;
-
-const vectorRecord: VectorRecord = {
+const searchRecord: SearchRecord = {
   key: "docs:a",
+  content: "Alpha",
   dense: [1, 0],
   metadata: { status: "ready", archived: false },
 };
-void vectorRecord;
+void searchRecord;
 
-const badVectorRecord: VectorRecord = {
+const badSearchRecord: SearchRecord = {
   key: "docs:b",
   dense: [1, 0],
-  // @ts-expect-error — vector metadata uses exact scalar filters, not nested objects.
+  // @ts-expect-error — search metadata uses exact scalar filters, not nested objects.
   metadata: { nested: { ok: true } },
 };
-void badVectorRecord;
+void badSearchRecord;
 
 declare const assets: AssetStore;
-const bundle = storage({ records, assets });
+declare const setup: StorageSetupPort;
+const bundle = storage({ records, assets, setup, close: async () => undefined });
 
 expectTypeOf(bundle).toEqualTypeOf<Storage>();
 expectTypeOf(bundle.records).toEqualTypeOf<RecordStore>();
 expectTypeOf(bundle.assets).toEqualTypeOf<AssetStore | undefined>();
+expectTypeOf(bundle.setup).toEqualTypeOf<StorageSetupPort | undefined>();
+expectTypeOf(bundle.close).toEqualTypeOf<(() => Promise<void>) | undefined>();
 expectTypeOf(Object.isFrozen(bundle)).toEqualTypeOf<boolean>();
+
+expectTypeOf(setup.check()).resolves.toEqualTypeOf<StorageSetupResult>();
+expectTypeOf(setup.apply()).resolves.toEqualTypeOf<StorageSetupResult>();
 
 // @ts-expect-error — canonical storage bundles require `records`.
 storage({});

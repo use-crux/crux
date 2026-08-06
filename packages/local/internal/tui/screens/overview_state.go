@@ -52,7 +52,14 @@ func (o *Overview) overviewSummary() api.InspectOverviewRecord {
 }
 
 func (o *Overview) insightRows() []api.InspectInsightRecord {
-	return o.insightsResource.Snapshot().Value
+	all := o.insightsResource.Snapshot().Value
+	open := make([]api.InspectInsightRecord, 0, len(all))
+	for _, insight := range all {
+		if insight.Status != "dismissed" && insight.Status != "resolved" {
+			open = append(open, insight)
+		}
+	}
+	return open
 }
 
 func (o *Overview) runRows() []api.InspectRunRecord {

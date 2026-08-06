@@ -25,8 +25,9 @@ import {
   type RawRelationClaim,
 } from './claims'
 import { generateObjectWithEvidence } from './modality-validation'
-import { renderBoundedRelationBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
+import { renderBoundedRelationBatches, renderBoundedRepairPrompt, orderDeriveChunks, type DerivePromptBatch } from './prompt-bounds'
 import type { DeriveStage } from './stage'
+import { selectTargetChunks } from './target-selection'
 
 /** Input for running configured derivations against one source. */
 export interface RunDeriveStagesInput {
@@ -54,6 +55,10 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
 
   for (const stage of orderStages(input.stages)) {
     const stageFingerprint = stage.fingerprint()
+    const selection = isAssertionStage(stage) && stage.targets !== undefined
+      ? selectTargetChunks(input.chunks, stage.targets)
+      : undefined
+    const roleDigest = selection?.roleDigest
     const cached = stage.kind === 'assertion'
       ? await readCachedAssertionClaimCount({
         records: input.records,
@@ -63,6 +68,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         sourceId: input.document.sourceId,
         sourceHash,
         stageFingerprint,
+        roleDigest,
       })
       : await readCachedClaimCount({
         records: input.records,
@@ -89,6 +95,8 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         document: input.document,
         chunks: input.chunks,
         stage,
+        targets: selection ? selection.targetChunks : orderDeriveChunks(input.chunks),
+        targetKeys: selection?.targetKeys,
         ...(input.assets ? { assets: input.assets } : {}),
       })
       await replaceAssertionClaimRecords({
@@ -99,6 +107,7 @@ export async function runDeriveStages(input: RunDeriveStagesInput): Promise<Deri
         sourceId: input.document.sourceId,
         sourceHash,
         stageFingerprint,
+        roleDigest,
         previous,
         claims: [...run.claims, ...run.relationClaims],
         warnings: run.warnings,

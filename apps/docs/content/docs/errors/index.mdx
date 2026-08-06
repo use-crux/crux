@@ -23,6 +23,8 @@ try {
 | ------------------------------------------------------------- | ----------------------------------------------------------------- |
 | [`RUNTIME_REQUIRED`](/docs/errors/RUNTIME_REQUIRED)           | A runtime-bound API was called without `config({ runtime })`.     |
 | [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING)       | The configured stack cannot support a used runtime feature.       |
+| [`OWNERSHIP_CONFLICT`](/docs/errors/OWNERSHIP_CONFLICT)       | Another worker already owns maintenance for this store namespace. |
+| [`SHUTDOWN_TIMEOUT`](/docs/errors/SHUTDOWN_TIMEOUT)           | A worker operation did not settle within the shutdown bound.      |
 | [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND)           | A wake or Effect recovery declaration named a missing or non-recoverable target. |
 | [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE)           | Two runtime targets or Effect recovery identities collide.        |
 | [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED)     | A discovered target cannot be imported as a named export.         |
@@ -33,10 +35,29 @@ try {
 | [`SETUP_REQUIRED`](/docs/errors/SETUP_REQUIRED)               | Required adapter resources are missing or mismatched.             |
 | [`PAYLOAD_NOT_JSON`](/docs/errors/PAYLOAD_NOT_JSON)           | A durable runtime payload is not JSON-compatible.                 |
 | [`WORK_DEAD_LETTERED`](/docs/errors/WORK_DEAD_LETTERED)       | Work exhausted retries and is terminal until operator retry.      |
+| [`WORK_IDEMPOTENCY_CONFLICT`](/docs/errors/WORK_IDEMPOTENCY_CONFLICT) | A Work idempotency tuple was reused with different input. |
+| [`WORK_TARGET_MISMATCH`](/docs/errors/WORK_TARGET_MISMATCH) | Work reconnection used a different exported Flow target. |
 | [`LEASE_LOST`](/docs/errors/LEASE_LOST)                       | A stale worker tried to commit after losing its lease.            |
 | [`NAMESPACE_AMBIGUOUS`](/docs/errors/NAMESPACE_AMBIGUOUS)     | The inferred runtime namespace is unsafe or ambiguous.            |
 | [`RUNTIME_HOST_ONLY`](/docs/errors/RUNTIME_HOST_ONLY)         | A host-bound runtime was used outside its host boundary.          |
 | [`EVAL_REACTIVE_DISPATCH_FORBIDDEN`](/docs/errors/EVAL_REACTIVE_DISPATCH_FORBIDDEN) | Eval execution attempted to wake durable reactive work.           |
+
+## Durable Agent Session codes
+
+Public Session failures use dedicated error classes from `@use-crux/core` /
+`@use-crux/core/session`. Generation-model and recovery codes extend
+`CruxRuntimeError`.
+
+| Code | Meaning |
+| --- | --- |
+| [`SESSION_IDENTITY_CONFLICT`](/docs/errors/SESSION_IDENTITY_CONFLICT) | A Session key is already bound to another Agent target. |
+| [`SESSION_NOT_FOUND`](/docs/errors/SESSION_NOT_FOUND) | No Session exists for the key in this Runtime namespace. |
+| [`SESSION_INPUT_INVALID`](/docs/errors/SESSION_INPUT_INVALID) | Input failed Prompt schema or JSON-safety admission. |
+| [`SESSION_UNSUPPORTED`](/docs/errors/SESSION_UNSUPPORTED) | The Runtime store cannot persist Agent Sessions. |
+| [`GENERATION_MODEL_BINDING_MISSING`](/docs/errors/GENERATION_MODEL_BINDING_MISSING) | No adapter-bound GenerationModel on Session or Agent. |
+| [`GENERATION_MODEL_NOT_STATIC`](/docs/errors/GENERATION_MODEL_NOT_STATIC) | Selected model is absent from the Runtime program. |
+| [`GENERATION_CAPABILITY_MISSING`](/docs/errors/GENERATION_CAPABILITY_MISSING) | Model cannot cover the Agent language requirements. |
+| [`SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE`](/docs/errors/SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE) | Prepared turn result evidence is missing for recovery. |
 
 ## Request-scoped defer codes
 

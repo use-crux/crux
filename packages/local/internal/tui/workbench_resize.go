@@ -11,7 +11,8 @@ import (
 func (w *Workbench) Resize(width, height int) {
 	w.width = max(0, width)
 	w.height = max(0, height)
-	w.definitionChooser.Resize(w.width, w.height)
+	overlayCanvas := workbenchOverlayCanvas(w.width, w.height)
+	w.definitionChooser.Resize(overlayCanvas.W, overlayCanvas.H)
 	w.resizeActiveScreen()
 }
 
@@ -25,25 +26,28 @@ func (w *Workbench) resizeActiveScreen() {
 
 func (w *Workbench) activeScreenBodySize() screens.Size {
 	root := kit.Rect{W: w.width, H: w.height}
-	regions := kit.SplitV(root, kit.Fill(), kit.Fixed(1))
-	if len(regions) == 0 {
-		return screens.Size{}
-	}
-	column := regions[0]
-	if kit.Classify(column.W) != kit.LayoutSingle {
-		panes := kit.SplitH(column, kit.Fixed(shell.NavRailWidth), kit.Fill())
+	column := root
+	if kit.Classify(root.W) != kit.LayoutSingle {
+		panes := kit.SplitH(root, kit.Fixed(shell.NavRailWidth), kit.Fill())
 		if len(panes) > 1 {
 			column = panes[1]
 		}
 	}
+	regions := kit.SplitV(kit.Rect{W: column.W, H: column.H}, kit.Fill(), kit.Fixed(1), kit.Fixed(1))
+	if len(regions) == 0 {
+		return screens.Size{}
+	}
+	column = regions[0]
 	if column.W <= 0 || column.H <= 0 {
 		return screens.Size{}
 	}
 	path, right := w.breadcrumbContent()
 	breadcrumbH := len(blockLines(shell.Breadcrumb(column.W, path, right)))
 	return screens.Size{
-		Width:  column.W,
-		Height: max(0, column.H-breadcrumbH),
+		Width: column.W,
+		// The terminating rule is a shared seam: it occupies the final rendered
+		// screen row while the screen retains the same logical viewport height.
+		Height: max(0, column.H-breadcrumbH+1),
 	}
 }
 

@@ -39,6 +39,10 @@ import type {
 } from "./kernel-deferred";
 import type { SignalPublishCompositeInput } from "./composites/signal";
 import type { FlowManualResumeInput } from "./composites/flow-manual-resume";
+import type { WorkAcceptCompositeInput } from "./composites/work-accept";
+import type { WorkProgressCompositeInput } from "./composites/work-progress";
+import type { WorkDetachCompositeInput } from "./composites/work-detach";
+import type { SessionInputsAcceptCompositeInput } from "./composites/session-inputs-accept";
 
 const DEFAULT_LEASE_TTL_MS = 60_000;
 
@@ -76,6 +80,10 @@ export type {
   SignalPublishCompositeInput,
   SignalPublishCompositeResult,
 } from "./composites/signal";
+export type {
+  WorkAcceptCompositeInput,
+  WorkAcceptCompositeResult,
+} from "./composites/work-accept";
 
 /** Create a runtime kernel from store, target registry, and deterministic hooks. */
 export function createRuntimeKernel(
@@ -110,6 +118,14 @@ export function createRuntimeKernel(
   });
 
   return Object.freeze({
+    acceptWork: (input: WorkAcceptCompositeInput) =>
+      runComposite("work.accept", input),
+    acceptSessionInputs: (input: SessionInputsAcceptCompositeInput) =>
+      runComposite("session.inputs.accept", input),
+    progressWork: (input: WorkProgressCompositeInput) =>
+      runComposite("work.progress", input),
+    detachWork: (input: WorkDetachCompositeInput) =>
+      runComposite("work.detach", input),
     resumeFlow: (input: FlowManualResumeInput) =>
       runComposite("flow.manual-resume", input),
     publishSignal: (input: SignalPublishCompositeInput) =>

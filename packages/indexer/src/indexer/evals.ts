@@ -1,11 +1,16 @@
 import type { AnyEval } from "@use-crux/core/eval";
 import {
-  projectEvalTimeoutPolicyForInternalUse,
+  getEvalDefinitionForInternalUse,
+  isEvalForInternalUse,
+  type EvalDefinitionV1,
+} from "@use-crux/core/eval/internal/runner";
+import {
+  type EvalTimeoutPolicyData,
+  type EvalTimeoutPolicyProjection,
   type ProjectDefinition,
 } from "@use-crux/core/project-index";
 import {
-  projectEvalTaskExecution,
-  projectEvalVariantTaskExecution,
+  projectEvalExecutionArms,
   type EvalTaskExecutionProjection,
 } from "@use-crux/core/runtime/internal/eval-registry";
 import { definition, safeId } from "./definitions";
@@ -18,23 +23,17 @@ export type AuthoredEvalExecutionArm = Readonly<
   { readonly name: string } & EvalTaskExecutionProjection
 >;
 
-const EVAL_DEFINITION_SYMBOL_DESCRIPTION = "crux.eval.definition";
 const REQUIRED_HOST_CAPABILITIES = new Set([
   "asset-store",
   "record-store",
-  "vector-store",
+  "search-store",
 ]);
 
 /** Identify an inert Eval without reading callbacks, schemas, or tasks. */
 export function isAuthoredEval(
   value: unknown,
 ): value is DiscoveredAuthoredEval {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "_tag" in value &&
-    value._tag === "CruxEval"
-  );
+  return isEvalForInternalUse(value);
 }
 
 /** Build safe Project Index corroboration for a deployed Eval. */
@@ -61,7 +60,8 @@ export async function definitionFromAuthoredEval(
         }),
   );
   const requiredHostCapabilities = runtimeCapabilityUnion(executionArms);
-  const timeout = projectEvalTimeoutPolicyForInternalUse(evalValue);
+  const authoredDefinition = evalDefinition(evalValue);
+  const timeout = projectEvalTimeoutPolicy(authoredDefinition.timeout);
   const timeoutFacts = timeout === undefined ? {} : { timeout };
   return definition(
     root,
@@ -73,6 +73,7 @@ export async function definitionFromAuthoredEval(
     {
       exportName,
       evalContract: "crux.eval",
+      runtimeDiscovered: true,
       explicitId: evalValue.id !== undefined,
       requiredHostCapabilities,
       evalExecutionArms: projectedArms,
@@ -80,6 +81,7 @@ export async function definitionFromAuthoredEval(
       facts: {
         kind: "eval",
         evalContract: "crux.eval",
+        runtimeDiscovered: true,
         requiredHostCapabilities,
         evalExecutionArms: projectedArms,
         ...timeoutFacts,
@@ -92,34 +94,45 @@ export async function definitionFromAuthoredEval(
 export function executionArmsFromAuthoredEval(
   evalValue: DiscoveredAuthoredEval,
 ): readonly AuthoredEvalExecutionArm[] {
-  const definitionSymbol = Object.getOwnPropertySymbols(evalValue).find(
-    (symbol) => symbol.description === EVAL_DEFINITION_SYMBOL_DESCRIPTION,
-  );
-  const definition = definitionSymbol
-    ? (evalValue as unknown as Record<PropertyKey, unknown>)[definitionSymbol]
-    : undefined;
-  if (!isRecord(definition) || definition.schemaVersion !== 1) {
-    return Object.freeze([]);
-  }
-  const variants = isRecord(definition.variants) ? definition.variants : {};
-  const names = Object.freeze([
-    "current",
-    ...Object.keys(variants).sort(compareCodepoint),
-  ]);
   return Object.freeze(
-    names.map((name) => {
-      const variant = name === "current" ? undefined : variants[name];
-      const execution =
-        name === "current"
-          ? projectEvalTaskExecution(definition.task)
-          : projectEvalVariantTaskExecution(
-              definition.task,
-              name,
-              isRecord(variant) ? variant : {},
-            );
-      return Object.freeze({ name, ...execution });
-    }),
+    projectEvalExecutionArms(evalValue)
+      .map((arm) =>
+        arm.status === "ready"
+          ? Object.freeze({
+              name: arm.name,
+              status: arm.status,
+              execution: arm.execution,
+              requiredHostCapabilities: arm.requiredHostCapabilities,
+            })
+          : Object.freeze({
+              name: arm.name,
+              status: arm.status,
+              code: arm.code,
+              reason: arm.reason,
+            }),
+      )
+      .sort((left, right) => {
+        if (left.name === "current") return -1;
+        if (right.name === "current") return 1;
+        return compareCodepoint(left.name, right.name);
+      }),
   );
+}
+
+function evalDefinition(
+  evalValue: DiscoveredAuthoredEval,
+): EvalDefinitionV1 {
+  return getEvalDefinitionForInternalUse(evalValue);
+}
+
+function projectEvalTimeoutPolicy(
+  authored: EvalTimeoutPolicyData | null | undefined,
+): EvalTimeoutPolicyProjection | undefined {
+  if (authored === undefined) return undefined;
+  return Object.freeze({
+    authored,
+    effective: authored ?? Object.freeze({}),
+  });
 }
 
 function runtimeCapabilityUnion(
@@ -149,10 +162,6 @@ function derivedEvalId(root: string, file: string): string {
     ? relativeFile.slice("evals/".length)
     : relativeFile;
   return beneathEvals.replace(/\.eval\.[cm]?[jt]sx?$/, "").replaceAll("/", ".");
-}
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return value !== null && typeof value === "object";
 }
 
 function compareCodepoint(left: string, right: string): number {

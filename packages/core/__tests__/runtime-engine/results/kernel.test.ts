@@ -189,6 +189,7 @@ describe("RuntimeKernel result references", () => {
               { result: "stored-before-commit" },
               { namespace: work.namespace },
             );
+            store.testing.failAfter(0);
             return { status: "completed", resultRef: storedRef };
           },
         },
@@ -201,8 +202,6 @@ describe("RuntimeKernel result references", () => {
       taskId: "task_failed_result_commit" as TaskId,
       targetId,
     });
-    store.testing.failAfter(0);
-
     await expect(kernel.handleWake(wakeEnvelopeForWork(work))).resolves.toEqual(
       { status: 200, outcome: "retry-scheduled" },
     );

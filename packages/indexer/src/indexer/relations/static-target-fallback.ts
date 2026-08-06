@@ -113,10 +113,10 @@ export function fallbackRelationTargetId(
     case "rag.retriever.uses_record_store":
     case "workspace.uses_record_store":
       return `storage.recordStore:${safeVariableId(variableName)}`;
-    case "storage.bundle.uses_vector_store":
-    case "rag.retriever.uses_vector_store":
-    case "workspace.uses_vector_store":
-      return `storage.vectorStore:${safeVariableId(variableName)}`;
+    case "storage.bundle.uses_search_store":
+    case "rag.retriever.uses_search_store":
+    case "workspace.uses_search_store":
+      return `storage.searchStore:${safeVariableId(variableName)}`;
     case "storage.bundle.uses_asset_store":
     case "rag.retriever.uses_asset_store":
     case "workspace.uses_asset_store":

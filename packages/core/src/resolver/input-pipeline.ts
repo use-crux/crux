@@ -3,8 +3,9 @@
  *
  * The compiler pass owns the pipeline order; this module keeps the supporting
  * scans small and reusable: declared `rawFields` for top-level auto-escape
- * exemptions, and nested-string detection for the warning that auto-escape
- * does not rewrite object/array internals.
+ * exemptions, declared `escapeFields` for recursive escaping, and
+ * nested-string detection for the warning that auto-escape does not rewrite
+ * unselected object/array internals.
  *
  * @module
  */
@@ -25,6 +26,7 @@ import {
   isRepresentationLadder,
 } from '../request/representation/ladder'
 import { PREPARATION_RESOURCES_INPUT } from '../request/prepare/pin-context'
+import { escapeXml } from '../shared/sanitize'
 
 const RESOLVER_PRIVATE_INPUT_KEYS = [
   '_crux_activeSkills',
@@ -66,37 +68,52 @@ export function collectDeclaredRawFields(entries: readonly ContextEntry[]): stri
   return [...rawFields]
 }
 
+/** Collect top-level input fields declared for recursive escaping by statically reachable contexts. */
+export function collectDeclaredEscapeFields(entries: readonly ContextEntry[]): string[] {
+  const escapeFields = new Set<string>()
+  for (const entry of entries) collectEntryFields(entry, escapeFields, 'escapeFields')
+  return [...escapeFields]
+}
+
 function collectEntryRawFields(entry: ContextEntry, rawFields: Set<string>): void {
+  collectEntryFields(entry, rawFields, 'rawFields')
+}
+
+function collectEntryFields(
+  entry: ContextEntry,
+  fields: Set<string>,
+  property: 'rawFields' | 'escapeFields',
+): void {
   if (!entry) return
 
   if (isForcedOffload(entry)) return
 
   if (isRepresentationLadder(entry)) {
     for (const source of compileRepresentationLadder(entry).primarySources) {
-      collectEntryRawFields(source, rawFields)
+      collectEntryFields(source, fields, property)
     }
     return
   }
 
   if (isContextEntry(entry)) {
-    collectContextRawFields(entry, rawFields)
+    collectContextFields(entry, fields, property)
     return
   }
   if (isConditionalContextEntry(entry)) {
-    collectContextRawFields(entry.context, rawFields)
+    collectContextFields(entry.context, fields, property)
     return
   }
   if (isMatchEntry(entry)) {
-    for (const branch of Object.values(entry.cases)) collectContextBranchRawFields(branch, rawFields)
-    if (entry.default) collectContextBranchRawFields(entry.default, rawFields)
+    for (const branch of Object.values(entry.cases)) collectContextBranchFields(branch, fields, property)
+    if (entry.default) collectContextBranchFields(entry.default, fields, property)
     return
   }
   if (isMemoryOrBlackboardEntry(entry)) {
-    collectContextRawFields(entry.asContext(), rawFields)
+    collectContextFields(entry.asContext(), fields, property)
     return
   }
   if (isContributorRawFieldEntry(entry)) {
-    for (const child of entry.useEntries) collectEntryRawFields(child, rawFields)
+    for (const child of entry.useEntries) collectEntryFields(child, fields, property)
   }
 }
 
@@ -126,17 +143,22 @@ function isContributorRawFieldEntry(
   return !!entry && entry._tag === 'Contributor' && 'useEntries' in entry
 }
 
-function collectContextBranchRawFields(
+function collectContextBranchFields(
   branch: Context<z.ZodType> | readonly Context<z.ZodType>[],
-  rawFields: Set<string>,
+  fields: Set<string>,
+  property: 'rawFields' | 'escapeFields',
 ): void {
   const contexts = Array.isArray(branch) ? branch : [branch]
-  for (const ctx of contexts) collectContextRawFields(ctx, rawFields)
+  for (const ctx of contexts) collectContextFields(ctx, fields, property)
 }
 
-function collectContextRawFields(ctx: Context<z.ZodType>, rawFields: Set<string>): void {
-  for (const field of ctx.rawFields) rawFields.add(field)
-  for (const child of ctx.useEntries) collectEntryRawFields(child, rawFields)
+function collectContextFields(
+  ctx: Context<z.ZodType>,
+  fields: Set<string>,
+  property: 'rawFields' | 'escapeFields',
+): void {
+  for (const field of ctx[property]) fields.add(field)
+  for (const child of ctx.useEntries) collectEntryFields(child, fields, property)
 }
 
 /** Return true when an object or array contains any nested string value. */
@@ -152,4 +174,43 @@ export function containsNestedString(value: unknown, seen = new WeakSet<object>(
   }
 
   return Object.values(value as Record<string, unknown>).some((child) => containsNestedString(child, seen))
+}
+
+/** Recursively copy an escape-selected value and XML-escape every string leaf. */
+export function escapeSelectedInputField(
+  value: unknown,
+  field: string,
+  seen = new WeakMap<object, unknown>(),
+): unknown {
+  if (typeof value === 'string') return escapeXml(value)
+  if (value === null || typeof value !== 'object') return value
+
+  const cached = seen.get(value)
+  if (cached) return cached
+
+  if (Array.isArray(value)) {
+    const copy: unknown[] = []
+    seen.set(value, copy)
+    for (const item of value) copy.push(escapeSelectedInputField(item, field, seen))
+    return copy
+  }
+
+  if (!isPlainRecord(value)) {
+    throw new TypeError(
+      `auto-escape: input field "${field}" is listed in escapeFields but contains a non-plain object. ` +
+        'escapeFields only supports strings, arrays, and plain records.',
+    )
+  }
+
+  const copy: Record<string, unknown> = {}
+  seen.set(value, copy)
+  for (const [key, child] of Object.entries(value)) {
+    copy[key] = escapeSelectedInputField(child, field, seen)
+  }
+  return copy
+}
+
+function isPlainRecord(value: object): value is Record<string, unknown> {
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }

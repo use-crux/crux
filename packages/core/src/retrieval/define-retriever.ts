@@ -2,7 +2,7 @@
  * The {@link retriever} factory.
  *
  * Dispatches between a custom retriever (user-supplied `retrieve`) and a
- * store-backed dense/sparse/hybrid retriever, validating the config and wiring
+ * store-backed search retriever, validating the config and wiring
  * search, instrumentation, and the shared retriever entity.
  *
  * @module
@@ -13,8 +13,9 @@ import { runRetrievalOperation } from './observability'
 import {
   deriveStoreBackedMode,
   getRetrieverRecordStore,
-  getRetrieverVectorStore,
+  getRetrieverSearchStore,
   prepareIndexedChunkSearch,
+  resolveSearchPlan,
   withMediaQueryProvenance,
 } from './search'
 import {
@@ -23,19 +24,17 @@ import {
 } from '../indexed-knowledge'
 import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
-import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
 import type { DenseEmbedding, EmbeddingModality } from '../embedding'
 import type {
   CustomRetrieverConfig,
   DenseStoreBackedRetrieverConfig,
-  RetrieveOptions,
   RetrieveRequest,
   Retriever,
   RetrieverHit,
 } from './types'
 import type { ExactFilter } from '../storage'
 import { retrieveOptions } from './request'
-import { assertSparseRetrievalInput, prepareRetrievalInput } from './query-input'
+import { prepareRetrievalInput } from './query-input'
 import { normalizeRetrieverHit } from './source'
 
 type StoreBackedRetrieverFactoryConfig<TModality extends EmbeddingModality> =
@@ -93,58 +92,28 @@ function isCustomConfig<TModality extends EmbeddingModality>(
 function validateDenseStoreBackedConfig<TModality extends EmbeddingModality>(
   config: Partial<DenseStoreBackedRetrieverConfig<TModality>>,
 ): asserts config is DenseStoreBackedRetrieverConfig<TModality> {
-  const mode = deriveStoreBackedMode(config)
   const records = getRetrieverRecordStore(config)
-  const vectors = getRetrieverVectorStore(config)
+  const search = getRetrieverSearchStore(config)
 
-  if (mode === 'dense') {
-    if (!config.dense) {
-      throw new Error('Store-backed retriever requires a dense embedding.')
-    }
-    if (!vectors) {
-      throw new Error('Dense retriever requires vectors.search().')
-    }
-    if (!records) {
-      throw new Error('Retriever with vectors requires records to hydrate vector hits.')
-    }
-    return
-  }
-
-  if (mode === 'sparse') {
-    if (!config.sparse) {
-      throw new Error('Sparse retriever requires a sparse embedding.')
-    }
-    if (!vectors) {
-      throw new Error('Sparse retriever requires vectors.search().')
-    }
-    if (!records) {
-      throw new Error('Retriever with vectors requires records to hydrate vector hits.')
-    }
-    return
-  }
-
-  if (!config.dense || !config.sparse) {
-    throw new Error('Hybrid retriever requires both dense and sparse embeddings.')
-  }
-  if (!vectors) {
-    throw new Error('Hybrid retriever requires vectors.search().')
+  if (!search) {
+    throw new Error('Store-backed retriever requires search.search().')
   }
   if (!records) {
-    throw new Error('Retriever with vectors requires records to hydrate vector hits.')
+    throw new Error('Retriever with search requires records to hydrate search hits.')
   }
 }
 
 function createDenseStoreBackedRetriever<TModality extends EmbeddingModality>(
   config: DenseStoreBackedRetrieverConfig<TModality>,
 ): Retriever<ExactFilter, TModality> {
-  const defaultMode = deriveStoreBackedMode(config)
+  const defaultMode = deriveStoreBackedMode()
   const recordStore = getRetrieverRecordStore(config)
   const indexerId = config.indexerId ?? config.id
   const records = createIndexedKnowledgeStore({
     indexerId,
     namespace: config.namespace,
     records: recordStore!,
-    vectors: getRetrieverVectorStore(config),
+    search: getRetrieverSearchStore(config),
   })
 
   let denseSpaceGuard: ReturnType<typeof guardRetrievedEmbeddingSpace> | undefined
@@ -160,32 +129,29 @@ function createDenseStoreBackedRetriever<TModality extends EmbeddingModality>(
 
   const retrieve = async (request: RetrieveRequest<ExactFilter, TModality>): Promise<RetrieverHit[]> => {
     const options = retrieveOptions(request)
-    const requestedMode: IndexedChunkSearchQuery['mode'] = options.mode ?? config.search?.mode ?? defaultMode
-    const guardedSpace = requestedMode === 'sparse' ? undefined : await guardDenseSpace()
     const prepared = await prepareRetrievalInput(request, config)
-    if (requestedMode === 'sparse') assertSparseRetrievalInput(prepared, config.sparse!)
-    const mode = requestedMode === 'hybrid' && prepared.media ? 'dense' : requestedMode
-    const limit = options.limit ?? config.search?.limit
-    const threshold = options.threshold ?? config.search?.threshold
+    const searchPlan = resolveSearchPlan(config, options)
+    const guardedSpace = searchPlan.dense ? await guardDenseSpace() : undefined
+    const limit = options.limit ?? config.limit
+    const threshold = options.threshold ?? config.threshold
     const filter = {
-      ...(config.search?.filter ?? {}),
+      ...(config.filter ?? {}),
       ...(options.filter ?? {}),
     }
-    const fusion = normalizeFusion(options.fusion) ?? config.search?.fusion
 
     return runRetrievalOperation({
       retrieverId: config.id,
       knowledgeBaseId: config.knowledgeBaseId,
       namespace: config.namespace,
-      mode,
+      mode: 'search',
       query: prepared.label,
       limit,
       threshold,
       filter,
-      fusion,
+      searchPlan,
       run: async () => {
         const hits = await records.searchChunks(
-          await prepareIndexedChunkSearch(config, prepared, options, mode, guardedSpace),
+          await prepareIndexedChunkSearch(config, prepared, options, guardedSpace),
         )
         return prepared.media ? hits.map((hit) => withMediaQueryProvenance(hit, prepared.label)) : [...hits]
       },
@@ -208,11 +174,6 @@ function createDenseStoreBackedRetriever<TModality extends EmbeddingModality>(
   })
 }
 
-function normalizeFusion(fusion: RetrieveOptions['fusion']): 'rrf' | undefined {
-  if (!fusion) return undefined
-  return fusion.strategy
-}
-
 function createCustomRetriever(config: CustomRetrieverConfig): Retriever<ExactFilter, 'text'> {
   return createRetrieverEntity({
     id: config.id,
@@ -229,7 +190,6 @@ function createCustomRetriever(config: CustomRetrieverConfig): Retriever<ExactFi
         limit: options.limit,
         threshold: options.threshold,
         filter: options.filter,
-        fusion: normalizeFusion(options.fusion),
         run: async () => (await config.retrieve(query, options)).map(normalizeRetrieverHit),
       })
     },

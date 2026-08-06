@@ -186,6 +186,19 @@ export interface PromptBaseConfig<
   >[];
 
   /**
+   * Top-level input fields whose nested arrays/plain records should be copied
+   * and XML-escaped recursively before prompt and context callbacks run.
+   * Only relevant when auto-escape is enabled.
+   *
+   * If a field is also listed in `rawFields`, `escapeFields` wins.
+   * Field names are typed against the merged input.
+   */
+  escapeFields?: readonly Extract<
+    keyof MergedInput<TOwnInput, TContexts>,
+    string
+  >[];
+
+  /**
    * Custom sanitization hook — runs after Zod validation and before auto-escape,
    * system/prompt functions, and context resolution. Use for truncation, domain-specific
    * validation, or additional transforms.
@@ -375,10 +388,11 @@ export type AnyPrompt = Prompt<
  */
 type ErasedPromptBaseConfig = Omit<
   PromptBaseConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[], AnyToolSet | undefined>,
-  "cache" | "rawFields" | "sanitize"
+  "cache" | "rawFields" | "escapeFields" | "sanitize"
 > & {
   cache?: PromptCacheOptions<Record<string, unknown>>;
   rawFields?: readonly string[];
+  escapeFields?: readonly string[];
   sanitize?: PromptCallback<
     [input: Record<string, unknown>],
     Record<string, unknown>

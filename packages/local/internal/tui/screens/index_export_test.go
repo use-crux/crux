@@ -27,7 +27,7 @@ func TestIndexExportUsesPortableFilenameAndRendersSuccess(t *testing.T) {
 	index.SetIndexForTest(api.IndexData{Definitions: []api.ProjectDefinition{definition}})
 	index.Resize(Size{Width: 100, Height: 24})
 
-	cmd := index.Update(testContext, tea.KeyPressMsg{Text: "e", Code: 'e'}, nil)
+	cmd := index.Update(testContext, tea.KeyPressMsg{Text: "x", Code: 'x'}, nil)
 	if cmd == nil {
 		t.Fatal("export action returned no command")
 	}
@@ -69,7 +69,7 @@ func TestIndexExportFailureKeepsDataAndRendersBoundedError(t *testing.T) {
 	index.SetIndexForTest(sampleIndex())
 	index.Resize(Size{Width: 100, Height: 24})
 
-	cmd := index.Update(testContext, tea.KeyPressMsg{Text: "e", Code: 'e'}, nil)
+	cmd := index.Update(testContext, tea.KeyPressMsg{Text: "x", Code: 'x'}, nil)
 	index.Update(testContext, cmd(), nil)
 	view := index.View(Size{})
 	plain := stripANSI(view)
@@ -97,7 +97,7 @@ func TestIndexLateExportOutcomeDoesNotAttachToAnotherDefinition(t *testing.T) {
 	}})
 	index.Resize(Size{Width: 100, Height: 24})
 
-	exportA := index.Update(testContext, tea.KeyPressMsg{Text: "e", Code: 'e'}, nil)
+	exportA := index.Update(testContext, tea.KeyPressMsg{Text: "x", Code: 'x'}, nil)
 	index.definitions.Select("prompt:b")
 	index.syncDetail()
 	index.Update(testContext, exportA(), nil)

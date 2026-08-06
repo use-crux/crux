@@ -70,7 +70,7 @@ Eval routes on a router, not both.
 
 Convex advertises `record-store` only when a deployed Eval requires it and the
 request context can bind the component service. Unsupported requirements such
-as `vector-store` and `asset-store` remain visible in the Eval manifest but
+as `search-store` and `asset-store` remain visible in the Eval manifest but
 absent from host capabilities, so readiness fails before inference instead of
 claiming a service that is not present.
 
@@ -88,7 +88,7 @@ as job admission. A serverless invocation can therefore admit a job, end, and
 later execute the exact generated Eval when the queue delivers its wake.
 
 ```ts title="app/api/crux/[[...path]]/route.ts"
-export { GET, POST, DELETE } from "../../../../crux.generated/next";
+export { GET, POST, DELETE } from "../../../../crux/generated/next";
 ```
 
 The selected Runtime store must implement durable result storage. Model work

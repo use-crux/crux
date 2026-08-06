@@ -1,18 +1,28 @@
-import { StorageError } from '@use-crux/core/storage'
-import { describe, expect, it, vi } from 'vitest'
+import { StorageError, type StorageSetupPort } from '@use-crux/core/storage'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { Pool } from 'pg'
-import { postgresRecordStore, postgresStorage, postgresVectorStore } from '../src/index'
-import { sparseVectorSql } from '../src/storage/validation'
+import { postgresRecordStore, postgresSearchStore, postgresStorage } from '../src/index'
+import { normalizeSearchRecord, sparsePayloadSql } from '../src/storage/validation'
 
 describe('PostgreSQL storage validation and SQL shaping', () => {
   it('requires positive configured dimensions', () => {
     const pool = fakePool()
-    expect(() => postgresVectorStore({ pool, dimensions: 0 })).toThrow(StorageError)
-    expect(() => postgresVectorStore({ pool, dimensions: 2, sparseDimensions: -1 })).toThrow(StorageError)
+    expect(() => postgresSearchStore({ pool, dimensions: 0 })).toThrow(StorageError)
+    expect(() => postgresSearchStore({ pool, dimensions: 2, sparseDimensions: -1 })).toThrow(StorageError)
+    expect(() => postgresSearchStore({ pool })).toThrow(StorageError)
   })
 
   it('converts zero-based sparse indices to sorted one-based sparsevec text', () => {
-    expect(sparseVectorSql({ indices: [4, 0, 2], values: [5, 1, 3] }, 8)).toBe('{1:1,3:3,5:5}/8')
+    expect(sparsePayloadSql({ indices: [4, 0, 2], values: [5, 1, 3] }, 8)).toBe('{1:1,3:3,5:5}/8')
+  })
+
+  it('accepts indexed content when lexical storage is disabled', () => {
+    expect(
+      normalizeSearchRecord(
+        { key: 'docs:a', content: 'Stored for lexical-capable adapters.', dense: [1, 0] },
+        { dimensions: 2, lexical: false },
+      ),
+    ).toMatchObject({ key: 'docs:a', content: 'Stored for lexical-capable adapters.', dense: [1, 0] })
   })
 
   it('validates record JSON, filters, keys, TTL, cursors, and options before SQL', async () => {
@@ -32,17 +42,26 @@ describe('PostgreSQL storage validation and SQL shaping', () => {
     expect(pool.query).not.toHaveBeenCalled()
   })
 
-  it('validates vectors and returns limit zero before SQL', async () => {
+  it('validates search payloads and returns limit zero before SQL', async () => {
     const pool = fakePool()
-    const vectors = postgresVectorStore({ pool, dimensions: 2, sparseDimensions: 4 })
-    await expect(vectors.upsert([{ key: 'bad', dense: [1] }])).rejects.toMatchObject({ code: 'invalid_value' })
-    await expect(vectors.upsert([{ key: 'bad', sparse: { indices: [4], values: [1] } }])).rejects.toMatchObject({
+    const search = postgresSearchStore({ pool, dimensions: 2, sparseDimensions: 4 })
+    await expect(search.upsert([{ key: 'bad', dense: [1] }] as never)).rejects.toMatchObject({ code: 'invalid_value' })
+    await expect(search.upsert([{ key: 'bad', sparse: { indices: [4], values: [1] } }] as never)).rejects.toMatchObject({
       code: 'invalid_value',
     })
-    await expect(vectors.search({ mode: 'dense', dense: [1, 0], limit: 0 })).resolves.toEqual([])
+    await expect(search.search({ legs: [{ kind: 'dense', vector: [1, 0] }], limit: 0 } as never)).resolves.toEqual([])
     await expect(
-      vectors.search({ mode: 'hybrid', dense: [1, 0], sparse: { indices: [0], values: [1] }, fusion: 'dbsf' }),
+      search.search({
+        legs: [
+          { kind: 'dense', vector: [1, 0] },
+          { kind: 'sparse', vector: { indices: [0], values: [1] } },
+        ],
+        fusion: { strategy: 'dbsf' },
+      } as never),
     ).rejects.toMatchObject({ code: 'unsupported_capability' })
+    await expect(search.search({ legs: [{ kind: 'lexical', query: 'missing' }] } as never)).rejects.toMatchObject({
+      code: 'unsupported_capability',
+    })
     expect(pool.query).not.toHaveBeenCalled()
   })
 
@@ -50,7 +69,8 @@ describe('PostgreSQL storage validation and SQL shaping', () => {
     const pool = fakePool()
     const storage = postgresStorage({ pool, dimensions: 2 })
     expect((storage.records as { setup?: unknown }).setup).toBe(storage.setup)
-    expect((storage.vectors as { setup?: unknown }).setup).toBe(storage.setup)
+    expect((storage.search as { setup?: unknown }).setup).toBe(storage.setup)
+    expectTypeOf(storage.setup).toEqualTypeOf<StorageSetupPort>()
     await storage.close()
     expect(pool.end).not.toHaveBeenCalled()
   })

@@ -2,6 +2,7 @@ import { parse as parseCsv } from 'csv-parse/sync'
 import ExcelJS from 'exceljs'
 import { load as loadHtml } from 'cheerio'
 import mammoth from 'mammoth'
+import SSF from 'ssf'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
@@ -19,6 +20,9 @@ import type {
   IngestFormat,
   IngestParser,
   IngestPart,
+  IngestSpreadsheetMerge,
+  IngestSpreadsheetRange,
+  IngestSpreadsheetRow,
   IngestTablePart,
   IngestTextPart,
   IngestWarning,
@@ -259,7 +263,7 @@ export const docxParser: IngestParser = {
 export const xlsxParser: IngestParser = {
   name: 'xlsx',
   formats: ['xlsx'],
-  async parse(input) {
+  async parse(input, ctx) {
     const workbook = new ExcelJS.Workbook()
     const workbookBytes = input.bytes.buffer.slice(
       input.bytes.byteOffset,
@@ -268,11 +272,49 @@ export const xlsxParser: IngestParser = {
     await workbook.xlsx.load(workbookBytes as Parameters<typeof workbook.xlsx.load>[0])
     const parts: IngestPart[] = []
 
+    const date1904 = workbook.properties.date1904 === true
+
     workbook.worksheets.forEach((worksheet, sheetIndex) => {
+      const dimensions = worksheet.dimensions
+      const sourceRange = {
+        address: dimensions.shortRange,
+        rowStart: dimensions.top,
+        rowEnd: dimensions.bottom,
+        columnStart: dimensions.left,
+        columnEnd: dimensions.right,
+      }
+      const merges = xlsxMergeMap(worksheet)
       const rows: string[][] = []
+      const sourceRows: IngestSpreadsheetRow[] = []
       worksheet.eachRow({ includeEmpty: false }, (row) => {
-        const values = row.values as unknown[]
-        rows.push(values.slice(1).map((value) => formatCell(value)))
+        const rowSourceRange = {
+          address: `${row.getCell(sourceRange.columnStart).address}:${row.getCell(sourceRange.columnEnd).address}`,
+          rowStart: row.number,
+          rowEnd: row.number,
+          columnStart: sourceRange.columnStart,
+          columnEnd: sourceRange.columnEnd,
+        }
+        const cells = Array.from({ length: sourceRange.columnEnd - sourceRange.columnStart + 1 }, (_, index) => {
+          const column = sourceRange.columnStart + index
+          const cell = row.getCell(column)
+          const merge = merges.get(cell.address)
+          const isMergeFollower = merge !== undefined && merge.master !== cell.address
+          return {
+            row: row.number,
+            column,
+            address: cell.address,
+            value: isMergeFollower ? '' : formatCell(cell, date1904, worksheet.name, ctx.warn),
+            ...(!isMergeFollower && cell.formula ? { formula: cell.formula } : {}),
+            ...(merge ? { merge } : {}),
+          }
+        })
+        rows.push(cells.map((cell) => cell.value))
+        sourceRows.push({
+          row: row.number,
+          address: rowSourceRange.address,
+          sourceRange: rowSourceRange,
+          cells,
+        })
       })
 
       if (rows.length === 0) return
@@ -281,9 +323,11 @@ export const xlsxParser: IngestParser = {
         id: `xlsx:${worksheet.name}:table:1`,
         kind: 'table',
         sheetName: worksheet.name,
-        rowStart: 1,
-        rowEnd: rows.length,
+        rowStart: sourceRows[0].row,
+        rowEnd: sourceRows[sourceRows.length - 1].row,
         rows,
+        sourceRange,
+        sourceRows,
         columns: rows[0],
         content: renderRows(rows),
       }
@@ -293,6 +337,7 @@ export const xlsxParser: IngestParser = {
         kind: 'sheet',
         sheetName: worksheet.name,
         index: sheetIndex,
+        sourceRange,
         tables: [table],
         content: `[Sheet: ${worksheet.name}]\n${deriveContent([table])}`,
       })
@@ -436,12 +481,158 @@ function formatJsonValue(value: unknown): string {
   return String(value)
 }
 
-function formatCell(value: unknown): string {
+function formatCell(cell: ExcelJS.Cell, date1904: boolean, sheetName: string, warn: (warning: IngestWarning) => void): string {
+  const value = cell.value
+  const displayValue = cell.formula ? cell.result : value
+  const fallback = projectXlsxDisplayValue(displayValue, { sheetName, address: cell.address, warn })
+  if (!cell.numFmt || displayValue === null || displayValue === undefined) return fallback
+  if (typeof displayValue !== 'number' && !(displayValue instanceof Date)) return fallback
+
+  try {
+    return SSF.format(cell.numFmt, displayValue, { date1904 })
+  } catch (error) {
+    warn({
+      code: 'parser_warning',
+      message: `Could not apply XLSX number format for cell ${cell.address}; emitted raw value.`,
+      metadata: {
+        sheetName,
+        address: cell.address,
+        numFmt: cell.numFmt,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    })
+    return fallback
+  }
+}
+
+export function projectXlsxDisplayValue(
+  value: unknown,
+  ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void },
+): string {
   if (value === null || value === undefined) return ''
   if (value instanceof Date) return value.toISOString()
-  if (typeof value === 'object' && 'text' in value) return String((value as { text: unknown }).text)
-  if (typeof value === 'object' && 'result' in value) return String((value as { result: unknown }).result)
-  return String(value)
+  switch (typeof value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+      return String(value)
+    case 'object':
+      return projectXlsxStructuredDisplayValue(value as Record<string, unknown>, ctx)
+    default:
+      return ''
+  }
+}
+
+function projectXlsxStructuredDisplayValue(
+  value: Record<string, unknown>,
+  ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void },
+): string {
+  if ('richText' in value) {
+    if (!Array.isArray(value.richText)) return rejectXlsxStructuredValue(ctx, 'richText')
+    const runs = value.richText
+    if (!runs.every((run) => run && typeof run === 'object' && typeof (run as { text?: unknown }).text === 'string')) {
+      return rejectXlsxStructuredValue(ctx, 'richText')
+    }
+    return runs.map((run) => (run as { text: string }).text).join('')
+  }
+
+  if ('hyperlink' in value || 'text' in value) {
+    if (typeof value.hyperlink === 'string' && typeof value.text === 'string') return value.text
+    return rejectXlsxStructuredValue(ctx, 'hyperlink' in value ? 'hyperlink' : 'textOnly')
+  }
+
+  if ('formula' in value) {
+    if (typeof value.formula !== 'string') return rejectXlsxStructuredValue(ctx, 'formula')
+    return 'result' in value ? projectXlsxDisplayValue(value.result, ctx) : ''
+  }
+
+  if ('sharedFormula' in value) {
+    if (typeof value.sharedFormula !== 'string') return rejectXlsxStructuredValue(ctx, 'sharedFormula')
+    return 'result' in value ? projectXlsxDisplayValue(value.result, ctx) : ''
+  }
+
+  if ('error' in value) {
+    if (typeof value.error === 'string') return value.error
+    return rejectXlsxStructuredValue(ctx, 'error')
+  }
+
+  if ('result' in value) return rejectXlsxStructuredValue(ctx, 'resultOnly')
+
+  return rejectXlsxStructuredValue(ctx, 'unknown')
+}
+
+function rejectXlsxStructuredValue(
+  ctx: { sheetName: string; address: string; warn: (warning: IngestWarning) => void },
+  valueShape: 'richText' | 'hyperlink' | 'formula' | 'sharedFormula' | 'error' | 'textOnly' | 'resultOnly' | 'unknown',
+): string {
+  ctx.warn({
+    code: 'parser_warning',
+    message: `Could not project XLSX structured value for cell ${ctx.address}; emitted empty value.`,
+    metadata: { sheetName: ctx.sheetName, address: ctx.address, valueShape },
+  })
+  return ''
+}
+
+function xlsxMergeMap(worksheet: ExcelJS.Worksheet): Map<string, IngestSpreadsheetMerge> {
+  const merges = new Map<string, IngestSpreadsheetMerge>()
+  const mergeRanges = Array.isArray(worksheet.model.merges) ? worksheet.model.merges : []
+  for (const mergeAddress of mergeRanges) {
+    if (typeof mergeAddress !== 'string') continue
+    const sourceRange = parseXlsxRange(mergeAddress)
+    if (!sourceRange) continue
+    const master = xlsxAddress(sourceRange.rowStart, sourceRange.columnStart)
+    const merge: IngestSpreadsheetMerge = { master, sourceRange }
+    for (let row = sourceRange.rowStart; row <= sourceRange.rowEnd; row += 1) {
+      for (let column = sourceRange.columnStart; column <= sourceRange.columnEnd; column += 1) {
+        merges.set(xlsxAddress(row, column), merge)
+      }
+    }
+  }
+  return merges
+}
+
+function parseXlsxRange(address: string): IngestSpreadsheetRange | undefined {
+  const [start, end = start] = address.split(':')
+  const startCell = parseXlsxAddress(start)
+  const endCell = parseXlsxAddress(end)
+  if (!startCell || !endCell) return undefined
+  const rowStart = Math.min(startCell.row, endCell.row)
+  const rowEnd = Math.max(startCell.row, endCell.row)
+  const columnStart = Math.min(startCell.column, endCell.column)
+  const columnEnd = Math.max(startCell.column, endCell.column)
+  return {
+    address,
+    rowStart,
+    rowEnd,
+    columnStart,
+    columnEnd,
+  }
+}
+
+function parseXlsxAddress(address: string | undefined): { row: number; column: number } | undefined {
+  const match = /^([A-Z]+)(\d+)$/i.exec(address ?? '')
+  if (!match) return undefined
+  return { column: xlsxColumnNumber(match[1].toUpperCase()), row: Number(match[2]) }
+}
+
+function xlsxColumnNumber(column: string): number {
+  let value = 0
+  for (let index = 0; index < column.length; index += 1) {
+    value = value * 26 + column.charCodeAt(index) - 64
+  }
+  return value
+}
+
+function xlsxAddress(row: number, column: number): string {
+  let remaining = column
+  let letters = ''
+  while (remaining > 0) {
+    const modulo = (remaining - 1) % 26
+    letters = String.fromCharCode(65 + modulo) + letters
+    remaining = Math.floor((remaining - modulo) / 26)
+  }
+  return `${letters}${row}`
 }
 
 function renderRows(rows: string[][]): string {

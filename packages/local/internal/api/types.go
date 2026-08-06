@@ -507,6 +507,7 @@ const (
 	SpanPrimitiveDelegateInvoke       = "delegate.invoke"
 	SpanPrimitiveWorkspaceOperation   = "workspace.operation"
 	SpanPrimitiveThreadOperation      = "thread.operation"
+	SpanPrimitiveSessionTurn          = "session.turn"
 	SpanPrimitivePlanOperation        = "plan.operation"
 	SpanPrimitiveTaskOperation        = "task.operation"
 	SpanPrimitiveIndexingPipeline     = "indexing.pipeline"
