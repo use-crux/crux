@@ -57,9 +57,9 @@ const chargeCustomer = effect(
 
 The executor receives `receiptId` before the external call, which lets
 application code associate the Crux receipt with a provider operation ID even
-when no response arrives. Keep that association in application state that fits
-your current process model. This release does not persist the Effect ledger
-across restarts.
+when no response arrives. Keep that association in application state, or rely
+on the durable receipt row when a Runtime Effects store is configured. Without
+a store, the Effect ledger is process-local.
 
 <Callout type="warn">
   Do not classify every timeout as unknown. Use the provider's documented
@@ -139,9 +139,10 @@ retry automatically because providing an idempotency key does not prove that a
 custom handler forwarded it.
 
 After checking the provider, call `reconcileEffect()` with the original receipt
-whose recovery is ambiguous. In this in-process slice, Crux resolves its sole
-linked unknown recovery attempt. A direct recovery-attempt receipt also works
-when the surrounding runtime retains one.
+whose recovery is ambiguous. Crux resolves its sole linked unknown recovery
+attempt for a single-receipt unit. A direct recovery-attempt receipt also works
+when the surrounding runtime retains one. With a Runtime Effects store, that
+settlement is durable and survives process loss.
 
 ```ts
 await reconcileEffect(originalReceipt, {
@@ -182,10 +183,17 @@ do not show a misleading recovery affordance. Use Runs to inspect the receipt
 and provider details, then use application code with appropriate authorization
 to reconcile it.
 
+A crash while execution or recovery is still running has the same shape as an
+unknown outcome: reconstruction projects the interrupted work as `unknown` or
+`ambiguous` and does not retry it. Confirm externally, then reconcile. Details
+are in
+[Durability and restarts](/docs/guides/effects/durability-and-restarts).
+
 ## Related
 
 - [Effects overview](/docs/guides/effects)
 - [Recovery patterns](/docs/guides/effects/recovery-patterns)
 - [Rollback boundaries](/docs/guides/effects/rollback-boundaries)
+- [Durability and restarts](/docs/guides/effects/durability-and-restarts)
 - [EFFECT_OUTCOME_AMBIGUOUS](/docs/errors/EFFECT_OUTCOME_AMBIGUOUS)
 - [Effects API reference](/docs/reference/crux-core/effect)

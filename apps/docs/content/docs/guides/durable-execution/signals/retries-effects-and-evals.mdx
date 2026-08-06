@@ -17,17 +17,25 @@ idempotent or model them as [Effects](/docs/guides/effects).
 Consumer failure is isolated to that delivery. It cannot retroactively reject
 an accepted publication or prevent other required deliveries from proceeding.
 
-## Effects remain in-process recovery
+## Effects and Signal durability stay separate
 
 A Signal-driven resume keeps the Flow's `EffectScopeRef` consistent across
 suspension and retry snapshots while the same process still owns the live
 Effect ledger. That prevents one retry from silently switching to another
 in-process rollback boundary.
 
-<Callout type="warn" title="A persisted EffectScopeRef is not a recovery ledger">
-  The ref is JSON-safe, but Effect receipts, captured state, recovery handlers,
-  and ledger state are process-local. Persisting the ref does not make rollback
-  restart-safe and cannot reconstruct recovery after process loss.
+With a Runtime store that implements the Effects port, receipt, scope, unit,
+attempt, and envelope rows also persist. After restart, the same scope ref
+reconstructs the reverse recovery plan. Recovery still runs only when your
+process calls `recover()`, `rollback()`, or `reconcileEffect()` with a matching
+Runtime program. An external worker that claims and drives Effect recovery after
+a kill is not part of this release.
+
+<Callout type="warn" title="A persisted EffectScopeRef is not automatic recovery">
+  The ref is JSON-safe snapshot metadata. Without a Runtime Effects store it
+  cannot reconstruct receipts after process loss. With a store, reconstruction
+  is restart-safe, but recovery is still an explicit API call, not a Signal wake
+  side effect.
 </Callout>
 
 Signal durability and Effect recovery therefore answer different questions:
@@ -38,7 +46,9 @@ Signal durability and Effect recovery therefore answer different questions:
 | Flow wake | At least once, with stable occurrence and delivery identities |
 | Completed Flow steps | Replayed from the durable Flow snapshot |
 | `EffectScopeRef` field | JSON-safe snapshot metadata |
-| Effect receipts, captures, handlers, ledger | In-process only |
+| Effect receipts, captures, handlers, ledger | Process-local without a Runtime Effects store; durable records and reverse-plan reconstruction with one. Recovery is application-driven, not worker-driven. |
+
+See [Durability and restarts](/docs/guides/effects/durability-and-restarts).
 
 ## Storage owns the durable boundary
 

@@ -10,6 +10,7 @@ import {
   genericQueue,
   createRuntimeHandler,
   createRuntime,
+  createRuntimeProgram,
   bindHostRuntime,
   durableTask,
   CruxRuntimeError,
@@ -25,7 +26,8 @@ The Runtime Engine is the durable execution layer for event waits, timers, backg
 
 | Export                                                                   | Use                                                                                                                                                                                                           |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `node(options?)`                                                         | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. Accepts `retention`.                        |
+| `node(options?)`                                                         | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. Accepts `program` and `retention` (including `effectEnvelopes`). |
+| `createRuntimeProgram({ targets, transports, effectTargets? })`          | Pure immutable program: flow/task targets, managed transports, and exact Effect recovery `(id, version)` declarations. No global registry and no stored closures. |
 | `serverless({ store, wake, endpoint, publicUrl, namespace, retention })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL.                                                          |
 | `genericQueue({ enqueue, secret, devSecret, maxDelayMs })`               | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding.                                                            |
 | `createRuntime({ runtime, targets, leaseTtlMs, leaseExtension })`        | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here.                                                         |

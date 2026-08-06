@@ -1,0 +1,213 @@
+---
+title: Durability and restarts
+description: Configure a Runtime store for durable Effect receipts, understand crash windows, and recover honestly after process loss.
+---
+
+Effects always produce receipts and recovery plans in the current process. When
+you configure a Runtime store that implements the Effects port, those records
+also survive process loss so a later process can reconstruct the same reverse
+recovery plan and settle work that finished while the first process was gone.
+
+This page documents what a configured store adds **now**, and what still
+requires an external Runtime worker. Read it before treating any Effect as
+restart-safe.
+
+## Mode table
+
+| Setup | What you get now | What you still do not get |
+| --- | --- | --- |
+| No Runtime store | Callable Effects, receipts, `rollbackOnError()`, delayed `rollback()`, and `reconcileEffect()` in the current process. Ledger state is process-local. | Any recovery after the process exits. |
+| Runtime store with an Effects port (memory for tests; PostgreSQL or Convex in deployment) | Durable receipt, scope, recovery-unit, attempt, and envelope rows. Restart-safe reconstruction of the exact reverse recovery plan and stable recovery idempotency keys. Honest crash-window projection and store-fenced terminal transitions. Bounded envelope retention. | Automatic background recovery in another process. An external worker that claims recovery work after a kill, restarts the handler, and drives recovery without your call. |
+| Runtime store plus `RuntimeProgram` Effect targets | The same durable records, plus exact `(id, version)` resolution of recovery handlers after restart when the restarted program declares them. | A global Effect registry, stored execution closures, or silent import of packages from receipt-controlled data. |
+| External Runtime worker (not this release) | Deferred. See the worker roadmap for external-process execution and kill-and-restart recovery through a self-hosted worker. | Not available yet. Do not document or assume it. |
+
+`effect()` itself does not require Runtime. Configure Runtime only when you need
+records or recovery to outlive the process that started the work.
+
+## Configure durable Effects
+
+Pass a Runtime store that exposes the Effects port and an immutable program that
+declares recoverable Effect definitions you need after restart:
+
+```ts
+import { config, effect } from "@use-crux/core";
+import {
+  createRuntimeProgram,
+  node,
+} from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+
+export const updateCustomer = effect(
+  "customer.update",
+  async (input: { id: string; name: string }, { idempotencyKey }) => {
+    const previous = await crm.customers.get(input.id);
+    await crm.customers.update(
+      input.id,
+      { name: input.name },
+      { idempotencyKey },
+    );
+    return { previousName: previous.name };
+  },
+  {
+    resource: ({ id }) => ({ type: "customer", id }),
+    recover: async ({ input, output, idempotencyKey }) => {
+      await crm.customers.update(
+        input.id,
+        { name: output.previousName },
+        { idempotencyKey },
+      );
+    },
+  },
+);
+
+export default config({
+  runtime: node({
+    store: postgres({ url: process.env.DATABASE_URL }),
+    program: createRuntimeProgram({
+      targets: [],
+      transports: [],
+      effectTargets: [updateCustomer],
+    }),
+    retention: {
+      // Recovery envelopes only. Receipt and audit metadata stay for evidence.
+      effectEnvelopes: "30d",
+    },
+  }),
+});
+```
+
+Generated hosts (Next, Convex, Cloudflare) bind the same program shape from
+`crux runtime generate`. Export recoverable Effects that durable scopes may
+need to recover after restart so the generated artifact includes them.
+
+JSON-safe recovery state is what survives. Non-JSON capture payloads remain
+usable only while the original process still holds them; the durable store
+keeps a non-durable marker rather than pretending the payload is restart-safe.
+
+## Recovery targets after restart
+
+`createRuntimeProgram({ effectTargets })` records immutable `(id, version)`
+identities, not closures. After a restart, recovery resolves the exact matching
+definition from the restarted program:
+
+```ts
+const program = createRuntimeProgram({
+  targets: [reviewFlow],
+  transports: [],
+  effectTargets: [updateCustomer],
+});
+```
+
+Rules that matter in production:
+
+- Identical definition objects for the same `(id, version)` collapse.
+- Two different objects for the same `(id, version)` throw
+  [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE) at program construction.
+- Passing a non-recoverable definition as an Effect target throws
+  [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND).
+- A recoverable Effect with **no** program declaration stays callable. Same-
+  process recovery still uses its live definition. After a cold restart, recovery
+  returns `handler_unavailable` instead of throwing at call time.
+- A version mismatch after restart also returns `handler_unavailable`. Keep the
+  exact older definition deployed, or migrate/expire the old receipts before
+  removing it.
+
+```ts
+// Cold process: store has the receipt, program no longer declares the target.
+const result = await recover(receipt);
+// result.status === "handler_unavailable"
+// result.error?.code === "EFFECT_RECOVERY_HANDLER_UNAVAILABLE"
+```
+
+Project Index reports `effect.recovery_not_runtime_addressable` when an
+unexported recoverable Effect is statically visible inside a required recovery
+boundary under a Runtime-backed configuration. That is a proactive diagnostic,
+not a hard block on `effect()` calls.
+
+## Crash windows and reconstruction
+
+Reconstruction is a pure read. It rebuilds scopes, receipts, units, and the
+exact reverse recovery plan from durable rows without invoking handlers. Crash
+honesty comes from record state, not wall-clock guesses:
+
+| Crash window | What reconstruction reports | What to do |
+| --- | --- | --- |
+| Prepared, executor never started | Receipt stays prepared and is queued for reconciliation. | Inspect, then decide whether to retry the same idempotency key or reconcile after external evidence. There is no silent auto-retry. |
+| Running execution interrupted before settlement | Receipt is projected as `unknown`. | Confirm the provider outcome out of band, then call `reconcileEffect()`. Never blind-retry. |
+| Recovery handler may have finished before attempt settlement | Recovery attempt is projected as `unknown` / unit `ambiguous`. | Reconcile the recovery attempt. Do not schedule a second attempt first. |
+| Two writers race a terminal transition | Store fencing rejects the stale writer. Exactly one terminal transition commits. | Treat the store winner as truth; re-read before acting. |
+
+```ts
+import { reconcileEffect, rollback } from "@use-crux/core/effect";
+
+// After restart, rebuild the plan from durable rows and inspect units.
+const plan = await rollback(scopeRef);
+for (const unit of plan.units) {
+  if (unit.status === "ambiguous") {
+    // Confirm with the provider using the receipt you retained at execution,
+    // then settle with reconcileEffect(receipt, { outcome, reason, ... }).
+    console.info("needs reconciliation", unit.unitId, unit.effectIds);
+  }
+}
+
+// Example once the provider confirms the retained receipt:
+await reconcileEffect(retainedReceipt, {
+  outcome: "succeeded",
+  output: confirmedOutput,
+  reason: "Provider confirms the change committed",
+});
+```
+
+`reconcileEffect()` commits receipt, unit, envelope, and audit rows at the store
+before updating the process cache. Losing concurrent reconciliations fail at the
+store instead of becoming local truth.
+
+Nested boundaries, native audit-first receipts, and partial earlier recovery all
+reconstruct into the same causal reverse order as the original process, with
+stable recovery idempotency keys.
+
+## Adapter support
+
+| Adapter | Durable Effects | Notes |
+| --- | --- | --- |
+| In-memory Runtime store | Supported for tests | Process-local durability only. Useful for conformance and local iteration. |
+| `@use-crux/postgres` | Supported | Full lifecycle, crash fencing, reconstruction, and callback-wide multi-operation transactions. |
+| `@use-crux/convex` | Supported with one declared limit | Each logical Effect operation commits as one component mutation. Arbitrary `transact()` callbacks that issue multiple Effect port calls do **not** share one Convex transaction (`multiOperationTransactions: unsupported`). Crash fencing and reconstruction still run. |
+
+Do not treat Convex as if it provides multi-step SQL-style atomicity for
+adapter callbacks. Logical Effect operations remain atomic one at a time.
+
+## Retention and evidence
+
+Runtime retention prunes recovery envelopes only. The default is
+`effectEnvelopes: "30d"`. When an envelope expires, receipt availability becomes
+`expired` while receipt and reconciliation audit metadata remain for evidence.
+
+Receipt evidence and journal linkage survive process loss for durable receipts:
+intent/change/recovery roles reconstruct from the store, and sealed request or
+canonical tool-outcome refs attach only when the Effect ran inside a journaled
+request context. Effects never invent request-plan facts.
+
+## What the external worker will add later
+
+An external-process Runtime worker is intentionally deferred. Until that ships:
+
+- your application or host must call `recover()`, `rollback()`, or
+  `reconcileEffect()` in a process that has the store and the matching program;
+- killing a worker does not automatically re-drive unfinished Effect recovery;
+- there is no lease-claimed recovery work item for Effects comparable to durable
+  Flow/task wake.
+
+Design recovery so operators and application code can finish the loop with the
+APIs above. When the worker lands, the durable records and recovery targets you
+configure here remain the input, not a second parallel model.
+
+## Related
+
+- [Effects overview](/docs/guides/effects)
+- [Recovery patterns](/docs/guides/effects/recovery-patterns)
+- [Rollback boundaries](/docs/guides/effects/rollback-boundaries)
+- [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [TARGET_DUPLICATE](/docs/errors/TARGET_DUPLICATE)
+- [TARGET_NOT_FOUND](/docs/errors/TARGET_NOT_FOUND)
+- [Effects API reference](/docs/reference/crux-core/effect)

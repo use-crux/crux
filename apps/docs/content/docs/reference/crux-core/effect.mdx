@@ -1,6 +1,6 @@
 ---
 title: Effects
-description: In-process custom effects, receipts, recovery, rollback boundaries, and reconciliation.
+description: Custom effects, receipts, recovery, rollback boundaries, reconciliation, and durable Runtime store records.
 ---
 
 ```ts
@@ -19,9 +19,13 @@ Effects make external state changes explicit. Every execution records an
 immutable receipt, recoverable definitions register one recovery unit per
 receipt, and rollback boundaries recover completed units in causal LIFO order.
 
-Recovery is in-process. A Flow snapshot may persist its JSON-safe scope ref,
-but receipts, captured state, recovery handlers, and Effect ledger state do not
-survive a restart, so the persisted ref alone cannot restore recovery.
+Without a Runtime store, receipts and recovery state are process-local. With a
+Runtime store that implements the Effects port, those records persist and a
+later process can reconstruct the exact reverse recovery plan. Recovery still
+runs only when application code calls `recover()`, `rollback()`, or
+`reconcileEffect()` with a matching Runtime program. An external worker that
+claims and drives Effect recovery after process kill is not part of this
+surface.
 
 ## `effect()`
 
@@ -189,9 +193,49 @@ Inside a flow handler, `flow.effects` exposes the same reference and
 makes the boundary terminal, so later Effects reject with
 `EFFECT_SCOPE_TERMINAL`.
 
-Run-like refs are resolvable only while the current process retains the receipt
-ledger and recovery handlers. Runtime-backed delayed recovery is not part of
-this in-process surface.
+Without a store, run-like refs resolve only while the current process retains
+the receipt ledger and recovery handlers. With a Runtime Effects store, the
+same ref reconstructs after restart; each unit still needs an exact program
+target or recovery returns `handler_unavailable`.
+
+## Durable Runtime configuration
+
+Configure durable Effect records through the Runtime Engine, not through
+`@use-crux/core/effect` options:
+
+```ts
+import { config } from "@use-crux/core";
+import {
+  createRuntimeProgram,
+  node,
+} from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+
+config({
+  runtime: node({
+    store: postgres({ url: process.env.DATABASE_URL }),
+    program: createRuntimeProgram({
+      targets: [reviewFlow],
+      transports: [],
+      effectTargets: [updateCustomer],
+    }),
+    retention: { effectEnvelopes: "30d" },
+  }),
+});
+```
+
+| Piece | Role |
+| --- | --- |
+| `store` | Memory (tests), PostgreSQL, or Convex Runtime adapter exposing the Effects port. |
+| `createRuntimeProgram({ effectTargets })` | Immutable exact `(id, version)` recovery targets. No stored closures. |
+| `retention.effectEnvelopes` | Bounded envelope pruning (default `30d`). Receipt/audit metadata remains. |
+
+Missing or version-mismatched cold targets settle as `handler_unavailable`. An
+undeclared recoverable Effect remains callable and can recover in the same
+process through its live definition. Convex supports per-operation atomicity
+and crash fencing; it declares multi-operation `transact()` callbacks
+unsupported. See
+[Durability and restarts](/docs/guides/effects/durability-and-restarts).
 
 ## `reconcileEffect()`
 
@@ -268,6 +312,8 @@ such as `EffectReceiptRef`, `EffectScopeRef`, `EffectResource`,
 
 Learn the workflows in the [Effects overview](/docs/guides/effects),
 [recovery patterns](/docs/guides/effects/recovery-patterns),
-[rollback boundaries](/docs/guides/effects/rollback-boundaries), and
-[ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation).
+[rollback boundaries](/docs/guides/effects/rollback-boundaries),
+[ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation),
+and
+[durability and restarts](/docs/guides/effects/durability-and-restarts).
 See [Effects error codes](/docs/errors#effects-codes) for diagnosis and fixes.

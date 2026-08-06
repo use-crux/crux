@@ -1,24 +1,48 @@
 ---
 title: TARGET_DUPLICATE
-description: Two runtime targets use the same durable name.
+description: Two runtime targets or Effect recovery targets use the same durable identity.
 ---
 
 ## What failed
 
-Crux found more than one exported `flow()` or `durableTask()` with the same literal target name.
+Crux found more than one exported `flow()` or `durableTask()` with the same
+literal target name, or more than one Effect recovery definition for the same
+`(id, version)` on a `RuntimeProgram`.
 
 ## Why
 
-Runtime target names are persisted routing identities. A wake must resolve one name to exactly one target.
+Runtime target names and Effect recovery identities are persisted routing keys.
+A wake or a cold recovery must resolve one identity to exactly one declaration.
 
 ## What still works
 
-Object-bound calls still work while you fix the duplicate. Runtime artifact generation and handler construction fail.
+Object-bound calls still work while you fix the duplicate. Runtime artifact
+generation, `createRuntimeProgram()`, and handler construction fail for the
+conflicting program.
 
 ## Fix
 
-Rename one target and regenerate artifacts:
+For flows and durable tasks, rename one target and regenerate artifacts:
 
 ```bash
 crux runtime generate
 ```
+
+For Effect recovery targets, pass one definition object per `(id, version)`.
+Identical objects collapse; different objects for the same pair throw:
+
+```ts
+createRuntimeProgram({
+  targets: [reviewFlow],
+  transports: [],
+  // One recoverable definition per (id, version).
+  effectTargets: [updateCustomer],
+});
+```
+
+If two modules both export a recoverable Effect with the same id and version,
+export only one of them into `effectTargets` or change one version after
+updating its recovery contract.
+
+See [Durability and restarts](/docs/guides/effects/durability-and-restarts) and
+the [Effects guide](/docs/guides/effects).

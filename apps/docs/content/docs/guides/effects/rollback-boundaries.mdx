@@ -180,9 +180,11 @@ receipts. Repeated or concurrent requests join or reuse unit settlement, so a
 successfully recovered unit reports `already_recovered` and its handler does
 not run twice.
 
-Flow snapshots may persist the JSON-safe scope ref, but receipts, captured
-state, recovery handlers, and Effect ledger state remain process-local. A ref
-cannot restore recovery after restart; durable recovery is future runtime work.
+Flow snapshots may persist the JSON-safe scope ref. Without a Runtime store,
+receipts and recovery handlers stay process-local and the ref alone cannot
+restore recovery after restart. With a Runtime store that implements the Effects
+port, durable rows rebuild the reverse plan for that scope, and recovery runs
+when your process calls `rollback()` with a matching Runtime program.
 
 ## Understand terminal boundaries
 
@@ -293,13 +295,16 @@ handler may finish pure computation and return its rejection result, but any
 later Effect is rejected with `EFFECT_SCOPE_TERMINAL`.
 
 Use `rollback(result.effects)` when review happens after the run completes.
-Both APIs are in-process in this release: the reference resolves only while
-the same process, receipt ledger, and recovery handlers remain alive. Runtime-
-backed recovery after restart belongs to a future release.
+Without a Runtime store the reference resolves only while the same process,
+receipt ledger, and recovery handlers remain alive. With a configured Effects
+store, the same ref reconstructs after restart; recovery still needs a matching
+program target for each unit. See
+[Durability and restarts](/docs/guides/effects/durability-and-restarts).
 
 ## Related
 
 - [Effects overview](/docs/guides/effects)
 - [Recovery patterns](/docs/guides/effects/recovery-patterns)
 - [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [Durability and restarts](/docs/guides/effects/durability-and-restarts)
 - [Effects API reference](/docs/reference/crux-core/effect)
