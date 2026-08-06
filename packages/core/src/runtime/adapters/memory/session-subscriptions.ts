@@ -1,9 +1,6 @@
 /** In-memory Session Signal subscription persistence. */
 
-import {
-  sessionSubscriptionMatchKey,
-  sessionSubscriptionMatchValue,
-} from "../../../session/subscription-match";
+import { sessionSubscriptionMatchValue } from "../../../session/subscription-match";
 import type {
   RuntimeSessionSubscriptionRecord,
   UpsertRuntimeSessionSubscriptionInput,
@@ -29,7 +26,7 @@ export function upsertMemorySessionSubscription(
     );
   }
   const match = sessionSubscriptionMatchValue(input.match);
-  const matchKey = sessionSubscriptionMatchKey(match);
+  const matchKey = input.matchKey;
   const existing = [...data.sessionSubscriptions.values()].find(
     (subscription) =>
       subscription.namespace === input.namespace &&

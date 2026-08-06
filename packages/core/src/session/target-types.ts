@@ -7,11 +7,13 @@ import type {
   SignalOccurrenceFor,
   StaticSignalSource,
 } from "../signal/source";
+import type { JsonValue } from "../storage";
 import type { AnyFlowTarget } from "../work/target-types";
 import type {
   WorkTargetInput,
   WorkTargetOutput,
 } from "../work/target-types";
+import type { WorkProgress } from "../work/progress";
 import type { GenerationModel } from "../generation-model";
 import type { Session, SessionModelGuard, SessionOptions } from "./types";
 
@@ -72,7 +74,7 @@ export type SessionTargetResume<TTarget extends SessionTarget> =
     : never;
 
 /** Yield/progress surface retained for joinable Session activations. */
-export type SessionTargetProgress = import("../work/progress").WorkProgress;
+export type SessionTargetProgress = WorkProgress;
 
 /**
  * Infer the exact Session handle for one Agent or Flow target.
@@ -114,7 +116,12 @@ export type FlowSessionSurface<TTarget extends AnyFlowTarget> = {
   readonly targetKind: "flow";
 } & SessionSubscriptionSurface<SessionSubscriptionSource<TTarget>>;
 
-/** Match-only Signal source accepted by dynamic Flow Session subscription. */
+/**
+ * Match-only Signal source accepted by dynamic Flow Session subscription.
+ *
+ * @remarks Flows without a declared static Signal map resolve to `never` so
+ * `subscribe()` is not call-compatible without Signal sources.
+ */
 export type SessionSubscriptionSource<TTarget extends AnyFlowTarget> =
   TTarget extends FlowHandle<
     infer _TOutput,
@@ -124,8 +131,8 @@ export type SessionSubscriptionSource<TTarget extends AnyFlowTarget> =
   >
     ? TSignals extends FlowSignalMap
       ? DeclaredSessionSignalSource<TSignals>
-      : StaticSignalSource
-    : StaticSignalSource;
+      : never
+    : never;
 
 type DeclaredSessionSignalSource<TSignals extends FlowSignalMap> = {
   readonly [TName in keyof TSignals]: TSignals[TName] extends StaticSignalSource
@@ -146,7 +153,7 @@ export interface SessionSubscription {
   /** Base Signal identity. */
   readonly signalId: string;
   /** Canonical match data when the subscription is filtered. */
-  readonly match?: unknown;
+  readonly match?: JsonValue;
   /**
    * Mark this subscription inactive for future publications.
    *
