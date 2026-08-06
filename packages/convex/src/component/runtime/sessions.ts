@@ -61,30 +61,30 @@ async function dispatch(port: SessionPort, operation: SessionOperation, encoded:
     case 'blockTurn':
       return await port.blockTurn(decodeCompositeValue(encoded))
     case 'getByActivationWorkId':
-      return await port.getByActivationWorkId?.(
+      return await port.getByActivationWorkId(
         requiredString(input[0]),
         decodeCompositeValue(input[1]),
       )
     case 'upsertSubscription':
-      return await port.upsertSubscription?.(decodeCompositeValue(encoded))
+      return await port.upsertSubscription(decodeCompositeValue(encoded))
     case 'getSubscription':
-      return await port.getSubscription?.(
+      return await port.getSubscription(
         requiredString(input[0]),
         requiredString(input[1]),
         requiredString(input[2]),
       )
     case 'listSubscriptions':
-      return await port.listSubscriptions?.(
+      return await port.listSubscriptions(
         requiredString(input[0]),
         requiredString(input[1]),
       )
     case 'listActiveSubscriptionsForSignal':
-      return await port.listActiveSubscriptionsForSignal?.(
+      return await port.listActiveSubscriptionsForSignal(
         requiredString(input[0]),
         requiredString(input[1]),
       )
     case 'unsubscribe':
-      return await port.unsubscribe?.(
+      return await port.unsubscribe(
         requiredString(input[0]),
         requiredString(input[1]),
         requiredString(input[2]),

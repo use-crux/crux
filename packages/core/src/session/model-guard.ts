@@ -2,6 +2,7 @@
 
 import type { AnyAgent } from "../agent";
 import type { GenerationModel } from "../generation-model";
+import type { GenerationCapabilities } from "../generation-model/capabilities";
 import {
   GenerationModelBindingError,
   GenerationModelCapabilityError,
@@ -26,10 +27,25 @@ export function requireCompatibleModel(
 }
 
 export function isGenerationModel(value: unknown): value is GenerationModel {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "_tag" in value &&
-    value._tag === "crux.generation-model"
-  );
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("_tag" in value) ||
+    value._tag !== "crux.generation-model"
+  ) {
+    return false;
+  }
+  return hasValidTaggedCapabilities(value);
+}
+
+/**
+ * Malformed tagged models must fail the binding guard, not throw TypeError
+ * when reading capability fields.
+ */
+function hasValidTaggedCapabilities(value: object): boolean {
+  if (!("capabilities" in value)) return false;
+  const capabilities = (value as { readonly capabilities: unknown }).capabilities;
+  if (typeof capabilities !== "object" || capabilities === null) return false;
+  const language = (capabilities as Partial<GenerationCapabilities>).language;
+  return Array.isArray(language);
 }

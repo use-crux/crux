@@ -2,11 +2,16 @@
 
 import type { JsonValue } from "../../../storage";
 import { matchesSignalData } from "../../../signal/match-runtime";
+import { SessionCapabilityError } from "../../../session/errors";
 import type { RuntimeWaiter } from "../../ports/waiters";
-import type { RuntimeSessionSubscriptionRecord } from "../../ports/sessions";
+import type {
+  RuntimeSessionStorePort,
+  RuntimeSessionSubscriptionRecord,
+} from "../../ports/sessions";
 import type { RuntimeStoreTransaction } from "../../store";
 
-type FlowSignalWaiter = RuntimeWaiter & {
+/** Flow waiter suspended on a durable Signal source with owned Work. */
+export type FlowSignalWaiter = RuntimeWaiter & {
   readonly workId: NonNullable<RuntimeWaiter["workId"]>;
   readonly work: { readonly kind: "flow.resume"; readonly flowId: string };
 };
@@ -69,7 +74,8 @@ async function matchingSessionSubscriptions(
   },
 ): Promise<readonly RuntimeSessionSubscriptionRecord[]> {
   const sessions = tx.sessions;
-  if (!sessions?.listActiveSubscriptionsForSignal) return Object.freeze([]);
+  if (!sessions) return Object.freeze([]);
+  requireSessionSubscriptionCapability(sessions);
   const active = await sessions.listActiveSubscriptionsForSignal(
     input.namespace,
     input.signalId,
@@ -101,10 +107,12 @@ async function gateSessionOwnedWaiters(
   waiters: readonly FlowSignalWaiter[],
   subscriptions: readonly RuntimeSessionSubscriptionRecord[],
 ): Promise<readonly FlowSignalWaiter[]> {
-  if (!tx.sessions?.getByActivationWorkId) return waiters;
+  const sessions = tx.sessions;
+  if (!sessions) return waiters;
+  requireSessionSubscriptionCapability(sessions);
   const allowed: FlowSignalWaiter[] = [];
   for (const waiter of waiters) {
-    const session = await tx.sessions.getByActivationWorkId(
+    const session = await sessions.getByActivationWorkId(
       namespace,
       waiter.workId,
     );
@@ -118,4 +126,19 @@ async function gateSessionOwnedWaiters(
     if (subscribed) allowed.push(waiter);
   }
   return Object.freeze(allowed);
+}
+
+/**
+ * Session storage is all-or-nothing for subscription and activation lookup.
+ * Partial ports must fail closed rather than silently skip fan-out or gating.
+ */
+function requireSessionSubscriptionCapability(
+  sessions: RuntimeSessionStorePort,
+): void {
+  if (
+    typeof sessions.listActiveSubscriptionsForSignal !== "function" ||
+    typeof sessions.getByActivationWorkId !== "function"
+  ) {
+    throw new SessionCapabilityError();
+  }
 }

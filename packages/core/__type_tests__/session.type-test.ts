@@ -10,11 +10,15 @@ import type {
 } from "../src";
 import { agent } from "../src/agent";
 import { flow } from "../src/flow";
+import type { JsonValue } from "../src/storage";
 import type { ThreadSnapshot } from "../src/thread";
 import type {
   SessionForTarget,
+  SessionSubscription,
+  SessionSubscriptionSource,
   SessionTargetInput,
   SessionTargetOutput,
+  SessionTargetProgress,
   SessionTargetResume,
 } from "../src/session/target-types";
 
@@ -130,8 +134,13 @@ expectTypeOf<SessionTargetResume<typeof review>>().toEqualTypeOf<{
   approvedBy: string;
 }>();
 expectTypeOf<SessionTargetResume<typeof support>>().toEqualTypeOf<never>();
-expectTypeOf<WorkProgress>().toEqualTypeOf<
-  import("../src/work/progress").WorkProgress
+expectTypeOf<SessionTargetProgress>().toEqualTypeOf<WorkProgress>();
+// SessionSubscription.match is exported JsonValue (optional).
+declare const subscriptionMatch: SessionSubscription["match"];
+const _subscriptionMatch: JsonValue | undefined = subscriptionMatch;
+void _subscriptionMatch;
+expectTypeOf<SessionSubscriptionSource<typeof review>>().toEqualTypeOf<
+  typeof approval
 >();
 
 const flowCreated = session(review, { key: "document:7" });
@@ -148,12 +157,10 @@ void flowCreated.then(async (handle) => {
   }>();
   const subscription = await handle.subscribe(approval);
   expectTypeOf(subscription.signalId).toEqualTypeOf<string>();
+  const _liveMatch: JsonValue | undefined = subscription.match;
+  void _liveMatch;
   expectTypeOf(handle.subscriptions()).resolves.toMatchTypeOf<
-    readonly {
-      readonly id: string;
-      readonly signalId: string;
-      unsubscribe(): Promise<void>;
-    }[]
+    readonly SessionSubscription[]
   >();
   expectTypeOf(handle.stream).toBeFunction();
   // @ts-expect-error Flow Sessions reject Agent-only model options.
@@ -173,6 +180,8 @@ expectTypeOf<SessionTargetInput<typeof voidFlow>>().toEqualTypeOf<void>();
 expectTypeOf<SessionTargetOutput<typeof voidFlow>>().toEqualTypeOf<"done">();
 expectTypeOf<SessionTargetInput<typeof primitiveFlow>>().toEqualTypeOf<number>();
 expectTypeOf<SessionTargetOutput<typeof primitiveFlow>>().toEqualTypeOf<number>();
+expectTypeOf<SessionSubscriptionSource<typeof voidFlow>>().toEqualTypeOf<never>();
+expectTypeOf<SessionSubscriptionSource<typeof primitiveFlow>>().toEqualTypeOf<never>();
 
 // SessionForTarget retains Flow input/result inference on send/result.
 type VoidSession = SessionForTarget<typeof voidFlow>;

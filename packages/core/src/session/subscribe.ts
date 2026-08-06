@@ -49,7 +49,7 @@ export async function subscribeSession(
     );
   }
   const sessions = runtime.store.sessions;
-  if (!sessions?.upsertSubscription) {
+  if (!sessions) {
     throw subscriptionCapabilityError();
   }
   const signalId = signalSourceId(source);
@@ -63,13 +63,14 @@ export async function subscribeSession(
   )}`;
   const stored = await runtime.store.transact(async (tx) => {
     const port = tx.sessions;
-    if (!port?.upsertSubscription) throw subscriptionCapabilityError();
+    if (!port) throw subscriptionCapabilityError();
     return port.upsertSubscription({
       namespace: runtime.namespace,
       sessionId: record.sessionId,
       subscriptionId,
       signalId,
       ...(match === undefined ? {} : { match }),
+      matchKey,
       now: runtime.now(),
     });
   });
@@ -88,7 +89,7 @@ export async function listSessionSubscriptions(
   record: RuntimeSessionRecord,
 ): Promise<readonly SessionSubscription[]> {
   const sessions = runtime.store.sessions;
-  if (!sessions?.listSubscriptions) {
+  if (!sessions) {
     throw subscriptionCapabilityError();
   }
   const listed = await sessions.listSubscriptions(
@@ -113,7 +114,7 @@ function subscriptionHandle(
   sessionId: string,
   subscriptionId: string,
   signalId: string,
-  match: unknown,
+  match: SessionSubscription["match"],
 ): SessionSubscription {
   return Object.freeze({
     id: subscriptionId,
@@ -121,10 +122,10 @@ function subscriptionHandle(
     ...(match === undefined ? {} : { match }),
     async unsubscribe() {
       const sessions = runtime.store.sessions;
-      if (!sessions?.unsubscribe) throw subscriptionCapabilityError();
+      if (!sessions) throw subscriptionCapabilityError();
       await runtime.store.transact(async (tx) => {
         const port = tx.sessions;
-        if (!port?.unsubscribe) throw subscriptionCapabilityError();
+        if (!port) throw subscriptionCapabilityError();
         await port.unsubscribe(
           runtime.namespace,
           sessionId,

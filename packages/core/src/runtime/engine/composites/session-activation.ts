@@ -5,6 +5,7 @@ import type { JsonValue } from "../../../storage";
 import type { RuntimeStoreTransaction } from "../../store";
 import { initialApplicationWorkState } from "../application-work-state";
 import { appendApplicationWorkStatusEvent } from "../application-work-events";
+import { canonicalRuntimeJson } from "../canonical-json";
 import { wakeEnvelopeForWork } from "../kernel-shared";
 import { sessionTurnIdentity } from "../session-turn-identity";
 import type { RuntimeWorkItem } from "../work";
@@ -132,7 +133,7 @@ async function reserveFlowActivation(
     status: "running",
     effects: identity.effects,
     input,
-    inputDigest: sha256Hex(encoder.encode(canonicalJson(input))),
+    inputDigest: sha256Hex(encoder.encode(canonicalRuntimeJson(input))),
     completedSteps: Object.freeze({}),
     fingerprint: Object.freeze([]),
     pendingSuspends: Object.freeze([]),
@@ -142,17 +143,4 @@ async function reserveFlowActivation(
   await tx.state.putSnapshot(snapshot);
   await tx.outbox.put(wakeEnvelopeForWork(work), { deliverAt: now });
   return work;
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const record = value as Readonly<Record<string, JsonValue | undefined>>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key]!)}`)
-      .join(",")}}`;
-  }
-  if (typeof value === "number" && Object.is(value, -0)) return "-0";
-  return JSON.stringify(value);
 }
