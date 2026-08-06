@@ -34,7 +34,7 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"ingest.source"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"media.operation"}`,
 		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"ad3c8aad2a1a1ba76282feea9342ca5278d7c9ec8ef9fdcadd014ac989dd9e24"}`,
-		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"ef6bdfa47ad770b1d6761a5cf00b37dfdae41a2106f61ccfb10ef8de27bf7f3b"}`,
+		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"e99fdb3c02cd55624f53cc32dfa497e4b07c04eb091d736d5b2aee153da18927"}`,
 		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"c4b9d617926b3bc21dd70607d62f17e06870cac8e7de90fdecd9ac553721816a"}`,
 		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.139.0+crux_native_group3.13"}`,
 	}

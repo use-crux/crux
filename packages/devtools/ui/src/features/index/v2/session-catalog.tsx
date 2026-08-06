@@ -42,6 +42,21 @@ export function IndexSessionDetail({ def }: { def: ViewDef }) {
     facts.call?.kind === "ambiguous"
       ? `ambiguous · ${facts.call.reason}`
       : facts.call?.kind;
+  const usageLabels = facts.usage
+    ? (
+        [
+          "subscribe",
+          "stream",
+          "stats",
+          "close",
+          "kill",
+          "delete",
+          "fork",
+          "clone",
+        ] as const
+      ).filter((method) => facts.usage?.[method])
+    : [];
+  const subscriptions = facts.subscriptions ?? [];
   return (
     <>
       <SectionHead
@@ -64,6 +79,7 @@ export function IndexSessionDetail({ def }: { def: ViewDef }) {
         }}
       >
         <Row label="operation">{facts.operation}</Row>
+        <Row label="target kind">{facts.target?.kind}</Row>
         <Row label="target">
           {facts.targetDefinitionId ? (
             <button
@@ -85,7 +101,56 @@ export function IndexSessionDetail({ def }: { def: ViewDef }) {
         <Row label="target binding">{facts.targetVariable}</Row>
         <Row label="key evidence">{keyLabel}</Row>
         <Row label="call shape">{callLabel}</Row>
+        {usageLabels.length > 0 && (
+          <Row label="observed usage">{usageLabels.join(" · ")}</Row>
+        )}
       </div>
+      {subscriptions.length > 0 && (
+        <>
+          <SectionHead eyebrow="Signal subscriptions" />
+          <div
+            style={{
+              background: T.bgElev,
+              border: `1px solid ${T.border}`,
+              borderRadius: 11,
+              padding: "12px 18px",
+              marginBottom: 22,
+            }}
+          >
+            {subscriptions.map((subscription, index) => {
+              const signalLabel =
+                subscription.signalDefinitionId ??
+                subscription.signalVariable ??
+                "dynamic";
+              return (
+                <Row
+                  key={`${subscription.signalDefinitionId ?? subscription.signalVariable ?? "sub"}-${index}`}
+                  label={subscription.matchKind}
+                >
+                  {subscription.signalDefinitionId ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        select(subscription.signalDefinitionId!)
+                      }
+                      style={{
+                        all: "unset",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 2,
+                      }}
+                    >
+                      {signalLabel}
+                    </button>
+                  ) : (
+                    signalLabel
+                  )}
+                </Row>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }

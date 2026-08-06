@@ -43,6 +43,7 @@ describe("Session devtools read model", () => {
           sessionId: fixture.conversation.id,
           keyHash: expect.any(String),
           targetId: "session-turn-recovery-devtools-bridge",
+          targetKind: "agent",
           threadId: fixture.conversation.thread.id,
         },
         status: {
@@ -52,6 +53,7 @@ describe("Session devtools read model", () => {
           pendingInputs: 0,
           pendingWork: 0,
         },
+        subscriptions: [],
         thread: { revision: expect.any(String) },
         inputs: [
           {

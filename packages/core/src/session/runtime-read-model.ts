@@ -3,13 +3,18 @@
 import { registerInspectableResource } from "../runtime-bridge/resources";
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
 import { sessionStatistics } from "../runtime/engine/session-statistics";
-import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
+import type {
+  RuntimeSessionRecord,
+  RuntimeSessionSubscriptionRecord,
+} from "../runtime/ports/sessions";
 import type { Storage } from "../storage";
 import { readThreadRevision } from "../thread/store/revision";
 import type { ExecutionStats } from "../work";
 import { SessionNotFoundError } from "./errors";
 import { readSessionInspection, readSessionStatus } from "./inspection";
+import { lineageFromRecord } from "./lifecycle-helpers";
 import type {
+  SessionForkLineage,
   SessionInputDeliveryInspection,
   SessionRecoveryDiagnostic,
   SessionStatus,
@@ -24,7 +29,18 @@ export interface SessionRuntimeIdentity {
   readonly sessionId: string;
   readonly keyHash: string;
   readonly targetId: string;
+  /** First-party target kind retained at Session creation. */
+  readonly targetKind: "agent" | "flow";
   readonly threadId: string;
+}
+
+/** Payload-free active Signal subscription projected for operators. */
+export interface SessionRuntimeSubscription {
+  readonly subscriptionId: string;
+  readonly signalId: string;
+  /** Empty string means an unfiltered bare Signal subscription. */
+  readonly matchKey: string;
+  readonly state: "active" | "unsubscribed";
 }
 
 /**
@@ -69,7 +85,10 @@ export interface SessionRuntimeCheckpoint {
  *
  * @remarks Used by the Runtime Bridge and `session.turn` observability.
  * Never includes prompts, inputs, outputs, reasoning, Tool arguments,
- * credentials, sealed request ids, or provider-native objects.
+ * credentials, sealed request ids, or provider-native objects. Active
+ * subscriptions, fork lineage, and bounded ingress statistics come from the
+ * same Session ports and statistics ledger the Runtime already persists — this
+ * projection does not introduce a second source of truth.
  */
 export interface SessionRuntimeReadModel {
   readonly schema: 1;
@@ -80,7 +99,11 @@ export interface SessionRuntimeReadModel {
     readonly inputId: string;
     readonly workId: string;
   };
+  /** Immutable parent boundary when this Session was created by fork/clone. */
+  readonly forkedFrom?: SessionForkLineage;
   readonly thread: { readonly revision: string };
+  /** Active Signal subscriptions when the adapter implements the port. */
+  readonly subscriptions: readonly SessionRuntimeSubscription[];
   readonly inputs: readonly SessionRuntimeInput[];
   readonly checkpoint?: SessionRuntimeCheckpoint;
   readonly recovery?: SessionRecoveryDiagnostic;
@@ -118,11 +141,13 @@ export async function readSessionRuntimeReadModel(
     sessionId,
   );
   if (!record) throw new SessionNotFoundError(sessionId);
-  const [status, inspection, revision] = await Promise.all([
+  const [status, inspection, revision, subscriptions] = await Promise.all([
     readSessionStatus(runtime, sessionId),
     readSessionInspection(runtime, sessionId),
     readThreadRevision(storage, record.threadId),
+    listActiveSubscriptions(runtime, sessionId),
   ]);
+  const lineage = lineageFromRecord(record);
   return Object.freeze({
     schema: 1,
     identity: identity(record),
@@ -136,7 +161,9 @@ export async function readSessionRuntimeReadModel(
           }),
         }
       : {}),
+    ...(lineage ? { forkedFrom: lineage } : {}),
     thread: Object.freeze({ revision }),
+    subscriptions,
     inputs: Object.freeze(
       inspection.inputs.map((input) =>
         Object.freeze({
@@ -171,8 +198,31 @@ function identity(record: RuntimeSessionRecord): SessionRuntimeIdentity {
     sessionId: record.sessionId,
     keyHash: record.keyHash,
     targetId: record.targetId,
+    targetKind: record.targetKind,
     threadId: record.threadId,
   });
+}
+
+async function listActiveSubscriptions(
+  runtime: Pick<ResolvedRuntimeEngine, "namespace" | "store">,
+  sessionId: string,
+): Promise<readonly SessionRuntimeSubscription[]> {
+  const sessions = runtime.store.sessions;
+  if (!sessions?.listSubscriptions) return Object.freeze([]);
+  const listed = await sessions.listSubscriptions(
+    runtime.namespace,
+    sessionId,
+  );
+  return Object.freeze(
+    listed.map((row: RuntimeSessionSubscriptionRecord) =>
+      Object.freeze({
+        subscriptionId: row.subscriptionId,
+        signalId: row.signalId,
+        matchKey: row.matchKey,
+        state: row.state,
+      }),
+    ),
+  );
 }
 
 function checkpoint(

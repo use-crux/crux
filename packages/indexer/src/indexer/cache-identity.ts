@@ -7,13 +7,13 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  * Cache epochs are intentional invalidation levers for compiler behavior that is not captured by
  * source/config hashes or structured dependency identities.
  */
-export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v93";
+export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v94";
 /**
- * Semantic v48 adds Session diagnostic classification and owner-mutation findings.
- * Signal provider/transport binding facts are static-only in this vertical; no
- * semantic epoch bump is required until shared semantic enrichment is added.
+ * Semantic v50 gates Flow Session targets on canonical `flow` export identity
+ * from allowed Crux Flow modules (not bare call names), with Session Flow
+ * targets, subscription lineage, and observed public method usage evidence.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v48";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v50";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

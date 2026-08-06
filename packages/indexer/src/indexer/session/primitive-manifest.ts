@@ -32,5 +32,21 @@ export const sessionPrimitiveContributions = Object.freeze({
       fidelity: "resolved" as const,
       runtimeJoin: true,
     },
+    {
+      type: "session.targets_flow",
+      fromKinds: ["session"] as const,
+      toKinds: ["flow"] as const,
+      presentation: "both" as const,
+      fidelity: "resolved" as const,
+      runtimeJoin: true,
+    },
+    {
+      type: "session.subscribes_to_signal",
+      fromKinds: ["session"] as const,
+      toKinds: ["signal"] as const,
+      presentation: "both" as const,
+      fidelity: "partial" as const,
+      runtimeJoin: true,
+    },
   ],
 });

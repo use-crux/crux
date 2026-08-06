@@ -1,6 +1,6 @@
 ---
-title: Durable Agent Session recipes
-description: Process-local start, PostgreSQL and Convex durability, reconnect, recovery, testing, and Devtools.
+title: Durable Session recipes
+description: Process-local start, Flow Sessions, Signal subscriptions, PostgreSQL and Convex durability, reconnect, recovery, testing, and Devtools.
 ---
 
 These recipes use the current public API only. Replace `nativeModel(...)` with
@@ -68,6 +68,73 @@ const reply = await turn.result();
 ```
 
 Stop the worker and dispose the host in `finally` blocks during tests.
+
+## Flow Session with Signal subscription
+
+```ts
+import { createWorkHost, session } from "@use-crux/core";
+import { flow } from "@use-crux/core/flow";
+import { signal } from "@use-crux/core/signal";
+import { createRuntimeProgram, node } from "@use-crux/core/runtime";
+import { z } from "zod";
+
+export const orderPaid = signal({
+  id: "order.paid",
+  schema: z.object({ orderId: z.string() }),
+});
+
+export const checkout = flow(
+  "checkout",
+  async (scope, input: { orderId: string }) => {
+    // Flow may wait for a Signal; Session subscription gates Session-owned waiters.
+    return { ok: true as const, orderId: input.orderId };
+  },
+);
+
+const program = createRuntimeProgram({
+  targets: [checkout],
+  generationModels: [],
+  transports: [],
+});
+const host = createWorkHost({
+  runtime: node({ namespace: "orders" }),
+  program,
+});
+
+const order = await host.run(() => session(checkout, { key: "order-42" }));
+await order.subscribe(orderPaid.when({ orderId: "order-42" }));
+const turn = await order.send({ orderId: "order-42" });
+const result = await turn.result();
+```
+
+List and deactivate with `order.subscriptions()` and
+`subscription.unsubscribe()`. Close drains represented work and deactivates
+subscriptions at the barrier: `await order.close()`.
+
+## Lifecycle and stream reconnect
+
+```ts
+const conversation = await host.run(() =>
+  session(support, { key: "customer-42" }),
+);
+
+let lastCursor: string | undefined;
+for await (const event of conversation.stream()) {
+  lastCursor = event.cursor;
+  if (event.type === "ingress.accepted") {
+    // safe input id + cursor only
+  }
+}
+
+// later reconnect
+for await (const event of conversation.stream({ after: lastCursor })) {
+  // resumes strictly after lastCursor, or snapshot + earliest retained if expired
+}
+
+const child = await conversation.fork();
+await conversation.close();
+await conversation.delete(); // only after close/kill
+```
 
 ## PostgreSQL durable deployment
 
@@ -246,9 +313,9 @@ Do not use sleeps, synthetic success labels, or a second Session worker.
 
 | Surface | What you see | What you never see |
 | --- | --- | --- |
-| Index Catalog | Authored `session` / `getSession` calls, target, literal/dynamic key, identity | Runtime key hashes as private lookup material |
-| Runs / `session.turn` | State, cursors, Work lineage, Thread revision, checkpoint/recovery, stats | Prompts, inputs, outputs, reasoning, Tool args, credentials |
-| Runtime Bridge `SessionRuntimeReadModel` | Closed JSON-safe projection for operators | Sealed request ids, provider-native objects |
+| Index Catalog | Authored `session` / `getSession` calls, Agent/Flow target, literal/dynamic key, identity, observed subscribe/stream/stats/lifecycle usage, Signal subscription lineage | Runtime key hashes as private lookup material; match payloads |
+| Runs / `session.turn` | State, cursors, Work lineage, Thread revision, fork lineage, active subscriptions, checkpoint/recovery, Work + ingress stats | Prompts, inputs, outputs, reasoning, Tool args, credentials |
+| Runtime Bridge `SessionRuntimeReadModel` | Closed JSON-safe projection for operators (same ports/ledger as Runtime) | Sealed request ids, provider-native objects |
 
 Evidence opens only when an observability sink is active. Production OTel and
 Devtools reuse the same privacy boundary; there is no alternate Session
@@ -257,6 +324,7 @@ telemetry endpoint or payload viewer.
 ## Related
 
 - [Progressive guide](/docs/guides/durable-execution/sessions)
+- [Activation, Signals, and lifecycle](/docs/guides/durable-execution/sessions/activation-and-lifecycle)
 - [Session API reference](/docs/reference/crux-core/session)
 - [Node execution worker](/docs/guides/durable-execution/node)
 - [PostgreSQL package reference](/docs/reference/postgres)

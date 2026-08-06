@@ -1,10 +1,10 @@
 ---
-title: Durable Agent Sessions
-description: Exact session, getSession, handle, inspection, stats, Runtime read model, and capability contracts.
+title: Durable Sessions
+description: Exact session, getSession, handle, subscriptions, streams, lifecycle, inspection, stats, and Runtime read model contracts.
 ---
 
-Durable Agent Sessions are keyed, restart-safe owners for one Agent
-conversation. Import from the package root or the focused subpath:
+Durable Sessions are keyed, restart-safe owners for one **Agent** or one
+exported **Flow**. Import from the package root or the focused subpath:
 
 ```ts
 import {
@@ -12,15 +12,25 @@ import {
   getSession,
   type Session,
   type SessionFor,
+  type SessionForTarget,
   type SessionOptions,
+  type FlowSessionOptions,
   type SessionTurnHandle,
   type SessionStatus,
   type SessionInspection,
+  type SessionSubscription,
+  type SessionEvent,
+  type SessionStreamOptions,
   type SessionRuntimeReadModel,
   SessionIdentityConflictError,
   SessionNotFoundError,
   SessionInputError,
   SessionCapabilityError,
+  SessionClosedError,
+  SessionDeletedError,
+  SessionLifecycleError,
+  SessionNotClosedError,
+  SessionTombstonedError,
   GenerationModelBindingError,
   GenerationModelNotStaticError,
   GenerationModelCapabilityError,
@@ -30,39 +40,46 @@ import {
 import { session, getSession } from "@use-crux/core/session";
 ```
 
-This page documents only the shipped Agent Session surface. It does not cover
-lifecycle close/kill/delete/fork, Signal subscriptions into Sessions, Flow
-Sessions, Channels, or transports.
-
 ## `session(target, options)`
 
 ```ts
+// Agent
 function session<TAgent extends AnyAgent, TModel extends GenerationModel | undefined>(
   target: TAgent,
   options: SessionOptions<TAgent, TModel> & SessionModelGuard<TAgent, TModel>,
-): Promise<SessionFor<TAgent>>;
+): Promise<SessionForTarget<TAgent>>;
+
+// Flow
+function session<TFlow extends AnyFlowTarget>(
+  target: TFlow,
+  options: FlowSessionOptions,
+): Promise<SessionForTarget<TFlow>>;
 ```
 
 Create or reopen one inert keyed Session for `target`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `options.key` | yes | Non-empty caller key bound to one Agent within the active Runtime namespace |
-| `options.model` | when Agent has no bound model | Immutable Session-level `GenerationModel` override |
+| `options.key` | yes | Non-empty caller key bound to one target within the active Runtime namespace |
+| `options.model` | Agent only, when Agent has no bound model | Immutable Session-level `GenerationModel` override |
 
 **Promise timing:** resolves after durable preparation and Thread-owner
-registration complete. It does not execute the Agent.
+registration complete. It does not execute the target.
 
-**Throws before Session / Work / Thread mutation:**
+**Throws before Session / Work / Thread mutation (Agent):**
 
 | Error | Code |
 | --- | --- |
 | `SessionIdentityConflictError` | `SESSION_IDENTITY_CONFLICT` |
 | `SessionCapabilityError` | `SESSION_UNSUPPORTED` |
+| `SessionTombstonedError` | `SESSION_TOMBSTONED` |
 | `GenerationModelBindingError` | `GENERATION_MODEL_BINDING_MISSING` |
 | `GenerationModelNotStaticError` | `GENERATION_MODEL_NOT_STATIC` |
 | `GenerationModelCapabilityError` | `GENERATION_CAPABILITY_MISSING` |
 | `TypeError` | empty key |
+
+Flow Sessions also reject when the Flow is not exported by the bound
+Runtime program (`TARGET_NOT_EXPORTED`).
 
 Requires an active Work host (`createWorkHost(...).run(...)`) and Runtime store
 with Sessions support, plus a configured linearizable Thread `RecordStore`.
@@ -70,22 +87,18 @@ with Sessions support, plus a configured linearizable Thread `RecordStore`.
 ## `getSession(target, key)`
 
 ```ts
-function getSession<TAgent extends AnyAgent>(
-  target: TAgent,
+function getSession<TTarget extends SessionTarget>(
+  target: TTarget,
   key: string,
-): Promise<SessionFor<TAgent>>;
+): Promise<SessionForTarget<TTarget>>;
 ```
 
 Retrieve an existing Session without creating one. Repairs interrupted owner
 preparation when a compatible record exists.
 
-**Throws:** `SessionNotFoundError`, `SessionIdentityConflictError`,
-`SessionCapabilityError`, `TypeError` (empty key), and model capability errors
-when the pinned program model cannot execute the Agent.
-
 ## Types
 
-### `SessionOptions` / `SessionModelGuard`
+### `SessionOptions` / `FlowSessionOptions` / `SessionModelGuard`
 
 ```ts
 type SessionOptions<A extends AnyAgent, M extends GenerationModel | undefined> = {
@@ -94,18 +107,23 @@ type SessionOptions<A extends AnyAgent, M extends GenerationModel | undefined> =
   | { readonly model?: M } // when Agent already has a GenerationModel
   | { readonly model: M } // when Agent has no GenerationModel
 );
+
+type FlowSessionOptions = {
+  readonly key: string;
+};
 ```
 
-`SessionModelGuard` is a compile-time compatibility check. Exact missing
-language facets become a false type; broad capability evidence remains accepted
-for runtime preflight.
+`SessionModelGuard` is a compile-time Agent model compatibility check. Exact
+missing language facets become a false type; broad capability evidence remains
+accepted for runtime preflight.
 
-### `Session<TInput, TOutput>` / `SessionFor<TAgent>`
+### `Session<TInput, TOutput>` / `SessionForTarget`
 
 ```ts
 interface Session<TInput, TOutput = unknown> {
   readonly id: string;
   readonly thread: SessionThreadView;
+  readonly forkedFrom?: SessionForkLineage;
   send(input: TInput): Promise<SessionTurnHandle<TOutput>>;
   sendMany(
     inputs: readonly TInput[],
@@ -113,13 +131,23 @@ interface Session<TInput, TOutput = unknown> {
   status(): Promise<SessionStatus>;
   inspect(): Promise<SessionInspection>;
   stats(): Promise<ExecutionStats>;
+  stream(options?: SessionStreamOptions): AsyncIterable<SessionEvent>;
+  close(): Promise<void>;
+  kill(): Promise<void>;
+  delete(): Promise<void>;
+  fork(): Promise<this>;
+  clone(): Promise<this>;
+  forks(): Promise<readonly SessionForkSummary[]>;
 }
 
-type SessionFor<TAgent extends AnyAgent> = Session<
-  InferAgentInput<TAgent>,
-  InferAgentOutput<TAgent>
->;
+// Agent and Flow handles also carry:
+//   targetKind: "agent" | "flow"
+//   subscribe / subscriptions (Signal surface)
 ```
+
+`SessionForTarget<T>` retains exact input/output inference for Agent Prompt
+schemas and Flow definition types. Prefer it over `SessionFor` when the target
+may be a Flow.
 
 ### `SessionThreadView`
 
@@ -131,7 +159,8 @@ interface SessionThreadView {
 ```
 
 Read-only owner-scoped Thread view. Reads only finalized Session heads. There
-is no public append/edit/delete surface on this view.
+is no public append/edit/delete surface on this view. After Session delete
+unregisters the owner, `read()` returns an empty owner path without resurrection.
 
 ### Input and turn handles
 
@@ -158,11 +187,59 @@ interface SessionTurnHandle<TOutput> extends SessionInputHandle {
 Invalid members fail the entire batch with `SESSION_INPUT_INVALID` before any
 cursor advances.
 
+### Signal subscriptions
+
+```ts
+interface SessionSubscription {
+  readonly id: string;
+  readonly signalId: string;
+  readonly matchKey: string;
+  readonly state: "active" | "unsubscribed";
+  unsubscribe(): Promise<void>;
+}
+
+// on Session handles that include the subscription surface:
+subscribe(source: Signal | MatchFilter): Promise<SessionSubscription>;
+subscriptions(): Promise<readonly SessionSubscription[]>;
+```
+
+Idempotent by Session + signal id + canonical match key. Predicate Signal views
+are rejected; use bare Signals or `signal.when({ ...match })`.
+
+### Streams
+
+```ts
+interface SessionStreamOptions {
+  readonly after?: string;
+}
+
+type SessionEvent =
+  | { type: "session.snapshot"; reason: "initial" | "cursor-expired"; status: SessionStatus; /* … */ }
+  | { type: "session.status"; status: SessionStatus; /* … */ }
+  | { type: "ingress.accepted"; ingress: SessionIngressSummary; /* … */ }
+  | { type: "ingress.delivered"; ingress: SessionIngressSummary; stepIndex: number; workId?: string; /* … */ };
+```
+
+Without `after`, emits `session.snapshot` (`initial`) then retained history.
+A valid `after` resumes strictly after that cursor. An expired/unknown `after`
+emits `session.snapshot` (`cursor-expired`) then continues from the earliest
+retained event. Closed Sessions end after the terminal `session.status` event.
+
+### Lifecycle
+
+| Method | Semantics |
+| --- | --- |
+| `close()` | Joinable ordered barrier; seals send/subscribe; deactivates subscriptions; drains represented pending obligations |
+| `kill()` | Fenced fast terminalization; revokes commit authority; projects as closed |
+| `delete()` | After closed/killed only; tombstones key; unregisters Thread owner |
+| `fork()` / `clone()` | New owner/head with immutable lineage; never aliases mutable head |
+| `forks()` | Direct children created by fork/clone |
+
 ### `SessionStatus`
 
 ```ts
 interface SessionStatus {
-  readonly state: "parked" | "running" | "blocked";
+  readonly state: "parked" | "running" | "blocked" | "closing" | "closed";
   readonly acceptedCursor?: string;
   readonly processedCursor?: string;
   readonly pendingInputs: number;
@@ -170,7 +247,7 @@ interface SessionStatus {
 }
 ```
 
-Detached compact snapshot. Lifecycle closure APIs are outside this surface.
+Killed Sessions project as `closed`. Deleted Sessions reject status reads.
 
 ### `SessionInspection`
 
@@ -185,42 +262,6 @@ interface SessionInspection {
   readonly recovery?: SessionRecoveryDiagnostic;
   readonly coverage: { readonly inputs: "complete" | "truncated"; readonly limit: 64 };
 }
-
-interface SessionInputInspection {
-  readonly id: string;
-  readonly cursor: string;
-  readonly state: "accepted" | "queued" | "running" | "completed" | "blocked";
-  readonly workId?: string;
-  readonly checkpointPrepared: boolean;
-  readonly delivery?: SessionInputDeliveryInspection;
-}
-
-interface SessionInputDeliveryInspection {
-  readonly stepIndex: number;
-  readonly reason: "initial" | "tool-result" | "validation-retry";
-  readonly deliveredAt: Date;
-}
-
-interface SessionCheckpointInspection {
-  readonly inputId: string;
-  readonly workId: string;
-  readonly checkpointedAt: Date;
-  readonly thread: {
-    readonly revision: string;
-    readonly range: string;
-    readonly offset: number;
-    readonly length: number;
-    readonly start?: string;
-    readonly end?: string;
-  };
-  readonly requestIds: readonly string[];
-  readonly requestCoverage: "complete" | "truncated";
-}
-
-interface SessionRecoveryDiagnostic {
-  readonly code: "SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE";
-  readonly nextStep: string;
-}
 ```
 
 Public handle inspection may list sealed request identities for operator
@@ -229,11 +270,13 @@ correlation. Runtime Bridge serialization replaces that list with a bounded
 
 ### `stats()`
 
-Returns the shared [`ExecutionStats`](/docs/reference/crux-core/work) aggregate
-for the complete addressed Session lifetime (usage, timing, model calls, tools,
-child work, failures, approvals, lifecycle).
+Returns the shared [`ExecutionStats`](/docs/reference/crux-core/work) /
+`ScopeStats` aggregate for the complete addressed Session lifetime, including
+exact ingress totals under `inputs`
+(`accepted` / `deduplicated` / `delivered` / `resumed` / `dropped`) with
+first-64 identity attribution.
 
-## GenerationModel precedence
+## GenerationModel precedence (Agent only)
 
 1. Optional immutable Session `model` override supplied to `session()`.
 2. Otherwise the Agent's bound `model`.
@@ -256,12 +299,15 @@ interface SessionRuntimeReadModel {
     readonly sessionId: string;
     readonly keyHash: string;
     readonly targetId: string;
+    readonly targetKind: "agent" | "flow";
     readonly threadId: string;
   };
   readonly status: SessionStatus;
   readonly wakePending: boolean;
   readonly activation?: { readonly inputId: string; readonly workId: string };
+  readonly forkedFrom?: SessionForkLineage;
   readonly thread: { readonly revision: string };
+  readonly subscriptions: readonly SessionRuntimeSubscription[];
   readonly inputs: readonly SessionRuntimeInput[];
   readonly checkpoint?: SessionRuntimeCheckpoint;
   readonly recovery?: SessionRecoveryDiagnostic;
@@ -271,9 +317,10 @@ interface SessionRuntimeReadModel {
 ```
 
 Dates serialize as ISO strings. Checkpoints expose `requestCount`, not sealed
-request ids. The projection never includes prompts, inputs, outputs, reasoning,
-Tool arguments, credentials, or provider-native objects. Evidence construction
-opens only when an observability sink is active.
+request ids. Subscriptions, lineage, and statistics come from the same Session
+ports and ledger the Runtime already persists — not a second source of truth.
+The projection never includes prompts, inputs, outputs, reasoning, Tool
+arguments, credentials, or provider-native objects.
 
 ## Capability and store requirements
 
@@ -282,7 +329,9 @@ opens only when an observability sink is active.
 | Runtime store with Sessions port | `SESSION_UNSUPPORTED` |
 | Active Work host / Runtime binding | host/runtime errors from Work admission |
 | Linearizable Thread `RecordStore` | Thread owner registration / commit failures |
-| Declared generation models | `GENERATION_MODEL_*` codes above |
+| Declared generation models (Agent) | `GENERATION_MODEL_*` codes above |
+| Exported Flow target (Flow) | `TARGET_NOT_EXPORTED` |
+| Subscription port when using `subscribe` | `SESSION_UNSUPPORTED` / capability error |
 
 PostgreSQL deployments must initialize Runtime storage and
 `postgresRecordStore` against the same database. Convex deployments use the
@@ -296,7 +345,9 @@ import { runSessionConformanceTests } from "@use-crux/core/runtime/testing";
 
 Provider-neutral factory used by memory, PostgreSQL, and Convex adapters. The
 harness injects only setup, reconstruction, fault, attempt, and observation
-seams; every law calls public Session, Thread, and Work APIs.
+seams; every law calls public Session, Thread, and Work APIs. Laws cover
+identity, ordering, subscriptions, lifecycle, fork lineage, stream cursors, and
+truthful capability reporting.
 
 ## Errors
 
@@ -306,6 +357,9 @@ seams; every law calls public Session, Thread, and Work APIs.
 | [`SESSION_NOT_FOUND`](/docs/errors/SESSION_NOT_FOUND) | `SessionNotFoundError` |
 | [`SESSION_INPUT_INVALID`](/docs/errors/SESSION_INPUT_INVALID) | `SessionInputError` |
 | [`SESSION_UNSUPPORTED`](/docs/errors/SESSION_UNSUPPORTED) | `SessionCapabilityError` |
+| `SESSION_TOMBSTONED` | `SessionTombstonedError` |
+| `SESSION_CLOSED` / lifecycle | `SessionClosedError`, `SessionLifecycleError`, `SessionNotClosedError` |
+| `SESSION_DELETED` | `SessionDeletedError` |
 | [`GENERATION_MODEL_BINDING_MISSING`](/docs/errors/GENERATION_MODEL_BINDING_MISSING) | `GenerationModelBindingError` |
 | [`GENERATION_MODEL_NOT_STATIC`](/docs/errors/GENERATION_MODEL_NOT_STATIC) | `GenerationModelNotStaticError` |
 | [`GENERATION_CAPABILITY_MISSING`](/docs/errors/GENERATION_CAPABILITY_MISSING) | `GenerationModelCapabilityError` |
@@ -314,7 +368,8 @@ seams; every law calls public Session, Thread, and Work APIs.
 ## Related
 
 - [Progressive guide](/docs/guides/durable-execution/sessions)
+- [Activation, Signals, and lifecycle](/docs/guides/durable-execution/sessions/activation-and-lifecycle)
 - [Recipes](/docs/guides/durable-execution/sessions/recipes)
 - [GenerationModel](/docs/reference/crux-core/generation-model)
+- [Signals](/docs/reference/crux-core/signal)
 - [Application Work](/docs/reference/crux-core/work)
-- [Runtime program and worker](/docs/reference/crux-core/runtime-worker)
