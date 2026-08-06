@@ -6,6 +6,7 @@ export type {
   SessionRuntimeIdentity,
   SessionRuntimeInput,
   SessionRuntimeReadModel,
+  SessionRuntimeSubscription,
 } from "./runtime-read-model";
 export {
   GenerationModelBindingError,

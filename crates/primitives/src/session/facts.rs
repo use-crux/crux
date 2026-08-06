@@ -14,6 +14,8 @@ const AGENT_MODULES: &[&str] = &[
     "@use-crux/convex/agent",
 ];
 
+const FLOW_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/flow"];
+
 /// Projects authored Session construction and keyed lookup evidence.
 pub(crate) fn session_facts(
     context: &PrimitiveContext<'_>,
@@ -31,14 +33,13 @@ pub(crate) fn session_facts(
     let target_value = parts.args.first()?;
     let target_variable = target_reference_name(target_value);
     let target = context.resolve_record_source(Some(target_value))?;
-    let target_definition_id = target.as_ref().and_then(agent_definition_id);
+    let resolved_target = target.as_ref().and_then(session_target_definition);
     let key = session_key(operation, parts.args.get(1));
-    let target_name = target_definition_id
-        .as_deref()
-        .and_then(|id| id.strip_prefix("agent:"))
-        .or(target_variable.as_deref())
-        .map(str::to_string);
-    let stable = target_definition_id.is_some() && key.is_some();
+    let target_name = resolved_target
+        .as_ref()
+        .map(|resolved| resolved.name.clone())
+        .or_else(|| target_variable.clone());
+    let stable = resolved_target.is_some() && key.is_some();
     let authored_identity = if stable {
         format!("{}:{}", target_name.as_deref()?, key.as_deref()?)
     } else {
@@ -61,17 +62,17 @@ pub(crate) fn session_facts(
             Value::String(target_variable.clone()),
         );
     }
-    if let Some(target_definition_id) = &target_definition_id {
+    if let Some(resolved) = &resolved_target {
         session_metadata.insert(
             "targetDefinitionId".to_string(),
-            Value::String(target_definition_id.clone()),
+            Value::String(resolved.definition_id.clone()),
         );
     }
     session_metadata.insert(
         "target".to_string(),
         json!({
-            "kind": if target_definition_id.is_some() {
-                "agent"
+            "kind": if let Some(resolved) = &resolved_target {
+                resolved.kind
             } else if matches!(target_value, StaticSyntaxValue::Identifier { .. } | StaticSyntaxValue::PropertyAccess { .. }) {
                 "unresolved"
             } else {
@@ -103,14 +104,21 @@ pub(crate) fn session_facts(
     parts.add_direct_export_evidence(&mut metadata);
     metadata.insert("facts".to_string(), Value::Object(session_metadata));
 
-    let references = target_variable
-        .map(|to_variable| {
-            vec![json!({
-                "type": "session.targets_agent",
-                "toVariable": to_variable,
-            })]
-        })
-        .unwrap_or_default();
+    let references = if let Some(resolved) = &resolved_target {
+        vec![json!({
+            "type": resolved.relation_type,
+            "toId": resolved.definition_id,
+        })]
+    } else {
+        target_variable
+            .map(|to_variable| {
+                vec![json!({
+                    "type": "session.targets_agent",
+                    "toVariable": to_variable,
+                })]
+            })
+            .unwrap_or_default()
+    };
     let source_refs = target
         .map(|resolved| {
             vec![source_ref(
@@ -198,28 +206,58 @@ fn session_call(
     }
 }
 
-fn agent_definition_id(resolved: &crate::context::ResolvedSource<'_>) -> Option<String> {
+struct ResolvedSessionTarget {
+    kind: &'static str,
+    definition_id: String,
+    name: String,
+    relation_type: &'static str,
+}
+
+fn session_target_definition(
+    resolved: &crate::context::ResolvedSource<'_>,
+) -> Option<ResolvedSessionTarget> {
     let StaticSyntaxValue::Call { callee, args, .. } = resolved.value else {
         return None;
     };
     let producer = callee.imported_name.as_deref().unwrap_or(&callee.name);
-    if !matches!(producer, "agent" | "convexAgent")
-        || !callee
-            .module_specifier
-            .as_deref()
-            .is_some_and(|module| AGENT_MODULES.contains(&module))
-    {
-        return None;
+    let module = callee.module_specifier.as_deref()?;
+
+    if matches!(producer, "agent" | "convexAgent") && AGENT_MODULES.contains(&module) {
+        let explicit_id = args
+            .first()
+            .and_then(|config| direct_string_property(config, "id"));
+        let name = explicit_id
+            .clone()
+            .unwrap_or_else(|| resolved.definition_symbol.clone());
+        return Some(ResolvedSessionTarget {
+            kind: "agent",
+            definition_id: format!("agent:{}", safe_id(&name)),
+            name,
+            relation_type: "session.targets_agent",
+        });
     }
-    let explicit_id = args
-        .first()
-        .and_then(|config| direct_string_property(config, "id"));
-    Some(format!(
-        "agent:{}",
-        safe_id(
-            explicit_id
-                .as_deref()
-                .unwrap_or(&resolved.definition_symbol)
-        )
-    ))
+
+    if matches!(producer, "flow" | "cruxFlow") && FLOW_MODULES.contains(&module) {
+        // Public API: flow(name, handler) or flow(name, options, handler).
+        let string_name = args.first().and_then(|value| match value {
+            StaticSyntaxValue::Literal {
+                value: LiteralValue::String(value),
+            } => Some(value.clone()),
+            _ => None,
+        });
+        let object_name = args
+            .first()
+            .and_then(|config| direct_string_property(config, "name"));
+        let name = string_name
+            .or(object_name)
+            .unwrap_or_else(|| resolved.definition_symbol.clone());
+        return Some(ResolvedSessionTarget {
+            kind: "flow",
+            definition_id: format!("flow:{}", safe_id(&name)),
+            name,
+            relation_type: "session.targets_flow",
+        });
+    }
+
+    None
 }

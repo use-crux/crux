@@ -11,12 +11,15 @@ import {
   staticReferenceName,
   staticStringValue,
 } from "../static-index/syntax/record/value";
+import { flowModules as flowModuleList } from "./flow-modules";
 
 const agentModules = new Set([
   "@use-crux/core/agent",
   "@use-crux/convex",
   "@use-crux/convex/agent",
 ]);
+
+const flowModules = new Set<string>(flowModuleList);
 
 /** Projects one authored Session construction or keyed lookup. */
 export function extractSessionStaticFacts(ctx: ExtractContext) {
@@ -34,18 +37,19 @@ export function extractSessionStaticFacts(ctx: ExtractContext) {
     ...(native.recordsByFile ? { recordsByFile: native.recordsByFile } : {}),
   });
   const target = resolver.resolveValue(targetValue);
-  const targetDefinitionId = targetAgentDefinitionId(target, ctx);
+  const resolvedTarget = resolveSessionTarget(target, ctx);
   const key = sessionKey(operation, native.match.args, native.initializers);
-  const targetForm = targetDefinitionId
-    ? ({ kind: "agent" } as const)
+  const targetForm = resolvedTarget
+    ? ({ kind: resolvedTarget.kind } as const)
     : targetValue?.kind === "identifier" ||
         targetValue?.kind === "property-access"
       ? ({ kind: "unresolved" } as const)
       : ({ kind: "dynamic" } as const);
   const call = sessionCall(operation, native.match.args, resolver);
   const targetName =
-    targetDefinitionId?.slice("agent:".length) ?? targetVariable;
-  const stableIdentity = Boolean(targetDefinitionId && key);
+    resolvedTarget?.definitionId.split(":").slice(1).join(":") ??
+    targetVariable;
+  const stableIdentity = Boolean(resolvedTarget && key);
   const authoredIdentity = stableIdentity
     ? `${targetName}:${key}`
     : `${native.record.relativePath}:${native.match.source.line}:${native.match.source.column}`;
@@ -54,18 +58,25 @@ export function extractSessionStaticFacts(ctx: ExtractContext) {
     kind: "session",
     operation,
     ...(targetVariable ? { targetVariable } : {}),
-    ...(targetDefinitionId ? { targetDefinitionId } : {}),
+    ...(resolvedTarget ? { targetDefinitionId: resolvedTarget.definitionId } : {}),
     target: targetForm,
     key:
       key !== undefined ? { kind: "literal", value: key } : { kind: "dynamic" },
     identity: stableIdentity ? "static" : "partial",
     call,
   };
-  const references = targetDefinitionId
-    ? [ctx.ref.id("session.targets_agent", targetDefinitionId)]
-    : targetVariable
-      ? [ctx.ref.variable("session.targets_agent", targetVariable)]
-      : [];
+  const targetRelation =
+    resolvedTarget?.kind === "agent"
+      ? "session.targets_agent"
+      : resolvedTarget?.kind === "flow"
+        ? "session.targets_flow"
+        : undefined;
+  const references =
+    resolvedTarget && targetRelation
+      ? [ctx.ref.id(targetRelation, resolvedTarget.definitionId)]
+      : targetVariable
+        ? [ctx.ref.variable("session.targets_agent", targetVariable)]
+        : [];
 
   return facts({
     definitions: [
@@ -136,26 +147,52 @@ function sessionKey(
   );
 }
 
-function targetAgentDefinitionId(
+function resolveSessionTarget(
   target: ResolvedStaticRecordSource | undefined,
   ctx: ExtractContext,
-): string | undefined {
+): { kind: "agent" | "flow"; definitionId: string } | undefined {
   if (target?.value.kind !== "call") return undefined;
   const callee = target.value.callee.importedName ?? target.value.callee.name;
-  if (
-    (callee !== "agent" && callee !== "convexAgent") ||
-    !target.value.callee.moduleSpecifier ||
-    !agentModules.has(target.value.callee.moduleSpecifier)
-  )
-    return undefined;
+  const moduleSpecifier = target.value.callee.moduleSpecifier;
+  if (!moduleSpecifier) return undefined;
   const config = target.value.args[0];
-  const explicitId =
-    config?.kind === "object"
-      ? staticStringValue(
-          staticObjectPropertyValue(config, "id"),
-          target.initializers,
-        )
+
+  if (
+    (callee === "agent" || callee === "convexAgent") &&
+    agentModules.has(moduleSpecifier)
+  ) {
+    const explicitId =
+      config?.kind === "object"
+        ? staticStringValue(
+            staticObjectPropertyValue(config, "id"),
+            target.initializers,
+          )
+        : undefined;
+    const identity = explicitId ?? target.symbol.split(".").at(-1);
+    return identity
+      ? { kind: "agent", definitionId: `agent:${ctx.source.safeId(identity)}` }
       : undefined;
-  const identity = explicitId ?? target.symbol.split(".").at(-1);
-  return identity ? `agent:${ctx.source.safeId(identity)}` : undefined;
+  }
+
+  if (
+    (callee === "flow" || callee === "cruxFlow") &&
+    flowModules.has(moduleSpecifier)
+  ) {
+    // Public API is flow(name, handler) or flow(name, options, handler).
+    const stringName = staticStringValue(config, target.initializers);
+    const objectName =
+      config?.kind === "object"
+        ? staticStringValue(
+            staticObjectPropertyValue(config, "name"),
+            target.initializers,
+          )
+        : undefined;
+    const identity =
+      stringName ?? objectName ?? target.symbol.split(".").at(-1);
+    return identity
+      ? { kind: "flow", definitionId: `flow:${ctx.source.safeId(identity)}` }
+      : undefined;
+  }
+
+  return undefined;
 }

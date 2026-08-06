@@ -5,6 +5,8 @@ import type {
   ProjectRelation,
   ProjectSourceRef,
   SessionFacts,
+  SessionSubscriptionFacts,
+  SessionUsageFacts,
 } from "@use-crux/core/project-index";
 import { safeId } from "../definitions";
 import { semanticDescendants } from "../embedding/semantic-values";
@@ -25,6 +27,12 @@ import {
   semanticSourceForNode,
   semanticVariableNameForNode,
 } from "../semantic/syntax-readers";
+import { resolveFlowSessionTarget } from "./semantic-flow-target";
+import {
+  collectSessionBindingUsage,
+  foldUsage,
+  mergeSessionUsage,
+} from "./semantic-usage";
 
 type Node = SemanticAnalyzerNode<SemanticAnalyzerView>;
 
@@ -41,7 +49,7 @@ export interface SemanticSessionFactsResult {
   readonly lintFindings: readonly IndexLintFinding[];
 }
 
-/** Projects Session identity and Agent target evidence through the shared analyzer. */
+/** Projects Session identity, Agent/Flow targets, and linked usage evidence. */
 export function semanticSessionFacts(
   root: string,
   sourceFiles: readonly SemanticAnalyzerSourceFile<SemanticAnalyzerView>[],
@@ -51,6 +59,7 @@ export function semanticSessionFacts(
   const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = [];
   const relations: ProjectRelation[] = [];
   const sessionBindings = new Map<string, string>();
+  const factsById = new Map<string, SessionFacts>();
 
   for (const call of semanticDescendants(sourceFiles, view)) {
     if (!view.syntax.isKind(call, "callExpression")) continue;
@@ -59,18 +68,23 @@ export function semanticSessionFacts(
     const args = view.syntax.callArguments(call);
     const targetExpression = args[0];
     if (!targetExpression) continue;
-    const target = semanticTargetForExpression(targetExpression, view);
+    const target =
+      semanticTargetForExpression(targetExpression, view) ??
+      resolveFlowSessionTarget(targetExpression, view);
     const key = sessionKey(operation, args[1], view);
     const targetForm: SessionFacts["target"] =
-      target?.kind === "agent"
-        ? { kind: "agent" }
+      target?.kind === "agent" || target?.kind === "flow"
+        ? { kind: target.kind }
         : semanticIsResolvableSourceExpression(targetExpression, view.syntax)
           ? { kind: "unresolved" }
           : { kind: "dynamic" };
     const source = semanticSourceForNode(call, view.syntax);
-    const stable = target?.kind === "agent" && key !== undefined;
+    const stable =
+      (target?.kind === "agent" || target?.kind === "flow") && key !== undefined;
     const targetName =
-      target?.kind === "agent" ? target.id.slice("agent:".length) : undefined;
+      target?.kind === "agent" || target?.kind === "flow"
+        ? target.id.split(":").slice(1).join(":")
+        : undefined;
     const authoredIdentity = stable
       ? `${targetName}:${key}`
       : `${relative(root, source.file)}:${source.line}:${source.column}`;
@@ -79,7 +93,9 @@ export function semanticSessionFacts(
       kind: "session",
       operation,
       targetVariable: view.syntax.text(targetExpression),
-      ...(target?.kind === "agent" ? { targetDefinitionId: target.id } : {}),
+      ...(target?.kind === "agent" || target?.kind === "flow"
+        ? { targetDefinitionId: target.id }
+        : {}),
       target: targetForm,
       key:
         key !== undefined
@@ -88,6 +104,7 @@ export function semanticSessionFacts(
       identity: stable ? "static" : "partial",
       call: sessionCall(operation, args, view),
     };
+    factsById.set(definitionId, facts);
     definitions.push({
       id: definitionId,
       kind: "session",
@@ -101,10 +118,13 @@ export function semanticSessionFacts(
     });
     const binding = semanticVariableNameForNode(call, view.syntax);
     if (binding) sessionBindings.set(binding, definitionId);
-    if (target?.kind === "agent") {
+    if (target?.kind === "agent" || target?.kind === "flow") {
       relations.push(
         projectRelation({
-          type: "session.targets_agent",
+          type:
+            target.kind === "agent"
+              ? "session.targets_agent"
+              : "session.targets_flow",
           from: definitionId,
           to: target.id,
           fidelity: "resolved",
@@ -122,18 +142,60 @@ export function semanticSessionFacts(
     if (ref) sourceRefs.push({ definitionId, ref });
   }
 
-  const lintFindings = semanticDescendants(sourceFiles, view).flatMap(
-    (node) => {
-      if (!view.syntax.isKind(node, "callExpression")) return [];
-      const mutation = sessionThreadMutation(node, sessionBindings, view);
-      return mutation ? [mutation] : [];
-    },
-  );
+  const usageById = new Map<
+    string,
+    {
+      usage: SessionUsageFacts;
+      subscriptions: SessionSubscriptionFacts[];
+    }
+  >();
+  const lintFindings: IndexLintFinding[] = [];
+
+  for (const node of semanticDescendants(sourceFiles, view)) {
+    if (!view.syntax.isKind(node, "callExpression")) continue;
+    const collected = collectSessionBindingUsage(node, sessionBindings, view);
+    if (!collected) continue;
+    lintFindings.push(...collected.lintFindings);
+    relations.push(...collected.relations);
+    sourceRefs.push(...collected.sourceRefs);
+    // Map usage back by finding which definition it belonged to via relations/source.
+    // Subscription relations already carry `from`; method-only usage needs binding lookup.
+    const definitionId =
+      collected.relations[0]?.from ??
+      collected.lintFindings[0]?.primaryDefinitionId ??
+      usageDefinitionFromCall(node, sessionBindings, view);
+    if (!definitionId) continue;
+    const prior = usageById.get(definitionId);
+    usageById.set(definitionId, {
+      usage: foldUsage(prior?.usage, collected.usage),
+      subscriptions: [
+        ...(prior?.subscriptions ?? []),
+        ...collected.subscriptions,
+      ],
+    });
+  }
+
+  for (const [definitionId, extra] of usageById) {
+    const base = factsById.get(definitionId);
+    if (!base) continue;
+    factsById.set(
+      definitionId,
+      mergeSessionUsage(base, extra.usage, extra.subscriptions),
+    );
+  }
 
   return {
-    definitions: definitions.sort((left, right) =>
-      left.id.localeCompare(right.id),
-    ),
+    definitions: definitions
+      .map((definition) => {
+        const facts = factsById.get(definition.id);
+        return facts
+          ? {
+              ...definition,
+              metadata: { ...definition.metadata, facts },
+            }
+          : definition;
+      })
+      .sort((left, right) => left.id.localeCompare(right.id)),
     sourceRefs: sourceRefs.sort((left, right) =>
       left.ref.id.localeCompare(right.ref.id),
     ),
@@ -144,79 +206,23 @@ export function semanticSessionFacts(
   };
 }
 
-const sessionThreadMutationMethods = new Set([
-  "append",
-  "commitTurn",
-  "delete",
-  "edit",
-  "redact",
-  "select",
-]);
-
-function sessionThreadMutation(
+function usageDefinitionFromCall(
   call: Node,
   sessionBindings: ReadonlyMap<string, string>,
   view: SemanticAnalyzerView,
-): IndexLintFinding | undefined {
+): string | undefined {
   const methodAccess = view.syntax.callExpressionTarget(call);
   if (
     !methodAccess ||
     !view.syntax.isKind(methodAccess, "propertyAccessExpression")
   )
     return undefined;
-  const method = view.syntax.propertyAccessName(methodAccess);
-  if (!method || !sessionThreadMutationMethods.has(method)) return undefined;
-  const threadAccess = view.syntax.propertyAccessExpression(methodAccess);
-  if (
-    !threadAccess ||
-    !view.syntax.isKind(threadAccess, "propertyAccessExpression") ||
-    view.syntax.propertyAccessName(threadAccess) !== "thread"
-  )
-    return undefined;
-  const sessionExpression = view.syntax.propertyAccessExpression(threadAccess);
+  const sessionExpression = view.syntax.propertyAccessExpression(methodAccess);
   if (!sessionExpression) return undefined;
   const binding = view.syntax.identifierText(
     view.syntax.unwrapExpression(sessionExpression),
   );
-  const definitionId = binding ? sessionBindings.get(binding) : undefined;
-  if (!definitionId) return undefined;
-  const source = semanticSourceForNode(call, view.syntax);
-  return {
-    id: `lint:session.non_owner_thread_mutation:${safeId(`${definitionId}:${source.file}:${source.line}:${source.column}:${method}`)}`,
-    ruleId: "session.non_owner_thread_mutation",
-    severity: "error",
-    category: "runtime",
-    maturity: "stable",
-    confidence: "high",
-    profiles: ["recommended", "strict"],
-    title: "Session Thread view is mutated outside its owner",
-    message: `Session Thread view calls mutating method \"${method}\" outside the Session owner.`,
-    rationale:
-      "A Session Thread view is read-only because only the owning Session may publish its canonical head.",
-    impact:
-      "Non-owner mutation is rejected by the linearizable Thread owner fence and cannot safely publish Session history.",
-    source,
-    primaryDefinitionId: definitionId,
-    relatedDefinitionIds: [definitionId],
-    evidence: [
-      {
-        kind: "source",
-        label: "Non-owner Session Thread mutation",
-        source,
-        data: { method, sessionDefinitionId: definitionId },
-      },
-    ],
-    fixes: [
-      {
-        title: "Send input through the Session",
-        description:
-          "Use session.send() or session.sendMany(); keep session.thread for read-only inspection.",
-        kind: "manual",
-      },
-    ],
-    docsUrl:
-      "/docs/reference/crux-core/index-lints/session-non-owner-thread-mutation",
-  };
+  return binding ? sessionBindings.get(binding) : undefined;
 }
 
 function sessionCall(

@@ -459,6 +459,7 @@ export type {
   SessionRuntimeIdentity,
   SessionRuntimeInput,
   SessionRuntimeReadModel,
+  SessionRuntimeSubscription,
 } from "./session";
 export type {
   AdapterBoundGenerationModel,

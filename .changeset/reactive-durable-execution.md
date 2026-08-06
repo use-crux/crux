@@ -298,3 +298,13 @@ terminal`) and idempotent `acceptInputs` for stable `inputIds` (no double
 cursor/pending/stats; PostgreSQL uses `ON CONFLICT DO NOTHING`). Boundary
 scans prefer pending Session deliveries and retire residual ingress Work after
 terminal deliveries so the settle budget is not spent on already-settled rows.
+
+Complete Session tooling, observability, and documentation on the same runtime
+facts: Project Index static and semantic evidence for Agent/Flow Session
+targets, Signal subscription lineage, and observed public method usage with
+exact JS/native parity and cache-epoch migration; LSP/lint copy that accepts
+resolved Agent or Flow targets; Devtools Catalog and `session.turn` detail for
+targets, subscriptions, fork lineage, and bounded ingress statistics via the
+existing Runtime Bridge read model; progressive user guides, recipes, exact API
+reference, and Core architecture internals that distinguish shipped Session
+behavior from future managed transport and Channel work.

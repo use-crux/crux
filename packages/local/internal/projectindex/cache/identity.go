@@ -56,6 +56,11 @@ package cache
 // Epoch 69 adds Signal provider, webhook transport, and managed transport
 // binding definitions, relations, source refs, and identity/live-value lints so
 // snapshots made before Signal transport tooling cannot mask the new catalogue.
+// Epoch 70 advances Signal transport parity so static and semantic provider
+// catalogues stay aligned across restart boundaries.
+// Epoch 71 adds Session Flow targets, Signal subscription lineage, and
+// observed public method usage facts so snapshots made before Session tooling
+// cannot mask the expanded catalogue.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 70
+const ProjectIndexSnapshotCacheEpoch = 71

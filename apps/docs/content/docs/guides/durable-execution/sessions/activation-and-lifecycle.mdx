@@ -1,0 +1,231 @@
+---
+title: Activation, Signals, and lifecycle
+description: Signal ingress, safe boundaries, streams, close/kill/delete, fork, statistics, and durability for durable Sessions.
+---
+
+This page assumes you already have a working
+[Session](/docs/guides/durable-execution/sessions) for an Agent or Flow. It covers
+the production controls that sit on the same Runtime Work, Thread, and storage
+spine.
+
+## Agent model binding
+
+Agent Sessions need an adapter-bound
+[`GenerationModel`](/docs/reference/crux-core/generation-model). Flow Sessions do
+not. With `@use-crux/ai`, bind once:
+
+```ts
+import { aiSdk } from "@use-crux/ai";
+
+const economy = aiSdk(nativeModel("nebula-text-v2"));
+const premium = aiSdk(nativeModel("nebula-text-v3"));
+
+export const support = agent({
+  id: "support",
+  model: economy,
+  prompt: supportPrompt,
+});
+
+// Optional immutable Session override (must appear in RuntimeProgram.generationModels)
+const conversation = await host.run(() =>
+  session(support, { key: "customer-42", model: premium }),
+);
+```
+
+Precedence is **Session override, then Agent model**. Creation rejects before
+Session, Work, or Thread mutation when:
+
+| Code | Cause |
+| --- | --- |
+| `GENERATION_MODEL_BINDING_MISSING` | Neither Session nor Agent has a bound model |
+| `GENERATION_MODEL_NOT_STATIC` | Bound model is absent from the Runtime program |
+| `GENERATION_CAPABILITY_MISSING` | Model cannot cover the Agent's language requirements |
+
+`getSession()` reuses the model pinned when the Session was created.
+
+## Send, sendMany, and ordering
+
+```ts
+const first = await conversation.send({ message: "First" });
+const batch = await conversation.sendMany([
+  { message: "Second" },
+  { message: "Third" },
+]);
+```
+
+- Every accepted input keeps its own id, server-assigned cursor, and handle.
+- `sendMany()` validates and accepts the whole array atomically in order, or accepts none.
+- Concurrent `send()` calls serialize; cursors stay strictly ordered.
+- Compatible pending inputs share one canonical activation Work. Joined handles resolve the same Work and exact shared result or failure through `turn.work()` / `turn.result()`.
+- Mid-turn ingress becomes model-visible only at the next real provider boundary (initial step, tool result, or validation retry)—never mid-step.
+
+Agent admission requires a Prompt `inputSchema` and strict JSON-safe object
+values. Flow Session inputs accept any JSON-safe value, including void (`null`
+stored) and primitives.
+
+## Signal subscriptions (Agent and Flow)
+
+Durable Signal subscriptions are Session-owned, idempotent by Session + signal
+id + **canonical match key** (key-order invariant). They reconstruct from
+storage after restart — never from a process-global registry.
+
+```ts
+import { signal } from "@use-crux/core/signal";
+import { z } from "zod";
+
+export const orderPaid = signal({
+  id: "order.paid",
+  schema: z.object({ orderId: z.string() }),
+});
+
+const order = await host.run(() => session(checkout, { key: "order-42" }));
+const sub = await order.subscribe(orderPaid);
+// or: await order.subscribe(orderPaid.when({ orderId: "order-42" }));
+
+const active = await order.subscriptions();
+await sub.unsubscribe();
+```
+
+| Behavior | Detail |
+| --- | --- |
+| Fan-out | All matching independent active subscriptions may receive an occurrence at least once |
+| Agent Sessions | Matching payloads become typed Session input on the existing ingress lane |
+| Flow Sessions | Session-owned Flow waiters receive durable delivery only when a matching **active Session subscription** also matches; non-Session Flow waiters remain an independent consumer |
+| Predicates | `Session.subscribe()` rejects predicate Signal views; use bare Signals or `signal.when({ ...match })` |
+| Close/kill | Deactivates all Session subscriptions at the barrier |
+
+### Safe-boundary ingress
+
+Signals, Work completion, timers, and direct input accepted during active
+execution become eligible only at the next declared safe boundary. They never
+mutate a sealed provider request, a pinned Thread revision, or an already
+journaled controller decision.
+
+For Agent Signal ingress, mid-turn deliveries wait for the next provider
+boundary. Settlement claims/accepts before `claimStepInputs`. Concurrent worker
+and boundary settlers coordinate via delivery compare-and-set
+(`pending → leased → terminal`) and idempotent `acceptInputs` for stable
+`inputIds`.
+
+## Streams and cursors
+
+```ts
+for await (const event of conversation.stream()) {
+  // session.snapshot | session.status | ingress.accepted | ingress.delivered
+  if (event.type === "session.status" && event.status.state === "closed") break;
+}
+
+// reconnect after a stored cursor
+for await (const event of conversation.stream({ after: lastCursor })) {
+  // ...
+}
+```
+
+| Resume mode | Behavior |
+| --- | --- |
+| No `after` | Emits `session.snapshot` (`initial`) then every retained event from the earliest retained position |
+| Valid `after` | Resumes strictly after that cursor (no gaps or duplicates) |
+| Expired/unknown `after` | Emits `session.snapshot` (`cursor-expired`) then continues from the earliest retained event |
+
+Snapshot events replace local reducer state; retained events that follow are
+authoritative and may restate facts already summarized by the snapshot. Slow
+consumers cannot create unbounded retained state — the durable event port bounds
+retention. Streams never carry prompts, private payloads, or provider objects.
+
+## Lifecycle: close, kill, delete, fork
+
+```ts
+await conversation.close(); // joinable ordered barrier
+await conversation.kill();  // fenced fast terminalization
+await conversation.delete(); // only after closed/killed; tombstones the key
+
+const child = await conversation.fork(); // or clone()
+const children = await conversation.forks();
+```
+
+| Control | Behavior |
+| --- | --- |
+| `close()` | Seals external send/subscribe, deactivates Signal subscriptions, drains currently represented `pendingInputs` / `pendingWork` / activation obligations, then becomes `closed`. Does not wake a parked Session merely for maintenance. Nested causal Work trees beyond those counters are **not** yet counted. |
+| `kill()` | Fenced fast terminalization distinct from close: deactivates subscriptions, revokes claim/checkpoint/start and closed-owner Thread commit authority, cancels active Work. Projects as public `status().state === "closed"`; storage keeps `killed`. |
+| `delete()` | Retention-safe after close/kill only. Strips payloads, tombstones the key, unregisters the Thread owner so whole-Thread deletion can proceed. |
+| `fork()` / `clone()` | New Session owner/head with immutable lineage from a pinned source revision; never aliases a mutable head. |
+
+`session.thread` remains a read-only owner-scoped view with no append/select.
+After delete, reads return an empty owner path without resurrecting ownership.
+
+## Status, inspection, and statistics
+
+```ts
+const status = await conversation.status();
+const inspection = await conversation.inspect();
+const stats = await conversation.stats();
+```
+
+| API | Contents |
+| --- | --- |
+| `status()` | `parked` / `running` / `blocked` / `closing` / `closed`, cursors, pending counts |
+| `inspect()` | Bounded input lineage, checkpoint, recovery diagnostic |
+| `stats()` | Lifetime Work statistics plus exact ingress totals (`accepted` / `deduplicated` / `delivered` / `resumed` / `dropped`) with first-64 identity coverage under `inputs` |
+
+Inspection and Runtime Bridge projections never expose prompts, inputs,
+outputs, reasoning, Tool arguments, credentials, sealed request ids, or
+provider-native objects.
+
+## Safe boundaries, replay, and recovery
+
+One Runtime worker, one canonical Work path, and one Effect scope own each
+activation:
+
+1. Acceptance writes ordered ingress and reserves wake intent.
+2. The worker claims the longest cursor-consecutive compatible prefix.
+3. Preparation journals a sealed plan against a pinned Thread revision.
+4. Recovery replays durable facts—never callbacks, provider requests, Tools, effects, or Thread publication.
+5. Thread publication is idempotent through the Session owner head.
+6. Terminal results complete the shared Work; joined handles reconnect to the same value.
+
+If prepared result evidence is missing after a crash,
+`SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` blocks with a payload-safe next step.
+
+## Signal versus Channel
+
+| Concern | Signal | Channel |
+| --- | --- | --- |
+| Ownership | Fan-out to many matching subscriptions | Exclusive conversation ownership |
+| Session role | Optional Session-owned subscriptions feed ingress / Flow waiters | Claimed provider conversation routes to one owning Session/Thread |
+| This release | Process-local and durable Flow/Session paths as documented | Provider adapters and claim policy are **not** part of this Session surface |
+
+Do not model a Channel claim as a Signal subscription. Managed transports and
+provider-specific Channel adapters are separate work streams; they are not
+available as part of the Session API documented here.
+
+## What is shipped vs future
+
+**Shipped in this Session surface:**
+
+- Agent and Flow Session targets with exact conditional typing
+- Durable Signal subscriptions and Agent Signal ingress at safe boundaries
+- Streams/cursors, lifecycle controls, fork/clone, bounded statistics
+- Memory, PostgreSQL, and Convex Session ports with shared conformance laws
+- Project Index, LSP/lint, Devtools Catalog and run detail for Session evidence
+
+**Not shipped here (do not document as available):**
+
+- Managed Signal provider routes or third-party transport daemons as Session dependencies
+- Channel provider adapters / claim-lease policy (owned by Channel work)
+- Full nested causal Work tree counting for `close()` drain
+- Speculative Signal providers, API routes, or polling/SSE/WebSocket supervision
+
+## Production operation
+
+1. Export Agents/Flows (and generation models for Agent Sessions) into the generated Runtime program.
+2. Run one execution worker per Runtime namespace for the store.
+3. Configure Runtime storage and the Session-owned Thread `RecordStore` against the **same** database (PostgreSQL) or Convex component.
+4. Authenticate application requests before calling `session` / `getSession`; keys are identifiers, not authorization.
+5. Inspect with Devtools Catalog (authored target/key/subscription evidence) and Runs (`session.turn` lineage, recovery, stats)—never by dumping private payloads.
+
+## Related
+
+- [Overview](/docs/guides/durable-execution/sessions)
+- [Recipes](/docs/guides/durable-execution/sessions/recipes)
+- [API reference](/docs/reference/crux-core/session)
+- [Signals](/docs/guides/durable-execution/signals)

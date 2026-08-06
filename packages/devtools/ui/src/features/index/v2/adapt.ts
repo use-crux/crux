@@ -199,13 +199,28 @@ export interface IndexFacts {
   // session
   operation?: "create" | "get";
   target?:
-    | { kind: "agent" | "unresolved" | "dynamic" }
+    | { kind: "agent" | "flow" | "unresolved" | "dynamic" }
     | { kind: "signal"; signalId: string };
   key?: { kind: "literal"; value: string } | { kind: "dynamic" };
   identity?: "static" | "partial";
   call?:
     | { kind: "supported" }
     | { kind: "ambiguous"; reason: "arity" | "options" };
+  usage?: {
+    subscribe?: true;
+    stream?: true;
+    stats?: true;
+    close?: true;
+    kill?: true;
+    delete?: true;
+    fork?: true;
+    clone?: true;
+  };
+  subscriptions?: readonly {
+    signalVariable?: string;
+    signalDefinitionId?: string;
+    matchKind: "bare" | "when" | "dynamic";
+  }[];
   // signal provider / transport binding
   signalId?: string;
   providerId?: string;
