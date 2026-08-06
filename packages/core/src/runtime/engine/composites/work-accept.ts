@@ -8,6 +8,7 @@ import type { FlowSnapshot } from "../../ports/state";
 import type { RuntimeTargetDefinitionRef } from "../../ports/target-definition";
 import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
+import { canonicalRuntimeJson } from "../canonical-json";
 import { wakeEnvelopeForWork } from "../kernel-shared";
 import type { RuntimeWorkItem } from "../work";
 import { createRuntimeError } from "../errors";
@@ -57,7 +58,8 @@ export async function acceptWorkInTransaction(
       existing.targetId !== input.targetId ||
       existing.work.kind !== "flow.resume" ||
       existing.work.flowId !== input.flowId ||
-      canonicalJson(snapshot.input) !== canonicalJson(input.input)
+      canonicalRuntimeJson(snapshot.input) !==
+        canonicalRuntimeJson(input.input)
     ) {
       throw idempotencyConflict(input);
     }
@@ -95,7 +97,7 @@ export async function acceptWorkInTransaction(
     status: "running",
     effects: input.effects,
     input: input.input,
-    inputDigest: sha256Hex(encoder.encode(canonicalJson(input.input))),
+    inputDigest: sha256Hex(encoder.encode(canonicalRuntimeJson(input.input))),
     completedSteps: Object.freeze({}),
     fingerprint: Object.freeze([]),
     pendingSuspends: Object.freeze([]),
@@ -105,19 +107,6 @@ export async function acceptWorkInTransaction(
   await tx.state.putSnapshot(snapshot);
   await tx.outbox.put(wakeEnvelopeForWork(work), { deliverAt: now });
   return Object.freeze({ work, snapshot, accepted: true });
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const record = value as Readonly<Record<string, JsonValue | undefined>>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key]!)}`)
-      .join(",")}}`;
-  }
-  if (typeof value === "number" && Object.is(value, -0)) return "-0";
-  return JSON.stringify(value);
 }
 
 function idempotencyConflict(input: WorkAcceptCompositeInput): never {

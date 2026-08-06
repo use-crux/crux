@@ -26,12 +26,13 @@ import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
 import { emitEventInTransaction } from "../kernel-events";
 import { createRuntimeError } from "../errors";
+import type { RuntimeWaiter } from "../../ports/waiters";
 import {
   isFlowSignalWaiter,
   resolveDurableSignalConsumers,
   type DurableSignalConsumers,
+  type FlowSignalWaiter,
 } from "./signal-session-consumers";
-import type { RuntimeWaiter } from "../../ports/waiters";
 
 /** Input accepted by the atomic `signal.publish` composite. */
 export interface SignalPublishCompositeInput {
@@ -210,10 +211,7 @@ async function signalStoreForPublication(
 
 function waiterDelivery(
   occurrence: SignalOccurrenceRecord,
-  waiter: RuntimeWaiter & {
-    readonly workId: NonNullable<RuntimeWaiter["workId"]>;
-    readonly work: { readonly kind: "flow.resume"; readonly flowId: string };
-  },
+  waiter: FlowSignalWaiter,
 ): SignalDeliveryRecord {
   return Object.freeze({
     schemaVersion: 1,

@@ -14,9 +14,7 @@ import {
 } from './session_helpers'
 
 type SessionPort = NonNullable<RuntimeStoreTransaction['sessions']>
-type SubscriptionInput = Parameters<
-  NonNullable<SessionPort['upsertSubscription']>
->[0]
+type SubscriptionInput = Parameters<SessionPort['upsertSubscription']>[0]
 
 /**
  * Create or reactivate one Session subscription.
@@ -31,7 +29,7 @@ export async function upsertSessionSubscription(ctx: MutationCtx, input: Subscri
     throw new Error(`Session "${input.sessionId}" was not found.`)
   }
   const match = sessionSubscriptionMatchValue(input.match)
-  const matchKey = sessionSubscriptionMatchKey(match)
+  const matchKey = input.matchKey
   const now = input.now.toISOString()
 
   const byId = await ctx.db

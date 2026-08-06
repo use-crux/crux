@@ -86,18 +86,23 @@ describe("public Flow Session lifecycle", () => {
         .toBe("suspended");
 
       // Negative control: without a Session subscription, Session-owned waiters
-      // are gated out and publication remains process-local.
+      // are gated out and publication remains process-local with no durable
+      // delivery ledger rows for that occurrence.
       const withoutSubscription = await approval.publish({
         documentId: "document:42",
         approvedBy: "ops",
       });
       expect(withoutSubscription.guarantee).toBe("process-local");
-      await expect
-        .poll(async () => {
-          const work = await accepted.work();
-          return (await work.status()).state;
-        })
-        .toBe("suspended");
+      const noDeliveries = await store.transact(async (tx) => {
+        if (!tx.signals) throw new Error("missing signals");
+        return tx.signals.listDeliveries(
+          "flow-session-test",
+          withoutSubscription.occurrenceId,
+        );
+      });
+      expect(noDeliveries).toEqual([]);
+      const stillSuspended = await accepted.work();
+      expect((await stillSuspended.status()).state).toBe("suspended");
 
       const subscription = await host.run(() =>
         created.subscribe(approval.when({ documentId: "document:42" })),
@@ -238,7 +243,7 @@ describe("public Flow Session lifecycle", () => {
 
   it("reopens the same Flow Session identity without forking Thread ownership", async () => {
     const release = flow("flow-session-conflict", async () => "done" as const);
-    const { records, host } = flowSessionHost("flow-session-conflict", [
+    const { records, host, worker } = flowSessionHost("flow-session-conflict", [
       release,
     ]);
     try {
@@ -251,6 +256,7 @@ describe("public Flow Session lifecycle", () => {
       const control = await records.get(`thread/${created.thread.id}`);
       expect(control?.owners).toEqual({ [created.id]: "open" });
     } finally {
+      await worker.stop();
       host.dispose();
     }
   });
