@@ -265,6 +265,22 @@ export interface AcceptRuntimeSessionInputsInput {
   readonly namespace: string;
   readonly sessionId: string;
   readonly inputs: readonly JsonValue[];
+  /**
+   * Optional stable input identities parallel to {@link inputs}.
+   *
+   * @remarks Used by Signal-subscription ingress so delivery identity is
+   * restart-safe and deduplicable via {@link RuntimeSessionStorePort.getInput}.
+   * When omitted, adapters assign cursor-based input ids.
+   */
+  readonly inputIds?: readonly string[];
+  readonly now: Date;
+}
+
+/** Input for appending owner-scoped mechanical Session statistics facts. */
+export interface AppendRuntimeSessionStatisticsInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly facts: readonly import("../../statistics").StatisticsFact[];
   readonly now: Date;
 }
 
@@ -315,6 +331,15 @@ export interface RuntimeSessionStorePort {
   acceptInputs(
     input: AcceptRuntimeSessionInputsInput,
   ): Promise<readonly RuntimeSessionInputRecord[]>;
+  /**
+   * Append mechanical Session statistics facts for one owner.
+   *
+   * @remarks Optional on stores that cannot rewrite Session statistics; Core
+   * Signal ingress and acceptance paths no-op when absent.
+   */
+  appendStatistics?(
+    input: AppendRuntimeSessionStatisticsInput,
+  ): Promise<RuntimeSessionRecord>;
   /** Reserve one queued canonical Work without claiming a moving cutoff. */
   reserveTurn(
     input: ReserveRuntimeSessionTurnInput,

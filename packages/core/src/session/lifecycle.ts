@@ -1,7 +1,9 @@
 /** Public Session close/kill/delete/fork orchestration on canonical ports. */
 
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
+import { appendSessionStatusEvent } from "../runtime/engine/session-events";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
+import type { RuntimeStoreTransaction } from "../runtime/store";
 import type { Storage } from "../storage";
 import {
   registerThreadOwner,
@@ -25,12 +27,29 @@ import {
   requireLifecycleSessions,
   requireSessionRecord,
 } from "./lifecycle-helpers";
+import {
+  sessionStatusEventId,
+  sessionStatusFromRecord,
+} from "./status-project";
 import type { SessionForkSummary } from "./types";
 
 export {
   assertSessionAcceptsIngress,
   lineageFromRecord,
 } from "./lifecycle-helpers";
+
+async function emitLifecycleStatus(
+  tx: RuntimeStoreTransaction,
+  record: RuntimeSessionRecord,
+): Promise<void> {
+  const status = sessionStatusFromRecord(record);
+  await appendSessionStatusEvent(tx, {
+    namespace: record.namespace,
+    sessionId: record.sessionId,
+    status,
+    eventId: sessionStatusEventId(record.sessionId, status, record.state),
+  });
+}
 
 /**
  * Ordered durable close barrier that joins until the Session is closed.
@@ -58,11 +77,13 @@ export async function closeSession(
   current = await runtime.store.transact(async (tx) => {
     const sessions = tx.sessions;
     if (!sessions?.close) throw new Error("Session close is unavailable.");
-    return sessions.close({
+    const next = await sessions.close({
       namespace: runtime.namespace,
       sessionId: current.sessionId,
       now: runtime.now(),
     });
+    await emitLifecycleStatus(tx, next);
+    return next;
   });
   if (isTerminalClosedSession(current)) {
     await setThreadOwnerState(storage, current.threadId, current.sessionId, "closed");
@@ -106,11 +127,13 @@ export async function killSession(
   current = await runtime.store.transact(async (tx) => {
     const sessions = tx.sessions;
     if (!sessions?.kill) throw new Error("Session kill is unavailable.");
-    return sessions.kill({
+    const next = await sessions.kill({
       namespace: runtime.namespace,
       sessionId: current.sessionId,
       now: runtime.now(),
     });
+    await emitLifecycleStatus(tx, next);
+    return next;
   });
   const workId = current.fencedWorkId;
   if (workId) {
@@ -146,11 +169,13 @@ export async function deleteSession(
   const deleted = await runtime.store.transact(async (tx) => {
     const sessions = tx.sessions;
     if (!sessions?.delete) throw new Error("Session delete is unavailable.");
-    return sessions.delete({
+    const next = await sessions.delete({
       namespace: runtime.namespace,
       sessionId: current.sessionId,
       now: runtime.now(),
     });
+    await emitLifecycleStatus(tx, next);
+    return next;
   });
   await unregisterThreadOwner(storage, deleted.threadId, deleted.sessionId);
 }

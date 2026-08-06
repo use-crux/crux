@@ -59,12 +59,34 @@ export function createMemorySignalStore(
         )
         .map(cloneDelivery);
     },
+    async listSessionDeliveries(namespace, sessionId, options = {}) {
+      const limit = options.limit ?? 100;
+      const matches = [...data.signalDeliveries.values()].filter((delivery) => {
+        if (delivery.namespace !== namespace) return false;
+        if (delivery.consumer.kind !== "session.subscription") return false;
+        if (delivery.consumer.sessionId !== sessionId) return false;
+        if (options.state !== undefined && delivery.state !== options.state) {
+          return false;
+        }
+        return true;
+      });
+      return matches.slice(0, limit).map(cloneDelivery);
+    },
     async putDelivery(record) {
       recordWrite?.();
       data.signalDeliveries.set(
         scopedKey(record.namespace, record.deliveryId),
         cloneDelivery(record),
       );
+    },
+    async compareAndSetDelivery(namespace, deliveryId, expectedState, next) {
+      const key = scopedKey(namespace, deliveryId);
+      const current = data.signalDeliveries.get(key);
+      if (!current || current.state !== expectedState) return null;
+      recordWrite?.();
+      const written = cloneDelivery(next);
+      data.signalDeliveries.set(key, written);
+      return written;
     },
   };
 }

@@ -82,7 +82,11 @@ export function createMemoryStatePort(
             item.namespace === options.namespace &&
             item.status === options.status &&
             (options.updatedBefore === undefined ||
-              item.updatedAt.getTime() < options.updatedBefore.getTime()),
+              item.updatedAt.getTime() < options.updatedBefore.getTime()) &&
+            (options.kind === undefined || item.work.kind === options.kind) &&
+            (options.sessionId === undefined ||
+              ("sessionId" in item.work &&
+                item.work.sessionId === options.sessionId)),
         )
         .slice(0, options.limit);
       return work.map((item) => cloneWorkItem(item));
@@ -439,6 +443,14 @@ export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
         threadId: work.threadId,
         input: cloneJsonValue(work.input, "Session turn input"),
         model: { ...work.model },
+      };
+    case "session.signal-ingress":
+      return {
+        kind: work.kind,
+        sessionId: work.sessionId,
+        deliveryId: work.deliveryId,
+        occurrenceId: work.occurrenceId,
+        subscriptionId: work.subscriptionId,
       };
     case "flow.resume":
       return { kind: work.kind, flowId: work.flowId };

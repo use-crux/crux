@@ -1,12 +1,14 @@
 /** Atomic Session input acceptance on the canonical Work spine. */
 
 import type { JsonValue } from "../../../storage";
+import type { StatisticsFact } from "../../../statistics";
 import type {
   RuntimeSessionInputRecord,
   RuntimeSessionRecord,
 } from "../../ports/sessions";
 import type { RuntimeStoreTransaction } from "../../store";
 import type { RuntimeCompositeDeps } from "../composites";
+import { appendSessionIngressAcceptedEvent } from "../session-events";
 import { reserveNextSessionActivation } from "./session-activation";
 
 /** Keyed Session identity carried by the public admission path. */
@@ -51,12 +53,44 @@ export async function acceptSessionInputsInTransaction(
     );
   }
   const now = deps.now();
+  const parked =
+    !session.activation &&
+    session.pendingInputs === 0 &&
+    session.pendingWork === 0;
   const accepted = await sessions.acceptInputs({
     namespace: input.namespace,
     sessionId: session.sessionId,
     inputs: input.inputs,
     now,
   });
+  const facts: StatisticsFact[] = accepted.flatMap((record, index) => [
+    { kind: "session-input", identity: record.inputId, outcome: "accepted" },
+    ...(parked && index === 0
+      ? ([
+          {
+            kind: "session-input",
+            identity: record.inputId,
+            outcome: "resumed",
+          },
+        ] as const)
+      : []),
+  ]);
+  if (facts.length > 0 && sessions.appendStatistics) {
+    await sessions.appendStatistics({
+      namespace: input.namespace,
+      sessionId: session.sessionId,
+      facts,
+      now,
+    });
+  }
+  for (const record of accepted) {
+    await appendSessionIngressAcceptedEvent(tx, {
+      namespace: input.namespace,
+      sessionId: session.sessionId,
+      accepted: record,
+      source: "send",
+    });
+  }
   await reserveNextSessionActivation(tx, {
     namespace: input.namespace,
     sessionId: session.sessionId,

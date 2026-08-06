@@ -7,16 +7,12 @@
 import type { JsonObject, JsonValue } from "../../../storage";
 import { canonicalSignalJson } from "../../../signal/canonical-json";
 import { SignalError } from "../../../signal/errors";
-import type { RuntimeSessionSubscriptionRecord } from "../../ports/sessions";
 import type {
   RuntimeSignalStorePort,
   SignalDeliveryRecord,
   SignalOccurrenceRecord,
 } from "../../reactive/records";
-import {
-  sessionSubscriptionDeliveryId,
-  signalDeliveryId,
-} from "../../reactive/identity";
+import { signalDeliveryId } from "../../reactive/identity";
 import {
   decodeSignalPayload,
   encodeSignalPayload,
@@ -33,6 +29,10 @@ import {
   type DurableSignalConsumers,
   type FlowSignalWaiter,
 } from "./signal-session-consumers";
+import {
+  acceptSessionSubscriptionDelivery,
+  requeuePendingAgentSessionDeliveries,
+} from "./signal-agent-delivery";
 
 /** Input accepted by the atomic `signal.publish` composite. */
 export interface SignalPublishCompositeInput {
@@ -102,14 +102,17 @@ export async function publishSignalInTransaction(
         `Signal \`${input.signalId}\` rejected idempotency reuse with different normalized payload data.`,
       );
     }
+    const deliveries = await signals.listDeliveries(
+      replay.namespace,
+      replay.occurrenceId,
+    );
+    await requeuePendingAgentSessionDeliveries(tx, replay, deliveries);
     return {
       accepted: true,
       occurrence: replay,
-      deliveries: await signals.listDeliveries(
-        replay.namespace,
-        replay.occurrenceId,
-      ),
+      deliveries,
       replayed: true,
+      // Worker, not the temporary publish runtime, owns Agent ingress wakes.
       outboxCount: 0,
     };
   }
@@ -148,9 +151,9 @@ export async function publishSignalInTransaction(
 
   const deliveries: SignalDeliveryRecord[] = [];
   for (const subscription of consumers.subscriptions) {
-    const delivery = sessionSubscriptionDelivery(occurrence, subscription);
-    deliveries.push(delivery);
-    await signals.putDelivery(delivery);
+    deliveries.push(
+      await acceptSessionSubscriptionDelivery(tx, occurrence, subscription),
+    );
   }
 
   const deliveredOccurrence: JsonObject = {
@@ -185,6 +188,9 @@ export async function publishSignalInTransaction(
           },
         );
 
+  // Agent Session Signal-ingress wakes stay for the long-lived Runtime worker
+  // that holds immutable program Agents. Counting them here would let the
+  // temporary publish runtime steal leases and block-missing-target.
   return {
     accepted: true,
     occurrence,
@@ -226,31 +232,6 @@ function waiterDelivery(
     }),
     state: "pending",
     attempts: 0,
-    updatedAt: occurrence.acceptedAt,
-  });
-}
-
-function sessionSubscriptionDelivery(
-  occurrence: SignalOccurrenceRecord,
-  subscription: RuntimeSessionSubscriptionRecord,
-): SignalDeliveryRecord {
-  return Object.freeze({
-    schemaVersion: 1,
-    namespace: occurrence.namespace,
-    deliveryId: sessionSubscriptionDeliveryId(
-      occurrence.occurrenceId,
-      subscription.subscriptionId,
-    ),
-    occurrenceId: occurrence.occurrenceId,
-    consumer: Object.freeze({
-      kind: "session.subscription" as const,
-      sessionId: subscription.sessionId,
-      subscriptionId: subscription.subscriptionId,
-    }),
-    // Session subscription acceptance completes at publish; Flow waiter
-    // delivery remains independent and applies only at the wait boundary.
-    state: "delivered",
-    attempts: 1,
     updatedAt: occurrence.acceptedAt,
   });
 }

@@ -97,6 +97,22 @@ const workItems: readonly RuntimeWork[] = [
   { kind: 'flow.timeout', flowId, suspendPoint: 'approval' },
   { kind: 'task.run', taskId, targetId, input: { documentId: 'doc_1' } },
   { kind: 'watch.deliver', subscriptionId: 'workspace', cursor },
+  {
+    kind: 'session.turn',
+    sessionId: 'session_1',
+    inputId: 'input_1',
+    cursor: 1,
+    threadId: 'thread_1',
+    input: { message: 'hi' },
+    model: { definitionId: 'm', fingerprint: 'v1' },
+  },
+  {
+    kind: 'session.signal-ingress',
+    sessionId: 'session_1',
+    deliveryId: 'delivery_1',
+    occurrenceId: 'occ_1',
+    subscriptionId: 'sub_1',
+  },
 ]
 
 for (const work of workItems) {
@@ -111,6 +127,12 @@ for (const work of workItems) {
       break
     case 'watch.deliver':
       expectTypeOf(work.cursor).toEqualTypeOf<EventCursor>()
+      break
+    case 'session.turn':
+      expectTypeOf(work.sessionId).toEqualTypeOf<string>()
+      break
+    case 'session.signal-ingress':
+      expectTypeOf(work.deliveryId).toEqualTypeOf<string>()
       break
   }
 }

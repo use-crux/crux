@@ -25,8 +25,9 @@ import {
   executeWithNamedDeferEvidence,
   flushNamedDeferEvidenceAfterCommit,
 } from './named-defer-evidence'
-import { transition } from './work'
+import { transition, type RuntimeWorkItem } from './work'
 import { openSessionTurnObservability } from '../../session/turn-observability'
+import { retryDelayMs } from './retry'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -86,6 +87,14 @@ export async function handleWake(
 
   const target = deps.targets[envelope.target]
   if (!target) {
+    // Agent Session Signal ingress is validated only by the long-lived program
+    // worker. Temporary publish dispatchers often lack that Agent target; block
+    // would strand the durable obligation under terminal idempotency. Requeue
+    // with outbox backoff, leave Work pending, and skip terminal idempotency.
+    if (current.work.kind === 'session.signal-ingress') {
+      await requeueMissingSessionSignalIngressTarget(deps, current)
+      return { status: 200, outcome: 'retry-scheduled' }
+    }
     await blockMissingTarget({
       runComposite: deps.runComposite,
       envelope,
@@ -212,6 +221,26 @@ async function blockMissingTarget(
   })
 }
 
+/**
+ * Requeue deferred Agent Signal ingress when this dispatcher lacks the target.
+ *
+ * @remarks Leaves Work pending, writes no terminal idempotency, and schedules a
+ * delayed outbox wake with the shared retry backoff so temporary dispatchers
+ * cannot tight-loop. The program worker later claims the same Work once its
+ * target authority is present.
+ */
+async function requeueMissingSessionSignalIngressTarget(
+  deps: HandleWakeDeps,
+  work: RuntimeWorkItem,
+): Promise<void> {
+  const delayMs = retryDelayMs({
+    attempt: Math.max(1, work.attempt),
+    rng: deps.rng,
+  })
+  const deliverAt = new Date(deps.now().getTime() + delayMs)
+  await deps.store.outbox.put(wakeEnvelopeForWork(work), { deliverAt })
+}
+
 /** Block missing-target work inside a transaction. */
 export async function blockMissingTargetInTransaction(
   tx: RuntimeStoreTransaction,
@@ -222,6 +251,15 @@ export async function blockMissingTargetInTransaction(
   const current = await tx.state.getWork(input.envelope.workId, {
     namespace: input.envelope.ns,
   })
+  // Defensive: composite callers must not terminalize deferred Agent ingress.
+  if (current?.work.kind === 'session.signal-ingress') {
+    const delayMs = retryDelayMs({
+      attempt: Math.max(1, current.attempt),
+    })
+    const deliverAt = new Date(deps.now().getTime() + delayMs)
+    await tx.outbox.put(wakeEnvelopeForWork(current), { deliverAt })
+    return
+  }
   if (current && !isTerminalWork(current)) {
     await putWorkWithIdleAccounting(
       tx,

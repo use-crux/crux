@@ -121,7 +121,14 @@ export async function markSessionReady(ctx: MutationCtx, namespace: string, sess
   return await replaceSession(ctx, row, next)
 }
 
-/** Append a validated group and advance its cursor atomically. */
+/**
+ * Append a validated group and advance its cursor atomically.
+ *
+ * @remarks Stable `inputIds` are idempotent: an existing input returns the
+ * canonical row without a second cursor/pending advance. Concurrent Convex
+ * mutations that both patch the Session document OCC-retry; the loser reloads
+ * existing inputs and must not insert duplicates.
+ */
 export async function acceptSessionInputs(ctx: MutationCtx, input: AcceptInput) {
   const row = await readSession(ctx, input.namespace, input.sessionId)
   if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
@@ -130,25 +137,74 @@ export async function acceptSessionInputs(ctx: MutationCtx, input: AcceptInput) 
       `Session "${input.sessionId}" no longer accepts external ingress.`,
     )
   }
+  if (
+    input.inputIds !== undefined &&
+    input.inputIds.length !== input.inputs.length
+  ) {
+    throw new Error('Session inputIds must align with inputs.')
+  }
   const acceptedAt = input.now.toISOString()
-  const accepted: SessionInputRecord[] = input.inputs.map((value, index) => ({
-    schemaVersion: 1,
-    namespace: input.namespace,
-    sessionId: input.sessionId,
-    inputId: `input_${input.sessionId}_${row.acceptedCursor + index + 1}`,
-    cursor: row.acceptedCursor + index + 1,
-    input: value,
-    acceptedAt,
-  }))
-  for (const record of accepted) await ctx.db.insert('runtimeSessionInputs', sessionInputDocument(record))
-  await replaceSession(ctx, row, {
-    ...sessionRecord(row),
-    acceptedCursor: row.acceptedCursor + accepted.length,
-    pendingInputs: row.pendingInputs + accepted.length,
-    wakePending: true,
-    updatedAt: acceptedAt,
-  })
+  const accepted: SessionInputRecord[] = []
+  let newCount = 0
+  let nextCursor = row.acceptedCursor
+  for (let index = 0; index < input.inputs.length; index += 1) {
+    const inputId =
+      input.inputIds?.[index] ??
+      `input_${input.sessionId}_${nextCursor + 1}`
+    const existing = await readInput(
+      ctx,
+      input.namespace,
+      input.sessionId,
+      inputId,
+    )
+    if (existing) {
+      accepted.push(sessionInputRecord(existing))
+      continue
+    }
+    nextCursor += 1
+    newCount += 1
+    const record: SessionInputRecord = {
+      schemaVersion: 1,
+      namespace: input.namespace,
+      sessionId: input.sessionId,
+      inputId,
+      cursor: nextCursor,
+      input: input.inputs[index]!,
+      acceptedAt,
+    }
+    await ctx.db.insert('runtimeSessionInputs', sessionInputDocument(record))
+    accepted.push(record)
+  }
+  if (newCount > 0) {
+    await replaceSession(ctx, row, {
+      ...sessionRecord(row),
+      acceptedCursor: nextCursor,
+      pendingInputs: row.pendingInputs + newCount,
+      wakePending: true,
+      updatedAt: acceptedAt,
+    })
+  }
   return accepted
+}
+
+/** Append mechanical Session statistics facts for one owner. */
+export async function appendSessionStatistics(
+  ctx: MutationCtx,
+  input: Parameters<NonNullable<SessionPort['appendStatistics']>>[0],
+) {
+  const row = await readSession(ctx, input.namespace, input.sessionId)
+  if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
+  if (input.facts.length === 0) return sessionRecord(row)
+  return await replaceSession(ctx, row, {
+    ...sessionRecord(row),
+    statistics: recordSessionStatistics(
+      row.statistics,
+      row.sessionId,
+      input.now,
+      input.facts,
+    ),
+    updatedAt: input.now.toISOString(),
+  })
 }
 
 /** Reserve one canonical activation before its Work row is created. */

@@ -80,8 +80,10 @@ export async function claimSessionStepInputs(ctx: MutationCtx, input: StepInput)
   const lastCursor = linkedRows.at(-1)?.cursor ?? row.processedCursor ?? 0
   const newlyClaimed = consecutiveUnlinked(allRows, lastCursor + 1, row.acceptedCursor)
   const deliveredAt = input.now.toISOString()
+  const newlyDelivered: string[] = []
   for (const candidate of [...linkedRows, ...newlyClaimed]) {
     if (candidate.delivery) continue
+    newlyDelivered.push(candidate.inputId)
     const work = candidate.work ?? {
       workId: activation.workId,
       target: activation.target,
@@ -99,6 +101,22 @@ export async function claimSessionStepInputs(ctx: MutationCtx, input: StepInput)
         },
       }),
     )
+  }
+  if (newlyDelivered.length > 0) {
+    await replaceSession(ctx, row, {
+      ...sessionRecord(row),
+      statistics: recordSessionStatistics(
+        row.statistics,
+        row.sessionId,
+        input.now,
+        newlyDelivered.map((identity) => ({
+          kind: 'session-input' as const,
+          identity,
+          outcome: 'delivered' as const,
+        })),
+      ),
+      updatedAt: input.now.toISOString(),
+    })
   }
   const replayable = (await workInputs(ctx, input.namespace, input.sessionId, input.workId))
     .filter(

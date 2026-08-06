@@ -32,6 +32,12 @@ interface EncodedOwnerState {
   readonly failures: OwnerState["failures"];
   readonly approvals: OwnerState["approvals"];
   readonly lifecycle: OwnerState["lifecycle"];
+  readonly inputs: OwnerState["inputs"];
+  readonly inputsByIdentity: readonly (readonly [
+    string,
+    OwnerState["inputs"],
+  ])[];
+  readonly otherInputs?: OwnerState["inputs"];
 }
 
 /** Encode one validated owner read model for host persistence. @internal */
@@ -60,6 +66,9 @@ export function encodeOwnerState(state: OwnerState): StatisticsLedgerExport {
     failures: state.failures,
     approvals: state.approvals,
     lifecycle: state.lifecycle,
+    inputs: state.inputs,
+    inputsByIdentity: [...state.inputsByIdentity],
+    ...(state.otherInputs ? { otherInputs: state.otherInputs } : {}),
   };
   return {
     version: 1,

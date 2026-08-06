@@ -2,6 +2,7 @@ import type { RuntimeStoreTransaction } from '@use-crux/core/runtime'
 import type { MutationCtx } from '../_generated/server.js'
 import {
   acceptSessionInputs,
+  appendSessionStatistics,
   createSession,
   getSession,
   getSessionByActivationWorkId,
@@ -45,6 +46,7 @@ export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeSt
     inspectInputs: (namespace, sessionId, limit) => inspectSessionInputs(ctx, namespace, sessionId, limit),
     markReady: (namespace, sessionId, now) => markSessionReady(ctx, namespace, sessionId, now),
     acceptInputs: (input) => acceptSessionInputs(ctx, input),
+    appendStatistics: (input) => appendSessionStatistics(ctx, input),
     reserveTurn: (input) => reserveSessionTurn(ctx, input),
     startTurn: (input) => startSessionTurn(ctx, input),
     getTurnInputs: (namespace, sessionId, workId) => getSessionTurnInputs(ctx, namespace, sessionId, workId),

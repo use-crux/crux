@@ -16,6 +16,11 @@ import { settleCompletedSignalWork } from "./signal-delivery-settlement";
 import { transition, type RuntimeWorkItem } from "./work";
 import type { LeaseToken } from "../ports/ids";
 import { reserveNextSessionActivation } from "./composites/session-activation";
+import { appendSessionStatusEvent } from "./session-events";
+import {
+  sessionStatusEventId,
+  sessionStatusFromRecord,
+} from "../../session/status-project";
 
 /** Commit a successful target outcome inside a transaction. */
 export async function completeWorkInTransaction(
@@ -105,7 +110,20 @@ export async function completeWorkInTransaction(
       now: completedAt,
     };
     if (completed.status === "completed") {
-      await tx.sessions.completeTurn(turn);
+      const session = await tx.sessions.completeTurn(turn);
+      if (session.state === "closed" || session.state === "closing") {
+        const status = sessionStatusFromRecord(session);
+        await appendSessionStatusEvent(tx, {
+          namespace: session.namespace,
+          sessionId: session.sessionId,
+          status,
+          eventId: sessionStatusEventId(
+            session.sessionId,
+            status,
+            session.state,
+          ),
+        });
+      }
       await reserveNextSessionActivation(tx, {
         namespace: current.namespace,
         sessionId: current.work.sessionId,

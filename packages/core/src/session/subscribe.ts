@@ -1,4 +1,4 @@
-/** Durable Flow Session Signal subscription helpers. */
+/** Durable Session Signal subscription helpers for Agent and Flow targets. */
 
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
@@ -20,13 +20,14 @@ import {
 const encoder = new TextEncoder();
 
 /**
- * Persist or reuse one durable Signal subscription for a Flow Session.
+ * Persist or reuse one durable Signal subscription for a Session.
  *
  * @remarks Idempotent by Session, Signal identity, and canonical match key.
- * Active subscriptions participate in Signal publication fan-out and gate
- * durable delivery to Session-owned Flow waiters. Unsubscribe marks the
- * subscription inactive for future publications; already accepted deliveries
- * remain on the occurrence ledger.
+ * Active subscriptions participate in Signal publication fan-out. Agent
+ * Sessions accept matching payloads as typed Session input; Flow Sessions
+ * also gate durable delivery to Session-owned Flow waiters. Unsubscribe marks
+ * the subscription inactive for future publications; already accepted
+ * deliveries remain on the occurrence ledger.
  */
 export async function subscribeSession(
   runtime: ResolvedRuntimeEngine,

@@ -174,7 +174,32 @@ export function claimSessionStepInputs(
       accepted,
     );
   }
-  if (delivered.length > 0) recordWrite?.();
+  if (delivered.length > 0) {
+    const newlyDelivered = delivered.filter(
+      (member) =>
+        !linked.some(
+          (prior) =>
+            prior.inputId === member.inputId && prior.delivery !== undefined,
+        ),
+    );
+    if (newlyDelivered.length > 0) {
+      updateSession(data, input, (current) => ({
+        ...current,
+        statistics: recordSessionStatistics(
+          current.statistics,
+          current.sessionId,
+          input.now,
+          newlyDelivered.map((member) => ({
+            kind: "session-input" as const,
+            identity: member.inputId,
+            outcome: "delivered" as const,
+          })),
+        ),
+        updatedAt: input.now.toISOString(),
+      }));
+    }
+    recordWrite?.();
+  }
   const replayable = turnInputs(data, input, input.workId).filter(
     (accepted) =>
       accepted.delivery?.stepIndex === input.stepIndex &&

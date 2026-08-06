@@ -178,6 +178,38 @@ export interface LifecycleStats {
   readonly steeringInputs: number;
 }
 
+/** Session ingress outcome counters for one owner or identity. */
+export interface SessionInputOutcomeStats {
+  /** Newly accepted ingress identities. */
+  readonly accepted: number;
+  /** Replays skipped by stable delivery/input identity. */
+  readonly deduplicated: number;
+  /** Inputs that became model-visible at a safe boundary. */
+  readonly delivered: number;
+  /** Inputs that reserved activation from a parked Session. */
+  readonly resumed: number;
+  /** Inputs rejected before acceptance (closed, invalid, etc.). */
+  readonly dropped: number;
+}
+
+/**
+ * Bounded Session ingress aggregates with first-64 identity attribution.
+ *
+ * @remarks Totals are exact. `byIdentity` retains at most the first 64 distinct
+ * identities; later identities roll into `otherIdentities` with truncated
+ * attribution.
+ */
+export interface SessionInputStats {
+  /** Exact totals across every ingress identity. */
+  readonly total: SessionInputOutcomeStats;
+  /** Outcomes for the first 64 normalized ingress identities. */
+  readonly byIdentity: Readonly<Record<string, SessionInputOutcomeStats>>;
+  /** Outcomes for identities beyond the fixed attribution bound. */
+  readonly otherIdentities?: SessionInputOutcomeStats;
+  /** Whether all ingress identities have explicit entries. */
+  readonly identityAttribution: AttributionCoverage;
+}
+
 /** Complete mechanical aggregate for one statistics owner. */
 export interface ScopeStats {
   /** Provider-reported usage and bounded model attribution. */
@@ -196,4 +228,6 @@ export interface ScopeStats {
   readonly approvals: ApprovalStats;
   /** Suspension, resumption, cancellation, and steering counts. */
   readonly lifecycle: LifecycleStats;
+  /** Session ingress outcomes with bounded identity attribution. */
+  readonly inputs: SessionInputStats;
 }

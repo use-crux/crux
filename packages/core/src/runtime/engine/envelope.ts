@@ -140,6 +140,8 @@ function isRuntimeWorkKind(value: unknown): value is RuntimeWork['kind'] {
     value === 'flow.resume' ||
     value === 'flow.timeout' ||
     value === 'task.run' ||
+    value === 'session.turn' ||
+    value === 'session.signal-ingress' ||
     value === 'watch.deliver'
   )
 }

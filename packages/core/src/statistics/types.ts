@@ -84,6 +84,17 @@ export type StatisticsFact =
         | "steering-input";
     }
   | {
+      readonly kind: "session-input";
+      /** Normalized ingress identity (input id or delivery id). */
+      readonly identity: string;
+      readonly outcome:
+        | "accepted"
+        | "deduplicated"
+        | "delivered"
+        | "resumed"
+        | "dropped";
+    }
+  | {
       readonly kind: "timing";
       /** Active duration newly committed by this fact. */
       readonly activeTimeMs: number;

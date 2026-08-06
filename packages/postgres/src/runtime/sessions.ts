@@ -1,4 +1,7 @@
-import { initialSessionStatistics } from '@use-crux/core/runtime/internal/session-store'
+import {
+  initialSessionStatistics,
+  recordSessionStatistics,
+} from '@use-crux/core/runtime/internal/session-store'
 import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
@@ -147,6 +150,12 @@ export function createPostgresSessionStore(
 
     async acceptInputs(input) {
       if (input.inputs.length === 0) return Object.freeze([])
+      if (
+        input.inputIds !== undefined &&
+        input.inputIds.length !== input.inputs.length
+      ) {
+        throw new Error('Session inputIds must align with inputs.')
+      }
       const current = await readSession(
         db,
         schema,
@@ -162,52 +171,184 @@ export function createPostgresSessionStore(
         )
       }
       const acceptedAt = input.now.toISOString()
-      const accepted: RuntimeSessionInputRecord[] = input.inputs.map(
-        (value, index) =>
-          Object.freeze({
-            schemaVersion: 1,
-            namespace: input.namespace,
-            sessionId: input.sessionId,
-            inputId: `input_${input.sessionId}_${current.acceptedCursor + index + 1}`,
-            cursor: current.acceptedCursor + index + 1,
-            input: value,
-            acceptedAt,
-          }),
-      )
-      recordWrite(faults)
-      await db.query(
-        `INSERT INTO ${inputs}
-          (namespace, session_id, input_id, cursor, input, accepted_at)
-         SELECT $1, $2, value.input_id, value.cursor, value.input, value.accepted_at
-           FROM jsonb_to_recordset($3::jsonb) AS value(
-             input_id text, cursor bigint, input jsonb, accepted_at timestamptz
-           )`,
-        [
+      // Idempotent for stable inputIds: ON CONFLICT DO NOTHING, then load
+      // canonical rows. Cursor/pending advance only by newly inserted count.
+      const planned: Array<{
+        readonly inputId: string
+        readonly input: unknown
+        readonly isGenerated: boolean
+      }> = input.inputs.map((value, index) => ({
+        inputId:
+          input.inputIds?.[index] ??
+          `input_${input.sessionId}_${current.acceptedCursor + index + 1}`,
+        input: value,
+        isGenerated: input.inputIds?.[index] === undefined,
+      }))
+
+      // Preload existing stable ids so mixed batches assign cursors only to new rows.
+      const existingById = new Map<string, RuntimeSessionInputRecord>()
+      for (const item of planned) {
+        if (item.isGenerated) continue
+        const found = await readSessionInput(
+          db,
+          schema,
           input.namespace,
           input.sessionId,
-          encodeJson(
-            accepted.map((record) => ({
-              input_id: record.inputId,
-              cursor: record.cursor,
-              input: record.input,
-              accepted_at: record.acceptedAt,
-            })),
-          ),
-        ],
+          item.inputId,
+        )
+        if (found) existingById.set(item.inputId, found)
+      }
+
+      let nextCursor = current.acceptedCursor
+      const toInsert: RuntimeSessionInputRecord[] = []
+      const accepted: RuntimeSessionInputRecord[] = []
+      for (const item of planned) {
+        const existing = existingById.get(item.inputId)
+        if (existing) {
+          accepted.push(existing)
+          continue
+        }
+        nextCursor += 1
+        const record = Object.freeze({
+          schemaVersion: 1 as const,
+          namespace: input.namespace,
+          sessionId: input.sessionId,
+          inputId: item.inputId,
+          cursor: nextCursor,
+          input: item.input as RuntimeSessionInputRecord['input'],
+          acceptedAt,
+        })
+        toInsert.push(record)
+        accepted.push(record)
+      }
+
+      if (toInsert.length > 0) {
+        recordWrite(faults)
+        // ON CONFLICT DO NOTHING so concurrent primary-key races never abort.
+        const insertResult = await db.query<{ input_id: string }>(
+          `INSERT INTO ${inputs}
+            (namespace, session_id, input_id, cursor, input, accepted_at)
+           SELECT $1, $2, value.input_id, value.cursor, value.input, value.accepted_at
+             FROM jsonb_to_recordset($3::jsonb) AS value(
+               input_id text, cursor bigint, input jsonb, accepted_at timestamptz
+             )
+           ON CONFLICT (namespace, input_id) DO NOTHING
+           RETURNING input_id`,
+          [
+            input.namespace,
+            input.sessionId,
+            encodeJson(
+              toInsert.map((record) => ({
+                input_id: record.inputId,
+                cursor: record.cursor,
+                input: record.input,
+                accepted_at: record.acceptedAt,
+              })),
+            ),
+          ],
+        )
+        const insertedIds = new Set(
+          insertResult.rows.map((row) => row.input_id),
+        )
+        // Concurrent loser: reload canonical rows for conflicted ids and do not
+        // advance cursor for them.
+        const newlyInserted = toInsert.filter((record) =>
+          insertedIds.has(record.inputId),
+        )
+        const conflicted = toInsert.filter(
+          (record) => !insertedIds.has(record.inputId),
+        )
+        for (const record of conflicted) {
+          const canonical = await readSessionInput(
+            db,
+            schema,
+            input.namespace,
+            input.sessionId,
+            record.inputId,
+          )
+          if (!canonical) {
+            throw new Error(
+              `Session input "${record.inputId}" conflicted but was not found.`,
+            )
+          }
+          const index = accepted.findIndex((row) => row.inputId === record.inputId)
+          if (index >= 0) accepted[index] = canonical
+        }
+        const newCount = newlyInserted.length
+        if (newCount > 0) {
+          // Re-read session after inserts for accurate cursor under concurrency.
+          const fresh = await readSession(
+            db,
+            schema,
+            input.namespace,
+            input.sessionId,
+            true,
+          )
+          if (!fresh)
+            throw new Error(`Session "${input.sessionId}" was not found.`)
+          // Assign high-water from max of fresh cursor and inserted cursors.
+          const maxInsertedCursor = Math.max(
+            ...newlyInserted.map((row) => row.cursor),
+            fresh.acceptedCursor,
+          )
+          await writeSession(
+            db,
+            schema,
+            faults,
+            Object.freeze({
+              ...fresh,
+              acceptedCursor: maxInsertedCursor,
+              pendingInputs: fresh.pendingInputs + newCount,
+              wakePending: true,
+              updatedAt: acceptedAt,
+            }),
+          )
+        }
+        // Rebuild accepted order with canonical rows.
+        for (let index = 0; index < accepted.length; index += 1) {
+          const row = accepted[index]!
+          if (insertedIds.has(row.inputId) || existingById.has(row.inputId)) {
+            continue
+          }
+          const canonical = await readSessionInput(
+            db,
+            schema,
+            input.namespace,
+            input.sessionId,
+            row.inputId,
+          )
+          if (canonical) accepted[index] = canonical
+        }
+      }
+      return Object.freeze(accepted)
+    },
+
+    async appendStatistics(input) {
+      const current = await readSession(
+        db,
+        schema,
+        input.namespace,
+        input.sessionId,
+        true,
       )
-      await writeSession(
+      if (!current)
+        throw new Error(`Session "${input.sessionId}" was not found.`)
+      if (input.facts.length === 0) return current
+      return await writeSession(
         db,
         schema,
         faults,
         Object.freeze({
           ...current,
-          acceptedCursor: current.acceptedCursor + accepted.length,
-          pendingInputs: current.pendingInputs + accepted.length,
-          wakePending: true,
-          updatedAt: acceptedAt,
+          statistics: recordSessionStatistics(
+            current.statistics,
+            current.sessionId,
+            input.now,
+            input.facts,
+          ),
+          updatedAt: input.now.toISOString(),
         }),
       )
-      return Object.freeze(accepted)
     },
 
     reserveTurn: async (input) =>

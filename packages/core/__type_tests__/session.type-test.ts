@@ -35,6 +35,16 @@ const support = agent({
   model: sessionModel,
 });
 
+const approval = signal({
+  id: "review.approved",
+  schema: z.object({ approvedBy: z.string() }),
+});
+
+const agentIngress = signal({
+  id: "agent.ingress",
+  schema: z.object({ message: z.string() }),
+});
+
 const created = session(support, { key: "customer:42" });
 const reopened = getSession(support, "customer:42");
 
@@ -83,17 +93,22 @@ void created.then(async (handle) => {
   handle.thread.id = "replacement";
   // @ts-expect-error Session input stays target-specific.
   handle.send({ unknown: true });
-  // @ts-expect-error Agent Sessions do not expose Flow subscribe.
-  handle.subscribe;
+  const subscription = await handle.subscribe(agentIngress);
+  expectTypeOf(subscription.signalId).toEqualTypeOf<string>();
+  expectTypeOf(handle.subscriptions()).resolves.toMatchTypeOf<
+    readonly {
+      readonly id: string;
+      readonly signalId: string;
+      unsubscribe(): Promise<void>;
+    }[]
+  >();
+  expectTypeOf(handle.stream).toBeFunction();
+  // Predicate closures are rejected at runtime (subscribeSession); match filters
+  // remain the durable public surface.
 });
 
 // @ts-expect-error A stable Session key is required.
 session(support);
-
-const approval = signal({
-  id: "review.approved",
-  schema: z.object({ approvedBy: z.string() }),
-});
 
 const review = flow(
   "session-flow-review",
@@ -147,6 +162,7 @@ void flowCreated.then(async (handle) => {
   expectTypeOf(handle.subscriptions()).resolves.toMatchTypeOf<
     readonly SessionSubscription[]
   >();
+  expectTypeOf(handle.stream).toBeFunction();
   // @ts-expect-error Flow Sessions reject Agent-only model options.
   await session(review, { key: "document:8", model: sessionModel });
   // @ts-expect-error Flow Session input stays target-specific.
