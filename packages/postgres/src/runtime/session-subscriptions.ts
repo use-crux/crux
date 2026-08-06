@@ -1,9 +1,6 @@
 /** PostgreSQL Session Signal subscription persistence. */
 
-import {
-  sessionSubscriptionMatchKey,
-  sessionSubscriptionMatchValue,
-} from '@use-crux/core/runtime/internal/session-store'
+import { sessionSubscriptionMatchValue } from '@use-crux/core/runtime/internal/session-store'
 import type { JsonValue } from '@use-crux/core'
 import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
@@ -39,6 +36,7 @@ export function createPostgresSessionSubscriptionMethods(
       readonly subscriptionId: string
       readonly signalId: string
       readonly match?: JsonValue
+      readonly matchKey: string
       readonly now: Date
     }): Promise<SubscriptionRecord> {
       const session = await db.query<Record<string, unknown>>(
@@ -55,12 +53,13 @@ export function createPostgresSessionSubscriptionMethods(
         )
       }
       const match = sessionSubscriptionMatchValue(input.match)
-      const matchKey = sessionSubscriptionMatchKey(match)
+      const matchKey = input.matchKey
       const matchJson = match === undefined ? null : encodeJson(match)
       const now = input.now.toISOString()
       recordWrite(faults)
       // Conflict-safe on the canonical identity unique index. Concurrent same-key
-      // upserts share one row; unsubscribed rows reactivate without allocating.
+      // upserts share one row. Active re-upserts are no-ops that preserve
+      // updated_at; unsubscribed rows reactivate with a fresh timestamp.
       const upserted = await db.query<Record<string, unknown>>(
         `INSERT INTO ${subscriptions}
           (namespace, session_id, subscription_id, signal_id, match, match_key,
@@ -68,7 +67,11 @@ export function createPostgresSessionSubscriptionMethods(
          VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'active', $7, $7)
          ON CONFLICT (namespace, session_id, signal_id, match_key) DO UPDATE
            SET state = 'active',
-               updated_at = EXCLUDED.updated_at,
+               updated_at = CASE
+                 WHEN ${subscriptions}.state = 'active'
+                   THEN ${subscriptions}.updated_at
+                 ELSE EXCLUDED.updated_at
+               END,
                match = EXCLUDED.match,
                subscription_id = ${subscriptions}.subscription_id
          RETURNING *`,
@@ -138,18 +141,43 @@ export function createPostgresSessionSubscriptionMethods(
       subscriptionId: string,
       now: Date,
     ): Promise<SubscriptionRecord> {
+      // Already-unsubscribed rows are no-op retries that preserve updated_at.
+      const existing = await db.query<Record<string, unknown>>(
+        `SELECT * FROM ${subscriptions}
+          WHERE namespace = $1 AND session_id = $2 AND subscription_id = $3`,
+        [namespace, sessionId, subscriptionId],
+      )
+      const current = existing.rows[0]
+      if (!current) {
+        throw new Error(
+          `Session subscription "${subscriptionId}" was not found.`,
+        )
+      }
+      if (current.state === 'unsubscribed') {
+        return decodeSubscription(current)
+      }
       recordWrite(faults)
       const result = await db.query<Record<string, unknown>>(
         `UPDATE ${subscriptions}
             SET state = 'unsubscribed', updated_at = $4
           WHERE namespace = $1 AND session_id = $2 AND subscription_id = $3
+            AND state = 'active'
           RETURNING *`,
         [namespace, sessionId, subscriptionId, now.toISOString()],
       )
       if (!result.rows[0]) {
-        throw new Error(
-          `Session subscription "${subscriptionId}" was not found.`,
+        // Concurrent unsubscribe: re-read the stable unsubscribed row.
+        const again = await db.query<Record<string, unknown>>(
+          `SELECT * FROM ${subscriptions}
+            WHERE namespace = $1 AND session_id = $2 AND subscription_id = $3`,
+          [namespace, sessionId, subscriptionId],
         )
+        if (!again.rows[0]) {
+          throw new Error(
+            `Session subscription "${subscriptionId}" was not found.`,
+          )
+        }
+        return decodeSubscription(again.rows[0])
       }
       return decodeSubscription(result.rows[0])
     },
@@ -160,11 +188,7 @@ function decodeSubscription(row: Record<string, unknown>): SubscriptionRecord {
   const matchKey =
     typeof row.match_key === 'string'
       ? row.match_key
-      : sessionSubscriptionMatchKey(
-          row.match === null || row.match === undefined
-            ? undefined
-            : (row.match as JsonValue),
-        )
+      : ''
   return Object.freeze({
     schemaVersion: 1 as const,
     namespace: String(row.namespace),

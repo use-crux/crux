@@ -35,10 +35,7 @@ export async function leaseWorkInTransaction(
       now,
     });
     if (!claimed) return null;
-  } else if (
-    current.work.kind === "flow.resume" &&
-    tx.sessions?.getByActivationWorkId
-  ) {
+  } else if (current.work.kind === "flow.resume" && tx.sessions) {
     const session = await tx.sessions.getByActivationWorkId(
       current.namespace,
       current.workId,

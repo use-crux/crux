@@ -1,6 +1,10 @@
 import { convexTest } from 'convex-test'
 import { makeFunctionReference } from 'convex/server'
 import { describe, expect, it } from 'vitest'
+import {
+  sessionSubscriptionMatchKey,
+  sessionSubscriptionMatchValue,
+} from '@use-crux/core/runtime/internal/session-store'
 import schema from '../src/component/schema'
 import { convexRuntimeStore } from '../src/runtime'
 import {
@@ -26,6 +30,10 @@ const modules = {
   '../src/component/runtime/session_checkpoint.ts': () =>
     import('../src/component/runtime/session_checkpoint'),
 } satisfies Record<string, () => Promise<unknown>>
+
+function matchKeyFor(match: { env: string; repo: string }) {
+  return sessionSubscriptionMatchKey(sessionSubscriptionMatchValue(match))
+}
 
 function createStore() {
   const test = convexTest({ schema, modules })
@@ -75,15 +83,15 @@ describe('Convex Session subscription port', () => {
   it('upserts by canonical key-order match identity and reactivates after unsubscribe', async () => {
     const { store, now } = createStore()
     const sessions = await prepareFlowSession(store, now)
-    if (!sessions.upsertSubscription || !sessions.unsubscribe) {
-      throw new Error('Expected subscription port methods')
-    }
+    const match = { env: 'prod', repo: 'crux' }
+    const matchKey = matchKeyFor(match)
     const first = await sessions.upsertSubscription({
       namespace: 'convex-sub-ns',
       sessionId: 'session_convex_sub_1',
       subscriptionId: 'subscription_a',
       signalId: 'orders.changed',
-      match: { env: 'prod', repo: 'crux' },
+      match,
+      matchKey,
       now,
     })
     const second = await sessions.upsertSubscription({
@@ -92,6 +100,7 @@ describe('Convex Session subscription port', () => {
       subscriptionId: 'subscription_b',
       signalId: 'orders.changed',
       match: { repo: 'crux', env: 'prod' },
+      matchKey,
       now: new Date(now.getTime() + 1_000),
     })
     expect(second.subscriptionId).toBe(first.subscriptionId)
@@ -108,12 +117,13 @@ describe('Convex Session subscription port', () => {
       sessionId: 'session_convex_sub_1',
       subscriptionId: first.subscriptionId,
       signalId: 'orders.changed',
-      match: { env: 'prod', repo: 'crux' },
+      match,
+      matchKey,
       now: new Date(now.getTime() + 3_000),
     })
     expect(reactivated.subscriptionId).toBe(first.subscriptionId)
     expect(reactivated.state).toBe('active')
-    const listed = await sessions.listSubscriptions?.(
+    const listed = await sessions.listSubscriptions(
       'convex-sub-ns',
       'session_convex_sub_1',
     )
@@ -123,29 +133,28 @@ describe('Convex Session subscription port', () => {
   it('keeps one row under concurrent same-key upserts', async () => {
     const { store, now } = createStore()
     const sessions = await prepareFlowSession(store, now)
-    if (!sessions.upsertSubscription) {
-      throw new Error('Expected subscription port methods')
-    }
     const match = { env: 'prod', repo: 'crux' }
+    const matchKey = matchKeyFor(match)
     const results = await Promise.all(
       Array.from({ length: 8 }, (_, index) =>
-        sessions.upsertSubscription!({
+        sessions.upsertSubscription({
           namespace: 'convex-sub-ns',
           sessionId: 'session_convex_sub_1',
           subscriptionId: `subscription_race_${index}`,
           signalId: 'orders.changed',
           match: index % 2 === 0 ? match : { repo: 'crux', env: 'prod' },
+          matchKey,
           now: new Date(now.getTime() + index),
         }),
       ),
     )
     const ids = new Set(results.map((row) => row.subscriptionId))
     expect(ids.size).toBe(1)
-    const listed = await sessions.listSubscriptions?.(
+    const listed = await sessions.listSubscriptions(
       'convex-sub-ns',
       'session_convex_sub_1',
     )
     expect(listed).toHaveLength(1)
-    expect(listed?.[0]?.subscriptionId).toBe(results[0]?.subscriptionId)
+    expect(listed[0]?.subscriptionId).toBe(results[0]?.subscriptionId)
   })
 })

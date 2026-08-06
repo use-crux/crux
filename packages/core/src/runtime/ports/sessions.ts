@@ -207,6 +207,13 @@ export interface UpsertRuntimeSessionSubscriptionInput {
   readonly subscriptionId: string;
   readonly signalId: string;
   readonly match?: JsonValue;
+  /**
+   * Already-derived canonical match identity for this subscription.
+   *
+   * @remarks Callers must pass the shared Session subscription match codec
+   * result. Adapters persist and compare this value without re-deriving it.
+   */
+  readonly matchKey: string;
   readonly now: Date;
 }
 
@@ -341,7 +348,7 @@ export interface RuntimeSessionStorePort {
   /** Retain one terminal safe blocker without exposing its payload. */
   blockTurn(input: RuntimeSessionTurnInput): Promise<RuntimeSessionRecord>;
   /** Resolve the Session whose current activation owns a Work occurrence. */
-  getByActivationWorkId?(
+  getByActivationWorkId(
     namespace: string,
     workId: WorkId,
   ): Promise<RuntimeSessionRecord | null>;
@@ -350,17 +357,17 @@ export interface RuntimeSessionStorePort {
    *
    * @remarks Idempotent by Session, Signal identity, and canonical match data.
    */
-  upsertSubscription?(
+  upsertSubscription(
     input: UpsertRuntimeSessionSubscriptionInput,
   ): Promise<RuntimeSessionSubscriptionRecord>;
   /** Read one subscription by identity. */
-  getSubscription?(
+  getSubscription(
     namespace: string,
     sessionId: string,
     subscriptionId: string,
   ): Promise<RuntimeSessionSubscriptionRecord | null>;
   /** List active subscriptions for one Session. */
-  listSubscriptions?(
+  listSubscriptions(
     namespace: string,
     sessionId: string,
   ): Promise<readonly RuntimeSessionSubscriptionRecord[]>;
@@ -370,12 +377,12 @@ export interface RuntimeSessionStorePort {
    * @remarks Used by Signal publication to fan out independent Session
    * deliveries without scanning every Session identity.
    */
-  listActiveSubscriptionsForSignal?(
+  listActiveSubscriptionsForSignal(
     namespace: string,
     signalId: string,
   ): Promise<readonly RuntimeSessionSubscriptionRecord[]>;
   /** Mark one subscription unsubscribed without deleting history. */
-  unsubscribe?(
+  unsubscribe(
     namespace: string,
     sessionId: string,
     subscriptionId: string,
