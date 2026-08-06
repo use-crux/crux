@@ -72,7 +72,14 @@ export default defineSchema({
     threadId: v.string(),
     model: v.optional(v.any()),
     definition: v.optional(v.any()),
-    state: v.union(v.literal('prepared'), v.literal('ready')),
+    state: v.union(
+      v.literal('prepared'),
+      v.literal('ready'),
+      v.literal('closing'),
+      v.literal('closed'),
+      v.literal('killed'),
+      v.literal('deleted'),
+    ),
     acceptedCursor: v.number(),
     processedCursor: v.optional(v.number()),
     pendingInputs: v.number(),
@@ -82,13 +89,23 @@ export default defineSchema({
     wakePending: v.boolean(),
     activation: v.optional(v.any()),
     activationWorkId: v.optional(v.string()),
+    parentSessionId: v.optional(v.string()),
+    forkedFrom: v.optional(
+      v.object({
+        sessionId: v.string(),
+        cursor: v.number(),
+        threadRevision: v.string(),
+      }),
+    ),
+    fencedWorkId: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
     .index('by_namespace_key', ['namespace', 'keyHash'])
     .index('by_namespace_session', ['namespace', 'sessionId'])
     .index('by_namespace_updated', ['namespace', 'updatedAt'])
-    .index('by_namespace_activation_work', ['namespace', 'activationWorkId']),
+    .index('by_namespace_activation_work', ['namespace', 'activationWorkId'])
+    .index('by_namespace_parent', ['namespace', 'parentSessionId']),
 
   runtimeSessionInputs: defineTable({
     schemaVersion: v.literal(1),

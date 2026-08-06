@@ -45,6 +45,11 @@ export async function acceptSessionInputsInTransaction(
       `Session "${input.session.sessionId}" does not match its keyed Runtime identity.`,
     );
   }
+  if (session.state !== "ready") {
+    throw new Error(
+      `Session "${session.sessionId}" no longer accepts external ingress.`,
+    );
+  }
   const now = deps.now();
   const accepted = await sessions.acceptInputs({
     namespace: input.namespace,

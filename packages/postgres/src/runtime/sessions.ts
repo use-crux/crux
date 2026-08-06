@@ -3,6 +3,13 @@ import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import {
+  closePostgresSession,
+  deletePostgresSession,
+  forkPostgresSession,
+  killPostgresSession,
+  listPostgresSessionForks,
+} from './session-controls'
+import {
   claimSessionStepInputs,
   reserveSessionTurn,
   startSessionTurn,
@@ -78,6 +85,9 @@ export function createPostgresSessionStore(
       }
       const existing = await getByKey(input.namespace, input.keyHash)
       if (!existing) throw new Error('Failed to read existing Runtime Session.')
+      if (existing.state === 'deleted') {
+        return { kind: 'tombstone', session: existing }
+      }
       return existing.targetId === input.targetId
         ? { kind: 'existing', session: existing }
         : { kind: 'conflict', session: existing }
@@ -122,6 +132,11 @@ export function createPostgresSessionStore(
       const current = await readSession(db, schema, namespace, sessionId, true)
       if (!current) throw new Error(`Session "${sessionId}" was not found.`)
       if (current.state === 'ready') return current
+      if (current.state !== 'prepared') {
+        throw new Error(
+          `Session "${sessionId}" cannot become ready from state "${current.state}".`,
+        )
+      }
       const ready: RuntimeSessionRecord = Object.freeze({
         ...current,
         state: 'ready',
@@ -142,7 +157,9 @@ export function createPostgresSessionStore(
       if (!current)
         throw new Error(`Session "${input.sessionId}" was not found.`)
       if (current.state !== 'ready') {
-        throw new Error(`Session "${input.sessionId}" is not ready.`)
+        throw new Error(
+          `Session "${input.sessionId}" no longer accepts external ingress.`,
+        )
       }
       const acceptedAt = input.now.toISOString()
       const accepted: RuntimeSessionInputRecord[] = input.inputs.map(
@@ -210,6 +227,21 @@ export function createPostgresSessionStore(
     },
 
     async checkpointPreparedExecution(input) {
+      const current = await readSession(
+        db,
+        schema,
+        input.namespace,
+        input.sessionId,
+        true,
+      )
+      if (!current) {
+        throw new Error(`Session "${input.sessionId}" was not found.`)
+      }
+      if (current.state !== 'ready' && current.state !== 'closing') {
+        throw new Error(
+          `Session "${input.sessionId}" no longer holds commit authority.`,
+        )
+      }
       const prepared: RuntimeSessionPreparedExecution = Object.freeze({
         workId: input.workId,
         preparedResultRef: Object.freeze({ ...input.preparedResultRef }),
@@ -258,6 +290,15 @@ export function createPostgresSessionStore(
     },
 
     ...subscriptionMethods,
+
+    close: async (input) =>
+      await closePostgresSession(db, schema, faults, input),
+    kill: async (input) => await killPostgresSession(db, schema, faults, input),
+    delete: async (input) =>
+      await deletePostgresSession(db, schema, faults, input),
+    fork: async (input) => await forkPostgresSession(db, schema, faults, input),
+    listForks: async (namespace, sessionId) =>
+      await listPostgresSessionForks(db, schema, namespace, sessionId),
   }
 
   async function getByKey(namespace: string, keyHash: string) {

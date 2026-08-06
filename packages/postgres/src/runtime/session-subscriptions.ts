@@ -39,6 +39,19 @@ export function createPostgresSessionSubscriptionMethods(
       readonly matchKey: string
       readonly now: Date
     }): Promise<SubscriptionRecord> {
+      const session = await db.query<Record<string, unknown>>(
+        `SELECT state FROM ${table(schema, 'sessions')}
+          WHERE namespace = $1 AND session_id = $2`,
+        [input.namespace, input.sessionId],
+      )
+      if (!session.rows[0]) {
+        throw new Error(`Session "${input.sessionId}" was not found.`)
+      }
+      if (session.rows[0].state !== 'ready') {
+        throw new Error(
+          `Session "${input.sessionId}" no longer accepts Signal subscriptions.`,
+        )
+      }
       const match = sessionSubscriptionMatchValue(input.match)
       const matchKey = input.matchKey
       const matchJson = match === undefined ? null : encodeJson(match)
@@ -105,10 +118,18 @@ export function createPostgresSessionSubscriptionMethods(
       namespace: string,
       signalId: string,
     ): Promise<readonly SubscriptionRecord[]> {
+      // Defense in depth: only ready Sessions receive Signal fan-out.
       const result = await db.query<Record<string, unknown>>(
-        `SELECT * FROM ${subscriptions}
-          WHERE namespace = $1 AND signal_id = $2 AND state = 'active'
-          ORDER BY created_at ASC`,
+        `SELECT sub.*
+           FROM ${subscriptions} sub
+           INNER JOIN ${table(schema, 'sessions')} sess
+             ON sess.namespace = sub.namespace
+            AND sess.session_id = sub.session_id
+          WHERE sub.namespace = $1
+            AND sub.signal_id = $2
+            AND sub.state = 'active'
+            AND sess.state = 'ready'
+          ORDER BY sub.created_at ASC`,
         [namespace, signalId],
       )
       return Object.freeze(result.rows.map(decodeSubscription))

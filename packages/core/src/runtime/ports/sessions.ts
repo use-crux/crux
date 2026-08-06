@@ -6,6 +6,30 @@ import type { RuntimeResultRef } from "../results/types";
 import type { StatisticsLedgerExport } from "../../statistics";
 import type { RuntimeTargetDefinitionRef } from "./target-definition";
 
+/**
+ * Durable Session control-record lifecycle.
+ *
+ * @remarks `prepared`/`ready` are open construction states. `closing` is the
+ * graceful drain barrier. `closed` and `killed` are terminal readable states.
+ * `deleted` is a key tombstone that rejects silent recreation.
+ */
+export type RuntimeSessionLifecycleState =
+  | "prepared"
+  | "ready"
+  | "closing"
+  | "closed"
+  | "killed"
+  | "deleted";
+
+/** Immutable fork lineage retained on child Sessions. */
+export interface RuntimeSessionForkLineage {
+  readonly sessionId: string;
+  /** Parent accepted-cursor high-water mark at the fork barrier. */
+  readonly cursor: number;
+  /** Exact Thread control revision observed when the child head was pinned. */
+  readonly threadRevision: string;
+}
+
 export interface RuntimeSessionRecord {
   readonly schemaVersion: 1;
   readonly namespace: string;
@@ -24,7 +48,7 @@ export interface RuntimeSessionRecord {
     readonly definitionId: string;
     readonly fingerprint: string;
   };
-  readonly state: "prepared" | "ready";
+  readonly state: RuntimeSessionLifecycleState;
   readonly acceptedCursor: number;
   readonly processedCursor?: number;
   readonly pendingInputs: number;
@@ -41,6 +65,18 @@ export interface RuntimeSessionRecord {
    * @remarks Agent Sessions leave this unset and use GenerationModel instead.
    */
   readonly definition?: RuntimeTargetDefinitionRef;
+  /** Parent Session identity when this Session was created by fork/clone. */
+  readonly parentSessionId?: string;
+  /** Immutable lineage snapshot for a forked child Session. */
+  readonly forkedFrom?: RuntimeSessionForkLineage;
+  /**
+   * Work fenced by `kill()` that must still be cancelled on retry.
+   *
+   * @remarks Set when kill transitions from a non-killed state. Retained so a
+   * crash between the Session fence and Work cancellation can complete cancel
+   * on the next kill() without restoring commit authority.
+   */
+  readonly fencedWorkId?: WorkId;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -186,7 +222,44 @@ export type CreateRuntimeSessionResult =
       readonly kind: "created" | "existing";
       readonly session: RuntimeSessionRecord;
     }
-  | { readonly kind: "conflict"; readonly session: RuntimeSessionRecord };
+  | { readonly kind: "conflict"; readonly session: RuntimeSessionRecord }
+  | { readonly kind: "tombstone"; readonly session: RuntimeSessionRecord };
+
+/** Input for the ordered close barrier. */
+export interface CloseRuntimeSessionInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly now: Date;
+}
+
+/** Input for fenced kill terminalization. */
+export interface KillRuntimeSessionInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly now: Date;
+}
+
+/** Input for retention-safe Session deletion. */
+export interface DeleteRuntimeSessionInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly now: Date;
+}
+
+/** Input for creating a child Session owner/head from a pinned parent revision. */
+export interface ForkRuntimeSessionInput {
+  readonly namespace: string;
+  readonly sessionId: string;
+  readonly childSessionId: string;
+  readonly childKeyHash: string;
+  readonly threadRevision: string;
+  readonly now: Date;
+}
+
+export interface ForkRuntimeSessionResult {
+  readonly parent: RuntimeSessionRecord;
+  readonly child: RuntimeSessionRecord;
+}
 
 export interface AcceptRuntimeSessionInputsInput {
   readonly namespace: string;
@@ -315,4 +388,35 @@ export interface RuntimeSessionStorePort {
     subscriptionId: string,
     now: Date,
   ): Promise<RuntimeSessionSubscriptionRecord>;
+  /**
+   * Seal external ingress and enter closing, or closed when already drained.
+   *
+   * @remarks Idempotent for closing/closed/killed. Rejects deleted Sessions.
+   */
+  close?(input: CloseRuntimeSessionInput): Promise<RuntimeSessionRecord>;
+  /**
+   * Fence the Session immediately and clear active activation linkage.
+   *
+   * @remarks Idempotent. Callers cancel residual Work through the kernel.
+   */
+  kill?(input: KillRuntimeSessionInput): Promise<RuntimeSessionRecord>;
+  /**
+   * Tombstone a closed or killed Session and strip retained ingress payloads.
+   *
+   * @remarks Does not unregister the Thread owner; the public delete path does
+   * that through the linearizable Thread owner registry after this transition.
+   */
+  delete?(input: DeleteRuntimeSessionInput): Promise<RuntimeSessionRecord>;
+  /**
+   * Create a child Session that shares the Thread with pinned independent head metadata.
+   *
+   * @remarks Child records store lineage only; Thread owner/head registration
+   * remains on the RecordStore `mutate()` path.
+   */
+  fork?(input: ForkRuntimeSessionInput): Promise<ForkRuntimeSessionResult>;
+  /** List direct child Sessions created by fork/clone. */
+  listForks?(
+    namespace: string,
+    sessionId: string,
+  ): Promise<readonly RuntimeSessionRecord[]>;
 }

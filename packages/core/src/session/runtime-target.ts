@@ -56,6 +56,20 @@ export function createSessionAgentRuntimeTarget(
         },
         { id: turn.sessionId, state: "open" },
       );
+      const assertCommitAuthority = async () => {
+        const session = await runtime.store.sessions!.get(
+          context.work.namespace,
+          turn.sessionId,
+        );
+        if (
+          !session ||
+          (session.state !== "ready" && session.state !== "closing")
+        ) {
+          throw new Error(
+            `Session "${turn.sessionId}" no longer holds commit authority.`,
+          );
+        }
+      };
       const checkpoint = await runtime.store.sessions.getPreparedExecution(
         context.work.namespace,
         turn.sessionId,
@@ -81,6 +95,7 @@ export function createSessionAgentRuntimeTarget(
           }
           throw error;
         }
+        await assertCommitAuthority();
         await ownerThread.commitTurn({
           messages: prepared.publication.messages,
           after: prepared.publication.after,
@@ -105,6 +120,7 @@ export function createSessionAgentRuntimeTarget(
           input: turn.input,
           model,
           [managedGenerationStepBoundary]: async (boundary) => {
+            await assertCommitAuthority();
             const claimed = await runtime.store.transact(async (tx) => {
               if (!tx.sessions) {
                 throw new Error("Runtime Session storage is unavailable.");
@@ -134,6 +150,7 @@ export function createSessionAgentRuntimeTarget(
             });
           },
           [managedGenerationCheckpoint]: async (prepared) => {
+            await assertCommitAuthority();
             const encoded = encodePreparedSessionTurn(
               context.work.workId,
               prepared,

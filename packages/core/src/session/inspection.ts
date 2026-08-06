@@ -16,13 +16,21 @@ export async function readSessionStatus(
   sessionId: string,
 ): Promise<SessionStatus> {
   const record = await readSession(runtime, sessionId);
+  if (record.state === "deleted") {
+    throw new SessionNotFoundError(sessionId);
+  }
+  const state =
+    record.state === "closing"
+      ? "closing"
+      : record.state === "closed" || record.state === "killed"
+        ? "closed"
+        : record.blockedWork > 0
+          ? "blocked"
+          : record.pendingInputs > 0 || record.pendingWork > 0
+            ? "running"
+            : "parked";
   return Object.freeze({
-    state:
-      record.blockedWork > 0
-        ? "blocked"
-        : record.pendingInputs > 0 || record.pendingWork > 0
-          ? "running"
-          : "parked",
+    state,
     ...(record.acceptedCursor > 0
       ? { acceptedCursor: String(record.acceptedCursor) }
       : {}),

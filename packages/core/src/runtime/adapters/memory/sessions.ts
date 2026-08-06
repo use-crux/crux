@@ -29,6 +29,15 @@ import {
   unsubscribeMemorySessionSubscription,
   upsertMemorySessionSubscription,
 } from "./session-subscriptions";
+import {
+  closeMemorySession,
+  deleteMemorySession,
+  forkMemorySession,
+  killMemorySession,
+  listMemorySessionForks,
+  sessionAcceptsIngress,
+  sessionAcceptsWorkMutation,
+} from "./session-controls";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 
@@ -54,6 +63,9 @@ export function createMemorySessionStore(
       const key = scopedKey(input.namespace, input.keyHash);
       const existing = data.sessionsByKey.get(key);
       if (existing) {
+        if (existing.state === "deleted") {
+          return { kind: "tombstone", session: existing };
+        }
         return existing.targetId === input.targetId
           ? { kind: "existing", session: existing }
           : { kind: "conflict", session: existing };
@@ -138,6 +150,11 @@ export function createMemorySessionStore(
       const session = data.sessionsById.get(sessionKey);
       if (!session) throw new Error(`Session "${sessionId}" was not found.`);
       if (session.state === "ready") return session;
+      if (session.state !== "prepared") {
+        throw new Error(
+          `Session "${sessionId}" cannot become ready from state "${session.state}".`,
+        );
+      }
       const updated = Object.freeze({
         ...session,
         state: "ready" as const,
@@ -153,8 +170,10 @@ export function createMemorySessionStore(
       const session = data.sessionsById.get(sessionKey);
       if (!session)
         throw new Error(`Session "${input.sessionId}" was not found.`);
-      if (session.state !== "ready") {
-        throw new Error(`Session "${input.sessionId}" is not ready.`);
+      if (!sessionAcceptsIngress(session)) {
+        throw new Error(
+          `Session "${input.sessionId}" no longer accepts external ingress.`,
+        );
       }
       const acceptedAt = input.now.toISOString();
       const inputs = input.inputs.map((value, index) =>
@@ -215,6 +234,17 @@ export function createMemorySessionStore(
     async checkpointPreparedExecution(
       input: CheckpointRuntimeSessionExecutionInput,
     ) {
+      const session = data.sessionsById.get(
+        scopedKey(input.namespace, input.sessionId),
+      );
+      if (!session) {
+        throw new Error(`Session "${input.sessionId}" was not found.`);
+      }
+      if (!sessionAcceptsWorkMutation(session)) {
+        throw new Error(
+          `Session "${input.sessionId}" no longer holds commit authority.`,
+        );
+      }
       const accepted = data.sessionInputs.get(
         scopedKey(input.namespace, input.inputId),
       );
@@ -284,6 +314,21 @@ export function createMemorySessionStore(
         now,
         recordWrite,
       );
+    },
+    async close(input) {
+      return closeMemorySession(data, input, recordWrite);
+    },
+    async kill(input) {
+      return killMemorySession(data, input, recordWrite);
+    },
+    async delete(input) {
+      return deleteMemorySession(data, input, recordWrite);
+    },
+    async fork(input) {
+      return forkMemorySession(data, input, recordWrite);
+    },
+    async listForks(namespace, sessionId) {
+      return listMemorySessionForks(data, namespace, sessionId);
     },
   };
 }

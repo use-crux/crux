@@ -74,6 +74,7 @@ export async function commitThreadAppend(
   const rawControl = await storage.records.get(threadControlKey(threadId));
   const observedControl = rawControl ? parseThreadControlRecord(rawControl) : null;
   assertLive(observedControl, threadId);
+  assertOwnerMayCommit(observedControl, ownerId, threadId);
   assertInputsNotRedacted(observedControl, messages);
   const prepared = await prepareThreadMessages(storage, threadId, messages);
   try {
@@ -82,6 +83,7 @@ export async function commitThreadAppend(
       ? parseThreadControlRecord(currentRaw)
       : null;
     assertLive(currentControl, threadId);
+    assertOwnerMayCommit(currentControl, ownerId, threadId);
     assertInputsNotRedacted(currentControl, messages);
     const hasExpectedHead = Object.hasOwn(options, "expectedHead");
     const parentId = hasExpectedHead
@@ -122,6 +124,7 @@ export async function commitThreadAppend(
         async (current) => {
           const control = current ? parseThreadControlRecord(current) : null;
           assertLive(control, threadId);
+          assertOwnerMayCommit(control, ownerId, threadId);
           if (
             control &&
             (await isNodePublished(storage, threadId, control, leafId))
@@ -261,6 +264,26 @@ function assertLive(
 ): void {
   if (control?.state === "deleted") {
     throw new ThreadError("deleted", `Thread "${threadId}" has been deleted.`);
+  }
+}
+
+/**
+ * Session kill/close marks owner state closed; late commits must not advance heads.
+ *
+ * @remarks The standalone main owner is unrestricted while the Thread is live.
+ */
+function assertOwnerMayCommit(
+  control: ThreadControlRecord | null,
+  ownerId: string,
+  threadId: string,
+): void {
+  if (ownerId === MAIN_THREAD_OWNER_ID) return;
+  const ownerState = control?.owners[ownerId];
+  if (ownerState === "closed") {
+    throw new ThreadError(
+      "identity_conflict",
+      `Thread owner "${ownerId}" on "${threadId}" is closed and cannot commit.`,
+    );
   }
 }
 

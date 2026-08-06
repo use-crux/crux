@@ -26,6 +26,13 @@ import {
   completeSessionTurn,
   getSessionPreparedExecution,
 } from './session_checkpoint'
+import {
+  closeSession,
+  deleteSession,
+  forkSession,
+  killSession,
+  listSessionForks,
+} from './session_controls'
 
 /** Build the Convex-local Session port for one atomic component mutation. */
 export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeStoreTransaction['sessions']> {
@@ -58,5 +65,10 @@ export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeSt
       listActiveSubscriptionsForSignal(ctx, namespace, signalId),
     unsubscribe: (namespace, sessionId, subscriptionId, now) =>
       unsubscribeSessionSubscription(ctx, namespace, sessionId, subscriptionId, now),
+    close: (input) => closeSession(ctx, input),
+    kill: (input) => killSession(ctx, input),
+    delete: (input) => deleteSession(ctx, input),
+    fork: (input) => forkSession(ctx, input),
+    listForks: (namespace, sessionId) => listSessionForks(ctx, namespace, sessionId),
   }
 }

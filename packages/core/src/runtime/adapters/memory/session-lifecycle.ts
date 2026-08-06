@@ -13,6 +13,7 @@ import type {
 import { recordSessionStatistics } from "../../engine/session-statistics";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
+import { sessionAcceptsWorkMutation } from "./session-controls";
 
 export function reserveSessionTurn(
   data: MemoryRuntimeData,
@@ -20,6 +21,11 @@ export function reserveSessionTurn(
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeSessionActivation {
   const current = currentSession(data, input);
+  if (!sessionAcceptsWorkMutation(current)) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer accepts Work mutations.`,
+    );
+  }
   if (current.activation) return current.activation;
   sessionInput(data, input);
   const activation = Object.freeze({
@@ -51,6 +57,7 @@ export function startSessionTurn(
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeSessionActivationClaim | null {
   const session = currentSession(data, input);
+  if (!sessionAcceptsWorkMutation(session)) return null;
   const activation = session.activation;
   if (!activation || activation.primaryInputId !== input.inputId) return null;
   if (activation.state === "running") {
@@ -124,6 +131,11 @@ export function claimSessionStepInputs(
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeSessionStepInputClaim {
   const session = currentSession(data, input);
+  if (!sessionAcceptsWorkMutation(session)) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer holds commit authority.`,
+    );
+  }
   const activation = session.activation;
   if (
     !activation ||

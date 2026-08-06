@@ -36,6 +36,15 @@ export function sessionRecord(row: SessionRow): SessionRecord {
     statistics: row.statistics,
     wakePending: row.wakePending,
     ...(row.activation === undefined ? {} : { activation: row.activation }),
+    ...(row.parentSessionId === undefined
+      ? {}
+      : { parentSessionId: row.parentSessionId }),
+    ...(row.forkedFrom === undefined ? {} : { forkedFrom: row.forkedFrom }),
+    ...(row.fencedWorkId === undefined
+      ? {}
+      : {
+          fencedWorkId: row.fencedWorkId as SessionRecord['fencedWorkId'],
+        }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

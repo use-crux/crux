@@ -6,6 +6,7 @@ import type { GenerationModel } from "../generation-model";
 import { activeSessionHost } from "../work/internal/durable-host-context";
 import type { AnyFlowTarget } from "../work/target-types";
 import {
+  SessionDeletedError,
   SessionIdentityConflictError,
   SessionNotFoundError,
 } from "./errors";
@@ -103,6 +104,9 @@ export async function getSession<const TTarget extends SessionTarget>(
     identityHash(host.runtime.namespace, key),
   );
   if (!record) throw new SessionNotFoundError(key);
+  if (record.state === "deleted") {
+    throw new SessionDeletedError(record.sessionId);
+  }
   if (record.targetId !== targetIdentity(target)) {
     throw new SessionIdentityConflictError(key);
   }

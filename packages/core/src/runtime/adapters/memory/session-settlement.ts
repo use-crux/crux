@@ -8,6 +8,10 @@ import type {
 } from "../../ports/sessions";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
+import {
+  maybeFinalizeClosingSession,
+  sessionAcceptsWorkMutation,
+} from "./session-controls";
 import { getSessionTurnInputs } from "./session-lifecycle";
 
 export function settleSessionTurn(
@@ -16,11 +20,15 @@ export function settleSessionTurn(
   outcome: "completed" | "blocked",
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeSessionRecord {
+  const session = currentSession(data, input);
+  // Killed/deleted Sessions ignore late settlement so provider output cannot
+  // rewrite the lifecycle or Thread-facing counters.
+  if (!sessionAcceptsWorkMutation(session)) return session;
   const accepted = sessionInput(data, input);
   const work = accepted.work;
   if (!work) throw new Error(`Session input "${input.inputId}" has no Work.`);
   if (work.state === "completed" || work.state === "blocked") {
-    return currentSession(data, input);
+    return session;
   }
   const joined = getSessionTurnInputs(
     data,
@@ -40,8 +48,7 @@ export function settleSessionTurn(
     );
   }
   const processedCursor = Math.max(...joined.map((member) => member.cursor));
-  const session = currentSession(data, input);
-  const updated = Object.freeze({
+  const settled = Object.freeze({
     ...session,
     ...(outcome === "completed" ? { processedCursor } : {}),
     pendingInputs: session.pendingInputs - joined.length,
@@ -75,6 +82,7 @@ export function settleSessionTurn(
     wakePending: session.acceptedCursor > processedCursor,
     updatedAt: input.now.toISOString(),
   });
+  const updated = maybeFinalizeClosingSession(settled, input.now);
   data.sessionsById.set(scopedKey(input.namespace, input.sessionId), updated);
   data.sessionsByKey.set(scopedKey(input.namespace, session.keyHash), updated);
   recordWrite?.();

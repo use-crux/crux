@@ -1,6 +1,10 @@
 import { recordSessionStatistics } from '@use-crux/core/runtime/internal/session-store'
 import type { MutationCtx } from '../_generated/server.js'
 import {
+  maybeFinalizeClosingSession,
+  sessionAcceptsWorkMutation,
+} from './session_controls'
+import {
   readInput,
   readSession,
   replaceSession,
@@ -28,6 +32,13 @@ export async function getSessionPreparedExecution(
 
 /** Retain one prepared artifact reference for every joined input. */
 export async function checkpointSessionExecution(ctx: MutationCtx, input: CheckpointInput) {
+  const sessionRow = await readSession(ctx, input.namespace, input.sessionId)
+  if (!sessionRow) throw new Error(`Session "${input.sessionId}" was not found.`)
+  if (!sessionAcceptsWorkMutation(sessionRecord(sessionRow))) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer holds commit authority.`,
+    )
+  }
   const accepted = await readInput(ctx, input.namespace, input.sessionId, input.inputId)
   if (!accepted) throw new Error(`Session input "${input.inputId}" was not found.`)
   const prepared = {
@@ -67,7 +78,9 @@ async function settleSessionTurn(ctx: MutationCtx, input: TurnInput, outcome: 'c
   if (!work) throw new Error(`Session input "${input.inputId}" has no Work.`)
   const row = await readSession(ctx, input.namespace, input.sessionId)
   if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
-  if (work.state === 'completed' || work.state === 'blocked') return sessionRecord(row)
+  const current = sessionRecord(row)
+  if (!sessionAcceptsWorkMutation(current)) return current
+  if (work.state === 'completed' || work.state === 'blocked') return current
   const joined = await workInputs(ctx, input.namespace, input.sessionId, work.workId)
   for (const member of joined) {
     if (!member.work) throw new Error('Session activation linkage is incomplete.')
@@ -80,8 +93,8 @@ async function settleSessionTurn(ctx: MutationCtx, input: TurnInput, outcome: 'c
     )
   }
   const processedCursor = Math.max(...joined.map((member) => member.cursor))
-  const next: SessionRecord = {
-    ...sessionRecord(row),
+  const settled: SessionRecord = {
+    ...current,
     ...(outcome === 'completed' ? { processedCursor } : {}),
     pendingInputs: row.pendingInputs - joined.length,
     pendingWork: outcome === 'completed' ? row.pendingWork - 1 : row.pendingWork,
@@ -112,11 +125,14 @@ async function settleSessionTurn(ctx: MutationCtx, input: TurnInput, outcome: 'c
     wakePending: row.acceptedCursor > processedCursor,
     updatedAt: input.now.toISOString(),
   }
+  const next = maybeFinalizeClosingSession(settled, input.now)
   return await replaceSession(
     ctx,
     row,
     next,
-    outcome === 'completed' ? { activationWorkId: null } : undefined,
+    outcome === 'completed' || next.activation === undefined
+      ? { activationWorkId: null }
+      : undefined,
   )
 }
 

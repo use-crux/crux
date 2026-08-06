@@ -42,6 +42,15 @@ export function decodeSessionRecord(row: JsonRecord): RuntimeSessionRecord {
     statistics: decodeStatistics(row.statistics),
     wakePending: requiredBoolean(row.wake_pending, 'wake_pending'),
     ...(row.activation ? { activation: decodeActivation(row.activation) } : {}),
+    ...(row.parent_session_id === null || row.parent_session_id === undefined
+      ? {}
+      : { parentSessionId: requiredString(row.parent_session_id, 'parent_session_id') }),
+    ...(row.forked_from === null || row.forked_from === undefined
+      ? {}
+      : { forkedFrom: decodeForkedFrom(row.forked_from) }),
+    ...(row.fenced_work_id === null || row.fenced_work_id === undefined
+      ? {}
+      : { fencedWorkId: workId(row.fenced_work_id, 'fenced_work_id') }),
     createdAt: timestamp(row.created_at, 'created_at'),
     updatedAt: timestamp(row.updated_at, 'updated_at'),
   })
@@ -191,8 +200,31 @@ function decodeStatistics(value: unknown): StatisticsLedgerExport {
 }
 
 function sessionState(value: unknown): RuntimeSessionRecord['state'] {
-  if (value !== 'prepared' && value !== 'ready') invalid('state')
+  if (
+    value !== 'prepared' &&
+    value !== 'ready' &&
+    value !== 'closing' &&
+    value !== 'closed' &&
+    value !== 'killed' &&
+    value !== 'deleted'
+  ) {
+    invalid('state')
+  }
   return value
+}
+
+function decodeForkedFrom(
+  value: unknown,
+): NonNullable<RuntimeSessionRecord['forkedFrom']> {
+  const record = object(value, 'forked_from')
+  return Object.freeze({
+    sessionId: requiredString(record.sessionId, 'forked_from.sessionId'),
+    cursor: safeInteger(record.cursor, 'forked_from.cursor'),
+    threadRevision: requiredString(
+      record.threadRevision,
+      'forked_from.threadRevision',
+    ),
+  })
 }
 
 function jsonValue(value: unknown, field: string): JsonValue {

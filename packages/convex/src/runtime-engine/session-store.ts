@@ -46,5 +46,10 @@ export function createConvexSessionStore(options: ConvexSessionStoreOptions): Se
       call('listActiveSubscriptionsForSignal', [namespace, signalId]),
     unsubscribe: (namespace, sessionId, subscriptionId, now) =>
       call('unsubscribe', [namespace, sessionId, subscriptionId, now]),
+    close: (input) => call('close', input),
+    kill: (input) => call('kill', input),
+    delete: (input) => call('delete', input),
+    fork: (input) => call('fork', input),
+    listForks: (namespace, sessionId) => call('listForks', [namespace, sessionId]),
   }
 }

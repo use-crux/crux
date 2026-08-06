@@ -268,3 +268,13 @@ a matching active Session subscription also matches the payload; non-Session
 Flow waiters remain an independent consumer. Memory, PostgreSQL, and Convex use
 one canonical subscription match-key codec for upsert idempotency and delivery
 matching, including key-order-invariant match data.
+
+Add production Session lifecycle controls on the same Thread owner registry and
+Runtime Work spine: joinable `close()` that deactivates Signal subscriptions at
+the barrier and drains currently represented pending-input/work/activation
+obligations (not a full nested causal Work tree), fenced `kill()` that revokes
+claim/checkpoint/start and closed-owner Thread commit authority, retention-safe
+`delete()` that unregisters owners only after closed/killed tombstones, and
+`fork()`/`clone()` that register the child owner/head pin before the Session
+fork record. Keyed recreation after delete is rejected. Memory, PostgreSQL, and
+Convex implement the lifecycle ports and shared conformance laws.

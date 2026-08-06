@@ -25,6 +25,9 @@ export async function createSession(ctx: MutationCtx, input: CreateInput) {
     .unique()
   if (existing) {
     const session = sessionRecord(existing)
+    if (session.state === 'deleted') {
+      return { kind: 'tombstone' as const, session }
+    }
     return existing.targetId === input.targetId
       ? { kind: 'existing' as const, session }
       : { kind: 'conflict' as const, session }
@@ -105,6 +108,11 @@ export async function markSessionReady(ctx: MutationCtx, namespace: string, sess
   const row = await readSession(ctx, namespace, sessionId)
   if (!row) throw new Error(`Session "${sessionId}" was not found.`)
   if (row.state === 'ready') return sessionRecord(row)
+  if (row.state !== 'prepared') {
+    throw new Error(
+      `Session "${sessionId}" cannot become ready from state "${row.state}".`,
+    )
+  }
   const next: SessionRecord = {
     ...sessionRecord(row),
     state: 'ready',
@@ -117,7 +125,11 @@ export async function markSessionReady(ctx: MutationCtx, namespace: string, sess
 export async function acceptSessionInputs(ctx: MutationCtx, input: AcceptInput) {
   const row = await readSession(ctx, input.namespace, input.sessionId)
   if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
-  if (row.state !== 'ready') throw new Error(`Session "${input.sessionId}" is not ready.`)
+  if (row.state !== 'ready') {
+    throw new Error(
+      `Session "${input.sessionId}" no longer accepts external ingress.`,
+    )
+  }
   const acceptedAt = input.now.toISOString()
   const accepted: SessionInputRecord[] = input.inputs.map((value, index) => ({
     schemaVersion: 1,
