@@ -35,6 +35,20 @@ export async function leaseWorkInTransaction(
       now,
     });
     if (!claimed) return null;
+  } else if (current.work.kind === "flow.resume" && tx.sessions) {
+    const session = await tx.sessions.getByActivationWorkId(
+      current.namespace,
+      current.workId,
+    );
+    if (session?.activation?.primaryInputId) {
+      const claimed = await tx.sessions.startTurn({
+        namespace: current.namespace,
+        sessionId: session.sessionId,
+        inputId: session.activation.primaryInputId,
+        now,
+      });
+      if (!claimed) return null;
+    }
   }
   const transitioned = recordApplicationWorkTransition(
     current,

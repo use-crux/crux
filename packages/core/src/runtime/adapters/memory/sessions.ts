@@ -8,7 +8,6 @@ import type {
   RuntimeSessionStorePort,
   RuntimeSessionPreparedExecution,
 } from "../../ports/sessions";
-import { createRuntimeError } from "../../engine/errors";
 import { cloneRuntimeResultRef } from "../../results/types";
 import { initialSessionStatistics } from "../../engine/session-statistics";
 import {
@@ -18,6 +17,18 @@ import {
   startSessionTurn,
 } from "./session-lifecycle";
 import { settleSessionTurn } from "./session-settlement";
+import {
+  assertSameSessionCheckpoint,
+  sessionCheckpointCrash,
+  sessionIngressDeliveryCrash,
+} from "./session-faults";
+import {
+  getMemorySessionSubscription,
+  listMemoryActiveSubscriptionsForSignal,
+  listMemorySessionSubscriptions,
+  unsubscribeMemorySessionSubscription,
+  upsertMemorySessionSubscription,
+} from "./session-subscriptions";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 
@@ -54,8 +65,14 @@ export function createMemorySessionStore(
         sessionId: input.sessionId,
         keyHash: input.keyHash,
         targetId: input.targetId,
+        targetKind: input.targetKind,
         threadId: input.threadId,
-        model: Object.freeze({ ...input.model }),
+        ...(input.model
+          ? { model: Object.freeze({ ...input.model }) }
+          : {}),
+        ...(input.definition
+          ? { definition: Object.freeze({ ...input.definition }) }
+          : {}),
         state: "prepared",
         acceptedCursor: 0,
         pendingInputs: 0,
@@ -79,6 +96,15 @@ export function createMemorySessionStore(
     },
     async get(namespace, sessionId) {
       return data.sessionsById.get(scopedKey(namespace, sessionId)) ?? null;
+    },
+    async getByActivationWorkId(namespace, workId) {
+      return (
+        [...data.sessionsById.values()].find(
+          (session) =>
+            session.namespace === namespace &&
+            session.activation?.workId === workId,
+        ) ?? null
+      );
     },
     async getInput(namespace, sessionId, inputId) {
       const accepted = data.sessionInputs.get(scopedKey(namespace, inputId));
@@ -176,7 +202,7 @@ export function createMemorySessionStore(
       const claimed = claimSessionStepInputs(data, input, recordWrite);
       if (faults?.crashAfterIngressDelivery && claimed.inputs.length > 0) {
         faults.crashAfterIngressDelivery = false;
-        throw ingressDeliveryCrash(input.workId);
+        throw sessionIngressDeliveryCrash(input.workId);
       }
       return claimed;
     },
@@ -208,7 +234,7 @@ export function createMemorySessionStore(
       );
       for (const member of joined) {
         if (member.preparedExecution) {
-          assertSameCheckpoint(member.preparedExecution, input);
+          assertSameSessionCheckpoint(member.preparedExecution, input);
           continue;
         }
         data.sessionInputs.set(
@@ -222,7 +248,7 @@ export function createMemorySessionStore(
       }
       if (faults?.crashAfterPreparedExecution) {
         faults.crashAfterPreparedExecution = false;
-        throw checkpointCrash(input.workId);
+        throw sessionCheckpointCrash(input.workId);
       }
       return preparedExecution;
     },
@@ -232,42 +258,32 @@ export function createMemorySessionStore(
     async blockTurn(input) {
       return settleSessionTurn(data, input, "blocked", recordWrite);
     },
+    async upsertSubscription(input) {
+      return upsertMemorySessionSubscription(data, input, recordWrite);
+    },
+    async getSubscription(namespace, sessionId, subscriptionId) {
+      return getMemorySessionSubscription(
+        data,
+        namespace,
+        sessionId,
+        subscriptionId,
+      );
+    },
+    async listSubscriptions(namespace, sessionId) {
+      return listMemorySessionSubscriptions(data, namespace, sessionId);
+    },
+    async listActiveSubscriptionsForSignal(namespace, signalId) {
+      return listMemoryActiveSubscriptionsForSignal(data, namespace, signalId);
+    },
+    async unsubscribe(namespace, sessionId, subscriptionId, now) {
+      return unsubscribeMemorySessionSubscription(
+        data,
+        namespace,
+        sessionId,
+        subscriptionId,
+        now,
+        recordWrite,
+      );
+    },
   };
-}
-
-function assertSameCheckpoint(
-  existing: RuntimeSessionPreparedExecution,
-  input: CheckpointRuntimeSessionExecutionInput,
-): void {
-  if (
-    existing.workId !== input.workId ||
-    existing.preparedResultRef.sha256 !== input.preparedResultRef.sha256 ||
-    existing.preparedResultRef.location !== input.preparedResultRef.location
-  ) {
-    throw new Error(
-      `Session input "${input.inputId}" has conflicting execution evidence.`,
-    );
-  }
-}
-
-function checkpointCrash(workId: string) {
-  return createRuntimeError({
-    code: "LEASE_LOST",
-    whatFailed: `Runtime work \`${workId}\` stopped after its prepared execution checkpoint.`,
-    why: "The in-memory test adapter injected process loss before owner-Thread publication.",
-    whatStillWorks:
-      "The write-once checkpoint can be finalized by the next Runtime worker attempt.",
-    nextStep: "Retry through the Runtime worker.",
-  });
-}
-
-function ingressDeliveryCrash(workId: string) {
-  return createRuntimeError({
-    code: "LEASE_LOST",
-    whatFailed: `Runtime work \`${workId}\` stopped at its Session ingress boundary.`,
-    why: "The in-memory test adapter injected process loss before request preparation.",
-    whatStillWorks:
-      "The rolled-back boundary can be claimed exactly once by the next Runtime worker attempt.",
-    nextStep: "Retry through the Runtime worker.",
-  });
 }

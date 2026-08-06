@@ -249,12 +249,14 @@ export interface SessionInspection {
 declare const sessionOutput: unique symbol;
 
 /**
- * Durable, keyed, Agent-specific input owner.
+ * Durable, keyed, target-specific input owner for an Agent or Flow.
  *
- * @typeParam TInput - Agent Prompt input accepted by {@link Session.send}.
- * @typeParam TOutput - Exact Agent output joined through turn handles.
- * @remarks Creating a Session does not run the Agent. Each `send` accepts
+ * @typeParam TInput - Target input accepted by {@link Session.send}.
+ * @typeParam TOutput - Exact target output joined through turn handles.
+ * @remarks Creating a Session does not run the target. Each `send` accepts
  * ordered ingress; one canonical Runtime Work occurrence owns each activation.
+ * Flow Sessions may also arm durable Signal subscriptions that fan out on
+ * publication and gate Session-owned Flow waiters.
  */
 export interface Session<TInput, TOutput = unknown> {
   /** Stable deterministic Session identity. */
@@ -282,7 +284,7 @@ export interface Session<TInput, TOutput = unknown> {
   inspect(): Promise<SessionInspection>;
   /** Read bounded statistics for the complete addressed Session lifetime. */
   stats(): Promise<ExecutionStats>;
-  /** Exact Agent output retained for later joinable Session results. @internal */
+  /** Exact target output retained for later joinable Session results. @internal */
   readonly [sessionOutput]?: TOutput;
 }
 
@@ -290,8 +292,7 @@ export interface Session<TInput, TOutput = unknown> {
  * Infer the target-specific Session handle owned by one Agent definition.
  *
  * @typeParam TAgent - Agent whose Prompt input/output types are retained.
+ * @remarks Prefer {@link SessionForTarget} when the target may be a Flow.
  */
-export type SessionFor<TAgent extends AnyAgent> = Session<
-  InferAgentInput<TAgent>,
-  InferAgentOutput<TAgent>
->;
+export type SessionFor<TAgent extends AnyAgent> =
+  import("./target-types").SessionForTarget<TAgent>;

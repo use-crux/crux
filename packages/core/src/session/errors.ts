@@ -2,13 +2,13 @@
 
 import { CruxRuntimeError } from "../runtime/engine/errors";
 
-/** Raised when a stable key is already bound to another Agent target. */
+/** Raised when a stable key is already bound to another Session target. */
 export class SessionIdentityConflictError extends Error {
   /** Stable machine-readable error code. */
   readonly code = "SESSION_IDENTITY_CONFLICT";
 
   constructor(key: string) {
-    super(`Session key "${key}" is already bound to a different Agent.`);
+    super(`Session key "${key}" is already bound to a different target.`);
     this.name = "SessionIdentityConflictError";
   }
 }
@@ -41,7 +41,7 @@ export class SessionCapabilityError extends Error {
   readonly code = "SESSION_UNSUPPORTED";
 
   constructor() {
-    super("The configured Runtime store cannot persist Agent Sessions.");
+    super("The configured Runtime store cannot persist Sessions.");
     this.name = "SessionCapabilityError";
   }
 }

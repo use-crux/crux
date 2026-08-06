@@ -7,3 +7,11 @@ export function signalDeliveryId(
 ): string {
   return `signal_delivery:${occurrenceId}:${waiterId}`;
 }
+
+/** Build one delivery identity for a Session Signal subscription consumer. @internal */
+export function sessionSubscriptionDeliveryId(
+  occurrenceId: string,
+  subscriptionId: string,
+): string {
+  return `signal_delivery:${occurrenceId}:session_sub:${subscriptionId}`;
+}

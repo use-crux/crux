@@ -68,8 +68,10 @@ export default defineSchema({
     sessionId: v.string(),
     keyHash: v.string(),
     targetId: v.string(),
+    targetKind: v.union(v.literal('agent'), v.literal('flow')),
     threadId: v.string(),
-    model: v.any(),
+    model: v.optional(v.any()),
+    definition: v.optional(v.any()),
     state: v.union(v.literal('prepared'), v.literal('ready')),
     acceptedCursor: v.number(),
     processedCursor: v.optional(v.number()),
@@ -79,12 +81,14 @@ export default defineSchema({
     statistics: v.any(),
     wakePending: v.boolean(),
     activation: v.optional(v.any()),
+    activationWorkId: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
     .index('by_namespace_key', ['namespace', 'keyHash'])
     .index('by_namespace_session', ['namespace', 'sessionId'])
-    .index('by_namespace_updated', ['namespace', 'updatedAt']),
+    .index('by_namespace_updated', ['namespace', 'updatedAt'])
+    .index('by_namespace_activation_work', ['namespace', 'activationWorkId']),
 
   runtimeSessionInputs: defineTable({
     schemaVersion: v.literal(1),
@@ -104,6 +108,28 @@ export default defineSchema({
     .index('by_session_cursor', ['namespace', 'sessionId', 'cursor'])
     .index('by_session_work_cursor', ['namespace', 'sessionId', 'workId', 'cursor'])
     .index('by_prepared_result', ['namespace', 'preparedResultLocation']),
+
+  runtimeSessionSubscriptions: defineTable({
+    schemaVersion: v.literal(1),
+    namespace: v.string(),
+    sessionId: v.string(),
+    subscriptionId: v.string(),
+    signalId: v.string(),
+    match: v.optional(v.any()),
+    matchKey: v.string(),
+    state: v.union(v.literal('active'), v.literal('unsubscribed')),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index('by_namespace_subscription', ['namespace', 'subscriptionId'])
+    .index('by_session_state', ['namespace', 'sessionId', 'state'])
+    .index('by_signal_state', ['namespace', 'signalId', 'state'])
+    .index('by_session_signal_match', [
+      'namespace',
+      'sessionId',
+      'signalId',
+      'matchKey',
+    ]),
 
   runtimeResults: defineTable({
     namespace: v.string(),

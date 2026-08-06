@@ -19,6 +19,7 @@ import {
   decodeSessionInputRecord,
   decodeSessionRecord,
 } from './session-codec'
+import { createPostgresSessionSubscriptionMethods } from './session-subscriptions'
 import type {
   PostgresSessionStore,
   RuntimeSessionInputRecord,
@@ -36,6 +37,11 @@ export function createPostgresSessionStore(
 ): PostgresSessionStore {
   const sessions = table(schema, 'sessions')
   const inputs = table(schema, 'session_inputs')
+  const subscriptionMethods = createPostgresSessionSubscriptionMethods(
+    db,
+    schema,
+    faults,
+  )
 
   return {
     async create(input) {
@@ -43,11 +49,12 @@ export function createPostgresSessionStore(
       recordWrite(faults)
       const inserted = await db.query<Record<string, unknown>>(
         `INSERT INTO ${sessions}
-          (namespace, session_id, key_hash, target_id, thread_id, model, state,
-           accepted_cursor, pending_inputs, pending_work, blocked_work,
-           statistics, wake_pending, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'prepared', 0, 0, 0, 0,
-                 $7::jsonb, false, $8, $8)
+          (namespace, session_id, key_hash, target_id, target_kind, thread_id,
+           model, definition, state, accepted_cursor, pending_inputs,
+           pending_work, blocked_work, statistics, wake_pending, created_at,
+           updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, 'prepared',
+                 0, 0, 0, 0, $9::jsonb, false, $10, $10)
          ON CONFLICT DO NOTHING
          RETURNING *`,
         [
@@ -55,8 +62,10 @@ export function createPostgresSessionStore(
           input.sessionId,
           input.keyHash,
           input.targetId,
+          input.targetKind,
           input.threadId,
-          encodeJson(input.model),
+          input.model === undefined ? null : encodeJson(input.model),
+          input.definition === undefined ? null : encodeJson(input.definition),
           encodeJson(initialSessionStatistics(input.sessionId, input.now)),
           now,
         ],
@@ -238,6 +247,17 @@ export function createPostgresSessionStore(
       await settleSessionTurn(db, schema, faults, input, 'completed'),
     blockTurn: async (input) =>
       await settleSessionTurn(db, schema, faults, input, 'blocked'),
+
+    async getByActivationWorkId(namespace, workId) {
+      const result = await db.query<Record<string, unknown>>(
+        `SELECT * FROM ${sessions}
+          WHERE namespace = $1 AND activation ->> 'workId' = $2`,
+        [namespace, workId],
+      )
+      return result.rows[0] ? decodeSessionRecord(result.rows[0]) : null
+    },
+
+    ...subscriptionMethods,
   }
 
   async function getByKey(namespace: string, keyHash: string) {

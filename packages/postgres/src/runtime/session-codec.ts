@@ -18,8 +18,14 @@ export function decodeSessionRecord(row: JsonRecord): RuntimeSessionRecord {
     sessionId: requiredString(row.session_id, 'session_id'),
     keyHash: requiredString(row.key_hash, 'key_hash'),
     targetId: requiredString(row.target_id, 'target_id'),
+    targetKind: targetKind(row.target_kind ?? 'agent'),
     threadId: requiredString(row.thread_id, 'thread_id'),
-    model: decodeModel(row.model),
+    ...(row.model === null || row.model === undefined
+      ? {}
+      : { model: decodeModel(row.model) }),
+    ...(row.definition === null || row.definition === undefined
+      ? {}
+      : { definition: decodeDefinition(row.definition) }),
     state: sessionState(row.state),
     acceptedCursor: safeInteger(row.accepted_cursor, 'accepted_cursor'),
     ...(row.processed_cursor === null || row.processed_cursor === undefined
@@ -63,12 +69,37 @@ export function decodeSessionInputRecord(
   })
 }
 
-function decodeModel(value: unknown): RuntimeSessionRecord['model'] {
+function decodeModel(
+  value: unknown,
+): NonNullable<RuntimeSessionRecord['model']> {
   const record = object(value, 'model')
   return Object.freeze({
     definitionId: requiredString(record.definitionId, 'model.definitionId'),
     fingerprint: requiredString(record.fingerprint, 'model.fingerprint'),
   })
+}
+
+function decodeDefinition(
+  value: unknown,
+): NonNullable<RuntimeSessionRecord['definition']> {
+  const record = object(value, 'definition')
+  return Object.freeze({
+    targetId: requiredString(record.targetId, 'definition.targetId') as never,
+    definitionId: requiredString(
+      record.definitionId,
+      'definition.definitionId',
+    ),
+    fingerprint: requiredString(record.fingerprint, 'definition.fingerprint'),
+    manifestHash: requiredString(
+      record.manifestHash,
+      'definition.manifestHash',
+    ),
+  })
+}
+
+function targetKind(value: unknown): RuntimeSessionRecord['targetKind'] {
+  if (value !== 'agent' && value !== 'flow') invalid('target_kind')
+  return value
 }
 
 function decodeActivation(value: unknown): RuntimeSessionActivation {

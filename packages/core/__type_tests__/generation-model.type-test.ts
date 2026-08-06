@@ -90,7 +90,9 @@ const nativeSession = () =>
 const broadSession = () =>
   session(unboundAgent, { key: "broad:1", model: broadModel });
 
-type ExpectedSession = Session<{ message: string }, { reply: string }>;
+type ExpectedSession = Session<{ message: string }, { reply: string }> & {
+  readonly targetKind: "agent";
+};
 expectTypeOf<
   Awaited<ReturnType<typeof boundSession>>
 >().toEqualTypeOf<ExpectedSession>();
