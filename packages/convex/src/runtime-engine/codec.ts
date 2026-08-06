@@ -66,14 +66,19 @@ function workIndexFields(work: RuntimeWorkItem['work'] | NewWorkItem['work']): {
 
 export function decodeWork(value: unknown): RuntimeWorkItem {
   const record = objectRecord(value)
+  // Storage-only denormalized list indexes must not surface on RuntimeWorkItem.
+  const { workKind: _workKind, workSessionId: _workSessionId, ...workRecord } =
+    record
+  void _workKind
+  void _workSessionId
   return Object.freeze(
     clean({
-      ...record,
-      workId: record.workId as WorkId,
-      notBefore: numberDate(record.notBefore),
-      lastError: decodeLastError(record.lastError),
-      createdAt: requiredDate(record.createdAt),
-      updatedAt: requiredDate(record.updatedAt),
+      ...workRecord,
+      workId: workRecord.workId as WorkId,
+      notBefore: numberDate(workRecord.notBefore),
+      lastError: decodeLastError(workRecord.lastError),
+      createdAt: requiredDate(workRecord.createdAt),
+      updatedAt: requiredDate(workRecord.updatedAt),
     }) as RuntimeWorkItem,
   )
 }
