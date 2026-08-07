@@ -51,8 +51,8 @@ export interface BoundedPushBuffer<T> {
    */
   close(): void;
   /**
-   * Fail the consumer with `error` after draining already-buffered items is
-   * skipped — the next pull rejects (or immediately if waiting).
+   * Fail the consumer with `error` after already-buffered items drain — the
+   * next pull after the queue is empty rejects (or immediately if waiting).
    *
    * @remarks Use for socket errors and for overflow after closing the socket.
    */
